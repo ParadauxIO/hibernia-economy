@@ -62,7 +62,11 @@ public interface LedgerMapper {
             "FROM ledger_postings lp " +
             "JOIN ledger_txns lt ON lp.txn_id = lt.txn_id " +
             "WHERE lp.account_id = #{accountId} " +
-            "ORDER BY lt.settlement_time DESC, lp.posting_id DESC " +
+            // posting_id (auto-increment) is monotonic with insert time, so DESC is
+            // newest-first and served by idx_postings_account (account_id, ...) ordering
+            // — no filesort/join-for-sort. Matches the Treasury plugin's canonical query;
+            // do not revert to ORDER BY lt.settlement_time.
+            "ORDER BY lp.posting_id DESC " +
             "LIMIT #{limit} OFFSET #{offset}")
     List<TransactionRow> findTransactionsByAccount(@Param("accountId") long accountId,
                                                    @Param("limit") int limit,

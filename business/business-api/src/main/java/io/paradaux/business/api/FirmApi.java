@@ -23,6 +23,30 @@ public interface FirmApi {
     Firm getFirm(String nameOrId);
 
     /**
+     * Typed lookup by numeric firm id — prefer this over {@link #getFirm(String)}
+     * when you already hold the id, so callers aren't forced through the
+     * name-or-id string parser (ADT-108). Default-implemented for source/binary
+     * compatibility with existing {@code FirmApi} implementations.
+     *
+     * @param firmId the firm id
+     * @return the firm, or {@code null} if not found
+     */
+    default Firm getFirmById(int firmId) {
+        return getFirm(Integer.toString(firmId));
+    }
+
+    /**
+     * Typed lookup by display name — the name-only counterpart of
+     * {@link #getFirmById(int)} (ADT-108).
+     *
+     * @param name the firm display name
+     * @return the firm, or {@code null} if not found
+     */
+    default Firm getFirmByName(String name) {
+        return getFirm(name);
+    }
+
+    /**
      * Lists firms with pagination.
      *
      * @param page     1-based page number

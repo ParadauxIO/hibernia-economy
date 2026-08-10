@@ -9,10 +9,13 @@ description: Treasury's config.yml — accounts, currency, tax cycles, balance/i
 Treasury's settings live in `plugins/Treasury/config.yml`.
 
 > [!CAUTION]
-> Treasury reads its config **once at startup and caches it** — there is **no reload
-> command**. Every change here requires a **server restart**. Treasury is the economy
-> system of record, so a bad `database.*` value or an invalid `economy.format` pattern
-> will stop the plugin from enabling.
+> Most changes here are picked up by **`/treasury reload`** (permission
+> `treasury.admin.reload`) — it re-reads `config.yml` and `messages.properties` and
+> refreshes salaries, balance-tax brackets/rates, source-income tax, government account
+> names, and the log level live. A full **server restart** is only needed for `database.*`,
+> the tax/salary schedule intervals, and `economy.format` (the currency pattern). Treasury
+> is the economy system of record, so a bad `database.*` value or an invalid
+> `economy.format` pattern will stop the plugin from enabling.
 
 ## Currency — `economy`
 
@@ -127,11 +130,15 @@ Recurring pay to online players based on their LuckPerms group.
 | `salaries.government-account` | `DCGovernment` | Unlimited faucet account salaries are paid from. |
 | `salaries.interval` | `900` | Seconds between payout cycles (900 = 15 minutes). |
 | `salaries.amount` | *(group → amount map)* | Per-LuckPerms-group salary, e.g. `senator: 65.0`. |
+| `salaries.skip-afk` | `true` | Skip online-but-AFK players when paying out. |
+| `salaries.afk-context-key` | `afk` | LuckPerms context key checked for AFK status. |
+| `salaries.afk-context-value` | `true` | Context value that marks a player as AFK. |
 
 Behaviour: requires **LuckPerms**; pays **online players only**; a player in several
 salaried groups gets the **single highest** amount (never the sum); group names match
 **case-insensitively**; groups set to `0` are intentionally unsalaried. Inherited groups
-count.
+count. With `skip-afk: true` (the default), online players whose LuckPerms `afk=true`
+context is set are **skipped** for that cycle; set `skip-afk: false` to pay AFK players too.
 
 > [!CAUTION]
 > If `salaries.government-account` doesn't name an existing government account, **the
@@ -143,6 +150,7 @@ count.
 | Key | Default | What it does |
 |---|---|---|
 | `tax.webhook.enabled` / `tax.webhook.url` | `false` / *(empty)* | Posts a Discord summary after each tax cycle. A blank URL disables it even when enabled. |
+| `fines.webhook.enabled` / `fines.webhook.url` | `false` / *(empty)* | Posts a Discord notification when a fine is issued or revoked. A blank URL disables it even when enabled. |
 | `bytebin.post-url` / `bytebin.base-url` | `pastes.paradaux.io` | Paste service the CSV transaction-export uploads to (must be a matched pair). |
 | `logging.level` | `WARN` | Log verbosity: `TRACE/DEBUG/INFO/WARN/ERROR/OFF`. `INFO` shows cycles, account creation, and admin money commands. |
 

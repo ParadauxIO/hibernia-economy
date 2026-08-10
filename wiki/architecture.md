@@ -26,9 +26,9 @@ much money exists.
    treasury-rest-api ──authenticated HTTP──▶│   (schema owned by    │
                                             │    economy-flyway)    │
                                             └───────────┬───────────┘
-                                                        │  read-only
-   economy-explorer (Next.js)  ◀───────────────────────┘
-   (public website + /docs)
+                                                        │  reads economy data
+   economy-explorer (Next.js)  ◀───────────────────────┘  (+ writes a few
+   (public website + /docs)                                control tables — see below)
 ```
 
 ### Money movement
@@ -83,9 +83,31 @@ Some integrations live outside Minecraft:
 
 ## The read side
 
-- **`economy-explorer`** (Next.js) is **read-only** against the economy data. It
-  renders balances, prices, and money flow for the public, and serves the
-  player/admin documentation at `/docs`. It never writes the ledger.
+- **`economy-explorer`** (Next.js) is **read-only against the economy data** — it
+  never writes the ledger, balances, accounts, or firms. It renders balances,
+  prices, and money flow for the public, and serves the player/admin
+  documentation at `/docs`.
+- It is **not** strictly read-only over the whole DB: it currently writes a few
+  *explorer-adjacent control* tables directly — `webhook_subscription` (player
+  webhook management), `api_keys` (key revocation), and `api_rate_limit_override`
+  (admin). Consolidating those writes onto the REST admin API so kysely is
+  strictly read-only is tracked separately (ADT-14); the more privileged admin
+  ops (firm disband/rename, arbitrary transfers) already route through the REST
+  API with a SERVICE token.
+
+### Who may read an account, and who owns writes
+
+- **Access truth.** Whether a UUID may read an account's history/balance is
+  decided over `account_access` via two named SQL views — `account_read_access_api`
+  (MEMBER/AUTHORIZER) and `account_read_access_web` (VIEWER too) — so the rule
+  isn't re-stated per client. The web surface is deliberately more permissive than
+  the public API (a department-secretary VIEWER reads on the web only). See
+  [database.md](database.md#account-read-access--single-source-of-truth).
+- **Schema contract.** The shared schema is owned by `economy-flyway`. The
+  explorer's kysely `DB` types are **hand-maintained and partial** (only the
+  `explorer_*` tables are typed; other tables use ad-hoc row interfaces), so a
+  migration rename isn't caught at TS compile time — generating those types from
+  the migrations with a CI drift gate is tracked separately (ADT-5).
 
 ## Multi-tenancy
 

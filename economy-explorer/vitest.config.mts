@@ -19,6 +19,16 @@ export default defineConfig({
       reporter: ['text', 'text-summary', 'html', 'lcov'],
       include: ['lib/**/*.ts'],
       exclude: ['lib/**/*.d.ts', 'lib/db.ts', 'lib/auth/authjs.ts'],
+      // Measured baseline (unit tests only; DB integration tests skip without
+      // RUN_INTEGRATION): lines/statements 13.82%, functions 19.04%,
+      // branches 84.61%. Set a couple points below so CI fails on regression
+      // without being flaky.
+      thresholds: {
+        lines: 11,
+        statements: 11,
+        functions: 17,
+        branches: 75,
+      },
     },
   },
 });

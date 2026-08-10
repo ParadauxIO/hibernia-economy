@@ -1,0 +1,56 @@
+name: ChestShop · Build
+
+# Assembles the shaded chestshop-<version>.jar on PR/push so a shading,
+# relocation, or soft-depend-repo regression in ChestShop's (most complex) build
+# is caught here rather than only at manual `./gradlew release` time
+# (ADT chestshop-no-build-workflow). Mirrors the other plugin *-build workflows.
+# Path filters follow the project() deps (treasury-api, business-api).
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'chestshop/**'
+      - 'treasury/treasury-api/**'
+      - 'business/business-api/**'
+      - '.github/workflows/chestshop-build.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'chestshop/**'
+      - 'treasury/treasury-api/**'
+      - 'business/business-api/**'
+      - '.github/workflows/chestshop-build.yml'
+  workflow_dispatch:
+
+# Least privilege (CodeQL actions/missing-workflow-permissions): build-only,
+# checkout is all the GITHUB_TOKEN needs.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build Shadow JAR
+        run: ./gradlew --no-daemon :chestshop:clean :chestshop:shadowJar -Pci=true

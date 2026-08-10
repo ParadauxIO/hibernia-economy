@@ -27,6 +27,14 @@ commands:
     description: View top balances
     usage: /baltop [page]
     permission: treasury.baltop
+  economy:
+    description: View top-level economy statistics (totals by account type)
+    usage: /economy
+    permission: treasury.economy
+  sales:
+    description: View your own ChestShop sales
+    usage: /sales [page] | /sales summary [days]
+    permission: treasury.sales
   transactions:
     description: View transaction history
     aliases: [txns]
@@ -34,7 +42,6 @@ commands:
     permission: treasury.transactions
   eco:
     description: Economy admin commands
-    aliases: [economy]
     usage: /eco <give|take|set|reset> <player> [amount]
     permission: treasury.eco
   government:
@@ -66,6 +73,12 @@ permissions:
   treasury.baltop:
     description: View top balances
     default: true
+  treasury.economy:
+    description: View top-level economy statistics
+    default: true
+  treasury.sales:
+    description: View your own ChestShop sales
+    default: true
   treasury.transactions:
     description: View your transaction history
     default: true
@@ -73,7 +86,7 @@ permissions:
     description: Export transaction history as CSV
     default: true
   treasury.transactions.audit:
-    description: View any player's or account's transaction history (staff/DOC auditing)
+    description: Audit any player's or account's transaction history. Government/DOC override — intentionally bypasses account membership; every use is server-logged. Grant only to trusted staff/government ranks.
     default: op
   treasury.eco:
     description: Base economy admin permission

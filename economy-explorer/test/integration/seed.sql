@@ -1,11 +1,11 @@
 -- Deterministic fixtures for the integration suite. Designed so each assertion
 -- has an unambiguous expected value. UUIDs are 32-hex; personal accounts store
 -- their display_name as the hyphenated UUID (the real-world "junk name" case)
--- so name resolution via firm_players is actually exercised. DAVE is absent
--- from firm_players to test the short-UUID fallback.
+-- so name resolution via economy_players is actually exercised. DAVE is absent
+-- from economy_players to test the short-UUID fallback.
 
 -- Players (uuid -> name) — everyone except DAVE.
-INSERT INTO firm_players (player_uuid_bin, current_name) VALUES
+INSERT INTO economy_players (player_uuid_bin, current_name) VALUES
   (UNHEX('0000000000000000000000000000A1CE'), 'Alice'),
   (UNHEX('00000000000000000000000000000B0B'), 'Bob'),
   (UNHEX('0000000000000000000000000000CA01'), 'Carol');
@@ -71,14 +71,19 @@ INSERT INTO chestshop_sale (txn_id, occurred_at, direction, customer_uuid_bin, s
   (NULL, NOW(), 'SELL', UNHEX('0000000000000000000000000000CA01'), 3, 'BUSINESS', 1, UNHEX('0000000000000000000000000000A1CE'), 0, 'DIAMOND', 'DIAMOND', 'Diamond', 0, 5, 6.0000, 30.00),
   (NULL, NOW(), 'SELL', UNHEX('00000000000000000000000000000B0B'), 3, 'BUSINESS', 1, UNHEX('0000000000000000000000000000A1CE'), 0, 'IRON_INGOT', 'IRON_INGOT', 'Iron Ingot', 0, 20, 1.0000, 20.00);
 
--- Explorer RBAC groups: "Auditors" grants staff.audit and is LuckPerms-fed (node
--- 'doc'); Bob is a manual member. Used to assert findCapabilities + isStaff.
+-- Explorer RBAC groups: "Viewers" grants the read-only financial-oversight
+-- 'viewer' capability and is LuckPerms-fed (node 'doc'). Bob is a manual member;
+-- Carol is a 'luckperms' member, i.e. one the reconciliation cron synced from the
+-- node — so the seed exercises BOTH membership sources resolving to the same
+-- capability (findCapabilities + isStaff). The legacy 'staff.audit' alias is
+-- covered by the unit tests (normalizeCapability) rather than seeded here.
 INSERT INTO explorer_group (group_id, name, description, luckperms_node) VALUES
-  (1, 'Auditors', 'Staff who can audit any entity', 'doc');
+  (1, 'Viewers', 'Staff who can view any entity''s financials (read-only)', 'doc');
 INSERT INTO explorer_group_capability (group_id, capability) VALUES
-  (1, 'staff.audit');
+  (1, 'viewer');
 INSERT INTO explorer_group_member (group_id, player_uuid_bin, source) VALUES
-  (1, UNHEX('00000000000000000000000000000B0B'), 'manual');
+  (1, UNHEX('00000000000000000000000000000B0B'), 'manual'),
+  (1, UNHEX('0000000000000000000000000000CA01'), 'luckperms');
 
 -- Bedrock/Floodgate fixture (PAR-240): a Floodgate-shaped UUID with a
 -- '.'-prefixed name and a completed in-game explorer_identity link. Account #8
@@ -86,7 +91,7 @@ INSERT INTO explorer_group_member (group_id, player_uuid_bin, source) VALUES
 -- distribution / gini assertions above (those count only positive, active
 -- personal balances). Proves a linked Bedrock player's wallet resolves the
 -- dotted name (never a bare UUID) and is searchable by it.
-INSERT INTO firm_players (player_uuid_bin, current_name) VALUES
+INSERT INTO economy_players (player_uuid_bin, current_name) VALUES
   (UNHEX('0000000000000000000000000000BED0'), '.BedrockBob');
 INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name, is_archived) VALUES
   (8, 'PERSONAL', UNHEX('0000000000000000000000000000BED0'), '00000000-0000-0000-0000-00000000bed0', 0);
@@ -100,3 +105,33 @@ INSERT INTO explorer_identity (keycloak_sub, player_uuid_bin, minecraft_name, li
 -- them see the department's ledger history.
 INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES
   (5, UNHEX('00000000000000000000000000005EC0'), 'VIEWER', UNHEX('0000000000000000000000000000A1CE'));
+
+-- Drift fixture (behaviour/0001): "Penny", one personal account (#9) whose
+-- windowed credits are 0.10 + 0.20 + 0.30 and debits are 0.15 + 0.25 + 0.20 — each
+-- summing to an exact DECIMAL(19,2) 0.60 that does NOT round-trip through a JS
+-- double (both reduce to 0.6000000000000001). Net is 0.00 and the balance stays
+-- 0.00 (like the Bedrock fixture), so the supply / gini / distribution assertions
+-- above are untouched — but income and spend prove the KPI rollups MUST be summed
+-- in SQL and carried as exact strings. getPlayerTotals demonstrates that here.
+INSERT INTO economy_players (player_uuid_bin, current_name) VALUES
+  (UNHEX('0000000000000000000000000000BE00'), 'Penny');
+INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name, is_archived) VALUES
+  (9, 'PERSONAL', UNHEX('0000000000000000000000000000BE00'), 'Penny Wallet', 0);
+INSERT INTO account_balances_mat (account_id, balance) VALUES (9, 0.00);
+INSERT INTO ledger_txns (txn_id, settlement_time, message, initiator_uuid_bin, plugin_system) VALUES
+  (10, NOW(), 'penny in a',  UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (11, NOW(), 'penny in b',  UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (12, NOW(), 'penny in c',  UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (13, NOW(), 'penny out a', UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (14, NOW(), 'penny out b', UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (15, NOW(), 'penny out c', UNHEX('0000000000000000000000000000BE00'), 'treasury');
+-- Two-leg txns: Bob's personal account (#2) is the counterparty for every leg.
+-- Kept PERSONAL↔PERSONAL on purpose so getMoneyFlow (cross-type only) ignores them
+-- and the money-flow assertion above still sees exactly one edge.
+INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES
+  (10, 2, -0.10), (10, 9,  0.10),
+  (11, 2, -0.20), (11, 9,  0.20),
+  (12, 2, -0.30), (12, 9,  0.30),
+  (13, 9, -0.15), (13, 2,  0.15),
+  (14, 9, -0.25), (14, 2,  0.25),
+  (15, 9, -0.20), (15, 2,  0.20);

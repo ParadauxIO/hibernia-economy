@@ -5,6 +5,7 @@ import io.paradaux.treasury.model.economy.*;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +33,35 @@ public interface LedgerService {
 
     /** Direct value transfer (no plugin SYSTEM postings). */
     long transfer(TransferRequest req);
+
+    /**
+     * Outcome of a transfer that also reports whether it moved money. {@code created}
+     * is {@code true} only when a fresh ledger txn was written; it is {@code false}
+     * when the client dedup key collapsed the call onto an existing txn — via the
+     * pre-insert check <em>or</em> a concurrent-insert race on {@code uq_ledger_dedup} —
+     * i.e. no new money moved.
+     */
+    record TransferResult(long txnId, boolean created) {}
+
+    /**
+     * Like {@link #transfer(TransferRequest)} but reports whether it actually created a
+     * new txn or deduplicated onto an existing one. Use when the caller must act only on
+     * a real money movement (notifications, counters); it is race-safe where a pre-check
+     * via a separate read is not, because the collapse is detected inside the same
+     * transactional insert (e.g. salary payouts).
+     */
+    TransferResult transferChecked(TransferRequest req);
+
+    /**
+     * Sweeps the freshly-locked positive balance of {@code fromAccountId} into
+     * {@code toAccountId} in one ledger transaction. The amount moved is read under the
+     * same {@code FOR UPDATE} lock (ascending account-id order, identical to
+     * {@link #transfer(TransferRequest)}) that guards the move, so a concurrent credit or
+     * debit cannot strand a residual or overdraw the source. The DB trigger remains the
+     * sole balance writer. Returns the sweep's txn id, or empty if the locked balance was
+     * not positive (nothing to move). See {@code TreasuryApi.sweepAll}.
+     */
+    java.util.OptionalLong sweepAll(int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin);
 
     /**
      * Admin override transfer: identical to {@link #transfer(TransferRequest)} but
@@ -73,8 +103,12 @@ public interface LedgerService {
     /** Paginated transaction history for an account (most recent first). */
     Page<TransactionEntry> getTransactionHistory(int accountId, int offset, int limit);
 
+    /** Merged paginated transaction history across several accounts (most recent first). */
+    Page<TransactionEntry> getTransactionHistory(Collection<Integer> accountIds, int offset, int limit);
+
     /** Single transaction lookup by ID. */
     LedgerTxn getTransaction(long txnId);
+
 
     /** All postings belonging to a transaction. */
     List<LedgerPosting> getPostingsForTransaction(long txnId);

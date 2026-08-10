@@ -1,18 +1,20 @@
 package io.paradaux.treasury.utils;
 
-import java.nio.ByteBuffer;
 import java.util.UUID;
 
-public class UuidBin {
+/**
+ * Thin alias for the shared {@link io.paradaux.common.UuidBin} (ADT-22). The
+ * conversion logic now lives in :common; this keeps existing call sites working
+ * against a single underlying implementation.
+ */
+public final class UuidBin {
     private UuidBin() {}
+
     public static byte[] toBytes(UUID uuid) {
-        ByteBuffer bb = ByteBuffer.allocate(16);
-        bb.putLong(uuid.getMostSignificantBits());
-        bb.putLong(uuid.getLeastSignificantBits());
-        return bb.array();
+        return io.paradaux.common.UuidBin.toBytes(uuid);
     }
+
     public static UUID fromBytes(byte[] bytes) {
-        ByteBuffer bb = ByteBuffer.wrap(bytes);
-        return new UUID(bb.getLong(), bb.getLong());
+        return io.paradaux.common.UuidBin.fromBytes(bytes);
     }
 }

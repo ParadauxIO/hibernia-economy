@@ -197,6 +197,30 @@ class FirmMapperIT extends IntegrationTestBase {
                 .containsExactly("Employer");
     }
 
+    @Test
+    void updateFirm_advancesUpdatedAt() throws Exception {
+        Firm firm = newFirm("Acme", UUID.randomUUID());
+        mapper.createFirm(firm);
+
+        // Force updated_at into the past so the bump is unambiguous without a sleep.
+        // (updateFirm used to write `updated_at = updated_at`, which self-assigns the
+        // column and suppresses the ON UPDATE CURRENT_TIMESTAMP bump — PAR-315.)
+        java.time.LocalDateTime past = java.time.LocalDateTime.of(2020, 1, 1, 0, 0, 0);
+        try (var conn = dataSource.getConnection();
+             var st = conn.createStatement()) {
+            st.executeUpdate("UPDATE firm SET updated_at = '2020-01-01 00:00:00' WHERE firm_id = "
+                    + firm.getFirmId());
+        }
+        assertThat(mapper.getFirmById(firm.getFirmId()).getUpdatedAt()).isEqualTo(past);
+
+        Firm patch = new Firm();
+        patch.setFirmId(firm.getFirmId());
+        patch.setHqRegion("plot-9");
+        mapper.updateFirm(patch);
+
+        assertThat(mapper.getFirmById(firm.getFirmId()).getUpdatedAt()).isAfter(past);
+    }
+
     private Firm newFirm(String name, UUID owner) {
         Firm f = new Firm();
         f.setDisplayName(name);

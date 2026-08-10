@@ -48,7 +48,7 @@ public class AccountService {
     /**
      * Resolves a player to their non-archived PERSONAL account. Exactly one of
      * {@code uuid} or {@code name} must be supplied. Names are matched
-     * case-insensitively via the {@code firm_players} IGN cache, so a player
+     * case-insensitively via the {@code economy_players} IGN cache, so a player
      * must have been seen on the server at least once for name lookup to work
      * (UUID lookup has no such constraint).
      *
@@ -73,10 +73,19 @@ public class AccountService {
                         "Query parameter 'uuid' is not a valid UUID.");
             }
         } else {
-            playerUuid = firmMapper.findPlayerUuidByName(name.trim());
+            String trimmed = name.trim();
+            playerUuid = firmMapper.findPlayerUuidByName(trimmed);
             if (playerUuid == null) {
                 throw new ApiException(HttpStatus.NOT_FOUND, "PLAYER_NOT_FOUND",
                         "No player known by the name '" + name + "'.");
+            }
+            // PAR-144: governments run as player alts of the same name. A bare name
+            // that is both a player and a non-archived GOVERNMENT account is
+            // ambiguous — refuse rather than silently returning the personal
+            // account; the caller should query by uuid to disambiguate.
+            if (accountMapper.existsGovernmentAccountByName(trimmed)) {
+                throw new ApiException(HttpStatus.CONFLICT, "AMBIGUOUS_NAME",
+                        "'" + name + "' is both a player and a government account; query by 'uuid' to disambiguate.");
             }
         }
 

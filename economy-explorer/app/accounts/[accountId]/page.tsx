@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
@@ -49,7 +50,7 @@ export default async function AccountDetailPage({
   if (!Number.isInteger(id) || id <= 0) notFound();
 
   const viewer = await getViewer();
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
 
   const account = await findAccount(id);
   if (!account) notFound();
@@ -385,12 +386,3 @@ export default async function AccountDetailPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      if (v.length > 0 && v[0] !== undefined) out[k] = v[0];
-    } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

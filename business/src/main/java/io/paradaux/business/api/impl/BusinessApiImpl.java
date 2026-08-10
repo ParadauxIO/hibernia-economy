@@ -72,6 +72,13 @@ public class BusinessApiImpl implements BusinessApi {
         }
 
         @Override
+        public Firm getFirmById(int firmId) {
+            // Typed path: resolve straight by id (archived-inclusive, matching getFirm)
+            // instead of the int→String→int round-trip the default would do (ADT-108/96).
+            return service.getAnyFirmById(firmId);
+        }
+
+        @Override
         public List<Firm> listFirms(int page, int pageSize) {
             return service.listAllFirms(page, pageSize);
         }
@@ -91,7 +98,7 @@ public class BusinessApiImpl implements BusinessApi {
             if (!service.isProprietor(firmId, actorId)) {
                 throw new IllegalStateException("Only the proprietor can disband a firm.");
             }
-            service.disbandFirm(String.valueOf(firmId), actorId);
+            service.disbandFirm(firmId, actorId);
         }
 
         @Override
@@ -99,7 +106,7 @@ public class BusinessApiImpl implements BusinessApi {
             if (!staff.hasPermission(firmId, actorId, RolePermission.ADMIN)) {
                 throw new IllegalStateException("You don't have permission to set the HQ for this firm.");
             }
-            service.updateFirmHq(String.valueOf(firmId), plotName, actorId);
+            service.updateFirmHq(firmId, plotName, actorId);
         }
 
         @Override
@@ -107,7 +114,7 @@ public class BusinessApiImpl implements BusinessApi {
             if (!staff.hasPermission(firmId, actorId, RolePermission.ADMIN)) {
                 throw new IllegalStateException("You don't have permission to set Discord for this firm.");
             }
-            service.updateFirmDiscord(String.valueOf(firmId), url, actorId);
+            service.updateFirmDiscord(firmId, url, actorId);
         }
 
         @Override
@@ -119,7 +126,7 @@ public class BusinessApiImpl implements BusinessApi {
         public Firm getFirmByAccountId(int accountId) {
             Integer firmId = accounts.getFirmIdByAccountId(accountId);
             if (firmId == null) return null;
-            return service.getAnyFirmByNameOrId(String.valueOf(firmId));
+            return service.getAnyFirmById(firmId);
         }
 
         @Override
@@ -137,12 +144,12 @@ public class BusinessApiImpl implements BusinessApi {
 
         @Override
         public List<FirmEmployee> getEmployees(int firmId) {
-            return service.getCurrentEmployees(String.valueOf(firmId));
+            return service.getCurrentEmployees(firmId);
         }
 
         @Override
         public List<Player> getOnlineEmployees(int firmId) {
-            return service.getOnlineEmployees(String.valueOf(firmId));
+            return service.getOnlineEmployees(firmId);
         }
 
         @Override
@@ -167,22 +174,22 @@ public class BusinessApiImpl implements BusinessApi {
 
         @Override
         public void fire(int firmId, UUID playerId, UUID actorId) {
-            service.fireEmployee(String.valueOf(firmId), playerId, actorId);
+            service.fireEmployee(firmId, playerId, actorId);
         }
 
         @Override
         public String promote(int firmId, UUID playerId, UUID actorId) {
-            return service.promoteEmployee(String.valueOf(firmId), playerId, actorId);
+            return service.promoteEmployee(firmId, playerId, actorId);
         }
 
         @Override
         public String demote(int firmId, UUID playerId, UUID actorId) {
-            return service.demoteEmployee(String.valueOf(firmId), playerId, actorId);
+            return service.demoteEmployee(firmId, playerId, actorId);
         }
 
         @Override
         public void resign(int firmId, UUID playerId) {
-            service.resignFromFirm(String.valueOf(firmId), playerId);
+            service.resignFromFirm(firmId, playerId);
         }
 
         @Override
@@ -207,22 +214,22 @@ public class BusinessApiImpl implements BusinessApi {
 
         @Override
         public void createRole(int firmId, String roleName, int rankOrder, UUID actorId) {
-            service.createRole(String.valueOf(firmId), roleName, rankOrder, actorId);
+            service.createRole(firmId, roleName, rankOrder, actorId);
         }
 
         @Override
         public void deleteRole(int firmId, String roleName, UUID actorId) {
-            service.deleteRole(String.valueOf(firmId), roleName, actorId);
+            service.deleteRole(firmId, roleName, actorId);
         }
 
         @Override
         public void addPermission(int firmId, String roleName, String permission, UUID actorId) {
-            service.addRolePermission(String.valueOf(firmId), roleName, permission, actorId);
+            service.addRolePermission(firmId, roleName, permission, actorId);
         }
 
         @Override
         public void removePermission(int firmId, String roleName, String permission, UUID actorId) {
-            service.removeRolePermission(String.valueOf(firmId), roleName, permission, actorId);
+            service.removeRolePermission(firmId, roleName, permission, actorId);
         }
     }
 
@@ -230,22 +237,22 @@ public class BusinessApiImpl implements BusinessApi {
 
         @Override
         public void offerEmployment(int firmId, UUID playerId, UUID actorId) {
-            service.offerEmployment(String.valueOf(firmId), playerId, actorId);
+            service.offerEmployment(firmId, playerId, actorId);
         }
 
         @Override
         public void rescindOffer(int firmId, UUID playerId, UUID actorId) {
-            service.rescindEmploymentOffer(String.valueOf(firmId), playerId, actorId);
+            service.rescindEmploymentOffer(firmId, playerId, actorId);
         }
 
         @Override
-        public void acceptOffer(int firmId, UUID playerId) {
-            service.acceptEmploymentOffer(String.valueOf(firmId), playerId);
+        public void acceptOffer(int firmId, UUID playerId, UUID actorId) {
+            service.acceptEmploymentOffer(firmId, playerId, actorId);
         }
 
         @Override
-        public void rejectOffer(int firmId, UUID playerId) {
-            service.rejectEmploymentOffer(String.valueOf(firmId), playerId);
+        public void rejectOffer(int firmId, UUID playerId, UUID actorId) {
+            service.rejectEmploymentOffer(firmId, playerId, actorId);
         }
     }
 

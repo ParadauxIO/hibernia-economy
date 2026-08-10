@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -38,7 +39,7 @@ export default async function AdminWebhooksPage({
   if (viewer.role !== 'admin') return <PrivacyGate kind="private" title="Admin only" />;
   await auditView(viewer, { path: '/admin/webhooks', targetType: 'global' });
 
-  const sp = SP_SCHEMA.safeParse(flatten(await searchParams)).data ?? SP_SCHEMA.parse({});
+  const sp = SP_SCHEMA.safeParse(flattenSearchParams(await searchParams)).data ?? SP_SCHEMA.parse({});
   const filters = { q: sp.q ?? null, scope: sp.scope ?? null, status: sp.status ?? null, source: sp.source ?? null };
   const [rows, total] = await Promise.all([
     listAllWebhooks(filters, sp.limit, (sp.page - 1) * sp.limit),
@@ -152,11 +153,3 @@ export default async function AdminWebhooksPage({
   );
 }
 
-function flatten(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const o: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === 'string') o[k] = v;
-    else if (Array.isArray(v) && v.length) o[k] = v[0];
-  }
-  return o;
-}

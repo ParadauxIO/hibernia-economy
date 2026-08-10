@@ -8,7 +8,7 @@ description: How the government pays automatic salaries for official roles — w
 
 The government pays a regular **salary** to players who hold official roles — senators,
 secretaries, justices, officers, and so on. It's fully automatic: if your role has a
-salary, you're paid on a timer just for being online. No command needed.
+salary, you're paid on a timer while you're online and active. No command needed.
 
 ## How you get paid
 
@@ -25,6 +25,10 @@ When a salary lands, you'll see a message in chat:
 > [!NOTE]
 > You're only paid while you're **online**. If you're offline when the timer fires, you
 > don't get that round — and roles that don't have a salary set simply pay nothing.
+
+> [!NOTE]
+> Being **AFK** counts as not active: by default, online-but-AFK players are skipped for
+> that round. (Staff can turn this off, but it's on by default.)
 
 ## Checking your pay
 

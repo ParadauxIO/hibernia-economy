@@ -1,6 +1,9 @@
 package io.paradaux.treasury.commands;
 
 import com.google.inject.Inject;
+import com.google.inject.Provider;
+import io.paradaux.hibernia.framework.commander.CommandManager;
+import io.paradaux.hibernia.framework.commander.HelpGenerator;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
@@ -23,9 +26,6 @@ import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,8 +36,6 @@ public class GovCommand implements CommandHandler {
     private static final int PAGE_SIZE = 10;
     /** Hard cap so /gov account history <name> <huge> can't push MariaDB into a giant OFFSET scan. */
     private static final int MAX_PAGE = 10_000;
-    private static final DateTimeFormatter TIME_FMT =
-            DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(ZoneId.systemDefault());
 
     private final AccountService accountService;
     private final LedgerService ledgerService;
@@ -45,6 +43,9 @@ public class GovCommand implements CommandHandler {
     private final GovService govService;
     private final PlayerDirectoryService playerDirectory;
     private final Message message;
+    // Provider breaks the construction cycle: CommandManager injects Set<CommandHandler>
+    // (which includes this handler), so resolve it lazily when help is rendered.
+    private final Provider<CommandManager> commandManager;
 
     @Inject
     public GovCommand(AccountService accountService,
@@ -52,13 +53,15 @@ public class GovCommand implements CommandHandler {
                       MembershipService membershipService,
                       GovService govService,
                       PlayerDirectoryService playerDirectory,
-                      Message message) {
+                      Message message,
+                      Provider<CommandManager> commandManager) {
         this.accountService   = accountService;
         this.ledgerService    = ledgerService;
         this.membershipService = membershipService;
         this.govService       = govService;
         this.playerDirectory  = playerDirectory;
         this.message          = message;
+        this.commandManager   = commandManager;
     }
 
     // =====================================================================
@@ -68,37 +71,20 @@ public class GovCommand implements CommandHandler {
     @Route("")
     @Description("Show /government help")
     public void root(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov");
+        helpPage(sender, 1);
     }
 
     @Route("help")
     @Description("Show /government help")
     public void help(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov");
+        helpPage(sender, 1);
     }
 
-    @Route("help account")
-    @Description("Show government account lifecycle help")
-    public void helpAccount(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.account");
-    }
-
-    @Route("help member")
-    @Description("Show government member-management help")
-    public void helpMember(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.member");
-    }
-
-    @Route("help auth")
-    @Description("Show government authorizer-management help")
-    public void helpAuth(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.auth");
-    }
-
-    @Route("help transfer")
-    @Description("Show government transfer / pay / payout help")
-    public void helpTransfer(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.transfer");
+    @Route("help <page>")
+    @Description("Show a page of the /government help index")
+    public void helpPage(@Sender CommandSender sender, @Arg("page") int page) {
+        HelpGenerator help = new HelpGenerator(commandManager.get());
+        sender.sendMessage(help.render(sender, "government", page));
     }
 
     // =====================================================================
@@ -694,21 +680,7 @@ public class GovCommand implements CommandHandler {
                 "pages", String.valueOf(result.totalPages()));
 
         for (TransactionEntry entry : result.items()) {
-            String formattedAmount = accountService.formatAmount(entry.getAmount().abs());
-            String sign = entry.getAmount().signum() >= 0 ? "+" : "-";
-            String colorTag = entry.getAmount().signum() >= 0 ? "green" : "red";
-            String coloredAmount = "<" + colorTag + ">" + sign + formattedAmount + "</" + colorTag + ">";
-            String memo = entry.getMemo() != null ? entry.getMemo() : entry.getMessage();
-            if (memo == null) memo = "—";
-            memo = sanitize(memo);
-            String time = entry.getSettlementTime() != null
-                    ? TIME_FMT.format(entry.getSettlementTime()) : "—";
-
-            message.send(sender, "treasury.transactions.entry",
-                    "txn", String.valueOf(entry.getTxnId()),
-                    "amount", coloredAmount,
-                    "memo", memo,
-                    "time", time);
+            TransactionEntryRenderer.send(sender, message, accountService, entry);
         }
 
         if (result.hasMore()) {
@@ -817,6 +789,15 @@ public class GovCommand implements CommandHandler {
         java.util.Optional<java.util.UUID> directoryUuid =
                 knownPlayer ? java.util.Optional.empty() : playerDirectory.resolveUuidByName(toName);
 
+        // PAR-144: a name that is both a known player and a non-archived GOVERNMENT
+        // account is ambiguous. Don't silently pay the personal account (which is
+        // what the player branches below would do) — refuse so the operator types
+        // the recipient explicitly rather than relying on cache/lookup order.
+        if ((knownPlayer || directoryUuid.isPresent()) && accountService.governmentAccountExists(toName)) {
+            message.send(sender, "treasury.gov.payout.ambiguous", "name", toName);
+            return;
+        }
+
         if (knownPlayer) {
             toAccountId = accountService.getOrCreatePersonalAccountId(targetPlayer.getUniqueId());
             toDisplayName = targetPlayer.getName();
@@ -837,16 +818,21 @@ public class GovCommand implements CommandHandler {
             // bare token first, then fall back to the canonical suffix —
             // letting `/gov payout DCGov Acme 100 …` resolve to Acme's
             // corporate account without users having to know the convention.
-            Account businessAccount = accountService.getBusinessAccountByName(toName);
-            if (businessAccount == null) {
-                businessAccount = accountService.getBusinessAccountByName(toName + " Corporate Account");
-            }
+            Account businessAccount = accountService.resolveBusinessAccountByToken(toName);
             if (businessAccount == null) {
                 message.send(sender, "treasury.gov.payout.unknown-recipient", "name", toName);
                 return;
             }
             toAccountId = businessAccount.getAccountId();
             toDisplayName = businessAccount.getDisplayName();
+        }
+
+        // Reject a payout that resolves to the source account itself up front, with a
+        // clear message — the ledger now rejects a same-account transfer outright
+        // (ADT-33), so without this guard it would surface as an uncaught error (ADT-55).
+        if (from.getAccountId() == toAccountId) {
+            message.send(sender, "treasury.gov.account.transfer.same-account", "name", toDisplayName);
+            return;
         }
 
         String memo = reason != null
@@ -940,14 +926,17 @@ public class GovCommand implements CommandHandler {
     private boolean canTransferFrom(CommandSender sender, Account account) {
         // Console / RCON bypasses the per-account membership gate — the server is
         // the authority. A plain player needs the global transfer/admin node, or
-        // membership/authorizer on this specific account.
+        // membership/authorizer on this specific account. The per-account
+        // member/authorizer predicate lives in the service
+        // (MembershipService.canSpend); this command enforces it by denying when it
+        // returns false. The coarse @Permission gate and these global nodes stay at
+        // the command layer.
         if (!(sender instanceof Player p)) {
             return true;
         }
         return p.hasPermission("treasury.gov.admin")
                 || p.hasPermission("treasury.gov.account.transfer")
-                || membershipService.isMember(account.getAccountId(), p.getUniqueId())
-                || membershipService.isAuthorizer(account.getAccountId(), p.getUniqueId());
+                || membershipService.canSpend(account.getAccountId(), p.getUniqueId());
     }
 
     /**
@@ -970,21 +959,11 @@ public class GovCommand implements CommandHandler {
         return !(sender instanceof Player) || sender.hasPermission(node);
     }
 
-    /** The initiator UUID to attribute an action to: the player, or the virtual
-     *  console initiator when run from console / RCON. */
     private static UUID actorOf(CommandSender sender) {
-        return sender instanceof Player p
-                ? p.getUniqueId()
-                : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
+        return CommandSenders.actorOf(sender);
     }
 
     private String resolvePlayerName(UUID uuid) {
-        OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
-        String name = op.getName();
-        return name != null ? name : uuid.toString();
-    }
-
-    private static String sanitize(String input) {
-        return input.replace("<", "\\<");
+        return CommandSenders.resolvePlayerName(uuid);
     }
 }

@@ -75,11 +75,12 @@ class SalaryConfigurationTest {
         when(cfg.getString("salaries.government-account", "DCGovernment")).thenReturn("DCGovernment");
         when(cfg.getLong("salaries.interval", 900L)).thenReturn(1800L);
         when(cfg.getConfigurationSection("salaries.amount")).thenReturn(sec);
-        Set<String> keys = new LinkedHashSet<>(List.of("senator", "president", "bad"));
+        Set<String> keys = new LinkedHashSet<>(List.of("senator", "president", "bad", "garbage"));
         when(sec.getKeys(false)).thenReturn(keys);
-        when(sec.getDouble("senator", 0)).thenReturn(65.0);
-        when(sec.getDouble("president", 0)).thenReturn(75.0);
-        when(sec.getDouble("bad", 0)).thenReturn(-5.0); // negative → skipped
+        when(sec.getString("senator", "0")).thenReturn("65.0");
+        when(sec.getString("president", "0")).thenReturn("75.0");
+        when(sec.getString("bad", "0")).thenReturn("-5.0");     // negative → skipped
+        when(sec.getString("garbage", "0")).thenReturn("NaN");  // unparseable → skipped
 
         SalaryConfiguration c = new SalaryConfiguration(plugin);
 

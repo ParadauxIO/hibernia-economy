@@ -34,6 +34,14 @@ public class SecurityConfig {
     public SecurityFilterChain apiChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                // No .cors() here on purpose: this API is reached only server-to-server
+                // (the explorer's Next.js backend, the in-game plugins) with a Bearer JWT,
+                // never fetched directly from a browser, so there are no cross-origin
+                // preflights to answer. The Envoy gateway in front terminates TLS and is
+                // where any browser-facing CORS policy would live if the UI ever called us
+                // directly. Spring's default (no CORS handling) correctly rejects stray
+                // cross-origin browser calls rather than reflecting their Origin
+                // (ADT no-cors-config-for-browser-ui).
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public, read-only ChestShop market data — no JWT (JwtAuthFilter
@@ -41,7 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/chestshop/**").permitAll()
                         .requestMatchers("/api/v1/transfers/**", "/api/v1/auth/**",
                                 "/api/v1/accounts/**", "/api/v1/firms/**",
-                                "/api/v1/webhooks/**").authenticated()
+                                "/api/v1/webhooks/**", "/api/v1/admin/**").authenticated()
                         .anyRequest().permitAll())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable)

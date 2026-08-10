@@ -104,7 +104,7 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
         ApiException ex = catchThrowableOfType(
                 () -> adminFirmService.disband(serviceToken(), 10), ApiException.class);
         assertThat(ex).isNotNull();
-        assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ex.getErrorCode()).isEqualTo("PROPRIETOR_NO_PERSONAL_ACCOUNT");
     }
 

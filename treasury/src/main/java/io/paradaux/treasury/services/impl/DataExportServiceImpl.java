@@ -8,7 +8,6 @@ import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.TransactionEntry;
 import io.paradaux.treasury.services.BytebinService;
 import io.paradaux.treasury.services.DataExportService;
-import org.mybatis.guice.transactional.Transactional;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -35,12 +34,18 @@ public class DataExportServiceImpl implements DataExportService {
     }
 
     @Override
-    @Transactional
     public String exportTransactionsFor(int accountId) {
+        // NOT @Transactional on purpose (ADT-72): this is a read-only export, so the
+        // two lookups are fine in autocommit and each releases its pooled connection
+        // immediately. The bytebin upload is a network round-trip — doing it here,
+        // outside any transaction, means it never pins a DB connection across that
+        // I/O (which under load would starve the pool). Atomicity across the two
+        // reads isn't needed for an export.
         Account account = accountMapper.findById(accountId);
         if (account == null) throw new IllegalArgumentException("Account not found: " + accountId);
         List<TransactionEntry> transactions = ledgerMapper.findAllTransactionsByAccount(accountId, MAX_EXPORT_ROWS);
-        String url = bytebinService.upload(buildCsv(transactions), "text/csv");
+        String csv = buildCsv(transactions);
+        String url = bytebinService.upload(csv, "text/csv");
         log.debug("Exported {} transactions for account {} -> {}", transactions.size(), accountId, url);
         return url;
     }

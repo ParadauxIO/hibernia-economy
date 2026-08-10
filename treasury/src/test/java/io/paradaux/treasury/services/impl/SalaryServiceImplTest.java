@@ -7,8 +7,11 @@ import io.paradaux.treasury.model.salary.SalaryPayment;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.LedgerService;
+import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.TreasuryConstants;
 import net.luckperms.api.LuckPerms;
+import net.luckperms.api.context.ContextManager;
+import net.luckperms.api.context.ImmutableContextSet;
 import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.user.User;
 import net.luckperms.api.model.user.UserManager;
@@ -22,6 +25,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -122,6 +128,20 @@ class SalaryServiceImplTest {
     }
 
     @Test
+    void plan_skipsAfkPlayer() {
+        // A salaried player flagged AFK via the LuckPerms context is not paid.
+        Player p = org.mockito.Mockito.mock(Player.class);
+        online(p);
+        ContextManager cm = org.mockito.Mockito.mock(ContextManager.class);
+        ImmutableContextSet ctx = org.mockito.Mockito.mock(ImmutableContextSet.class);
+        when(luckPerms.getContextManager()).thenReturn(cm);
+        when(cm.getContext(p)).thenReturn(ctx);
+        when(ctx.contains("afk", "true")).thenReturn(true); // default afk context
+
+        assertThat(service(cfg(true, AMOUNTS), true).planPayroll()).isEmpty();
+    }
+
+    @Test
     void plan_skipsWhenLuckPermsUserUnknown() {
         UUID u = UUID.randomUUID();
         Player p = org.mockito.Mockito.mock(Player.class);
@@ -146,7 +166,7 @@ class SalaryServiceImplTest {
         int paid = service(cfg(true, AMOUNTS), true)
                 .payout(List.of(new SalaryPayment(UUID.randomUUID(), "senator", new BigDecimal("65.0"))));
         assertThat(paid).isZero();
-        verify(ledgerService, never()).transfer(any());
+        verify(ledgerService, never()).transferChecked(any());
         verifyNoInteractions(notifier);
     }
 
@@ -157,13 +177,14 @@ class SalaryServiceImplTest {
         gov.setAccountId(7);
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
         when(accountService.getOrCreatePersonalAccountId(alice)).thenReturn(42);
+        when(ledgerService.transferChecked(any())).thenReturn(new LedgerService.TransferResult(1L, true));
 
         int paid = service(cfg(true, AMOUNTS), true)
                 .payout(List.of(new SalaryPayment(alice, "senator", new BigDecimal("65.0"))));
 
         assertThat(paid).isEqualTo(1);
         ArgumentCaptor<TransferRequest> cap = ArgumentCaptor.forClass(TransferRequest.class);
-        verify(ledgerService).transfer(cap.capture());
+        verify(ledgerService).transferChecked(cap.capture());
         TransferRequest req = cap.getValue();
         assertThat(req.fromAccountId()).isEqualTo(7);
         assertThat(req.toAccountId()).isEqualTo(42);
@@ -179,6 +200,58 @@ class SalaryServiceImplTest {
     }
 
     @Test
+    void payout_attachesDeterministicPerPeriodDedupKey() {
+        // Without a dedup key, two overlapping payout runs in the same interval
+        // would pay a player twice. The key is derived from the period bucket
+        // (interval 900s), so a retry/overlap collapses while the next period pays.
+        UUID alice = UUID.randomUUID();
+        Account gov = new Account();
+        gov.setAccountId(7);
+        when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
+        when(accountService.getOrCreatePersonalAccountId(alice)).thenReturn(42);
+
+        when(ledgerService.transferChecked(any())).thenReturn(new LedgerService.TransferResult(1L, true));
+
+        Clock clock = Clock.fixed(Instant.ofEpochSecond(1_000_000L), ZoneOffset.UTC);
+        SalaryServiceImpl svc = new SalaryServiceImpl(
+                cfg(true, AMOUNTS), accountService, ledgerService, server, notifier, clock);
+
+        svc.payout(List.of(new SalaryPayment(alice, "senator", new BigDecimal("65.0"))));
+
+        ArgumentCaptor<TransferRequest> cap = ArgumentCaptor.forClass(TransferRequest.class);
+        verify(ledgerService).transferChecked(cap.capture());
+        // 1_000_000 mod 900 == 100 → period start 999_900.
+        byte[] expected = Idempotency.sha256("salary:999900:" + alice);
+        assertThat(cap.getValue().dedupKey()).isEqualTo(expected);
+    }
+
+    @Test
+    void payout_doesNotNotifyOrCountWhenTransferCollapsesOntoExistingDedupKey() {
+        // ADT-8 semantics: a payment whose dedup key already exists collapses onto the
+        // prior txn (no new money moved). transferChecked reports created=false, so the
+        // player must NOT be re-notified and the payout must NOT be counted — otherwise a
+        // retry or a manual run overlapping the scheduled task double-notifies. This is
+        // race-safe: the engine reports created=false whether the collapse is detected by
+        // the pre-insert check or by a concurrent-insert race, so it can't be defeated by
+        // two runs both passing an earlier pre-check.
+        UUID alice = UUID.randomUUID();
+        Account gov = new Account();
+        gov.setAccountId(7);
+        when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
+        when(accountService.getOrCreatePersonalAccountId(alice)).thenReturn(42);
+        // The transfer collapses onto an existing period txn → created=false.
+        when(ledgerService.transferChecked(any())).thenReturn(new LedgerService.TransferResult(123L, false));
+
+        int paid = service(cfg(true, AMOUNTS), true)
+                .payout(List.of(new SalaryPayment(alice, "senator", new BigDecimal("65.0"))));
+
+        // Corrected behaviour: transfer attempted, but no notify and not counted.
+        assertThat(paid).isZero();
+        verify(ledgerService).transferChecked(any());
+        verify(notifier, never()).notifySalaryPaid(org.mockito.ArgumentMatchers.eq(alice), any());
+    }
+
+    @Test
     void payout_continuesWhenOneTransferFails() {
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
@@ -187,7 +260,9 @@ class SalaryServiceImplTest {
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
         when(accountService.getOrCreatePersonalAccountId(a)).thenReturn(1);
         when(accountService.getOrCreatePersonalAccountId(b)).thenReturn(2);
-        doThrow(new RuntimeException("boom")).doReturn(99L).when(ledgerService).transfer(any());
+        doThrow(new RuntimeException("boom"))
+                .doReturn(new LedgerService.TransferResult(99L, true))
+                .when(ledgerService).transferChecked(any());
 
         List<SalaryPayment> plan = new ArrayList<>();
         plan.add(new SalaryPayment(a, "senator", new BigDecimal("65.0")));
@@ -195,7 +270,7 @@ class SalaryServiceImplTest {
 
         int paid = service(cfg(true, AMOUNTS), true).payout(plan);
         assertThat(paid).isEqualTo(1); // first threw, second succeeded
-        verify(ledgerService, org.mockito.Mockito.times(2)).transfer(any());
+        verify(ledgerService, org.mockito.Mockito.times(2)).transferChecked(any());
         // Only the player whose transfer succeeded is notified.
         verify(notifier, never()).notifySalaryPaid(org.mockito.ArgumentMatchers.eq(a), any());
         verify(notifier).notifySalaryPaid(org.mockito.ArgumentMatchers.eq(b), any());

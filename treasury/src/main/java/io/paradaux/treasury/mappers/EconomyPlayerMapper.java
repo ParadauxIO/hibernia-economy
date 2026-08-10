@@ -1,5 +1,6 @@
 package io.paradaux.treasury.mappers;
 
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -29,9 +30,29 @@ public interface EconomyPlayerMapper {
                      @Param("currentName") String currentName,
                      @Param("epochSeconds") long epochSeconds);
 
+    /**
+     * Releases a name claimed by a <em>different</em> player. A Minecraft name
+     * belongs to exactly one player at a time (Java via Mojang; Bedrock via the
+     * unique {@code .}-prefixed Floodgate name), so on a name change/reuse the
+     * previous holder's row must give it up before the new owner is upserted —
+     * otherwise the {@code UNIQUE(name_lower)} constraint collides. The old holder
+     * is re-added on their next login. Matched on the indexed {@code name_lower}.
+     */
+    @Delete("DELETE FROM economy_players WHERE name_lower = LOWER(#{name}) AND player_uuid_bin <> #{keepUuid}")
+    void releaseNameFromOthers(@Param("name") String name, @Param("keepUuid") UUID keepUuid);
+
     /** The player's last-login epoch (seconds), or {@code null} if never recorded. */
     @Select("SELECT last_login_epoch FROM economy_players WHERE player_uuid_bin = #{playerUuid}")
     Long findLastLogin(@Param("playerUuid") UUID playerUuid);
+
+    /**
+     * Locking variant of {@link #findLastLogin}: takes a row lock so the
+     * read-previous-then-write-new sequence in {@code recordLogin} is serialised at
+     * the database level — correct across multiple writer processes, not just within
+     * one JVM monitor (ADT-9).
+     */
+    @Select("SELECT last_login_epoch FROM economy_players WHERE player_uuid_bin = #{playerUuid} FOR UPDATE")
+    Long findLastLoginForUpdate(@Param("playerUuid") UUID playerUuid);
 
     /** Resolves a current name (case-insensitive) to a UUID, or {@code null} if unknown. */
     @Select("SELECT player_uuid_bin FROM economy_players WHERE name_lower = LOWER(#{name})")

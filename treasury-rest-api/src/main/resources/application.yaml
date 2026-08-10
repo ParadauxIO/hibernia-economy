@@ -23,6 +23,9 @@ mybatis:
   type-handlers-package: io.paradaux.treasuryrestapi.mybatis
 
 api:
+  # Prefer "base64:<openssl rand -base64 48>" (random key material) over a
+  # passphrase, and keep it byte-identical to the plugin's api.jwt-secret. A
+  # plain passphrase uses a deprecated legacy SHA-256 KDF (warns). (ADT-23)
   jwt-secret: change-me-please-use-a-long-random-secret-key
 
 # Per-issuer API rate limiting. With redis-host unset (local/dev) the limiter

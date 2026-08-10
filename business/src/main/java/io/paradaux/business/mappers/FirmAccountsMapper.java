@@ -80,4 +80,17 @@ public interface FirmAccountsMapper {
         LIMIT 1
         """)
     Integer getFirmIdByAccountId(@Param("accountId") Integer accountId);
+
+    /**
+     * Every live firm-↔-account link across all firms, in one query. Backs the
+     * firm balance leaderboard (/firm baltop), which sums each firm's account
+     * balances; doing this per-firm would be N+1. {@code added_at} is left unset.
+     */
+    @Select("""
+        SELECT firm_id    AS firmId,
+               account_id AS accountId
+        FROM firm_accounts
+        WHERE removed_at IS NULL
+        """)
+    List<FirmAccount> listActiveAccountLinks();
 }

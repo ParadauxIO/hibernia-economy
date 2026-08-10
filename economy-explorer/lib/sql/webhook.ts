@@ -112,60 +112,9 @@ export async function findForOwner(id: number, ownerUuid: string): Promise<Webho
   return r.rows[0] ? toRow(r.rows[0]) : null;
 }
 
-export async function createSubscription(args: {
-  ownerUuid: string;
-  keyType: 'PERSONAL' | 'BUSINESS';
-  accountId: number | null;
-  firmId: number | null;
-  targetUrl: string;
-  secret: string;
-}): Promise<number> {
-  const r = await sql`
-    INSERT INTO webhook_subscription
-      (api_key_id, owner_uuid_bin, key_type, account_id, firm_id, target_url, secret)
-    VALUES
-      (NULL, ${uuidToBin(args.ownerUuid)}, ${args.keyType}, ${args.accountId}, ${args.firmId},
-       ${args.targetUrl}, ${args.secret})
-  `.execute(db);
-  return Number(r.insertId);
-}
-
-/** Enable/disable. Re-activating clears the failure counter + disabled_at. */
-export async function setActive(id: number, ownerUuid: string, active: boolean): Promise<number> {
-  const a = active ? 1 : 0;
-  const r = await sql`
-    UPDATE webhook_subscription
-    SET active = ${a},
-        consecutive_failures = IF(${a}, 0, consecutive_failures),
-        disabled_at = IF(${a}, NULL, disabled_at)
-    WHERE subscription_id = ${id} AND owner_uuid_bin = ${uuidToBin(ownerUuid)}
-  `.execute(db);
-  return Number(r.numAffectedRows ?? 0);
-}
-
-export async function setUrl(id: number, ownerUuid: string, url: string): Promise<number> {
-  const r = await sql`
-    UPDATE webhook_subscription SET target_url = ${url}
-    WHERE subscription_id = ${id} AND owner_uuid_bin = ${uuidToBin(ownerUuid)}
-  `.execute(db);
-  return Number(r.numAffectedRows ?? 0);
-}
-
-export async function rotateSecret(id: number, ownerUuid: string, secret: string): Promise<number> {
-  const r = await sql`
-    UPDATE webhook_subscription SET secret = ${secret}
-    WHERE subscription_id = ${id} AND owner_uuid_bin = ${uuidToBin(ownerUuid)}
-  `.execute(db);
-  return Number(r.numAffectedRows ?? 0);
-}
-
-export async function deleteSubscription(id: number, ownerUuid: string): Promise<number> {
-  const r = await sql`
-    DELETE FROM webhook_subscription
-    WHERE subscription_id = ${id} AND owner_uuid_bin = ${uuidToBin(ownerUuid)}
-  `.execute(db);
-  return Number(r.numAffectedRows ?? 0);
-}
+// Writes to webhook_subscription go through the REST admin API (ADT-14):
+// lib/treasury.ts createWebhook / setWebhookActive / setWebhookUrl /
+// setWebhookSecret / deleteWebhook. kysely is read-only here.
 
 // ── Admin (fleet-wide, not owner-scoped) ────────────────────────────────────
 
@@ -227,7 +176,7 @@ const ADMIN_JOINS = sql`
   FROM webhook_subscription s
   LEFT JOIN accounts a ON a.account_id = s.account_id
   LEFT JOIN firm fm ON fm.firm_id = s.firm_id
-  LEFT JOIN firm_players fp ON fp.player_uuid_bin = s.owner_uuid_bin`;
+  LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.owner_uuid_bin`;
 
 /** Every webhook across all owners/accounts, filtered + paginated (admin). */
 export async function listAllWebhooks(f: AdminWebhookFilters, limit: number, offset: number): Promise<AdminWebhookRow[]> {
@@ -250,41 +199,8 @@ export async function countAllWebhooks(f: AdminWebhookFilters): Promise<number> 
   return Number(r.rows[0]?.c ?? 0);
 }
 
-/** Admin-create an account-scoped webhook (owner explicitly supplied; no owner-scope check). */
-export async function adminCreateForAccount(args: {
-  ownerUuid: string;
-  keyType: 'PERSONAL' | 'BUSINESS' | 'GOVERNMENT';
-  accountId: number;
-  targetUrl: string;
-  secret: string;
-}): Promise<number> {
-  const r = await sql`
-    INSERT INTO webhook_subscription
-      (api_key_id, owner_uuid_bin, key_type, account_id, firm_id, target_url, secret)
-    VALUES
-      (NULL, ${uuidToBin(args.ownerUuid)}, ${args.keyType}, ${args.accountId}, NULL, ${args.targetUrl}, ${args.secret})
-  `.execute(db);
-  return Number(r.insertId);
-}
-
-/** Enable/disable any webhook (admin; resets failures/disabled on enable). */
-export async function adminSetActive(id: number, active: boolean): Promise<number> {
-  const a = active ? 1 : 0;
-  const r = await sql`
-    UPDATE webhook_subscription
-    SET active = ${a},
-        consecutive_failures = IF(${a}, 0, consecutive_failures),
-        disabled_at = IF(${a}, NULL, disabled_at)
-    WHERE subscription_id = ${id}
-  `.execute(db);
-  return Number(r.numAffectedRows ?? 0);
-}
-
-/** Delete any webhook (admin). */
-export async function adminDelete(id: number): Promise<number> {
-  const r = await sql`DELETE FROM webhook_subscription WHERE subscription_id = ${id}`.execute(db);
-  return Number(r.numAffectedRows ?? 0);
-}
+// Admin webhook writes also go through the REST admin API (ADT-14): the fleet-wide
+// create/setActive/delete map to the same endpoints with no ownerUuid scope.
 
 /** Recent deliveries for a webhook — owner-scoped via the subscription join. */
 export async function listRecentDeliveries(

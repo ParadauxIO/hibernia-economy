@@ -112,6 +112,39 @@ class LedgerServiceBreadthIT extends IntegrationTestBase {
     }
 
     @Test
+    void getTransactionHistory_mergesAcrossAccountsMostRecentFirst() {
+        UUID p1 = UUID.randomUUID();
+        UUID p2 = UUID.randomUUID();
+        UUID admin = UUID.randomUUID();
+        ledgerService.resolveOrCreatePersonal(p1);
+        ledgerService.resolveOrCreatePersonal(p2);
+        int a1 = accountService.getPersonalAccountId(p1);
+        int a2 = accountService.getPersonalAccountId(p2);
+
+        for (int i = 0; i < 6; i++) ledgerService.adminGive(p1, new BigDecimal("1.00"), "a" + i, admin);
+        for (int i = 0; i < 4; i++) ledgerService.adminGive(p2, new BigDecimal("1.00"), "b" + i, admin);
+
+        Page<TransactionEntry> merged = ledgerService.getTransactionHistory(List.of(a1, a2), 0, 100);
+
+        // Every posting belongs to one of the two accounts, the total spans both,
+        // and results are merged most-recent-first (posting_id strictly descending).
+        assertThat(merged.items()).allMatch(t -> t.getAccountId() == a1 || t.getAccountId() == a2);
+        assertThat(merged.totalCount()).isEqualTo(merged.items().size());
+        assertThat(merged.totalCount()).isGreaterThanOrEqualTo(10);
+        List<TransactionEntry> items = merged.items();
+        for (int i = 1; i < items.size(); i++) {
+            assertThat(items.get(i).getPostingId()).isLessThan(items.get(i - 1).getPostingId());
+        }
+    }
+
+    @Test
+    void getTransactionHistory_emptyAccountList_returnsEmptyPage() {
+        Page<TransactionEntry> page = ledgerService.getTransactionHistory(List.of(), 0, 10);
+        assertThat(page.items()).isEmpty();
+        assertThat(page.totalCount()).isZero();
+    }
+
+    @Test
     void getTransactionHistory_returnsMostRecentFirst() {
         UUID player = UUID.randomUUID();
         UUID admin = UUID.randomUUID();

@@ -113,7 +113,7 @@ public abstract class EmbeddedDbIT {
     }
 
     protected void insertPlayer(UUID uuid, String currentName) {
-        exec("INSERT INTO firm_players (player_uuid_bin, current_name) VALUES (?,?)", ps -> {
+        exec("INSERT INTO economy_players (player_uuid_bin, current_name) VALUES (?,?)", ps -> {
             ps.setBytes(1, EmbeddedMariaDb.uuidBytes(uuid));
             ps.setString(2, currentName);
         });
@@ -125,6 +125,182 @@ public abstract class EmbeddedDbIT {
             ps.setInt(1, accountId);
             ps.setBigDecimal(2, new java.math.BigDecimal(balance));
         });
+    }
+
+    // ── seed: api keys ──────────────────────────────────────────────────────────
+
+    /** Seed an api_keys row; returns nothing (keyId is the caller-supplied PK). */
+    protected void insertApiKey(int keyId, String keyType, UUID owner, String jwtId,
+                                boolean revoked, java.time.LocalDateTime expiresAt) {
+        exec("INSERT INTO api_keys (key_id, key_type, owner_uuid_bin, jwt_id, revoked, issued_at, expires_at) "
+                + "VALUES (?,?,?,?,?, CURRENT_TIMESTAMP, ?)", ps -> {
+            ps.setInt(1, keyId);
+            ps.setString(2, keyType);
+            ps.setBytes(3, EmbeddedMariaDb.uuidBytes(owner));
+            ps.setString(4, jwtId);
+            ps.setInt(5, revoked ? 1 : 0);
+            ps.setTimestamp(6, java.sql.Timestamp.valueOf(expiresAt));
+        });
+    }
+
+    protected String jwtIdOf(int keyId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT jwt_id FROM api_keys WHERE key_id = ?")) {
+            ps.setInt(1, keyId);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getString(1); }
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    protected boolean isKeyRevoked(int keyId) {
+        return queryInt("SELECT revoked FROM api_keys WHERE key_id = ?", keyId) == 1;
+    }
+
+    // ── seed: firm roster ───────────────────────────────────────────────────────
+
+    protected void insertFirmRole(int roleId, int firmId, String name, int rankOrder,
+                                  boolean proprietorLike, boolean defaultRole, boolean deleted) {
+        exec("INSERT INTO firm_role (role_id, firm_id, name, rank_order, is_proprietor_like, is_default, deleted_at) "
+                + "VALUES (?,?,?,?,?,?, ?)", ps -> {
+            ps.setInt(1, roleId);
+            ps.setInt(2, firmId);
+            ps.setString(3, name);
+            ps.setInt(4, rankOrder);
+            ps.setInt(5, proprietorLike ? 1 : 0);
+            ps.setInt(6, defaultRole ? 1 : 0);
+            if (deleted) ps.setTimestamp(7, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
+            else ps.setNull(7, Types.TIMESTAMP);
+        });
+    }
+
+    protected void insertRolePermission(int roleId, String permission, boolean deleted) {
+        exec("INSERT INTO firm_role_permission (role_id, permission, deleted_at) VALUES (?,?, ?)", ps -> {
+            ps.setInt(1, roleId);
+            ps.setString(2, permission);
+            if (deleted) ps.setTimestamp(3, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
+            else ps.setNull(3, Types.TIMESTAMP);
+        });
+    }
+
+    protected void insertEmployee(int firmId, UUID player, int roleId, boolean left) {
+        exec("INSERT INTO firm_employee (firm_id, player_uuid_bin, role_id, joined_at, left_at) "
+                + "VALUES (?,?,?, CURRENT_TIMESTAMP, ?)", ps -> {
+            ps.setInt(1, firmId);
+            ps.setBytes(2, EmbeddedMariaDb.uuidBytes(player));
+            ps.setInt(3, roleId);
+            if (left) ps.setTimestamp(4, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
+            else ps.setNull(4, Types.TIMESTAMP);
+        });
+    }
+
+    // ── seed: webhooks ──────────────────────────────────────────────────────────
+
+    /** Seed a webhook_subscription; returns the generated subscription_id. */
+    protected long insertSubscription(UUID owner, String keyType, Integer accountId, Integer firmId,
+                                      String targetUrl, String secret, boolean active,
+                                      long consecutiveFailures) {
+        return execReturningKey("INSERT INTO webhook_subscription "
+                + "(owner_uuid_bin, key_type, account_id, firm_id, target_url, secret, active, consecutive_failures) "
+                + "VALUES (?,?,?,?,?,?,?,?)", ps -> {
+            ps.setBytes(1, EmbeddedMariaDb.uuidBytes(owner));
+            ps.setString(2, keyType);
+            if (accountId == null) ps.setNull(3, Types.INTEGER); else ps.setInt(3, accountId);
+            if (firmId == null) ps.setNull(4, Types.INTEGER); else ps.setInt(4, firmId);
+            ps.setString(5, targetUrl);
+            ps.setString(6, secret);
+            ps.setInt(7, active ? 1 : 0);
+            ps.setLong(8, consecutiveFailures);
+        });
+    }
+
+    /** Seed a webhook_delivery due now (next_attempt_at in the past). Returns delivery_id. */
+    protected long insertDueDelivery(long subscriptionId, long txnId, int accountId, int attempts) {
+        return execReturningKey("INSERT INTO webhook_delivery "
+                + "(subscription_id, txn_id, account_id, status, attempts, next_attempt_at) "
+                + "VALUES (?,?,?, 'PENDING', ?, NOW() - INTERVAL 1 MINUTE)", ps -> {
+            ps.setLong(1, subscriptionId);
+            ps.setLong(2, txnId);
+            ps.setInt(3, accountId);
+            ps.setInt(4, attempts);
+        });
+    }
+
+    /** Seed a minimal settled ledger txn + one posting for the given account. Returns txn_id. */
+    protected long insertSettledTxn(int accountId, String amount, String message, UUID initiator) {
+        long txnId = execReturningKey("INSERT INTO ledger_txns "
+                + "(message, settlement_time, initiator_uuid_bin, plugin_system) "
+                + "VALUES (?, NOW() - INTERVAL 1 HOUR, ?, 'test')", ps -> {
+            ps.setString(1, message);
+            ps.setBytes(2, EmbeddedMariaDb.uuidBytes(initiator));
+        });
+        exec("INSERT INTO ledger_postings (txn_id, account_id, amount, memo) VALUES (?,?,?, ?)", ps -> {
+            ps.setLong(1, txnId);
+            ps.setInt(2, accountId);
+            ps.setBigDecimal(3, new java.math.BigDecimal(amount));
+            ps.setString(4, message);
+        });
+        return txnId;
+    }
+
+    /** Read a single string/int/timestamp column from a webhook_delivery row. */
+    protected String deliveryStatus(long deliveryId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT status FROM webhook_delivery WHERE delivery_id = ?")) {
+            ps.setLong(1, deliveryId);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getString(1); }
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    protected int deliveryAttempts(long deliveryId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT attempts FROM webhook_delivery WHERE delivery_id = ?")) {
+            ps.setLong(1, deliveryId);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getInt(1); }
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    /** Seconds from now until this delivery's next_attempt_at (negative if already due). */
+    protected long secondsUntilNextAttempt(long deliveryId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT TIMESTAMPDIFF(SECOND, NOW(), next_attempt_at) FROM webhook_delivery WHERE delivery_id = ?")) {
+            ps.setLong(1, deliveryId);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getLong(1); }
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    protected boolean subscriptionActive(long subscriptionId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT active FROM webhook_subscription WHERE subscription_id = ?")) {
+            ps.setLong(1, subscriptionId);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getInt(1) == 1; }
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    protected long subscriptionFailures(long subscriptionId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT consecutive_failures FROM webhook_subscription WHERE subscription_id = ?")) {
+            ps.setLong(1, subscriptionId);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getLong(1); }
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    protected long deliveryCount(long subscriptionId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT COUNT(*) FROM webhook_delivery WHERE subscription_id = ?")) {
+            ps.setLong(1, subscriptionId);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getLong(1); }
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    protected long cursorValue() {
+        try (Connection c = dataSource.getConnection();
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT last_dispatched_txn_id FROM webhook_cursor WHERE id = 1")) {
+            rs.next();
+            return rs.getLong(1);
+        } catch (Exception e) { throw new RuntimeException(e); }
     }
 
     // ── seed: ChestShop analytics ───────────────────────────────────────────────

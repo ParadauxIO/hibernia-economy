@@ -58,10 +58,23 @@ export function synthesiseFromBuckets(buckets: { bucket: string; account_count: 
     '50k_100k': 75000,
     '100k_plus': 200000,
   };
+  // 'neg' (balance < 0) is the one key getBalanceDistribution emits that carries
+  // no positive wealth and is deliberately not in `mid`. Anything else missing
+  // from `mid` means the SQL bucket keys drifted from this map — which would
+  // silently skew Gini/top-share — so surface it rather than dropping it (ADT-160).
+  const EXCLUDED = new Set(['neg']);
   const out: number[] = [];
   for (const b of buckets) {
     const m = mid[b.bucket];
-    if (m == null) continue;
+    if (m == null) {
+      if (!EXCLUDED.has(b.bucket)) {
+        console.warn(
+          `[derived] synthesiseFromBuckets: unknown balance bucket '${b.bucket}' — ` +
+            `bucket keys drifted from lib/sql/stats.ts getBalanceDistribution; excluded from Gini.`,
+        );
+      }
+      continue;
+    }
     for (let i = 0; i < b.account_count; i++) out.push(m);
   }
   return out;

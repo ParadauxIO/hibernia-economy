@@ -108,12 +108,20 @@ export interface ExplorerFirmRow {
 export type SortColumn = 'balance' | 'name' | 'type' | 'created' | 'account_id';
 export type SortDir = 'ASC' | 'DESC';
 
+// Sort direction is the one fragment kysely can't parameterize, so it goes
+// through sql.raw. Callers already validate `dir` via a zod enum, but normalize
+// to a known-safe literal here too — the DAL boundary is the right place to make
+// injection impossible regardless of what a future caller passes.
+function rawDir(dir: SortDir) {
+  return sql.raw(dir === 'ASC' ? 'ASC' : 'DESC');
+}
+
 const ORDER_BY: Record<SortColumn, (dir: SortDir) => ReturnType<typeof sql>> = {
-  balance: (dir) => sql`ORDER BY abm.balance ${sql.raw(dir)}, a.account_id DESC`,
-  name: (dir) => sql`ORDER BY COALESCE(a.display_name, fp.current_name) ${sql.raw(dir)}, a.account_id DESC`,
-  type: (dir) => sql`ORDER BY a.account_type ${sql.raw(dir)}, a.account_id DESC`,
-  created: (dir) => sql`ORDER BY a.created_at ${sql.raw(dir)}, a.account_id DESC`,
-  account_id: (dir) => sql`ORDER BY a.account_id ${sql.raw(dir)}`,
+  balance: (dir) => sql`ORDER BY abm.balance ${rawDir(dir)}, a.account_id DESC`,
+  name: (dir) => sql`ORDER BY COALESCE(a.display_name, fp.current_name) ${rawDir(dir)}, a.account_id DESC`,
+  type: (dir) => sql`ORDER BY a.account_type ${rawDir(dir)}, a.account_id DESC`,
+  created: (dir) => sql`ORDER BY a.created_at ${rawDir(dir)}, a.account_id DESC`,
+  account_id: (dir) => sql`ORDER BY a.account_id ${rawDir(dir)}`,
 };
 
 // ── Accounts ──────────────────────────────────────────────────────────────
@@ -137,7 +145,7 @@ export async function listAccounts(args: {
            a.credit_limit, a.created_at, COALESCE(abm.balance, 0.00) AS balance
     FROM accounts a
     LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     ${where}
     ${order}
     LIMIT ${args.limit} OFFSET ${args.offset}
@@ -153,10 +161,10 @@ export async function countAccounts(args: {
   q: string | null;
 }): Promise<number> {
   const where = buildAccountsWhere(args.type, args.archived, args.q);
-  // firm_players is only referenced by the `q` name filter; skip the join on the
+  // economy_players is only referenced by the `q` name filter; skip the join on the
   // common no-search count so it doesn't join every account row for nothing.
   const nameJoin = args.q
-    ? sql`LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin`
+    ? sql`LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin`
     : sql``;
   const result = await sql<{ c: string | number }>`
     SELECT COUNT(*) AS c
@@ -175,7 +183,7 @@ export async function findAccount(accountId: number): Promise<ExplorerAccountRow
            a.credit_limit, a.created_at, COALESCE(abm.balance, 0.00) AS balance
     FROM accounts a
     LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE a.account_id = ${accountId}
   `.execute(db);
   const row = result.rows[0];
@@ -192,13 +200,16 @@ export async function findAccount(accountId: number): Promise<ExplorerAccountRow
  */
 export async function canReadAccount(accountId: number, viewerUuid: string): Promise<boolean> {
   const bin = uuidToBin(viewerUuid);
-  // Access is the consolidated account_access table (PAR-249): any active row —
-  // VIEWER, MEMBER, or AUTHORIZER — can read. LuckPerms-group grants
-  // (account_group_access) resolve in-game only, so web access is by UUID.
+  // Reads account_read_access_web (ADT-13) — the single source of truth for the
+  // WEB read rule: any active account_access grant (VIEWER, MEMBER, or
+  // AUTHORIZER). VIEWER is included on purpose so a department secretary reads
+  // their account's history (PAR-237); the public REST API is stricter
+  // (account_read_access_api). LuckPerms-group grants (account_group_access)
+  // resolve in-game only, so web access is by UUID.
   const result = await sql<{ allowed: number }>`
     SELECT EXISTS(
-      SELECT 1 FROM account_access
-       WHERE account_id = ${accountId} AND subject_uuid_bin = ${bin} AND removed_at IS NULL
+      SELECT 1 FROM account_read_access_web
+       WHERE account_id = ${accountId} AND subject_uuid_bin = ${bin}
     ) AS allowed
   `.execute(db);
   return Number(result.rows[0]?.allowed ?? 0) === 1;
@@ -218,7 +229,7 @@ export async function listAccountTransactions(args: {
            fp.current_name AS initiator_name, lt.plugin_system
     FROM ledger_postings lp
     JOIN ledger_txns lt ON lp.txn_id = lt.txn_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin
     WHERE lp.account_id = ${args.accountId}
     -- Order by txn_id (auto-increment, monotonic with creation) rather than
     -- lt.settlement_time: settlement_time lives on the other table, so ordering
@@ -257,7 +268,7 @@ export async function getCounterparties(accountId: number, limit: number): Promi
     JOIN ledger_postings partner ON partner.txn_id = me.txn_id
                                   AND partner.account_id != me.account_id
     JOIN accounts a ON a.account_id = partner.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE me.account_id = ${accountId}
     GROUP BY partner.account_id, a.display_name, a.account_type,
              a.owner_uuid_bin, fp.current_name
@@ -334,8 +345,8 @@ export async function listTransactions(args: {
 } & TxnFilters): Promise<ExplorerTxnRow[]> {
   const where = buildTxnsWhere(args);
   let order: ReturnType<typeof sql>;
-  if (args.sort === 'txnId') order = sql`ORDER BY lt.txn_id ${sql.raw(args.dir)}`;
-  else if (args.sort === 'settlement') order = sql`ORDER BY lt.settlement_time ${sql.raw(args.dir)}, lt.txn_id DESC`;
+  if (args.sort === 'txnId') order = sql`ORDER BY lt.txn_id ${rawDir(args.dir)}`;
+  else if (args.sort === 'settlement') order = sql`ORDER BY lt.settlement_time ${rawDir(args.dir)}, lt.txn_id DESC`;
   else order = sql`ORDER BY lt.settlement_time DESC, lt.txn_id DESC`;
 
   // posting_count via correlated subquery, not a join+GROUP BY over the whole
@@ -350,7 +361,7 @@ export async function listTransactions(args: {
            lt.plugin_system,
            (SELECT COUNT(*) FROM ledger_postings lp WHERE lp.txn_id = lt.txn_id) AS posting_count
     FROM ledger_txns lt
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin
     ${where}
     ${order}
     LIMIT ${args.limit} OFFSET ${args.offset}
@@ -361,11 +372,11 @@ export async function listTransactions(args: {
 /** Mirrors LedgerExplorerMapper.countTransactions (line 153-165). */
 export async function countTransactions(args: TxnFilters): Promise<number> {
   const where = buildTxnsWhere(args);
-  // The firm_players join only exists to let the `q` filter match on
+  // The economy_players join only exists to let the `q` filter match on
   // initiator_name; with no text query it's pure overhead on a full-table count,
   // so skip it (the default firehose count is the common case).
   const nameJoin = args.q
-    ? sql`LEFT JOIN firm_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin`
+    ? sql`LEFT JOIN economy_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin`
     : sql``;
   const result = await sql<{ c: string | number }>`
     SELECT COUNT(*) AS c FROM ledger_txns lt
@@ -382,7 +393,7 @@ export async function findTransaction(txnId: number): Promise<ExplorerTxnRow | n
            lt.initiator_uuid_bin, fp.current_name AS initiator_name,
            lt.plugin_system, 0 AS posting_count
     FROM ledger_txns lt
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = lt.initiator_uuid_bin
     WHERE lt.txn_id = ${txnId}
   `.execute(db);
   const row = result.rows[0];
@@ -405,7 +416,7 @@ export async function findPostingsByTxnId(txnId: number): Promise<ExplorerPostin
            fp.current_name AS owner_name, a.owner_uuid_bin, lp.amount, lp.memo
     FROM ledger_postings lp
     LEFT JOIN accounts a ON a.account_id = lp.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE lp.txn_id = ${txnId}
     ORDER BY lp.posting_id
   `.execute(db);
@@ -513,7 +524,7 @@ export async function getTopAccounts(limit: number): Promise<TopAccountRow[]> {
            a.account_type, abm.balance
     FROM accounts a
     JOIN account_balances_mat abm ON abm.account_id = a.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE a.is_archived = 0
     ORDER BY abm.balance DESC
     LIMIT ${limit}
@@ -548,16 +559,16 @@ export async function listFirms(args: {
   let order: ReturnType<typeof sql>;
   switch (args.sort) {
     case 'name':
-      order = sql`ORDER BY f.display_name ${sql.raw(args.dir)}, f.firm_id DESC`;
+      order = sql`ORDER BY f.display_name ${rawDir(args.dir)}, f.firm_id DESC`;
       break;
     case 'employees':
-      order = sql`ORDER BY employee_count ${sql.raw(args.dir)}, total_balance DESC`;
+      order = sql`ORDER BY employee_count ${rawDir(args.dir)}, total_balance DESC`;
       break;
     case 'created':
-      order = sql`ORDER BY f.created_at ${sql.raw(args.dir)}, f.firm_id DESC`;
+      order = sql`ORDER BY f.created_at ${rawDir(args.dir)}, f.firm_id DESC`;
       break;
     default:
-      order = sql`ORDER BY total_balance ${sql.raw(args.dir)}, f.firm_id DESC`;
+      order = sql`ORDER BY total_balance ${rawDir(args.dir)}, f.firm_id DESC`;
   }
 
   const result = await sql<{

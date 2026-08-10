@@ -11,6 +11,7 @@ import io.paradaux.treasuryrestapi.mapper.MembershipMapper;
 import io.paradaux.treasuryrestapi.model.Account;
 import io.paradaux.treasuryrestapi.model.TransactionRow;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
+import io.paradaux.treasuryrestapi.util.Pagination;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -82,19 +83,12 @@ public class TransactionService {
         // Compute the offset in long so a large page can't overflow int into a
         // negative value — MariaDB rejects a negative OFFSET, which would surface
         // as a 500. Reject any page whose offset can't be served as a clean 400.
-        long offsetLong = (long) (page - 1) * limit;
-        if (offsetLong > Integer.MAX_VALUE) {
-            log.warn("Invalid page parameter: page={} limit={} overflows offset for accountId={}",
-                    page, limit, accountId);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAM",
-                    "Query parameter 'page' is too large.");
-        }
+        int offset = Pagination.offset(page, limit);
 
         // Steps 4 & 5: account must exist and the caller must be authorised
         requireTransactionAccess(verified, accountId);
 
         // Steps 6 & 7: query history and total count
-        int offset = (int) offsetLong;
         List<TransactionRow> rows = ledgerMapper.findTransactionsByAccount(accountId, limit, offset);
         long totalItems = ledgerMapper.countTransactionsByAccount(accountId);
         int totalPages = (int) Math.ceil((double) totalItems / limit);

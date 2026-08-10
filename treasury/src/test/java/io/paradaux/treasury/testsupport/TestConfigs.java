@@ -2,6 +2,7 @@ package io.paradaux.treasury.testsupport;
 
 import io.paradaux.treasury.model.config.BytebinConfiguration;
 import io.paradaux.treasury.model.config.DiscordWebhookConfiguration;
+import io.paradaux.treasury.model.config.FineWebhookConfiguration;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
@@ -27,7 +28,7 @@ public final class TestConfigs {
         setField(cfg, "economyFormat", "$#,##0.00");
         setField(cfg, "currencyNameSingular", "Dollar");
         setField(cfg, "currencyNamePlural", "Dollars");
-        setField(cfg, "startingBalance", startingBalance);
+        setField(cfg, "startingBalance", java.math.BigDecimal.valueOf(startingBalance));
         return cfg;
     }
 
@@ -52,6 +53,13 @@ public final class TestConfigs {
 
     public static DiscordWebhookConfiguration discordWebhook(boolean enabled, String url) {
         DiscordWebhookConfiguration cfg = newInstance(DiscordWebhookConfiguration.class);
+        setField(cfg, "enabled", enabled);
+        setField(cfg, "url", url);
+        return cfg;
+    }
+
+    public static FineWebhookConfiguration fineWebhook(boolean enabled, String url) {
+        FineWebhookConfiguration cfg = newInstance(FineWebhookConfiguration.class);
         setField(cfg, "enabled", enabled);
         setField(cfg, "url", url);
         return cfg;

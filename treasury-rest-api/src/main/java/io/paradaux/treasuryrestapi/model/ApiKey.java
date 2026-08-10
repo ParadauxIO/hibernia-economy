@@ -25,7 +25,9 @@ public class ApiKey {
     /** UUID string stored in api_keys.jwt_id — compared against the jti claim. */
     private String jwtId;
     private boolean revoked;
-    private String token;
+    // No token field: the signed JWT is no longer persisted (ADT-6). Verification
+    // needs only jwt_id by kid; a freshly-minted token is returned to the caller
+    // at rotation time and never stored or read back.
     private LocalDateTime issuedAt;
     private LocalDateTime expiresAt;
 }

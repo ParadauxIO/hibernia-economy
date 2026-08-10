@@ -13,8 +13,12 @@ public final class CallingPluginDetector {
     private static final Set<String> IGNORE_PACKAGES = Set.of(
             "java.", "jdk.", "sun.",
             "org.bukkit.", "net.md_5.",
-            "io.paradaux.", "io.papermc.",
-            "io.paradaux.treasury." // avoid attributing to ourselves
+            "io.papermc.",
+            // Only skip our own plugin, not every first-party io.paradaux.*
+            // caller — a broad "io.paradaux." prefix would mis-attribute
+            // source-income tax and plugin-system accounts for sibling plugins
+            // (business, realty, …) that legitimately move money through us.
+            "io.paradaux.treasury."
     );
 
     private static final ConcurrentHashMap<Class<?>, Plugin> PROVIDER_CACHE = new ConcurrentHashMap<>();

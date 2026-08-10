@@ -25,10 +25,13 @@ import java.util.Map;
 public class SourceIncomeTaxConfiguration {
 
     // Mutable so {@link #reload()} can refresh them at runtime (Guice singleton,
-    // read live per deposit). {@code pluginRates} is replaced wholesale.
-    private boolean enabled;
-    private BigDecimal defaultRate;
-    private String governmentAccount;
+    // read live per deposit). volatile so a deposit handler on another thread sees a
+    // fully-published value after /treasury reload re-populates these in place,
+    // rather than a stale or torn read (ADT-30). {@code pluginRates} is replaced
+    // wholesale.
+    private volatile boolean enabled;
+    private volatile BigDecimal defaultRate;
+    private volatile String governmentAccount;
     private volatile Map<String, BigDecimal> pluginRates;
     /** Set only via the {@code @Inject} ctor; null for test-factory instances. */
     private Treasury plugin;
@@ -64,7 +67,11 @@ public class SourceIncomeTaxConfiguration {
         FileConfiguration cfg = plugin.getConfig();
 
         this.enabled = cfg.getBoolean("tax.source-income-tax.enabled", false);
-        this.defaultRate = BigDecimal.valueOf(cfg.getDouble("tax.source-income-tax.default-rate", 0.0));
+        // Parse from the string form (not getDouble) so no IEEE-754 error reaches
+        // the ledger, and range-check to [0,1] — the same handling the per-plugin
+        // rates below already use. A malformed or out-of-range default is dropped
+        // to 0 rather than silently taxing at a nonsense rate.
+        this.defaultRate = parseDefaultRate(cfg.getString("tax.source-income-tax.default-rate", "0"));
 
         String govAccount = cfg.getString("tax.source-income-tax.government-account", "DCGovernment");
         this.governmentAccount = (govAccount == null || govAccount.isBlank()) ? "DCGovernment" : govAccount;
@@ -92,6 +99,27 @@ public class SourceIncomeTaxConfiguration {
         if (enabled) {
             log.info("Source income tax enabled: default-rate={}, government-account={}, plugin-specific-rates={}",
                     defaultRate, governmentAccount, pluginRates.size());
+        }
+    }
+
+    /**
+     * Parse the default rate from its configured string form and constrain it to
+     * the valid {@code [0,1]} range. Falls back to {@link BigDecimal#ZERO} on a
+     * blank, malformed, or out-of-range value (logging a warning), so a bad config
+     * can never tax at a negative or {@code >100%} rate.
+     */
+    private static BigDecimal parseDefaultRate(String raw) {
+        if (raw == null || raw.isBlank()) return BigDecimal.ZERO;
+        try {
+            BigDecimal rate = new BigDecimal(raw.trim());
+            if (rate.compareTo(BigDecimal.ZERO) < 0 || rate.compareTo(BigDecimal.ONE) > 0) {
+                log.warn("Source income tax default-rate is out of range [0,1]: {} — defaulting to 0", raw);
+                return BigDecimal.ZERO;
+            }
+            return rate;
+        } catch (NumberFormatException e) {
+            log.warn("Invalid source income tax default-rate: '{}' — defaulting to 0", raw);
+            return BigDecimal.ZERO;
         }
     }
 

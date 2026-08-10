@@ -161,6 +161,13 @@ public class JwtTokenVerifier {
                 // carry neither an 'acc' nor a 'firm' claim. Authorisation for the admin
                 // endpoints is enforced per-endpoint (requireServiceKey), not via a
                 // scoped claim here. accountId/firmId stay null.
+                //
+                // SERVICE is the most powerful credential in the system, so leave a trail
+                // of every use (ADT service-key-keytype-not-pinned) — an unexpected
+                // SERVICE verification (e.g. an api_keys row whose key_type was flipped)
+                // is then visible. INFO rather than WARN: the explorer uses a SERVICE key
+                // on every admin call, so WARN would be noise that buries the signal.
+                log.info("SERVICE token verified: keyId={} owner={}", keyId, ownerUuid);
             }
             default -> throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
                     "Token has an unrecognised key type.");

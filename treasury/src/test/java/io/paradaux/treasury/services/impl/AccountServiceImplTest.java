@@ -2,12 +2,14 @@ package io.paradaux.treasury.services.impl;
 
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.MembershipMapper;
-import io.paradaux.treasury.utils.AccountRedirectCache;
-import io.paradaux.treasury.utils.PersonalAccountCache;
+import io.paradaux.treasury.services.cache.AccountRedirectCache;
+import io.paradaux.treasury.services.cache.PersonalAccountCache;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.economy.AccountTypeTotal;
+import io.paradaux.treasury.model.economy.EconomySummary;
 import io.paradaux.treasury.testsupport.TestConfigs;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -59,6 +62,43 @@ class AccountServiceImplTest {
         b.setBalance(new BigDecimal("123.45"));
         when(accountMapper.readBalance(7)).thenReturn(b);
         assertThat(svc.getBalanceReadOnly(7)).isEqualByComparingTo("123.45");
+    }
+
+    @Test
+    void getBalancesByIds_mapsBalancesByAccountId() {
+        AccountBalance b1 = new AccountBalance(10, new BigDecimal("5.00"), 0);
+        AccountBalance b2 = new AccountBalance(11, new BigDecimal("7.50"), 0);
+        when(accountMapper.readBalances(List.of(10, 11))).thenReturn(List.of(b1, b2));
+
+        Map<Integer, BigDecimal> result = svc.getBalancesByIds(List.of(10, 11));
+        assertThat(result.get(10)).isEqualByComparingTo("5.00");
+        assertThat(result.get(11)).isEqualByComparingTo("7.50");
+    }
+
+    @Test
+    void getBalancesByIds_emptyInputShortCircuits() {
+        assertThat(svc.getBalancesByIds(List.of())).isEmpty();
+        verify(accountMapper, never()).readBalances(any());
+    }
+
+    @Test
+    void getAccountsByIds_mapsAccountsByAccountId() {
+        Account a1 = new Account();
+        a1.setAccountId(10);
+        Account a2 = new Account();
+        a2.setAccountId(11);
+        when(accountMapper.findByIds(List.of(10, 11))).thenReturn(List.of(a1, a2));
+
+        Map<Integer, Account> result = svc.getAccountsByIds(List.of(10, 11));
+        assertThat(result).containsOnlyKeys(10, 11);
+        assertThat(result.get(10)).isSameAs(a1);
+        assertThat(result.get(11)).isSameAs(a2);
+    }
+
+    @Test
+    void getAccountsByIds_emptyInputShortCircuits() {
+        assertThat(svc.getAccountsByIds(List.of())).isEmpty();
+        verify(accountMapper, never()).findByIds(any());
     }
 
     @Test
@@ -361,6 +401,32 @@ class AccountServiceImplTest {
     }
 
     @Test
+    void getOrCreateSystemAccountId_concurrentInsert_reResolvesToWinner() {
+        UUID owner = UUID.randomUUID();
+        when(accountMapper.findSystemAccountForPlugin("RacyPlugin")).thenReturn(null);
+        // The insert loses the race against uq_one_system_per_plugin (V24, ADT-74).
+        org.mockito.Mockito.doThrow(new org.apache.ibatis.exceptions.PersistenceException("dup"))
+                .when(accountMapper).insertAccount(org.mockito.ArgumentMatchers.any());
+        when(accountMapper.findSystemAccountIdForPluginLocking("RacyPlugin")).thenReturn(123);
+
+        assertThat(svc.getOrCreateSystemAccountId("RacyPlugin", owner)).isEqualTo(123);
+        verify(accountMapper, org.mockito.Mockito.never()).seedBalance(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void getOrCreateSystemAccountId_insertFailsAndNoWinner_propagates() {
+        UUID owner = UUID.randomUUID();
+        when(accountMapper.findSystemAccountForPlugin("BrokenPlugin")).thenReturn(null);
+        org.mockito.Mockito.doThrow(new org.apache.ibatis.exceptions.PersistenceException("boom"))
+                .when(accountMapper).insertAccount(org.mockito.ArgumentMatchers.any());
+        when(accountMapper.findSystemAccountIdForPluginLocking("BrokenPlugin")).thenReturn(null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> svc.getOrCreateSystemAccountId("BrokenPlugin", owner))
+                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
+    }
+
+    @Test
     void updateAccount_known_callsMapperUpdate() {
         Account a = new Account();
         a.setAccountId(7);
@@ -459,6 +525,37 @@ class AccountServiceImplTest {
     void listGovernmentAccounts_delegates() {
         when(accountMapper.findAllGovernmentAccounts()).thenReturn(List.of(new Account(), new Account()));
         assertThat(svc.listGovernmentAccounts()).hasSize(2);
+    }
+
+    // ---- Economy summary ----
+
+    @Test
+    void getEconomySummary_foldsTypeTotalsAndSumsGrandTotal() {
+        when(accountMapper.getEconomyTotalsByType()).thenReturn(List.of(
+                new AccountTypeTotal(AccountType.PERSONAL, new BigDecimal("106500.00")),
+                new AccountTypeTotal(AccountType.BUSINESS, new BigDecimal("25000.00")),
+                new AccountTypeTotal(AccountType.GOVERNMENT, new BigDecimal("8000.00"))));
+
+        EconomySummary s = svc.getEconomySummary();
+
+        assertThat(s.getPersonal()).isEqualByComparingTo("106500.00");
+        assertThat(s.getBusiness()).isEqualByComparingTo("25000.00");
+        assertThat(s.getGovernment()).isEqualByComparingTo("8000.00");
+        assertThat(s.getTotal()).isEqualByComparingTo("139500.00");
+    }
+
+    @Test
+    void getEconomySummary_missingTypesDefaultToZero() {
+        // Only PERSONAL has any balance; BUSINESS/GOVERNMENT rows absent.
+        when(accountMapper.getEconomyTotalsByType()).thenReturn(List.of(
+                new AccountTypeTotal(AccountType.PERSONAL, new BigDecimal("500.00"))));
+
+        EconomySummary s = svc.getEconomySummary();
+
+        assertThat(s.getPersonal()).isEqualByComparingTo("500.00");
+        assertThat(s.getBusiness()).isEqualByComparingTo("0");
+        assertThat(s.getGovernment()).isEqualByComparingTo("0");
+        assertThat(s.getTotal()).isEqualByComparingTo("500.00");
     }
 
     // ---- Formatting ----

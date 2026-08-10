@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
+import { isStaff } from '@/lib/auth/access';
 
 // Client-side viewer resolution for the header (login state, role badges, nav
 // gating). Keeping this out of the root layout is what lets the layout — and so
@@ -14,6 +15,10 @@ export async function GET() {
       anon: v.anon,
       loggedIn: !v.anon,
       isAdmin: v.role === 'admin',
+      // The read-only financial-oversight (viewer) capability — true for admin and
+      // government too, since both imply it. Drives the header "viewer" badge for a
+      // plain player who holds it via a group.
+      isViewer: isStaff(v),
       role: v.anon ? null : v.role,
       minecraftName: v.anon ? null : v.minecraftName,
     },

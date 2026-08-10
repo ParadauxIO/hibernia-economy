@@ -47,6 +47,9 @@ class MarketApiImplIT extends IntegrationTestBase {
             st.execute("TRUNCATE TABLE chestshop_sale");
             st.execute("TRUNCATE TABLE chestshop_shop");
         }
+        // This IT inserts synthetic txn/account/firm ids, so drop the V20 FK
+        // enforcement the Flyway harness applied to these analytics tables.
+        dropChestShopMarketForeignKeys();
     }
 
     // ── recordSale ──────────────────────────────────────────────────────────────
@@ -184,7 +187,7 @@ class MarketApiImplIT extends IntegrationTestBase {
         // Same location, new price/stock/item → updates the existing row, same shop_id.
         market.upsertShop(new ChestShopShopRecord("world", 1, 2, 3, false, null, "PERSONAL", null, owner,
                 "EMERALD", "EMERALD", "Emerald", false, null,
-                new BigDecimal("12.50"), new BigDecimal("9.00"), 8, 64));
+                new BigDecimal("12.50"), new BigDecimal("9.00"), 8, 64, 128, null));
 
         List<Map<String, Object>> rows = query("SELECT * FROM chestshop_shop");
         assertEquals(1, rows.size(), "upsert must not create a second row for the same location");
@@ -201,7 +204,7 @@ class MarketApiImplIT extends IntegrationTestBase {
     void upsertShop_nullStock_leavesStockAtNull() throws Exception {
         market.upsertShop(new ChestShopShopRecord("world", 9, 9, 9, true, null, null, null, null,
                 "DIRT", "DIRT", "Dirt", false, null,
-                new BigDecimal("1.00"), null, 64, null));
+                new BigDecimal("1.00"), null, 64, null, null, null));
         Map<String, Object> r = query("SELECT * FROM chestshop_shop").get(0);
         assertEquals(1, ((Number) r.get("is_admin_shop")).intValue());
         assertNull(r.get("current_stock"));
@@ -240,10 +243,11 @@ class MarketApiImplIT extends IntegrationTestBase {
     void updateShopStock_updatesStockAndTimestamp() throws Exception {
         market.upsertShop(shop("world", 2, 2, 2, "PERSONAL", null, UUID.randomUUID(),
                 new BigDecimal("5.00"), null, 1, 10));
-        market.updateShopStock("world", 2, 2, 2, 99);
+        market.updateShopStock("world", 2, 2, 2, 99, 27);
 
         Map<String, Object> r = query("SELECT * FROM chestshop_shop").get(0);
         assertEquals(99, ((Number) r.get("current_stock")).intValue());
+        assertEquals(27, ((Number) r.get("estimated_capacity")).intValue());
         assertNotNull(r.get("stock_at"));
     }
 
@@ -251,14 +255,14 @@ class MarketApiImplIT extends IntegrationTestBase {
     void updateShopStock_nullStock_clearsValue() throws Exception {
         market.upsertShop(shop("world", 3, 3, 3, "PERSONAL", null, UUID.randomUUID(),
                 new BigDecimal("5.00"), null, 1, 10));
-        market.updateShopStock("world", 3, 3, 3, null);
+        market.updateShopStock("world", 3, 3, 3, null, null);
         Map<String, Object> r = query("SELECT * FROM chestshop_shop").get(0);
         assertNull(r.get("current_stock"));
     }
 
     @Test
     void updateShopStock_missingLocation_isNoOp() {
-        assertDoesNotThrow(() -> market.updateShopStock("nowhere", 0, 0, 0, 5));
+        assertDoesNotThrow(() -> market.updateShopStock("nowhere", 0, 0, 0, 5, 3));
         assertEquals(0, query("SELECT * FROM chestshop_shop").size());
     }
 
@@ -268,7 +272,7 @@ class MarketApiImplIT extends IntegrationTestBase {
                                             Integer firmId, UUID owner, BigDecimal buy, BigDecimal sell,
                                             int batch, Integer stock) {
         return new ChestShopShopRecord(world, x, y, z, false, 100, type, firmId, owner,
-                "DIAMOND", "DIAMOND", "Diamond", false, null, buy, sell, batch, stock);
+                "DIAMOND", "DIAMOND", "Diamond", false, null, buy, sell, batch, stock, 50, null);
     }
 
     private int activeFlag(String world, int x, int y, int z) {
@@ -355,7 +359,11 @@ class MarketApiImplIT extends IntegrationTestBase {
               sell_price DECIMAL(19,2) NULL,
               batch_qty INT NOT NULL,
               current_stock INT NULL,
+              estimated_capacity INT NULL,
+              world_uuid BINARY(16) NULL,
               active TINYINT(1) NOT NULL DEFAULT 1,
+              visible TINYINT(1) NOT NULL DEFAULT 1,
+              hologram TINYINT(1) NOT NULL DEFAULT 1,
               created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
               stock_at TIMESTAMP NULL,
               last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -363,4 +371,15 @@ class MarketApiImplIT extends IntegrationTestBase {
               UNIQUE KEY uq_shop_location (world, sign_x, sign_y, sign_z)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """;
+
+    static final String CREATE_PREVIEW = """
+            CREATE TABLE IF NOT EXISTS chestshop_preview_preference (
+              player_uuid_bin BINARY(16) NOT NULL,
+              visible TINYINT(1) NOT NULL DEFAULT 1,
+              PRIMARY KEY (player_uuid_bin)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """;
+
+    static final String CREATE_SHOP_DDL = CREATE_SHOP;
+    static final String CREATE_SALE_DDL = CREATE_SALE;
 }

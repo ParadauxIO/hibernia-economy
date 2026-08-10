@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -31,7 +32,7 @@ export default async function AccountsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const raw = await searchParams;
-  const parsed = SP_SCHEMA.safeParse(flatten(raw));
+  const parsed = SP_SCHEMA.safeParse(flattenSearchParams(raw));
   const sp = parsed.success ? parsed.data : SP_SCHEMA.parse({});
   const dir: SortDir = sp.dir.toUpperCase() as SortDir;
   // Inactive/archived accounts are hidden entirely — active only.
@@ -157,17 +158,6 @@ export default async function AccountsPage({
   );
 }
 
-function flatten(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      if (v.length > 0 && v[0] !== undefined) out[k] = v[0];
-    } else if (v !== undefined) {
-      out[k] = v;
-    }
-  }
-  return out;
-}
 
 function sortHeader(
   label: string,

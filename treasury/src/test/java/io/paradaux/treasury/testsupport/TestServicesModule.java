@@ -23,16 +23,19 @@ import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
+import io.paradaux.treasury.services.BalanceTaxService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
 import io.paradaux.treasury.services.impl.AccountServiceImpl;
+import io.paradaux.treasury.services.impl.BalanceTaxServiceImpl;
+import io.paradaux.treasury.services.impl.TaxCycleRegistryImpl;
 import io.paradaux.treasury.services.impl.DataExportServiceImpl;
 import io.paradaux.treasury.services.impl.GovServiceImpl;
 import io.paradaux.treasury.services.impl.PlayerDirectoryServiceImpl;
 import io.paradaux.treasury.services.impl.LedgerServiceImpl;
 import io.paradaux.treasury.services.impl.MembershipServiceImpl;
-import io.paradaux.treasury.utils.AccountRedirectCache;
-import io.paradaux.treasury.utils.PersonalAccountCache;
-import io.paradaux.treasury.utils.PluginSystemAccountCache;
+import io.paradaux.treasury.services.cache.AccountRedirectCache;
+import io.paradaux.treasury.services.cache.PersonalAccountCache;
+import io.paradaux.treasury.services.cache.PluginSystemAccountCache;
 
 /**
  * Wires the production service implementations against test configurations.
@@ -66,7 +69,8 @@ public class TestServicesModule extends AbstractModule {
             @Override public void notifySalaryPaid(java.util.UUID playerUuid, BigDecimal amount) { }
         });
 
-        bind(TaxCycleRegistry.class).in(Singleton.class);
+        bind(TaxCycleRegistry.class).to(TaxCycleRegistryImpl.class).in(Singleton.class);
+        bind(BalanceTaxService.class).to(BalanceTaxServiceImpl.class).in(Singleton.class);
         bind(TaxApiImpl.class).in(Singleton.class);
         bind(TaxApi.class).to(TaxApiImpl.class).in(Singleton.class);
 

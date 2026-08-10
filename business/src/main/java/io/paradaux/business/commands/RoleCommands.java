@@ -9,7 +9,7 @@ import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.business.model.FirmRole;
 import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.services.FirmRoleService;
-import io.paradaux.business.utils.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.FirmName;
 import org.bukkit.entity.Player;
 
 import java.util.List;
@@ -35,8 +35,8 @@ public class RoleCommands implements CommandHandler {
     public void createRole(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("role") String role, @Arg("order") Integer order) {
         String firm = firmRef.value();
         UUID actor = sender.getUniqueId();
+        // createRole now grants the DEFAULT permission atomically (ADT-56).
         roles.createRole(firm, role, order, actor);
-        roles.addRolePermission(firm, role, "DEFAULT", actor);
         message.send(sender, "business.staff.role.create.sender", "role", role, "firm", firm);
     }
 

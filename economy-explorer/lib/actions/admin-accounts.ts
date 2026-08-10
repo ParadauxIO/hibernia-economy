@@ -2,16 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { getViewer, type Viewer } from '@/lib/auth/viewer';
-import { ForbiddenError } from '@/lib/errors';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 import { auditView } from '@/lib/audit';
 import {
   adminTransfer, renameAccount, changeAccountOwner, archiveAccount, unarchiveAccount,
   type TransferResult, type AccountResult,
 } from '@/lib/treasury';
-
-function requireAdmin(viewer: Viewer): asserts viewer is Extract<Viewer, { anon: false }> {
-  if (viewer.anon || viewer.role !== 'admin') throw new ForbiddenError('Admin only.');
-}
 
 type Result<T> = { ok: boolean; error?: string; result?: T };
 

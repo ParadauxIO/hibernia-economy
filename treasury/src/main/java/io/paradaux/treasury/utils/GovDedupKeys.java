@@ -37,11 +37,15 @@ public final class GovDedupKeys {
 
     private static String buildKey(String prefix, UUID sender, int fromAccountId,
                                    int toAccountId, BigDecimal amount, Instant when) {
+        // Use the epoch-second as a plain number rather than the ISO-8601 Instant,
+        // whose "HH:MM:SS" rendering contains the same ':' used as the field
+        // separator. With every field colon-free (prefix, UUID, ints, decimal,
+        // long) the ':'-joined key is unambiguously injective (ADT-55).
         return prefix + ":"
                 + sender + ":"
                 + fromAccountId + ":"
                 + toAccountId + ":"
                 + amount.toPlainString() + ":"
-                + when.truncatedTo(ChronoUnit.SECONDS);
+                + when.truncatedTo(ChronoUnit.SECONDS).getEpochSecond();
     }
 }

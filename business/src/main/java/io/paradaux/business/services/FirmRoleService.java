@@ -18,6 +18,20 @@ public interface FirmRoleService {
 
     void removeRolePermission(String firmName, String roleName, String permission, UUID actorId);
 
+    // ---- int-id overloads (structure/0004) ----------------------------------
+    // For internal callers (the BusinessApi delegate) that already hold the firm
+    // id: resolve straight by id instead of round-tripping through
+    // getFirmByNameOrId(String.valueOf(id)). The String overloads stay for the
+    // command entrypoints resolving user name-or-id input.
+
+    void createRole(int firmId, String roleName, int rankOrder, UUID actorId);
+
+    void deleteRole(int firmId, String roleName, UUID actorId);
+
+    void addRolePermission(int firmId, String roleName, String permission, UUID actorId);
+
+    void removeRolePermission(int firmId, String roleName, String permission, UUID actorId);
+
     List<FirmRole> getFirmRoles(String firmName, UUID actorId);
     List<FirmRole> getFirmRoles(int firmId);
 

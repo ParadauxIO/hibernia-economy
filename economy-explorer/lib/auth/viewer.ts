@@ -8,7 +8,7 @@ import { findCapabilities } from '@/lib/sql/group';
 import {
   legacyRoleCapabilities,
   roleFromCapabilities,
-  isCapability,
+  normalizeCapability,
   type Capability,
 } from '@/lib/auth/capabilities';
 
@@ -132,7 +132,12 @@ export const getViewer = cache(async (): Promise<Viewer> => {
         findCapabilities(playerUuid),
       ]);
       for (const r of elevated) for (const c of legacyRoleCapabilities(r)) caps.add(c);
-      for (const c of groupCaps) if (isCapability(c)) caps.add(c);
+      // Group rows store raw capability strings; normalize so legacy 'staff.audit'
+      // grants resolve to the current 'viewer' capability (and unknowns drop out).
+      for (const c of groupCaps) {
+        const norm = normalizeCapability(c);
+        if (norm) caps.add(norm);
+      }
     }
     const capabilities = [...caps];
 

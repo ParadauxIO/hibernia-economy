@@ -12,6 +12,12 @@ import java.util.List;
  */
 public record Page<T>(List<T> items, int totalCount, int offset, int limit) {
 
+    public Page {
+        // Defensive, unmodifiable copy (ADT-40) so a caller can't mutate the page
+        // contents through the list reference they passed in / received back.
+        items = items == null ? List.of() : List.copyOf(items);
+    }
+
     public boolean hasMore() {
         return offset + items.size() < totalCount;
     }

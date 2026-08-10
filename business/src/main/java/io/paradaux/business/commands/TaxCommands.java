@@ -6,16 +6,14 @@ import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.config.BalanceTaxConfiguration;
+import io.paradaux.business.services.FirmBalanceTaxService;
 import io.paradaux.business.services.FirmPropertyService;
 import io.paradaux.business.services.FirmService;
-import io.paradaux.business.services.FirmTransactionService;
-import io.paradaux.business.utils.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.treasury.api.TreasuryApi;
 import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 
 @Singleton
 @Command({"db", "democracybusiness", "business", "firm", "company"})
@@ -25,22 +23,19 @@ public class TaxCommands implements CommandHandler {
 
     private final FirmService firmService;
     private final FirmPropertyService firmPropertyService;
-    private final FirmTransactionService firmTransactionService;
-    private final BalanceTaxConfiguration taxConfig;
+    private final FirmBalanceTaxService balanceTaxService;
     private final TreasuryApi treasuryApi;
     private final Message message;
 
     @Inject
     public TaxCommands(FirmService firmService,
                        FirmPropertyService firmPropertyService,
-                       FirmTransactionService firmTransactionService,
-                       BalanceTaxConfiguration taxConfig,
+                       FirmBalanceTaxService balanceTaxService,
                        TreasuryApi treasuryApi,
                        Message message) {
         this.firmService = firmService;
         this.firmPropertyService = firmPropertyService;
-        this.firmTransactionService = firmTransactionService;
-        this.taxConfig = taxConfig;
+        this.balanceTaxService = balanceTaxService;
         this.treasuryApi = treasuryApi;
         this.message = message;
     }
@@ -82,13 +77,13 @@ public class TaxCommands implements CommandHandler {
         }
 
         boolean exempt = firmPropertyService.getBoolean(f.getFirmId(), EXEMPT_KEY).orElse(false);
-        BigDecimal totalBalance = firmTransactionService.getAggregateBalance(f.getFirmId());
-        BigDecimal rate = taxConfig.getWeeklyRate(totalBalance);
-        BigDecimal estimatedTax = totalBalance.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+        // Economy arithmetic (balance × rate, 2dp rounding) lives in the service; the
+        // handler only formats for display (plugin-architecture/0006).
+        FirmBalanceTaxService.WeeklyTaxEstimate estimate = balanceTaxService.estimateWeeklyTax(f.getFirmId());
 
-        String balanceFmt = treasuryApi.formatAmount(totalBalance);
-        String taxFmt = treasuryApi.formatAmount(estimatedTax);
-        String ratePct = rate.multiply(BigDecimal.valueOf(100)).stripTrailingZeros().toPlainString() + "%";
+        String balanceFmt = treasuryApi.formatAmount(estimate.totalBalance());
+        String taxFmt = treasuryApi.formatAmount(estimate.estimatedTax());
+        String ratePct = estimate.rate().multiply(BigDecimal.valueOf(100)).stripTrailingZeros().toPlainString() + "%";
         String exemptStatus = exempt ? "<green>Exempt</green>" : "<red>Not Exempt</red>";
 
         message.send(sender, "business.tax.info",

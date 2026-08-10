@@ -5,7 +5,7 @@ import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { BackLink } from '@/components/BackLink';
 import { getGroup, listGroupMembers } from '@/lib/services/group';
-import { CAPABILITIES, CAPABILITY_LABELS, CAPABILITY_DESCRIPTIONS } from '@/lib/auth/capabilities';
+import { CAPABILITIES, CAPABILITY_LABELS, CAPABILITY_DESCRIPTIONS, normalizeCapability } from '@/lib/auth/capabilities';
 import { CapabilitiesForm } from './capabilities-form';
 import { LuckpermsNodeForm } from './luckperms-node-form';
 import { MemberManager } from './member-manager';
@@ -45,7 +45,9 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
         <CapabilitiesForm
           groupId={id}
           all={CAPABILITIES.map((c) => ({ value: c, label: CAPABILITY_LABELS[c], description: CAPABILITY_DESCRIPTIONS[c] }))}
-          selected={group.capabilities}
+          // Normalize legacy aliases (e.g. 'staff.audit' → 'viewer') so a pre-rename
+          // row renders as its current checkbox; saving then rewrites it canonically.
+          selected={group.capabilities.map((c) => normalizeCapability(c) ?? c)}
         />
       </div>
 

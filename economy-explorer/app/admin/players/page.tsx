@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -27,7 +28,7 @@ export default async function AdminPlayersPage({
   const viewer = await getViewer();
   await auditView(viewer, { path: '/admin/players', targetType: 'global' });
 
-  const sp = SP_SCHEMA.safeParse(flatten(await searchParams)).data ?? {};
+  const sp = SP_SCHEMA.safeParse(flattenSearchParams(await searchParams)).data ?? {};
   const q = sp.q ?? null;
   const results = q ? await searchPlayers(q, 50) : [];
   const directUuid = q && UUID_RE.test(q) ? q.toLowerCase() : null;
@@ -77,11 +78,3 @@ export default async function AdminPlayersPage({
   );
 }
 
-function flatten(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const o: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === 'string') o[k] = v;
-    else if (Array.isArray(v) && v.length) o[k] = v[0];
-  }
-  return o;
-}

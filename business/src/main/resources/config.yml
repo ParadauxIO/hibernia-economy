@@ -2,9 +2,9 @@ database:
   host: localhost
   port: 3306
   database: treasury
-  username: root
-  password: password
-  table-prefix: treasury_
+  username: treasury
+  # Placeholder; the plugin refuses to boot until this is changed from CHANGE_ME.
+  password: CHANGE_ME
 
 firm:
   # Maximum number of firms a single player may own (be proprietor of).
@@ -15,13 +15,28 @@ firm:
   # Set to 0 (or below) to disable.
   create-cooldown-seconds: 300
 
+sales:
+  # economy-explorer base URL that `/firm sales export` deep-links into (the
+  # explorer's own auth gates the page). Per tenant; leave blank to disable export.
+  explorer-url: ""
+  # Maximum window (days) a sales export may cover. 0 (or below) = unlimited.
+  max-export-days: 30
+  # Real-time sale notifications to a firm's online staff. Per-firm opt-in via
+  # `/firm sales toggle <firm>`; this is the default state for firms that haven't
+  # set it. Bursts are condensed into a digest flushed every notify-flush-seconds.
+  notify-default: false
+  notify-flush-seconds: 15
+
 tax:
   balance:
     enabled: true
     government-account: "DCGovernment"
+    # The key is the bracket floor (inclusive); the value is the weekly rate as a decimal.
+    # IMPORTANT: bracket floors must be whole numbers (no decimal point). A decimal key
+    # like `100000.00` is parsed by YAML as a nested path and is silently ignored.
     brackets:
-      0.00:       0.0      # $0.00    – $99,999.99  → 0 %
-      100000.00:  0.01     # $100,000 – $199,999.99  → 1 %
-      200000.00:  0.012    # $200,000 – $299,999.99  → 1.2 %
-      300000.00:  0.014    # $300,000 – $499,999.99  → 1.4 %
-      500000.00:  0.018    # $500,000+               → 1.8 %
+      0:       0.0      # $0.00    – $99,999.99  → 0 %
+      100000:  0.01     # $100,000 – $199,999.99  → 1 %
+      200000:  0.012    # $200,000 – $299,999.99  → 1.2 %
+      300000:  0.014    # $300,000 – $499,999.99  → 1.4 %
+      500000:  0.018    # $500,000+               → 1.8 %

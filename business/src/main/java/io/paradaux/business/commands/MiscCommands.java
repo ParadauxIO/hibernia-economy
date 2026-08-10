@@ -5,35 +5,28 @@ import com.google.inject.Singleton;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.business.exceptions.NoFirmAccountException;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmPlayer;
-import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.*;
-import io.paradaux.business.utils.resolvers.FirmName;
-import io.paradaux.business.utils.resolvers.OnlineFirmName;
+import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.OnlineFirmName;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.TransactionEntry;
 import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
 @Singleton
 @Command({"db", "democracybusiness", "business", "firm", "company"})
 public class MiscCommands implements CommandHandler {
 
     private static final int TX_PAGE_SIZE = 10;
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("MM/dd HH:mm")
-            .withZone(ZoneId.systemDefault());
 
     private final FirmService firms;
     private final FirmStaffService staff;
     private final FirmRoleService roles;
     private final FirmTransactionService audit;
-    private final FirmAreaShopService areas;
     private final TreasuryApi treasury;
     private final Message message;
     private final FirmNotificationService notifications;
@@ -41,13 +34,12 @@ public class MiscCommands implements CommandHandler {
     @Inject
     public MiscCommands(FirmService firms, FirmStaffService staff, FirmRoleService roles,
                         FirmTransactionService audit,
-                        FirmAreaShopService areas, TreasuryApi treasury, Message message,
+                        TreasuryApi treasury, Message message,
                         FirmNotificationService notifications) {
         this.firms = firms;
         this.staff = staff;
         this.roles = roles;
         this.audit = audit;
-        this.areas = areas;
         this.treasury = treasury;
         this.message = message;
         this.notifications = notifications;
@@ -103,17 +95,13 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.deposit(f.getFirmId(), sender.getUniqueId(), amount, memo);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.finance.deposit.success", "firm", f.getDisplayName(), "amount", formatted);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-personal");
-        } catch (SecurityException e) {
-            message.send(sender, "business.general.no-permission");
-        }
+        // Service throws framework semantic exceptions (invalid-amount, insufficient
+        // funds, no-permission, no-account) that the framework's ErrorRenderer resolves
+        // to the player's locale via the key each carries — no catch-and-hand-format
+        // here (plugin-architecture/0002).
+        audit.deposit(f.getFirmId(), sender.getUniqueId(), amount, memo);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.finance.deposit.success", "firm", f.getDisplayName(), "amount", formatted);
     }
 
     // ---- WITHDRAW ---------------------------------------------------------------
@@ -135,21 +123,9 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.withdraw(f.getFirmId(), sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.finance.withdraw.success", "firm", f.getDisplayName(), "amount", formatted);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (NoFirmAccountException e) {
-            // Distinct from "insufficient funds" — a broken/missing default account
-            // was the real reason proprietors "couldn't withdraw" (PAR-45).
-            message.send(sender, "business.finance.no-account");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-business");
-        } catch (SecurityException e) {
-            message.send(sender, "business.finance.not-authorizer");
-        }
+        audit.withdraw(f.getFirmId(), sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.finance.withdraw.success", "firm", f.getDisplayName(), "amount", formatted);
     }
 
     // ---- PAY: PLAYER -> BUSINESS ------------------------------------------------
@@ -166,17 +142,11 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.payIntoFirm(f.getFirmId(), sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.finance.pay.into.success", "firm", f.getDisplayName(), "amount", formatted);
-            notifications.notifyFirmExcept(f.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                    "firm", f.getDisplayName(), "amount", formatted, "sender", sender.getName());
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-personal");
-        }
+        audit.payIntoFirm(f.getFirmId(), sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.finance.pay.into.success", "firm", f.getDisplayName(), "amount", formatted);
+        notifications.notifyFirmExcept(f.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
+                "firm", f.getDisplayName(), "amount", formatted, "sender", sender.getName());
     }
 
     // ---- PAY: BUSINESS -> PLAYER ------------------------------------------------
@@ -199,18 +169,10 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.payPlayer(f.getFirmId(), target.getUniqueId(), sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.finance.pay.player.success",
-                    "firm", f.getDisplayName(), "player", target.getCurrentName(), "amount", formatted);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-business");
-        } catch (SecurityException e) {
-            message.send(sender, "business.finance.not-authorizer");
-        }
+        audit.payPlayer(f.getFirmId(), target.getUniqueId(), sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.finance.pay.player.success",
+                "firm", f.getDisplayName(), "player", target.getCurrentName(), "amount", formatted);
     }
 
     // ---- PAY: BUSINESS -> BUSINESS ----------------------------------------------
@@ -245,20 +207,12 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.payFirm(f.getFirmId(), targetF.getFirmId(), sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.finance.pay.business.success",
-                    "firm", f.getDisplayName(), "target", targetF.getDisplayName(), "amount", formatted);
-            notifications.notifyFirmExcept(targetF.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                    "firm", targetF.getDisplayName(), "amount", formatted, "sender", f.getDisplayName());
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-business");
-        } catch (SecurityException e) {
-            message.send(sender, "business.finance.not-authorizer");
-        }
+        audit.payFirm(f.getFirmId(), targetF.getFirmId(), sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.finance.pay.business.success",
+                "firm", f.getDisplayName(), "target", targetF.getDisplayName(), "amount", formatted);
+        notifications.notifyFirmExcept(targetF.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
+                "firm", targetF.getDisplayName(), "amount", formatted, "sender", f.getDisplayName());
     }
 
     // ---- SEND: BUSINESS -> BUSINESS (multi-firm operator) -----------------------
@@ -323,22 +277,12 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.payFirm(source.getFirmId(), target.getFirmId(), sender.getUniqueId(), amount, memo);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.finance.send.success",
-                    "source", source.getDisplayName(), "target", target.getDisplayName(), "amount", formatted);
-            notifications.notifyFirmExcept(target.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                    "firm", target.getDisplayName(), "amount", formatted, "sender", source.getDisplayName());
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (NoFirmAccountException e) {
-            message.send(sender, "business.finance.no-account");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-business");
-        } catch (SecurityException e) {
-            message.send(sender, "business.finance.not-authorizer");
-        }
+        audit.payFirm(source.getFirmId(), target.getFirmId(), sender.getUniqueId(), amount, memo);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.finance.send.success",
+                "source", source.getDisplayName(), "target", target.getDisplayName(), "amount", formatted);
+        notifications.notifyFirmExcept(target.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
+                "firm", target.getDisplayName(), "amount", formatted, "sender", source.getDisplayName());
     }
 
     // ---- TRANSACTIONS -----------------------------------------------------------
@@ -378,14 +322,8 @@ public class MiscCommands implements CommandHandler {
         message.send(sender, "business.finance.transactions.header",
                 "firm", f.getDisplayName(), "page", txPage.pageNumber(), "totalPages", txPage.totalPages());
 
-        for (TransactionEntry entry : txPage.items()) {
-            String sign = entry.getAmount().signum() >= 0 ? "+" : "";
-            String formatted = sign + treasury.formatAmount(entry.getAmount());
-            String time = TIME_FMT.format(entry.getSettlementTime());
-            String msg = entry.getMessage() != null ? entry.getMessage() : "";
-            message.send(sender, "business.finance.transactions.line",
-                    "time", time, "amount", formatted, "message", msg);
-        }
+        CommandSupport.renderTransactionLines(message, treasury, sender, txPage,
+                "business.finance.transactions.line");
 
         if (txPage.hasMore()) {
             message.send(sender, "business.finance.transactions.next-page",
@@ -394,8 +332,6 @@ public class MiscCommands implements CommandHandler {
     }
 
     private boolean canAccessFirmFinances(Firm f, Player player) {
-        return firms.isProprietor(f.getFirmId(), player.getUniqueId())
-                || staff.hasPermission(f.getFirmId(), player.getUniqueId(), RolePermission.ADMIN)
-                || staff.hasPermission(f.getFirmId(), player.getUniqueId(), RolePermission.FINANCIAL);
+        return CommandSupport.canAccessFirmFinances(firms, staff, f.getFirmId(), player.getUniqueId());
     }
 }

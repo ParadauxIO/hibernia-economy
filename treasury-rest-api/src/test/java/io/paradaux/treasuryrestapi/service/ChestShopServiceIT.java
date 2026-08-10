@@ -85,7 +85,7 @@ class ChestShopServiceIT extends EmbeddedDbIT {
                     assertThat(s.itemKey()).isEqualTo("minecraft:diamond");
                 });
 
-        // itemKey filter → personal shop, name resolved from firm_players IGN cache
+        // itemKey filter → personal shop, name resolved from economy_players IGN cache
         ChestShopShopsResponse byItem = service.listShops("minecraft:dirt", null, null, false, false, null, 1, 50);
         assertThat(byItem.items()).singleElement()
                 .satisfies(s -> {

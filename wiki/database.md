@@ -67,6 +67,28 @@ URL/schema and secrets per environment — not a code or schema fork. The
 deploy workflows are these tenant identities; treat them as infrastructure, not
 branding.
 
+## Account read access — single source of truth
+
+"Who may read an account's history/balance" is decided over the `account_access`
+table (the ordered scale `VIEWER < MEMBER < AUTHORIZER`, soft-deleted via
+`removed_at`). That rule used to be hand-restated in every client and had drifted,
+so it lives in two **named SQL views** (`V22`) that all consumers read instead of
+re-writing the level filter:
+
+| View | Rule | Consumed by |
+|---|---|---|
+| `account_read_access_api` | `MEMBER` / `AUTHORIZER` only | `treasury-rest-api`, `treasury` plugin |
+| `account_read_access_web` | `VIEWER` too | `economy-explorer` |
+
+The two surfaces are **deliberately different**: the public REST API and in-game
+plugin are strict (a read-only `VIEWER` is not a member), while the web explorer
+also lets a `VIEWER` read — that's the government department-secretary case
+(PAR-237). The OWNER path is checked separately by each caller (the owner isn't
+necessarily an `account_access` row), so it isn't folded into the views. Change
+the rule in `V<n>`, not in a mapper or a Kysely query — cross-side conformance
+tests guard it (`MembershipAccessIT`, `MembershipServiceIT`, the explorer
+integration suite).
+
 ## Rollback
 
 There is no automated rollback. The canonical recovery path is **restore from the

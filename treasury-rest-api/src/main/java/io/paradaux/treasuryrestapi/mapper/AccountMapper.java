@@ -13,7 +13,7 @@ import java.util.UUID;
 @Mapper
 public interface AccountMapper {
 
-    @Select("SELECT account_id, is_archived AS archived, requires_authorization, allow_overdraft, credit_limit " +
+    @Select("SELECT account_id, account_type, is_archived AS archived, requires_authorization, allow_overdraft, credit_limit " +
             "FROM accounts WHERE account_id = #{accountId}")
     Account findById(@Param("accountId") long accountId);
 
@@ -25,6 +25,15 @@ public interface AccountMapper {
     @Select("SELECT account_id FROM accounts " +
             "WHERE account_type = 'PERSONAL' AND owner_uuid_bin = #{ownerUuid} AND is_archived = 0 LIMIT 1")
     Long findPersonalAccountIdByOwner(@Param("ownerUuid") UUID ownerUuid);
+
+    /**
+     * Whether a non-archived GOVERNMENT account with this display name exists.
+     * Used to detect player↔GOVERNMENT name collisions on bare-name resolution
+     * (PAR-144), mirroring the in-game guard.
+     */
+    @Select("SELECT COUNT(*) > 0 FROM accounts " +
+            "WHERE account_type = 'GOVERNMENT' AND display_name = #{name} AND is_archived = 0")
+    boolean existsGovernmentAccountByName(@Param("name") String name);
 
     /**
      * Non-locking balance read via the account_balances view (COALESCE to 0.00).

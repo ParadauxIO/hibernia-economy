@@ -76,6 +76,15 @@ public class MembershipServiceImpl implements MembershipService {
         return isMember(accountId, uuid) || isViewer(accountId, uuid);
     }
 
+    @Override
+    @Transactional
+    public boolean canSpend(int accountId, UUID uuid) {
+        // Per-account spend gate: a member or an authorizer of the account may move
+        // its money. Read-only viewers do not qualify. Global permission nodes and
+        // the console/RCON bypass are handled by the command layer before this.
+        return isMember(accountId, uuid) || isAuthorizer(accountId, uuid);
+    }
+
     // ── Individual UUID CRUD ──
 
     @Override

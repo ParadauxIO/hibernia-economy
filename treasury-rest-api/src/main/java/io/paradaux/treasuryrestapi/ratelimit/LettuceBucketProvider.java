@@ -3,13 +3,12 @@ package io.paradaux.treasuryrestapi.ratelimit;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.distributed.proxy.ClientSideConfig;
+import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
 import io.github.bucket4j.distributed.serialization.Mapper;
-import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.github.bucket4j.redis.lettuce.Bucket4jLettuce;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
-import io.lettuce.core.codec.ByteArrayCodec;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -36,12 +35,15 @@ public class LettuceBucketProvider implements BucketProvider, AutoCloseable {
         }
         RedisURI uri = uriBuilder.build();
         this.redisClient = RedisClient.create(uri);
-        this.proxyManager = LettuceBasedProxyManager.builderFor(
-                        redisClient.connect(ByteArrayCodec.INSTANCE))
-                .withClientSideConfig(ClientSideConfig.getDefault()
-                        .withExpirationAfterWriteStrategy(
-                                io.github.bucket4j.distributed.ExpirationAfterWriteStrategy
-                                        .fixedTimeToLive(Duration.ofHours(1))))
+        // Bucket4jLettuce.casBasedBuilder(RedisClient) replaces the deprecated
+        // LettuceBasedProxyManager.builderFor(...) factory (bucket4j 8.19+). The
+        // RedisClient overload is byte[]-keyed and opens its own byte-array-codec
+        // connection internally, so no explicit connect(ByteArrayCodec) is needed;
+        // redisClient.shutdown() in close() still tears the connection down. The
+        // expiry strategy is now set directly via expirationAfterWrite(...) rather
+        // than through the removed ClientSideConfig wrapper.
+        this.proxyManager = Bucket4jLettuce.casBasedBuilder(redisClient)
+                .expirationAfterWrite(ExpirationAfterWriteStrategy.fixedTimeToLive(Duration.ofHours(1)))
                 .build();
     }
 

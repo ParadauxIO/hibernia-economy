@@ -30,7 +30,8 @@ directly.
 
 ## Government accounts
 
-Shared accounts that government **departments** run together. **Members** can view and
+Shared accounts that government **departments** run together. **Viewers** get read-only
+access — they see the balance and history but can't spend; **members** can view and
 spend from them; **authorizers** can do that *and* manage who else has access. They
 belong to a department rather than a company. See
 **[Government accounts](/docs/guides/government-accounts)**.

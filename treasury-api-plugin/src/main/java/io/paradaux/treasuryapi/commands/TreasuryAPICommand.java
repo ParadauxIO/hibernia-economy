@@ -1,6 +1,9 @@
 package io.paradaux.treasuryapi.commands;
 
 import com.google.inject.Inject;
+import com.google.inject.Provider;
+import io.paradaux.hibernia.framework.commander.CommandManager;
+import io.paradaux.hibernia.framework.commander.HelpGenerator;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
@@ -14,6 +17,11 @@ public class TreasuryAPICommand implements CommandHandler {
 
     @Inject private TreasuryAPI plugin;
     @Inject private Message message;
+    // Provider breaks the construction cycle: CommandManager injects the
+    // Set<CommandHandler> (which includes this class), and HelpGenerator takes a
+    // CommandManager — so @Inject-ing HelpGenerator directly is circular and Guice
+    // can't proxy the concrete CommandManager. Mirrors the Treasury/Business pattern.
+    @Inject private Provider<CommandManager> commandManager;
     @Inject private PersonalKeyHandler personalHandler;
     @Inject private BusinessKeyHandler businessHandler;
     @Inject private UiAccessHandler uiHandler;
@@ -24,6 +32,16 @@ public class TreasuryAPICommand implements CommandHandler {
     public void info(@Sender CommandSender sender) {
         message.send(sender, "treasuryapi.info",
                 "version", plugin.getDescription().getVersion());
+    }
+
+    // /treasuryapi help [page] — paginated, permission-filtered help built from the
+    // registered routes (each carries its @Description), so it stays in sync with the
+    // real commands instead of being hand-maintained.
+    @Route("help [page]")
+    @Description("Show command help")
+    public void help(@Sender CommandSender sender,
+                     @OptionalArg(value = "page", defaultValue = "1") int page) {
+        sender.sendMessage(new HelpGenerator(commandManager.get()).render(sender, "treasuryapi", page));
     }
 
     // ---- Personal ----
@@ -42,15 +60,6 @@ public class TreasuryAPICommand implements CommandHandler {
     @Description("List personal API keys you have issued")
     public void personalList(@Sender Player sender) {
         personalHandler.doList(sender);
-    }
-
-    @Route("personal export <keyId>")
-    @Permission("treasuryapi.personal.export")
-    @Async
-    @Description("Export a personal API key token to a shareable URL")
-    public void personalExport(@Sender Player sender,
-                               @Arg("keyId") int keyId) {
-        personalHandler.doExport(sender, keyId);
     }
 
     @Route("personal reissue <keyId>")
@@ -96,15 +105,6 @@ public class TreasuryAPICommand implements CommandHandler {
     @Description("List business API keys for firms you are employed at")
     public void businessListAccess(@Sender Player sender) {
         businessHandler.doListAccess(sender);
-    }
-
-    @Route("business export <keyId>")
-    @Permission("treasuryapi.business.export")
-    @Async
-    @Description("Export a business API key token to a shareable URL")
-    public void businessExport(@Sender Player sender,
-                               @Arg("keyId") int keyId) {
-        businessHandler.doExport(sender, keyId);
     }
 
     @Route("business reissue <keyId>")

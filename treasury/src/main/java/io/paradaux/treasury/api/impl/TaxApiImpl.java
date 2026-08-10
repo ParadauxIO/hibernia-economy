@@ -8,7 +8,6 @@ import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
 import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.model.tax.TaxCollection;
 import io.paradaux.treasury.model.tax.TaxCycleType;
@@ -16,6 +15,7 @@ import io.paradaux.treasury.model.tax.TaxResult;
 import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
+import io.paradaux.treasury.utils.AccountFactory;
 import io.paradaux.treasury.utils.Money;
 import io.paradaux.treasury.utils.TreasuryConstants;
 import org.jetbrains.annotations.NotNull;
@@ -274,15 +274,8 @@ public class TaxApiImpl implements TaxApi {
         Account existing = accountMapper.findGovernmentAccountByName(accountName);
         if (existing != null) return existing.getAccountId();
 
-        Account account = new Account();
-        account.setAccountType(AccountType.GOVERNMENT);
-        account.setOwnerUuid(TreasuryConstants.VIRTUAL_TREASURY_OWNER);
-        account.setDisplayName(accountName);
-        account.setRequiresAuthorization(false);
-        account.setArchived(false);
-        account.setAllowOverdraft(true);
-        // Primitive GOVERNMENT account: -1 = unlimited credit (faucet/sink).
-        account.setCreditLimit(BigDecimal.valueOf(-1));
+        // Primitive GOVERNMENT account: overdraft on, -1 = unlimited credit (faucet/sink).
+        Account account = AccountFactory.primitiveGovernment(accountName);
         accountMapper.insertAccount(account);
         accountMapper.seedBalance(account.getAccountId());
         log.warn("Default tax-collection account '{}' was missing — created on demand. "

@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -25,7 +26,7 @@ const SP = z.object({ q: z.string().trim().min(1).optional() });
 export default async function AdminAccountsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
   if (viewer.anon || viewer.role !== 'admin') return null; // layout gates; defence in depth
-  const sp = SP.safeParse(flat(await searchParams)).data ?? {};
+  const sp = SP.safeParse(flattenSearchParams(await searchParams)).data ?? {};
   const q = sp.q ?? null;
   await auditView(viewer, { path: '/admin/accounts', targetType: 'global', targetId: q });
 
@@ -75,8 +76,3 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
   );
 }
 
-function flat(sp: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(sp)) if (typeof v === 'string') out[k] = v;
-  return out;
-}

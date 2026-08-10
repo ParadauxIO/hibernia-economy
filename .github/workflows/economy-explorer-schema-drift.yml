@@ -1,0 +1,102 @@
+name: Economy Explorer · Schema Drift Gate
+
+# ADT-5: the explorer's kysely DB types were hand-maintained and partial, so a
+# Flyway rename/drop wasn't caught at TS compile time. This regenerates the types
+# from the authoritative migrated schema and fails if the committed
+# economy-explorer/lib/db.generated.ts is stale.
+#
+# Bootstrap: the first run has no committed baseline and will fail, uploading the
+# freshly generated lib/db.generated.ts as an artifact — download it, commit it,
+# and the gate is live thereafter. Regenerate locally with `npm run db:codegen`
+# against a migrated DB (DATABASE_URL) whenever you change a migration.
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'economy-flyway/**'
+      - 'economy-explorer/lib/db.generated.ts'
+      - 'economy-explorer/package.json'
+      - '.github/workflows/economy-explorer-schema-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: economy
+          MARIADB_DATABASE: economy
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Apply the authoritative Flyway migrations
+        env:
+          FLYWAY_URL: jdbc:mysql://127.0.0.1:3306/economy
+          FLYWAY_USER: root
+          FLYWAY_PASSWORD: economy
+        run: ./gradlew --no-daemon :economy-flyway:flywayMigrate
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: economy-explorer/package-lock.json
+
+      - name: Install explorer deps
+        working-directory: economy-explorer
+        run: npm ci --no-audit --no-fund
+
+      - name: Regenerate kysely types from the migrated schema
+        working-directory: economy-explorer
+        env:
+          DATABASE_URL: mysql://root:economy@127.0.0.1:3306/economy
+        run: npm run db:codegen
+
+      - name: Fail on schema drift
+        working-directory: economy-explorer
+        run: |
+          # intent-to-add so a missing baseline (first run) also shows as a diff
+          git add -N lib/db.generated.ts
+          if ! git diff --quiet -- lib/db.generated.ts; then
+            echo "::error::lib/db.generated.ts is out of date with the migrated schema."
+            echo "Run 'npm run db:codegen' against a migrated DB and commit lib/db.generated.ts."
+            git --no-pager diff -- lib/db.generated.ts | head -200
+            exit 1
+          fi
+          echo "kysely DB types are in sync with the migrations."
+
+      - name: Upload regenerated types (so the baseline can be committed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-generated-types
+          path: economy-explorer/lib/db.generated.ts

@@ -1,5 +1,5 @@
 import 'server-only';
-import { Kysely, MysqlDialect } from 'kysely';
+import { Kysely, MysqlDialect, type Generated } from 'kysely';
 import { createPool } from 'mysql2';
 
 const pool = createPool({
@@ -42,7 +42,8 @@ export interface DB {
     keycloak_sub: string;
     player_uuid_bin: Buffer;
     minecraft_name: string | null;
-    linked_at: Date;
+    // NOT NULL DEFAULT CURRENT_TIMESTAMP (V3): DB-generated, so optional on insert.
+    linked_at: Generated<Date>;
     linked_by: string | null;
   };
   explorer_link_code: {

@@ -1,6 +1,7 @@
 package io.paradaux.treasuryrestapi.security;
 
 import io.jsonwebtoken.Jwts;
+import io.paradaux.common.JwtKeys;
 import io.paradaux.treasuryrestapi.mapper.ApiKeyMapper;
 import io.paradaux.treasuryrestapi.model.ApiKey;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -63,6 +65,26 @@ class JwtTokenVerifierTest {
         assertThat(vt.keyType()).isEqualTo("BUSINESS");
         assertThat(vt.firmId()).isEqualTo(FIRM);
         assertThat(vt.accountId()).isNull();
+    }
+
+    @Test
+    void tokenMintedWithJwtKeysBase64Derivation_verifiesEndToEnd() {
+        // Cross-language auth-boundary guard (ADT no-crosslang-token-roundtrip-test):
+        // the mint side (treasury-api-plugin) and this verify side both derive the HMAC
+        // key from the SAME io.paradaux.common.JwtKeys. Exercise the production-recommended
+        // base64: secret end-to-end so a derivation regression can't pass while silently
+        // breaking every API key. (The other tests use the legacy SHA-256 fixture key.)
+        String base64Secret = "base64:" + Base64.getEncoder()
+                .encodeToString("0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8)); // 32 bytes
+        SecretKey sharedKey = JwtKeys.deriveHmacKey(base64Secret);
+
+        JwtTokenVerifier verifier = new JwtTokenVerifier(sharedKey, stub(keyId -> keyId == KID ? personalKey() : null));
+        String token = baseBuilder("PERSONAL", b -> b.claim("acc", ACC))
+                .signWith(sharedKey, Jwts.SIG.HS256).compact();
+
+        VerifiedToken vt = verifier.verify(token);
+        assertThat(vt.keyType()).isEqualTo("PERSONAL");
+        assertThat(vt.accountId()).isEqualTo(ACC);
     }
 
     // ── F5: scoped-claim must agree with the DB row (defence in depth) ───────────
@@ -281,10 +303,11 @@ class JwtTokenVerifierTest {
         return new ApiKeyMapper() {
             @Override public ApiKey findByKeyId(long keyId) { return byKeyId.apply(keyId); }
             @Override public ApiKey findByKeyIdForUpdate(long keyId) { throw new UnsupportedOperationException(); }
-            @Override public int rotateKey(long keyId, String jwtId, String token,
+            @Override public int rotateKey(long keyId, String jwtId,
                                            java.time.LocalDateTime issuedAt, java.time.LocalDateTime expiresAt) {
                 throw new UnsupportedOperationException();
             }
+            @Override public int revoke(long keyId) { throw new UnsupportedOperationException(); }
         };
     }
 

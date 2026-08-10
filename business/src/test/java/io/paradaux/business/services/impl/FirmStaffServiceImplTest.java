@@ -61,7 +61,7 @@ class FirmStaffServiceImplTest {
 
     @Test
     void hireEmployee_failsForUnknownFirm() {
-        when(firms.getFirmByNameOrId("99")).thenReturn(null);
+        when(firms.getFirmById(99)).thenReturn(null);
         assertThatThrownBy(() -> svc.hireEmployee(99, target, actor))
                 .isInstanceOf(BadCommandException.class);
     }
@@ -70,7 +70,7 @@ class FirmStaffServiceImplTest {
     void hireEmployee_rejectsCallerWithoutAdmin() {
         // actor is not the proprietor and not employed → no ADMIN permission
         Firm firm = acme();
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm);
+        when(firms.getFirmById(1)).thenReturn(firm);
         // hasPermission returns false (proprietor mismatch + not employed)
         assertThatThrownBy(() -> svc.hireEmployee(1, target, actor))
                 .isInstanceOf(io.paradaux.hibernia.framework.exceptions.NoPermissionException.class);
@@ -81,7 +81,7 @@ class FirmStaffServiceImplTest {
     void hireEmployee_succeedsWhenCallerIsProprietor() {
         // Proprietor is the actor → hasPermission returns true → body runs
         Firm firm = acme();
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm);
+        when(firms.getFirmById(1)).thenReturn(firm);
         // hasPermission checks firms.isProprietor first
         when(firms.isProprietor(1, actor)).thenReturn(true);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
@@ -101,7 +101,7 @@ class FirmStaffServiceImplTest {
 
     @Test
     void hireEmployeeFromInvite_failsForUnknownFirm() {
-        when(firms.getFirmByNameOrId("99")).thenReturn(null);
+        when(firms.getFirmById(99)).thenReturn(null);
         assertThatThrownBy(() -> svc.hireEmployeeFromInvite(99, target, actor))
                 .isInstanceOf(BadCommandException.class);
     }
@@ -109,7 +109,7 @@ class FirmStaffServiceImplTest {
     @Test
     void hireEmployeeFromInvite_rejectsHiringSelf() {
         Firm firm = acme();
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm);
+        when(firms.getFirmById(1)).thenReturn(firm);
         assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, actor, actor))
                 .isInstanceOf(BadCommandException.class);
     }
@@ -117,7 +117,7 @@ class FirmStaffServiceImplTest {
     @Test
     void hireEmployeeFromInvite_rejectsAlreadyEmployed() {
         Firm firm = acme();
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm);
+        when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(true);
         assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, target, actor))
                 .isInstanceOf(BadCommandException.class);
@@ -126,7 +126,7 @@ class FirmStaffServiceImplTest {
     @Test
     void hireEmployeeFromInvite_fallsBackToEmployeeWhenNoLowestRole() {
         Firm firm = acme();
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm);
+        when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
         when(roles.findLowestRole(1)).thenReturn(null);
         when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString())).thenReturn(1);
@@ -140,7 +140,7 @@ class FirmStaffServiceImplTest {
     @Test
     void hireEmployeeFromInvite_usesConfiguredLowestRole() {
         Firm firm = acme();
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm);
+        when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
         when(roles.findLowestRole(1)).thenReturn("Intern");
         when(staff.insertEmployment(1, target.toString(), "Intern", actor.toString())).thenReturn(1);
@@ -153,7 +153,7 @@ class FirmStaffServiceImplTest {
     @Test
     void hireEmployeeFromInvite_throwsInternalWhenInsertReturnsZero() {
         Firm firm = acme();
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm);
+        when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
         when(roles.findLowestRole(1)).thenReturn("Employee");
         when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString())).thenReturn(0);
@@ -503,5 +503,103 @@ class FirmStaffServiceImplTest {
     void getCurrentRole_delegates() {
         when(staff.getCurrentRole(1, target.toString())).thenReturn("Manager");
         assertThat(svc.getCurrentRole(1, target)).isEqualTo("Manager");
+    }
+
+    // ---------- int-id overloads (structure/0004) ----------
+    // Same behaviour as the String overloads, but resolve the firm directly by id
+    // (getFirmById / getAnyFirmById) with no int→String→int round-trip.
+
+    @Test
+    void fireEmployee_byId_resolvesByIdAndEnds() {
+        when(firms.getFirmById(1)).thenReturn(acme());
+        when(firms.isProprietor(1, actor)).thenReturn(true);
+        when(firms.isProprietor(1, target)).thenReturn(false);
+        when(staff.endCurrentEmployment(1, target.toString(), actor.toString())).thenReturn(1);
+
+        svc.fireEmployee(1, target, actor);
+
+        verify(staff).endCurrentEmployment(1, target.toString(), actor.toString());
+    }
+
+    @Test
+    void promoteEmployee_byId_movesToNextRole() {
+        when(firms.getFirmById(1)).thenReturn(acme());
+        when(firms.isProprietor(1, actor)).thenReturn(true);
+        when(staff.isEmployedBy(1, target.toString())).thenReturn(true);
+        when(staff.getCurrentRole(1, target.toString())).thenReturn("Employee");
+        when(roles.getRank(1, "Employee")).thenReturn(5);
+        when(roles.findRoleAbove(1, 5)).thenReturn("Supervisor");
+        when(staff.updateCurrentRole(1, target.toString(), "Supervisor")).thenReturn(1);
+
+        assertThat(svc.promoteEmployee(1, target, actor)).isEqualTo("Supervisor");
+    }
+
+    @Test
+    void demoteEmployee_byId_movesDown() {
+        when(firms.getFirmById(1)).thenReturn(acme());
+        when(firms.isProprietor(1, actor)).thenReturn(true);
+        when(staff.isEmployedBy(1, target.toString())).thenReturn(true);
+        when(staff.getCurrentRole(1, target.toString())).thenReturn("Manager");
+        when(roles.getRank(1, "Manager")).thenReturn(3);
+        when(roles.findRoleBelow(1, 3)).thenReturn("Supervisor");
+        when(staff.updateCurrentRole(1, target.toString(), "Supervisor")).thenReturn(1);
+
+        assertThat(svc.demoteEmployee(1, target, actor)).isEqualTo("Supervisor");
+    }
+
+    @Test
+    void resignFromFirm_byId_endsEmployment() {
+        when(firms.getFirmById(1)).thenReturn(acme());
+        when(staff.isEmployedBy(1, target.toString())).thenReturn(true);
+
+        svc.resignFromFirm(1, target);
+
+        verify(staff).endCurrentEmployment(1, target.toString(), target.toString());
+    }
+
+    @Test
+    void getCurrentEmployees_byId_prependsProprietor() {
+        when(firms.getAnyFirmById(1)).thenReturn(acme());
+        when(roles.findProprietorRoleName(1)).thenReturn("Boss");
+        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(new java.util.ArrayList<>(List.of(
+                new FirmEmployee(1, target.toString(), "Employee", LocalDateTime.now(), null, actor.toString(), null, true)
+        )));
+
+        assertThat(svc.getCurrentEmployees(1)).hasSize(2);
+    }
+
+    @Test
+    void getOnlineEmployees_byId_delegatesToRoster() {
+        when(firms.getAnyFirmById(1)).thenReturn(acme());
+        when(roles.findProprietorRoleName(1)).thenReturn("Boss");
+        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(new java.util.ArrayList<>());
+
+        // Roster members are filtered by online status; all are offline in tests.
+        try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(() -> org.bukkit.Bukkit.getPlayer(org.mockito.ArgumentMatchers.any(UUID.class)))
+                    .thenReturn(null);
+            assertThat(svc.getOnlineEmployees(1)).isEmpty();
+        }
+    }
+
+    @Test
+    void getOnlineEmployees_byName_delegatesToRoster() {
+        when(firms.getAnyFirmByNameOrId("Acme")).thenReturn(acme());
+        when(roles.findProprietorRoleName(1)).thenReturn("Boss");
+        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(new java.util.ArrayList<>());
+
+        try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(() -> org.bukkit.Bukkit.getPlayer(org.mockito.ArgumentMatchers.any(UUID.class)))
+                    .thenReturn(null);
+            assertThat(svc.getOnlineEmployees("Acme")).isEmpty();
+        }
+    }
+
+    @Test
+    void getProprietorAsEmployee_byId_fallsBackToProprietor() {
+        when(firms.getAnyFirmById(1)).thenReturn(acme());
+        when(roles.findProprietorRoleName(1)).thenReturn(null);
+
+        assertThat(svc.getProprietorAsEmployee(1).getRoleName()).isEqualTo("Proprietor");
     }
 }

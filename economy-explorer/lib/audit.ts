@@ -59,7 +59,17 @@ export async function auditView(
   let sourceIp: string | null = null;
   try {
     const h = await headers();
-    sourceIp = h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || null;
+    // Prefer the trusted gateway's address over the client-controlled
+    // X-Forwarded-For leftmost hop, which is spoofable — a caller could otherwise
+    // forge the source IP recorded against their own audited actions (same reasoning
+    // as the rate-limiter, ADT-15/124). x-envoy-external-address is set by the Envoy
+    // gateway and x-real-ip by the ingress; the XFF leftmost hop is a last-resort,
+    // best-effort fallback only.
+    sourceIp =
+      h.get('x-envoy-external-address')?.trim() ||
+      h.get('x-real-ip')?.trim() ||
+      h.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      null;
   } catch {
     /* headers() unavailable — leave IP null */
   }

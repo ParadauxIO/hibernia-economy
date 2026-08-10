@@ -4,18 +4,28 @@ import com.google.inject.*;
 import com.google.inject.Module;
 import com.zaxxer.hikari.HikariDataSource;
 import io.paradaux.hibernia.framework.commander.CommandManager;
-import io.paradaux.hibernia.framework.configurator.ConfigurationLoader;
+import io.paradaux.hibernia.framework.events.ListenerManager;
+import io.paradaux.hibernia.framework.guice.HiberniaModule;
+import io.paradaux.treasury.commands.resolvers.PayTargetResolver;
+import io.paradaux.treasury.commands.*;
+import io.paradaux.treasury.events.FirstPlayerJoinEvent;
+import io.paradaux.treasury.events.OnlinePlayerRosterListener;
+import io.paradaux.treasury.events.PlayerLoginListener;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.adapters.VaultEconomyRegistrar;
 import io.paradaux.treasury.api.MarketApi;
+import io.paradaux.treasury.api.SalesQueryApi;
+import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.api.impl.MarketApiImpl;
+import io.paradaux.treasury.api.impl.SalesQueryApiImpl;
+import io.paradaux.treasury.api.impl.ShopQueryApiImpl;
 import io.paradaux.treasury.api.impl.TaxApiImpl;
 import io.paradaux.treasury.api.impl.TreasuryApiImpl;
+import io.paradaux.common.DataSourceProvider;
 import io.paradaux.treasury.guice.*;
-import io.paradaux.treasury.guice.providers.DataSourceProvider;
 import io.paradaux.treasury.model.config.DatabaseConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.config.LoggingConfiguration;
@@ -29,61 +39,98 @@ import io.paradaux.treasury.tasks.SalaryTask;
 import io.paradaux.treasury.tasks.TaxCycleTask;
 import io.paradaux.treasury.utils.LoggingConfigurer;
 import org.bukkit.Bukkit;
-import org.bukkit.event.Listener;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
-public final class Treasury extends JavaPlugin {
+// Non-final so the startup test can load it under MockBukkit (which subclasses the
+// plugin main to intercept lifecycle) and drive the real injector (treasury/testing/0001).
+// The class is never extended in production; this only unblocks the wiring test.
+public class Treasury extends JavaPlugin {
 
     @Getter
     private Injector injector;
 
     @Override
     public void onEnable() {
-        // 1) Load configuration first so we can apply the configured log level
-        //    before anything else gets a chance to spam the console.
-        ConfigurationLoader configLoader = new ConfigurationLoader(this);
-        configLoader.scanPackage("io.paradaux.treasury.model.config");
+        // 1) Build the framework module. HiberniaModule scans the config package and
+        //    binds the plugin, ConfigurationLoader, every @ConfigurationComponent,
+        //    Message, the command/resolver/listener multibinders, PapiSupport and the
+        //    dialog renderer. We fetch the configs needed for early bootstrap (log
+        //    level, DataSource) off the module before the injector exists.
+        HiberniaModule hiberniaModule = HiberniaModule.forPlugin(this)
+                .scanConfiguration("io.paradaux.treasury.model.config")
+                .handlers(
+                        TreasuryCommand.class,
+                        PayCommand.class,
+                        PayAccountCommand.class,
+                        BalanceCommand.class,
+                        BaltopCommand.class,
+                        EconomyCommand.class,
+                        SalesCommand.class,
+                        TransactionsCommand.class,
+                        EcoCommand.class,
+                        GovCommand.class,
+                        FineCommand.class,
+                        TaxCommand.class)
+                .resolvers(PayTargetResolver.class)
+                .listeners(
+                        FirstPlayerJoinEvent.class,
+                        PlayerLoginListener.class,
+                        OnlinePlayerRosterListener.class)
+                .build();
 
-        LoggingConfiguration logCfg = configLoader.getComponent(LoggingConfiguration.class);
+        // Apply the configured log level before anything else spams the console.
+        LoggingConfiguration logCfg = hiberniaModule.configuration(LoggingConfiguration.class);
         if (logCfg != null) {
             LoggingConfigurer.apply(logCfg.getLevel());
         }
 
         log.info("Loading Treasury…");
 
-        DatabaseConfiguration dbCfg = configLoader.getComponent(DatabaseConfiguration.class);
+        DatabaseConfiguration dbCfg = hiberniaModule.configuration(DatabaseConfiguration.class);
         if (dbCfg == null) {
             throw new IllegalStateException(
                     "DatabaseConfiguration not found. Check @ConfigurationComponent and package scan.");
         }
 
+        // Fail fast instead of silently booting against the shared money DB with the
+        // documented default password — the guard treasury-api-plugin already has,
+        // back-ported here so all writers to the shared DB behave the same (ADT-187).
+        String dbPass = dbCfg.getPassword();
+        if ("password".equals(dbPass) || "CHANGE_ME".equals(dbPass)) {
+            throw new IllegalStateException(
+                    "Refusing to start: the database password is still the placeholder default. "
+                    + "Set database.password in config.yml.");
+        }
+
         // 2) Build the Guice injector. VaultModule is only installed when Vault
         //    is on the classpath, so VaultEconomyAdapter is bound conditionally.
-        DataSource dataSource = new DataSourceProvider(
-                dbCfg.getHost(),
-                Integer.parseInt(dbCfg.getPort()),
-                dbCfg.getDatabase(),
-                dbCfg.getUsername(),
-                dbCfg.getPassword(),
-                Integer.parseInt(dbCfg.getPoolMaximumSize()),
-                Integer.parseInt(dbCfg.getPoolMinimumIdle()),
-                Long.parseLong(dbCfg.getPoolConnectionTimeoutMs()),
-                Long.parseLong(dbCfg.getPoolMaxLifetimeMs()),
-                Long.parseLong(dbCfg.getPoolKeepaliveMs())
-        ).get();
+        DataSource dataSource = DataSourceProvider.builder(
+                        dbCfg.getHost(),
+                        Integer.parseInt(dbCfg.getPort()),
+                        dbCfg.getDatabase(),
+                        dbCfg.getUsername(),
+                        dbCfg.getPassword())
+                .poolName("Treasury-Hikari")
+                .maximumPoolSize(Integer.parseInt(dbCfg.getPoolMaximumSize()))
+                .minimumIdle(Integer.parseInt(dbCfg.getPoolMinimumIdle()))
+                .connectionTimeoutMs(Long.parseLong(dbCfg.getPoolConnectionTimeoutMs()))
+                .maxLifetimeMs(Long.parseLong(dbCfg.getPoolMaxLifetimeMs()))
+                .keepaliveMs(Long.parseLong(dbCfg.getPoolKeepaliveMs()))
+                .leakDetectionThresholdMs(30_000L)
+                .statementCaching(true)
+                .build()
+                .get();
 
         List<Module> modules = new ArrayList<>();
-        modules.add(new TreasuryModule(this, configLoader));
+        modules.add(hiberniaModule);
+        modules.add(new TreasuryModule(this));
         modules.add(new DatabaseModule(dataSource));
-        modules.add(new CommanderModule(this));
-        modules.add(new EventsModule());
         if (isVaultAvailable()) {
             modules.add(new VaultModule());
         }
@@ -100,8 +147,8 @@ public final class Treasury extends JavaPlugin {
         // 4) Register commands.
         injector.getInstance(CommandManager.class).registerAll();
 
-        // 5) Register listeners (set bound by EventsModule).
-        registerListeners();
+        // 5) Register listeners (Set<Listener> bound via HiberniaModule.listeners(...)).
+        injector.getInstance(ListenerManager.class).registerAll();
 
         // 6) Register Vault economy if available.
         if (isVaultAvailable()) {
@@ -114,6 +161,8 @@ public final class Treasury extends JavaPlugin {
         registerTreasuryApi();
         registerTaxApi();
         registerMarketApi();
+        registerSalesQueryApi();
+        registerShopQueryApi();
         scheduleSalaries();
 
         log.info("Treasury enabled.");
@@ -142,14 +191,6 @@ public final class Treasury extends JavaPlugin {
     }
 
     // ---- Helpers ----
-
-    private void registerListeners() {
-        Set<Listener> listeners = injector.getInstance(Key.get(new TypeLiteral<Set<Listener>>() {}));
-        for (Listener listener : listeners) {
-            Bukkit.getPluginManager().registerEvents(listener, this);
-            log.debug("Registered listener: {}", listener.getClass().getSimpleName());
-        }
-    }
 
     private void registerTreasuryApi() {
         TreasuryApi api = injector.getInstance(TreasuryApiImpl.class);
@@ -190,6 +231,16 @@ public final class Treasury extends JavaPlugin {
     private void registerMarketApi() {
         MarketApi marketApi = injector.getInstance(MarketApiImpl.class);
         Bukkit.getServicesManager().register(MarketApi.class, marketApi, this, ServicePriority.Highest);
+    }
+
+    private void registerSalesQueryApi() {
+        SalesQueryApi salesQueryApi = injector.getInstance(SalesQueryApiImpl.class);
+        Bukkit.getServicesManager().register(SalesQueryApi.class, salesQueryApi, this, ServicePriority.Highest);
+    }
+
+    private void registerShopQueryApi() {
+        ShopQueryApi shopQueryApi = injector.getInstance(ShopQueryApiImpl.class);
+        Bukkit.getServicesManager().register(ShopQueryApi.class, shopQueryApi, this, ServicePriority.Highest);
     }
 
     private boolean isVaultAvailable() {

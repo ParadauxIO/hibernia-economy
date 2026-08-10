@@ -11,17 +11,19 @@ page is the operator's view of how access to those accounts is granted and what 
 permission nodes mean. The player-facing basics are in
 [Government accounts](/docs/guides/government-accounts).
 
-## Two levels of access
+## Levels of access
 
-Every government account has two kinds of access:
+Every government account has three tiers of access (`VIEWER` < `MEMBER` < `AUTHORIZER`):
 
-- **Members** can **view** the account and its history **and spend** from it (`/government
-  pay`, `/government payout`).
+- **Viewers** can **view** the account and its history only — no spending, no managing
+  access.
+- **Members** can do everything a viewer can **and spend** from it (`/government pay`,
+  `/government payout`).
 - **Authorizers** can do everything a member can, **plus manage who has access** — adding
-  and removing other members and authorizers.
+  and removing viewers, members and other authorizers.
 
-An authorizer is always a member too. Spending is gated by membership; managing access is
-gated by authorizer status.
+Each tier includes the ones below it. Viewing is gated by viewer access, spending by
+membership, and managing access by authorizer status.
 
 > [!NOTE]
 > The same gate covers **fines**: to issue or revoke a fine paid into an account
@@ -36,6 +38,8 @@ should use groups — see [why groups](#prefer-groups) below.
 ### Individual players
 
 ```text
+/government account viewer add <account> <player>
+/government account viewer remove <account> <player>
 /government account member add <account> <player>
 /government account member remove <account> <player>
 /government account auth add <account> <player>
@@ -45,6 +49,8 @@ should use groups — see [why groups](#prefer-groups) below.
 ### LuckPerms groups
 
 ```text
+/government account viewer addgroup <account> <group>
+/government account viewer removegroup <account> <group>
 /government account member addgroup <account> <group>
 /government account member removegroup <account> <group>
 /government account auth addgroup <account> <group>
@@ -55,9 +61,14 @@ should use groups — see [why groups](#prefer-groups) below.
 access with:
 
 ```text
+/government account viewer list <account>
 /government account member list <account>
 /government account auth list <account>
 ```
+
+> [!NOTE]
+> Managing **viewers** is gated like managing members — it needs
+> `treasury.gov.account.manage` (plus authorizer access on the account).
 
 ### Prefer groups
 

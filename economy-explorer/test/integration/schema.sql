@@ -1,3 +1,28 @@
+-- =============================================================================
+-- DELIBERATE LIGHT STAND-IN — NOT the authoritative schema (economy-explorer/testing/0005).
+-- =============================================================================
+-- This file is a hand-maintained, intentionally *light* subset of the economy
+-- schema, kept here so the in-repo integration tests (test/integration/sql.test.ts,
+-- run only with RUN_INTEGRATION=1) can exercise the real lib/sql queries against a
+-- real MariaDB quickly, with no Flyway/JVM bootstrap.
+--
+-- It is DELIBERATELY NOT wired to Flyway. The design decision (0005) is:
+--   * in-repo tests stay LIGHT  — unit + light integration + regression;
+--   * the FULL authoritative-schema harness (all migrations, DB triggers such as
+--     trg_postings_ai, generated columns, constraints) lives OUTSIDE the monorepo
+--     in ../other. Trigger/full-schema behaviour is covered there, not here.
+--
+-- The AUTHORITATIVE schema is economy-flyway/ (V<n>__*.sql migrations). This file
+-- only needs enough shape (tables/columns/views the queries touch) to run those
+-- queries; it does not — and is not meant to — reproduce triggers or every column.
+--
+-- DRIFT GUARD — IMPORTANT: the .github/workflows/economy-explorer-schema-drift.yml
+-- gate does NOT guard this file. That gate regenerates lib/db.generated.ts (the
+-- kysely types) from the migrated Flyway schema and fails on drift there. This
+-- snapshot is unguarded: if a migration changes a shape a query here relies on,
+-- keep this file in sync by hand (or the affected integration test will fail).
+-- =============================================================================
+
 SET FOREIGN_KEY_CHECKS=0;
 
 CREATE TABLE `accounts` (
@@ -151,14 +176,15 @@ CREATE TABLE `firm_role_permission` (
   KEY `idx_rp_active` (`role_id`,`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `firm_players` (
+CREATE TABLE `economy_players` (
   `player_uuid_bin` binary(16) NOT NULL,
   `current_name` varchar(32) NOT NULL,
   `name_lower` varchar(32) GENERATED ALWAYS AS (lcase(`current_name`)) VIRTUAL,
   `first_seen` timestamp NOT NULL DEFAULT current_timestamp(),
   `last_seen` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `last_login_epoch` bigint(20) DEFAULT NULL,
   PRIMARY KEY (`player_uuid_bin`),
-  UNIQUE KEY `uq_firm_players_name` (`name_lower`)
+  UNIQUE KEY `uq_economy_players_name` (`name_lower`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `chestshop_sale` (
@@ -306,12 +332,6 @@ CREATE TABLE `explorer_link_code` (
   KEY `idx_link_code_expiry` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `player_login_times` (
-  `player_uuid_bin` binary(16) NOT NULL,
-  `last_login_epoch` bigint(20) NOT NULL,
-  PRIMARY KEY (`player_uuid_bin`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE `explorer_identity` (
   `keycloak_sub` varchar(64) NOT NULL,
   `player_uuid_bin` binary(16) NOT NULL,
@@ -356,5 +376,14 @@ CREATE TABLE `explorer_group_member` (
   PRIMARY KEY (`group_id`,`player_uuid_bin`),
   KEY `idx_group_member_player` (`player_uuid_bin`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ADT-13 single-source read-access views (mirror V22__account_read_access_views.sql).
+CREATE OR REPLACE VIEW `account_read_access_api` AS
+  SELECT account_id, subject_uuid_bin FROM account_access
+   WHERE level IN ('MEMBER','AUTHORIZER') AND removed_at IS NULL;
+
+CREATE OR REPLACE VIEW `account_read_access_web` AS
+  SELECT account_id, subject_uuid_bin FROM account_access
+   WHERE level IN ('VIEWER','MEMBER','AUTHORIZER') AND removed_at IS NULL;
 
 SET FOREIGN_KEY_CHECKS=1;

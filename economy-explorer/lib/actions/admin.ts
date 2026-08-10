@@ -1,18 +1,12 @@
 'use server';
 import { revalidatePath } from 'next/cache';
-import { randomUUID } from 'node:crypto';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
+import { getViewer } from '@/lib/auth/viewer';
 import {
-  setApiKeyRevoked,
-  findApiKeyForRotate,
-  rotateApiKeyRow,
-} from '@/lib/sql/apiKey';
-import {
-  upsertRateLimitOverride,
-  deleteRateLimitOverride,
-} from '@/lib/sql/rateLimitOverride';
-import { signApiKeyJwt, jwtSigningConfigured } from '@/lib/jwt';
-import { ForbiddenError } from '@/lib/errors';
+  setRateLimitOverride,
+  clearRateLimitOverride,
+  revokeApiKey,
+  rotateApiKey,
+} from '@/lib/treasury';
 import { auditView } from '@/lib/audit';
 import {
   createGroup,
@@ -24,14 +18,7 @@ import {
   resolvePlayerUuid,
 } from '@/lib/services/group';
 import { isCapability } from '@/lib/auth/capabilities';
-
-const TOKEN_LIFETIME_DAYS = 180;
-
-function requireAdmin(viewer: Viewer): asserts viewer is Extract<Viewer, { anon: false }> {
-  if (viewer.anon || viewer.role !== 'admin') {
-    throw new ForbiddenError('Admin only.');
-  }
-}
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 // ---- Group RBAC management -------------------------------------------------
 
@@ -126,7 +113,8 @@ export async function revokeApiKeyAction(keyId: number): Promise<{ ok: boolean; 
   const viewer = await getViewer();
   requireAdmin(viewer);
   try {
-    await setApiKeyRevoked(keyId);
+    // ADT-14: route through the REST admin API (kysely stays read-only).
+    await revokeApiKey(keyId);
     await auditView(viewer, { method: 'POST', path: '/admin/api-keys/revoke', targetType: 'global', targetId: `key:${keyId}` });
     revalidatePath('/admin/api-keys');
     return { ok: true };
@@ -136,46 +124,20 @@ export async function revokeApiKeyAction(keyId: number): Promise<{ ok: boolean; 
 }
 
 /**
- * Admin force-rotate: mints a new JWT, invalidates the old token, returns
- * only the new expiry (never the token — same security choice as Spring's
- * adminForceRotate). The owner must re-export the new token in-game.
+ * Admin force-rotate via the REST admin API (ADT-14). The REST side
+ * (AuthService.adminForceRotate) replaces the jti to invalidate the current
+ * token and returns only the new expiry — it never mints/persists a token
+ * (ADT-6), so the explorer no longer signs JWTs itself. The owner reissues
+ * the new token in-game.
  */
 export async function rotateApiKeyAction(keyId: number): Promise<{ ok: boolean; expiresAt?: string; error?: string }> {
   const viewer = await getViewer();
   requireAdmin(viewer);
-
-  if (!jwtSigningConfigured()) {
-    return { ok: false, error: 'JWT signing is not configured in this environment (missing JWT_SECRET).' };
-  }
-
   try {
-    const row = await findApiKeyForRotate(keyId);
-    if (!row) return { ok: false, error: 'API key not found.' };
-    if (row.revoked) return { ok: false, error: 'Key is revoked; revoked keys cannot be rotated.' };
-    if (!row.owner_uuid) return { ok: false, error: 'Key has no owner UUID — cannot rotate.' };
-
-    const jti = randomUUID();
-    const iat = new Date();
-    const exp = new Date(iat.getTime() + TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
-
-    const token = await signApiKeyJwt({
-      keyId: row.key_id,
-      ownerUuid: row.owner_uuid,
-      keyType: row.key_type,
-      accountId: row.account_id,
-      firmId: row.firm_id,
-      jti,
-      iat,
-      exp,
-    });
-
-    const affected = await rotateApiKeyRow({ keyId, jti, token, issuedAt: iat, expiresAt: exp });
-    if (affected !== 1) {
-      return { ok: false, error: 'Rotation failed (key revoked concurrently).' };
-    }
+    const { expiresAt } = await rotateApiKey(keyId);
     await auditView(viewer, { method: 'POST', path: '/admin/api-keys/rotate', targetType: 'global', targetId: `key:${keyId}` });
     revalidatePath('/admin/api-keys');
-    return { ok: true, expiresAt: exp.toISOString() };
+    return { ok: true, expiresAt };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -195,15 +157,11 @@ export async function setRateLimitAction(args: {
   requireAdmin(viewer);
   try {
     const mult = clamp(args.multiplier, 0.1, 1000);
+    // Route the write through the REST admin API (ADT-14) — kysely stays read-only.
     if (mult === 1 && (!args.note || !args.note.trim())) {
-      await deleteRateLimitOverride(args.ownerUuid);
+      await clearRateLimitOverride(args.ownerUuid);
     } else {
-      await upsertRateLimitOverride({
-        ownerUuid: args.ownerUuid,
-        multiplier: mult.toFixed(2),
-        note: args.note?.trim() || null,
-        updatedBy: viewer.minecraftUuid,
-      });
+      await setRateLimitOverride(args.ownerUuid, mult.toFixed(2), args.note?.trim() || null);
     }
     await auditView(viewer, { method: 'POST', path: '/admin/api-keys/rate-limit', targetType: 'player', targetId: args.ownerUuid });
     revalidatePath('/admin/api-keys');

@@ -63,7 +63,7 @@ export function looksLikeUuid(s: string | null | undefined): boolean {
 /**
  * The best human-readable identifier for an account. Prefers a real
  * displayName (BUSINESS / GOVERNMENT / SYSTEM, or an account the player named),
- * then the resolved owner name (firm_players.current_name), then a short UUID.
+ * then the resolved owner name (economy_players.current_name), then a short UUID.
  *
  * Personal accounts default their display_name to the owner's raw UUID, so a
  * UUID-shaped display_name is junk — skip it and use the resolved player name.

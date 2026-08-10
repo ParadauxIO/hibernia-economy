@@ -12,8 +12,19 @@ import java.util.UUID;
  */
 public interface PlayerDirectoryService {
 
-    /** Records (upserts) a player's current name and last-login epoch on login. */
-    void recordLogin(UUID playerUuid, String currentName, long epochSeconds);
+    /**
+     * Records (upserts) a player's current name and last-login epoch on login,
+     * and returns the player's <em>previous</em> last-login epoch (the value
+     * before this call), or {@code null} if this is their first ever login.
+     *
+     * <p>This is the single owner of the {@code economy_players} row write and
+     * the single atomic read-old/write-new of {@code last_login_epoch}, so
+     * callers that prorate over the elapsed period (balance tax) consume the
+     * returned value rather than reading the column themselves — which would
+     * race this write. Serialised per player so concurrent logins can't both
+     * observe the same previous value.
+     */
+    Long recordLogin(UUID playerUuid, String currentName, long epochSeconds);
 
     /**
      * Resolves a current name to a UUID, case-insensitively, regardless of

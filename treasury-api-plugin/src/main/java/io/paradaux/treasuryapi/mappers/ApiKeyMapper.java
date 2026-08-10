@@ -1,6 +1,7 @@
 package io.paradaux.treasuryapi.mappers;
 
 import io.paradaux.treasuryapi.model.economy.ApiKey;
+import io.paradaux.treasuryapi.model.economy.KeyType;
 import org.apache.ibatis.annotations.*;
 
 import java.time.Instant;
@@ -10,16 +11,18 @@ import java.util.UUID;
 @Mapper
 public interface ApiKeyMapper {
 
+    // token is no longer persisted (ADT-6): the signed JWT is shown once at
+    // issue/reissue and never stored or read back; only jwt_id (jti) is kept.
     @Insert("""
-            INSERT INTO api_keys (key_type, account_id, firm_id, owner_uuid_bin, jwt_id, token, issued_at, expires_at)
-            VALUES (#{keyType}, #{accountId}, #{firmId}, #{ownerUuid}, #{jwtId}, #{token}, #{issuedAt}, #{expiresAt})
+            INSERT INTO api_keys (key_type, account_id, firm_id, owner_uuid_bin, jwt_id, issued_at, expires_at)
+            VALUES (#{keyType}, #{accountId}, #{firmId}, #{ownerUuid}, #{jwtId}, #{issuedAt}, #{expiresAt})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "keyId", keyColumn = "key_id")
     void insert(ApiKey apiKey);
 
     @Select("""
             SELECT key_id, key_type, account_id, firm_id, owner_uuid_bin,
-                   jwt_id, token, issued_at, expires_at, revoked
+                   jwt_id, issued_at, expires_at, revoked
               FROM api_keys
              WHERE key_id = #{keyId}
             """)
@@ -30,25 +33,27 @@ public interface ApiKeyMapper {
             @Result(column = "firm_id",        property = "firmId"),
             @Result(column = "owner_uuid_bin", property = "ownerUuid"),
             @Result(column = "jwt_id",         property = "jwtId"),
-            @Result(column = "token",          property = "token"),
             @Result(column = "issued_at",      property = "issuedAt",  javaType = Instant.class),
             @Result(column = "expires_at",     property = "expiresAt", javaType = Instant.class),
             @Result(column = "revoked",        property = "revoked")
     })
     ApiKey findById(@Param("keyId") int keyId);
 
+    // `AND revoked = 0` is the SQL-level guard that "revoked stays revoked": a
+    // revoked key must not be resurrected by reissuing it (ADT-110). The 0-rows
+    // result is treated as a terminal-state rejection by the service. Mirrors the
+    // treasury-rest-api ApiKeyMapper.rotateKey guard so both writers to api_keys
+    // agree on the revoke invariant.
     @Update("""
             UPDATE api_keys
                SET jwt_id     = #{jwtId},
-                   token      = #{token},
                    issued_at  = #{issuedAt},
-                   expires_at = #{expiresAt},
-                   revoked    = 0
+                   expires_at = #{expiresAt}
              WHERE key_id = #{keyId}
+               AND revoked = 0
             """)
     int reissue(@Param("keyId") int keyId,
                 @Param("jwtId") String jwtId,
-                @Param("token") String token,
                 @Param("issuedAt") Instant issuedAt,
                 @Param("expiresAt") Instant expiresAt);
 
@@ -59,7 +64,7 @@ public interface ApiKeyMapper {
 
     @Select("""
             SELECT key_id, key_type, account_id, firm_id, owner_uuid_bin,
-                   jwt_id, token, issued_at, expires_at, revoked
+                   jwt_id, issued_at, expires_at, revoked
               FROM api_keys
              WHERE key_type = #{keyType}
                AND owner_uuid_bin = #{ownerUuid}
@@ -67,13 +72,13 @@ public interface ApiKeyMapper {
             """)
     @ResultMap("apiKeyMap")
     List<ApiKey> findByOwnerAndType(@Param("ownerUuid") UUID ownerUuid,
-                                    @Param("keyType") String keyType);
+                                    @Param("keyType") KeyType keyType);
 
     // ---- Business access — keys for firms the player is employed at ----
 
     @Select("""
             SELECT DISTINCT ak.key_id, ak.key_type, ak.account_id, ak.firm_id, ak.owner_uuid_bin,
-                   ak.jwt_id, ak.token, ak.issued_at, ak.expires_at, ak.revoked
+                   ak.jwt_id, ak.issued_at, ak.expires_at, ak.revoked
               FROM api_keys ak
               JOIN firm_employee fe ON ak.firm_id = fe.firm_id
              WHERE ak.key_type = 'BUSINESS'

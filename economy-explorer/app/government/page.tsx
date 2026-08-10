@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -24,7 +25,7 @@ export default async function GovernmentPage({
 }) {
   // Public — players are expected to see government account holdings and the
   // public record of fines.
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
   const [cats, fines, govAccounts] = await memo(`government:${sp.days}`, 60_000, () =>
     Promise.all([
       getFineCategorySummary(sp.days),
@@ -181,10 +182,3 @@ export default async function GovernmentPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

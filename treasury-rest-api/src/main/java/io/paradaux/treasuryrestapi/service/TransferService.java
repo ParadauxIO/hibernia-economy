@@ -1,5 +1,6 @@
 package io.paradaux.treasuryrestapi.service;
 
+import io.paradaux.common.OverdraftPolicy;
 import io.paradaux.treasuryrestapi.dto.FirmTransferRequest;
 import io.paradaux.treasuryrestapi.dto.PlayerTransferRequest;
 import io.paradaux.treasuryrestapi.dto.TransferRequest;
@@ -190,7 +191,16 @@ public class TransferService {
             log.debug("Idempotency key provided but no prior transaction found; proceeding with new transfer");
         }
 
-        // Step 6: source account must exist and not be archived
+        // Step 6: source account must exist and not be archived.
+        // Note on parity with the in-process plugin engine (LedgerServiceImpl): the plugin
+        // re-reads the source's overdraft flags (allow_overdraft/credit_limit) under a
+        // shared row lock (ADT-10) to exclude a concurrent flag flip mid-transfer. This
+        // engine deliberately reads them from this unlocked findById instead — and that is
+        // safe here, NOT an oversight: treasury-rest-api has no code path that writes those
+        // flags at all (only the plugin's admin tooling flips them), and no normal user can
+        // trigger a flip. If parity were ever needed, the correct change is a shared-lock
+        // read of the accounts row BEFORE the balance FOR UPDATE locks below (accounts-then-
+        // balances, matching the plugin's order) — do not "fix" it as a deadlock issue.
         Account source = accountMapper.findById(fromAccountId);
         if (source == null || source.isArchived()) {
             log.warn("Transfer rejected: source accountId={} not found or archived", fromAccountId);
@@ -231,18 +241,106 @@ public class TransferService {
                 fromAccountId, sourceBalance.getBalance(), sourceBalance.getVersion(),
                 toAccountId, destBalance.getBalance(), destBalance.getVersion());
 
-        // Step 10: overdraft check (after both locks held — order is irrelevant for the check itself)
-        if (!source.isAllowOverdraft()) {
-            BigDecimal creditLimit = source.getCreditLimit() != null
-                    ? source.getCreditLimit() : BigDecimal.ZERO;
-            if (sourceBalance.getBalance().subtract(amount).compareTo(creditLimit.negate()) < 0) {
-                log.warn("Transfer rejected: insufficient funds on accountId={} (balance={}, amount={}, creditLimit={})",
-                        fromAccountId, sourceBalance.getBalance(), amount, creditLimit);
-                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "INSUFFICIENT_FUNDS",
-                        "Source account has insufficient funds.");
-            }
+        // Step 10: overdraft check (after both locks held — order is irrelevant for the check itself).
+        // Defers to the shared OverdraftPolicy so this engine and the in-process Treasury plugin
+        // interpret (allow_overdraft, credit_limit) identically (PAR-319):
+        //   SYSTEM account                            → unlimited (ignores credit limits)
+        //   allow_overdraft = false                   → floor 0 (credit_limit ignored)
+        //   allow_overdraft = true, credit_limit < 0  → unlimited faucet/sink
+        //   allow_overdraft = true, credit_limit >= 0 → floor -credit_limit
+        boolean sourceIsSystem = "SYSTEM".equals(source.getAccountType());
+        if (!OverdraftPolicy.isWithinFloor(sourceBalance.getBalance(), amount,
+                source.isAllowOverdraft(), source.getCreditLimit(), sourceIsSystem)) {
+            log.warn("Transfer rejected: insufficient funds on accountId={} (balance={}, amount={}, "
+                    + "allowOverdraft={}, creditLimit={}, accountType={})",
+                    fromAccountId, sourceBalance.getBalance(), amount,
+                    source.isAllowOverdraft(), source.getCreditLimit(), source.getAccountType());
+            throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "INSUFFICIENT_FUNDS",
+                    "Source account has insufficient funds.");
         }
 
+        return postTransfer(fromAccountId, toAccountId, amount, safeMemo, initiator, dedupKey);
+    }
+
+    /**
+     * Sweeps the <em>freshly locked</em> positive balance of {@code fromAccountId}
+     * into {@code toAccountId} in a single ledger transaction. Unlike
+     * {@link #executeTransfer}, the moved amount is not a caller-supplied snapshot: it
+     * is read under the {@code SELECT ... FOR UPDATE} lock, so a concurrent credit or
+     * debit that lands between a caller's snapshot and this call cannot leave a residual
+     * behind or make the sweep overdraw (conservation stays exact). Used by the admin
+     * firm-disband sweep, which must not trust {@code account_balances_mat} snapshots.
+     *
+     * <p>Returns {@code null} when the locked balance is zero-or-negative (nothing to
+     * move) so the caller can archive the account without emitting an empty transfer.
+     *
+     * @return the transfer receipt, or {@code null} if the locked balance was not positive
+     */
+    @Transactional
+    public TransferResponse sweepAll(long fromAccountId,
+                                     long toAccountId,
+                                     String memo,
+                                     UUID initiator) {
+        String safeMemo = memo == null ? "" : memo;
+        if (fromAccountId == toAccountId) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SELF_TRANSFER",
+                    "Source and destination accounts must be different.");
+        }
+
+        // Lock both balance rows in ascending account-id order — identical ordering to
+        // executeTransfer — so a sweep and a concurrent A→B / B→A transfer can't deadlock.
+        long firstLockId  = Math.min(fromAccountId, toAccountId);
+        long secondLockId = Math.max(fromAccountId, toAccountId);
+        AccountBalance firstLock  = accountMapper.findBalanceForUpdate(firstLockId);
+        AccountBalance secondLock = accountMapper.findBalanceForUpdate(secondLockId);
+        AccountBalance sourceBalance = (fromAccountId == firstLockId) ? firstLock : secondLock;
+        if (sourceBalance == null) {
+            // Two-engine parity with LedgerServiceImpl.sweepAll: a missing source balance
+            // row is a state error, not a silent no-op. Not live-reachable today (disband
+            // callers only sweep accounts that exist), but keep the engines equivalent.
+            throw new IllegalStateException("Missing balance row for source account " + fromAccountId);
+        }
+
+        BigDecimal amount = sourceBalance.getBalance();
+        if (amount == null || amount.signum() <= 0) {
+            log.debug("Sweep no-op: locked balance on accountId={} is {} (nothing to move)",
+                    fromAccountId, amount);
+            return null;
+        }
+
+        log.debug("Sweeping locked balance {} from accountId={} to accountId={}",
+                amount.toPlainString(), fromAccountId, toAccountId);
+        return postTransfer(fromAccountId, toAccountId, amount, safeMemo, initiator, /* dedupKey */ null);
+    }
+
+    /**
+     * Reads an account's balance under a {@code SELECT ... FOR UPDATE} lock, held for
+     * the remainder of the caller's transaction. Used by the admin disband flow to
+     * decide — from the authoritative, concurrency-safe value rather than a stale
+     * {@code account_balances_mat} snapshot — whether an account with no sweep
+     * destination truly still holds money. Returns {@code null} if no balance row
+     * exists for the account.
+     */
+    @Transactional
+    public BigDecimal lockedBalance(long accountId) {
+        AccountBalance locked = accountMapper.findBalanceForUpdate(accountId);
+        return locked == null ? null : locked.getBalance();
+    }
+
+    /**
+     * Records the money movement once both balance rows are locked and the amount is
+     * settled: inserts the {@code ledger_txns} row and the debit/credit postings, then
+     * builds the receipt. The {@code account_balances_mat} deltas are applied by the
+     * {@code trg_postings_ai} trigger on {@code ledger_postings} — never an
+     * application-side UPDATE. Shared by {@link #executeTransfer} and {@link #sweepAll}
+     * so both write the ledger identically.
+     */
+    private TransferResponse postTransfer(long fromAccountId,
+                                          long toAccountId,
+                                          BigDecimal amount,
+                                          String safeMemo,
+                                          UUID initiator,
+                                          String dedupKey) {
         Instant now = Instant.now();
         LocalDateTime settlementTime = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
 
@@ -313,7 +411,7 @@ public class TransferService {
                     "Firm '" + request.toFirm() + "' not found.");
         }
         if (firm.getDefaultAccountId() == null) {
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "NO_DEFAULT_ACCOUNT",
+            throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "NO_DEFAULT_ACCOUNT",
                     "Firm '" + request.toFirm() + "' has no default account configured.");
         }
 

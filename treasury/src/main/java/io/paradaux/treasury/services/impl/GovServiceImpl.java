@@ -16,6 +16,7 @@ import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.LedgerService;
+import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.Money;
 import io.paradaux.treasury.utils.TreasuryConstants;
@@ -34,16 +35,19 @@ public class GovServiceImpl implements GovService {
     private final LedgerService ledgerService;
     private final GovernmentFineMapper fineMapper;
     private final GovernmentConfiguration govConfig;
+    private final PlayerDirectoryService playerDirectory;
 
     @Inject
     public GovServiceImpl(AccountService accountService,
                           LedgerService ledgerService,
                           GovernmentFineMapper fineMapper,
-                          GovernmentConfiguration govConfig) {
+                          GovernmentConfiguration govConfig,
+                          PlayerDirectoryService playerDirectory) {
         this.accountService = accountService;
         this.ledgerService  = ledgerService;
         this.fineMapper     = fineMapper;
         this.govConfig      = govConfig;
+        this.playerDirectory = playerDirectory;
     }
 
     // ---- Account management ----
@@ -54,6 +58,15 @@ public class GovServiceImpl implements GovService {
         Account existing = accountService.getGovernmentAccountByName(name);
         if (existing != null) {
             throw new IllegalArgumentException("A GOVERNMENT account named '" + name + "' already exists");
+        }
+        // Guard at the source (PAR-144): governments are run as Minecraft player
+        // alts of the same name, and that player↔GOVERNMENT name collision is what
+        // makes bare-name resolution ambiguous everywhere downstream. Refuse to
+        // mint a GOVERNMENT account whose name already belongs to a known player so
+        // no new collisions are created.
+        if (playerDirectory.resolveUuidByName(name).isPresent()) {
+            throw new IllegalArgumentException("A player named '" + name + "' already exists; "
+                    + "a GOVERNMENT account must not share a player's name (use a distinct name)");
         }
         Account created = accountService.createAccount(AccountType.GOVERNMENT, TreasuryConstants.VIRTUAL_TREASURY_OWNER, name);
         log.info("Department account '{}' (id={}) created by {}", name, created.getAccountId(), createdBy);
@@ -135,12 +148,21 @@ public class GovServiceImpl implements GovService {
         }
 
         BigDecimal normalized = Money.normalize(amount);
+        // Include the amount and reason in the dedup key, not just issuer+debtor+second:
+        // otherwise two legitimate but distinct fines on the same debtor within the same
+        // second collapse to one via the ledger dedup UNIQUE (ADT-33). Two fines that
+        // also share amount and reason in the same second are treated as a double-submit.
         byte[] dedupKey = Idempotency.sha256("fine:" + issuedBy + ":" + debtorAccountId + ":"
+                + normalized.toPlainString() + ":" + reason + ":"
                 + Instant.now().truncatedTo(ChronoUnit.SECONDS));
 
         long txnId;
         try {
-            txnId = ledgerService.transfer(new TransferRequest(
+            // A fine is an administrative debit by authority of permission, so it
+            // must bypass the debtor's requires_authorization gate (you can't dodge
+            // a fine by demanding an authorizer) — adminTransfer skips ONLY that gate
+            // and still fails on insufficient funds (ADT fine-debtor-auth-not-wrapped).
+            txnId = ledgerService.adminTransfer(new TransferRequest(
                     debtorAccountId,
                     govAccount.getAccountId(),
                     normalized,

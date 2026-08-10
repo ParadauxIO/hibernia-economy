@@ -104,7 +104,7 @@ export async function selectGroupById(groupId: number): Promise<GroupSummary | n
  */
 export async function findPlayerUuidByName(name: string): Promise<string | null> {
   const r = await sql<{ player_uuid_bin: Buffer }>`
-    SELECT player_uuid_bin FROM firm_players
+    SELECT player_uuid_bin FROM economy_players
     WHERE LOWER(current_name) = LOWER(${name})
     ORDER BY player_uuid_bin LIMIT 1
   `.execute(db);
@@ -156,7 +156,7 @@ export async function listGroupMembers(groupId: number): Promise<GroupMember[]> 
   }>`
     SELECT gm.player_uuid_bin, fp.current_name AS name, gm.source, gm.added_at
     FROM explorer_group_member gm
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
     WHERE gm.group_id = ${groupId}
     ORDER BY gm.source, fp.current_name
   `.execute(db);

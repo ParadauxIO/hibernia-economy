@@ -9,11 +9,10 @@ import io.paradaux.treasury.event.TaxCycleEvent;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
 import io.paradaux.treasury.model.tax.TaxCycleReport;
 import io.paradaux.treasury.model.tax.TaxCycleType;
-import io.paradaux.treasury.services.BalanceTaxService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
 import io.paradaux.treasury.services.TaxWebhookService;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.RegisteredListener;
 
@@ -24,7 +23,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * Admin command for inspecting tax cycle status and triggering cycles for testing.
@@ -47,18 +45,16 @@ public class TaxCommand implements CommandHandler {
     private final TaxCycleRegistry cycleRegistry;
     private final TaxCycleConfiguration cycleConfig;
     private final TaxWebhookService webhookService;
-    private final BalanceTaxService balanceTaxService;
     private final Message message;
 
     @Inject
     public TaxCommand(TaxApi taxApi, TaxCycleRegistry cycleRegistry,
                       TaxCycleConfiguration cycleConfig, TaxWebhookService webhookService,
-                      BalanceTaxService balanceTaxService, Message message) {
+                      Message message) {
         this.taxApi            = taxApi;
         this.cycleRegistry     = cycleRegistry;
         this.cycleConfig       = cycleConfig;
         this.webhookService    = webhookService;
-        this.balanceTaxService = balanceTaxService;
         this.message           = message;
     }
 
@@ -82,28 +78,34 @@ public class TaxCommand implements CommandHandler {
     @Async
     @Description("Show all tax cycle configuration and registered plugin integrations")
     public void status(@Sender CommandSender sender) {
-        sender.sendRichMessage("<bold><blue>TREASURY</blue></bold> <gray>»</gray> Tax Status");
-        sender.sendRichMessage("");
+        message.send(sender, "treasury.tax.status.header");
+        sender.sendMessage(Component.empty());
 
         // Default tax account
-        sender.sendRichMessage("<gray>Default tax account: <#6f6fff>"
-                + taxApi.getDefaultTaxAccountName()
-                + "</#6f6fff> <gray>(id: " + taxApi.getDefaultTaxAccountId() + ")</gray>");
-        sender.sendRichMessage("");
+        message.send(sender, "treasury.tax.status.default-account",
+                "name", taxApi.getDefaultTaxAccountName(),
+                "id", taxApi.getDefaultTaxAccountId());
+        sender.sendMessage(Component.empty());
 
         // Collect all listeners and the explicitly registered ones
         Set<String> allListeners = collectListenerPlugins();
-        sender.sendRichMessage("<gray>Cycles:</gray>");
+        message.send(sender, "treasury.tax.status.cycles-header");
 
         for (TaxCycleType type : TaxCycleType.values()) {
-            sender.sendRichMessage(formatCycleRow(type));
+            message.send(sender, "treasury.tax.status.cycle-row",
+                    "type", type.name(),
+                    "status", Message.rich(taxApi.isCycleEnabled(type)
+                            ? "<green>enabled</green>" : "<red>disabled</red>"),
+                    "schedule", formatScheduleHint(type),
+                    "next", Message.rich(formatNextFire(taxApi.getNextFireTime(type))));
 
             Set<String> registered = taxApi.getCycleParticipants(type);
             if (!registered.isEmpty()) {
-                sender.sendRichMessage("    <gray>└─ Plugins: <#6f6fff>"
-                        + String.join("<gray>, </#6f6fff><#6f6fff>", registered) + "</#6f6fff></gray>");
+                message.send(sender, "treasury.tax.status.cycle-plugins",
+                        "plugins", Message.rich(String.join(
+                                "<gray>, </#6f6fff><#6f6fff>", registered)));
             } else {
-                sender.sendRichMessage("    <gray>└─ Plugins: <italic>none registered</italic></gray>");
+                message.send(sender, "treasury.tax.status.cycle-plugins-none");
             }
         }
 
@@ -115,14 +117,14 @@ public class TaxCommand implements CommandHandler {
         Set<String> unregistered = new LinkedHashSet<>(allListeners);
         unregistered.removeAll(allRegistered);
 
-        sender.sendRichMessage("");
+        sender.sendMessage(Component.empty());
         if (!unregistered.isEmpty()) {
-            sender.sendRichMessage("<gray>Unregistered listeners <dark_gray>(listening but haven't called registerCycleParticipant):</dark_gray></gray>");
+            message.send(sender, "treasury.tax.status.unregistered-header");
             for (String name : unregistered) {
-                sender.sendRichMessage("  <yellow>" + name + "</yellow>");
+                message.send(sender, "treasury.tax.status.unregistered-entry", "name", name);
             }
         } else if (allListeners.isEmpty()) {
-            sender.sendRichMessage("<gray>No external plugins are listening for TaxCycleEvent.</gray>");
+            message.send(sender, "treasury.tax.status.no-listeners");
         }
     }
 
@@ -143,11 +145,10 @@ public class TaxCommand implements CommandHandler {
         Instant periodStart = Instant.now();
         String triggeredBy = sender.getName();
 
-        sender.sendRichMessage("<bold><blue>TREASURY</blue></bold> <gray>»</gray> "
-                + "<yellow>[MANUAL]</yellow> Firing <#6f6fff>" + cycleType.name().toLowerCase()
-                + "</#6f6fff> cycle (period start: " + periodStart + ")…");
-        sender.sendRichMessage("<gray>Note: dedup keys are derived from this period start — "
-                + "this run will NOT conflict with the regularly scheduled cycle.</gray>");
+        message.send(sender, "treasury.tax.trigger.firing",
+                "cycle", cycleType.name().toLowerCase(),
+                "start", periodStart);
+        message.send(sender, "treasury.tax.trigger.dedup-note");
 
         cycleRegistry.startSession(cycleType, periodStart, true, triggeredBy);
 
@@ -157,38 +158,13 @@ public class TaxCommand implements CommandHandler {
         TaxCycleReport report = cycleRegistry.endSession();
         if (report != null) webhookService.sendCycleReport(report);
 
-        sender.sendRichMessage("<bold><blue>TREASURY</blue></bold> <gray>»</gray> "
-                + "<green>Done.</green> Check server logs for per-entry results."
-                + (report != null ? " <gray>Collected: <white>" + report.collectedCount()
-                        + "</white>  Skipped: <white>" + report.skippedCount()
-                        + "</white>  Failed: <white>" + report.failedCount() + "</white></gray>" : ""));
-    }
-
-    // ---- /tax trigger balance <player> ----
-
-    @Route("trigger balance <player>")
-    @Async
-    @Description("Force personal balance tax collection for a player as if they just logged in now")
-    public void triggerBalance(@Sender CommandSender sender, @Arg("player") String playerName) {
-        @SuppressWarnings("deprecation")
-        OfflinePlayer target = Bukkit.getOfflinePlayer(playerName);
-        UUID uuid = target.getUniqueId();
-
-        if (!target.hasPlayedBefore() && !target.isOnline()) {
-            message.send(sender, "treasury.tax.unknown-player", "player", playerName);
-            return;
-        }
-
-        sender.sendRichMessage("<bold><blue>TREASURY</blue></bold> <gray>»</gray> "
-                + "<yellow>[MANUAL]</yellow> Running balance tax for <#6f6fff>" + playerName + "</#6f6fff>…");
-
-        long loginEpochSecs = Instant.now().getEpochSecond();
-        try {
-            balanceTaxService.processLogin(uuid, loginEpochSecs);
-            sender.sendRichMessage("<bold><blue>TREASURY</blue></bold> <gray>»</gray> "
-                    + "<green>Done.</green> Check server logs for the result.");
-        } catch (Exception e) {
-            message.send(sender, "treasury.tax.balance.failed", "reason", String.valueOf(e.getMessage()));
+        if (report != null) {
+            message.send(sender, "treasury.tax.trigger.done-report",
+                    "collected", report.collectedCount(),
+                    "skipped", report.skippedCount(),
+                    "failed", report.failedCount());
+        } else {
+            message.send(sender, "treasury.tax.trigger.done");
         }
     }
 
@@ -204,18 +180,6 @@ public class TaxCommand implements CommandHandler {
             }
         }
         return names;
-    }
-
-    private String formatCycleRow(TaxCycleType type) {
-        boolean enabled = taxApi.isCycleEnabled(type);
-        String statusTag = enabled ? "<green>enabled</green>" : "<red>disabled</red>";
-        String nextStr   = formatNextFire(taxApi.getNextFireTime(type));
-        String schedule  = formatScheduleHint(type);
-
-        return "  <#6f6fff>" + type.name() + "</#6f6fff>  "
-                + statusTag + "  "
-                + "<gray>" + schedule + "</gray>  "
-                + nextStr;
     }
 
     private String formatNextFire(Optional<Instant> nextFire) {

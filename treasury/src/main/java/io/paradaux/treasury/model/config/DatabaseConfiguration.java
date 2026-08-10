@@ -17,10 +17,12 @@ public class DatabaseConfiguration {
     @ConfigurationValue(path = "database.database", defaultValue = "treasury")
     private String database;
 
-    @ConfigurationValue(path = "database.username", defaultValue = "root")
+    @ConfigurationValue(path = "database.username", defaultValue = "treasury")
     private String username;
 
-    @ConfigurationValue(path = "database.password", defaultValue = "password")
+    // Placeholder default; the plugin refuses to boot while it's unchanged
+    // (ADT default-db-creds-in-shipped-config).
+    @ConfigurationValue(path = "database.password", defaultValue = "CHANGE_ME")
     private String password;
 
     // ---- Connection pool (HikariCP) ----

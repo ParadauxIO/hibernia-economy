@@ -51,7 +51,7 @@ public class AdminAccountService {
 
     /**
      * Reassign an account's owner. {@code ownerSpec} is a UUID or a player name
-     * (resolved via firm_players). Guards the one-PERSONAL-per-player unique index:
+     * (resolved via economy_players). Guards the one-PERSONAL-per-player unique index:
      * a PERSONAL account can't be moved to a player who already has one.
      */
     @Transactional

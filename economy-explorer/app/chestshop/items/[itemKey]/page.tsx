@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
 import { listItemSales, countItemSales, listItemSellers, countItemSellers, itemPriceByDay, listSamplesInRange } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
@@ -43,7 +44,7 @@ export default async function ItemDetailPage({
 }) {
   const { itemKey: raw } = await params;
   const itemKey = decodeURIComponent(raw);
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
 
   // Windows capped at 30 days (there isn't more data yet, and tighter windows
   // give denser, readable candles).
@@ -304,10 +305,3 @@ export default async function ItemDetailPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

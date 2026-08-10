@@ -17,7 +17,22 @@ public final class NameValidator {
     /** Same character set, slightly tighter range; account names are shown next to a firm name. */
     private static final Pattern ACCOUNT_NAME = Pattern.compile("[A-Za-z0-9 _.\\-]{2,40}");
 
+    /**
+     * A firm's advertised Discord invite (business/structure/0003). Strict
+     * {@code https + discord.gg} code charset — the old {@code \S+} let a
+     * MiniMessage payload ride into the public /firm info card (ADT
+     * discord-url-minimessage-injection). This is the single source of the rule
+     * shared by the command layer and {@code FirmServiceImpl}.
+     */
+    public static final String DISCORD_INVITE_REGEX = "https://discord\\.gg/[A-Za-z0-9]{2,32}";
+    private static final Pattern DISCORD_INVITE = Pattern.compile(DISCORD_INVITE_REGEX);
+
     private NameValidator() {}
+
+    /** Whether {@code s} is a valid Discord invite URL for a firm's advertised link. */
+    public static boolean isValidDiscordInvite(String s) {
+        return s != null && DISCORD_INVITE.matcher(s).matches();
+    }
 
     public static boolean isValidFirmName(String s) {
         return s != null && FIRM_NAME.matcher(s).matches();

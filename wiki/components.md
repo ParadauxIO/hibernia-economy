@@ -106,7 +106,7 @@ Treasury and Business so a sale can pay a player or a firm.
 - **Vendored fork:** DC-specific changes are expected; it's built here, not pulled
   from upstream.
 - **Single Gradle module** (`plugin/`) compiled against the **Paper 1.21.11** API,
-  shaded straight to **`ChestShop.jar`**. (Originally ported from Maven with the
+  shaded straight to **`chestshop-<version>.jar`**. (Originally ported from Maven with the
   upstream multi-version adapter matrix — a 1.13.2-baseline core + seven
   `Spigot_*`/`Paper_*` adapter modules + an `assemble` module — but since DC runs
   one modern version, those were folded into the core and the extra modules removed.)

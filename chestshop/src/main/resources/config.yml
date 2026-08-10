@@ -1,0 +1,176 @@
+# ChestShop configuration.
+# Keys are flat UPPER_SNAKE_CASE (unchanged from older versions, so existing
+# configs keep working). Missing keys are merged in automatically on upgrade.
+
+# Should the plugin log some messages that are useful for debugging?
+DEBUG: false
+
+# How large should the internal caches be?
+CACHE_SIZE: 1000
+
+# Should the plugin strip the colors from formatted price?
+STRIP_PRICE_COLORS: false
+
+# What containers are allowed to hold a shop? (Only blocks with inventories work!)
+SHOP_CONTAINERS:
+  - CHEST
+  - TRAPPED_CHEST
+  - BARREL
+
+# (In 1/1000th of a second) How often can a player use the shop sign?
+SHOP_INTERACTION_INTERVAL: 250
+
+# Do you want to block people in creative mode from using shops?
+IGNORE_CREATIVE_MODE: true
+
+# Do you want to block people who have access to a shop due to their permissions from using it? (owners are always ignored)
+IGNORE_ACCESS_PERMS: true
+
+# If true, people will buy with left-click and sell with right-click.
+REVERSE_BUTTONS: false
+
+# If true, people will be able to buy/sell in 64 stacks while holding the crouch button.
+SHIFT_SELLS_IN_STACKS: false
+
+# If true, people will be able to sell/buy everything available of the same type.
+SHIFT_SELLS_EVERYTHING: false
+
+# What can you do by clicking shift with SHIFT_SELLS_IN_STACKS turned on? (ALL/BUY/SELL)
+SHIFT_ALLOWS: ALL
+
+# Can shop's chest be opened by owner with right-clicking a shop's sign?
+ALLOW_SIGN_CHEST_OPEN: false
+
+# If true and in 1.14+, the owner of a chest shop can click with a dye / ink sac to dye the sign.
+SIGN_DYING: true
+
+# If true, when you left-click your own shop sign you won't open chest's inventory, but instead you will start destroying the sign.
+ALLOW_LEFT_CLICK_DESTROYING: true
+
+# If true, if the shop is empty, the sign is destroyed and put into the chest, so the shop isn't usable anymore.
+REMOVE_EMPTY_SHOPS: false
+
+# If true, if the REMOVE_EMPTY_SHOPS option is turned on, the chest is also destroyed.
+REMOVE_EMPTY_CHESTS: false
+
+# A list of worlds in which to remove empty shops with the previous config. Case sensitive. An empty list means all worlds.
+REMOVE_EMPTY_WORLDS:
+  - world1
+  - world2
+
+# First line of your Admin Shop's sign should look like this:
+ADMIN_SHOP_NAME: Admin Shop
+
+# Make all admin shops be unlimited even if they have a shop container at the sign
+FORCE_UNLIMITED_ADMIN_SHOP: false
+
+# The name of the economy account which Admin Shops should use and to which all taxes will go
+SERVER_ECONOMY_ACCOUNT: ''
+
+# The uuid of the economy account for the Admin Shop. Useful for fake accounts as normally only accounts of players work
+SERVER_ECONOMY_ACCOUNT_UUID: 00000000-0000-0000-0000-000000000000
+
+# Percent of the price that should go to the server's account. (100 = 100 percent)
+TAX_AMOUNT: 0
+
+# Percent of the price that should go to the server's account when buying from an Admin Shop.
+SERVER_TAX_AMOUNT: 0
+
+# Amount of money player must pay to create a shop
+SHOP_CREATION_PRICE: 0
+
+# How much money do you get back when destroying a sign?
+SHOP_REFUND_PRICE: 0
+
+# How many decimal places are allowed at a maximum for prices?
+PRICE_PRECISION: 2
+
+# This makes sure that the UUIDs of player shop accounts match the server's online-mode setting.
+# DC fork default is false: Floodgate/Bedrock players have non-v4 UUIDs that this check would reject, blocking them from owning shops.
+ENSURE_CORRECT_PLAYERID: false
+
+# This regexp validates the name of the player. If the name doesn't match, the player will neither be able to create a valid shop sign, nor buy/sell from a shop.
+# DC fork default allows an optional leading Floodgate prefix (the dot) so Bedrock players like .FiftyNine595 can trade and own shops.
+VALID_PLAYERNAME_REGEXP: ^\.?\w+$
+
+# Should we block shops that sell things for more than they buy? (This prevents newbies from creating shops that would be exploited)
+BLOCK_SHOPS_WITH_SELL_PRICE_HIGHER_THAN_BUY_PRICE: true
+
+# Should shops with a buy or sell price of exactly 0 ("free" shops, e.g. b:0 or s:0) be allowed?
+# DC fork default is false: free shops are rejected at creation and any pre-existing ones are removed on use.
+ALLOW_FREE_SHOPS: false
+
+# Maximum amount of items that can be bought/sold at a shop. Default 3456 is a double chest of 64 stacks.
+MAX_SHOP_AMOUNT: 3456
+
+# Do you want to allow other players to build a shop on a block where there's one already?
+ALLOW_MULTIPLE_SHOPS_AT_ONE_BLOCK: false
+
+# Can shops be used even when the buyer/seller doesn't have enough items, space or money? (The price will be scaled adequately to the item amount)
+ALLOW_PARTIAL_TRANSACTIONS: true
+
+# Can '?' be put in place of item name in order for the sign to be auto-filled?
+ALLOW_AUTO_ITEM_FILL: true
+
+# Do you want to show "Out of stock" messages?
+SHOW_MESSAGE_OUT_OF_STOCK: true
+
+# Do you want to show "Full shop" messages?
+SHOW_MESSAGE_FULL_SHOP: true
+
+# How many seconds do you want to wait before showing notifications for the same shop to the owner again?
+NOTIFICATION_MESSAGE_COOLDOWN: 10
+
+# Can players hide the "Out of stock" messages with /cstoggle?
+CSTOGGLE_TOGGLES_OUT_OF_STOCK: false
+
+# Can players hide the "Full shop" messages with /cstoggle?
+CSTOGGLE_TOGGLES_FULL_SHOP: false
+
+# Do you want to show "You bought/sold... " messages?
+SHOW_TRANSACTION_INFORMATION_CLIENT: true
+
+# Do you want to show "Somebody bought/sold... " messages?
+SHOW_TRANSACTION_INFORMATION_OWNER: true
+
+# Should all shop removals be logged?
+LOG_ALL_SHOP_REMOVALS: true
+
+# Do you want to stack all items up to 64 item stacks?
+STACK_TO_64: false
+
+# Do you want to use built-in protection against chest destruction?
+USE_BUILT_IN_PROTECTION: true
+
+# Do you want to have shop signs "stick" to chests?
+STICK_SIGNS_TO_CHESTS: false
+
+# EXPERIMENTAL: Do you want to turn off the default protection when another plugin is protecting the block?
+TURN_OFF_DEFAULT_PROTECTION_WHEN_PROTECTED_EXTERNALLY: false
+
+# Do you want to turn off the default sign protection? Warning! Other players will be able to destroy other people's shops!
+TURN_OFF_SIGN_PROTECTION: false
+
+# Do you want to disable the hopper protection, which prevents Hopper-Minecarts from taking items out of shops?
+TURN_OFF_HOPPER_PROTECTION: false
+
+# Only allow users to buy/sell that have access to the sign's protection? (E.g. WorldGuard regions)
+CHECK_ACCESS_FOR_SHOP_USE: false
+
+# Do you want to only let people build inside WorldGuard regions?
+WORLDGUARD_INTEGRATION: false
+
+# Do you want to only let people build inside region flagged by doing /region regionName flag allow-shop allow?
+WORLDGUARD_USE_FLAG: false
+
+# Do you want ChestShop to respect WorldGuard's chest protection?
+WORLDGUARD_USE_PROTECTION: false
+
+# Do you want to only let people build inside GriefPrevention claims?
+GRIEFPREVENTION_INTEGRATION: false
+
+# Add stock counter to quantity line?
+USE_STOCK_COUNTER: false
+
+# Exclude these item meta attributes from the similarity check when comparing items
+EXCLUDED_ITEM_ATTRIBUTES: []

@@ -8,9 +8,13 @@ import io.paradaux.business.services.FirmPropertyService;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Singleton
 public class FirmPropertyServiceImpl implements FirmPropertyService {
+
+    private static final Logger LOG = Logger.getLogger("Business");
 
     private final FirmPropertyMapper mapper;
 
@@ -33,6 +37,10 @@ public class FirmPropertyServiceImpl implements FirmPropertyService {
         try {
             return Optional.of(Integer.parseInt(prop.getValue()));
         } catch (NumberFormatException e) {
+            // Corrupt value, not merely absent — surface it instead of silently
+            // reading as not-set (ADT-56).
+            LOG.log(Level.WARNING, "Corrupt INTEGER property firm=" + firmId + " key=" + key
+                    + " value=" + prop.getValue());
             return Optional.empty();
         }
     }
@@ -44,6 +52,10 @@ public class FirmPropertyServiceImpl implements FirmPropertyService {
         try {
             return Optional.of(new BigDecimal(prop.getValue()));
         } catch (NumberFormatException e) {
+            // Corrupt value, not merely absent — surface it instead of silently
+            // reading as not-set (ADT-56).
+            LOG.log(Level.WARNING, "Corrupt BIGDECIMAL property firm=" + firmId + " key=" + key
+                    + " value=" + prop.getValue());
             return Optional.empty();
         }
     }

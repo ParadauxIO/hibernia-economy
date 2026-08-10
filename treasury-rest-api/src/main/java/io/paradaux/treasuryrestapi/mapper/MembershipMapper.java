@@ -10,20 +10,19 @@ import java.util.UUID;
 public interface MembershipMapper {
 
     /**
-     * Returns a count > 0 if the given UUID is currently a member of the
+     * Returns a count > 0 if the given UUID currently has API read access to the
      * given account. Used by the transaction history endpoint to allow
      * business-account members to view history beyond their own account.
      *
-     * <p>Access lives in the consolidated {@code account_access} table (PAR-249),
-     * one row per (account, subject) on the ordered scale VIEWER &lt; MEMBER &lt;
-     * AUTHORIZER. "Member" means level MEMBER or AUTHORIZER (an authorizer is a
-     * member); a read-only VIEWER does not count. Soft-deleted via
-     * {@code removed_at}, so a revoked member can no longer access history here.
+     * <p>Reads the {@code account_read_access_api} view (ADT-13) — the single
+     * source of truth for the public-API access rule over the consolidated
+     * {@code account_access} table (PAR-249): level MEMBER or AUTHORIZER, not
+     * soft-deleted. A read-only VIEWER does <em>not</em> count for the API (the
+     * web explorer is deliberately more permissive — see the view definition in
+     * {@code V22__account_read_access_views.sql}).
      */
-    @Select("SELECT COUNT(*) FROM account_access " +
+    @Select("SELECT COUNT(*) FROM account_read_access_api " +
             "WHERE account_id = #{accountId} " +
-            "  AND subject_uuid_bin = #{memberUuid} " +
-            "  AND level IN ('MEMBER','AUTHORIZER') " +
-            "  AND removed_at IS NULL")
+            "  AND subject_uuid_bin = #{memberUuid}")
     int isMember(@Param("accountId") long accountId, @Param("memberUuid") UUID memberUuid);
 }

@@ -43,15 +43,23 @@ public class SalaryConfiguration {
     private static final long DEFAULT_INTERVAL_SECONDS = 900L; // 15 minutes
 
     // Mutable so {@link #reload()} can refresh them at runtime (Guice singleton —
-    // SalaryService reads enabled/amounts/account live each cycle). Note the
-    // payout INTERVAL is fixed when the timer is scheduled at startup; changing
+    // SalaryService reads enabled/amounts/account live each cycle). volatile so the
+    // async payout cycle sees a fully-published value after /treasury reload
+    // re-populates these in place, rather than a stale or torn read (ADT-30). Note
+    // the payout INTERVAL is fixed when the timer is scheduled at startup; changing
     // it needs a restart.
-    private boolean enabled;
-    private String governmentAccount;
+    private volatile boolean enabled;
+    private volatile String governmentAccount;
     /** Seconds between payout cycles. */
-    private long intervalSeconds;
+    private volatile long intervalSeconds;
     /** LuckPerms group name (lower-cased) → salary amount. */
-    private Map<String, BigDecimal> amounts;
+    private volatile Map<String, BigDecimal> amounts;
+    /** Don't pay players who are AFK (per the LuckPerms AFK context). Default true. */
+    private volatile boolean skipAfk = true;
+    /** LuckPerms context key that marks a player AFK (e.g. {@code afk}). */
+    private volatile String afkContextKey = "afk";
+    /** LuckPerms context value (paired with {@link #afkContextKey}) that marks a player AFK. */
+    private volatile String afkContextValue = "true";
     /** Set only via the {@code @Inject} ctor; null for test-factory instances. */
     private Treasury plugin;
 
@@ -96,7 +104,16 @@ public class SalaryConfiguration {
         ConfigurationSection sec = cfg.getConfigurationSection("salaries.amount");
         if (sec != null) {
             for (String key : sec.getKeys(false)) {
-                BigDecimal amt = BigDecimal.valueOf(sec.getDouble(key, 0));
+                // Parse from the string form (not getDouble) so salary amounts
+                // carry no IEEE-754 error into the ledger; skip malformed values.
+                String raw = sec.getString(key, "0");
+                BigDecimal amt;
+                try {
+                    amt = new BigDecimal(raw == null ? "0" : raw.trim());
+                } catch (NumberFormatException e) {
+                    log.warn("Invalid salary for group '{}': '{}' — skipping", key, raw);
+                    continue;
+                }
                 if (amt.signum() < 0) {
                     log.warn("Negative salary for group '{}' ({}) — skipping", key, amt);
                     continue;
@@ -106,9 +123,15 @@ public class SalaryConfiguration {
         }
         this.amounts = normalise(parsed);
 
+        this.skipAfk = cfg.getBoolean("salaries.skip-afk", true);
+        String afkKey = cfg.getString("salaries.afk-context-key", "afk");
+        this.afkContextKey = (afkKey == null || afkKey.isBlank()) ? "afk" : afkKey;
+        String afkVal = cfg.getString("salaries.afk-context-value", "true");
+        this.afkContextValue = (afkVal == null || afkVal.isBlank()) ? "true" : afkVal;
+
         if (enabled) {
-            log.info("Government salaries enabled: {} group(s), every {}s, from {}",
-                    amounts.size(), intervalSeconds, governmentAccount);
+            log.info("Government salaries enabled: {} group(s), every {}s, from {} (skip-afk={})",
+                    amounts.size(), intervalSeconds, governmentAccount, skipAfk);
         }
     }
 

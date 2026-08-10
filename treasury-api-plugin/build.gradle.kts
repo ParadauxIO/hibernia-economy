@@ -1,41 +1,19 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    java
     id("com.gradleup.shadow")
+    id("io.paradaux.paper-server-conventions")
 }
 
 // group + version are set centrally by the root allprojects block (single
 // mono-repo version, 2.3.0-SNAPSHOT, overridable with -Pversion).
+// The JVM toolchain, repositories, resource expansion, base test setup, shaded-jar
+// defaults, and dev-server staging come from io.paradaux.paper-server-conventions.
 description = "TreasuryAPI"
 
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    }
-}
-
-repositories {
-    mavenCentral()
-    maven {
-        name = "papermc"
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
-    maven("https://oss.sonatype.org/content/groups/public/")
-    maven("https://jitpack.io")
-    maven {
-        name = "ParadauxReleases"
-        url = uri("https://repo.paradaux.io/releases")
-        mavenContent { releasesOnly() }
-    }
-    maven {
-        name = "ParadauxSnapshots"
-        url = uri("https://repo.paradaux.io/snapshots")
-        mavenContent { snapshotsOnly() }
-    }
-}
-
 dependencies {
+    implementation(project(":common"))
+
     // Paper API (provided by server)
     compileOnly(libs.paper.api)
 
@@ -76,34 +54,40 @@ dependencies {
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.junit.jupiter)
+    // GroupReconciliationTask extends BukkitRunnable and references the LuckPerms
+    // API, so the test classpath needs both to load the class (even for pure tests).
+    testImplementation(libs.paper.api)
+    testImplementation(libs.luckperms.api)
+    // The command handlers reference the Treasury/Business public APIs (compileOnly
+    // in production — provided by the sibling plugins at runtime). Tests that exercise
+    // those handlers need the API types on the test classpath.
+    testImplementation(project(":treasury:treasury-api"))
+    testImplementation(project(":business:business-api"))
+
+    // Mapper integration tests run the mappers against a real MariaDB — MariaDB4j
+    // unpacks a real MariaDB binary and runs it on a dynamic port (mirrors the
+    // treasury/business harness). The schema is built from the authoritative
+    // economy-flyway migrations (staged onto the test classpath below), so tests and
+    // production share one source of schema truth — no schema.sql snapshot to drift.
+    testImplementation(libs.assertj.core)
+    testImplementation(libs.mariadb4j)
+    testImplementation(libs.flyway.core)
+    testImplementation(libs.flyway.mysql)
+}
+
+// Stage the economy-flyway migrations onto the test classpath (under db/migration)
+// so the mapper-IT harness can run them with Flyway (classpath:db/migration).
+tasks.named<Copy>("processTestResources") {
+    from(project(":economy-flyway").file("src/main/resources/db/migration")) {
+        into("db/migration")
+    }
 }
 
 tasks {
-    // Mirror Maven default goal locally
-    defaultTasks("clean", "shadowJar")
-
-    test {
-        useJUnitPlatform()
-    }
-
-    // Keep resource filtering tight to avoid $ expansion issues in YAML like config.yml
-    processResources {
-        filteringCharset = "UTF-8"
-        // Capture at configuration time so the filesMatching action never touches
-        // `project` at execution time (config-cache safe; Gradle 10 forward-compat).
-        val expansions = mapOf("version" to project.version, "name" to project.name,
-                "description" to (project.description ?: ""))
-        filesMatching(listOf("**/*.properties", "plugin.yml", "paper-plugin.yml", "application*.yml")) {
-            expand(expansions)
-        }
-    }
-
-    withType<JavaCompile> {
-        options.encoding = "UTF-8"
-        options.release.set(21)
-    }
-
-    // Produce a single shaded jar without the "-all" classifier
+    // Project-specific shaded-lib relocations. archiveClassifier + mergeServiceFiles
+    // come from io.paradaux.paper-server-conventions.
     withType<ShadowJar> {
         val root = "io.paradaux.treasuryapi.libs"
 
@@ -115,29 +99,5 @@ tasks {
         relocate("org.reflections",   "$root.reflections")
         relocate("io.jsonwebtoken",   "$root.jjwt")
         relocate("com.fasterxml.jackson", "$root.jackson")
-
-        mergeServiceFiles()
-        archiveClassifier.set("")
     }
 }
-
-val isCi = project.hasProperty("ci")
-
-val copyPlugin = tasks.register<Copy>("copyPlugin") {
-    // Both :jar and :shadowJar write to build/libs/<name>.jar by default;
-    // Gradle 8.11 strict-mode requires declaring deps on every task whose
-    // output we read.
-    dependsOn(tasks.named("shadowJar"), tasks.named("jar"))
-    from(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    into(layout.projectDirectory.dir("../../server/plugins"))
-    onlyIf { !isCi } // don't run on CI
-}
-
-tasks.named<ShadowJar>("shadowJar") {
-    finalizedBy(copyPlugin)
-}
-
-// Shadow 9 + Gradle 8: both :jar and :shadowJar write to build/libs/<name>.jar,
-// and :jar runs AFTER :shadowJar — silently overwriting the fat jar with a
-// thin one that disables-on-enable for missing classpath. Disable :jar.
-tasks.jar { enabled = false }

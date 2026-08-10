@@ -111,7 +111,7 @@ class TransferAmountValidationIT extends EmbeddedDbIT {
         // The DECIMAL(19,2) maximum must NOT be an INVALID_AMOUNT — with a small,
         // no-overdraft balance it should fall through to the funds check (422).
         ApiException ex = reject("99999999999999999.99");
-        assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ex.getErrorCode()).isEqualTo("INSUFFICIENT_FUNDS");
     }
 

@@ -9,13 +9,11 @@ import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.TransactionEntry;
 import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.AuditService;
 import io.paradaux.treasury.services.DataExportService;
 import io.paradaux.treasury.services.LedgerService;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
-
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
 @Slf4j
 @Command({"transactions", "txns"})
@@ -23,22 +21,23 @@ import java.time.format.DateTimeFormatter;
 public class TransactionsCommand implements CommandHandler {
 
     private static final int PAGE_SIZE = 10;
-    private static final DateTimeFormatter TIME_FMT =
-            DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(ZoneId.systemDefault());
 
     private final AccountService accountService;
     private final LedgerService ledgerService;
     private final DataExportService dataExportService;
+    private final AuditService auditService;
     private final Message message;
 
     @Inject
     public TransactionsCommand(AccountService accountService,
                                LedgerService ledgerService,
                                DataExportService dataExportService,
+                               AuditService auditService,
                                Message message) {
         this.accountService = accountService;
         this.ledgerService = ledgerService;
         this.dataExportService = dataExportService;
+        this.auditService = auditService;
         this.message = message;
     }
 
@@ -164,6 +163,12 @@ public class TransactionsCommand implements CommandHandler {
      * have actually played (the framework resolver returns a synthetic
      * OfflinePlayer for unknown names) and to own a PERSONAL account — never
      * creates one.
+     *
+     * <p>Like the rest of this audit surface, access is governed solely by the
+     * {@code treasury.transactions.audit} node and intentionally <em>bypasses</em>
+     * {@code account_access}: it is the in-game government's audit tool for
+     * viewing any account, not an account-membership feature (ADT-18). Every
+     * audit is logged in {@link #renderAudit} for accountability.
      */
     private void showPlayerAudit(Player viewer, OfflinePlayer target, int page) {
         if (target == null || (!target.hasPlayedBefore() && !target.isOnline())) {
@@ -178,7 +183,16 @@ public class TransactionsCommand implements CommandHandler {
         renderAudit(viewer, accountId, page, target.getName(), "/transactions audit " + target.getName());
     }
 
-    /** Renders any account's history by id for an auditor (covers business/government accounts). */
+    /**
+     * Renders any account's history by id for an auditor (covers business/government accounts).
+     *
+     * <p>Intentionally gated only by {@code treasury.transactions.audit} (op by
+     * default; granted to the in-game government), with no {@code canAccessAccount}
+     * check — viewing accounts the auditor is not a member of is the whole point.
+     * The asymmetry with the export route ({@code canAccessAccount}-gated) is
+     * deliberate: export is a player-facing {@code default:true} node, this is a
+     * government audit override (ADT-18).
+     */
     private void showAccountAudit(Player viewer, int accountId, int page) {
         if (!accountService.hasAccountByAccountId(accountId)) {
             message.send(viewer, "treasury.transactions.audit.not-found");
@@ -199,6 +213,8 @@ public class TransactionsCommand implements CommandHandler {
         // Leave a server-log trail of who audited whom, mirroring the explorer's auditView.
         log.info("{} audited transactions of {} (account #{}, page {})",
                 viewer.getName(), subjectLabel, accountId, page);
+        // Durable trail in the shared explorer_audit access log (fail-open).
+        auditService.recordTransactionAudit(viewer.getUniqueId(), viewer.getName(), accountId, navBase, page);
 
         if (result.items().isEmpty()) {
             message.send(viewer, "treasury.transactions.audit.empty", "target", subjectLabel);
@@ -220,26 +236,7 @@ public class TransactionsCommand implements CommandHandler {
 
     private void sendEntries(Player viewer, Page<TransactionEntry> result) {
         for (TransactionEntry entry : result.items()) {
-            String formattedAmount = accountService.formatAmount(entry.getAmount().abs());
-            String sign = entry.getAmount().signum() >= 0 ? "+" : "-";
-            String colorTag = entry.getAmount().signum() >= 0 ? "green" : "red";
-            String coloredAmount = "<" + colorTag + ">" + sign + formattedAmount + "</" + colorTag + ">";
-            String memo = entry.getMemo() != null ? entry.getMemo() : entry.getMessage();
-            if (memo == null) memo = "—";
-            memo = sanitize(memo);
-            String time = entry.getSettlementTime() != null
-                    ? TIME_FMT.format(entry.getSettlementTime()) : "—";
-
-            message.send(viewer, "treasury.transactions.entry",
-                    "txn", String.valueOf(entry.getTxnId()),
-                    "amount", coloredAmount,
-                    "memo", memo,
-                    "time", time);
+            TransactionEntryRenderer.send(viewer, message, accountService, entry);
         }
-    }
-
-    /** Escapes MiniMessage tag syntax in user-supplied strings to prevent injection. */
-    private static String sanitize(String input) {
-        return input.replace("<", "\\<");
     }
 }

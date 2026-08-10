@@ -12,29 +12,33 @@
 [versions]
 # Server / framework
 paper = "1.21.11-R0.1-SNAPSHOT"
-hibernia = "1.1.0"
+hibernia = "1.2.0-SNAPSHOT"
 luckperms = "5.4"
-log4j = "2.20.0"
-annotations = "24.0.0"
+log4j = "2.26.0"
+annotations = "26.1.0"
 
 # Runtime libraries
 guice = "7.0.0"
-hikari = "6.2.1"
-mariadb = "3.5.2"
-mybatis = "3.5.16"
-mybatis-guice = "4.0.0"
+hikari = "7.1.0"
+mariadb = "3.5.9"
+mybatis = "3.5.19"
+mybatis-guice = "4.1.0"
 reflections = "0.10.2"
-jjwt = "0.12.6"
-lombok = "1.18.34"
-slf4j = "2.0.16"
+jjwt = "0.13.0"
+lombok = "1.18.46"
+slf4j = "2.0.18"
+
+# Gradle plugins (referenced from the root build via `alias(libs.plugins.*)` and,
+# for the shadow classpath dep, from build-logic — see [plugins] below).
+shadow = "9.0.2"
 
 # Test
-junit = "5.13.3"
-assertj = "3.26.3"
-mockito = "5.14.2"
-mariadb4j = "3.2.0"
-flyway = "10.22.0"
-jacoco = "0.8.12"
+junit = "6.1.0"
+assertj = "3.27.7"
+mockito = "5.23.0"
+mariadb4j = "3.3.1"
+flyway = "12.9.0"
+jacoco = "0.8.15"
 
 [libraries]
 # Server / framework
@@ -70,3 +74,12 @@ mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.
 mariadb4j = { module = "ch.vorburger.mariaDB4j:mariaDB4j", version.ref = "mariadb4j" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
+
+# The shadow plugin coordinate, so build-logic can build the shadow plugin
+# classpath dep from the same version the root build applies (single source of
+# truth). build-logic references it as `libs.plugins.shadow.get().pluginId` +
+# `.version`; the root build as `alias(libs.plugins.shadow)`.
+shadow-lib = { module = "com.gradleup.shadow:shadow-gradle-plugin", version.ref = "shadow" }
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

@@ -38,8 +38,11 @@ public interface WebhookDeliveryMapper {
             + "JOIN webhook_subscription s ON s.subscription_id = d.subscription_id AND s.active = 1 "
             + "JOIN ledger_postings lp ON lp.txn_id = d.txn_id AND lp.account_id = d.account_id "
             + "JOIN ledger_txns lt ON lt.txn_id = d.txn_id "
+            // idx_delivery_due (status, next_attempt_at): the status equality lets the
+            // index's next_attempt_at column satisfy the sort (due-order, oldest first);
+            // delivery_id breaks ties deterministically.
             + "WHERE d.status = 'PENDING' AND d.next_attempt_at <= NOW() "
-            + "ORDER BY d.delivery_id ASC LIMIT #{limit}")
+            + "ORDER BY d.next_attempt_at ASC, d.delivery_id ASC LIMIT #{limit}")
     List<DueDelivery> findDue(@Param("limit") int limit);
 
     @Update("UPDATE webhook_delivery SET status = 'DELIVERED', attempts = attempts + 1, "

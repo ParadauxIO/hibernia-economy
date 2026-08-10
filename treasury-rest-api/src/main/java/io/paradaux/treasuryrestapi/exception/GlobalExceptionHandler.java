@@ -7,7 +7,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -28,6 +30,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ex.getStatus())
                 .body(new ErrorResponse(ex.getErrorCode(), ex.getMessage()));
+    }
+
+    /**
+     * Bean-validation failure on a {@code @Valid @RequestBody} DTO. Surfaces the
+     * first field error in the stable {@link ErrorResponse} envelope rather than
+     * Spring's default validation payload, so the error contract is uniform.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+        FieldError first = ex.getBindingResult().getFieldError();
+        String message = first != null
+                ? "Field '" + first.getField() + "' " + first.getDefaultMessage() + "."
+                : "Request body failed validation.";
+        log.warn("Request validation failed: {}", message);
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("VALIDATION_ERROR", message));
     }
 
     /** Malformed or missing request body. */

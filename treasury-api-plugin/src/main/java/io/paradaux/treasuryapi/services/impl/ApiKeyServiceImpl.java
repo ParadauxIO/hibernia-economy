@@ -3,22 +3,19 @@ package io.paradaux.treasuryapi.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.jsonwebtoken.Jwts;
+import io.paradaux.business.api.BusinessApi;
+import io.paradaux.common.JwtKeys;
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import io.paradaux.treasuryapi.mappers.ApiKeyMapper;
 import io.paradaux.treasuryapi.model.config.ApiConfiguration;
 import io.paradaux.treasuryapi.model.economy.ApiKey;
+import io.paradaux.treasuryapi.model.economy.KeyType;
 import io.paradaux.treasuryapi.services.ApiKeyService;
 import org.mybatis.guice.transactional.Transactional;
 
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -32,26 +29,28 @@ public class ApiKeyServiceImpl implements ApiKeyService {
 
     private final ApiKeyMapper apiKeyMapper;
     private final ApiConfiguration apiConfig;
+    private final BusinessApi businessApi;
 
     @Inject
-    public ApiKeyServiceImpl(ApiKeyMapper apiKeyMapper, ApiConfiguration apiConfig) {
+    public ApiKeyServiceImpl(ApiKeyMapper apiKeyMapper, ApiConfiguration apiConfig, BusinessApi businessApi) {
         this.apiKeyMapper = apiKeyMapper;
         this.apiConfig = apiConfig;
+        this.businessApi = businessApi;
     }
 
     @Override
     @Transactional
     public ApiKey issuePersonalKey(int accountId, UUID ownerUuid) {
-        return issue("PERSONAL", accountId, null, ownerUuid);
+        return issue(KeyType.PERSONAL, accountId, null, ownerUuid);
     }
 
     @Override
     @Transactional
     public ApiKey issueBusinessKey(int firmId, UUID ownerUuid) {
-        return issue("BUSINESS", null, firmId, ownerUuid);
+        return issue(KeyType.BUSINESS, null, firmId, ownerUuid);
     }
 
-    private ApiKey issue(String keyType, Integer accountId, Integer firmId, UUID ownerUuid) {
+    private ApiKey issue(KeyType keyType, Integer accountId, Integer firmId, UUID ownerUuid) {
         String jwtId = UUID.randomUUID().toString();
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plus(KEY_LIFETIME_DAYS, ChronoUnit.DAYS);
@@ -65,26 +64,35 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         key.setIssuedAt(issuedAt);
         key.setExpiresAt(expiresAt);
 
-        // Insert with placeholder token to obtain the generated keyId
-        key.setToken("");
+        // Insert (no token column) to obtain the generated keyId.
         apiKeyMapper.insert(key);
 
-        // Build the real JWT now that we have the keyId
+        // Build the real JWT now that we have the keyId. It is set on the returned
+        // object for one-time display to the issuer and is NEVER persisted (ADT-6).
         String token = buildJwt(key.getKeyId(), jwtId, keyType, accountId, firmId, ownerUuid, issuedAt, expiresAt);
         key.setToken(token);
-
-        // Update the row with the real token
-        apiKeyMapper.reissue(key.getKeyId(), jwtId, token, issuedAt, expiresAt);
 
         return key;
     }
 
     @Override
     @Transactional
-    public ApiKey reissueKey(int keyId) {
+    public ApiKey reissueKey(int keyId, UUID actingUuid) {
         ApiKey existing = apiKeyMapper.findById(keyId);
         if (existing == null) {
-            throw new IllegalArgumentException("API key not found: " + keyId);
+            throw new NotFoundException("treasuryapi.key.not-found");
+        }
+        // The service is the authorization boundary (plugin-architecture/0005): the
+        // ownership/proprietorship check holds regardless of caller, so a handler that
+        // forgot to pre-check (or a future non-command caller) still can't rotate a key
+        // they don't control.
+        requireCanManage(existing, actingUuid);
+        // Revocation is terminal (ADT-110): a revoked key must not be resurrected
+        // by reissuing it. Reject early so the caller gets a clear error and we
+        // never mint a fresh token for a credential that was deliberately killed
+        // (e.g. after a leak). Issue a new key instead.
+        if (existing.isRevoked()) {
+            throw new ConflictException("treasuryapi.key.revoked");
         }
 
         String newJwtId = UUID.randomUUID().toString();
@@ -94,29 +102,49 @@ public class ApiKeyServiceImpl implements ApiKeyService {
                 existing.getAccountId(), existing.getFirmId(),
                 existing.getOwnerUuid(), issuedAt, expiresAt);
 
-        apiKeyMapper.reissue(keyId, newJwtId, token, issuedAt, expiresAt);
+        // The mapper's UPDATE is guarded by `AND revoked = 0`, so a key revoked
+        // between the read above and this write affects 0 rows — treat that as a
+        // terminal-state rejection rather than silently building an unusable token.
+        int updated = apiKeyMapper.reissue(keyId, newJwtId, issuedAt, expiresAt);
+        if (updated == 0) {
+            throw new ConflictException("treasuryapi.key.revoked");
+        }
 
         existing.setJwtId(newJwtId);
-        existing.setToken(token);
+        existing.setToken(token); // one-time display only; not persisted (ADT-6)
         existing.setIssuedAt(issuedAt);
         existing.setExpiresAt(expiresAt);
-        existing.setRevoked(false);
         return existing;
     }
 
     @Override
     @Transactional
-    public void revokeKey(int keyId) {
+    public void revokeKey(int keyId, UUID actingUuid) {
+        ApiKey existing = apiKeyMapper.findById(keyId);
+        if (existing == null) {
+            throw new NotFoundException("treasuryapi.key.not-found");
+        }
+        requireCanManage(existing, actingUuid);
         apiKeyMapper.revoke(keyId);
     }
 
-    @Override
-    public String exportToken(int keyId) {
-        ApiKey key = apiKeyMapper.findById(keyId);
-        if (key == null) {
-            throw new IllegalArgumentException("API key not found: " + keyId);
+    /**
+     * Enforces the per-key management invariant: a PERSONAL key may be managed only by
+     * its current owner; a BUSINESS key only by a CURRENT proprietor of its firm — never
+     * the individual who happened to issue it (ADT-111), so the firm keeps control of its
+     * own credential after a proprietor transfer. Throws {@code NoPermissionException}
+     * on failure.
+     */
+    private void requireCanManage(ApiKey key, UUID actingUuid) {
+        boolean allowed = switch (key.getKeyType()) {
+            case BUSINESS -> key.getFirmId() != null
+                    && businessApi.firms().isProprietor(key.getFirmId(), actingUuid);
+            case PERSONAL, GOVERNMENT -> key.getOwnerUuid() != null
+                    && key.getOwnerUuid().equals(actingUuid);
+        };
+        if (!allowed) {
+            throw new NoPermissionException("treasuryapi.key.no-access");
         }
-        return uploadToBytebin(key.getToken());
     }
 
     @Override
@@ -125,7 +153,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     }
 
     @Override
-    public List<ApiKey> listKeys(UUID ownerUuid, String keyType) {
+    public List<ApiKey> listKeys(UUID ownerUuid, KeyType keyType) {
         return apiKeyMapper.findByOwnerAndType(ownerUuid, keyType);
     }
 
@@ -134,57 +162,14 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         return apiKeyMapper.findBusinessAccessibleByEmployee(employeeUuid);
     }
 
-    private String uploadToBytebin(String token) {
-        try {
-            // Mirror Treasury's BytebinServiceImpl: gzip body, Bytebin-Max-Reads: 1
-            // so the share link self-destructs after a single open. Without
-            // gzip + the max-reads header the bytebin instance at
-            // pastes.paradaux.io rejects the upload with a 4xx.
-            byte[] compressed = gzip(token.getBytes(StandardCharsets.UTF_8));
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiConfig.getBytebinPostUrl()))
-                    .header("Content-Type", "text/plain")
-                    .header("Content-Encoding", "gzip")
-                    .header("User-Agent", "TreasuryAPI-Plugin/1.0")
-                    .header("Bytebin-Max-Reads", "1")
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(compressed))
-                    .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("Bytebin upload failed with status " + response.statusCode());
-            }
-
-            String body = response.body();
-            int keyStart = body.indexOf("\"key\"");
-            if (keyStart == -1) {
-                throw new IllegalStateException("Bytebin response did not contain a key");
-            }
-            int valueStart = body.indexOf('"', body.indexOf(':', keyStart) + 1) + 1;
-            int valueEnd = body.indexOf('"', valueStart);
-            return apiConfig.getBytebinBaseUrl() + body.substring(valueStart, valueEnd);
-        } catch (IOException | InterruptedException e) {
-            throw new IllegalStateException("Failed to upload token to bytebin", e);
-        }
-    }
-
-    private static byte[] gzip(byte[] data) throws IOException {
-        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-        try (java.util.zip.GZIPOutputStream gzip = new java.util.zip.GZIPOutputStream(baos)) {
-            gzip.write(data);
-        }
-        return baos.toByteArray();
-    }
-
-    private String buildJwt(int keyId, String jwtId, String keyType,
+    private String buildJwt(int keyId, String jwtId, KeyType keyType,
                              Integer accountId, Integer firmId, UUID ownerUuid,
                              Instant issuedAt, Instant expiresAt) {
-        SecretKey key = deriveKey(apiConfig.getJwtSecret());
+        SecretKey key = JwtKeys.deriveHmacKey(apiConfig.getJwtSecret());
         var builder = Jwts.builder()
                 .header().add("kid", String.valueOf(keyId)).and()
                 .subject(ownerUuid.toString())
-                .claim("type", keyType)
+                .claim("type", keyType.name())
                 .id(jwtId)
                 .issuedAt(Date.from(issuedAt))
                 .expiration(Date.from(expiresAt));
@@ -195,13 +180,4 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         return builder.signWith(key, Jwts.SIG.HS256).compact();
     }
 
-    private SecretKey deriveKey(String secret) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] keyBytes = digest.digest(secret.getBytes(StandardCharsets.UTF_8));
-            return new SecretKeySpec(keyBytes, "HmacSHA256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 not available", e);
-        }
-    }
 }

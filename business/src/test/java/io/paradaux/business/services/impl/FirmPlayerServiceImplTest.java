@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,29 +36,6 @@ class FirmPlayerServiceImplTest {
     @AfterEach
     void tearDown() {
         bukkit.close();
-    }
-
-    @Test
-    void touch_validatesArgs() {
-        UUID id = UUID.randomUUID();
-        assertThatThrownBy(() -> svc.touch(null, "x")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> svc.touch(id, null)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> svc.touch(id, "  ")).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void touch_zeroRowsThrowsIllegalState() {
-        UUID id = UUID.randomUUID();
-        when(mapper.upsert(id.toString(), "Bob")).thenReturn(0);
-        assertThatThrownBy(() -> svc.touch(id, "Bob"))
-                .isInstanceOf(IllegalStateException.class);
-    }
-
-    @Test
-    void touch_succeeds() {
-        UUID id = UUID.randomUUID();
-        when(mapper.upsert(id.toString(), "Bob")).thenReturn(1);
-        svc.touch(id, "Bob");
     }
 
     @Test

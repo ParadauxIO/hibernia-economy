@@ -9,6 +9,7 @@ import java.util.UUID;
  * scraping the message text.
  */
 public class InsufficientFineFundsException extends TreasuryException {
+    private static final long serialVersionUID = 1L;
     private final UUID playerUuid;
     private final Integer debtorAccountId;
 

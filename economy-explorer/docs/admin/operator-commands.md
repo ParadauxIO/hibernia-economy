@@ -39,7 +39,6 @@ Inspect and test the automatic tax cycles.
 ```text
 /tax status                 # config + next-fire times for every cycle
 /tax trigger weekly         # fire a cycle now (testing)
-/tax trigger balance Steve  # force a player's balance tax as if they just logged in
 ```
 
 | Argument | What it is |

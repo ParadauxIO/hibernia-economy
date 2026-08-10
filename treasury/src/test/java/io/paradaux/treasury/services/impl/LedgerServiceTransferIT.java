@@ -20,6 +20,12 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -84,6 +90,50 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         assertThat(secondTxn).isEqualTo(firstTxn);
         assertThat(balanceOf(a)).isEqualByComparingTo("400.00");
         assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void transfer_concurrentIdenticalDedupKey_allReturnSameTxnAndChargeOnce() throws Exception {
+        // ADT-73: several threads fire the SAME logical transfer (identical dedup key)
+        // at once. uq_ledger_dedup guarantees the money moves once; the loser inserts
+        // must re-resolve to the winner's txn id rather than propagating a duplicate-key
+        // PersistenceException. Assert: no thread throws, all return one txn id, the
+        // source is debited exactly once, and exactly one ledger_txn row exists.
+        Account a = createPersonalAccount(1_000);
+        Account b = createPersonalAccount(0);
+        byte[] key = Idempotency.sha256("test:concurrent-dedup");
+
+        int threads = 8;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Long>> tasks = new java.util.ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                tasks.add(() -> {
+                    start.await(); // line everyone up so the inserts genuinely race
+                    return ledgerService.transfer(new TransferRequest(
+                            a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"),
+                            "concurrent", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", key));
+                });
+            }
+            List<Future<Long>> futures = new java.util.ArrayList<>();
+            for (Callable<Long> t : tasks) futures.add(pool.submit(t));
+            start.countDown();
+
+            Long firstTxn = null;
+            for (Future<Long> f : futures) {
+                Long txn = f.get(30, TimeUnit.SECONDS); // throws if any thread propagated an exception
+                if (firstTxn == null) firstTxn = txn;
+                assertThat(txn).isEqualTo(firstTxn);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // Money moved exactly once despite N concurrent attempts.
+        assertThat(balanceOf(a)).isEqualByComparingTo("900.00");
+        assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
+        assertThat(ledgerMapper.findByDedupKey(key)).isNotNull();
     }
 
     @Test
@@ -517,6 +567,115 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
                 "test", null)))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("not permitted");
+    }
+
+    // ---------- concurrency: deadlock-safe lock ordering ----------
+
+    @Test
+    void concurrentSwappedTransfers_neverDeadlock_andConserveMoney() throws Exception {
+        // Transfers lock both balance rows FOR UPDATE in ascending account-id order,
+        // so A→B and B→A can't form a lock cycle. Hammer both directions at once and
+        // assert zero transient failures + money conserved (ADT-50).
+        Account a = createPersonalAccount(10_000);
+        Account b = createPersonalAccount(10_000);
+
+        int perDirection = 40;
+        java.util.List<java.util.concurrent.Callable<Void>> tasks = new java.util.ArrayList<>();
+        for (int i = 0; i < perDirection; i++) {
+            tasks.add(() -> { transferOne(a, b); return null; });
+            tasks.add(() -> { transferOne(b, a); return null; });
+        }
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(6);
+        java.util.List<Throwable> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
+        try {
+            for (java.util.concurrent.Future<Void> f : pool.invokeAll(tasks)) {
+                try {
+                    f.get();
+                } catch (java.util.concurrent.ExecutionException e) {
+                    errors.add(e.getCause());
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(errors).as("no transient deadlock/failure under swapped-direction load").isEmpty();
+        // Equal traffic each way nets to zero; money is conserved regardless.
+        assertThat(balanceOf(a)).isEqualByComparingTo("10000.00");
+        assertThat(balanceOf(b)).isEqualByComparingTo("10000.00");
+        assertThat(balanceOf(a).add(balanceOf(b))).isEqualByComparingTo("20000.00");
+    }
+
+    private void transferOne(Account from, Account to) {
+        ledgerService.transfer(new TransferRequest(
+                from.getAccountId(), to.getAccountId(),
+                new BigDecimal("1.00"), "concurrency test",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+    }
+
+    // ---------- sweepAll (firm-disband drain) ----------
+
+    @Test
+    void sweepAll_movesTheEntireLiveBalance_conservingValue() {
+        Account firmAcc = createPersonalAccount(0);
+        Account payout  = createPersonalAccount(0);
+        Account funder  = createPersonalAccount(1_000);
+        // Fund the firm account with a plain ledger transfer (NOT adminGive — adminGive
+        // resolves the owner via resolveOrCreatePersonal, which also seeds the 10_000
+        // starting balance and would mask the swept amount). This keeps the firm balance
+        // an exact, trigger-maintained 737.50.
+        ledgerService.transfer(new TransferRequest(
+                funder.getAccountId(), firmAcc.getAccountId(),
+                new BigDecimal("737.50"), "seed",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+        BigDecimal before = balanceOf(firmAcc).add(balanceOf(payout));
+
+        java.util.OptionalLong txn = ledgerService.sweepAll(
+                firmAcc.getAccountId(), payout.getAccountId(), "Firm disbanded", UUID.randomUUID(), "BusinessPlugin");
+
+        assertThat(txn).isPresent();
+        // Exact conservation: everything left the source, nothing was created or lost.
+        assertThat(balanceOf(firmAcc)).isEqualByComparingTo("0.00");
+        assertThat(balanceOf(payout)).isEqualByComparingTo("737.50");
+        assertThat(balanceOf(firmAcc).add(balanceOf(payout))).isEqualByComparingTo(before);
+    }
+
+    @Test
+    void sweepAll_zeroBalance_isNoOp() {
+        Account firmAcc = createPersonalAccount(0);
+        Account payout  = createPersonalAccount(0);
+
+        java.util.OptionalLong txn = ledgerService.sweepAll(
+                firmAcc.getAccountId(), payout.getAccountId(), "Firm disbanded", UUID.randomUUID(), "BusinessPlugin");
+
+        assertThat(txn).isEmpty();
+        assertThat(balanceOf(payout)).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void sweepAll_concurrentCreditLandingBeforeSweep_isNotStranded() throws Exception {
+        // Model the finding: a credit lands, THEN the disband sweep runs. Because the
+        // amount is read under the sweep's FOR UPDATE lock (not a pre-credit snapshot),
+        // the whole post-credit balance is swept and nothing is stranded.
+        Account firmAcc = createPersonalAccount(0);
+        Account payout  = createPersonalAccount(0);
+        Account funder  = createPersonalAccount(1_000);
+
+        ledgerService.transfer(new TransferRequest(
+                funder.getAccountId(), firmAcc.getAccountId(),
+                new BigDecimal("400.00"), "late credit",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+
+        java.util.OptionalLong txn = ledgerService.sweepAll(
+                firmAcc.getAccountId(), payout.getAccountId(), "Firm disbanded", UUID.randomUUID(), "BusinessPlugin");
+
+        assertThat(txn).isPresent();
+        assertThat(balanceOf(firmAcc)).isEqualByComparingTo("0.00");
+        assertThat(balanceOf(payout)).isEqualByComparingTo("400.00");
     }
 
     // ---------- helpers ----------

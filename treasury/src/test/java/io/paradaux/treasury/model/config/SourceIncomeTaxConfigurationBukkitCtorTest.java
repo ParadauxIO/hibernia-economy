@@ -39,7 +39,7 @@ class SourceIncomeTaxConfigurationBukkitCtorTest {
     @Test
     void disabled_default_returnsZeroRateForAnyPlugin() {
         when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(false);
-        when(fileConfig.getDouble("tax.source-income-tax.default-rate", 0.0)).thenReturn(0.0);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("0");
         when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment"))
                 .thenReturn("DCGov");
         when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates")).thenReturn(null);
@@ -54,7 +54,7 @@ class SourceIncomeTaxConfigurationBukkitCtorTest {
     @Test
     void enabled_withDefaultRateAndOneOverride_picksRightValue() {
         when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(true);
-        when(fileConfig.getDouble("tax.source-income-tax.default-rate", 0.0)).thenReturn(0.05);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("0.05");
         when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment"))
                 .thenReturn("DCGov");
         when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates"))
@@ -75,7 +75,7 @@ class SourceIncomeTaxConfigurationBukkitCtorTest {
     @Test
     void blankGovernmentAccount_fallsBackToDefault() {
         when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(true);
-        when(fileConfig.getDouble("tax.source-income-tax.default-rate", 0.0)).thenReturn(0.0);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("0");
         when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment")).thenReturn("");
         when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates")).thenReturn(null);
 
@@ -86,7 +86,7 @@ class SourceIncomeTaxConfigurationBukkitCtorTest {
     @Test
     void rateOutOfRange_isSkipped() {
         when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(true);
-        when(fileConfig.getDouble("tax.source-income-tax.default-rate", 0.0)).thenReturn(0.02);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("0.02");
         when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment")).thenReturn("X");
         when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates"))
                 .thenReturn(ratesSection);
@@ -105,7 +105,7 @@ class SourceIncomeTaxConfigurationBukkitCtorTest {
     @Test
     void invalidNumberFormat_isSkipped() {
         when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(true);
-        when(fileConfig.getDouble("tax.source-income-tax.default-rate", 0.0)).thenReturn(0.0);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("0");
         when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment")).thenReturn("X");
         when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates"))
                 .thenReturn(ratesSection);
@@ -119,9 +119,31 @@ class SourceIncomeTaxConfigurationBukkitCtorTest {
     }
 
     @Test
+    void defaultRateOutOfRange_fallsBackToZero() {
+        when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(true);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("1.5"); // > 1
+        when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment")).thenReturn("X");
+        when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates")).thenReturn(null);
+
+        SourceIncomeTaxConfiguration cfg = new SourceIncomeTaxConfiguration(plugin);
+        assertThat(cfg.getDefaultRate()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void defaultRateInvalidNumber_fallsBackToZero() {
+        when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(true);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("not-a-number");
+        when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment")).thenReturn("X");
+        when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates")).thenReturn(null);
+
+        SourceIncomeTaxConfiguration cfg = new SourceIncomeTaxConfiguration(plugin);
+        assertThat(cfg.getDefaultRate()).isEqualByComparingTo("0");
+    }
+
+    @Test
     void nullRateString_isSkipped() {
         when(fileConfig.getBoolean("tax.source-income-tax.enabled", false)).thenReturn(true);
-        when(fileConfig.getDouble("tax.source-income-tax.default-rate", 0.0)).thenReturn(0.0);
+        when(fileConfig.getString("tax.source-income-tax.default-rate", "0")).thenReturn("0");
         when(fileConfig.getString("tax.source-income-tax.government-account", "DCGovernment")).thenReturn("X");
         when(fileConfig.getConfigurationSection("tax.source-income-tax.plugin-rates"))
                 .thenReturn(ratesSection);

@@ -1,16 +1,16 @@
 package io.paradaux.treasury.model.config;
 
 import com.google.inject.Inject;
+import io.paradaux.common.BalanceTaxBrackets;
 import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.Treasury;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.math.BigDecimal;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.TreeMap;
 
 /**
  * Configuration for the personal balance tax feature.
@@ -26,29 +26,24 @@ import java.util.TreeMap;
  *   tax         = balance × weekly_rate × proration
  * </pre>
  *
+ * <p>The bracket model (defaults, parsing, rate lookup) lives in the shared,
+ * framework-free {@link BalanceTaxBrackets} (ADT-186); this class only reads the
+ * Bukkit config and holds the live snapshot.
+ *
  * <p>Config location: {@code config.yml} under the {@code tax.balance:} key.
  */
 @Slf4j
 public class BalanceTaxConfiguration {
 
-    private static final NavigableMap<BigDecimal, BigDecimal> DEFAULT_BRACKETS;
-
-    static {
-        NavigableMap<BigDecimal, BigDecimal> m = new TreeMap<>();
-        m.put(new BigDecimal("0.00"),       BigDecimal.ZERO);
-        m.put(new BigDecimal("100000.00"),  new BigDecimal("0.01"));
-        m.put(new BigDecimal("200000.00"),  new BigDecimal("0.012"));
-        m.put(new BigDecimal("300000.00"),  new BigDecimal("0.014"));
-        m.put(new BigDecimal("500000.00"),  new BigDecimal("0.018"));
-        DEFAULT_BRACKETS = Collections.unmodifiableNavigableMap(m);
-    }
-
     // Mutable so {@link #reload()} can refresh them at runtime (Guice singleton,
-    // read live per login). {@code brackets} is replaced wholesale.
-    private boolean enabled;
-    private String governmentAccount;
-    /** Sorted ascending by minimum balance. Key = bracket floor, value = weekly rate. */
-    private volatile NavigableMap<BigDecimal, BigDecimal> brackets;
+    // read live per login). volatile so a balance-tax collection running on another
+    // thread sees a fully-published value after /treasury reload re-populates these
+    // in place, rather than a stale or torn read (ADT-30). {@code brackets} is
+    // replaced wholesale.
+    private volatile boolean enabled;
+    private volatile String governmentAccount;
+    /** Immutable bracket snapshot; replaced wholesale on reload. */
+    private volatile BalanceTaxBrackets brackets;
     /** Set only via the {@code @Inject} ctor; null for test-factory instances. */
     private Treasury plugin;
 
@@ -57,7 +52,7 @@ public class BalanceTaxConfiguration {
         this.enabled = enabled;
         this.governmentAccount = (governmentAccount == null || governmentAccount.isBlank())
                 ? "DCGovernment" : governmentAccount;
-        this.brackets = Collections.unmodifiableNavigableMap(new TreeMap<>(brackets));
+        this.brackets = BalanceTaxBrackets.of(brackets);
     }
 
     /** Test-only factory: bypasses Bukkit config parsing. Production code uses the {@code @Inject} ctor. */
@@ -85,28 +80,14 @@ public class BalanceTaxConfiguration {
         String gov = cfg.getString("tax.balance.government-account", "DCGovernment");
         this.governmentAccount = (gov == null || gov.isBlank()) ? "DCGovernment" : gov;
 
+        Map<String, String> raw = new LinkedHashMap<>();
         ConfigurationSection sec = cfg.getConfigurationSection("tax.balance.brackets");
-        NavigableMap<BigDecimal, BigDecimal> map = new TreeMap<>();
         if (sec != null) {
             for (String key : sec.getKeys(false)) {
-                try {
-                    BigDecimal min  = new BigDecimal(key);
-                    BigDecimal rate = new BigDecimal(sec.getString(key, "0"));
-                    if (rate.compareTo(BigDecimal.ZERO) < 0 || rate.compareTo(BigDecimal.ONE) > 0) {
-                        log.warn("Balance tax bracket rate for floor '{}' is out of range [0,1]: {} — skipping", key, rate);
-                        continue;
-                    }
-                    map.put(min, rate);
-                } catch (NumberFormatException e) {
-                    log.warn("Invalid balance tax bracket key '{}' — skipping", key);
-                }
+                raw.put(key, sec.getString(key, "0"));
             }
         }
-
-        if (map.isEmpty()) {
-            map.putAll(DEFAULT_BRACKETS);
-        }
-        this.brackets = Collections.unmodifiableNavigableMap(map);
+        this.brackets = BalanceTaxBrackets.fromRawEntries(raw, log::warn);
 
         if (enabled) {
             log.info("Personal balance tax enabled: {} bracket(s), government-account={}",
@@ -131,7 +112,6 @@ public class BalanceTaxConfiguration {
      * @return the weekly rate (e.g. {@code 0.01} for 1 %), or {@code BigDecimal.ZERO} if none match
      */
     public BigDecimal getWeeklyRate(BigDecimal balance) {
-        Map.Entry<BigDecimal, BigDecimal> entry = brackets.floorEntry(balance);
-        return entry != null ? entry.getValue() : BigDecimal.ZERO;
+        return brackets.weeklyRate(balance);
     }
 }

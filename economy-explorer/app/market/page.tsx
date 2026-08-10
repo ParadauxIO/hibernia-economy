@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import { memo } from '@/lib/cache';
 import { z } from 'zod';
 import { topItemsWithSeries, volumeByDay, countSales, sumVolume, countDistinctItems } from '@/lib/sql/market';
@@ -45,7 +46,7 @@ export default async function MarketPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
   const [items, volume, totalSales, totalVolume, distinctItems] = await getMarketData(sp.days);
 
   const windowSales = volume.reduce((s, v) => s + v.sales, 0);
@@ -116,10 +117,3 @@ export default async function MarketPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

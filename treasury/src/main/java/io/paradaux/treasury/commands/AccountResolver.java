@@ -69,10 +69,7 @@ public final class AccountResolver {
                 return new Resolved(a.getAccountId(), "government " + a.getDisplayName());
             }
             case "business", "firm" -> {
-                Account a = accountService.getBusinessAccountByName(token);
-                if (a == null) {
-                    a = accountService.getBusinessAccountByName(token + " Corporate Account");
-                }
+                Account a = accountService.resolveBusinessAccountByToken(token);
                 if (a == null) {
                     sender.sendMessage("§cUnknown business account for <" + side + ">: " + token
                             + " (try the firm name, or use 'account <id>').");

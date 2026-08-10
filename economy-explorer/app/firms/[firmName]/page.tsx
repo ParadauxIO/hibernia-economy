@@ -104,6 +104,14 @@ export default async function FirmDetailPage({
 
       <div className="kpi-grid">
         <div className="kpi">
+          <div className="kpi-label">Proprietor</div>
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>
+            {firm.proprietor_uuid
+              ? <Player name={firm.proprietor_name} uuid={firm.proprietor_uuid} />
+              : '—'}
+          </div>
+        </div>
+        <div className="kpi">
           <div className="kpi-label">HQ region</div>
           <div className="kpi-value" style={{ fontSize: 18, paddingTop: 6 }}>
             {firm.hq_region ?? '—'}

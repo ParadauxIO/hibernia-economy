@@ -129,4 +129,36 @@ class FirmRequestMapperIT extends IntegrationTestBase {
                 LocalDateTime.now().minusMinutes(1));
         assertThat(requests.expireStaleTransfers()).isEqualTo(1);
     }
+
+    // ---------- admin proprietor override audit (PAR-315, V26) ----------
+
+    @Test
+    void recordAdminOverride_writesAuditRowWithActor() throws Exception {
+        UUID from = inviter; // current proprietor from seed()
+        UUID to = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+
+        assertThat(requests.recordAdminOverride(firmId, from.toString(), to.toString(),
+                actor.toString(), "override-tok-1")).isEqualTo(1);
+
+        try (var conn = dataSource.getConnection();
+             var ps = conn.prepareStatement(
+                     "SELECT status, bin_to_uuid(from_uuid_bin), bin_to_uuid(to_uuid_bin), " +
+                     "bin_to_uuid(actor_uuid_bin) FROM firm_transfer_requests " +
+                     "WHERE firm_id = ? AND status = 'ADMIN_OVERRIDE'")) {
+            ps.setInt(1, firmId);
+            try (var rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getString(1)).isEqualTo("ADMIN_OVERRIDE");
+                assertThat(rs.getString(2)).isEqualToIgnoringCase(from.toString());
+                assertThat(rs.getString(3)).isEqualToIgnoringCase(to.toString());
+                assertThat(rs.getString(4)).isEqualToIgnoringCase(actor.toString());
+            }
+        }
+
+        // A terminal ADMIN_OVERRIDE has active_only = NULL, so a second override on
+        // the same firm must not collide with uq_one_active_transfer.
+        assertThat(requests.recordAdminOverride(firmId, from.toString(), to.toString(),
+                actor.toString(), "override-tok-2")).isEqualTo(1);
+    }
 }

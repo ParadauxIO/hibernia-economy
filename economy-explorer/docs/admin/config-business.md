@@ -7,12 +7,14 @@ description: Business's config.yml — the firm ownership limit and the weekly f
 # Business configuration
 
 The Business (firms) plugin's settings live in `plugins/Business/config.yml`. It's a small
-file — three sections: `database`, `firm`, and `tax`.
+file — four sections: `database`, `firm`, `sales`, and `tax`.
 
 > [!CAUTION]
-> **`/business reload` only refreshes message strings.** It does *not* re-read the firm
-> limit, the tax brackets, or the database — those are captured once at startup. Any real
-> config change needs a **server restart**.
+> **`/business reload` re-reads `config.yml` at runtime** — the firm ownership limit, the
+> creation cooldown, and the balance-tax brackets all refresh without a restart. The
+> exception is the **database connection** (and the listeners / scheduled jobs wired up at
+> startup): those are fixed when the plugin loads, so changing the `database` block needs a
+> **server restart**.
 
 ## Firm ownership — `firm`
 
@@ -27,6 +29,18 @@ Notes:
 - Enforced **only at creation** — a player can end up over the limit by receiving a firm
   transfer, but can't `create` a new one while at or over it.
 
+## Firm sales export & notifications — `sales`
+
+Controls the firm ChestShop sales export (`/business sales export`) and real-time sale
+notifications (`/business sales toggle`).
+
+| Key | Default | What it does |
+|---|---|---|
+| `sales.explorer-url` | `""` | Base URL of the Economy Explorer used to build sales-report links. Blank disables `/business sales export` (it reports the feature as unavailable). |
+| `sales.max-export-days` | `30` | Maximum number of days a sales export may cover. `0` or less = no cap. |
+| `sales.notify-default` | `false` | Whether firms have real-time sale notifications on by default. |
+| `sales.notify-flush-seconds` | `15` | How often (seconds) batched sale notifications are flushed to firm staff. |
+
 ## Firm balance tax — `tax.balance`
 
 A weekly wealth tax on each firm's total balance, charged on Treasury's **weekly** tax
@@ -35,7 +49,7 @@ cycle.
 | Key | Default | What it does |
 |---|---|---|
 | `tax.balance.enabled` | `true` | Master switch. **Deleting the key defaults it to `false`** — set it explicitly. |
-| `tax.balance.government-account` | `DCGovernment` | Government account the tax is paid into (falls back to Treasury's default account if missing). |
+| `tax.balance.government-account` | `DCGovernment` | Government account the tax is paid into (falls back to the literal account name `DCGovernment` if missing or blank). |
 | `tax.balance.brackets` | *(see below)* | Balance-floor → weekly-rate table. |
 
 Shipped brackets (flat, applied to the firm's **whole** balance — not marginal):

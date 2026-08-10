@@ -16,8 +16,8 @@ the automated systems.
 
 ## In this section
 
-- **[Managing Explorer access](/docs/admin/roles)** — grant or revoke admin and
-  government roles for the website.
+- **[Managing Explorer access](/docs/admin/roles)** — grant or revoke admin, government,
+  and viewer access for the website.
 - **[Government account access](/docs/admin/government-accounts)** — grant access to
   department accounts by individual player or LuckPerms group, and the permission nodes
   behind it.

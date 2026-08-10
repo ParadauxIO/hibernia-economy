@@ -4,7 +4,6 @@ import com.google.inject.Inject;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.utils.Money;
@@ -85,35 +84,12 @@ public class PayAccountCommand implements CommandHandler {
             return;
         }
 
-        BigDecimal senderBalance = accountService.getBalanceReadOnly(senderAccountId);
-        if (senderBalance.compareTo(normalized) < 0) {
-            message.send(sender, "treasury.pay.insufficient",
-                    "balance", accountService.formatAmount(senderBalance));
-            return;
-        }
-
         String memoLine = memo != null
                 ? "Payment from " + sender.getName() + " to " + target.label() + ": " + memo
                 : "Payment from " + sender.getName() + " to " + target.label();
-        try {
-            ledgerService.transfer(new TransferRequest(
-                    senderAccountId,
-                    target.accountId(),
-                    normalized,
-                    memoLine,
-                    sender.getUniqueId(),
-                    null,
-                    null,
-                    null));
-        } catch (IllegalStateException e) {
-            BigDecimal current = accountService.getBalanceReadOnly(senderAccountId);
-            message.send(sender, "treasury.pay.insufficient",
-                    "balance", accountService.formatAmount(current));
-            return;
-        }
 
-        message.send(sender, "treasury.pay.success",
-                "target", target.label(),
-                "amount", accountService.formatAmount(normalized));
+        PersonalAccountPayment.pay(sender, senderAccountId, target::accountId, target.label(),
+                normalized, memoLine, null,
+                accountService, ledgerService, message);
     }
 }

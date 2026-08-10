@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import {
   findAccountsForPlayer,
-  getPlayerTrajectory,
+  getPlayerTotals,
   countPlayerTransactions,
   getPlayerCounterparties,
   getPlayerTransactions,
@@ -23,17 +23,18 @@ const DAYS = 90;
 export async function PlayerDashboard({ uuid, name, self = false }: { uuid: string; name: string | null; self?: boolean }) {
   const accounts = await findAccountsForPlayer(uuid);
   const accountIds = accounts.map((a) => a.account_id);
-  const [trajectory, txnCount, partners, recentTxns] = await Promise.all([
-    getPlayerTrajectory(accountIds, DAYS),
+  const [totals, txnCount, partners, recentTxns] = await Promise.all([
+    getPlayerTotals(accountIds, DAYS),
     countPlayerTransactions(accountIds, DAYS),
     getPlayerCounterparties(accountIds, 12, DAYS),
     getPlayerTransactions(accountIds, 25),
   ]);
 
-  const totalBalance = accounts.reduce((s, a) => s + parseFloat(a.balance), 0);
-  const income = trajectory.reduce((s, t) => s + parseFloat(t.credits), 0);
-  const spend = trajectory.reduce((s, t) => s + parseFloat(t.debits), 0);
-  const net = income - spend;
+  // Money rollups are summed in SQL and carried as exact DECIMAL strings — never
+  // folded through a JS double (behaviour/0001) — so the KPIs match the ledger to
+  // the cent. Only the sign class needs a numeric compare of the net string.
+  const { totalBalance, income, spend, net } = totals;
+  const netNonNegative = !net.trimStart().startsWith('-');
 
   const prefix = (self ? 'my' : (name ?? uuid)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'player';
 
@@ -57,7 +58,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
         </div>
         <div className="kpi">
           <div className="kpi-label">Net / {DAYS}d</div>
-          <div className={`kpi-value ${net >= 0 ? 'pos' : 'neg'}`}>{net >= 0 ? '+' : ''}{fmtAmtFull(net)}</div>
+          <div className={`kpi-value ${netNonNegative ? 'pos' : 'neg'}`}>{netNonNegative ? '+' : ''}{fmtAmtFull(net)}</div>
           <div className="kpi-meta">{fmtN(txnCount)} txns</div>
         </div>
       </div>

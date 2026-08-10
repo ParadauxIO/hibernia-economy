@@ -6,6 +6,7 @@ import {
   legacyRoleCapabilities,
   roleFromCapabilities,
   isCapability,
+  normalizeCapability,
 } from '@/lib/auth/capabilities';
 
 describe('capability metadata stays in lockstep with the vocabulary', () => {
@@ -20,13 +21,13 @@ describe('capability metadata stays in lockstep with the vocabulary', () => {
 describe('legacyRoleCapabilities', () => {
   it('admin implies every capability', () => {
     expect(legacyRoleCapabilities('admin')).toEqual(
-      expect.arrayContaining(['admin', 'staff.audit', 'government']),
+      expect.arrayContaining(['admin', 'viewer', 'government']),
     );
   });
 
-  it('government implies staff.audit + government but not admin', () => {
+  it('government implies viewer + government but not admin', () => {
     const caps = legacyRoleCapabilities('government');
-    expect(caps).toContain('staff.audit');
+    expect(caps).toContain('viewer');
     expect(caps).toContain('government');
     expect(caps).not.toContain('admin');
   });
@@ -42,13 +43,13 @@ describe('roleFromCapabilities', () => {
   });
 
   it('government without admin collapses to government role', () => {
-    expect(roleFromCapabilities(['staff.audit', 'government'])).toBe('government');
+    expect(roleFromCapabilities(['viewer', 'government'])).toBe('government');
   });
 
-  it('staff.audit alone (a DOC auditor) stays player role', () => {
-    // The capability grants audit access (isStaff) without elevating the role,
-    // so requireRole('government') still keeps DOC out of government-only pages.
-    expect(roleFromCapabilities(['staff.audit'])).toBe('player');
+  it('viewer alone (a read-only auditor) stays player role', () => {
+    // The capability grants oversight access (isStaff) without elevating the role,
+    // so requireRole('government') still keeps a viewer out of government-only pages.
+    expect(roleFromCapabilities(['viewer'])).toBe('player');
   });
 
   it('empty set is player', () => {
@@ -57,9 +58,28 @@ describe('roleFromCapabilities', () => {
 });
 
 describe('isCapability', () => {
-  it('accepts known capabilities and rejects unknown strings', () => {
-    expect(isCapability('staff.audit')).toBe(true);
+  it('accepts current capabilities and rejects unknown or legacy strings', () => {
+    expect(isCapability('viewer')).toBe(true);
     expect(isCapability('admin')).toBe(true);
+    // 'staff.audit' is a legacy alias, not a current capability — use
+    // normalizeCapability to resolve it.
+    expect(isCapability('staff.audit')).toBe(false);
     expect(isCapability('not-a-capability')).toBe(false);
+  });
+});
+
+describe('normalizeCapability', () => {
+  it('passes current capabilities through unchanged', () => {
+    expect(normalizeCapability('viewer')).toBe('viewer');
+    expect(normalizeCapability('admin')).toBe('admin');
+    expect(normalizeCapability('government')).toBe('government');
+  });
+
+  it('resolves the legacy staff.audit alias to viewer', () => {
+    expect(normalizeCapability('staff.audit')).toBe('viewer');
+  });
+
+  it('returns null for unknown strings', () => {
+    expect(normalizeCapability('not-a-capability')).toBeNull();
   });
 });

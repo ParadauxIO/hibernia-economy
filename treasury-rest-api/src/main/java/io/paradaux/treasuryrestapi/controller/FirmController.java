@@ -11,6 +11,7 @@ import io.paradaux.treasuryrestapi.dto.UpdateDisplayNameRequest;
 import io.paradaux.treasuryrestapi.ratelimit.RateLimit;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.FirmService;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -168,7 +169,7 @@ public class FirmController {
     public ResponseEntity<FirmAccountSummaryResponse> updateAccountDisplayName(
             @AuthenticationPrincipal VerifiedToken verified,
             @PathVariable long accountId,
-            @RequestBody UpdateDisplayNameRequest request) {
+            @Valid @RequestBody UpdateDisplayNameRequest request) {
 
         log.info("PATCH /firms/me/accounts/{}/display-name requested by keyId={} firmId={}",
                 accountId, verified.keyId(), verified.firmId());

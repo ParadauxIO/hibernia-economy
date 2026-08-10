@@ -4,6 +4,7 @@ import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,12 +43,15 @@ public class RateLimitConfig implements WebMvcConfigurer {
     private final ObjectMapper objectMapper;
     private final RateLimitOverrideService overrides;
     private final MeterRegistry metrics;
+    private final ObjectProvider<RateLimitInterceptor> interceptorProvider;
 
     public RateLimitConfig(ObjectMapper objectMapper, RateLimitOverrideService overrides,
-                           MeterRegistry metrics) {
+                           MeterRegistry metrics,
+                           ObjectProvider<RateLimitInterceptor> interceptorProvider) {
         this.objectMapper = objectMapper;
         this.overrides = overrides;
         this.metrics = metrics;
+        this.interceptorProvider = interceptorProvider;
     }
 
     @Bean
@@ -70,6 +74,9 @@ public class RateLimitConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // No path filter — the interceptor is a no-op on routes without
         // @RateLimit, and only kicks in for authenticated requests anyway.
-        registry.addInterceptor(rateLimitInterceptor(bucketProvider()));
+        // Reuse the singleton bean rather than re-invoking the @Bean factory
+        // methods, which would build a second BucketProvider (and, on Lettuce,
+        // a second Redis client that is never closed).
+        registry.addInterceptor(interceptorProvider.getObject());
     }
 }

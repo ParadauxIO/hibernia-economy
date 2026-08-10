@@ -25,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -121,8 +122,8 @@ class FirmAccountServiceImplTest {
                 new FirmAccount(1, 11, null)));
         Account a1 = new Account(); a1.setAccountId(10);
         Account a2 = new Account(); a2.setAccountId(11);
-        when(treasury.getAccountById(10)).thenReturn(a1);
-        when(treasury.getAccountById(11)).thenReturn(a2);
+        // One batch read instead of one getAccountById per account (ADT-36).
+        when(treasury.getAccountsByIds(List.of(10, 11))).thenReturn(Map.of(10, a1, 11, a2));
 
         assertThat(svc.listAccounts(1)).containsExactly(a1, a2);
     }
@@ -371,6 +372,9 @@ class FirmAccountServiceImplTest {
 
         svc.addMemberToAccount(1, 10, member, actor);
         verify(treasury).addMember(10, member, actor);
+        // PAR-77: the manual write is followed by a role-derived reconcile.
+        verify(treasury).getMembers(10);
+        verify(treasury).getAuthorizers(10);
     }
 
     @Test
@@ -391,6 +395,9 @@ class FirmAccountServiceImplTest {
 
         svc.removeMemberFromAccount(1, 10, toRemove, actor);
         verify(treasury).removeMember(10, toRemove);
+        // PAR-77: the manual write is followed by a role-derived reconcile.
+        verify(treasury).getMembers(10);
+        verify(treasury).getAuthorizers(10);
     }
 
     @Test
@@ -402,6 +409,9 @@ class FirmAccountServiceImplTest {
 
         svc.addAuthorizerToAccount(1, 10, auth, actor);
         verify(treasury).addAuthorizer(10, auth, actor);
+        // PAR-77: the manual write is followed by a role-derived reconcile.
+        verify(treasury).getMembers(10);
+        verify(treasury).getAuthorizers(10);
     }
 
     @Test
@@ -422,6 +432,9 @@ class FirmAccountServiceImplTest {
 
         svc.removeAuthorizerFromAccount(1, 10, toRemove, actor);
         verify(treasury).removeAuthorizer(10, toRemove);
+        // PAR-77: the manual write is followed by a role-derived reconcile.
+        verify(treasury).getMembers(10);
+        verify(treasury).getAuthorizers(10);
     }
 
     // ---------- getters ----------

@@ -49,25 +49,11 @@ Registry credentials and Harbor coordinates come from repo/organization secrets
 See [conventions.md](conventions.md) for the branch model and how Tesks issues move
 through their workflow.
 
-## ⚠️ Migrate the workflows to the single root build
+## Root-build invocation
 
-The build was consolidated into a **single root Gradle build** (per-project
-wrappers and `settings.gradle.kts` files were removed). Most of the build/test
-workflows were authored for the earlier **per-project** layout — they `cd` into a
-project directory (`working-directory: <project>`) and call `./gradlew`, which no
-longer exists there.
-
-They need updating to invoke the root build, e.g.:
-
-```yaml
-# before (per-project):
-#   working-directory: treasury
-#   run: ./gradlew --no-daemon clean shadowJar -Pci=true
-
-# after (single root build):
-- run: ./gradlew --no-daemon :treasury:shadowJar -Pci=true
-```
-
-`chestshop-test` already uses the root form (`./gradlew :chestshop:plugin:test`)
-and is the pattern to follow. The `paths:` filters, service containers, and
-Harbor/Argo steps stay as they are. This is a known follow-up.
+The build is a **single root Gradle build**. Every JVM workflow already invokes the
+root wrapper with a project-scoped task — e.g. `./gradlew --no-daemon :treasury:shadowJar
+-Pci=true` — rather than `cd`-ing into a project directory. The only workflows that set
+`working-directory:` are the two `economy-explorer` npm jobs, which is correct (the
+explorer is a Node project outside the Gradle graph). New workflows should follow the
+`:<project>:<task>` form.

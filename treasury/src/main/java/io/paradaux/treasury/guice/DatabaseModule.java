@@ -39,10 +39,12 @@ public class DatabaseModule extends AbstractModule {
                 addMapperClass(MembershipMapper.class);
                 addMapperClass(GovernmentFineMapper.class);
                 addMapperClass(GroupMembershipMapper.class);
-                addMapperClass(PlayerLoginMapper.class);
                 addMapperClass(EconomyPlayerMapper.class);
                 addMapperClass(AccountRedirectMapper.class);
                 addMapperClass(ChestShopMarketMapper.class);
+                addMapperClass(ChestShopSalesReadMapper.class);
+                addMapperClass(ShopQueryMapper.class);
+                addMapperClass(ExplorerAuditMapper.class);
 
                 addTypeHandlerClass(UuidBinaryTypeHandler.class);
                 addTypeHandlerClass(Sha256BinaryTypeHandler.class);

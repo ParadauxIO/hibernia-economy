@@ -4,6 +4,8 @@ import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationComp
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationValue;
 import lombok.Getter;
 
+import java.math.BigDecimal;
+
 @ConfigurationComponent
 @Getter
 public class EconomyConfiguration {
@@ -18,5 +20,5 @@ public class EconomyConfiguration {
     private String currencyNamePlural;
 
     @ConfigurationValue(path = "economy.starting-balance", defaultValue = "10000")
-    private double startingBalance;
+    private BigDecimal startingBalance;
 }

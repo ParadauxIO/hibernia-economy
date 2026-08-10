@@ -9,13 +9,32 @@ on:
       - 'treasury-rest-api/**'
       - '.github/workflows/treasury-rest-api-docker.yml'
 
+# The called treasury-rest-api-test.yml requests checks: write to surface JUnit
+# results; a reusable workflow can't exceed its caller's permissions, and this
+# workflow had none (so the restrictive repo default applied), which failed the
+# run at startup. Declare them here (also clears the missing-workflow-permissions
+# CodeQL warning). Checkout needs contents: read; the Harbor push authenticates
+# with registry secrets, not GITHUB_TOKEN.
+permissions:
+  contents: read
+  checks: write
+
 jobs:
+  # Gate the image on the real test suite (ADT-19): the money service must not
+  # build+push without its *IT suite passing. Reuses treasury-rest-api-test.yml.
+  test:
+    uses: ./.github/workflows/treasury-rest-api-test.yml
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+
+      - name: Validate Gradle wrapper   # ADT-171: verify wrapper jar before running it with Harbor creds
+        uses: gradle/actions/wrapper-validation@v4
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -70,6 +89,12 @@ jobs:
           echo "SHA_TAG=${ENV_NAME}-sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "MUTABLE_TAG=${MUTABLE}" >> "$GITHUB_OUTPUT"
 
+      # PAR-329: provenance/SBOM attestations below need the docker-container
+      # driver. Without this step build-push-action falls back to the default
+      # `docker` driver, which can't emit them, and the build fails outright.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to Harbor registry
         uses: docker/login-action@v3
         with:
@@ -77,16 +102,18 @@ jobs:
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - name: Build Docker image
-        run: |
-          IMAGE=${{ secrets.HARBOR_REGISTRY }}/paradaux-public/treasury-rest-api
-          docker build \
-            -t "${IMAGE}:${{ steps.tags.outputs.SHA_TAG }}" \
-            -t "${IMAGE}:${{ steps.tags.outputs.MUTABLE_TAG }}" \
-            treasury-rest-api
-
-      - name: Push Docker image
-        run: |
-          IMAGE=${{ secrets.HARBOR_REGISTRY }}/paradaux-public/treasury-rest-api
-          docker push "${IMAGE}:${{ steps.tags.outputs.SHA_TAG }}"
-          docker push "${IMAGE}:${{ steps.tags.outputs.MUTABLE_TAG }}"
+      # Build + push via docker/build-push-action so images carry provenance
+      # attestations and an SBOM (global/infra/0004). Pinned to the current major
+      # tag: an exact SHA pin isn't knowable offline — resolve to a commit SHA when
+      # network access is available. Immutable env-sha tag + mutable tag and the
+      # Harbor registry auth (docker/login-action above) are unchanged.
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: treasury-rest-api
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ secrets.HARBOR_REGISTRY }}/paradaux-public/treasury-rest-api:${{ steps.tags.outputs.SHA_TAG }}
+            ${{ secrets.HARBOR_REGISTRY }}/paradaux-public/treasury-rest-api:${{ steps.tags.outputs.MUTABLE_TAG }}

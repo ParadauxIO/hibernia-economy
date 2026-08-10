@@ -210,14 +210,41 @@ Handing the firm to someone else is a confirmed, two-sided handshake:
 | `/business tax info <firm>` | Show the firm's tax status and estimated weekly tax. |
 | `/business tax exempt <firm> <on\|off>` | Set or clear tax exemption (admin). Accepts any on/off token — `true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`, `enable`/`disable`. |
 
+## Sales
+
+Read-only reporting over the firm's ChestShop sales. Viewing is gated to the firm's
+**proprietor** or staff with the **FINANCIAL** or **ADMIN** role — sales figures are the
+firm's books, not public.
+
+| Command | What it does |
+|---|---|
+| `/business sales <firm> [page]` | List the firm's recent ChestShop sales (paginated). |
+| `/business sales summary <firm> [days]` | Aggregate sales report — totals, top items, top customers (default 30 days). |
+| `/business sales export <firm> <days>` | Get an Economy Explorer link to the firm's sales report (capped by `sales.max-export-days`). |
+| `/business sales toggle <firm>` | Turn real-time sale notifications on/off for the firm (owner/admin). |
+
+## Chat
+
+A private, employee-only chat channel for a firm (like Factions' `/f chat`). Requires
+CarbonChat; messages route through the firm's channel once selected.
+
+| Command | What it does |
+|---|---|
+| `/business chat` | Enter your firm's chat channel (joins your only firm). |
+| `/business chat <firm>` | Enter a specific firm's chat when you're in several. |
+| `/business chat off` | Leave firm chat. |
+
 ## Permission nodes
 
 Business uses **two** layers of access:
 
-1. **LuckPerms node** — gates the command itself. Only `business.pay` defaults to
-   everyone; **every other node — including `business.use`, which the base `/business`
-   command needs — is operator-only until you grant it** (these are normally granted to
-   all players so they can run businesses).
+1. **LuckPerms node** — gates the command itself. **Almost every `business.*` node defaults
+   to everyone (`default: true`)** — including `business.use`, which the base `/business`
+   command needs. The only exceptions are the staff-override nodes `business.admin.*`
+   (disband / rename / attribute / proprietor / reload) and `business.tax.exempt`, which
+   default to operator-only. Real authorisation for everyday commands is enforced at the
+   in-firm role layer below, so the node only governs whether a player may *attempt* the
+   command at all.
 2. **In-firm role permission** — for actions on a specific firm, the plugin then checks
    the actor's [role permission](#roles) (`ADMIN` / `FINANCIAL`). The firm **owner
    (proprietor) bypasses this layer entirely**.
@@ -232,7 +259,7 @@ in-firm role.
 | `/business info` | `business.info` | — |
 | `/business list` · `list <player>` · `list all` | `business.list` · `business.list.other` · `business.list.all` | — |
 | `/business deposit` · `balance` · `withdraw` · `pay player` · `pay business` · `send` · `transactions` | `business.finance` | `ADMIN` or `FINANCIAL` |
-| `/business pay` (into a firm) | `business.pay` *(default: everyone)* | — |
+| `/business pay` (into a firm) | `business.pay` | — |
 | `/business offer` / `hire` · `offer rescind` | `business.staff.offer` · `business.staff.offer.rescind` | `ADMIN` |
 | `/business offer accept` · `reject` | `business.staff.offer.accept` · `business.staff.offer.reject` | — (the invitee) |
 | `/business fire` | `business.staff.fire` | `ADMIN` |
@@ -246,13 +273,17 @@ in-firm role.
 | `/business account sync` | `business.account.sync` | — (operator) |
 | `/business account addmember` · `removemember` · `addauthorizer` · `removeauthorizer` | `business.account.addmember` · `.removemember` · `.addauthorizer` · `.removeauthorizer` | **owner only** |
 | `/business account list` · `members` · `authorizers` | `business.account.list` · `.members` · `.authorizers` | — |
-| `/business account pay into` | `business.pay` *(default: everyone)* | — |
+| `/business account pay into` | `business.pay` | — |
 | `/business account deposit` · `withdraw` · `pay player` · `pay business` · `balance` · `transactions` | `business.account.finance` | `ADMIN` or `FINANCIAL` |
 | `/business transfer begin` · `confirm` · `cancel` | `business.transfer.begin` · `.confirm` · `.cancel` | owner only |
 | `/business transfer complete` · `reject` | `business.transfer.complete` · `.reject` | — (the recipient) |
 | `/business attribute set hq` · `discord` | `business.attribute.hq` · `business.attribute.discord` | `ADMIN` |
 | `/business tax info` | `business.tax.info` | — |
 | `/business tax exempt` | `business.tax.exempt` | operator action |
+| `/business sales` · `sales summary` | `business.sales` | proprietor / `ADMIN` / `FINANCIAL` |
+| `/business sales export` | `business.sales.export` | proprietor / `ADMIN` / `FINANCIAL` |
+| `/business sales toggle` | `business.sales.toggle` | owner / `ADMIN` |
+| `/business chat` | `business.chat` | firm member |
 | `/business admin disband` | `business.admin.disband` | — (operator, bypasses firm roles) |
 | `/business admin rename` | `business.admin.rename` | — (operator, bypasses firm roles) |
 | `/business admin set hq` · `set discord` | `business.admin.attribute` | — (operator, bypasses firm roles) |
@@ -260,10 +291,10 @@ in-firm role.
 | `/business reload` | `business.admin.reload` | — (operator) |
 
 > [!NOTE]
-> The base `/business` command itself needs `business.use`. Only `business.pay` defaults
-> to everyone; **everything else — including `business.use` — is operator-only in
-> `plugin.yml`**, so a server normally grants the everyday `business.*` nodes to all
-> players via LuckPerms and keeps the `business.admin.*` nodes for staff. The "owner only"
+> The base `/business` command itself needs `business.use`. In `plugin.yml` **almost every
+> `business.*` node defaults to everyone (`default: true`)** — including `business.use` —
+> so players can run businesses out of the box; only the staff-override nodes
+> `business.admin.*` and `business.tax.exempt` default to operator-only. The "owner only"
 > rows are enforced in the plugin itself — only a firm's **proprietor** can manage its
 > accounts and their access, regardless of LuckPerms nodes or in-firm role. The
 > `business.admin.*` overrides go the other way: they let operators act on any firm,

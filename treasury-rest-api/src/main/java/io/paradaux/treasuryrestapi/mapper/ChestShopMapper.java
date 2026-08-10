@@ -42,7 +42,7 @@ public interface ChestShopMapper {
      * Active shops matching the (all-optional) filters, newest-priced first.
      * Ordering: in-stock before sold-out, then priced-to-buy before not, then
      * cheapest buy price, then most-recently-seen. Owner name is resolved from
-     * {@code firm} (BUSINESS) or {@code firm_players} (PERSONAL); null otherwise.
+     * {@code firm} (BUSINESS) or {@code economy_players} (PERSONAL); null otherwise.
      */
     @Select("""
             SELECT s.shop_id, s.world, s.sign_x, s.sign_y, s.sign_z,
@@ -53,7 +53,7 @@ public interface ChestShopMapper {
                    s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.stock_at, s.last_seen
             FROM chestshop_shop s
             LEFT JOIN firm f ON f.firm_id = s.shop_firm_id
-            LEFT JOIN firm_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
+            LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
             WHERE s.active = 1
               AND (#{itemKey}  IS NULL OR s.item_key = #{itemKey})
               AND (#{material} IS NULL OR s.material = #{material})

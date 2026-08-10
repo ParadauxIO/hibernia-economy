@@ -19,7 +19,6 @@ const LINKS: AdminLink[] = [
   { href: '/admin/players', label: 'Players', match: (p) => p.startsWith('/admin/players') },
   { href: '/admin/accounts', label: 'Accounts', match: (p) => p.startsWith('/admin/accounts') },
   { href: '/transactions', label: 'Transactions', match: (p) => p.startsWith('/transactions') },
-  { href: '/admin/audit', label: 'Audit', match: (p) => p.startsWith('/admin/audit') },
   { href: '/admin/api-keys', label: 'API keys', match: (p) => p.startsWith('/admin/api-keys') },
   { href: '/admin/groups', label: 'Groups', match: (p) => p.startsWith('/admin/groups') },
   { href: '/admin/firms', label: 'Firms', match: (p) => p.startsWith('/admin/firms') },

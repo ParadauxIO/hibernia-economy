@@ -170,23 +170,39 @@ public class VaultEconomyAdapter implements Economy {
         if (playerUuid == null) return failure(amount, 0D, "Unknown player");
         if (amount < 0.01D) return failure(amount, getBalance(playerUuid), "Amount must be at least 0.01");
         String pluginKey = resolveCallingPluginKey();
+        BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
+
+        // The Vault economy API carries no caller-supplied idempotency token, so
+        // deposits are intentionally at-least-once: two identical deposits are a
+        // legitimate pattern, not a duplicate, so we deliberately pass no dedupKey.
+        // The critical invariant is therefore to report the deposit TRUTHFULLY — a
+        // committed deposit must never return FAILURE, or an at-least-once Vault
+        // caller will retry and double-credit (money creation, ADT-8).
         try {
-            BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
             ledgerService.vaultDeposit(pluginKey, playerUuid, bd,
                     memo != null ? memo : "Vault deposit (" + pluginKey + ")",
                     TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, null);
+        } catch (Exception e) {
+            return failure(amount, getBalance(playerUuid), e.getMessage());
+        }
 
-            // Apply source income tax after a successful deposit.
+        // Source income tax runs only after the deposit has committed and must not
+        // affect the deposit's reported outcome. It returns its own result and logs
+        // its own failures, so neither a Failed result nor a thrown exception can
+        // turn a successful deposit into a FAILURE (which previously triggered the
+        // double-credit retry above).
+        try {
             TaxResult taxResult = taxApi.applySourceIncomeTax(playerUuid, bd, pluginKey);
             if (taxResult instanceof TaxResult.Failed f) {
                 log.warn("Source income tax failed for player {} (plugin={}, amount={}): {}",
                         playerUuid, pluginKey, bd, f.errorMessage());
             }
-
-            return success(amount, getBalance(playerUuid), "OK");
         } catch (Exception e) {
-            return failure(amount, getBalance(playerUuid), e.getMessage());
+            log.warn("Source income tax threw for player {} (plugin={}, amount={}) after a committed deposit: {}",
+                    playerUuid, pluginKey, bd, e.getMessage());
         }
+
+        return success(amount, getBalance(playerUuid), "OK");
     }
 
     /* ========================= Bank (not supported) ========================= */

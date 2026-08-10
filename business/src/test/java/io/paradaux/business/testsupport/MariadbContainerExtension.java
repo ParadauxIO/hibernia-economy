@@ -143,7 +143,7 @@ public final class MariadbContainerExtension {
             st.execute("TRUNCATE TABLE firm_role");
             st.execute("TRUNCATE TABLE firm_accounts");
             st.execute("TRUNCATE TABLE firm");
-            st.execute("TRUNCATE TABLE firm_players");
+            st.execute("TRUNCATE TABLE economy_players");
             st.execute("TRUNCATE TABLE accounts");
             st.execute("SET FOREIGN_KEY_CHECKS = 1");
         }

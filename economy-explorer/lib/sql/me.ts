@@ -1,7 +1,7 @@
 import 'server-only';
 import { sql } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
-import type { ExplorerAccountRow, CounterpartyRow, AccountTrajectoryRow } from '@/lib/sql/ledger';
+import type { ExplorerAccountRow, CounterpartyRow } from '@/lib/sql/ledger';
 
 /** Mirrors LedgerExplorerMapper.findAccountsForPlayer (line 625-635). */
 export async function findAccountsForPlayer(playerUuid: string): Promise<ExplorerAccountRow[]> {
@@ -24,11 +24,14 @@ export async function findAccountsForPlayer(playerUuid: string): Promise<Explore
            a.credit_limit, a.created_at, COALESCE(abm.balance, 0.00) AS balance
     FROM accounts a
     LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE a.owner_uuid_bin = ${bin}
-       OR a.account_id IN (SELECT account_id FROM account_access
-                           WHERE subject_uuid_bin = ${bin}
-                             AND level IN ('MEMBER','AUTHORIZER') AND removed_at IS NULL)
+       -- Same WEB read rule as canReadAccount via the shared account_read_access_web
+       -- view (ADT-13): VIEWER counts. Previously this list filtered MEMBER/AUTHORIZER
+       -- only, so an account a player could open (canReadAccount) never appeared in
+       -- their own "my accounts" list — the explorer disagreeing with itself.
+       OR a.account_id IN (SELECT account_id FROM account_read_access_web
+                           WHERE subject_uuid_bin = ${bin})
     ORDER BY balance DESC
   `.execute(db);
   return r.rows.map((row) => ({
@@ -53,23 +56,46 @@ export async function findAccountsForPlayer(playerUuid: string): Promise<Explore
 // the ids straight in as `IN (?, ?, …)` — the optimizer can use idx_postings_account
 // cleanly instead of materialising the UNION subquery (twice, in counterparties).
 
-/** Trajectory over the player's account set, last `days`. Mirrors getPlayerTrajectory. */
-export async function getPlayerTrajectory(accountIds: number[], days: number): Promise<AccountTrajectoryRow[]> {
-  if (accountIds.length === 0) return [];
-  const r = await sql<AccountTrajectoryRow>`
-    SELECT DATE_FORMAT(DATE(lt.settlement_time), '%Y-%m-%d') AS date,
-           COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0.00) AS credits,
-           COALESCE(SUM(CASE WHEN lp.amount < 0 THEN -lp.amount ELSE 0 END), 0.00) AS debits,
-           COALESCE(SUM(lp.amount), 0.00) AS net,
-           COUNT(*) AS postingCount
-    FROM ledger_postings lp
-    JOIN ledger_txns lt ON lt.txn_id = lp.txn_id
-    WHERE lp.account_id IN (${sql.join(accountIds)})
-      AND lt.settlement_time >= NOW() - INTERVAL ${days} DAY
-    GROUP BY DATE(lt.settlement_time)
-    ORDER BY date ASC
-  `.execute(db);
-  return r.rows;
+/**
+ * Exact money rollups for the dashboard KPIs, summed in SQL (never folded
+ * through a JS double). `totalBalance` is the current balance across the whole
+ * account set; `income`/`spend`/`net` are the windowed credit/debit/net over the
+ * last `days`. Returned as DECIMAL strings so the viewer matches the ledger to the
+ * cent — the windowed net uses the same SUM path as its all-time siblings
+ * (getTotalSupply) so the two can never disagree.
+ */
+export interface PlayerTotals {
+  totalBalance: string;
+  income: string;
+  spend: string;
+  net: string;
+}
+
+export async function getPlayerTotals(accountIds: number[], days: number): Promise<PlayerTotals> {
+  if (accountIds.length === 0) return { totalBalance: '0.00', income: '0.00', spend: '0.00', net: '0.00' };
+  const ids = sql.join(accountIds);
+  const [bal, flow] = await Promise.all([
+    sql<{ s: string | null }>`
+      SELECT COALESCE(SUM(abm.balance), 0.00) AS s
+      FROM account_balances_mat abm
+      WHERE abm.account_id IN (${ids})
+    `.execute(db),
+    sql<{ income: string | null; spend: string | null; net: string | null }>`
+      SELECT COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0.00) AS income,
+             COALESCE(SUM(CASE WHEN lp.amount < 0 THEN -lp.amount ELSE 0 END), 0.00) AS spend,
+             COALESCE(SUM(lp.amount), 0.00) AS net
+      FROM ledger_postings lp
+      JOIN ledger_txns lt ON lt.txn_id = lp.txn_id
+      WHERE lp.account_id IN (${ids})
+        AND lt.settlement_time >= NOW() - INTERVAL ${days} DAY
+    `.execute(db),
+  ]);
+  return {
+    totalBalance: bal.rows[0]?.s ?? '0.00',
+    income: flow.rows[0]?.income ?? '0.00',
+    spend: flow.rows[0]?.spend ?? '0.00',
+    net: flow.rows[0]?.net ?? '0.00',
+  };
 }
 
 /** Distinct txn count over the player's account set, last `days`. Mirrors countPlayerTransactions. */
@@ -110,7 +136,7 @@ export async function getPlayerCounterparties(accountIds: number[], limit: numbe
     JOIN ledger_txns lt ON lt.txn_id = me.txn_id
     JOIN ledger_postings partner ON partner.txn_id = me.txn_id AND partner.account_id != me.account_id
     JOIN accounts a ON a.account_id = partner.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE me.account_id IN (${ids})
       AND lt.settlement_time >= NOW() - INTERVAL ${days} DAY
       AND partner.account_id NOT IN (${ids})
@@ -129,18 +155,18 @@ export async function getPlayerCounterparties(accountIds: number[], limit: numbe
   }));
 }
 
-/** Resolve a player's current name from the firm_players cache (null if unknown). */
+/** Resolve a player's current name from the economy_players cache (null if unknown). */
 export async function findPlayerName(uuid: string): Promise<string | null> {
   const r = await sql<{ current_name: string | null }>`
-    SELECT current_name FROM firm_players WHERE player_uuid_bin = ${uuidToBin(uuid)} LIMIT 1
+    SELECT current_name FROM economy_players WHERE player_uuid_bin = ${uuidToBin(uuid)} LIMIT 1
   `.execute(db);
   return r.rows[0]?.current_name ?? null;
 }
 
-/** Name/UUID search over the firm_players cache, for the admin player lookup. */
+/** Name/UUID search over the economy_players cache, for the admin player lookup. */
 export async function searchPlayers(q: string, limit: number): Promise<{ uuid: string; name: string }[]> {
   const r = await sql<{ player_uuid_bin: Buffer; current_name: string }>`
-    SELECT player_uuid_bin, current_name FROM firm_players
+    SELECT player_uuid_bin, current_name FROM economy_players
     WHERE current_name LIKE CONCAT('%', ${q}, '%')
     ORDER BY current_name
     LIMIT ${limit}

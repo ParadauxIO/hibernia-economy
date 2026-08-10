@@ -16,6 +16,20 @@ public interface FirmStaffService {
     List<FirmEmployee> getCurrentEmployees(String firmName);
     List<Player> getOnlineEmployees(String firmName);
 
+    // ---- int-id overloads (structure/0004) ----------------------------------
+    // Preferred by internal callers that already hold the firm id: resolve the
+    // firm straight by id rather than round-tripping through
+    // getFirmByNameOrId(String.valueOf(id)). The String overloads above stay for
+    // the command entrypoints that resolve user name-or-id input.
+
+    void fireEmployee(int firmId, UUID playerId, UUID actorId);
+    String promoteEmployee(int firmId, UUID playerId, UUID actorId);
+    String demoteEmployee(int firmId, UUID playerId, UUID actorId);
+    void resignFromFirm(int firmId, UUID playerId);
+    List<FirmEmployee> getCurrentEmployees(int firmId);
+    List<Player> getOnlineEmployees(int firmId);
+    FirmEmployee getProprietorAsEmployee(int firmId);
+
     /**
      * Hires a player into a firm. Requires {@code actorId} to hold
      * {@link RolePermission#ADMIN} on the firm — throws
@@ -24,9 +38,9 @@ public interface FirmStaffService {
      *
      * <p>For the invite-acceptance flow, where the inviter's permission was
      * already validated at invite-creation time, use
-     * {@link #hireEmployeeFromInvite(Integer, UUID, UUID)} instead.
+     * {@link #hireEmployeeFromInvite(int, UUID, UUID)} instead.
      */
-    void hireEmployee(Integer firmId, UUID playerId, UUID actorId);
+    void hireEmployee(int firmId, UUID playerId, UUID actorId);
 
     /**
      * Internal hire path used after an employment offer has been accepted.
@@ -35,10 +49,10 @@ public interface FirmStaffService {
      * accept is called, an INVITE-permission check has already happened.
      *
      * <p>Only call this from {@code FirmRequestServiceImpl.acceptEmploymentOffer}.
-     * Other callers must use {@link #hireEmployee(Integer, UUID, UUID)} so the
+     * Other callers must use {@link #hireEmployee(int, UUID, UUID)} so the
      * ADMIN check applies.
      */
-    void hireEmployeeFromInvite(Integer firmId, UUID playerId, UUID inviter);
+    void hireEmployeeFromInvite(int firmId, UUID playerId, UUID inviter);
     boolean hasPermission(Integer firmId, UUID playerId, RolePermission permission);
     boolean isEmployedBy(Integer firmId, UUID playerId);
     String getCurrentRole(Integer firmId, UUID playerId);

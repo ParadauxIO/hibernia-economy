@@ -6,6 +6,8 @@ export interface FirmRow {
   firm_id: number;
   display_name: string;
   proprietor_uuid: string | null;
+  /** The proprietor's current IGN from the player directory; null when not cached. */
+  proprietor_name: string | null;
   discord_url: string | null;
   hq_region: string | null;
   default_account_id: number | null;
@@ -49,6 +51,7 @@ export async function findFirmByDisplayName(displayName: string): Promise<FirmRo
     firm_id: number;
     display_name: string;
     proprietorUuid: Buffer | null;
+    proprietor_name: string | null;
     discord_url: string | null;
     hq_region: string | null;
     default_account_id: number | null;
@@ -56,8 +59,10 @@ export async function findFirmByDisplayName(displayName: string): Promise<FirmRo
     created_at: Date;
     exemptValue: string | null;
   }>`
-    SELECT firm_id, display_name, proprietor_uuid_bin AS proprietorUuid,
-           discord_url, hq_region, default_account_id, is_archived AS archived, created_at,
+    SELECT firm.firm_id, firm.display_name, firm.proprietor_uuid_bin AS proprietorUuid,
+           pp.current_name AS proprietor_name,
+           firm.discord_url, firm.hq_region, firm.default_account_id,
+           firm.is_archived AS archived, firm.created_at,
            (
              SELECT fp.value FROM firm_properties fp
              WHERE fp.firm_id = firm.firm_id
@@ -66,7 +71,9 @@ export async function findFirmByDisplayName(displayName: string): Promise<FirmRo
                AND fp.deleted_at IS NULL
              LIMIT 1
            ) AS exemptValue
-    FROM firm WHERE display_name = ${displayName}
+    FROM firm
+    LEFT JOIN economy_players pp ON pp.player_uuid_bin = firm.proprietor_uuid_bin
+    WHERE firm.display_name = ${displayName}
   `.execute(db);
   const row = r.rows[0];
   if (!row) return null;
@@ -74,6 +81,7 @@ export async function findFirmByDisplayName(displayName: string): Promise<FirmRo
     firm_id: row.firm_id,
     display_name: row.display_name,
     proprietor_uuid: row.proprietorUuid ? binToUuid(row.proprietorUuid) : null,
+    proprietor_name: row.proprietor_name,
     discord_url: row.discord_url,
     hq_region: row.hq_region,
     default_account_id: row.default_account_id,
@@ -136,7 +144,7 @@ export async function getFirmHeader(firmId: number): Promise<FirmReportHeader | 
               LEFT JOIN account_balances_mat abm ON abm.account_id = fa.account_id
              WHERE fa.firm_id = f.firm_id AND fa.removed_at IS NULL) AS total_balance
     FROM firm f
-    LEFT JOIN firm_players pp ON pp.player_uuid_bin = f.proprietor_uuid_bin
+    LEFT JOIN economy_players pp ON pp.player_uuid_bin = f.proprietor_uuid_bin
     WHERE f.firm_id = ${firmId}
   `.execute(db);
   const row = r.rows[0];
@@ -169,7 +177,7 @@ export async function listFirmEmployees(firmId: number): Promise<FirmEmployeeRow
            fr.name AS roleName, fe.joined_at AS joinedAt
     FROM firm_employee fe
     JOIN firm_role fr ON fr.role_id = fe.role_id AND fr.deleted_at IS NULL
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = fe.player_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = fe.player_uuid_bin
     WHERE fe.firm_id = ${firmId} AND fe.left_at IS NULL
     ORDER BY fr.rank_order, fe.joined_at
   `.execute(db);

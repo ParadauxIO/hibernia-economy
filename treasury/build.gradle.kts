@@ -1,45 +1,17 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    java
     jacoco
     id("com.gradleup.shadow")
     id("maven-publish")
+    id("io.paradaux.paper-server-conventions")
 }
 
 // group + version are set centrally by the root allprojects block (single
 // mono-repo version, 2.3.0-SNAPSHOT, overridable with -Pversion).
+// The JVM toolchain, repositories, resource expansion, base test setup, shaded-jar
+// defaults, and dev-server staging come from io.paradaux.paper-server-conventions.
 description = "Treasury"
-
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    }
-}
-
-repositories {
-    // mavenLocal first so a locally-published hibernia-framework SNAPSHOT
-    // (or treasury-api during cross-project work) is picked up before the
-    // remote Reposilite copy. Harmless when nothing's published locally.
-    mavenLocal()
-    mavenCentral()
-    maven {
-        name = "papermc"
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
-    maven("https://oss.sonatype.org/content/groups/public/")
-    maven("https://jitpack.io")
-    maven {
-        name = "ParadauxReleases"
-        url = uri("https://repo.paradaux.io/releases")
-        mavenContent { releasesOnly() }
-    }
-    maven {
-        name = "ParadauxSnapshots"
-        url = uri("https://repo.paradaux.io/snapshots")
-        mavenContent { snapshotsOnly() }
-    }
-}
 
 dependencies {
     // Paper API (provided by server)
@@ -59,6 +31,7 @@ dependencies {
 
     // Treasury API submodule
     implementation(project(":treasury:treasury-api"))
+    implementation(project(":common"))
 
     // Hibernia Framework
     implementation(libs.hibernia.framework)
@@ -84,6 +57,11 @@ dependencies {
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
+
+    // Shared startup + message-key test-kit. Brings JUnit, Guice, the framework and
+    // MockBukkit transitively (declared `api` there) so the startup test can boot an
+    // in-memory server and drive the real injector without re-declaring them.
+    testImplementation(project(":test-support"))
 
     testImplementation(libs.assertj.core)
     testImplementation(libs.mockito.core)
@@ -131,38 +109,7 @@ tasks.named<Copy>("processTestResources") {
 }
 
 tasks {
-    // Mirror Maven default goal locally
-    defaultTasks("clean", "shadowJar")
-
-    // Keep resource filtering tight to avoid $ expansion issues in YAML like config.yml
-    processResources {
-        filteringCharset = "UTF-8"
-        // Capture at configuration time so the filesMatching action never touches
-        // `project` at execution time (config-cache safe; Gradle 10 forward-compat).
-        val expansions = mapOf("version" to project.version, "name" to project.name,
-                "description" to (project.description ?: ""))
-        filesMatching(listOf("**/*.properties", "plugin.yml", "paper-plugin.yml", "application*.yml")) {
-            // Expands ${...} from these project properties only in these files
-            expand(expansions)
-        }
-    }
-
-    withType<JavaCompile> {
-        options.encoding = "UTF-8"
-        options.release.set(21)
-    }
-
     test {
-        useJUnitPlatform()
-        // Tag-based filtering: gradle test -PskipIT skips DB-backed tests.
-        if (project.hasProperty("skipIT")) {
-            useJUnitPlatform { excludeTags("integration") }
-        }
-        testLogging {
-            events("failed", "skipped")
-            showStandardStreams = false
-            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-        }
         finalizedBy(jacocoTestReport)
     }
 
@@ -232,26 +179,14 @@ tasks {
         )
     }
 
-    // Shadow 9 writes shadowJar to build/libs/<name>.jar by default, and
-    // so does :jar. With both enabled :jar runs *after* :shadowJar and
-    // overwrites the fat jar with the thin one — produced a 158 KB
-    // dependency-less plugin that disabled itself on enable. Disable :jar
-    // so the shaded artifact stays put.
-    jar {
-        enabled = false
-    }
-
-    // Produce a single shaded jar without the "-all" classifier
+    // Project-specific shaded-lib relocations. archiveClassifier + mergeServiceFiles
+    // come from io.paradaux.paper-server-conventions.
     withType<ShadowJar> {
-        archiveClassifier.set("")
-        // relocate shaded libs
         relocate("com.google.inject", "io.paradaux.libs.guice")
         relocate("javax.inject", "io.paradaux.libs.javax")
         relocate("org.aopalliance", "io.paradaux.libs.aopalliance")
         relocate("io.jsonwebtoken", "io.paradaux.libs.jjwt")
         relocate("com.fasterxml.jackson", "io.paradaux.libs.jackson")
-        // some libs use META-INF/services (safe and cheap)
-        mergeServiceFiles()
     }
 }
 
@@ -259,41 +194,6 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
-val isCi = project.hasProperty("ci")
-
-val copyPlugin = tasks.register<Copy>("copyPlugin") {
-    // :jar is disabled (see comment above) so we only depend on shadowJar.
-    dependsOn(tasks.named("shadowJar"))
-    from(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    into(layout.projectDirectory.dir("../../server/plugins"))
-    onlyIf { !isCi } // don’t run on CI
-}
-
-tasks.named<ShadowJar>("shadowJar") {
-    finalizedBy(copyPlugin)
-}
-
-subprojects {
-    plugins.withId("maven-publish") {
-        extensions.configure<PublishingExtension>("publishing") {
-            repositories {
-                maven {
-                    val isSnapshot = project.version.toString().endsWith("-SNAPSHOT")
-
-                    name = if (isSnapshot) "Snapshots" else "Releases"
-                    url = uri(
-                        if (isSnapshot)
-                            "https://repo.paradaux.io/snapshots"
-                        else
-                            "https://repo.paradaux.io/releases"
-                    )
-
-                    credentials {
-                        username = System.getenv("REPO_USER")
-                        password = System.getenv("REPO_PASS")
-                    }
-                }
-            }
-        }
-    }
-}
+// The publish repository target (snapshot/release URL + REPO_USER/REPO_PASS creds)
+// for treasury-api now lives in the io.paradaux.published-library-conventions
+// plugin, applied by treasury/treasury-api itself (global/build/0004).

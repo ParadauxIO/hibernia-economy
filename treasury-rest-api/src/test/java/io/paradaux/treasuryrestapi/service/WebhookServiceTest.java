@@ -115,6 +115,10 @@ class WebhookServiceTest {
             return 1;
         }
         @Override public int delete(long id) { return rows.remove(id) != null ? 1 : 0; }
+        @Override public int setActiveScoped(long id, java.util.UUID ownerUuid, boolean active) { return 0; }
+        @Override public int setUrlScoped(long id, java.util.UUID ownerUuid, String targetUrl) { return 0; }
+        @Override public int setSecretScoped(long id, java.util.UUID ownerUuid, String secret) { return 0; }
+        @Override public int deleteScoped(long id, java.util.UUID ownerUuid) { return 0; }
         @Override public List<SubscriptionMatch> findAccountMatches(List<Long> accountIds) { return List.of(); }
         @Override public List<SubscriptionMatch> findFirmMatches(List<Long> accountIds) { return List.of(); }
         @Override public int incrementFailures(long id) { return 0; }

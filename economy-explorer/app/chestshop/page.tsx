@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import { memo } from '@/lib/cache';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -40,7 +41,7 @@ export default async function ChestShopPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
   const offset = (sp.page - 1) * sp.limit;
   const [items, total] = sp.q
     ? await Promise.all([listItems({ search: sp.q, limit: sp.limit, offset }), countItems(sp.q)])
@@ -121,10 +122,3 @@ export default async function ChestShopPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

@@ -2,6 +2,8 @@ plugins {
     `java-library`
     `maven-publish`
     jacoco
+    id("io.paradaux.jvm-conventions") // Java 21 toolchain + UTF-8 / release=21 JavaCompile
+    id("io.paradaux.published-library-conventions") // publish target: repo.paradaux.io + REPO_USER/REPO_PASS
 }
 
 group = "io.paradaux"
@@ -9,10 +11,8 @@ version = rootProject.version
 description = "Business API"
 
 java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    }
     withSourcesJar()
+    withJavadocJar() // publish a -javadoc artifact for this documented public API (ADT no-javadoc-jar-or-compat-policy)
 }
 
 repositories {
@@ -40,10 +40,16 @@ dependencies {
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
 
+    // @Nullable on the published API surface (ADT firmplayer-null-uuid-contract-break).
+    compileOnly(libs.jetbrains.annotations)
+
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.assertj.core)
+    // FirmPlayer implements HiberniaPlayer (compileOnly above); the test
+    // instantiates it, so the interface must be on the test classpath.
+    testImplementation(libs.hibernia.framework)
 }
 
 tasks.test {

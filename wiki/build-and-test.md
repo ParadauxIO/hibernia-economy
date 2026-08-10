@@ -23,6 +23,29 @@ projects have no wrapper or settings of their own.
 
 On Windows use `.\gradlew.bat`.
 
+## Convention plugins (`build-logic/`)
+
+Shared plugin-build boilerplate lives in **`build-logic/`**, an included build wired
+in via `pluginManagement { includeBuild("build-logic") }` in the root
+`settings.gradle.kts`. It publishes two precompiled convention plugins that
+subprojects apply by id (no version):
+
+- **`io.paradaux.jvm-conventions`** — applied by all four Paper plugins
+  (treasury, business, treasury-api-plugin, chestshop): the Java toolchain (21)
+  and `JavaCompile` options (UTF-8, `--release 21`).
+- **`io.paradaux.paper-server-conventions`** — applied by the three shading
+  *server* plugins (treasury, business, treasury-api-plugin); applies
+  `jvm-conventions` transitively and adds the common repositories (with
+  `-PuseMavenLocal`-gated `mavenLocal`), `plugin.yml`/`messages` resource
+  expansion, the base test setup, the shaded-jar defaults (`archiveClassifier=""`,
+  `mergeServiceFiles`, `:jar` disabled), and the `copyPlugin` dev-server staging.
+
+Each project still owns what genuinely differs: its **shadow relocations**, its
+**dependencies**, and (treasury/business) its **jacoco coverage gate**. ChestShop
+applies only `jvm-conventions` and keeps its bespoke repos/shadow/resources —
+they diverge too far to share. `build-logic` compiles on the JDK 21 toolchain
+like everything else.
+
 ## Build the deployable artifacts
 
 | Artifact | Task | Output |
@@ -30,13 +53,28 @@ On Windows use `.\gradlew.bat`.
 | Treasury plugin | `:treasury:shadowJar` | `treasury/build/libs/` |
 | Business plugin | `:business:shadowJar` | `business/build/libs/` |
 | API-key plugin | `:treasury-api-plugin:shadowJar` | `treasury-api-plugin/build/libs/` |
-| ChestShop | `:chestshop:plugin:shadowJar` | `chestshop/plugin/build/libs/ChestShop.jar` |
+| ChestShop | `:chestshop:shadowJar` | `chestshop/build/libs/chestshop-<version>.jar` |
 | REST API | `:treasury-rest-api:bootJar` | `treasury-rest-api/build/libs/` |
 | API jars | `:treasury:treasury-api:jar`, `:business:business-api:jar` | each `build/libs/` |
 
 A successful `:treasury:shadowJar` / `:business:shadowJar` also **stages** the jar
 into `server/plugins/` (via a `copyPlugin` task) for a local dev server. Pass
 `-Pci=true` to skip that copy (CI, or to avoid disturbing a running server).
+
+### The release bundle
+
+```bash
+./gradlew release        # build every Paper plugin into a clean release/ folder
+```
+
+The root `release` task gathers the shaded jar of every deployable Paper plugin
+(`:treasury`, `:business`, `:treasury-api-plugin`, `:chestshop`) into `release/`
+at the repo root. It's a `Sync`, so the folder is **mirrored** to exactly the
+current set of jars — stale artifacts from a prior run are removed, so you always
+get a clean folder. `release/` is git-ignored (the `*.jar` rule).
+
+`treasury-rest-api` is intentionally excluded: it ships as a container image
+(`bootJar` → Docker → Harbor/Argo CD), not as a server plugin.
 
 ### Publishing an API jar
 
@@ -50,23 +88,31 @@ For consumers **outside** this repo:
 
 ## ChestShop specifics
 
-ChestShop is a **single module** (`:chestshop:plugin`) compiled against the **Paper
-1.21.11** API and shaded straight to `ChestShop.jar`. It was ported from Maven with
+ChestShop is a **single module** (`:chestshop`) compiled against the **Paper
+1.21.11** API and shaded straight to `chestshop-<version>.jar` (standardised with
+the other plugins — base name = project name, version = the pinned monorepo
+version). It was ported from Maven with
 upstream's multi-version adapter matrix — a 1.13.2-baseline core plus seven
 `Spigot_*`/`Paper_*` adapter modules and an `assemble` module — but since DC runs a
 single modern server version, the adapters were folded into the core and the extra
-modules removed.
+modules removed (including the former `:chestshop:plugin` nesting — the code now
+lives at `chestshop/src` like every other project).
 
 Things worth knowing if you touch it:
 
-- **Shading & relocations.** `:chestshop:plugin`'s shadowJar bundles a whitelisted
-  set of libraries (adventure/kyori, minedown, bStats, ORMLite, javax.persistence)
-  and relocates them under `io.paradaux.chestshop.Libs.*` / `.Metrics.*` /
-  `.Updater`. The server/soft-depend APIs are `compileOnly` and never bundled.
-- **Folded-in adapters.** The former version-adapter classes (ItemInfo tooltips,
-  non-snapshot holder/state) now live in the core under
-  `io/paradaux/chestshop/Adapter/` and are still discovered + registered at runtime
-  by the jar-scan in `ChestShop#registerVersionedAdapters`.
+- **Shading & relocations.** `:chestshop`'s shadowJar bundles HiberniaFramework,
+  Guice, Reflections and MyBatis, and relocates only `com.google.inject` /
+  `javax.inject` / `org.aopalliance` under `io.paradaux.chestshop.Libs.*`
+  (`mergeServiceFiles()`). Adventure is **provided natively by Paper** — `compileOnly`,
+  not bundled or relocated (the old bundled+relocated Adventure and the de.themoep
+  MineDown/lang libs were removed — MineDown broke against a now-sealed Adventure
+  interface). The server/soft-depend APIs are `compileOnly` and never bundled.
+- **Persistence is MyBatis over SQLite (PAR-282).** The old ORMLite layer was
+  migrated to the same service→mapper/MyBatis annotation-SQL layer the other plugins
+  use — just against the existing SQLite files (`users.db`/`items.db`), not MariaDB.
+  The SQLite JDBC driver (`org.sqlite.JDBC`) is server-provided at runtime, as it was
+  for ORMLite. There are no version-adapter modules or a runtime adapter jar-scan any
+  more — the single 1.21.11 core replaced them.
 - **Soft-depend APIs are resolved non-transitively.** Gradle's `compileOnly` pulls
   transitives that Maven's `provided` didn't, dragging in dead/incompatible
   artifacts; the build pins them off. WorldEdit is force-pinned to **7.3.9** (the

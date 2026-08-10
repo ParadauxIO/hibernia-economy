@@ -6,6 +6,7 @@ import io.paradaux.treasuryrestapi.dto.FirmResponse;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.AdminFirmService;
 import io.swagger.v3.oas.annotations.Hidden;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -52,7 +53,7 @@ public class AdminFirmController {
     @PostMapping("/{firmId}/rename")
     public ResponseEntity<FirmResponse> rename(@AuthenticationPrincipal VerifiedToken verified,
                                                @PathVariable long firmId,
-                                               @RequestBody FirmRenameRequest request) {
+                                               @Valid @RequestBody FirmRenameRequest request) {
         log.info("POST /admin/firms/{}/rename requested by keyId={}",
                 firmId, verified != null ? verified.keyId() : null);
         return ResponseEntity.ok(adminFirmService.rename(verified, firmId, request.newName()));

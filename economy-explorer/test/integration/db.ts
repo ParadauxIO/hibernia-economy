@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url';
 // Integration tests run only when RUN_INTEGRATION=1 and DB_* point at a
 // disposable MariaDB (a CI service container, or a local docker). They exercise
 // the REAL lib/sql queries against a REAL database — no query mocking.
+//
+// The schema loaded here (./schema.sql) is a DELIBERATE LIGHT stand-in, not the
+// authoritative schema (that's economy-flyway/). See the header of schema.sql for
+// the full rationale: in-repo tests stay light; the full authoritative-schema +
+// trigger harness lives outside the monorepo in ../other (economy-explorer/testing/0005).
 export const HAS_DB = process.env.RUN_INTEGRATION === '1';
 
 const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -21,6 +26,13 @@ export async function resetDb(): Promise<void> {
   });
   try {
     await conn.query('SET FOREIGN_KEY_CHECKS=0');
+    // Drop views first — DROP TABLE can't remove them (ADT-13 added the
+    // account_read_access_* views), and they'd otherwise show up in SHOW TABLES.
+    const [views] = await conn.query<mysql.RowDataPacket[]>(
+      'SELECT table_name AS n FROM information_schema.views WHERE table_schema = DATABASE()');
+    for (const v of views) {
+      await conn.query('DROP VIEW IF EXISTS `' + (v as Record<string, string>).n + '`');
+    }
     const [tables] = await conn.query<mysql.RowDataPacket[]>('SHOW TABLES');
     const col = tables.length ? Object.keys(tables[0])[0] : null;
     for (const row of tables) {
@@ -51,3 +63,7 @@ export const BEDROCK = uuid('0000000000000000000000000000BED0');
 // A government department "secretary": a read-only viewer of gov account #5
 // (City Hall) — not its owner and not a member (PAR-237).
 export const SECRETARY = uuid('00000000000000000000000000005EC0');
+// "Penny": the drift fixture (behaviour/0001). Two personal accounts (#9, #10)
+// whose balances (0.10 + 0.20) and windowed credits (0.10 + 0.20 + 0.30) sum
+// exactly in DECIMAL but NOT in a JS double — proves getPlayerTotals sums in SQL.
+export const PENNY = uuid('0000000000000000000000000000BE00');

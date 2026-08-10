@@ -34,7 +34,6 @@ public final class DiscordWebhook {
 
     private static final int COLOR_CREDIT = 0x2ECC71; // green
     private static final int COLOR_DEBIT = 0xE74C3C;  // red
-    private static final DecimalFormat MONEY = new DecimalFormat("#,##0.00");
 
     /** True if {@code uri} is a Discord channel/webhook execute URL. */
     public static boolean isDiscordWebhook(URI uri) {
@@ -80,8 +79,10 @@ public final class DiscordWebhook {
 
     /** Signed, grouped money string: {@code +$1,234.56} / {@code -$500.00}. */
     private static String money(BigDecimal amount) {
+        // DecimalFormat is not thread-safe; build a fresh instance per call rather
+        // than sharing a static one across webhook-delivery threads.
         String sign = amount.signum() < 0 ? "-" : "+";
-        return sign + "$" + MONEY.format(amount.abs());
+        return sign + "$" + new DecimalFormat("#,##0.00").format(amount.abs());
     }
 
     private static boolean notBlank(String s) {

@@ -18,6 +18,9 @@ const ADMIN_GROUP: DocsNavGroup = {
   items: [
     { title: 'Managing Explorer access', href: '/docs/admin/roles', order: 2 },
     { title: 'Operator commands', href: '/docs/admin/operator-commands', order: 3 },
+    { title: 'Government accounts', href: '/docs/admin/government-accounts', order: 4 },
+    { title: 'Webhooks', href: '/docs/admin/webhooks', order: 6 },
+    { title: 'Configuration', href: '/docs/admin/configuration', order: 10 },
   ],
 };
 

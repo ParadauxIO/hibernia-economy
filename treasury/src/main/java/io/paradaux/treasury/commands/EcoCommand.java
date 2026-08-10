@@ -8,7 +8,6 @@ import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.utils.Money;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -17,7 +16,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 
-@Command({"eco", "economy"})
+@Command({"eco"})
 @Permission("treasury.eco")
 public class EcoCommand implements CommandHandler {
 
@@ -66,9 +65,16 @@ public class EcoCommand implements CommandHandler {
             return;
         }
 
-        UUID adminUuid = sender instanceof Player p ? p.getUniqueId() : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
-        ledgerService.adminGive(target.getUniqueId(), normalized,
-                "Admin give by " + sender.getName(), adminUuid);
+        UUID adminUuid = CommandSenders.actorOf(sender);
+        try {
+            ledgerService.adminGive(target.getUniqueId(), normalized,
+                    "Admin give by " + sender.getName(), adminUuid);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            // Mirror /eco take's defensive handling: surface a clean message instead
+            // of leaking a raw ledger exception if the give can't be applied (ADT-55).
+            message.send(sender, "treasury.general.invalid-amount");
+            return;
+        }
 
         String formattedAmount = accountService.formatAmount(normalized);
         message.send(sender, "treasury.eco.give.success",
@@ -106,7 +112,7 @@ public class EcoCommand implements CommandHandler {
             return;
         }
 
-        UUID adminUuid = sender instanceof Player p ? p.getUniqueId() : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
+        UUID adminUuid = CommandSenders.actorOf(sender);
         try {
             ledgerService.adminTake(target.getUniqueId(), normalized,
                     "Admin take by " + sender.getName(), adminUuid);
@@ -156,7 +162,7 @@ public class EcoCommand implements CommandHandler {
             return;
         }
 
-        UUID adminUuid = sender instanceof Player p ? p.getUniqueId() : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
+        UUID adminUuid = CommandSenders.actorOf(sender);
         ledgerService.adminSet(target.getUniqueId(), normalized,
                 "Admin set balance by " + sender.getName(), adminUuid);
 
@@ -181,10 +187,10 @@ public class EcoCommand implements CommandHandler {
             return;
         }
 
-        UUID adminUuid = sender instanceof Player p ? p.getUniqueId() : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
+        UUID adminUuid = CommandSenders.actorOf(sender);
         ledgerService.adminReset(target.getUniqueId(), adminUuid);
 
-        BigDecimal startingBalance = Money.normalize(BigDecimal.valueOf(economyConfig.getStartingBalance()));
+        BigDecimal startingBalance = Money.normalize(economyConfig.getStartingBalance());
         String formattedAmount = accountService.formatAmount(startingBalance);
         message.send(sender, "treasury.eco.reset.success",
                 "target", target.getName(), "amount", formattedAmount);

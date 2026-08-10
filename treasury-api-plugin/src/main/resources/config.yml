@@ -1,12 +1,21 @@
+# Secrets (database.password, keycloak.client-secret) can be supplied via env
+# vars instead of plaintext here — env takes precedence: TREASURYAPI_DB_HOST,
+# _DB_PORT, _DB_NAME, _DB_USERNAME, _DB_PASSWORD, _KEYCLOAK_CLIENT_SECRET. If you
+# keep them in this file, chmod 600 it. The plugin refuses to start while the DB
+# password is the default 'password'.
 database:
   host: localhost
   port: 3306
   database: treasury
   username: root
   password: password
-  table-prefix: treasury_
 
 api:
+  # Prefer random key material over a passphrase: set this to "base64:<value>"
+  # where <value> is `openssl rand -base64 48`. Must be byte-identical to the
+  # treasury-rest-api JWT_SECRET. Rotating it invalidates all live API tokens
+  # (users reissue in-game). A plain passphrase still works via a legacy SHA-256
+  # KDF but logs a warning — rotate to base64 key material. (ADT-23)
   jwt-secret: change-me-please-use-a-long-random-secret-key
 
 # Keycloak Admin API for the in-game account-linking flow (/treasuryapi ui link).

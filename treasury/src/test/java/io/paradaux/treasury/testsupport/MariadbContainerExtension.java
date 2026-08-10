@@ -136,7 +136,6 @@ public final class MariadbContainerExtension {
             st.execute("TRUNCATE TABLE economy_players");
             st.execute("TRUNCATE TABLE government_fines");
             st.execute("TRUNCATE TABLE account_redirects");
-            st.execute("TRUNCATE TABLE player_login_times");
             st.execute("TRUNCATE TABLE account_group_access");
             st.execute("TRUNCATE TABLE account_access");
             st.execute("TRUNCATE TABLE account_balances_mat");

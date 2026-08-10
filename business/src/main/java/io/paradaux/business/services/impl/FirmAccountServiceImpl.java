@@ -19,7 +19,12 @@ import io.paradaux.treasury.model.economy.AccountType;
 import org.mybatis.guice.transactional.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Singleton
 public class FirmAccountServiceImpl implements FirmAccountService {
@@ -30,6 +35,17 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     private final FirmStaffMapper staff;
     private final FirmRoleMapper roles;
     private final FirmService firmService;
+
+    /**
+     * Per-firm locks serialising member/authorizer reconciliation. The sync is a
+     * read-current → diff → mutate against Treasury with no DB transaction
+     * spanning it, so two overlapping staff/role mutations on the same firm could
+     * interleave and leave a qualifying employee removed (or a removed one
+     * retained) — i.e. wrong access to firm money (ADT-12). Holding one lock per
+     * firmId for the duration of a reconciliation makes the read-diff-mutate
+     * atomic with respect to other reconciliations of the same firm.
+     */
+    private final ConcurrentMap<Integer, ReentrantLock> firmSyncLocks = new ConcurrentHashMap<>();
 
     @Inject
     public FirmAccountServiceImpl(
@@ -56,7 +72,9 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         }
 
         Firm firm = firms.getFirmById(firmId);
-        if (firm == null) {
+        // getFirmById is archived-inclusive; reject archived firms so a createAccount
+        // racing a disband can't mint an orphan account against an archived firm.
+        if (firm == null || Boolean.TRUE.equals(firm.getArchived())) {
             throw new BadCommandException("Firm not found");
         }
 
@@ -64,37 +82,54 @@ public class FirmAccountServiceImpl implements FirmAccountService {
             throw new NoPermissionException("Only the proprietor can create accounts");
         }
 
-        // Reject duplicate display names within the same firm. Without this,
-        // a proprietor can spam-create N accounts named "Savings", each backed
-        // by a distinct Treasury BUSINESS account_id — making subsequent
-        // /business account deposit / withdraw by name ambiguous and the
-        // member-sync churn unbounded.
-        for (FirmAccount existing : firmAccounts.listAccountsByFirm(firmId)) {
-            Account a = treasury.getAccountById(existing.getAccountId());
-            if (a != null && a.getDisplayName() != null
-                    && a.getDisplayName().equalsIgnoreCase(accountName)) {
-                throw new BadCommandException("An account named '" + accountName
-                        + "' already exists for this firm.");
+        // Serialise the duplicate-name check + create per firm so two concurrent
+        // creates of the same name can't both pass the check and mint two accounts
+        // (ADT-93). Reuses the per-firm reconciliation lock; it's reentrant, so the
+        // syncAccountMembers call below (which re-acquires it) is safe.
+        ReentrantLock lock = firmSyncLocks.computeIfAbsent(firmId, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            // Reject duplicate display names within the same firm. Without this,
+            // a proprietor can spam-create N accounts named "Savings", each backed
+            // by a distinct Treasury BUSINESS account_id — making subsequent
+            // /business account deposit / withdraw by name ambiguous and the
+            // member-sync churn unbounded. One batch read instead of N (ADT-36).
+            List<Integer> existingIds = firmAccounts.listAccountsByFirm(firmId).stream()
+                    .map(FirmAccount::getAccountId)
+                    .toList();
+            for (Account a : treasury.getAccountsByIds(existingIds).values()) {
+                if (a.getDisplayName() != null
+                        && a.getDisplayName().equalsIgnoreCase(accountName)) {
+                    throw new BadCommandException("An account named '" + accountName
+                            + "' already exists for this firm.");
+                }
             }
+
+            // Create Treasury account
+            Account account = treasury.createAccount(AccountType.BUSINESS, actorId, accountName);
+
+            // Register it with the firm
+            firmAccounts.insertFirmAccount(firmId, account.getAccountId());
+
+            // Sync all current staff
+            syncAccountMembers(firmId, account.getAccountId());
+
+            return account;
+        } finally {
+            lock.unlock();
         }
-
-        // Create Treasury account
-        Account account = treasury.createAccount(AccountType.BUSINESS, actorId, accountName);
-
-        // Register it with the firm
-        firmAccounts.insertFirmAccount(firmId, account.getAccountId());
-
-        // Sync all current staff
-        syncAccountMembers(firmId, account.getAccountId());
-
-        return account;
     }
 
     @Override
     public List<Account> listAccounts(Integer firmId) {
-        List<FirmAccount> firmAccountList = firmAccounts.listAccountsByFirm(firmId);
-        return firmAccountList.stream()
-                .map(fa -> treasury.getAccountById(fa.getAccountId()))
+        // One batch read instead of one getAccountById per linked account (ADT-36).
+        List<Integer> accountIds = firmAccounts.listAccountsByFirm(firmId).stream()
+                .map(FirmAccount::getAccountId)
+                .toList();
+        Map<Integer, Account> byId = treasury.getAccountsByIds(accountIds);
+        return accountIds.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -156,6 +191,18 @@ public class FirmAccountServiceImpl implements FirmAccountService {
 
     @Override
     public void syncAccountMembers(Integer firmId, Integer accountId) {
+        // Serialise reconciliation per firm so concurrent staff/role mutations
+        // can't interleave their read-diff-mutate against Treasury (ADT-12).
+        ReentrantLock lock = firmSyncLocks.computeIfAbsent(firmId, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            reconcileAccountMembers(firmId, accountId);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void reconcileAccountMembers(Integer firmId, Integer accountId) {
         Firm firm = firms.getFirmById(firmId);
         if (firm == null) {
             throw new BadCommandException("Firm not found");
@@ -250,36 +297,50 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     public void addMemberToAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId) {
         validateAccountAccess(firmId, accountId, actorId);
         treasury.addMember(accountId, memberUuid, actorId);
+        // Access is role-derived (PAR-77): reconcile immediately so the account
+        // always reflects firm roles and never drifts until a manual resync.
+        syncAccountMembers(firmId, accountId);
     }
 
     @Override
     public void removeMemberFromAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId) {
         validateAccountAccess(firmId, accountId, actorId);
         Firm firm = firms.getFirmById(firmId);
+        if (firm == null) { // ADT-95: firm could vanish between the access check and this re-fetch
+            throw new BadCommandException("Firm not found");
+        }
 
         if (firm.getProprietorUuid().equals(memberUuid.toString())) {
             throw new BadCommandException("Cannot remove the proprietor from account membership");
         }
 
         treasury.removeMember(accountId, memberUuid);
+        syncAccountMembers(firmId, accountId);
     }
 
     @Override
     public void addAuthorizerToAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId) {
         validateAccountAccess(firmId, accountId, actorId);
         treasury.addAuthorizer(accountId, authorizerUuid, actorId);
+        // Access is role-derived (PAR-77): reconcile immediately so the account
+        // always reflects firm roles and never drifts until a manual resync.
+        syncAccountMembers(firmId, accountId);
     }
 
     @Override
     public void removeAuthorizerFromAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId) {
         validateAccountAccess(firmId, accountId, actorId);
         Firm firm = firms.getFirmById(firmId);
+        if (firm == null) { // ADT-95: firm could vanish between the access check and this re-fetch
+            throw new BadCommandException("Firm not found");
+        }
 
         if (firm.getProprietorUuid().equals(authorizerUuid.toString())) {
             throw new BadCommandException("Cannot remove the proprietor from account authorization");
         }
 
         treasury.removeAuthorizer(accountId, authorizerUuid);
+        syncAccountMembers(firmId, accountId);
     }
 
     @Override

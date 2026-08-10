@@ -48,8 +48,8 @@ export async function getRecentFines(days: number, limit: number): Promise<FineR
            fp_i.current_name AS issuedByName, gf.issued_at AS issuedAt,
            gf.revoked
     FROM government_fines gf
-    LEFT JOIN firm_players fp_p ON fp_p.player_uuid_bin = gf.player_uuid_bin
-    LEFT JOIN firm_players fp_i ON fp_i.player_uuid_bin = gf.issued_by_uuid_bin
+    LEFT JOIN economy_players fp_p ON fp_p.player_uuid_bin = gf.player_uuid_bin
+    LEFT JOIN economy_players fp_i ON fp_i.player_uuid_bin = gf.issued_by_uuid_bin
     LEFT JOIN accounts a ON a.account_id = gf.gov_account_id
     WHERE gf.issued_at >= NOW() - INTERVAL ${days} DAY
     ORDER BY gf.issued_at DESC
@@ -127,7 +127,7 @@ export async function getGovernmentAccounts(): Promise<GovAccountRow[]> {
            a.account_type, COALESCE(abm.balance, 0.00) AS balance
     FROM accounts a
     LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE a.is_archived = 0 AND a.account_type = 'GOVERNMENT'
     ORDER BY abm.balance DESC
   `.execute(db);

@@ -29,5 +29,9 @@ public record ChestShopShopRecord(
         BigDecimal sellPrice,       // customer SELLS to shop; null if not offered
         int batchQty,
         // live stock of the item in the chest; null = admin/infinite or unknown
-        Integer currentStock
+        Integer currentStock,
+        // remaining free space for the item (units that still fit); null = admin/infinite or unknown
+        Integer estimatedCapacity,
+        // stable world identity alongside the name key; null if the caller didn't resolve it
+        UUID worldUuid
 ) {}

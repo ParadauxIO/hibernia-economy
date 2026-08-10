@@ -13,6 +13,9 @@ export interface ViewerCtx {
   anon: boolean;
   loggedIn: boolean;
   isAdmin: boolean;
+  // Holds the read-only financial-oversight (viewer) capability. admin/government
+  // imply it; a plain player can also hold it via a group.
+  isViewer: boolean;
   role: 'admin' | 'government' | 'player' | null;
   minecraftName: string | null;
   loading: boolean;
@@ -22,6 +25,7 @@ const ANON: ViewerCtx = {
   anon: true,
   loggedIn: false,
   isAdmin: false,
+  isViewer: false,
   role: null,
   minecraftName: null,
   loading: true,

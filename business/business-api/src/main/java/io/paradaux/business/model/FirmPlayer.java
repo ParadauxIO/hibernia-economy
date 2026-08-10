@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -20,7 +21,25 @@ public class FirmPlayer implements HiberniaPlayer {
     private LocalDateTime firstSeen; // TIMESTAMP
     private LocalDateTime lastSeen;  // TIMESTAMP
 
+    /**
+     * @return the player's UUID, or {@code null} when this instance carries no UUID
+     *         (default-constructed) or the stored value is not a valid UUID. The
+     *         {@code @Nullable} makes the (intentional, ADT-35) deviation from the
+     *         non-null {@link HiberniaPlayer#getUniqueId()} contract visible to
+     *         consumers and static analysis (ADT firmplayer-null-uuid-contract-break).
+     */
+    @Nullable
+    @Override
     public UUID getUniqueId() {
-        return UUID.fromString(playerUuid);
+        if (playerUuid == null || playerUuid.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(playerUuid);
+        } catch (IllegalArgumentException malformed) {
+            // A getter must not throw on a malformed stored value; return null per
+            // the documented nullable contract rather than surprising callers.
+            return null;
+        }
     }
 }

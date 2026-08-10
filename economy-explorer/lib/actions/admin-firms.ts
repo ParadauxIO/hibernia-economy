@@ -1,15 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
-import { ForbiddenError } from '@/lib/errors';
+import { getViewer } from '@/lib/auth/viewer';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 import { auditView } from '@/lib/audit';
 import { disbandFirm, renameFirm, updateFirmDetails, type DisbandResult, type FirmResult } from '@/lib/treasury';
 import { findFirmById } from '@/lib/sql/firm';
-
-function requireAdmin(viewer: Viewer): asserts viewer is Extract<Viewer, { anon: false }> {
-  if (viewer.anon || viewer.role !== 'admin') throw new ForbiddenError('Admin only.');
-}
 
 /**
  * Disband a firm via the ledger-authoritative treasury-rest-api admin endpoint.

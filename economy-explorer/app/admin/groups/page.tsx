@@ -5,6 +5,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { listGroups } from '@/lib/services/group';
+import { normalizeCapability } from '@/lib/auth/capabilities';
 import { fmtN } from '@/lib/format';
 import { CreateGroupForm } from './create-group-form';
 import { DeleteGroupButton } from './delete-group-button';
@@ -59,7 +60,7 @@ export default async function AdminGroupsPage() {
                   <td>
                     {g.capabilities.length === 0
                       ? <span className="muted">—</span>
-                      : g.capabilities.map((c) => <span key={c} className="badge" style={{ marginRight: 4 }}>{c}</span>)}
+                      : g.capabilities.map((c) => <span key={c} className="badge" style={{ marginRight: 4 }}>{normalizeCapability(c) ?? c}</span>)}
                   </td>
                   <td>{g.luckpermsNode ? <span className="mono">{g.luckpermsNode}</span> : <span className="muted">manual only</span>}</td>
                   <td className="amount mono">

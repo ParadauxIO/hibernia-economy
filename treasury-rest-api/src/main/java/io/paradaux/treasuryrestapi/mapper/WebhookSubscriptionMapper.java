@@ -10,6 +10,8 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.util.UUID;
+
 import java.util.List;
 
 @Mapper
@@ -49,6 +51,32 @@ public interface WebhookSubscriptionMapper {
 
     @Delete("DELETE FROM webhook_subscription WHERE subscription_id = #{id}")
     int delete(@Param("id") long id);
+
+    // ── ADT-14: owner-optional admin mutators (replace the explorer's direct
+    //    owner-scoped writes). When ownerUuid is non-null the row must also match
+    //    the owner (self-service); when null it's a fleet-wide admin op. ──
+
+    @Update("<script>UPDATE webhook_subscription "
+            + "SET active = #{active}, "
+            + "    consecutive_failures = IF(#{active}, 0, consecutive_failures), "
+            + "    disabled_at = IF(#{active}, NULL, disabled_at) "
+            + "WHERE subscription_id = #{id}"
+            + "<if test='ownerUuid != null'> AND owner_uuid_bin = #{ownerUuid}</if></script>")
+    int setActiveScoped(@Param("id") long id, @Param("ownerUuid") UUID ownerUuid, @Param("active") boolean active);
+
+    @Update("<script>UPDATE webhook_subscription SET target_url = #{targetUrl} "
+            + "WHERE subscription_id = #{id}"
+            + "<if test='ownerUuid != null'> AND owner_uuid_bin = #{ownerUuid}</if></script>")
+    int setUrlScoped(@Param("id") long id, @Param("ownerUuid") UUID ownerUuid, @Param("targetUrl") String targetUrl);
+
+    @Update("<script>UPDATE webhook_subscription SET secret = #{secret} "
+            + "WHERE subscription_id = #{id}"
+            + "<if test='ownerUuid != null'> AND owner_uuid_bin = #{ownerUuid}</if></script>")
+    int setSecretScoped(@Param("id") long id, @Param("ownerUuid") UUID ownerUuid, @Param("secret") String secret);
+
+    @Delete("<script>DELETE FROM webhook_subscription WHERE subscription_id = #{id}"
+            + "<if test='ownerUuid != null'> AND owner_uuid_bin = #{ownerUuid}</if></script>")
+    int deleteScoped(@Param("id") long id, @Param("ownerUuid") UUID ownerUuid);
 
     // ── Dispatcher: match new transactions' accounts to active subscriptions ──
 

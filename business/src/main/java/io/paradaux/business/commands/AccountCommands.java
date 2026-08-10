@@ -7,25 +7,22 @@ import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmPlayer;
-import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmTransactionService;
-import io.paradaux.business.utils.resolvers.FirmName;
-import io.paradaux.business.utils.resolvers.OnlineFirmName;
+import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.OnlineFirmName;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
 import io.paradaux.treasury.model.economy.TransactionEntry;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Singleton
@@ -33,8 +30,6 @@ import java.util.List;
 public class AccountCommands implements CommandHandler {
 
     private static final int TX_PAGE_SIZE = 10;
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("MM/dd HH:mm")
-            .withZone(ZoneId.systemDefault());
 
     private final FirmAccountService accounts;
     private final FirmService firms;
@@ -43,11 +38,12 @@ public class AccountCommands implements CommandHandler {
     private final TreasuryApi treasury;
     private final Message message;
     private final FirmNotificationService notifications;
+    private final FirmPlayerService firmPlayers;
 
     @Inject
     public AccountCommands(FirmAccountService accounts, FirmService firms, FirmStaffService staff,
                            FirmTransactionService audit, TreasuryApi treasury, Message message,
-                           FirmNotificationService notifications) {
+                           FirmNotificationService notifications, FirmPlayerService firmPlayers) {
         this.accounts = accounts;
         this.firms = firms;
         this.staff = staff;
@@ -55,6 +51,20 @@ public class AccountCommands implements CommandHandler {
         this.treasury = treasury;
         this.message = message;
         this.notifications = notifications;
+        this.firmPlayers = firmPlayers;
+    }
+
+    /**
+     * Resolve a player's display name from the DB-backed FirmPlayer cache rather
+     * than {@code Bukkit.getOfflinePlayer(uuid).getName()}, which blocks on the
+     * Mojang API / usercache off the main thread and can return null (ADT-70).
+     * Falls back to the raw UUID if the player isn't in the cache.
+     */
+    private String resolveName(java.util.UUID uuid) {
+        return firmPlayers.findByUuid(uuid)
+                .map(FirmPlayer::getCurrentName)
+                .filter(n -> n != null && !n.isBlank())
+                .orElse(uuid.toString());
     }
 
     @Route("account create <firm> <name>")
@@ -265,7 +275,7 @@ public class AccountCommands implements CommandHandler {
                 "count", members.size());
 
         for (AccountMember member : members) {
-            String playerName = Bukkit.getOfflinePlayer(member.getMemberUuid()).getName();
+            String playerName = resolveName(member.getMemberUuid());
             message.send(sender, "business.account.members.entry",
                     "player", playerName,
                     "uuid", member.getMemberUuid());
@@ -299,7 +309,7 @@ public class AccountCommands implements CommandHandler {
                 "count", authorizers.size());
 
         for (AccountMember authorizer : authorizers) {
-            String playerName = Bukkit.getOfflinePlayer(authorizer.getMemberUuid()).getName();
+            String playerName = resolveName(authorizer.getMemberUuid());
             message.send(sender, "business.account.authorizers.entry",
                     "player", playerName,
                     "uuid", authorizer.getMemberUuid());
@@ -350,18 +360,12 @@ public class AccountCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.depositToAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.account.deposit.success",
-                    "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-personal");
-        } catch (SecurityException e) {
-            message.send(sender, "business.general.no-permission");
-        }
+        // The service throws framework semantic exceptions that the ErrorRenderer maps
+        // to the player's locale via each exception's key (plugin-architecture/0002).
+        audit.depositToAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.account.deposit.success",
+                "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
     }
 
     // ---- ACCOUNT WITHDRAW -------------------------------------------------------
@@ -384,18 +388,10 @@ public class AccountCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.withdrawFromAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.account.withdraw.success",
-                    "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-business");
-        } catch (SecurityException e) {
-            message.send(sender, "business.finance.not-authorizer");
-        }
+        audit.withdrawFromAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.account.withdraw.success",
+                "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
     }
 
     // ---- ACCOUNT PAY: PLAYER -> BUSINESS ----------------------------------------
@@ -413,16 +409,10 @@ public class AccountCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.payIntoAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.account.pay.into.success",
-                    "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-personal");
-        }
+        audit.payIntoAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.account.pay.into.success",
+                "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
     }
 
     // ---- ACCOUNT PAY: BUSINESS -> PLAYER ----------------------------------------
@@ -446,19 +436,11 @@ public class AccountCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.payPlayerFromAccount(firm.getFirmId(), accountId, target.getUniqueId(), sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.account.pay.player.success",
-                    "firm", firm.getDisplayName(), "accountId", accountId,
-                    "player", target.getCurrentName(), "amount", formatted);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-business");
-        } catch (SecurityException e) {
-            message.send(sender, "business.finance.not-authorizer");
-        }
+        audit.payPlayerFromAccount(firm.getFirmId(), accountId, target.getUniqueId(), sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.account.pay.player.success",
+                "firm", firm.getDisplayName(), "accountId", accountId,
+                "player", target.getCurrentName(), "amount", formatted);
     }
 
     // ---- ACCOUNT PAY: BUSINESS -> BUSINESS --------------------------------------
@@ -494,21 +476,13 @@ public class AccountCommands implements CommandHandler {
             return;
         }
 
-        try {
-            audit.payFirmFromAccount(firm.getFirmId(), accountId, targetF.getFirmId(), sender.getUniqueId(), amount);
-            String formatted = treasury.formatAmount(amount);
-            message.send(sender, "business.account.pay.business.success",
-                    "firm", firm.getDisplayName(), "accountId", accountId,
-                    "target", targetF.getDisplayName(), "amount", formatted);
-            notifications.notifyFirmExcept(targetF.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                    "firm", targetF.getDisplayName(), "amount", formatted, "sender", firm.getDisplayName());
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "business.finance.invalid-amount");
-        } catch (IllegalStateException e) {
-            message.send(sender, "business.finance.insufficient-business");
-        } catch (SecurityException e) {
-            message.send(sender, "business.finance.not-authorizer");
-        }
+        audit.payFirmFromAccount(firm.getFirmId(), accountId, targetF.getFirmId(), sender.getUniqueId(), amount);
+        String formatted = treasury.formatAmount(amount);
+        message.send(sender, "business.account.pay.business.success",
+                "firm", firm.getDisplayName(), "accountId", accountId,
+                "target", targetF.getDisplayName(), "amount", formatted);
+        notifications.notifyFirmExcept(targetF.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
+                "firm", targetF.getDisplayName(), "amount", formatted, "sender", firm.getDisplayName());
     }
 
     // ---- ACCOUNT TRANSACTIONS ---------------------------------------------------
@@ -552,14 +526,8 @@ public class AccountCommands implements CommandHandler {
                 "firm", firm.getDisplayName(), "accountId", accountId,
                 "page", txPage.pageNumber(), "totalPages", txPage.totalPages());
 
-        for (TransactionEntry entry : txPage.items()) {
-            String sign = entry.getAmount().signum() >= 0 ? "+" : "";
-            String formatted = sign + treasury.formatAmount(entry.getAmount());
-            String time = TIME_FMT.format(entry.getSettlementTime());
-            String msg = entry.getMessage() != null ? entry.getMessage() : "";
-            message.send(sender, "business.account.transactions.line",
-                    "time", time, "amount", formatted, "message", msg);
-        }
+        CommandSupport.renderTransactionLines(message, treasury, sender, txPage,
+                "business.account.transactions.line");
 
         if (txPage.hasMore()) {
             message.send(sender, "business.account.transactions.next-page",
@@ -569,8 +537,6 @@ public class AccountCommands implements CommandHandler {
     }
 
     private boolean canAccessFirmFinances(Firm firm, Player player) {
-        return firms.isProprietor(firm.getFirmId(), player.getUniqueId())
-                || staff.hasPermission(firm.getFirmId(), player.getUniqueId(), RolePermission.ADMIN)
-                || staff.hasPermission(firm.getFirmId(), player.getUniqueId(), RolePermission.FINANCIAL);
+        return CommandSupport.canAccessFirmFinances(firms, staff, firm.getFirmId(), player.getUniqueId());
     }
 }

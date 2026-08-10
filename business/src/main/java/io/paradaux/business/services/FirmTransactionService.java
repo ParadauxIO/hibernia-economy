@@ -1,5 +1,6 @@
 package io.paradaux.business.services;
 
+import io.paradaux.business.model.FirmBalanceEntry;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.TransactionEntry;
 
@@ -11,6 +12,16 @@ public interface FirmTransactionService {
     BigDecimal getFirmBalance(Integer firmId);
 
     String getFormattedBalance(Integer firmId);
+
+    /**
+     * Leaderboard of active firms ranked by the collective balance summed across
+     * every treasury account each firm owns (descending; ties broken by name).
+     * Backs {@code /firm baltop}. {@code page}/{@code pageSize} below 1 are clamped.
+     */
+    Page<FirmBalanceEntry> getFirmBalanceTop(int page, int pageSize);
+
+    /** Formats a raw amount using Treasury's configured currency formatting. */
+    String formatAmount(BigDecimal amount);
 
     Page<TransactionEntry> getTransactions(Integer firmId, int page, int pageSize);
 

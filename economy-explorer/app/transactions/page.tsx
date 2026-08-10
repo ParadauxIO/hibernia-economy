@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -54,7 +55,7 @@ export default async function TransactionsPage({
   }
 
   const raw = await searchParams;
-  const sp = SP_SCHEMA.safeParse(flat(raw)).data ?? SP_SCHEMA.parse({});
+  const sp = SP_SCHEMA.safeParse(flattenSearchParams(raw)).data ?? SP_SCHEMA.parse({});
   const dir = sp.dir.toUpperCase() as SortDir;
 
   // Privileged read: admin browsing the whole-economy transaction firehose.
@@ -178,12 +179,3 @@ export default async function TransactionsPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      if (v.length > 0 && v[0] !== undefined) out[k] = v[0];
-    } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { HAS_DB, resetDb, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY } from './db';
+import { HAS_DB, resetDb, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
 import { accountLabel, looksLikeUuid } from '@/lib/format';
 import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount } from '@/lib/sql/ledger';
 import { getPersonalBalances, getBalanceDistribution } from '@/lib/sql/stats';
 import { isFirmMember, hasFirmFinancialAccess, getAccountFirmId, getFirmStats, findFirmByDisplayName } from '@/lib/sql/firm';
 import { listFinanceFirms } from '@/lib/sql/webhook';
 import { findCapabilities, findPlayerUuidByName } from '@/lib/sql/group';
-import { findAccountsForPlayer } from '@/lib/sql/me';
+import { findAccountsForPlayer, getPlayerTotals } from '@/lib/sql/me';
 import { findIdentityBySub } from '@/lib/sql/identity';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { listItemSales } from '@/lib/sql/market';
@@ -36,7 +36,7 @@ d('account name resolution', () => {
     expect(accountLabel(a!)).toBe('Acme Corp');
   });
 
-  it('falls back to a short UUID for a player not in firm_players (Dave)', async () => {
+  it('falls back to a short UUID for a player not in economy_players (Dave)', async () => {
     const a = await findAccount(7);
     expect(a!.owner_name).toBeNull();
     expect(accountLabel(a!)).toMatch(/…$/); // shortened UUID
@@ -131,6 +131,19 @@ d('firm financial-access tiers', () => {
     const acme = await findFirmByDisplayName('Acme Corp');
     expect(acme?.exempt).toBe(false);
   });
+
+  it('resolves the proprietor name, falling back to null when uncached (PAR-208)', async () => {
+    // Acme Corp's proprietor (Alice) is in economy_players → name resolves.
+    const acme = await findFirmByDisplayName('Acme Corp');
+    expect(acme?.proprietor_uuid).toBe('00000000-0000-0000-0000-00000000a1ce');
+    expect(acme?.proprietor_name).toBe('Alice');
+
+    // TaxFree Co's proprietor (DAVE) is absent from economy_players → name is null
+    // (the page renders the short UUID via <Player/>).
+    const taxFree = await findFirmByDisplayName('TaxFree Co');
+    expect(taxFree?.proprietor_uuid).toBe('00000000-0000-0000-0000-00000000da7e');
+    expect(taxFree?.proprietor_name).toBeNull();
+  });
 });
 
 d('money flow counts only clean cross-type transfers', () => {
@@ -143,20 +156,28 @@ d('money flow counts only clean cross-type transfers', () => {
 });
 
 d('group capabilities', () => {
-  it('returns capabilities a player has via group membership', async () => {
-    // Bob is a member of the "Auditors" group (grants staff.audit).
-    expect(await findCapabilities(BOB)).toContain('staff.audit');
+  it('returns the viewer capability for a manual group member', async () => {
+    // Bob is a manual member of the "Viewers" group (grants viewer).
+    expect(await findCapabilities(BOB)).toContain('viewer');
+  });
+
+  it('returns the viewer capability for a LuckPerms-synced member (the recon-cron path)', async () => {
+    // Carol holds her membership via source='luckperms' — i.e. the reconciliation
+    // cron synced her from the group's node. The same capability must resolve, so
+    // a linked player gets the viewer role purely from their in-game group.
+    expect(await findCapabilities(CAROL)).toContain('viewer');
   });
 
   it('returns nothing for a player in no groups', async () => {
-    expect(await findCapabilities(CAROL)).toEqual([]);
+    // The government-account secretary has account_access but no explorer_group.
+    expect(await findCapabilities(SECRETARY)).toEqual([]);
   });
 });
 
 d('audit logging records privileged access', () => {
   it('persists an audit row that listAudit reads back', async () => {
     await audit({
-      viewer: { anon: false, keycloakSub: 'e2e-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['admin', 'staff.audit', 'government'] },
+      viewer: { anon: false, keycloakSub: 'e2e-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['admin', 'viewer', 'government'] },
       method: 'GET',
       path: '/transactions',
       targetType: 'global',
@@ -222,5 +243,44 @@ d('government account viewer access (PAR-237)', () => {
 
   it('denies a player with no member/authorizer/viewer row', async () => {
     expect(await canReadAccount(5, DAVE)).toBe(false);
+  });
+
+  // ADT-13: the "my accounts" list must agree with canReadAccount. Previously it
+  // filtered MEMBER/AUTHORIZER, so a viewer could open the account page but the
+  // account never showed in their own list. Both now share account_read_access_web.
+  it('lists the viewer-granted department account under "my accounts" (ADT-13)', async () => {
+    const ids = (await findAccountsForPlayer(SECRETARY)).map((a) => a.account_id);
+    expect(ids).toContain(5);
+  });
+});
+
+// behaviour/0001: the dashboard KPI rollups (total balance, income, spend, net)
+// must be summed in SQL and carried as exact DECIMAL strings, never folded through
+// a JS double. Penny's fixture (account #9) is chosen so the windowed credit and
+// debit totals do NOT round-trip through IEEE-754: 0.10+0.20+0.30 and
+// 0.15+0.25+0.20 both reduce to 0.6000000000000001 in a double, but the exact
+// DECIMAL sum is 0.60. If getPlayerTotals summed in JS the strings below would
+// carry that long tail; SQL SUM gives the exact ledger figure.
+d('player KPI rollups sum money in SQL, exact to the cent (behaviour/0001)', () => {
+  it('returns exact DECIMAL strings, not double-drifted numbers', async () => {
+    const ids = (await findAccountsForPlayer(PENNY)).map((a) => a.account_id).sort((a, b) => a - b);
+    expect(ids).toEqual([9]);
+
+    const t = await getPlayerTotals(ids, 90);
+    // Exact strings — the very values a JS-double reduce would corrupt.
+    expect(t.totalBalance).toBe('0.00'); // Penny's wallet nets to zero
+    expect(t.income).toBe('0.60');       // 0.10 + 0.20 + 0.30 (double → 0.6000000000000001)
+    expect(t.spend).toBe('0.60');        // 0.15 + 0.25 + 0.20 (double → 0.6000000000000001)
+    expect(t.net).toBe('0.00');          // SUM(amount) over the window
+
+    // Guard: the JS-double reduce the component used to do drifts off the exact
+    // string (that IS the finding). The SQL path is unaffected.
+    expect(String([0.1, 0.2, 0.3].reduce((s, x) => s + x, 0))).not.toBe('0.6'); // 0.6000000000000001
+    expect(t.income).toBe('0.60');
+  });
+
+  it('is empty-safe for a player with no accounts', async () => {
+    const t = await getPlayerTotals([], 90);
+    expect(t).toEqual({ totalBalance: '0.00', income: '0.00', spend: '0.00', net: '0.00' });
   });
 });

@@ -9,6 +9,7 @@ import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmBalanceTaxService;
 import io.paradaux.business.services.FirmPropertyService;
 import io.paradaux.business.services.FirmService;
+import io.paradaux.business.services.FirmTransactionService;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.event.TaxCycleEvent;
 import io.paradaux.treasury.model.economy.Account;
@@ -38,6 +39,7 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
     private final FirmService firmService;
     private final FirmPropertyService firmPropertyService;
     private final FirmAccountService firmAccountService;
+    private final FirmTransactionService firmTransactionService;
     private final TreasuryApi treasuryApi;
     private final Logger logger;
 
@@ -46,14 +48,26 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
                                      FirmService firmService,
                                      FirmPropertyService firmPropertyService,
                                      FirmAccountService firmAccountService,
+                                     FirmTransactionService firmTransactionService,
                                      TreasuryApi treasuryApi,
                                      Business plugin) {
         this.config = config;
         this.firmService = firmService;
         this.firmPropertyService = firmPropertyService;
         this.firmAccountService = firmAccountService;
+        this.firmTransactionService = firmTransactionService;
         this.treasuryApi = treasuryApi;
         this.logger = plugin.getLogger();
+    }
+
+    @Override
+    public WeeklyTaxEstimate estimateWeeklyTax(Integer firmId) {
+        BigDecimal totalBalance = firmTransactionService.getAggregateBalance(firmId);
+        BigDecimal rate = config.getWeeklyRate(totalBalance);
+        // Same 2dp HALF_UP rounding the live collection path settles at, so the
+        // estimate matches what would actually be collected (plugin-architecture/0006).
+        BigDecimal estimatedTax = totalBalance.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+        return new WeeklyTaxEstimate(totalBalance, rate, estimatedTax);
     }
 
     @Override
@@ -108,10 +122,12 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
         List<Integer> accountIds = firmAccountService.listAccountIds(firm.getFirmId());
         if (accountIds.isEmpty()) return List.of();
 
+        // One batch balance read per firm instead of one IPC per account (ADT-36).
+        Map<Integer, BigDecimal> balancesById = treasuryApi.getBalancesByIds(accountIds);
         Map<Integer, BigDecimal> accountBalances = new LinkedHashMap<>();
         BigDecimal totalBalance = BigDecimal.ZERO;
         for (Integer accountId : accountIds) {
-            BigDecimal balance = treasuryApi.getBalanceByAccountId(accountId);
+            BigDecimal balance = balancesById.getOrDefault(accountId, BigDecimal.ZERO);
             if (balance.compareTo(BigDecimal.ZERO) > 0) {
                 accountBalances.put(accountId, balance);
                 totalBalance = totalBalance.add(balance);

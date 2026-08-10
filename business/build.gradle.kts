@@ -1,48 +1,32 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    java
     jacoco
     id("com.gradleup.shadow")
+    id("io.paradaux.paper-server-conventions")
 }
 
 // group + version are set centrally by the root allprojects block (single
 // mono-repo version, 2.3.0-SNAPSHOT, overridable with -Pversion).
+// The JVM toolchain, repositories, resource expansion, base test setup, shaded-jar
+// defaults, and dev-server staging come from io.paradaux.paper-server-conventions.
 description = "Business"
-
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    }
-}
-
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven {
-        name = "papermc"
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
-    maven("https://oss.sonatype.org/content/groups/public/")
-    maven("https://jitpack.io")
-    maven {
-        name = "ParadauxReleases"
-        url = uri("https://repo.paradaux.io/releases")
-        mavenContent { releasesOnly() }
-    }
-    maven {
-        name = "ParadauxSnapshots"
-        url = uri("https://repo.paradaux.io/snapshots")
-        mavenContent { snapshotsOnly() }
-    }
-}
 
 dependencies {
     // Business API subproject (bundled into shadow JAR)
     implementation(project(":business:business-api"))
 
+    // Shared framework-free utilities (balance-tax bracket model, etc.) — bundled
+    // into the shadow JAR (ADT-22, ADT-186).
+    implementation(project(":common"))
+
     // Paper API (provided by server)
     compileOnly(libs.paper.api)
+
+    // CarbonChat API — the server's chat plugin (provided at runtime). Pinned to a
+    // specific 3.0.0-beta because the API churns across betas (PAR-20). compileOnly:
+    // Carbon ships the impl; we only register a channel against its API.
+    compileOnly("de.hexaoxi:carbonchat-api:3.0.0-beta.32")
 
     // Vault API, exclude Bukkit to avoid capability conflict with Paper
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
@@ -80,6 +64,19 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
 
+    // Shared startup + message-key test-kit. Brings JUnit, Guice, the framework and
+    // MockBukkit transitively (declared `api` there) so the startup test can boot an
+    // in-memory server and drive the real injector without re-declaring them.
+    testImplementation(project(":test-support"))
+
+    // CarbonChat is a compileOnly soft-dep in production (the server provides it at
+    // runtime). The startup test builds the real injector, which constructs ChatCommands
+    // → FirmChatService (a Carbon channel), so the API must be on the test classpath too —
+    // otherwise resolving the CommandManager fails with a NoClassDefFoundError that never
+    // happens on a real server. Mirrors how chestshop puts the Treasury/Business APIs on
+    // its test classpath.
+    testImplementation("de.hexaoxi:carbonchat-api:3.0.0-beta.32")
+
     // Treasury API + Paper API are compileOnly in production; tests need them too.
     testImplementation(project(":treasury:treasury-api"))
     testImplementation(libs.paper.api)
@@ -113,38 +110,7 @@ tasks.named<Copy>("processTestResources") {
 }
 
 tasks {
-    // Mirror Maven default goal locally
-    defaultTasks("clean", "shadowJar")
-
-    // Keep resource filtering tight to avoid $ expansion issues in YAML like config.yml
-    processResources {
-        filteringCharset = "UTF-8"
-        // Capture at configuration time so the filesMatching action never touches
-        // `project` at execution time (config-cache safe; Gradle 10 forward-compat).
-        val expansions = mapOf("version" to project.version, "name" to project.name,
-                "description" to (project.description ?: ""))
-        filesMatching(listOf("**/*.properties", "plugin.yml", "paper-plugin.yml", "application*.yml")) {
-            // Expands ${...} from these project properties only in these files
-            expand(expansions)
-        }
-    }
-
-    withType<JavaCompile> {
-        options.encoding = "UTF-8"
-        options.release.set(21)
-    }
-
     test {
-        useJUnitPlatform()
-        // Tag-based filtering: gradle test -PskipIT skips the DB-backed integration suite.
-        if (project.hasProperty("skipIT")) {
-            useJUnitPlatform { excludeTags("integration") }
-        }
-        testLogging {
-            events("failed", "skipped")
-            showStandardStreams = false
-            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-        }
         finalizedBy(jacocoTestReport)
     }
 
@@ -163,6 +129,10 @@ tasks {
         "io/paradaux/business/listeners/**",
         "io/paradaux/business/jobs/**",
         "io/paradaux/business/guice/**",
+        "io/paradaux/business/integration/**",
+        // CarbonChat-backed employee chat: Bukkit/Carbon glue that can't be
+        // exercised without a running server (same rationale as commands/listeners).
+        "io/paradaux/business/chat/**",
         "io/paradaux/business/utils/resolvers/**"
     )
 
@@ -199,7 +169,8 @@ tasks {
         }
     }
 
-    // Produce a single shaded jar without the "-all" classifier
+    // Project-specific shaded-lib relocations. archiveClassifier + mergeServiceFiles
+    // come from io.paradaux.paper-server-conventions.
     withType<ShadowJar> {
         val root = "io.paradaux.business.libs"
 
@@ -209,9 +180,6 @@ tasks {
         relocate("com.zaxxer.hikari", "$root.hikari")
         relocate("org.mariadb",       "$root.mariadb")
         relocate("org.reflections",   "$root.reflections")
-
-        mergeServiceFiles()
-        archiveClassifier.set("")
     }
 }
 
@@ -219,51 +187,6 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
-val isCi = project.hasProperty("ci")
-
-val copyPlugin = tasks.register<Copy>("copyPlugin") {
-    // Both :jar and :shadowJar write to build/libs/<name>.jar by default;
-    // Gradle 8.11 strict-mode requires declaring deps on every task whose
-    // output we read.
-    dependsOn(tasks.named("shadowJar"), tasks.named("jar"))
-    from(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    into(layout.projectDirectory.dir("../../server/plugins"))
-    onlyIf { !isCi } // don’t run on CI
-}
-
-tasks.named<ShadowJar>("shadowJar") {
-    finalizedBy(copyPlugin)
-}
-
-// Shadow 9 writes both :jar and :shadowJar to build/libs/<name>.jar; :jar runs
-// after :shadowJar and overwrites the fat jar with a ~120 KB thin one that
-// disables itself on enable for missing classes. Disable :jar so the shaded
-// artifact stays put.
-tasks.jar {
-    enabled = false
-}
-
-subprojects {
-    plugins.withId("maven-publish") {
-        extensions.configure<PublishingExtension>("publishing") {
-            repositories {
-                maven {
-                    val isSnapshot = project.version.toString().endsWith("-SNAPSHOT")
-
-                    name = if (isSnapshot) "Snapshots" else "Releases"
-                    url = uri(
-                        if (isSnapshot)
-                            "https://repo.paradaux.io/snapshots"
-                        else
-                            "https://repo.paradaux.io/releases"
-                    )
-
-                    credentials {
-                        username = System.getenv("REPO_USER")
-                        password = System.getenv("REPO_PASS")
-                    }
-                }
-            }
-        }
-    }
-}
+// The publish repository target (snapshot/release URL + REPO_USER/REPO_PASS creds)
+// for business-api now lives in the io.paradaux.published-library-conventions
+// plugin, applied by business/business-api itself (global/build/0004).

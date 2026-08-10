@@ -103,14 +103,19 @@ public abstract class IntegrationTestBase {
     /** Inserts a player row directly via JDBC; returns the same UUID. */
     protected UUID insertPlayer(String name) throws Exception {
         UUID id = UUID.randomUUID();
+        insertPlayer(id, name);
+        return id;
+    }
+
+    /** Inserts a player row with a caller-supplied UUID into the directory cache. */
+    protected void insertPlayer(UUID id, String name) throws Exception {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(
-                     "INSERT INTO firm_players (player_uuid_bin, current_name) VALUES (uuid_to_bin(?), ?)")) {
+                     "INSERT INTO economy_players (player_uuid_bin, current_name) VALUES (uuid_to_bin(?), ?)")) {
             ps.setString(1, id.toString());
             ps.setString(2, name);
             ps.executeUpdate();
         }
-        return id;
     }
 
     /** Captures an ExtensionContext so the static container helper can access JUnit's store. */

@@ -17,6 +17,12 @@ on:
   # commit and the path-filtered push event doesn't fire.
   workflow_dispatch:
 
+# Least privilege (CodeQL actions/missing-workflow-permissions): both jobs only
+# check out the repo; the Harbor push authenticates with registry secrets, not
+# the GITHUB_TOKEN.
+permissions:
+  contents: read
+
 defaults:
   run:
     working-directory: economy-explorer

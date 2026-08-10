@@ -1,14 +1,11 @@
 package io.paradaux.treasuryrestapi.config;
 
-import io.jsonwebtoken.security.Keys;
+import io.paradaux.common.JwtKeys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
 @Configuration
 public class JwtConfig {
@@ -29,8 +26,9 @@ public class JwtConfig {
     private String jwtSecret;
 
     /**
-     * Derives the HMAC-SHA256 signing key by SHA-256 hashing the configured secret.
-     * This matches the key derivation used by the in-game plugin when issuing tokens.
+     * Derives the HMAC-SHA256 signing key via the shared {@link JwtKeys#deriveHmacKey}
+     * (ADT-22) — the exact same derivation the in-game plugin uses to sign tokens,
+     * so the two can no longer drift apart independently.
      *
      * <p>Validates the configured secret before deriving the key:
      * <ul>
@@ -41,7 +39,7 @@ public class JwtConfig {
      * </ul>
      */
     @Bean
-    public SecretKey jwtSigningKey() throws NoSuchAlgorithmException {
+    public SecretKey jwtSigningKey() {
         if (jwtSecret == null || jwtSecret.isBlank()) {
             throw new IllegalStateException(
                     "api.jwt-secret is not set. Configure JWT_SECRET in the active profile "
@@ -59,8 +57,6 @@ public class JwtConfig {
                     + "high-entropy random data (currently " + jwtSecret.length() + ").");
         }
 
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] keyBytes = digest.digest(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        return Keys.hmacShaKeyFor(keyBytes);
+        return JwtKeys.deriveHmacKey(jwtSecret);
     }
 }

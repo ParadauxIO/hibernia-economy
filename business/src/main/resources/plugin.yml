@@ -3,6 +3,7 @@ version: '${version}'
 main: io.paradaux.business.Business
 api-version: '1.21'
 depend: [ Treasury ]
+softdepend: [ CarbonChat, Realty ]
 commands:
     business:
         description: Business commands
@@ -23,6 +24,9 @@ permissions:
         default: op
     business.admin.proprietor:
         description: Reassign any firm's proprietor (staff/DOC override).
+        default: op
+    business.admin.chatspy:
+        description: Social-spy on firm chat — all firms or a specific one (staff/DOC override).
         default: op
     business.admin.reload:
         description: Reload the Business plugin configuration.
@@ -56,6 +60,9 @@ permissions:
     business.list:
         description: List your firms.
         default: true
+    business.baltop:
+        description: View the leaderboard of firms by collective account balance.
+        default: true
     business.list.other:
         description: List another player's firms.
         default: true
@@ -64,6 +71,18 @@ permissions:
         default: true
     business.finance:
         description: Manage a firm's finances (balance, deposit, withdraw, pay, transactions).
+        default: true
+    business.sales:
+        description: View a firm's ChestShop sales (gated to proprietor/FINANCIAL/ADMIN at the service layer).
+        default: true
+    business.sales.export:
+        description: Get an economy-explorer link to a firm's sales report.
+        default: true
+    business.sales.toggle:
+        description: Toggle real-time sale notifications for a firm (owner/admin).
+        default: true
+    business.chat:
+        description: Use the employee-only firm chat channel.
         default: true
     business.tax.info:
         description: View a firm's tax status.

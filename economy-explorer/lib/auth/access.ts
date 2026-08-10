@@ -21,7 +21,7 @@ export function hasCapability(v: Viewer, cap: Capability): boolean {
  * legitimately have access to every row.
  */
 export function isStaff(v: Viewer): boolean {
-  return hasCapability(v, 'staff.audit');
+  return hasCapability(v, 'viewer');
 }
 
 /**

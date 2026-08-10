@@ -16,7 +16,7 @@ public interface ApiKeyMapper {
      * key_id is the primary key so this is O(1).
      */
     @Select("SELECT key_id, key_type, owner_uuid_bin AS owner_uuid, account_id, firm_id, " +
-            "       jwt_id, revoked, token, issued_at, expires_at " +
+            "       jwt_id, revoked, issued_at, expires_at " +
             "FROM api_keys WHERE key_id = #{keyId}")
     ApiKey findByKeyId(@Param("keyId") long keyId);
 
@@ -25,7 +25,7 @@ public interface ApiKeyMapper {
      * before issuing a new token. Must be called within a transaction.
      */
     @Select("SELECT key_id, key_type, owner_uuid_bin AS owner_uuid, account_id, firm_id, " +
-            "       jwt_id, revoked, token, issued_at, expires_at " +
+            "       jwt_id, revoked, issued_at, expires_at " +
             "FROM api_keys WHERE key_id = #{keyId} FOR UPDATE")
     ApiKey findByKeyIdForUpdate(@Param("keyId") long keyId);
 
@@ -40,12 +40,15 @@ public interface ApiKeyMapper {
      * detect that case and fail fast.
      */
     @Update("UPDATE api_keys " +
-            "SET jwt_id = #{jwtId}, token = #{token}, issued_at = #{issuedAt}, " +
+            "SET jwt_id = #{jwtId}, issued_at = #{issuedAt}, " +
             "    expires_at = #{expiresAt} " +
             "WHERE key_id = #{keyId} AND revoked = 0")
     int rotateKey(@Param("keyId") long keyId,
                   @Param("jwtId") String jwtId,
-                  @Param("token") String token,
                   @Param("issuedAt") LocalDateTime issuedAt,
                   @Param("expiresAt") LocalDateTime expiresAt);
+
+    /** Revoke a key (ADT-14: replaces the explorer's direct UPDATE). Idempotent. */
+    @Update("UPDATE api_keys SET revoked = 1 WHERE key_id = #{keyId}")
+    int revoke(@Param("keyId") long keyId);
 }

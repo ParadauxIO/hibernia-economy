@@ -240,7 +240,7 @@ export async function listItemSales(itemKey: string, limit: number, offset: numb
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     WHERE cs.item_key = ${itemKey}
     ORDER BY cs.occurred_at DESC, cs.sale_id DESC LIMIT ${limit} OFFSET ${offset}
   `.execute(db);
@@ -286,7 +286,7 @@ export async function listItemSellers(itemKey: string, limit: number, offset: nu
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     WHERE cs.item_key = ${itemKey}
     GROUP BY cs.is_admin_shop, cs.shop_account_type, cs.shop_firm_id, cs.shop_owner_uuid_bin, cs.shop_account_id
     ORDER BY sale_count DESC LIMIT ${limit} OFFSET ${offset}
@@ -316,7 +316,7 @@ export async function topSellers(days: number, limit: number): Promise<MarketSel
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     WHERE cs.occurred_at >= NOW() - INTERVAL ${days} DAY
     GROUP BY cs.is_admin_shop, cs.shop_account_type, cs.shop_firm_id, cs.shop_owner_uuid_bin, cs.shop_account_id
     ORDER BY total_volume DESC LIMIT ${limit}
@@ -337,7 +337,7 @@ export async function topBuyers(days: number, limit: number): Promise<MarketCust
            COALESCE(SUM(cs.total_price),0.00) AS total_volume
     FROM chestshop_sale cs
     LEFT JOIN accounts ca ON ca.owner_uuid_bin = cs.customer_uuid_bin AND ca.account_type='PERSONAL'
-    LEFT JOIN firm_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
+    LEFT JOIN economy_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
     WHERE cs.occurred_at >= NOW() - INTERVAL ${days} DAY
     GROUP BY cs.customer_uuid_bin ORDER BY total_volume DESC LIMIT ${limit}
   `.execute(db);
@@ -494,9 +494,9 @@ export async function listSalesFeed(args: {
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     LEFT JOIN accounts ca ON ca.owner_uuid_bin = cs.customer_uuid_bin AND ca.account_type='PERSONAL'
-    LEFT JOIN firm_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
+    LEFT JOIN economy_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
     ${where}
     ORDER BY cs.occurred_at DESC, cs.sale_id DESC LIMIT ${args.limit} OFFSET ${args.offset}
   `.execute(db);
@@ -524,7 +524,7 @@ export async function countSalesFeed(args: {
     SELECT COUNT(*) AS c FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     ${where}
   `.execute(db);
   return Number(r.rows[0]?.c ?? 0);
@@ -561,8 +561,8 @@ export async function listPlayerSales(playerUuid: string, days: number | null): 
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
-    LEFT JOIN firm_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
     WHERE (cs.customer_uuid_bin = ${bin}
            OR (cs.shop_owner_uuid_bin = ${bin} AND cs.shop_account_type = 'PERSONAL'))
       ${windowCond}
@@ -610,7 +610,7 @@ export async function listShops(args: {
     FROM chestshop_shop s
     LEFT JOIN firm f ON f.firm_id = s.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = s.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
     ${where}
     ORDER BY (s.current_stock IS NOT NULL AND s.current_stock = 0), (s.buy_price IS NULL),
       s.buy_price ASC, s.last_seen DESC

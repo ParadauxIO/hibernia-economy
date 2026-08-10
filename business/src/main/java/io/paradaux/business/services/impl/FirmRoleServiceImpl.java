@@ -17,6 +17,7 @@ import io.paradaux.business.services.FirmRoleService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import org.apache.ibatis.exceptions.PersistenceException;
+import org.mybatis.guice.transactional.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -39,14 +40,32 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         this.accounts = accounts;
     }
 
+    // @Transactional so the role insert and its baseline DEFAULT-permission
+    // grant are atomic: previously these were two separate, non-atomic command
+    // calls and a failure between them left a role with no permissions (ADT-56).
+    // @Transactional on both public entrypoints (not the shared private body):
+    // mybatis-guice intercepts only proxied calls, so the transaction boundary
+    // must sit on the method the proxy dispatches — a this-call into the helper
+    // would not be intercepted and would lose atomicity (ADT-56).
+    @Transactional
+    @Override
     public void createRole(String firmName, String roleName, int rankOrder, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        createRoleInternal(firms.getFirmByNameOrId(firmName), roleName, rankOrder, actorId);
+    }
+
+    @Transactional
+    @Override
+    public void createRole(int firmId, String roleName, int rankOrder, UUID actorId) {
+        createRoleInternal(firms.getFirmById(firmId), roleName, rankOrder, actorId);
+    }
+
+    private void createRoleInternal(Firm firm, String roleName, int rankOrder, UUID actorId) {
         if (firm == null) {
-            throw new NotFoundException("Firm not found: " + firmName);
+            throw new NotFoundException("Firm not found.");
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don't have permission to manage roles for " + firmName + ".");
+            throw new NoPermissionException("You don't have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
         // Prevent creating a role at or above the proprietor role's rank
@@ -55,25 +74,38 @@ public class FirmRoleServiceImpl implements FirmRoleService {
             throw new BadCommandException("Cannot create a role at or above the proprietor role's rank.");
         }
 
-        FirmRole role = new FirmRole(firm.getFirmId(), normalizeRoleName(roleName), rankOrder);
+        String normalizedName = normalizeRoleName(roleName);
+        FirmRole role = new FirmRole(firm.getFirmId(), normalizedName, rankOrder);
 
         try {
             int inserted = roles.insertRole(role);
             if (inserted != 1) throw new IllegalStateException("Insert failed for role: " + roleName);
+            // Grant the baseline DEFAULT permission in the same transaction so a
+            // role is never persisted without it.
+            roles.addRolePermission(new FirmRolePermission(firm.getFirmId(), normalizedName, RolePermission.DEFAULT));
         } catch (PersistenceException e) {
             // e.g., duplicate name or uq_role_rank clash
             throw new ConflictException("Could not create role (name or rank already used in this firm).", e);
         }
     }
 
+    @Override
     public void deleteRole(String firmName, String roleName, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        deleteRoleInternal(firms.getFirmByNameOrId(firmName), roleName, actorId);
+    }
+
+    @Override
+    public void deleteRole(int firmId, String roleName, UUID actorId) {
+        deleteRoleInternal(firms.getFirmById(firmId), roleName, actorId);
+    }
+
+    private void deleteRoleInternal(Firm firm, String roleName, UUID actorId) {
         if (firm == null) {
-            throw new NotFoundException("Firm not found: " + firmName);
+            throw new NotFoundException("Firm not found.");
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don't have permission to manage roles for " + firmName + ".");
+            throw new NoPermissionException("You don't have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
         // Prevent deleting the proprietor role (the role with the lowest rank_order)
@@ -119,14 +151,23 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         accounts.syncAllFirmAccounts(firm.getFirmId());
     }
 
+    @Override
     public void addRolePermission(String firmName, String roleName, String permission, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        addRolePermissionInternal(firms.getFirmByNameOrId(firmName), roleName, permission, actorId);
+    }
+
+    @Override
+    public void addRolePermission(int firmId, String roleName, String permission, UUID actorId) {
+        addRolePermissionInternal(firms.getFirmById(firmId), roleName, permission, actorId);
+    }
+
+    private void addRolePermissionInternal(Firm firm, String roleName, String permission, UUID actorId) {
         if (firm == null) {
-            throw new NotFoundException("Firm not found: " + firmName);
+            throw new NotFoundException("Firm not found.");
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don’t have permission to manage roles for " + firmName + ".");
+            throw new NoPermissionException("You don’t have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
         boolean roleExists = roles.listRolesByFirm(firm.getFirmId()).stream().anyMatch(r -> r.getRoleName().equalsIgnoreCase(roleName));
@@ -149,14 +190,23 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         accounts.syncAllFirmAccounts(firm.getFirmId());
     }
 
+    @Override
     public void removeRolePermission(String firmName, String roleName, String permission, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        removeRolePermissionInternal(firms.getFirmByNameOrId(firmName), roleName, permission, actorId);
+    }
+
+    @Override
+    public void removeRolePermission(int firmId, String roleName, String permission, UUID actorId) {
+        removeRolePermissionInternal(firms.getFirmById(firmId), roleName, permission, actorId);
+    }
+
+    private void removeRolePermissionInternal(Firm firm, String roleName, String permission, UUID actorId) {
         if (firm == null) {
-            throw new NotFoundException("Firm not found: " + firmName);
+            throw new NotFoundException("Firm not found.");
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don’t have permission to manage roles for " + firmName + ".");
+            throw new NoPermissionException("You don’t have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
         RolePermission rolePermission = RolePermission.fromString(permission);

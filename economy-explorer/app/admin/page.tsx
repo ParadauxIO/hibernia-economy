@@ -15,7 +15,6 @@ const TOOLS: { href: Route; title: string; desc: string }[] = [
   { href: '/admin/players', title: 'Players', desc: 'Look up any player and view their personal data dashboard (balances, transactions, counterparties).' },
   { href: '/admin/accounts', title: 'Accounts', desc: 'Move money between accounts, rename, change owner, archive/unarchive — ledger-safe, audited.' },
   { href: '/transactions', title: 'Transactions', desc: 'The whole-economy transaction firehose — powerful filters over every ledger transfer.' },
-  { href: '/admin/audit', title: 'Audit', desc: 'Explorer access log — who viewed which privileged data, and when.' },
   { href: '/admin/api-keys', title: 'API keys', desc: 'Programmatic API keys, usage, and per-issuer rate-limit overrides.' },
   { href: '/admin/groups', title: 'Groups', desc: 'RBAC access groups and capabilities (manual + LuckPerms-fed).' },
   { href: '/admin/webhooks', title: 'Webhooks', desc: 'Every transaction-feed webhook — search, manage, and register for any account.' },

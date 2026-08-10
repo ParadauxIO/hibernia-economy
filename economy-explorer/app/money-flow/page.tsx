@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { memo } from '@/lib/cache';
@@ -22,7 +23,7 @@ export default async function MoneyFlowPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const raw = await searchParams;
-  const sp = SP_SCHEMA.parse(flat(raw));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(raw));
   // The money-flow self-join is the heaviest aggregate in the explorer (it was
   // effectively inaccessible uncached) — cache it per pod/fleet for 60s, keyed
   // by the day window, via the shared-Redis SWR cache.
@@ -110,10 +111,3 @@ export default async function MoneyFlowPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

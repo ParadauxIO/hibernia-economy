@@ -38,6 +38,7 @@ public class ReloadCommand implements CommandHandler {
      */
     @Route("reload")
     @Permission("business.admin.reload")
+    @Async // config reload does disk I/O — keep it off the server thread (ADT-56).
     @Description("Admin: Reload messages.properties and config.yml (firm limits, balance-tax brackets).")
     public void reload(@Sender CommandSender sender) {
         try {
@@ -47,10 +48,9 @@ public class ReloadCommand implements CommandHandler {
             balanceTaxConfig.reload();    // refresh tax.balance.* brackets
         } catch (RuntimeException e) {
             business.getLogger().warning("Config reload failed: " + e);
-            sender.sendMessage("§cReload failed: " + e.getMessage() + " (see console).");
+            message.send(sender, "business.admin.reload.failed", "error", e.getMessage());
             return;
         }
-        sender.sendMessage("§aReloaded messages.properties and config.yml "
-                + "(firm limits + balance-tax brackets). DB pool and scheduled jobs still need a restart.");
+        message.send(sender, "business.admin.reload.success");
     }
 }

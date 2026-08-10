@@ -24,9 +24,6 @@ permissions:
     treasuryapi.personal.list:
         description: List personal API keys
         default: true
-    treasuryapi.personal.export:
-        description: Export a personal API key token to a URL
-        default: true
     treasuryapi.personal.reissue:
         description: Reissue (rotate) a personal API key
         default: true
@@ -40,9 +37,6 @@ permissions:
         default: true
     treasuryapi.business.list:
         description: List business API keys
-        default: true
-    treasuryapi.business.export:
-        description: Export a business API key token to a URL
         default: true
     treasuryapi.business.reissue:
         description: Reissue (rotate) a business API key

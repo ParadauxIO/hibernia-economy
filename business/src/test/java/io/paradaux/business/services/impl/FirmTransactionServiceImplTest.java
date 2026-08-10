@@ -1,10 +1,15 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.business.exceptions.NoFirmAccountException;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmAccount;
 import io.paradaux.business.services.FirmService;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
+import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
+import io.paradaux.hibernia.framework.exceptions.KeyedException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
@@ -21,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,14 +76,14 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void getFirmBalance_usesDefaultAccount() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         when(treasury.getBalanceByAccountId(100)).thenReturn(new BigDecimal("50.00"));
         assertThat(svc.getFirmBalance(1)).isEqualByComparingTo("50.00");
     }
 
     @Test
     void getFirmBalance_unsetDefault_selfHealsToSurvivingAccount() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, null));
+        when(firms.getFirmById(1)).thenReturn(firm(1, null));
         when(firmAccounts.getAnyAccountId(1)).thenReturn(200);
         when(treasury.getBalanceByAccountId(200)).thenReturn(new BigDecimal("12"));
         assertThat(svc.getFirmBalance(1)).isEqualByComparingTo("12");
@@ -88,7 +94,7 @@ class FirmTransactionServiceImplTest {
     @Test
     void getFirmBalance_staleDefault_selfHealsToSurvivingAccount() {
         // Default points at account 100, but the firm no longer owns it (archived/removed).
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         when(firmAccounts.isFirmAccount(1, 100)).thenReturn(false);
         when(firmAccounts.getAnyAccountId(1)).thenReturn(200);
         when(treasury.getBalanceByAccountId(200)).thenReturn(new BigDecimal("7"));
@@ -98,22 +104,26 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void getFirmBalance_throwsWhenFirmHasNoAccount() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, null));
+        when(firms.getFirmById(1)).thenReturn(firm(1, null));
         when(firmAccounts.getAnyAccountId(1)).thenReturn(null);
+        // The missing-account condition is a distinct semantic exception carrying its
+        // own message key so the player learns the real cause (behaviour/0001).
         assertThatThrownBy(() -> svc.getFirmBalance(1))
-                .isInstanceOf(NoFirmAccountException.class);
+                .isInstanceOf(NotFoundException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.no-account");
     }
 
     @Test
     void getFirmBalance_throwsForUnknownFirm() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(null);
+        when(firms.getFirmById(1)).thenReturn(null);
         assertThatThrownBy(() -> svc.getFirmBalance(1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void getFormattedBalance_delegates() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         when(treasury.getBalanceByAccountId(100)).thenReturn(new BigDecimal("1.00"));
         when(treasury.formatAmount(new BigDecimal("1.00"))).thenReturn("$1.00");
         assertThat(svc.getFormattedBalance(1)).isEqualTo("$1.00");
@@ -121,7 +131,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void getTransactions_clampsPagination() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Page<TransactionEntry> page = new Page<>(List.of(), 0, 0, 10);
         when(treasury.getTransactionHistory(100, 0, 10)).thenReturn(page);
         assertThat(svc.getTransactions(1, 0, 0)).isSameAs(page);
@@ -129,7 +139,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void getTransactions_paginates() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Page<TransactionEntry> page = new Page<>(List.of(), 0, 20, 10);
         when(treasury.getTransactionHistory(100, 20, 10)).thenReturn(page);
         assertThat(svc.getTransactions(1, 3, 10)).isSameAs(page);
@@ -139,36 +149,69 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void deposit_rejectsNonPositive() {
+        // Invalid amount surfaces as BadCommandException keyed to the invalid-amount message.
         assertThatThrownBy(() -> svc.deposit(1, player, BigDecimal.ZERO))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.invalid-amount");
         assertThatThrownBy(() -> svc.deposit(1, player, new BigDecimal("-1")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.invalid-amount");
     }
 
     @Test
     void deposit_insufficientPersonalFunds_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.hasFunds(7, BigDecimal.ONE)).thenReturn(false);
         assertThatThrownBy(() -> svc.deposit(1, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ExceedsLimitException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.insufficient-personal");
+    }
+
+    @Test
+    void deposit_firmHasNoAccount_reportsNoAccountNotInsufficientFunds() {
+        // behaviour/0001: a firm with no usable Treasury account must report the real
+        // cause (no-account) rather than misreporting "insufficient personal funds".
+        // resolveAccountId runs before the funds check, so no funds stubbing is needed.
+        when(firms.getFirmById(1)).thenReturn(firm(1, null));
+        when(firmAccounts.getAnyAccountId(1)).thenReturn(null);
+        assertThatThrownBy(() -> svc.deposit(1, player, BigDecimal.ONE))
+                .isInstanceOf(NotFoundException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.no-account");
+    }
+
+    @Test
+    void payIntoFirm_firmHasNoAccount_reportsNoAccountNotInsufficientFunds() {
+        // behaviour/0001: /firm pay into a firm with no usable account reports no-account.
+        when(firms.getFirmById(1)).thenReturn(firm(1, null));
+        when(firmAccounts.getAnyAccountId(1)).thenReturn(null);
+        assertThatThrownBy(() -> svc.payIntoFirm(1, player, BigDecimal.ONE))
+                .isInstanceOf(NotFoundException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.no-account");
     }
 
     @Test
     void deposit_noAccess_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.hasFunds(7, BigDecimal.ONE)).thenReturn(true);
         when(treasury.canAccessAccount(player, 100)).thenReturn(false);
         assertThatThrownBy(() -> svc.deposit(1, player, BigDecimal.ONE))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(NoPermissionException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.general.no-permission");
     }
 
     @Test
     void deposit_buildsTransferAndReturnsId() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.hasFunds(7, BigDecimal.TEN)).thenReturn(true);
@@ -190,7 +233,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void deposit_withMemo_recordsItAsReason() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.hasFunds(7, BigDecimal.TEN)).thenReturn(true);
@@ -207,7 +250,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void deposit_withBlankMemo_fallsBackToDefaultReason() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.hasFunds(7, BigDecimal.TEN)).thenReturn(true);
@@ -223,7 +266,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void deposit_withOverlongMemo_capsReasonAt255() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.hasFunds(7, BigDecimal.TEN)).thenReturn(true);
@@ -242,24 +285,28 @@ class FirmTransactionServiceImplTest {
     @Test
     void withdraw_rejectsNonPositive() {
         assertThatThrownBy(() -> svc.withdraw(1, player, BigDecimal.ZERO))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.invalid-amount");
     }
 
     @Test
     void withdraw_noAccessThrows() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account business = new Account(); business.setAccountId(100);
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.getAccountById(100)).thenReturn(business);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.canAccessAccount(player, 100)).thenReturn(false);
         assertThatThrownBy(() -> svc.withdraw(1, player, BigDecimal.ONE))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(NoPermissionException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.general.no-permission");
     }
 
     @Test
     void withdraw_insufficientBusinessFundsThrows() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account business = new Account(); business.setAccountId(100);
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.getAccountById(100)).thenReturn(business);
@@ -267,13 +314,15 @@ class FirmTransactionServiceImplTest {
         when(treasury.canAccessAccount(player, 100)).thenReturn(true);
         when(treasury.hasFunds(100, BigDecimal.ONE)).thenReturn(false);
         assertThatThrownBy(() -> svc.withdraw(1, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ExceedsLimitException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.insufficient-business");
     }
 
     @Test
     void withdraw_authorizerRequired_andPlayerIsAuthorizer() {
         Firm f = firm(1, 100);
-        when(firms.getFirmByNameOrId("1")).thenReturn(f);
+        when(firms.getFirmById(1)).thenReturn(f);
 
         Account business = new Account();
         business.setAccountId(100);
@@ -298,7 +347,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void withdraw_authorizerRequired_butPlayerIsNot_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account business = new Account();
         business.setAccountId(100);
         business.setRequiresAuthorization(true);
@@ -311,12 +360,14 @@ class FirmTransactionServiceImplTest {
         when(treasury.getAuthorizers(100)).thenReturn(List.of());
 
         assertThatThrownBy(() -> svc.withdraw(1, player, BigDecimal.ONE))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(NoPermissionException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.not-authorizer");
     }
 
     @Test
     void withdraw_noAuthorizationRequired_succeeds() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account business = new Account();
         business.setAccountId(100);
         business.setRequiresAuthorization(false);
@@ -342,6 +393,7 @@ class FirmTransactionServiceImplTest {
         // A firm with no live accounts (e.g. disbanded) reads as zero rather than throwing,
         // so /firm info, the disband prompt, and the public API don't crash.
         when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of());
+        when(treasury.getBalancesByIds(List.of())).thenReturn(Map.of());
         assertThat(svc.getAggregateBalance(1)).isEqualByComparingTo("0");
     }
 
@@ -349,15 +401,16 @@ class FirmTransactionServiceImplTest {
     void getAggregateBalance_sumsAccounts() {
         when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of(
                 new FirmAccount(1, 10, null), new FirmAccount(1, 11, null)));
-        when(treasury.getBalanceByAccountId(10)).thenReturn(new BigDecimal("5"));
-        when(treasury.getBalanceByAccountId(11)).thenReturn(new BigDecimal("3"));
+        // One batch read instead of one IPC per account (ADT-36).
+        when(treasury.getBalancesByIds(List.of(10, 11)))
+                .thenReturn(Map.of(10, new BigDecimal("5"), 11, new BigDecimal("3")));
         assertThat(svc.getAggregateBalance(1)).isEqualByComparingTo("8");
     }
 
     @Test
     void getFormattedAggregateBalance_delegates() {
         when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
-        when(treasury.getBalanceByAccountId(10)).thenReturn(new BigDecimal("5"));
+        when(treasury.getBalancesByIds(List.of(10))).thenReturn(Map.of(10, new BigDecimal("5")));
         when(treasury.formatAmount(new BigDecimal("5"))).thenReturn("$5");
         assertThat(svc.getFormattedAggregateBalance(1)).isEqualTo("$5");
     }
@@ -365,32 +418,136 @@ class FirmTransactionServiceImplTest {
     @Test
     void getAggregateTransactions_emptyAccountsReturnsEmptyPage() {
         when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of());
+        when(treasury.getTransactionHistory(List.of(), 0, 10)).thenReturn(new Page<>(List.of(), 0, 0, 10));
         Page<TransactionEntry> p = svc.getAggregateTransactions(1, 1, 10);
         assertThat(p.items()).isEmpty();
         assertThat(p.totalCount()).isZero();
     }
 
     @Test
-    void getAggregateTransactions_clampsPagingAndSorts() {
+    void getAggregateTransactions_delegatesToTreasuryMergedQuery() {
+        // Merging/sorting/total now happen Treasury-side (ADT-36); the service just
+        // collects the account ids and forwards the computed offset. page/pageSize
+        // below 1 are clamped to 1 and 10.
         when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of(
                 new FirmAccount(1, 10, null), new FirmAccount(1, 11, null)));
-        TransactionEntry early = txn(1L, Instant.parse("2025-01-01T00:00:00Z"));
         TransactionEntry late = txn(2L, Instant.parse("2025-12-01T00:00:00Z"));
-        when(treasury.getTransactionHistory(eq(10), eq(0), anyInt())).thenReturn(new Page<>(List.of(early), 1, 0, 10));
-        when(treasury.getTransactionHistory(eq(11), eq(0), anyInt())).thenReturn(new Page<>(List.of(late), 1, 0, 10));
+        TransactionEntry early = txn(1L, Instant.parse("2025-01-01T00:00:00Z"));
+        Page<TransactionEntry> merged = new Page<>(List.of(late, early), 2, 0, 10);
+        when(treasury.getTransactionHistory(List.of(10, 11), 0, 10)).thenReturn(merged);
 
         Page<TransactionEntry> p = svc.getAggregateTransactions(1, 0, 0);
+        assertThat(p).isSameAs(merged);
         assertThat(p.items()).extracting(TransactionEntry::getPostingId).containsExactly(2L, 1L);
-        assertThat(p.totalCount()).isEqualTo(2);
     }
 
     @Test
-    void getAggregateTransactions_offsetPastTotal_returnsEmpty() {
+    void getAggregateTransactions_forwardsComputedOffset() {
         when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
-        when(treasury.getTransactionHistory(eq(10), eq(0), anyInt())).thenReturn(
-                new Page<>(List.of(txn(1L, Instant.now())), 1, 0, 10));
+        Page<TransactionEntry> empty = new Page<>(List.of(), 1, 40, 10);
+        // page 5, pageSize 10 → offset (5-1)*10 = 40.
+        when(treasury.getTransactionHistory(List.of(10), 40, 10)).thenReturn(empty);
         Page<TransactionEntry> p = svc.getAggregateTransactions(1, 5, 10);
         assertThat(p.items()).isEmpty();
+    }
+
+    // ---------- firm balance leaderboard (/firm baltop) ----------
+
+    @Test
+    void getFirmBalanceTop_ranksFirmsByCollectiveBalanceDescending() {
+        when(firms.listAllActiveFirms()).thenReturn(List.of(
+                namedFirm(1, 10, "Acme"),
+                namedFirm(2, 20, "Globex")));
+        // Acme owns accounts 10 (+ a second account 11); Globex owns 20.
+        when(firmAccounts.listActiveAccountLinks()).thenReturn(List.of(
+                new FirmAccount(1, 10, null),
+                new FirmAccount(1, 11, null),
+                new FirmAccount(2, 20, null)));
+        when(treasury.getBalancesByIds(List.of(10, 11, 20))).thenReturn(Map.of(
+                10, new BigDecimal("100"), 11, new BigDecimal("50"), 20, new BigDecimal("200")));
+
+        Page<io.paradaux.business.model.FirmBalanceEntry> page = svc.getFirmBalanceTop(1, 10);
+
+        assertThat(page.totalCount()).isEqualTo(2);
+        // Globex (200) outranks Acme (100+50=150) despite being created later.
+        assertThat(page.items()).extracting(e -> e.displayName()).containsExactly("Globex", "Acme");
+        assertThat(page.items().get(0).balance()).isEqualByComparingTo("200");
+        assertThat(page.items().get(1).balance()).isEqualByComparingTo("150");
+    }
+
+    @Test
+    void getFirmBalanceTop_includesFirmWithNoAccountsAtZero() {
+        when(firms.listAllActiveFirms()).thenReturn(List.of(
+                namedFirm(1, 10, "Acme"),
+                namedFirm(2, null, "Empty")));
+        when(firmAccounts.listActiveAccountLinks()).thenReturn(List.of(new FirmAccount(1, 10, null)));
+        when(treasury.getBalancesByIds(List.of(10))).thenReturn(Map.of(10, new BigDecimal("5")));
+
+        Page<io.paradaux.business.model.FirmBalanceEntry> page = svc.getFirmBalanceTop(1, 10);
+
+        assertThat(page.items()).extracting(e -> e.displayName()).containsExactly("Acme", "Empty");
+        assertThat(page.items().get(1).balance()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void getFirmBalanceTop_missingBalanceRowCountsAsZero() {
+        when(firms.listAllActiveFirms()).thenReturn(List.of(namedFirm(1, 10, "Acme")));
+        when(firmAccounts.listActiveAccountLinks()).thenReturn(List.of(
+                new FirmAccount(1, 10, null), new FirmAccount(1, 11, null)));
+        // Account 11 has no materialized balance row → treated as zero, not an NPE.
+        when(treasury.getBalancesByIds(List.of(10, 11))).thenReturn(Map.of(10, new BigDecimal("7")));
+
+        Page<io.paradaux.business.model.FirmBalanceEntry> page = svc.getFirmBalanceTop(1, 10);
+        assertThat(page.items().get(0).balance()).isEqualByComparingTo("7");
+    }
+
+    @Test
+    void getFirmBalanceTop_paginatesAndClampsBelowOne() {
+        // Three firms, page size 2 → page 2 holds the third. page/pageSize < 1 clamp to 1/10.
+        when(firms.listAllActiveFirms()).thenReturn(List.of(
+                namedFirm(1, 10, "A"), namedFirm(2, 20, "B"), namedFirm(3, 30, "C")));
+        when(firmAccounts.listActiveAccountLinks()).thenReturn(List.of(
+                new FirmAccount(1, 10, null), new FirmAccount(2, 20, null), new FirmAccount(3, 30, null)));
+        when(treasury.getBalancesByIds(List.of(10, 20, 30))).thenReturn(Map.of(
+                10, new BigDecimal("30"), 20, new BigDecimal("20"), 30, new BigDecimal("10")));
+
+        Page<io.paradaux.business.model.FirmBalanceEntry> p2 = svc.getFirmBalanceTop(2, 2);
+        assertThat(p2.totalCount()).isEqualTo(3);
+        assertThat(p2.offset()).isEqualTo(2);
+        assertThat(p2.items()).extracting(e -> e.displayName()).containsExactly("C");
+        assertThat(p2.hasMore()).isFalse();
+
+        // page 0 / size 0 → clamps to page 1, size 10: all three, highest first.
+        Page<io.paradaux.business.model.FirmBalanceEntry> clamped = svc.getFirmBalanceTop(0, 0);
+        assertThat(clamped.items()).extracting(e -> e.displayName()).containsExactly("A", "B", "C");
+    }
+
+    @Test
+    void getFirmBalanceTop_offsetPastEndReturnsEmptyPageWithTotal() {
+        when(firms.listAllActiveFirms()).thenReturn(List.of(namedFirm(1, 10, "Acme")));
+        when(firmAccounts.listActiveAccountLinks()).thenReturn(List.of(new FirmAccount(1, 10, null)));
+        when(treasury.getBalancesByIds(List.of(10))).thenReturn(Map.of(10, new BigDecimal("5")));
+
+        Page<io.paradaux.business.model.FirmBalanceEntry> page = svc.getFirmBalanceTop(5, 10);
+        assertThat(page.items()).isEmpty();
+        assertThat(page.totalCount()).isEqualTo(1);
+    }
+
+    @Test
+    void getFirmBalanceTop_noFirmsReturnsEmptyPage() {
+        when(firms.listAllActiveFirms()).thenReturn(List.of());
+        when(firmAccounts.listActiveAccountLinks()).thenReturn(List.of());
+        when(treasury.getBalancesByIds(List.of())).thenReturn(Map.of());
+
+        Page<io.paradaux.business.model.FirmBalanceEntry> page = svc.getFirmBalanceTop(1, 10);
+        assertThat(page.items()).isEmpty();
+        assertThat(page.totalCount()).isZero();
+    }
+
+    @Test
+    void formatAmount_delegatesToTreasury() {
+        when(treasury.formatAmount(new BigDecimal("12.50"))).thenReturn("$12.50");
+        assertThat(svc.formatAmount(new BigDecimal("12.50"))).isEqualTo("$12.50");
     }
 
     private TransactionEntry txn(long id, Instant when) {
@@ -406,7 +563,9 @@ class FirmTransactionServiceImplTest {
     void getAccountBalance_validatesOwnership() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
         assertThatThrownBy(() -> svc.getAccountBalance(1, 99))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.foreign-account");
     }
 
     @Test
@@ -436,7 +595,9 @@ class FirmTransactionServiceImplTest {
     void depositToAccount_rejectsForeignAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
         assertThatThrownBy(() -> svc.depositToAccount(1, 99, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.foreign-account");
     }
 
     @Test
@@ -462,14 +623,18 @@ class FirmTransactionServiceImplTest {
         business.setArchived(true);
         when(treasury.getAccountById(99)).thenReturn(business);
         assertThatThrownBy(() -> svc.depositToAccount(1, 99, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ConflictException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.archived");
     }
 
     @Test
     void withdrawFromAccount_rejectsForeignAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
         assertThatThrownBy(() -> svc.withdrawFromAccount(1, 99, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.foreign-account");
     }
 
     @Test
@@ -500,25 +665,29 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payIntoFirm_rejectsNonPositive() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         assertThatThrownBy(() -> svc.payIntoFirm(1, player, BigDecimal.ZERO))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.invalid-amount");
     }
 
     @Test
     void payIntoFirm_insufficientPersonalFunds_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
         when(treasury.hasFunds(7, BigDecimal.ONE)).thenReturn(false);
         assertThatThrownBy(() -> svc.payIntoFirm(1, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ExceedsLimitException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.insufficient-personal");
     }
 
     @Test
     void payIntoFirm_succeeds_noAccessCheckOnPayer() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         Account personal = new Account(); personal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
@@ -539,7 +708,9 @@ class FirmTransactionServiceImplTest {
     void payIntoAccount_rejectsForeignAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
         assertThatThrownBy(() -> svc.payIntoAccount(1, 99, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.foreign-account");
     }
 
     @Test
@@ -547,12 +718,14 @@ class FirmTransactionServiceImplTest {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
         when(treasury.getAccountById(99)).thenReturn(account(99, true, false));
         assertThatThrownBy(() -> svc.payIntoAccount(1, 99, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ConflictException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.archived");
     }
 
     @Test
     void payIntoAccount_succeeds() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
         when(treasury.getAccountById(99)).thenReturn(account(99, false, false));
         Account personal = new Account(); personal.setAccountId(7);
@@ -568,30 +741,34 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payPlayer_noAccess_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account targetPersonal = new Account(); targetPersonal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(targetPersonal);
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         when(treasury.canAccessAccount(player, 100)).thenReturn(false);
         assertThatThrownBy(() -> svc.payPlayer(1, target, player, BigDecimal.ONE))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(NoPermissionException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.general.no-permission");
     }
 
     @Test
     void payPlayer_insufficientBusinessFunds_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account targetPersonal = new Account(); targetPersonal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(targetPersonal);
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         when(treasury.canAccessAccount(player, 100)).thenReturn(true);
         when(treasury.hasFunds(100, BigDecimal.ONE)).thenReturn(false);
         assertThatThrownBy(() -> svc.payPlayer(1, target, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ExceedsLimitException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.insufficient-business");
     }
 
     @Test
     void payPlayer_succeeds() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account targetPersonal = new Account(); targetPersonal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(targetPersonal);
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
@@ -610,7 +787,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payPlayer_authorizerRequired_isAuthorizer_succeeds() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account targetPersonal = new Account(); targetPersonal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(targetPersonal);
         when(treasury.getAccountById(100)).thenReturn(account(100, false, true));
@@ -629,7 +806,7 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payPlayer_authorizerRequired_notAuthorizer_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         Account targetPersonal = new Account(); targetPersonal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(targetPersonal);
         when(treasury.getAccountById(100)).thenReturn(account(100, false, true));
@@ -637,19 +814,23 @@ class FirmTransactionServiceImplTest {
         when(treasury.hasFunds(100, BigDecimal.ONE)).thenReturn(true);
         when(treasury.getAuthorizers(100)).thenReturn(List.of());
         assertThatThrownBy(() -> svc.payPlayer(1, target, player, BigDecimal.ONE))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(NoPermissionException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.not-authorizer");
     }
 
     @Test
     void payPlayerFromAccount_rejectsForeignAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
         assertThatThrownBy(() -> svc.payPlayerFromAccount(1, 99, target, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.foreign-account");
     }
 
     @Test
     void payPlayerFromAccount_succeeds() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
         Account targetPersonal = new Account(); targetPersonal.setAccountId(7);
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(targetPersonal);
@@ -664,8 +845,8 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payFirm_succeeds() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
-        when(firms.getFirmByNameOrId("2")).thenReturn(firm(2, 200));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
+        when(firms.getFirmById(2)).thenReturn(firm(2, 200));
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         when(treasury.canAccessAccount(player, 100)).thenReturn(true);
         when(treasury.hasFunds(100, BigDecimal.TEN)).thenReturn(true);
@@ -681,16 +862,18 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payFirm_sameAccount_throws() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
-        when(firms.getFirmByNameOrId("2")).thenReturn(firm(2, 100));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
+        when(firms.getFirmById(2)).thenReturn(firm(2, 100));
         assertThatThrownBy(() -> svc.payFirm(1, 2, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.pay.same-firm");
     }
 
     @Test
     void payFirm_usesDefaultReasonFromFirmNames() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(namedFirm(1, 100, "Acme"));
-        when(firms.getFirmByNameOrId("2")).thenReturn(namedFirm(2, 200, "Globex"));
+        when(firms.getFirmById(1)).thenReturn(namedFirm(1, 100, "Acme"));
+        when(firms.getFirmById(2)).thenReturn(namedFirm(2, 200, "Globex"));
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         when(treasury.canAccessAccount(player, 100)).thenReturn(true);
         when(treasury.hasFunds(100, BigDecimal.TEN)).thenReturn(true);
@@ -705,8 +888,8 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payFirm_withMemo_appendsSanitizedMemoToReason() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(namedFirm(1, 100, "Acme"));
-        when(firms.getFirmByNameOrId("2")).thenReturn(namedFirm(2, 200, "Globex"));
+        when(firms.getFirmById(1)).thenReturn(namedFirm(1, 100, "Acme"));
+        when(firms.getFirmById(2)).thenReturn(namedFirm(2, 200, "Globex"));
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         when(treasury.canAccessAccount(player, 100)).thenReturn(true);
         when(treasury.hasFunds(100, BigDecimal.TEN)).thenReturn(true);
@@ -722,8 +905,8 @@ class FirmTransactionServiceImplTest {
 
     @Test
     void payFirm_withBlankMemo_fallsBackToDefaultReason() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(namedFirm(1, 100, "Acme"));
-        when(firms.getFirmByNameOrId("2")).thenReturn(namedFirm(2, 200, "Globex"));
+        when(firms.getFirmById(1)).thenReturn(namedFirm(1, 100, "Acme"));
+        when(firms.getFirmById(2)).thenReturn(namedFirm(2, 200, "Globex"));
         when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
         when(treasury.canAccessAccount(player, 100)).thenReturn(true);
         when(treasury.hasFunds(100, BigDecimal.TEN)).thenReturn(true);
@@ -740,21 +923,25 @@ class FirmTransactionServiceImplTest {
     void payFirmFromAccount_rejectsForeignAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
         assertThatThrownBy(() -> svc.payFirmFromAccount(1, 99, 2, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.foreign-account");
     }
 
     @Test
     void payFirmFromAccount_sameAccount_throws() {
         when(firmAccounts.isFirmAccount(1, 100)).thenReturn(true);
-        when(firms.getFirmByNameOrId("2")).thenReturn(firm(2, 100));
+        when(firms.getFirmById(2)).thenReturn(firm(2, 100));
         assertThatThrownBy(() -> svc.payFirmFromAccount(1, 100, 2, player, BigDecimal.ONE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .extracting(e -> ((KeyedException) e).messageKey())
+                .isEqualTo("business.finance.pay.same-firm");
     }
 
     @Test
     void payFirmFromAccount_succeeds() {
-        when(firms.getFirmByNameOrId("1")).thenReturn(firm(1, 100));
-        when(firms.getFirmByNameOrId("2")).thenReturn(firm(2, 200));
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
+        when(firms.getFirmById(2)).thenReturn(firm(2, 200));
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
         when(treasury.getAccountById(99)).thenReturn(account(99, false, false));
         when(treasury.canAccessAccount(player, 99)).thenReturn(true);

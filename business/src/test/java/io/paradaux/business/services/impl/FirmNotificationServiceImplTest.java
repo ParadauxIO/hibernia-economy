@@ -41,7 +41,7 @@ class FirmNotificationServiceImplTest {
     void notifyFirm_sendsToAllOnlineMembers() {
         Player a = player(UUID.randomUUID());
         Player b = player(UUID.randomUUID());
-        when(staff.getOnlineEmployees("1")).thenReturn(List.of(a, b));
+        when(staff.getOnlineEmployees(1)).thenReturn(List.of(a, b));
 
         svc().notifyFirm(1, "business.notify.transfer.incoming", "amount", "$5");
 
@@ -57,7 +57,7 @@ class FirmNotificationServiceImplTest {
         UUID actor = UUID.randomUUID();
         Player actorPlayer = player(actor);
         Player other = player(UUID.randomUUID());
-        when(staff.getOnlineEmployees("1")).thenReturn(List.of(actorPlayer, other));
+        when(staff.getOnlineEmployees(1)).thenReturn(List.of(actorPlayer, other));
 
         svc().notifyFirmExcept(1, actor, "business.notify.transfer.incoming");
 
@@ -68,7 +68,7 @@ class FirmNotificationServiceImplTest {
 
     @Test
     void noOnlineRecipients_doesNotSend() {
-        when(staff.getOnlineEmployees("1")).thenReturn(List.of());
+        when(staff.getOnlineEmployees(1)).thenReturn(List.of());
         svc().notifyFirm(1, "business.notify.transfer.incoming");
         verify(message, never()).send(any(List.class), any(), any());
     }
@@ -77,7 +77,7 @@ class FirmNotificationServiceImplTest {
     void allRecipientsExcluded_doesNotSend() {
         UUID actor = UUID.randomUUID();
         Player actorPlayer = player(actor);
-        when(staff.getOnlineEmployees("1")).thenReturn(List.of(actorPlayer));
+        when(staff.getOnlineEmployees(1)).thenReturn(List.of(actorPlayer));
         svc().notifyFirmExcept(1, actor, "business.notify.transfer.incoming");
         verify(message, never()).send(any(List.class), any(), any());
     }
@@ -85,7 +85,7 @@ class FirmNotificationServiceImplTest {
     @Test
     void deliveryIsBestEffort_swallowsExceptions() {
         // A resolution failure (e.g. firm vanished) must not propagate to the caller.
-        when(staff.getOnlineEmployees("1")).thenThrow(new RuntimeException("boom"));
+        when(staff.getOnlineEmployees(1)).thenThrow(new RuntimeException("boom"));
         svc().notifyFirm(1, "business.notify.transfer.incoming");
         verify(message, never()).send(any(List.class), any(), any());
     }
