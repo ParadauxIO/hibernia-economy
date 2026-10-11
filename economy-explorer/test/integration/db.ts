@@ -1,6 +1,6 @@
 import mysql from 'mysql2/promise';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 // Integration tests run only when RUN_INTEGRATION=1 and DB_* point at a
 // disposable MariaDB (a CI service container, or a local docker). They exercise
@@ -12,7 +12,9 @@ import { fileURLToPath } from 'node:url';
 // trigger harness lives outside the monorepo in ../other (economy-explorer/testing/0005).
 export const HAS_DB = process.env.RUN_INTEGRATION === '1';
 
-const file = (p: string) => fileURLToPath(new URL(p, import.meta.url));
+// Resolved from the package root (vitest and Playwright both run there) rather than
+// import.meta.url, which Playwright's CommonJS transpile of this file can't use.
+const file = (p: string) => resolve(process.cwd(), 'test/integration', p);
 
 /** Drop everything, recreate the schema, and load the deterministic seed. */
 export async function resetDb(): Promise<void> {

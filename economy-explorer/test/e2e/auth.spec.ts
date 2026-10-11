@@ -1,4 +1,6 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
+import mysql from 'mysql2/promise';
+import { dataTable, visit } from './helpers';
 
 // These require the app running with E2E_TEST_AUTH=1 against the seeded test DB
 // (the CI e2e job sets E2E_AUTH_SHIM=1 to enable them). Skipped otherwise so a
@@ -15,26 +17,41 @@ test.describe('admin', () => {
   test.beforeEach(({ context }) => loginAs(context, 'admin'));
 
   test('can open the whole-economy transactions list', async ({ page }) => {
-    await page.goto('/transactions');
+    await visit(page, '/transactions');
     await expect(page.locator('.privacy-gate')).toHaveCount(0);
-    await expect(page.locator('table.data-table')).toBeVisible();
+    await expect(dataTable(page)).toBeVisible();
   });
 
   test('can open admin API keys', async ({ page }) => {
-    await page.goto('/admin/api-keys');
+    await visit(page, '/admin/api-keys');
     await expect(page.locator('.privacy-gate')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'API keys' })).toBeVisible();
   });
 
   test('sees the staff-only Sales tab in the market nav', async ({ page }) => {
-    await page.goto('/market');
+    await visit(page, '/market');
     await expect(page.locator('.section-tabs a', { hasText: 'Sales' })).toBeVisible();
   });
 
   test('privileged reads are written to the audit log', async ({ page }) => {
-    await page.goto('/transactions'); // a privileged read of everyone's transactions
-    await page.goto('/admin/audit');
-    await expect(page.locator('table.data-table')).toContainText('/transactions');
+    await visit(page, '/transactions'); // a privileged read of everyone's transactions
+    // There is no audit page in the explorer; assert on the row itself. The insert
+    // is awaited by the page render, so it is committed once the page has settled.
+    const conn = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT ?? 3306),
+      user: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    });
+    try {
+      const [rows] = await conn.query<mysql.RowDataPacket[]>(
+        "SELECT actor_role FROM explorer_audit WHERE actor_sub = 'e2e-admin' AND path = '/transactions'");
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows[0].actor_role).toBe('admin');
+    } finally {
+      await conn.end();
+    }
   });
 });
 
@@ -42,15 +59,15 @@ test.describe('player own-data', () => {
   test.beforeEach(({ context }) => loginAs(context, 'player')); // shim = Alice, owns account #1
 
   test('sees their own account history', async ({ page }) => {
-    await page.goto('/accounts/1');
+    await visit(page, '/accounts/1');
     await expect(page.locator('.privacy-gate')).toHaveCount(0);
     // account-detail renders several tables (txns, counterparties, …) when
     // history is visible — assert at least one is present.
-    await expect(page.locator('table.data-table').first()).toBeVisible();
+    await expect(dataTable(page).first()).toBeVisible();
   });
 
   test('cannot see another account’s history', async ({ page }) => {
-    await page.goto('/accounts/2'); // Bob's account
+    await visit(page, '/accounts/2'); // Bob's account
     await expect(page.locator('.privacy-gate')).toBeVisible();
   });
 });

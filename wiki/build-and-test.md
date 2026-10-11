@@ -161,6 +161,21 @@ npm run typecheck && npm run lint
 npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
 
+The SQL integration suite and the Playwright end-to-end suite both need a
+**disposable** MariaDB — every table in it is dropped and reseeded from
+`test/integration/schema.sql` + `seed.sql`:
+
+```bash
+export DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=economy_test DB_USERNAME=... DB_PASSWORD=...
+RUN_INTEGRATION=1 npm test          # unit + SQL integration (skipped without RUN_INTEGRATION=1)
+npx playwright install chromium     # once
+npm run test:e2e                    # seeds the DB, builds + starts the app, runs every spec
+```
+
+`test:e2e` refuses a `DB_NAME` that doesn't contain `test`. Set `E2E_BASE_URL` to
+run only the public specs against an instance that is already running; nothing is
+seeded or started in that mode. CI runs both suites in **Economy Explorer · CI**.
+
 ## Adding a new module
 
 1. Create the project directory with its own `build.gradle.kts`.

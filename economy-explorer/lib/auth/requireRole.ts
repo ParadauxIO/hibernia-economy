@@ -12,7 +12,7 @@ const RANK: Record<RequiredRole, number> = { player: 1, government: 2, admin: 3 
  *
  * Use sparingly: most pages branch on viewer state in-line (anonymous baseline
  * stays public; login only unlocks more). Reserve requireRole for pages that
- * have no anonymous variant — /me, /admin/*, /admin/audit, /government.
+ * have no anonymous variant — /me, /admin/*, /government.
  */
 export function requireRole(viewer: Viewer, min: RequiredRole): asserts viewer is Extract<Viewer, { anon: false }> {
   if (viewer.anon) throw new UnauthorizedError(`This page requires sign-in.`);
