@@ -14,7 +14,7 @@ import {
 } from '@/lib/sql/ledger';
 import { accountLabel, fmtAmt, fmtAmtFull, fmtN, fmtTs, shortenUuid } from '@/lib/format';
 import { getViewer } from '@/lib/auth/viewer';
-import { isStaff } from '@/lib/auth/access';
+import { hasElevatedRead, isStaff } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import { Pagination } from '@/components/Pagination';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -75,8 +75,10 @@ export default async function AccountDetailPage({
   }
 
   // Audit privileged inspection: a staff member using elevated access to view
-  // someone ELSE's account history (their own view needs no elevation).
-  if (!viewer.anon && (viewer.role === 'admin' || viewer.role === 'government') && !isOwner) {
+  // someone ELSE's account history (their own view needs no elevation). Keyed on
+  // hasElevatedRead so the read-only `viewer` role (role 'player' + the viewer
+  // capability, PAR-265) is audited too — it reads via isStaff above.
+  if (hasElevatedRead(viewer) && !isOwner) {
     await auditView(viewer, { path: `/accounts/${id}`, targetType: 'account', targetId: String(id) });
   }
 

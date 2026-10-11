@@ -35,7 +35,7 @@ edit is live:
 |---|---|
 | **Treasury** | **`/treasury reload` applies most changes live** — it re-reads `config.yml` + `messages.properties`, refreshing salaries, tax brackets/rates, government account names, and log level. Only `database.*`, the tax/salary schedule intervals, and the `economy.format` currency pattern need a restart. |
 | **Business** | **`/business reload` applies most changes live** — it re-reads `config.yml`, refreshing the firm ownership limit, the creation cooldown, and the balance-tax brackets (plus message strings). Only the database connection needs a restart. |
-| **ChestShop** | **`/csVersion reload`** (alias `/chestshop reload`) re-reads `config.yml` live; a full restart isn't required. |
+| **ChestShop** | **`/chestshop reload`** (alias `/cs reload`) re-reads `config.yml` live; a full restart isn't required. |
 | **Realty** | **`/realty reload` applies most changes live**, including `taxes.yml` (it takes effect on the next tax cycle). Database changes still need a restart. |
 
 ## How the pieces fit together

@@ -380,7 +380,17 @@ export async function countMarketFirms(): Promise<number> {
   return Number(r.rows[0]?.c ?? 0);
 }
 
-export async function getMarketFirm(firmId: number): Promise<MarketFirmRow | null> {
+/**
+ * One firm's ChestShop totals. `days = null` means all-time; otherwise the
+ * trailing N-day window (the `/firm sales export <firm> <days>` deep link).
+ *
+ * The window only narrows the FIGURES, never the firm's existence: a firm that
+ * has ever sold still resolves (with zero totals) when nothing falls inside the
+ * window, so a windowed link can't 404 a real firm. Returns null only for a firm
+ * with no ChestShop sales at all.
+ */
+export async function getMarketFirm(firmId: number, days: number | null = null): Promise<MarketFirmRow | null> {
+  const inWindow = days != null ? sql`cs.occurred_at >= NOW() - INTERVAL ${days} DAY` : sql`TRUE`;
   const r = await sql<{
     firm_id: number;
     display_name: string | null;
@@ -388,8 +398,10 @@ export async function getMarketFirm(firmId: number): Promise<MarketFirmRow | nul
     total_quantity: string | number;
     total_volume: string;
   }>`
-    SELECT cs.shop_firm_id AS firm_id, MAX(f.display_name) AS display_name, COUNT(*) AS sale_count,
-           COALESCE(SUM(cs.quantity),0) AS total_quantity, COALESCE(SUM(cs.total_price),0.00) AS total_volume
+    SELECT cs.shop_firm_id AS firm_id, MAX(f.display_name) AS display_name,
+           COALESCE(SUM(CASE WHEN ${inWindow} THEN 1 ELSE 0 END),0) AS sale_count,
+           COALESCE(SUM(CASE WHEN ${inWindow} THEN cs.quantity END),0) AS total_quantity,
+           COALESCE(SUM(CASE WHEN ${inWindow} THEN cs.total_price END),0.00) AS total_volume
     FROM chestshop_sale cs JOIN firm f ON f.firm_id = cs.shop_firm_id
     WHERE cs.shop_firm_id = ${firmId} GROUP BY cs.shop_firm_id
   `.execute(db);
@@ -404,12 +416,19 @@ export async function getMarketFirm(firmId: number): Promise<MarketFirmRow | nul
   };
 }
 
-export async function listFirmMarketItems(firmId: number, limit: number, offset: number): Promise<MarketItemRow[]> {
+/** A firm's per-item sales. `days = null` means all-time; otherwise the trailing N-day window. */
+export async function listFirmMarketItems(
+  firmId: number,
+  limit: number,
+  offset: number,
+  days: number | null = null,
+): Promise<MarketItemRow[]> {
+  const windowCond = days != null ? sql`AND occurred_at >= NOW() - INTERVAL ${days} DAY` : sql``;
   const r = await sql<RawMarketItem>`
     SELECT item_key, MAX(material) AS material, MAX(item_name) AS item_name,
            MAX(item_custom) AS item_custom, COUNT(*) AS trade_count,
            COALESCE(SUM(quantity),0) AS total_quantity, COALESCE(SUM(total_price),0.00) AS total_volume
-    FROM chestshop_sale WHERE shop_firm_id = ${firmId}
+    FROM chestshop_sale WHERE shop_firm_id = ${firmId} ${windowCond}
     GROUP BY item_key ORDER BY trade_count DESC, item_name ASC LIMIT ${limit} OFFSET ${offset}
   `.execute(db);
   return r.rows.map(toMarketItemRow);

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
-import { canViewFirmFinancials } from '@/lib/auth/access';
+import { canViewFirmFinancials, hasElevatedRead } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import {
   findFirmByDisplayName,
@@ -57,7 +57,9 @@ export default async function FirmDetailPage({
 
   // Audit privileged inspection: a staff member using elevated access to view a
   // firm's internals/financials when they aren't actually part of that firm.
-  if (!viewer.anon && (viewer.role === 'admin' || viewer.role === 'government')) {
+  // hasElevatedRead also covers the read-only `viewer` role (PAR-265), which
+  // gets the financials via canViewFirmFinancials → isStaff.
+  if (hasElevatedRead(viewer)) {
     const member = viewer.minecraftUuid ? await isFirmMember(firm.firm_id, viewer.minecraftUuid) : false;
     if (!member) {
       await auditView(viewer, { path: `/firms/${encodeURIComponent(firmName)}`, targetType: 'firm', targetId: String(firm.firm_id) });

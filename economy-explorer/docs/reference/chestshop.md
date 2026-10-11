@@ -97,11 +97,18 @@ See [Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
 |---|---|
 | `/shopinfo` | Show details of the shop you're looking at — owner, item, quantity, prices. Aliases: `/sinfo`, `/shop`. |
 | `/iteminfo [item]` | Show the name and shop code for the item in your hand, or for a named item (e.g. `/iteminfo log`). Alias: `/iinfo`. |
-| `/cstoggle` | Turn the "someone used your shop" messages on or off. |
-| `/csaccess` | Toggle your access to trade at shops. |
-| `/csVersion` | Show the ChestShop version. Alias: `/chestshop`. |
-| `/csMetrics` | Show server-wide shop metrics. |
-| `/csGive <item code> [amount] [player]` | Admin: give an item by its shop code. |
+| `/find [item]` | Search every shop on the server for an item and browse the results. |
+| `/chestshop` | Show ChestShop command help (also `/chestshop help [page]`). Alias: `/cs` — every subcommand below works as `/cs …` too. |
+| `/chestshop notify` | Turn the "someone used your shop" messages on or off. |
+| `/chestshop toggle visibility <true\|false>` | Show or hide the shop you're looking at in `/find` results. Shop owner (or admin) only. |
+| `/chestshop toggle hologram <true\|false>` | Show or hide the floating item preview above the shop you're looking at. Shop owner (or admin) only. |
+| `/chestshop toggle preview <true\|false>` | Show or hide shop item previews for yourself. |
+| `/chestshop bypass` | Admin: toggle your own admin bypass — off lets you use shops as a normal customer. |
+| `/chestshop version` | Admin: show the ChestShop version. |
+| `/chestshop reload` | Admin: reload the ChestShop configuration. |
+| `/chestshop metrics` | Admin: show server-wide shop metrics. |
+| `/chestshop give <item code> [amount] [player]` | Admin: give an item by its shop code. |
+| `/chestshop resync <chunks>` | Admin: rebuild the `/find` shop registry from the loaded world around you. |
 
 ## Shops and firms
 
@@ -122,9 +129,11 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 |---|---|---|
 | `/iteminfo` (`/iinfo`) | `ChestShop.iteminfo` | `true` |
 | `/shopinfo` (`/sinfo`, `/shop`) | `ChestShop.shopinfo` | `true` |
-| `/cstoggle` | `ChestShop.toggle` | `true` |
-| `/csaccess` | `ChestShop.accesstoggle` | `op` |
-| `/csGive` · `/csVersion` (`/chestshop`) · `/csMetrics` | `ChestShop.admin` | `op` |
+| `/find` | `ChestShop.find` | `op` (not declared by the plugin — grant it to players) |
+| `/chestshop notify` | `ChestShop.toggle` | `true` |
+| `/chestshop toggle visibility` · `toggle hologram` | shop owner, or `ChestShop.admin` | — |
+| `/chestshop toggle preview` | none | everyone |
+| `/chestshop bypass` · `version` · `reload` · `metrics` · `give` · `resync` | `ChestShop.admin` | `op` |
 
 ### Using and building shops
 

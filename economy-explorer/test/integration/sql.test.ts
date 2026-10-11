@@ -9,7 +9,8 @@ import { findCapabilities, findPlayerUuidByName } from '@/lib/sql/group';
 import { findAccountsForPlayer, getPlayerTotals } from '@/lib/sql/me';
 import { findIdentityBySub } from '@/lib/sql/identity';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
-import { listItemSales } from '@/lib/sql/market';
+import { listItemSales, getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
+import mysql from 'mysql2/promise';
 import { gini } from '@/lib/derived';
 import { audit } from '@/lib/audit';
 import { listAudit } from '@/lib/sql/audit';
@@ -200,6 +201,66 @@ d('market seller names resolve (no UUIDs)', () => {
     expect(names).toContain('Alice'); // personal shop, display_name was a UUID
     expect(names).toContain('Acme Corp'); // firm shop
     for (const n of names) expect(looksLikeUuid(n)).toBe(false);
+  });
+});
+
+// The in-game `/firm sales export <firm> <days>` link opens
+// /chestshop/firms/<id>?days=N; the firm drilldown must honour the window.
+d('firm market drilldown honours the ?days window', () => {
+  beforeAll(async () => {
+    // One Acme (firm 1) sale 40 days old, alongside the two seeded "now" sales,
+    // and a 40-day-old sale that is TaxFree Co's (firm 2) only one.
+    const conn = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT ?? 3306),
+      user: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    });
+    try {
+      await conn.query(
+        `INSERT INTO chestshop_sale (txn_id, occurred_at, direction, customer_uuid_bin, shop_account_id, shop_account_type, shop_firm_id, shop_owner_uuid_bin, is_admin_shop, material, item_key, item_name, item_custom, quantity, unit_price, total_price)
+         VALUES (NULL, NOW() - INTERVAL 40 DAY, 'SELL', UNHEX('00000000000000000000000000000B0B'), 3, 'BUSINESS', 1, UNHEX('0000000000000000000000000000A1CE'), 0, 'GOLD_INGOT', 'GOLD_INGOT', 'Gold Ingot', 0, 4, 25.0000, 100.00),
+                (NULL, NOW() - INTERVAL 40 DAY, 'SELL', UNHEX('00000000000000000000000000000B0B'), NULL, 'BUSINESS', 2, UNHEX('0000000000000000000000000000DA7E'), 0, 'GOLD_INGOT', 'GOLD_INGOT', 'Gold Ingot', 0, 1, 25.0000, 25.00)`,
+      );
+    } finally {
+      await conn.end();
+    }
+  });
+
+  it('all-time (no window) includes the old sale', async () => {
+    const firm = await getMarketFirm(1);
+    expect(firm).toMatchObject({ firm_id: 1, display_name: 'Acme Corp', sale_count: 3, total_quantity: 29 });
+    expect(Number(firm!.total_volume)).toBe(150);
+    const items = await listFirmMarketItems(1, 50, 0);
+    expect(items.map((i) => i.item_key).sort()).toEqual(['DIAMOND', 'GOLD_INGOT', 'IRON_INGOT']);
+  });
+
+  it('a 30-day window excludes the 40-day-old sale from totals and items', async () => {
+    const firm = await getMarketFirm(1, 30);
+    expect(firm).toMatchObject({ firm_id: 1, display_name: 'Acme Corp', sale_count: 2, total_quantity: 25 });
+    expect(Number(firm!.total_volume)).toBe(50);
+    const items = await listFirmMarketItems(1, 50, 0, 30);
+    expect(items.map((i) => i.item_key).sort()).toEqual(['DIAMOND', 'IRON_INGOT']);
+  });
+
+  it('a wider window brings it back', async () => {
+    expect((await getMarketFirm(1, 60))!.sale_count).toBe(3);
+    expect(await listFirmMarketItems(1, 50, 0, 60)).toHaveLength(3);
+  });
+
+  it('still resolves a firm with no sales inside the window (zero totals, not a 404)', async () => {
+    // TaxFree Co (firm 2): its only sale is 40 days old.
+    const windowed = await getMarketFirm(2, 30);
+    expect(windowed).toMatchObject({ firm_id: 2, display_name: 'TaxFree Co', sale_count: 0, total_quantity: 0 });
+    expect(Number(windowed!.total_volume)).toBe(0);
+    expect(await listFirmMarketItems(2, 50, 0, 30)).toEqual([]);
+    expect((await getMarketFirm(2))!.sale_count).toBe(1);
+  });
+
+  it('returns null for a firm with no ChestShop sales at all', async () => {
+    expect(await getMarketFirm(999_999, 30)).toBeNull();
+    expect(await getMarketFirm(999_999)).toBeNull();
   });
 });
 

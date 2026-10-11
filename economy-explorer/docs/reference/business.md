@@ -220,7 +220,7 @@ firm's books, not public.
 |---|---|
 | `/business sales <firm> [page]` | List the firm's recent ChestShop sales (paginated). |
 | `/business sales summary <firm> [days]` | Aggregate sales report — totals, top items, top customers (default 30 days). |
-| `/business sales export <firm> <days>` | Get an Economy Explorer link to the firm's sales report (capped by `sales.max-export-days`). |
+| `/business sales export <firm> <days>` | Get an Economy Explorer link to the firm's sales report for the last `<days>` days (capped by `sales.max-export-days`). The page shows the window it is filtered to, with a link to switch to all time. |
 | `/business sales toggle <firm>` | Turn real-time sale notifications on/off for the firm (owner/admin). |
 
 ## Chat
