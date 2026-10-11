@@ -146,16 +146,17 @@ public class Business extends JavaPlugin {
 
         // 6) Drive the firm sale-notification digest: flush buffered sales on a
         // timer so bursts are condensed into one message per firm per window.
+        // Asynchronous: the flush reads the database (enabled flag, firm, roster,
+        // customer name) and must not stall the main thread.
         FirmSalesNotificationService salesNotifications =
                 injector.getInstance(FirmSalesNotificationService.class);
         long flushTicks = injector.getInstance(FirmConfiguration.class).getSalesNotifyFlushSeconds() * 20L;
-        getServer().getScheduler().runTaskTimer(this, salesNotifications::flush, flushTicks, flushTicks);
+        getServer().getScheduler().runTaskTimerAsynchronously(this, salesNotifications::flush, flushTicks, flushTicks);
 
         // 7) Register the employee-only firm chat channel with CarbonChat (PAR-20).
-        // CarbonChat is a soft dependency: if it's absent, linking the Carbon-
-        // referencing method throws NoClassDefFoundError at the call site (before
-        // the method's own guard runs), so catch Throwable here to keep firm chat
-        // optional without breaking enable.
+        // CarbonChat is a soft dependency: initialise() soft-disables the feature
+        // itself when Carbon is absent; the catch here is a second line of defence
+        // so firm chat can never break enable.
         try {
             injector.getInstance(io.paradaux.business.chat.FirmChatService.class).initialise();
         } catch (Throwable t) {

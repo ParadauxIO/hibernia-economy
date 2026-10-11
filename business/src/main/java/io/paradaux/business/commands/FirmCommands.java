@@ -80,7 +80,7 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.firm.not-found", "firm", firm);
             return;
         }
-        if (Boolean.TRUE.equals(f.getArchived())) {
+        if (fullyDisbanded(f)) {
             message.send(sender, "business.firm.disband.already", "firm", firm);
             return;
         }
@@ -109,7 +109,7 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.firm.not-found", "firm", firm);
             return;
         }
-        if (Boolean.TRUE.equals(f.getArchived())) {
+        if (fullyDisbanded(f)) {
             message.send(sender, "business.firm.disband.already", "firm", firm);
             return;
         }
@@ -127,10 +127,35 @@ public class FirmCommands implements CommandHandler {
         // an empty list depending on how it filters.
         var onlineEmployees = staff.getOnlineEmployees(firm);
 
-        firms.disbandFirm(firm, sender.getUniqueId());
-        message.send(sender, "business.firm.disband.success", "firm", f.getDisplayName());
-        message.send(onlineEmployees, "business.firm.disband.employee", "firm", f.getDisplayName(), "sender", sender.getName());
-        message.broadcast("business.firm.disband.broadcast", "firm", f.getDisplayName(), "sender", sender.getName());
+        FirmService.DisbandResult result = firms.disbandFirm(firm, sender.getUniqueId());
+        reportDisband(sender, f, result, onlineEmployees, "/firm disband " + f.getDisplayName());
+    }
+
+    /**
+     * Disbanded with nothing left to drain. A firm that is archived but still has
+     * accounts linked is a disband that failed partway; it stays disbandable so
+     * the remaining balances can be returned.
+     */
+    private boolean fullyDisbanded(Firm f) {
+        return Boolean.TRUE.equals(f.getArchived()) && !firms.isDisbandIncomplete(f);
+    }
+
+    private void reportDisband(Player sender, Firm f, FirmService.DisbandResult result,
+                               List<Player> onlineEmployees, String rerunCommand) {
+        if (result.complete()) {
+            message.send(sender, "business.firm.disband.success", "firm", f.getDisplayName());
+        } else {
+            // Some accounts couldn't be emptied: say so rather than claim the funds
+            // were returned, and point at the re-run that finishes the job.
+            message.send(sender, "business.firm.disband.partial", "firm", f.getDisplayName(),
+                    "failed", result.undrainedAccountIds().size(), "command", rerunCommand);
+        }
+        // A re-run only drains what an earlier disband left behind — the firm was
+        // already announced as disbanded then.
+        if (!result.resumed()) {
+            message.send(onlineEmployees, "business.firm.disband.employee", "firm", f.getDisplayName(), "sender", sender.getName());
+            message.broadcast("business.firm.disband.broadcast", "firm", f.getDisplayName(), "sender", sender.getName());
+        }
     }
 
     @Route("list")
@@ -311,16 +336,14 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.firm.not-found", "firm", firm);
             return;
         }
-        if (Boolean.TRUE.equals(f.getArchived())) {
+        if (fullyDisbanded(f)) {
             message.send(sender, "business.firm.disband.already", "firm", firm);
             return;
         }
 
         var onlineEmployees = staff.getOnlineEmployees(firm);
-        firms.adminDisbandFirm(firm);
-        message.send(sender, "business.firm.disband.success", "firm", f.getDisplayName());
-        message.send(onlineEmployees, "business.firm.disband.employee", "firm", f.getDisplayName(), "sender", sender.getName());
-        message.broadcast("business.firm.disband.broadcast", "firm", f.getDisplayName(), "sender", sender.getName());
+        FirmService.DisbandResult result = firms.adminDisbandFirm(firm);
+        reportDisband(sender, f, result, onlineEmployees, "/firm admin disband " + f.getDisplayName());
     }
 
     @Route("admin rename <firm> <newname>")

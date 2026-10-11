@@ -3,6 +3,7 @@ package io.paradaux.business.services.impl;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.InternalException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
 import io.paradaux.business.model.Firm;
@@ -37,6 +38,7 @@ class FirmStaffServiceImplTest {
     @Mock FirmRoleMapper roles;
     @Mock FirmStaffMapper staff;
     @Mock FirmAccountService accounts;
+    @Mock FirmChatService chat;
 
     private FirmStaffServiceImpl svc;
 
@@ -45,7 +47,7 @@ class FirmStaffServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        svc = new FirmStaffServiceImpl(firms, roles, staff, accounts);
+        svc = new FirmStaffServiceImpl(firms, roles, staff, accounts, () -> chat);
     }
 
     private Firm acme() {
@@ -217,6 +219,8 @@ class FirmStaffServiceImplTest {
 
         verify(staff).endCurrentEmployment(1, target.toString(), actor.toString());
         verify(accounts).syncAllFirmAccounts(1);
+        // The fired employee's firm-chat selection must be re-checked at once.
+        verify(chat).membershipChanged(1);
     }
 
     @Test
@@ -555,6 +559,7 @@ class FirmStaffServiceImplTest {
         svc.resignFromFirm(1, target);
 
         verify(staff).endCurrentEmployment(1, target.toString(), target.toString());
+        verify(chat).membershipChanged(1);
     }
 
     @Test

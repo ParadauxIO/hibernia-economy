@@ -98,8 +98,18 @@ class BusinessApiImplTest {
     @Test
     void firms_disbandFirm_succeedsForProprietor() {
         when(firmService.isProprietor(7, actor)).thenReturn(true);
+        when(firmService.disbandFirm(7, actor)).thenReturn(new FirmService.DisbandResult(false, List.of()));
         api.firms().disbandFirm(7, actor);
         verify(firmService).disbandFirm(7, actor);
+    }
+
+    @Test
+    void firms_disbandFirm_partialDrain_isSurfacedNotReportedAsSuccess() {
+        when(firmService.isProprietor(7, actor)).thenReturn(true);
+        when(firmService.disbandFirm(7, actor)).thenReturn(new FirmService.DisbandResult(false, List.of(41, 42)));
+        assertThatThrownBy(() -> api.firms().disbandFirm(7, actor))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("2 account(s) could not be drained");
     }
 
     @Test

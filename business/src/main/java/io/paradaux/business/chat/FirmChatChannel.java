@@ -43,6 +43,8 @@ public class FirmChatChannel implements ChatChannel {
 
             @Override
             public ChannelPermissionResult speechPermitted(CarbonPlayer player) {
+                // activeFirm() re-validates membership (cached briefly), so a player
+                // who was fired or resigned since selecting the firm is denied here.
                 return service.activeFirm(player.uuid()).isPresent()
                         ? ChannelPermissionResult.allowed()
                         : ChannelPermissionResult.denied(

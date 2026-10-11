@@ -8,7 +8,39 @@ import java.util.UUID;
 public interface FirmService {
 
     Firm createFirm(String name, UUID actorId);
-    void disbandFirm(String firmName, UUID actorId);
+
+    /**
+     * Disband a firm: archive it, then return each account's balance to the
+     * proprietor and archive + unlink the account. Draining is per-account and
+     * best-effort, so the result must be checked — see {@link DisbandResult}. A
+     * firm left partially drained may be disbanded again to finish the job; one
+     * with nothing left to drain is rejected as already disbanded.
+     */
+    DisbandResult disbandFirm(String firmName, UUID actorId);
+
+    /**
+     * Whether the firm was disbanded but still has accounts linked — i.e. an
+     * earlier disband failed partway through draining and can be re-run.
+     */
+    boolean isDisbandIncomplete(Firm firm);
+
+    /**
+     * Outcome of a disband.
+     *
+     * @param resumed             the firm was already archived by an earlier (or a
+     *                            concurrent) disband, so this run only drained what
+     *                            was left — callers shouldn't re-announce the disband
+     * @param undrainedAccountIds accounts that could not be drained/archived; they
+     *                            stay linked with their balance intact, and
+     *                            disbanding the firm again retries them
+     */
+    record DisbandResult(boolean resumed, List<Integer> undrainedAccountIds) {
+
+        /** Whether every account was drained, archived and unlinked. */
+        public boolean complete() {
+            return undrainedAccountIds.isEmpty();
+        }
+    }
 
     List<Firm> listAllFirms(int page, int pageSize);
     List<Firm> listOwnedOrMemberFirms(UUID playerId);
@@ -22,7 +54,7 @@ public interface FirmService {
     // getFirmByNameOrId(String.valueOf(id)). The String overloads stay for the
     // command entrypoints resolving user name-or-id input.
 
-    void disbandFirm(int firmId, UUID actorId);
+    DisbandResult disbandFirm(int firmId, UUID actorId);
     void updateFirmHq(int firmId, String plotName, UUID actorId);
     void updateFirmDiscord(int firmId, String url, UUID actorId);
 
@@ -31,7 +63,7 @@ public interface FirmService {
     // responsible for gating them on the `business.admin.*` permission surface.
 
     /** Force-disband a firm regardless of proprietorship (funds still returned to its proprietor). */
-    void adminDisbandFirm(String firmName);
+    DisbandResult adminDisbandFirm(String firmName);
 
     /** Rename a firm's display name, validated like creation (format + uniqueness). Returns the updated firm. */
     Firm renameFirm(String firmName, String newName);

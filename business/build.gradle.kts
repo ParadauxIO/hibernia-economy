@@ -70,11 +70,11 @@ dependencies {
     testImplementation(project(":test-support"))
 
     // CarbonChat is a compileOnly soft-dep in production (the server provides it at
-    // runtime). The startup test builds the real injector, which constructs ChatCommands
-    // → FirmChatService (a Carbon channel), so the API must be on the test classpath too —
-    // otherwise resolving the CommandManager fails with a NoClassDefFoundError that never
-    // happens on a real server. Mirrors how chestshop puts the Treasury/Business APIs on
-    // its test classpath.
+    // runtime). It is on the test classpath only so the Carbon-facing glue
+    // (FirmChatChannel / CarbonFirmChat) can be unit-tested against Carbon's types —
+    // NOT because the injector needs it: nothing Guice reflects over may name a
+    // net.draycia.* type, and the testWithoutCarbon task below re-runs the startup
+    // test with this jar stripped from the classpath to prove it.
     testImplementation("de.hexaoxi:carbonchat-api:3.0.0-beta.32")
 
     // Treasury API + Paper API are compileOnly in production; tests need them too.
@@ -109,13 +109,32 @@ tasks.named<Copy>("processTestResources") {
     }
 }
 
+// CarbonChat is only a softdepend (plugin.yml), so the plugin must enable on a server
+// without it. Re-run the startup-shaped tests with carbonchat-api removed from the
+// runtime classpath: if any class Guice reflects over (fields, methods — including
+// synthetic lambda bodies — or constructors) names a net.draycia.* type, building the
+// real injector fails here with NoClassDefFoundError instead of on a production boot.
+val testWithoutCarbon = tasks.register<Test>("testWithoutCarbon") {
+    description = "Runs the startup tests with carbonchat-api absent from the classpath."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath.filter { !it.name.startsWith("carbonchat-api") }
+    useJUnitPlatform()
+    // Selected by class file, not by tag: JUnit discovery would otherwise introspect
+    // every test class, and the ones that mock Carbon types can't load here.
+    include("**/startup/BusinessStartupTest.class", "**/chat/FirmChatWithoutCarbonTest.class")
+    shouldRunAfter(tasks.test)
+}
+
 tasks {
     test {
+        // These assert Carbon is NOT loadable, so they only make sense in testWithoutCarbon.
+        useJUnitPlatform { excludeTags("carbon-absent") }
         finalizedBy(jacocoTestReport)
     }
 
     check {
-        dependsOn(jacocoTestCoverageVerification)
+        dependsOn(jacocoTestCoverageVerification, testWithoutCarbon)
     }
 
     // Bukkit / I/O glue that can't be exercised without a running server.

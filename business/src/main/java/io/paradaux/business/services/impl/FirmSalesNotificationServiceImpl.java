@@ -25,9 +25,14 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Buffers firm sales and flushes them as a single line or a condensed digest
  * (PAR-179). The per-firm enabled flag lives in {@code firm_properties} under
- * {@link #NOTIFY_KEY}. record()/flush() both run on the main thread (the event
- * is sync, the flush is a sync scheduler task), so the per-firm buffers need no
- * locking beyond the ConcurrentHashMap that holds them.
+ * {@link #NOTIFY_KEY}.
+ *
+ * <p>record() runs on the main thread (the sale event is sync) and only touches
+ * memory. flush() reads the database (enabled flag, firm, roster, customer name),
+ * so it runs on an async scheduler task and must never be called from the main
+ * thread. The two therefore race: a buffer is {@link FirmBuffer#drain() drained}
+ * and closed under its own monitor, and a record() that loses that race retries
+ * against a fresh buffer, so no sale is dropped or counted twice.
  */
 @Singleton
 public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationService {
@@ -66,7 +71,15 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
         }
         // Buffer unconditionally (cheap, in-memory); the enabled check is done once
         // per firm at flush to keep the per-sale path off the DB.
-        buffers.computeIfAbsent(firmId, k -> new FirmBuffer()).add(sale);
+        while (true) {
+            FirmBuffer buf = buffers.computeIfAbsent(firmId, k -> new FirmBuffer());
+            if (buf.add(sale)) {
+                return;
+            }
+            // A concurrent flush drained this buffer after we fetched it: make sure
+            // it's unmapped and start a fresh one.
+            buffers.remove(firmId, buf);
+        }
     }
 
     @Override
@@ -76,13 +89,17 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
         }
         for (Integer firmId : new ArrayList<>(buffers.keySet())) {
             FirmBuffer buf = buffers.remove(firmId);
-            if (buf == null || buf.count == 0) {
+            if (buf == null) {
+                continue;
+            }
+            Snapshot sales = buf.drain();
+            if (sales.count() == 0) {
                 continue;
             }
             if (!isEnabled(firmId)) {
                 continue; // firm opted out — drop the buffered sales silently
             }
-            send(firmId, buf);
+            send(firmId, sales);
         }
     }
 
@@ -98,25 +115,12 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
         return next;
     }
 
-    private void send(int firmId, FirmBuffer buf) {
+    private void send(int firmId, Snapshot sales) {
         Firm firm = firms.getAnyFirmById(firmId);
         String firmName = firm != null ? firm.getDisplayName() : ("Firm #" + firmId);
 
-        // Snapshot the buffer atomically (same monitor as add()) so building the
-        // message can't race a concurrent record() if recordSale is ever invoked
-        // off the main thread.
-        long count;
-        ChestShopSaleRecord first;
-        LocalDateTime since;
-        BigDecimal totalVolume;
-        String items;
-        synchronized (buf) {
-            count = buf.count;
-            first = buf.firstSale;
-            since = buf.since;
-            totalVolume = buf.totalVolume;
-            items = buf.renderItems();
-        }
+        long count = sales.count();
+        ChestShopSaleRecord first = sales.first();
 
         if (count == 1 && first != null) {
             notifications.notifyFirm(firmId, "business.sales.notify.single",
@@ -132,9 +136,9 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
         notifications.notifyFirm(firmId, "business.sales.notify.digest",
                 "firm", firmName,
                 "count", count,
-                "since", TIME_FMT.format(since),
-                "items", items,
-                "total", treasury.formatAmount(totalVolume));
+                "since", TIME_FMT.format(sales.since()),
+                "items", sales.items(),
+                "total", treasury.formatAmount(sales.totalVolume()));
     }
 
     /** Firm-centric label: a customer BUY means the firm sold, and vice versa. */
@@ -156,8 +160,13 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
         private long count;
         private BigDecimal totalVolume = BigDecimal.ZERO;
         private ChestShopSaleRecord firstSale;
+        private boolean drained;
 
-        synchronized void add(ChestShopSaleRecord s) {
+        /** Returns false (recording nothing) if a flush has already drained this buffer. */
+        synchronized boolean add(ChestShopSaleRecord s) {
+            if (drained) {
+                return false;
+            }
             if (count == 0) {
                 firstSale = s;
             }
@@ -166,6 +175,13 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
             String label = action(s.direction()) + " " + s.itemName();
             byItem.computeIfAbsent(label, k -> new ItemAgg(action(s.direction()), s.itemName()))
                     .add(s.quantity());
+            return true;
+        }
+
+        /** Take the buffered sales and close the buffer to further adds, atomically. */
+        synchronized Snapshot drain() {
+            drained = true;
+            return new Snapshot(count, firstSale, since, totalVolume, renderItems());
         }
 
         /** e.g. "sold 128x Cobblestone, sold 64x Iron Ingot (+2 more)". */
@@ -185,6 +201,10 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
             return sb.toString();
         }
     }
+
+    /** An immutable copy of a drained {@link FirmBuffer}. */
+    private record Snapshot(long count, ChestShopSaleRecord first, LocalDateTime since,
+                            BigDecimal totalVolume, String items) {}
 
     private static final class ItemAgg {
         private final String action;

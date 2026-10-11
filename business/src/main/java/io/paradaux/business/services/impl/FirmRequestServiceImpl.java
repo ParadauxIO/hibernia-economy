@@ -78,16 +78,35 @@ public class FirmRequestServiceImpl implements FirmRequestService {
         }
 
         if (requests.hasPendingJobOffer(firm.getFirmId(), targetId.toString())) {
-            throw new BadCommandException("This player already has a pending invite to " + firm.getDisplayName()
-                    + ". Wait for them to accept it, or rescind it first with /firm offer rescind "
-                    + firm.getDisplayName() + " <player>.");
+            throw pendingInviteExists(firm);
         }
 
-        int rowsAffected = requests.createInvite(firm.getFirmId(), targetId.toString(), actorId.toString(), expiresAt);
+        // An invite that lapsed unanswered stays PENDING until the periodic expiry job
+        // runs: the guard above ignores it, but it still holds the one-pending-invite
+        // unique slot. Expire it now so the re-offer isn't rejected by the database.
+        requests.expireStaleInvite(firm.getFirmId(), targetId.toString());
+
+        int rowsAffected;
+        try {
+            rowsAffected = requests.createInvite(firm.getFirmId(), targetId.toString(), actorId.toString(), expiresAt);
+        } catch (PersistenceException ex) {
+            // Lost a race with a concurrent offer to the same player: same outcome as
+            // the guard above, not a raw database error.
+            if (ex.getCause() instanceof SQLIntegrityConstraintViolationException) {
+                throw pendingInviteExists(firm);
+            }
+            throw ex;
+        }
 
         if (rowsAffected != 1) {
             throw new InternalException("Internal exception occurred while trying to offer employment.");
         }
+    }
+
+    private static BadCommandException pendingInviteExists(Firm firm) {
+        return new BadCommandException("This player already has a pending invite to " + firm.getDisplayName()
+                + ". Wait for them to accept it, or rescind it first with /firm offer rescind "
+                + firm.getDisplayName() + " <player>.");
     }
 
     @Override

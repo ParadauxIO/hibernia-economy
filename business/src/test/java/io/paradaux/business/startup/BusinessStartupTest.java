@@ -52,6 +52,10 @@ import static org.mockito.Mockito.mock;
  * as mocks, and the real {@link DatabaseModule}'s {@code @Provides DataSource} — which
  * would open a live MariaDB pool — is overridden with a non-connecting mock, since
  * {@code registerAll()} builds MyBatis mapper proxies without touching the DB.</p>
+ *
+ * <p>The {@code testWithoutCarbon} Gradle task re-runs this class with carbonchat-api
+ * stripped from the classpath, proving the CarbonChat soft-dependency never breaks the
+ * injector — so nothing here may reference a Carbon type.</p>
  */
 class BusinessStartupTest {
 

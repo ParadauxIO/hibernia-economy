@@ -147,6 +147,56 @@ class FirmRequestServiceImplTest {
                 .isInstanceOf(InternalException.class);
     }
 
+    /**
+     * Regression: an invite that lapsed unanswered stays PENDING until the 30-minute
+     * expiry job runs. The duplicate guard ignores it (it requires an unexpired
+     * invite) but the unique key still counts it, so the re-offer used to die on a
+     * raw PersistenceException. The stale row must be expired before the insert.
+     */
+    @Test
+    void offerEmployment_expiresALapsedInviteBeforeReoffering() {
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm());
+        when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
+        when(staff.isEmployedBy(1, target)).thenReturn(false);
+        when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(false);
+        when(requests.createInvite(anyInt(), anyString(), anyString(), any())).thenReturn(1);
+
+        svc.offerEmployment("Acme", target, actor);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(requests);
+        order.verify(requests).expireStaleInvite(1, target.toString());
+        order.verify(requests).createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class));
+    }
+
+    @Test
+    void offerEmployment_uniqueKeyViolation_isReportedAsAlreadyPending() {
+        // A concurrent offer won the insert: same message as the guard, not a raw DB error.
+        Firm firm = firm();
+        firm.setDisplayName("Acme");
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
+        when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
+        when(staff.isEmployedBy(1, target)).thenReturn(false);
+        when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(false);
+        when(requests.createInvite(anyInt(), anyString(), anyString(), any()))
+                .thenThrow(new PersistenceException("dup", new SQLIntegrityConstraintViolationException("uq_one_pending_invite")));
+
+        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("already has a pending invite to Acme");
+    }
+
+    @Test
+    void offerEmployment_otherPersistenceFailure_propagates() {
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm());
+        when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
+        when(staff.isEmployedBy(1, target)).thenReturn(false);
+        when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(false);
+        PersistenceException down = new PersistenceException("connection lost", new java.sql.SQLException("down"));
+        when(requests.createInvite(anyInt(), anyString(), anyString(), any())).thenThrow(down);
+
+        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor)).isSameAs(down);
+    }
+
     // ---------- rescindEmploymentOffer ----------
 
     @Test
