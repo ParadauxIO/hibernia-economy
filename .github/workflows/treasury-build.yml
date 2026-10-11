@@ -5,11 +5,13 @@ on:
     branches: [ main, develop ]
     paths:
       - 'treasury/**'
+      - 'common/**'                  # implementation(project(":common")), shaded into the jar
       - '.github/workflows/treasury-build.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'treasury/**'
+      - 'common/**'                  # implementation(project(":common")), shaded into the jar
       - '.github/workflows/treasury-build.yml'
   workflow_dispatch:
 

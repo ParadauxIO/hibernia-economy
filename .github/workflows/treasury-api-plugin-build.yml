@@ -15,6 +15,7 @@ on:
       - 'common/**'
       - 'treasury/treasury-api/**'
       - 'business/business-api/**'
+      - 'economy-flyway/**'          # migrations are staged onto the test classpath (mapper ITs)
       - '.github/workflows/treasury-api-plugin-build.yml'
   pull_request:
     branches: [ main, develop ]
@@ -23,6 +24,7 @@ on:
       - 'common/**'
       - 'treasury/treasury-api/**'
       - 'business/business-api/**'
+      - 'economy-flyway/**'          # migrations are staged onto the test classpath (mapper ITs)
       - '.github/workflows/treasury-api-plugin-build.yml'
   workflow_dispatch:
 
