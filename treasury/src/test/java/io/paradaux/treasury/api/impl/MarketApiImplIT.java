@@ -223,6 +223,53 @@ class MarketApiImplIT extends IntegrationTestBase {
         assertEquals(1, activeFlag("world", 4, 4, 4), "re-creating a shop sign must reactivate the row");
     }
 
+    // ── owner flags (visible / hologram) across upserts ──────────────────────────
+
+    @Test
+    void upsertShop_onLiveShop_keepsOwnerFlags() throws Exception {
+        market.upsertShop(shop("world", 6, 6, 6, "PERSONAL", null, UUID.randomUUID(),
+                new BigDecimal("5.00"), null, 1, 10));
+        market.setShopVisibility("world", 6, 6, 6, false);
+        market.setShopHologram("world", 6, 6, 6, false);
+
+        // a restock / price-change upsert on the same live shop
+        market.upsertShop(shop("world", 6, 6, 6, "PERSONAL", null, UUID.randomUUID(),
+                new BigDecimal("6.00"), null, 1, 20));
+
+        assertEquals(1, flag("active", "world", 6, 6, 6));
+        assertEquals(0, flag("visible", "world", 6, 6, 6), "an upsert must not reset the owner's /find choice");
+        assertEquals(0, flag("hologram", "world", 6, 6, 6), "an upsert must not reset the owner's hologram choice");
+    }
+
+    @Test
+    void upsertShop_revivingDestroyedShop_resetsOwnerFlags() throws Exception {
+        market.upsertShop(shop("world", 7, 7, 7, "PERSONAL", null, UUID.randomUUID(),
+                new BigDecimal("5.00"), null, 1, 10));
+        market.setShopVisibility("world", 7, 7, 7, false);
+        market.setShopHologram("world", 7, 7, 7, false);
+        market.deactivateShop("world", 7, 7, 7);
+        // the tombstone keeps the destroyed shop's flags
+        assertEquals(0, flag("visible", "world", 7, 7, 7));
+        assertEquals(0, flag("hologram", "world", 7, 7, 7));
+
+        // a NEW shop placed at the same location must not inherit them
+        market.upsertShop(shop("world", 7, 7, 7, "PERSONAL", null, UUID.randomUUID(),
+                new BigDecimal("5.00"), null, 1, 20));
+
+        assertEquals(1, flag("active", "world", 7, 7, 7));
+        assertEquals(1, flag("visible", "world", 7, 7, 7), "a new shop on a tombstone starts visible");
+        assertEquals(1, flag("hologram", "world", 7, 7, 7), "a new shop on a tombstone starts with its hologram");
+    }
+
+    @Test
+    void setShopFlags_missingLocation_storeNothing() {
+        // Plain UPDATEs: with no registry row there is nothing to write to (ChestShop registers
+        // the shop before toggling for exactly this reason).
+        assertDoesNotThrow(() -> market.setShopVisibility("nowhere", 0, 0, 0, false));
+        assertDoesNotThrow(() -> market.setShopHologram("nowhere", 0, 0, 0, false));
+        assertEquals(0, query("SELECT * FROM chestshop_shop").size());
+    }
+
     // ── deactivate / updateStock ─────────────────────────────────────────────────
 
     @Test
@@ -276,11 +323,15 @@ class MarketApiImplIT extends IntegrationTestBase {
     }
 
     private int activeFlag(String world, int x, int y, int z) {
+        return flag("active", world, x, y, z);
+    }
+
+    private int flag(String column, String world, int x, int y, int z) {
         List<Map<String, Object>> rows = query(
-                "SELECT active FROM chestshop_shop WHERE world='" + world + "' AND sign_x=" + x
+                "SELECT " + column + " FROM chestshop_shop WHERE world='" + world + "' AND sign_x=" + x
                         + " AND sign_y=" + y + " AND sign_z=" + z);
         assertFalse(rows.isEmpty());
-        return ((Number) rows.get(0).get("active")).intValue();
+        return ((Number) rows.get(0).get(column)).intValue();
     }
 
     private List<Map<String, Object>> query(String sql) {

@@ -12,6 +12,7 @@ import com.sk89q.worldedit.world.block.BlockCategories;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
 import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.MarketSyncService;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.PluginDisableEvent;
@@ -23,15 +24,20 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * Keeps the shop registry clean when WorldEdit/FastAsyncWorldEdit bulk-removes
+ * Keeps the shop registry in step when WorldEdit/FastAsyncWorldEdit bulk-edits
  * shops: WE bypasses Bukkit block events, so we wrap the edit extent and capture
- * positions where a sign is being overwritten, then deactivate those shops. A
- * port of the legacy chestshop-database WorldEdit adapter, narrowed to sign
- * removals so a large edit doesn't enqueue millions of no-op deactivations.
+ * positions where a sign is being overwritten or placed. A port of the legacy
+ * chestshop-database WorldEdit adapter, narrowed to signs so a large edit doesn't
+ * enqueue millions of no-op positions.
+ *
+ * <p>The extent only sees the edit being <em>requested</em> — not whether the block
+ * really changed, and an {@code //undo} puts the sign back through the same path. So
+ * nothing is decided here: the drain task hands each captured position to
+ * {@code MarketSyncService#onBlockReplaced}, which looks at what actually stands in
+ * the world a moment later and re-registers a shop sign or deactivates the row.
  *
  * <p>This class references WorldEdit types, so it is only loaded/constructed when
- * WorldEdit is present (guarded in the plugin bootstrap). Deactivation is a no-op
- * for any captured position that wasn't actually a shop.
+ * WorldEdit is present (guarded in the plugin bootstrap).
  */
 public final class WorldEditShopCleanupListener implements Listener {
 
@@ -39,10 +45,12 @@ public final class WorldEditShopCleanupListener implements Listener {
 
     private final JavaPlugin plugin;
     private final io.paradaux.chestshop.services.MarketService marketService;
+    private final MarketSyncService marketSync;
     private final Queue<Pos> queue = new ConcurrentLinkedDeque<>();
 
-    public WorldEditShopCleanupListener(JavaPlugin plugin, MarketService marketService) {
+    public WorldEditShopCleanupListener(JavaPlugin plugin, MarketService marketService, MarketSyncService marketSync) {
         this.marketService = marketService;
+        this.marketSync = marketSync;
         this.plugin = plugin;
     }
 
@@ -64,7 +72,7 @@ public final class WorldEditShopCleanupListener implements Listener {
             batch.add(pos);
         }
         for (Pos p : batch) {
-            marketService.market().deactivateShop(p.world(), p.x(), p.y(), p.z());
+            marketSync.onBlockReplaced(p.world(), p.x(), p.y(), p.z());
         }
     }
 
@@ -74,7 +82,7 @@ public final class WorldEditShopCleanupListener implements Listener {
                 || event.getStage() != EditSession.Stage.BEFORE_HISTORY) {
             return;
         }
-        event.setExtent(new SignRemovalLogger(queue, event.getExtent(), event.getWorld().getName()));
+        event.setExtent(new SignChangeLogger(queue, event.getExtent(), event.getWorld().getName()));
     }
 
     @EventHandler
@@ -84,13 +92,13 @@ public final class WorldEditShopCleanupListener implements Listener {
         }
     }
 
-    /** Captures positions where a sign is being overwritten by an edit. */
-    private static final class SignRemovalLogger extends AbstractDelegateExtent {
+    /** Captures positions where an edit overwrites a sign or places one (a paste, or an undo). */
+    private static final class SignChangeLogger extends AbstractDelegateExtent {
 
         private final Queue<Pos> queue;
         private final String world;
 
-        private SignRemovalLogger(Queue<Pos> queue, Extent extent, String world) {
+        private SignChangeLogger(Queue<Pos> queue, Extent extent, String world) {
             super(extent);
             this.queue = queue;
             this.world = world;
@@ -100,7 +108,8 @@ public final class WorldEditShopCleanupListener implements Listener {
         public <T extends BlockStateHolder<T>> boolean setBlock(BlockVector3 position, T block)
                 throws WorldEditException {
             BlockState existing = getExtent().getBlock(position);
-            if (existing != null && BlockCategories.SIGNS.contains(existing.getBlockType())) {
+            if ((existing != null && BlockCategories.SIGNS.contains(existing.getBlockType()))
+                    || BlockCategories.SIGNS.contains(block.getBlockType())) {
                 queue.add(new Pos(world, position.x(), position.y(), position.z()));
             }
             return super.setBlock(position, block);

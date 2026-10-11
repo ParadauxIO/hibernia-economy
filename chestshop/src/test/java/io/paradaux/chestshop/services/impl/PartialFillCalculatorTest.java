@@ -158,6 +158,29 @@ class PartialFillCalculatorTest {
 
     // ═══════════════════ adjustBuy — affordability ═══════════════════
 
+    // ---- free items (ALLOW_FREE_SHOPS): a zero price must never be divided by ----
+
+    @Test
+    void getAmountOfAffordableItems_freeItem_isTheWholeRequest() {
+        assertThat(PartialFillCalculatorImpl.getAmountOfAffordableItems(BigDecimal.ZERO, BigDecimal.ZERO, 64)).isEqualTo(64);
+        assertThat(PartialFillCalculatorImpl.getAmountOfAffordableItems(new BigDecimal("-5"), new BigDecimal("0.00"), 3)).isEqualTo(3);
+    }
+
+    @Test
+    void adjustBuy_freeShop_fundsCheckFailing_stillFillsTheWholeOrder() {
+        // e.g. an overdrawn buyer: hasFunds(0) is false, which used to divide the wallet by 0.
+        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("0.00"), false, BUY);
+        economy.hasFunds = (u, a) -> false;
+        economy.balance = u -> new BigDecimal("-3.00");
+        when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
+        when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
+
+        calc.adjustBuy(ctx);
+
+        assertThat(ctx.isCancelled()).isFalse();
+        assertThat(ctx.getExactPrice()).isEqualByComparingTo("0");
+    }
+
     @Test
     void adjustBuy_fullyAffordableAndInStock_completesUnchanged() {
         PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, BUY);

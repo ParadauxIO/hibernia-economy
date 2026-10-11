@@ -193,6 +193,10 @@ public class PartialFillCalculatorImpl implements PartialFillCalculator {
         // intValueExact() would throw ArithmeticException and abort the trade on the main thread.
         // The affordable amount is only ever used to scale the fill down, so it never needs to
         // exceed the requested item count — clamp to that cap before converting to int.
+        // A free item (ALLOW_FREE_SHOPS) is always affordable, and must not divide by zero.
+        if (pricePerItem.signum() == 0) {
+            return cap;
+        }
         BigDecimal affordable = walletMoney.divide(pricePerItem, 0, RoundingMode.FLOOR)
                 .min(BigDecimal.valueOf(cap));
         return affordable.intValue();

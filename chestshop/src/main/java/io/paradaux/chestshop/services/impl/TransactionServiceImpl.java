@@ -75,8 +75,13 @@ public class TransactionServiceImpl implements TransactionService {
     public void process(Transaction event) {
         execute(event);
 
-        // Runs regardless of cancellation.
-        stockCounter.onTransaction(event);
+        // Runs regardless of cancellation. The counter is sign decoration: by now the goods and
+        // money have moved, so a failure in it must not skip the sale record and messages below.
+        try {
+            stockCounter.onTransaction(event);
+        } catch (RuntimeException e) {
+            log.warn("Could not update the stock counter after a trade", e);
+        }
 
         if (event.isCancelled()) {
             return;

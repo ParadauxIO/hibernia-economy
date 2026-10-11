@@ -1,24 +1,20 @@
 package io.paradaux.chestshop.services.impl;
 import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.MarketResyncService;
+import io.paradaux.chestshop.services.MarketSyncService;
+import io.paradaux.chestshop.services.PreviewService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.chestshop.model.Account;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.market.ShopLocation;
 import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.BlockState;
-import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -48,26 +44,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class MarketResyncServiceImpl implements MarketResyncService {
 
+    /** Upper bound on chunks scanned per tick: the scan and its registry writes run on the main thread. */
+    static final int MAX_CHUNKS_PER_TICK = 64;
+
     private final JavaPlugin plugin;
     private final MarketService marketService;
     private final SignService signService;
-    private final ShopBlockService shopBlockService;
-    private final ItemCodeService itemCodes;
-    private final AccountService accounts;
+    private final MarketSyncService marketSync;
+    private final PreviewService previews;
     private final Message message;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Inject
     public MarketResyncServiceImpl(JavaPlugin plugin, MarketService marketService, SignService signService,
-                               ShopBlockService shopBlockService, ItemCodeService itemCodes,
-                               AccountService accounts, Message message) {
+                               MarketSyncService marketSync, PreviewService previews, Message message) {
         this.plugin = plugin;
         this.marketService = marketService;
         this.signService = signService;
-        this.shopBlockService = shopBlockService;
-        this.itemCodes = itemCodes;
-        this.accounts = accounts;
+        this.marketSync = marketSync;
+        this.previews = previews;
         this.message = message;
     }
 
@@ -81,7 +77,7 @@ public class MarketResyncServiceImpl implements MarketResyncService {
             message.send(initiator, "chestshop.resync.busy");
             return;
         }
-        int perTick = Math.max(1, chunksPerTick);
+        int perTick = Math.min(MAX_CHUNKS_PER_TICK, Math.max(1, chunksPerTick));
         message.send(initiator, "chestshop.resync.queued");
         // The only off-main step: enumerate known shop locations, then hand back to the main thread.
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -145,9 +141,11 @@ public class MarketResyncServiceImpl implements MarketResyncService {
         int upserted = 0;
         for (BlockState state : chunk.getTileEntities(false)) {
             if (state instanceof Sign sign && signService.isValid(sign)) {
-                if (upsertSign(sign)) {
+                // The sign is physically there, so its row is never a deactivation candidate —
+                // even when the row can't be rebuilt right now (item/owner not resolvable).
+                seen.add(posKey(sign.getX(), sign.getY(), sign.getZ()));
+                if (marketSync.registerShop(sign)) {
                     upserted++;
-                    seen.add(posKey(sign.getX(), sign.getY(), sign.getZ()));
                 }
             }
         }
@@ -158,41 +156,15 @@ public class MarketResyncServiceImpl implements MarketResyncService {
                 if (!seen.contains(pos)) {
                     int[] xyz = parsePos(pos);
                     marketService.market().deactivateShop(world, xyz[0], xyz[1], xyz[2]);
+                    previews.destroy(world, xyz[0], xyz[1], xyz[2]);
                     deactivated++;
                 }
             }
         }
-        return new int[]{upserted, deactivated};
-    }
-
-    /** Build and upsert a registry row from a live sign. False if it can't be resolved. */
-    private boolean upsertSign(Sign sign) {
-        try {
-            String itemCode = SignService.getItem(sign);
-            ItemStack item = itemCode != null ? itemCodes.decode(itemCode) : null;
-            if (item == null) {
-                return false;
-            }
-            boolean admin = signService.isAdminShop(sign);
-            MarketService.Owner owner;
-            if (admin) {
-                owner = marketService.ownerFromUuid(null, true);
-            } else {
-                Account account = accounts.resolveAccount(SignService.getOwner(sign));
-                if (account == null || account.getUuid() == null) {
-                    return false; // owner not resolvable — skip rather than write a half row
-                }
-                owner = marketService.ownerFromUuid(account.getUuid(), false);
-            }
-            Container container = admin ? null : shopBlockService.findConnectedContainer(sign);
-            Integer stock = container != null ? marketService.stockOf(item, container.getInventory()) : null;
-            Integer capacity = container != null ? marketService.capacityOf(item, container.getInventory()) : null;
-            marketService.market().upsertShop(marketService.shop(sign, item, owner, stock, capacity));
-            return true;
-        } catch (RuntimeException e) {
-            log.debug("resync: skipped a sign", e);
-            return false;
+        if (upserted > 0) {
+            previews.loadChunk(world, chunk.getX(), chunk.getZ()); // previews for newly discovered shops
         }
+        return new int[]{upserted, deactivated};
     }
 
     private static Map<String, Set<String>> groupKnownByChunk(List<ShopLocation> locations) {

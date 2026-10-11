@@ -349,6 +349,49 @@ class StockCounterServiceImplTest {
     }
 
     @Test
+    void onTransaction_chestlessAdminShop_hasNothingToCount() {
+        // FORCE_UNLIMITED_ADMIN_SHOP off, but the admin shop has no chest: the owner inventory is
+        // null, and looking a holder up through it used to throw after the trade had settled.
+        Sign sign = mock(Sign.class);
+        Transaction event = mock(Transaction.class);
+        when(event.getSign()).thenReturn(sign);
+        when(event.isUnlimitedOwner()).thenReturn(true);
+        when(config.isUseStockCounter()).thenReturn(true);
+        when(config.getMaxShopAmount()).thenReturn(3840);
+        when(config.isForceUnlimitedAdminShop()).thenReturn(false);
+
+        try (MockedStatic<SignService> ss = mockStatic(SignService.class);
+             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+            ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
+            qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
+
+            service.onTransaction(event);
+        }
+        verify(shopBlockService, never()).findConnectedShopSigns(any(InventoryHolder.class));
+    }
+
+    @Test
+    void onTransaction_noOwnerInventory_hasNothingToCount() {
+        Sign sign = mock(Sign.class);
+        Transaction event = mock(Transaction.class);
+        when(event.getSign()).thenReturn(sign);
+        when(event.isUnlimitedOwner()).thenReturn(false);
+        when(event.getOwnerInventory()).thenReturn(null);
+        when(config.isUseStockCounter()).thenReturn(true);
+        when(config.getMaxShopAmount()).thenReturn(3840);
+        when(config.isForceUnlimitedAdminShop()).thenReturn(false);
+
+        try (MockedStatic<SignService> ss = mockStatic(SignService.class);
+             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+            ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
+            qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
+
+            service.onTransaction(event);
+        }
+        verify(shopBlockService, never()).findConnectedShopSigns(any(InventoryHolder.class));
+    }
+
+    @Test
     void onTransaction_forceUnlimitedDisabled_stillUpdatesConnectedSigns() {
         // forceUnlimitedAdminShop off → the && short-circuits on its left operand (line 113 left-false
         // arc); the loop runs regardless of admin-shop status.

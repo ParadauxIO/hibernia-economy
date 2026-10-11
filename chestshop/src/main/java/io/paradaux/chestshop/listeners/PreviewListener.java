@@ -4,7 +4,6 @@ import io.paradaux.chestshop.services.PreviewService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.treasury.api.market.ShopResult;
 import org.bukkit.Chunk;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,7 +13,6 @@ import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -42,29 +40,8 @@ public final class PreviewListener implements Listener {
 
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
-        if (!marketService.searchEnabled()) {
-            return;
-        }
         Chunk chunk = event.getChunk();
-        String world = chunk.getWorld().getName();
-        int cx = chunk.getX();
-        int cz = chunk.getZ();
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            List<ShopResult> shops;
-            try {
-                shops = marketService.shopQuery().shopsInChunk(world, cx, cz);
-            } catch (RuntimeException e) {
-                return;
-            }
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (!chunk.isLoaded()) {
-                    return; // unloaded again before we got back
-                }
-                for (ShopResult shop : shops) {
-                    previews.render(shop);
-                }
-            });
-        });
+        previews.loadChunk(chunk.getWorld().getName(), chunk.getX(), chunk.getZ());
     }
 
     @EventHandler

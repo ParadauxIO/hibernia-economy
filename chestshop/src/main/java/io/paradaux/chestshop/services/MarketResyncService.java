@@ -17,6 +17,9 @@ import org.bukkit.entity.Player;
  */
 public interface MarketResyncService {
 
-    /** Kick off a resync, reporting progress to {@code initiator}. One at a time. */
+    /**
+     * Kick off a resync, reporting progress to {@code initiator}. One at a time.
+     * {@code chunksPerTick} is clamped to a sane range — the scan runs on the main thread.
+     */
     void resync(Player initiator, int chunksPerTick);
 }

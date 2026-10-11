@@ -816,6 +816,22 @@ class ShopServiceImplTest extends ServerTest {
         verify(economy).deposit(eq(notchAccount.getUuid()), any(BigDecimal.class), any());
     }
 
+    @Test
+    void refundOnRemoval_restoresServerAccountWhenOwnerCreditFails() {
+        // The server-economy account was debited to fund the refund, then the owner credit
+        // failed: the money must go back to the server account, not vanish.
+        when(accounts.resolveAccount("Notch")).thenReturn(notchAccount);
+        Account serverAcc = new Account("Server", "Server", UUID.randomUUID());
+        when(accounts.getServerEconomyAccount()).thenReturn(serverAcc);
+        when(economy.withdraw(eq(serverAcc.getUuid()), any(BigDecimal.class), any())).thenReturn(true);
+        when(economy.deposit(eq(notchAccount.getUuid()), any(BigDecimal.class), any())).thenReturn(false); // owner leg fails
+
+        refundService().refundOnRemoval(player, placeShopSign("Notch", "Diamond"));
+
+        verify(economy).deposit(eq(serverAcc.getUuid()), eq(new BigDecimal("5")), any()); // compensated
+        verify(message, never()).send(eq(player), eq("chestshop.SHOP_REFUNDED"), anyString(), anyString());
+    }
+
     // ---- helpers ----------------------------------------------------------------
 
     private int signX = 100;

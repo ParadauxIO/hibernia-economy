@@ -89,6 +89,7 @@ class MarketServiceImplTest extends ServerTest {
         register(ShopQueryApi.class, mock(ShopQueryApi.class));
         register(TreasuryApi.class, mock(TreasuryApi.class));
         register(BusinessApi.class, mock(BusinessApi.class));
+        org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin("Business");
 
         market.init();
 
@@ -98,6 +99,20 @@ class MarketServiceImplTest extends ServerTest {
         assertThat(market.shopQuery()).isNotNull();
         assertThat(market.treasury()).isNotNull();
         assertThat(market.business()).isNotNull();
+    }
+
+    @Test
+    void init_businessNotInstalled_neverTouchesItsApi() {
+        // Business is a soft dependency: without the plugin its API classes don't exist, so the
+        // lookup (and the BusinessApi class literal behind it) must be skipped entirely.
+        register(MarketApi.class, mock(MarketApi.class));
+        register(TreasuryApi.class, mock(TreasuryApi.class));
+        register(BusinessApi.class, mock(BusinessApi.class)); // would be found if it were looked up
+
+        market.init();
+
+        assertThat(market.enabled()).isTrue();
+        assertThat(market.business()).isNull();
     }
 
     @Test
@@ -205,6 +220,7 @@ class MarketServiceImplTest extends ServerTest {
         when(firms.getFirmByAccountId(13)).thenReturn(firm);
         when(business.firms()).thenReturn(firms);
         register(TreasuryApi.class, treasury);
+        org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin("Business");
         register(BusinessApi.class, business);
         market.init();
 
@@ -223,6 +239,7 @@ class MarketServiceImplTest extends ServerTest {
         when(firms.getFirmByAccountId(14)).thenReturn(null);
         when(business.firms()).thenReturn(firms);
         register(TreasuryApi.class, treasury);
+        org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin("Business");
         register(BusinessApi.class, business);
         market.init();
 

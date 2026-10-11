@@ -203,6 +203,24 @@ class TransactionServiceImplTest {
         assertThat(economy.migrateCalls).isZero();
     }
 
+    @Test
+    void process_stockCounterFailure_doesNotSkipTheSaleRecord() {
+        // By the time the counter runs the goods and money have moved. It only decorates the
+        // sign, so it blowing up must not lose the sale record, log line or confirmation.
+        Transaction event = sampleTransaction();
+        org.mockito.Mockito.doThrow(new NullPointerException("no owner inventory"))
+                .when(stockCounter).onTransaction(event);
+
+        service.process(event);
+
+        verify(postTrade).deleteEmptyShop(event);
+        assertThat(economy.migrateCalls).isEqualTo(1);
+        verify(market).onTransaction(event);
+        verify(postTrade).logTransaction(event);
+        verify(postTrade).sendTransactionMessages(event);
+        verify(metrics).onTransaction(event);
+    }
+
     /**
      * Hand-written {@link io.paradaux.chestshop.services.EconomyService} double. It can't be a
      * Mockito mock: the interface's {@code bind(TreasuryApi, int, TaxApi)} forces ByteBuddy to load
