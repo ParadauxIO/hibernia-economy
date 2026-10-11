@@ -87,13 +87,13 @@ Some integrations live outside Minecraft:
   never writes the ledger, balances, accounts, or firms. It renders balances,
   prices, and money flow for the public, and serves the player/admin
   documentation at `/docs`.
-- It is **not** strictly read-only over the whole DB: it currently writes a few
-  *explorer-adjacent control* tables directly — `webhook_subscription` (player
-  webhook management), `api_keys` (key revocation), and `api_rate_limit_override`
-  (admin). Consolidating those writes onto the REST admin API so kysely is
-  strictly read-only is tracked separately (ADT-14); the more privileged admin
-  ops (firm disband/rename, arbitrary transfers) already route through the REST
-  API with a SERVICE token.
+- Its only direct writes are to its **own `explorer_*` tables** — identity links
+  and link codes, access groups/capabilities/members, and the `explorer_audit`
+  log. Every other mutation goes through the `treasury-rest-api` admin API with a
+  SERVICE token (`TREASURY_API_BASE_URL` / `TREASURY_ADMIN_TOKEN`,
+  `economy-explorer/lib/treasury.ts`): webhook subscriptions, API-key
+  revoke/rotate, rate-limit overrides (ADT-14), and the privileged admin ops
+  (firm disband/rename, account edits, arbitrary transfers).
 
 ### Who may read an account, and who owns writes
 
@@ -104,10 +104,13 @@ Some integrations live outside Minecraft:
   the public API (a department-secretary VIEWER reads on the web only). See
   [database.md](database.md#account-read-access--single-source-of-truth).
 - **Schema contract.** The shared schema is owned by `economy-flyway`. The
-  explorer's kysely `DB` types are **hand-maintained and partial** (only the
-  `explorer_*` tables are typed; other tables use ad-hoc row interfaces), so a
-  migration rename isn't caught at TS compile time — generating those types from
-  the migrations with a CI drift gate is tracked separately (ADT-5).
+  explorer's full-schema kysely types are **generated from the migrated schema**
+  into `economy-explorer/lib/db.generated.ts` (`npm run db:codegen`), and the
+  `economy-explorer-schema-drift` workflow fails any PR whose migrations leave
+  that file stale (ADT-5). The queries themselves still use the hand-maintained
+  `DB` registry in `lib/db.ts` (only the `explorer_*` tables) plus ad-hoc row
+  interfaces for raw SQL, so the gate flags a rename/drop for review but does
+  not by itself break the TS build.
 
 ## Multi-tenancy
 

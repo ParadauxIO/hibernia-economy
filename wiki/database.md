@@ -41,10 +41,21 @@ The intended flow:
 2. Run **Migrate** against the same target to apply it.
 
 Per-target secrets (`FLYWAY_URL` / `FLYWAY_USER` / `FLYWAY_PASSWORD` /
-`FLYWAY_SCHEMA`) are configured as **GitHub Environments** — typical targets are
-`dc-test-server`, `democracycraft`, and `statecraft`. The migrate workflow runs
+`FLYWAY_SCHEMA`) are configured as **GitHub Environments** — the targets the
+workflows offer are `democracycraft` and `statecraft`. The migrate workflow runs
 `flywayInfo` (the plan) immediately before applying, and again afterward as an
 audit trail.
+
+A manual run uses the migrations of the branch picked under *Use workflow from*
+(the repository default is `develop`) — pick the ref you are actually deploying.
+
+> [!IMPORTANT]
+> Applying the schema and deploying the code are **separate, unsynchronised**
+> steps: images roll out on merge to `main`, plugins on a server restart, and
+> migrations only when someone runs the workflow. A migration that drops or
+> renames something the running code still uses therefore needs a planned
+> stop — see the **[release runbook](release-runbook.md)** for the full order
+> of operations (backup → stop → migrate → deploy → verify → rollback).
 
 ## Local development
 
@@ -94,4 +105,5 @@ integration suite).
 There is no automated rollback. The canonical recovery path is **restore from the
 pre-deploy backup**: pause economy-touching services, restore, fix the migration,
 re-run. This is deliberate — half-applied schema migrations have too many failure
-modes to automate safely.
+modes to automate safely. The step-by-step version is in the
+[release runbook](release-runbook.md#rollback).
