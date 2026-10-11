@@ -62,7 +62,7 @@ class ApiKeyServiceImplTest {
         return new ApiKeyMapper() {
             @Override public void insert(ApiKey k) { k.setKeyId(generatedId); }
             @Override public ApiKey findById(int keyId) { return null; }
-            @Override public int reissue(int keyId, String jwtId, Instant issuedAt, Instant expiresAt) { return 1; }
+            @Override public int reissue(int keyId, UUID ownerUuid, String jwtId, Instant issuedAt, Instant expiresAt) { return 1; }
             @Override public int revoke(int keyId) { return 0; }
             @Override public List<ApiKey> findByOwnerAndType(UUID ownerUuid, KeyType keyType) { return List.of(); }
             @Override public List<ApiKey> findBusinessAccessibleByEmployee(UUID playerUuid) { return List.of(); }
@@ -149,7 +149,7 @@ class ApiKeyServiceImplTest {
 
         assertThrows(NoPermissionException.class,
                 () -> new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, intruder));
-        verify(mapper, never()).reissue(anyInt(), org.mockito.ArgumentMatchers.any(),
+        verify(mapper, never()).reissue(anyInt(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
@@ -184,7 +184,7 @@ class ApiKeyServiceImplTest {
 
         assertThrows(NoPermissionException.class,
                 () -> new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, actor));
-        verify(mapper, never()).reissue(anyInt(), org.mockito.ArgumentMatchers.any(),
+        verify(mapper, never()).reissue(anyInt(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
@@ -198,6 +198,76 @@ class ApiKeyServiceImplTest {
 
         new ApiKeyServiceImpl(mapper, config, businessApi).revokeKey(1, actor);
         verify(mapper).revoke(1);
+    }
+
+    @Test
+    void reissueKey_business_byNewProprietor_carriesActingProprietorIdentity_inTokenAndRow() {
+        // The key was issued by a proprietor who has since handed the firm over. The
+        // REST API attributes everything done with the token to its subject, so a
+        // reissue by the current proprietor must not keep minting the old identity.
+        UUID formerProprietor = UUID.randomUUID();
+        UUID currentProprietor = UUID.randomUUID();
+        ApiKey biz = businessKey(1, 7);
+        biz.setOwnerUuid(formerProprietor);
+        FirmApi firms = mock(FirmApi.class);
+        when(businessApi.firms()).thenReturn(firms);
+        when(firms.isProprietor(7, currentProprietor)).thenReturn(true);
+        ApiKeyMapper mapper = trackingMapper(biz);
+
+        ApiKey reissued = new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, currentProprietor);
+
+        Claims claims = Jwts.parser().verifyWith(deriveKey(SECRET)).build()
+                .parseSignedClaims(reissued.getToken()).getPayload();
+        assertEquals(currentProprietor.toString(), claims.getSubject(),
+                "token subject must be the proprietor who reissued, not the original issuer");
+        assertEquals(7, claims.get("firm", Integer.class));
+        assertEquals(currentProprietor, reissued.getOwnerUuid());
+        // ...and the persisted row is moved to the same identity as the token.
+        verify(mapper).reissue(org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.eq(currentProprietor),
+                org.mockito.ArgumentMatchers.eq(reissued.getJwtId()),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void reissueKey_personal_keepsOwnerIdentity() {
+        UUID owner = UUID.randomUUID();
+        ApiKey personal = personalKey(1, owner);
+        personal.setAccountId(4);
+        ApiKeyMapper mapper = trackingMapper(personal);
+
+        ApiKey reissued = new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, owner);
+
+        Claims claims = Jwts.parser().verifyWith(deriveKey(SECRET)).build()
+                .parseSignedClaims(reissued.getToken()).getPayload();
+        assertEquals(owner.toString(), claims.getSubject());
+        assertEquals(owner, reissued.getOwnerUuid());
+        verify(mapper).reissue(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.eq(owner),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    // ---- SERVICE keys are backend credentials: never player-manageable ----
+
+    @Test
+    void reissueKey_service_isRejectedEvenForItsOwner_neverWritesReissue() {
+        UUID owner = UUID.randomUUID();
+        ApiKeyMapper mapper = trackingMapper(serviceKey(1, owner));
+
+        assertThrows(NoPermissionException.class,
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, owner));
+        verify(mapper, never()).reissue(anyInt(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void revokeKey_service_isRejectedEvenForItsOwner_neverRevokes() {
+        UUID owner = UUID.randomUUID();
+        ApiKeyMapper mapper = trackingMapper(serviceKey(1, owner));
+
+        assertThrows(NoPermissionException.class,
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi).revokeKey(1, owner));
+        verify(mapper, never()).revoke(anyInt());
     }
 
     @Test
@@ -217,6 +287,15 @@ class ApiKeyServiceImplTest {
         return k;
     }
 
+    private static ApiKey serviceKey(int keyId, UUID owner) {
+        ApiKey k = new ApiKey();
+        k.setKeyId(keyId);
+        k.setKeyType(KeyType.SERVICE);
+        k.setOwnerUuid(owner);
+        k.setRevoked(false);
+        return k;
+    }
+
     private static ApiKey businessKey(int keyId, int firmId) {
         ApiKey k = new ApiKey();
         k.setKeyId(keyId);
@@ -230,7 +309,7 @@ class ApiKeyServiceImplTest {
     private static ApiKeyMapper trackingMapper(ApiKey found) {
         ApiKeyMapper mapper = mock(ApiKeyMapper.class);
         when(mapper.findById(found.getKeyId())).thenReturn(found);
-        when(mapper.reissue(anyInt(), org.mockito.ArgumentMatchers.any(),
+        when(mapper.reissue(anyInt(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(1);
         return mapper;
     }
@@ -240,7 +319,7 @@ class ApiKeyServiceImplTest {
         return new ApiKeyMapper() {
             @Override public void insert(ApiKey k) {}
             @Override public ApiKey findById(int keyId) { return found; }
-            @Override public int reissue(int keyId, String jwtId, Instant issuedAt, Instant expiresAt) { return rows; }
+            @Override public int reissue(int keyId, UUID ownerUuid, String jwtId, Instant issuedAt, Instant expiresAt) { return rows; }
             @Override public int revoke(int keyId) { return 1; }
             @Override public List<ApiKey> findByOwnerAndType(UUID ownerUuid, KeyType keyType) { return List.of(); }
             @Override public List<ApiKey> findBusinessAccessibleByEmployee(UUID playerUuid) { return List.of(); }

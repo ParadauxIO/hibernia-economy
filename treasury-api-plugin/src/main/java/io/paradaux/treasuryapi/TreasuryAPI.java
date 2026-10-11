@@ -18,6 +18,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.logging.Level;
+
 public final class TreasuryAPI extends JavaPlugin {
 
     private Injector injector;
@@ -105,9 +107,17 @@ public final class TreasuryAPI extends JavaPlugin {
         ReconciliationConfiguration reconCfg = hibernia.configuration(ReconciliationConfiguration.class);
         if (reconCfg != null && reconCfg.isEnabled()) {
             if (getServer().getPluginManager().getPlugin("LuckPerms") != null) {
-                injector.getInstance(GroupReconciliationTask.class).schedule(reconCfg.getIntervalSeconds());
-                getLogger().info("Group reconciliation cron scheduled (every "
-                        + reconCfg.getIntervalSeconds() + "s).");
+                try {
+                    injector.getInstance(GroupReconciliationTask.class).schedule(reconCfg.getIntervalSeconds());
+                    getLogger().info("Group reconciliation cron scheduled (every "
+                            + reconCfg.getIntervalSeconds() + "s).");
+                } catch (RuntimeException | LinkageError e) {
+                    // LuckPerms is installed but never registered its service (it failed
+                    // to enable), so the task can't be built. Skip the cron rather than
+                    // failing the whole plugin over an optional feature.
+                    getLogger().log(Level.WARNING,
+                            "LuckPerms is installed but unavailable — reconciliation skipped.", e);
+                }
             } else {
                 getLogger().warning("reconciliation.enabled=true but LuckPerms is not installed — reconciliation skipped.");
             }

@@ -98,18 +98,26 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         String newJwtId = UUID.randomUUID().toString();
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plus(KEY_LIFETIME_DAYS, ChronoUnit.DAYS);
+        // The reissued credential belongs to whoever rotated it. For PERSONAL keys
+        // that is the unchanged owner (requireCanManage), but a BUSINESS key can be
+        // rotated by a proprietor other than its original issuer (ADT-111) — and the
+        // REST API attributes ledger initiators, rate limits, webhook ownership and
+        // account-membership access to the JWT subject. Carrying the previous
+        // proprietor's UUID forward would keep acting as them, so both the token and
+        // the row move to the acting proprietor.
         String token = buildJwt(keyId, newJwtId, existing.getKeyType(),
                 existing.getAccountId(), existing.getFirmId(),
-                existing.getOwnerUuid(), issuedAt, expiresAt);
+                actingUuid, issuedAt, expiresAt);
 
         // The mapper's UPDATE is guarded by `AND revoked = 0`, so a key revoked
         // between the read above and this write affects 0 rows — treat that as a
         // terminal-state rejection rather than silently building an unusable token.
-        int updated = apiKeyMapper.reissue(keyId, newJwtId, issuedAt, expiresAt);
+        int updated = apiKeyMapper.reissue(keyId, actingUuid, newJwtId, issuedAt, expiresAt);
         if (updated == 0) {
             throw new ConflictException("treasuryapi.key.revoked");
         }
 
+        existing.setOwnerUuid(actingUuid);
         existing.setJwtId(newJwtId);
         existing.setToken(token); // one-time display only; not persisted (ADT-6)
         existing.setIssuedAt(issuedAt);
@@ -132,8 +140,9 @@ public class ApiKeyServiceImpl implements ApiKeyService {
      * Enforces the per-key management invariant: a PERSONAL key may be managed only by
      * its current owner; a BUSINESS key only by a CURRENT proprietor of its firm — never
      * the individual who happened to issue it (ADT-111), so the firm keeps control of its
-     * own credential after a proprietor transfer. Throws {@code NoPermissionException}
-     * on failure.
+     * own credential after a proprietor transfer. A SERVICE key is a backend credential
+     * that no player may manage, whoever its owner column names. Throws
+     * {@code NoPermissionException} on failure.
      */
     private void requireCanManage(ApiKey key, UUID actingUuid) {
         boolean allowed = switch (key.getKeyType()) {
@@ -141,6 +150,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
                     && businessApi.firms().isProprietor(key.getFirmId(), actingUuid);
             case PERSONAL, GOVERNMENT -> key.getOwnerUuid() != null
                     && key.getOwnerUuid().equals(actingUuid);
+            case SERVICE -> false;
         };
         if (!allowed) {
             throw new NoPermissionException("treasuryapi.key.no-access");

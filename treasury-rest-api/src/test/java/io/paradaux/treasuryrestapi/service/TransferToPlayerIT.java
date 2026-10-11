@@ -120,6 +120,46 @@ class TransferToPlayerIT extends EmbeddedDbIT {
         assertThat(ex.getErrorCode()).isEqualTo("ACCOUNT_NOT_FOUND");
     }
 
+    @Test
+    void payByName_playerAndGovernmentSameName_409Ambiguous_movesNoMoney() {
+        // PAR-144 parity with GET /accounts/by-player: governments run as player alts
+        // of the same name, so a bare name that is both must not silently route the
+        // payment to the personal account.
+        insertAccount(1, "PERSONAL", PAYER, PAYER.toString());
+        insertAccount(2, "PERSONAL", PAYEE, "Treasury");
+        insertAccount(3, "GOVERNMENT", null, "Treasury");
+        insertPlayer(PAYEE, "Treasury");
+        seedBalance(1, "1000.00");
+        seedBalance(2, "0.00");
+        seedBalance(3, "0.00");
+
+        ApiException ex = expectApiException(new PlayerTransferRequest(
+                null, null, "treasury", "25.00", null));
+
+        assertThat(ex.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(ex.getErrorCode()).isEqualTo("AMBIGUOUS_NAME");
+        assertThat(rowCount("ledger_txns")).isZero();
+    }
+
+    @Test
+    void payByUuid_notBlockedByGovernmentNameCollision() {
+        // The guard is bare-name only: a UUID names the player unambiguously.
+        insertAccount(1, "PERSONAL", PAYER, PAYER.toString());
+        insertAccount(2, "PERSONAL", PAYEE, "Treasury");
+        insertAccount(3, "GOVERNMENT", null, "Treasury");
+        insertPlayer(PAYEE, "Treasury");
+        seedBalance(1, "1000.00");
+        seedBalance(2, "0.00");
+        seedBalance(3, "0.00");
+
+        TransferResponse resp = transferService.transferToPlayer(
+                personalToken(1, PAYER),
+                new PlayerTransferRequest(null, PAYEE.toString(), null, "25.00", null),
+                null);
+
+        assertThat(resp.toAccountId()).isEqualTo(2L);
+    }
+
     private ApiException expectApiException(PlayerTransferRequest request) {
         Throwable t = catchThrowable(() ->
                 transferService.transferToPlayer(personalToken(1, PAYER), request, null));

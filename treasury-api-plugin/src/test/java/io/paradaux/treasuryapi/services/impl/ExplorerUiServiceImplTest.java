@@ -1,6 +1,5 @@
 package io.paradaux.treasuryapi.services.impl;
 
-import com.google.inject.Provider;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ConflictException;
 import io.paradaux.hibernia.framework.exceptions.NotFoundException;
@@ -8,14 +7,11 @@ import io.paradaux.treasuryapi.TreasuryAPI;
 import io.paradaux.treasuryapi.mappers.ExplorerUiMapper;
 import io.paradaux.treasuryapi.services.ExplorerUiService;
 import io.paradaux.treasuryapi.services.KeycloakAdminClient;
-import io.paradaux.treasuryapi.tasks.GroupReconciliationTask;
-import org.bukkit.Bukkit;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.PluginManager;
+import io.paradaux.treasuryapi.services.PlayerGroupSync;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
 
+import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -24,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,15 +29,15 @@ import static org.mockito.Mockito.when;
  * (structure/0001, plugin-architecture/0001): role validation, the atomic
  * single-use link-code claim (the {@code claimLinkCode} affected-row count is the
  * authoritative guard), the Keycloak-pending fallback, and the self-sync
- * LuckPerms guard resolved through a {@code Provider} (not the Injector,
- * plugin-architecture/0002).
+ * LuckPerms guard resolved through an optional {@code PlayerGroupSync} (not the
+ * Injector, plugin-architecture/0002).
  */
 class ExplorerUiServiceImplTest {
 
     private ExplorerUiMapper mapper;
     private KeycloakAdminClient keycloak;
     private TreasuryAPI plugin;
-    private GroupReconciliationTask task;
+    private PlayerGroupSync task;
     private ExplorerUiServiceImpl service;
 
     private final UUID playerId = UUID.randomUUID();
@@ -53,9 +48,8 @@ class ExplorerUiServiceImplTest {
         keycloak = mock(KeycloakAdminClient.class);
         plugin = mock(TreasuryAPI.class);
         when(plugin.getLogger()).thenReturn(Logger.getLogger("test"));
-        task = mock(GroupReconciliationTask.class);
-        Provider<GroupReconciliationTask> provider = () -> task;
-        service = new ExplorerUiServiceImpl(mapper, keycloak, plugin, provider);
+        task = mock(PlayerGroupSync.class);
+        service = new ExplorerUiServiceImpl(mapper, keycloak, plugin, Optional.of(task));
     }
 
     // ---- Role grants ----
@@ -149,43 +143,29 @@ class ExplorerUiServiceImplTest {
         verify(mapper).upsertIdentity(anyString(), any(), anyString(), anyString());
     }
 
-    // ---- Self-sync (LuckPerms guard via Provider, not Injector) ----
+    // ---- Self-sync (optional PlayerGroupSync, absent without LuckPerms) ----
 
     @Test
-    void selfSync_luckPermsAbsent_throwsConflict_neverResolvesTask() {
-        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            PluginManager pm = mock(PluginManager.class);
-            bukkit.when(Bukkit::getPluginManager).thenReturn(pm);
-            when(pm.getPlugin("LuckPerms")).thenReturn(null);
+    void selfSync_luckPermsAbsent_throwsConflictUnavailable() {
+        ExplorerUiServiceImpl withoutLuckPerms =
+                new ExplorerUiServiceImpl(mapper, keycloak, plugin, Optional.empty());
 
-            ConflictException ex = assertThrows(ConflictException.class, () -> service.selfSync(playerId));
-            assertEquals("treasuryapi.ui.sync.unavailable", ex.getMessage());
-        }
-        verify(task, never()).reconcilePlayer(any());
+        ConflictException ex = assertThrows(ConflictException.class,
+                () -> withoutLuckPerms.selfSync(playerId));
+        assertEquals("treasuryapi.ui.sync.unavailable", ex.getMessage());
     }
 
     @Test
     void selfSync_luckPermsPresent_reconcilesPlayer() {
-        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            PluginManager pm = mock(PluginManager.class);
-            bukkit.when(Bukkit::getPluginManager).thenReturn(pm);
-            when(pm.getPlugin("LuckPerms")).thenReturn(mock(Plugin.class));
-
-            service.selfSync(playerId);
-        }
+        service.selfSync(playerId);
         verify(task).reconcilePlayer(playerId);
     }
 
     @Test
     void selfSync_reconcileThrows_wrappedAsConflictFailed() {
-        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            PluginManager pm = mock(PluginManager.class);
-            bukkit.when(Bukkit::getPluginManager).thenReturn(pm);
-            when(pm.getPlugin("LuckPerms")).thenReturn(mock(Plugin.class));
-            org.mockito.Mockito.doThrow(new RuntimeException("kaboom")).when(task).reconcilePlayer(playerId);
+        org.mockito.Mockito.doThrow(new RuntimeException("kaboom")).when(task).reconcilePlayer(playerId);
 
-            ConflictException ex = assertThrows(ConflictException.class, () -> service.selfSync(playerId));
-            assertEquals("treasuryapi.ui.sync.failed", ex.getMessage());
-        }
+        ConflictException ex = assertThrows(ConflictException.class, () -> service.selfSync(playerId));
+        assertEquals("treasuryapi.ui.sync.failed", ex.getMessage());
     }
 }

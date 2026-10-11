@@ -425,7 +425,8 @@ public class TransferService {
     /**
      * Resolves a player (by UUID or in-game name) to their PERSONAL account, then
      * delegates to the standard transfer pipeline. Exactly one of
-     * {@code toPlayerUuid} / {@code toPlayerName} must be supplied. The target
+     * {@code toPlayerUuid} / {@code toPlayerName} must be supplied; a name that is also
+     * a GOVERNMENT account's is rejected as ambiguous (409). The target
      * must already have a PERSONAL account — this never mints one (no faucet
      * exposure via REST). Same idempotency semantics as {@link #transfer}.
      */
@@ -453,6 +454,16 @@ public class TransferService {
             if (targetUuid == null) {
                 throw new ApiException(HttpStatus.NOT_FOUND, "PLAYER_NOT_FOUND",
                         "No player known by the name '" + request.toPlayerName() + "'.");
+            }
+            // PAR-144, same guard as GET /accounts/by-player: governments run as player
+            // alts of the same name, so a bare name that is both a player and a
+            // non-archived GOVERNMENT account is ambiguous. Refuse rather than silently
+            // paying the personal account; the caller should pay by 'toPlayerUuid' (or
+            // by account id for the government) to disambiguate.
+            if (accountMapper.existsGovernmentAccountByName(request.toPlayerName().trim())) {
+                throw new ApiException(HttpStatus.CONFLICT, "AMBIGUOUS_NAME",
+                        "'" + request.toPlayerName() + "' is both a player and a government account; "
+                                + "use 'toPlayerUuid' to disambiguate.");
             }
         }
 

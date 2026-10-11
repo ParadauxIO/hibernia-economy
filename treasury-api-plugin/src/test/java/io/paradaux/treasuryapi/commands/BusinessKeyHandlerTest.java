@@ -130,6 +130,21 @@ class BusinessKeyHandlerTest {
     }
 
     @Test
+    void serviceKey_isInvisibleToTheBusinessCommands() {
+        ApiKey serviceKey = businessKey(null, false);
+        serviceKey.setKeyType(KeyType.SERVICE);
+        when(apiKeyService.getKey(21)).thenReturn(serviceKey);
+
+        handler.doReissue(proprietor, 21);
+        handler.doRevoke(proprietor, 21);
+
+        verify(message).send(proprietor, "treasuryapi.business.reissue.not-found");
+        verify(message).send(proprietor, "treasuryapi.business.revoke.not-found");
+        verify(apiKeyService, never()).reissueKey(anyInt(), any());
+        verify(apiKeyService, never()).revokeKey(anyInt(), any());
+    }
+
+    @Test
     void doReissue_revokedKey_proprietorToldTerminal_neverReissues() {
         when(apiKeyService.getKey(21)).thenReturn(businessKey(7, true));
         when(firms.isProprietor(7, proprietorId)).thenReturn(true);

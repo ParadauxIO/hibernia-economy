@@ -1,7 +1,6 @@
 package io.paradaux.treasuryapi.services.impl;
 
 import com.google.inject.Inject;
-import com.google.inject.Provider;
 import com.google.inject.Singleton;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ConflictException;
@@ -10,11 +9,11 @@ import io.paradaux.treasuryapi.TreasuryAPI;
 import io.paradaux.treasuryapi.mappers.ExplorerUiMapper;
 import io.paradaux.treasuryapi.services.ExplorerUiService;
 import io.paradaux.treasuryapi.services.KeycloakAdminClient;
-import io.paradaux.treasuryapi.tasks.GroupReconciliationTask;
-import org.bukkit.Bukkit;
+import io.paradaux.treasuryapi.services.PlayerGroupSync;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -33,21 +32,23 @@ public class ExplorerUiServiceImpl implements ExplorerUiService {
     private final ExplorerUiMapper mapper;
     private final KeycloakAdminClient keycloak;
     private final TreasuryAPI plugin;
-    // A Provider (not the concrete task, and NOT the Guice Injector — the former
-    // service-locator smell, plugin-architecture/0002) breaks the eager dependency:
-    // GroupReconciliationTask is only bound when LuckPerms is present, so it is
-    // resolved lazily and only after the LuckPerms guard passes.
-    private final Provider<GroupReconciliationTask> reconciliationTask;
+    // Optional (bound via OptionalBinder in TreasuryAPIModule), NOT the concrete
+    // GroupReconciliationTask nor a Provider of it: Guice validates a Provider's
+    // target at injector creation, so either would drag the LuckPerms binding — and
+    // the net.luckperms.* classes — into startup and break the softdepend. Empty
+    // when LuckPerms is absent. (Also not the Guice Injector — the former
+    // service-locator smell, plugin-architecture/0002.)
+    private final Optional<PlayerGroupSync> groupSync;
 
     @Inject
     public ExplorerUiServiceImpl(ExplorerUiMapper mapper,
                                  KeycloakAdminClient keycloak,
                                  TreasuryAPI plugin,
-                                 Provider<GroupReconciliationTask> reconciliationTask) {
+                                 Optional<PlayerGroupSync> groupSync) {
         this.mapper = mapper;
         this.keycloak = keycloak;
         this.plugin = plugin;
-        this.reconciliationTask = reconciliationTask;
+        this.groupSync = groupSync;
     }
 
     @Override
@@ -110,11 +111,11 @@ public class ExplorerUiServiceImpl implements ExplorerUiService {
 
     @Override
     public void selfSync(UUID playerUuid) {
-        if (Bukkit.getPluginManager().getPlugin("LuckPerms") == null) {
+        if (groupSync.isEmpty()) {
             throw new ConflictException("treasuryapi.ui.sync.unavailable");
         }
         try {
-            reconciliationTask.get().reconcilePlayer(playerUuid);
+            groupSync.get().reconcilePlayer(playerUuid);
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Self-sync failed for " + playerUuid, e);
             throw new ConflictException("treasuryapi.ui.sync.failed", e);

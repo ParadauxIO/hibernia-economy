@@ -180,6 +180,37 @@ class AdminServicesIT extends EmbeddedDbIT {
     }
 
     @Test
+    void setOverride_multiplierAboveColumnRange_400_notADriver500() {
+        // api_rate_limit_override.multiplier is DECIMAL(6,2): 10000 does not fit and
+        // would otherwise surface as an out-of-range SQL error (500).
+        for (String tooLarge : List.of("10000", "9999.995", "1E+12")) {
+            ApiException ex = catchThrowableOfType(ApiException.class,
+                    () -> adminRateLimit.setOverride(service(), OWNER, new BigDecimal(tooLarge), null));
+            assertThat(ex).as("multiplier %s", tooLarge).isNotNull();
+            assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(ex.getErrorCode()).isEqualTo("INVALID_BODY");
+        }
+        assertThat(rowCount("api_rate_limit_override")).isZero();
+    }
+
+    @Test
+    void setOverride_multiplierAtColumnBounds_persists() {
+        adminRateLimit.setOverride(service(), OWNER, new BigDecimal("9999.99"), null);
+        assertThat(overrides.getMultiplier(OWNER)).isEqualByComparingTo("9999.99");
+        adminRateLimit.setOverride(service(), OWNER, new BigDecimal("0.01"), null);
+        assertThat(overrides.getMultiplier(OWNER)).isEqualByComparingTo("0.01");
+    }
+
+    @Test
+    void setOverride_multiplierThatWouldStoreAsZero_400() {
+        // 0.004 is > 0 but rounds to 0.00 in DECIMAL(6,2) — a zero multiplier in the table.
+        ApiException ex = catchThrowableOfType(ApiException.class,
+                () -> adminRateLimit.setOverride(service(), OWNER, new BigDecimal("0.004"), null));
+        assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(rowCount("api_rate_limit_override")).isZero();
+    }
+
+    @Test
     void setOverride_overlongNote_400() {
         ApiException ex = catchThrowableOfType(ApiException.class,
                 () -> adminRateLimit.setOverride(service(), OWNER, new BigDecimal("2"), "n".repeat(256)));
