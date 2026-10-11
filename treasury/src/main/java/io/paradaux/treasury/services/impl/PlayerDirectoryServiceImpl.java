@@ -46,9 +46,10 @@ public class PlayerDirectoryServiceImpl implements PlayerDirectoryService {
             // DB — the JVM monitor above only covers concurrent logins in this JVM.
             Long previousEpoch = economyPlayers.findLastLoginForUpdate(playerUuid);
 
-            // A name belongs to exactly one player at a time; evict any stale claim by a
+            // A name belongs to exactly one player at a time; release any stale claim by a
             // different player first so the upsert can't collide on UNIQUE(name_lower)
-            // when a name is changed or reused (the old holder re-registers on next login).
+            // when a name is changed or reused. The old holder's row (and its login
+            // epoch) is kept under a placeholder name until their next login restores it.
             economyPlayers.releaseNameFromOthers(currentName, playerUuid);
             economyPlayers.upsertLogin(playerUuid, currentName, epochSeconds);
 

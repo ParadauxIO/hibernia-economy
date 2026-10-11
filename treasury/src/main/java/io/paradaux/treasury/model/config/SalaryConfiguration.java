@@ -45,12 +45,20 @@ public class SalaryConfiguration {
     // Mutable so {@link #reload()} can refresh them at runtime (Guice singleton —
     // SalaryService reads enabled/amounts/account live each cycle). volatile so the
     // async payout cycle sees a fully-published value after /treasury reload
-    // re-populates these in place, rather than a stale or torn read (ADT-30). Note
-    // the payout INTERVAL is fixed when the timer is scheduled at startup; changing
-    // it needs a restart.
+    // re-populates these in place, rather than a stale or torn read (ADT-30). The
+    // payout INTERVAL is the exception: the timer is scheduled once at startup, so
+    // it is read once and deliberately NOT refreshed by reload — changing it needs
+    // a restart.
     private volatile boolean enabled;
     private volatile String governmentAccount;
-    /** Seconds between payout cycles. */
+    /**
+     * Seconds between payout cycles, as the timer was scheduled at startup. Kept
+     * across {@link #reload()}: SalaryService buckets its per-period dedup key by
+     * this value, so it must stay equal to the running timer's period. If a reload
+     * widened it while the timer kept its old, shorter period, several fires would
+     * land in one bucket and all but the first would dedup away — silently dropped
+     * payouts.
+     */
     private volatile long intervalSeconds;
     /** LuckPerms group name (lower-cased) → salary amount. */
     private volatile Map<String, BigDecimal> amounts;
@@ -81,15 +89,15 @@ public class SalaryConfiguration {
     @Inject
     public SalaryConfiguration(Treasury plugin) {
         this.plugin = plugin;
-        load();
+        load(true);
     }
 
     /** Re-reads from the (already-reloaded) config. No-op for test instances. */
     public void reload() {
-        if (plugin != null) load();
+        if (plugin != null) load(false);
     }
 
-    private void load() {
+    private void load(boolean startup) {
         FileConfiguration cfg = plugin.getConfig();
 
         this.enabled = cfg.getBoolean("salaries.enabled", false);
@@ -98,7 +106,13 @@ public class SalaryConfiguration {
         this.governmentAccount = (gov == null || gov.isBlank()) ? DEFAULT_GOV_ACCOUNT : gov;
 
         long iv = cfg.getLong("salaries.interval", DEFAULT_INTERVAL_SECONDS);
-        this.intervalSeconds = iv > 0 ? iv : DEFAULT_INTERVAL_SECONDS;
+        long configuredInterval = iv > 0 ? iv : DEFAULT_INTERVAL_SECONDS;
+        if (startup) {
+            this.intervalSeconds = configuredInterval;
+        } else if (configuredInterval != this.intervalSeconds) {
+            log.warn("salaries.interval changed from {}s to {}s — ignored until restart; "
+                    + "payouts continue every {}s.", intervalSeconds, configuredInterval, intervalSeconds);
+        }
 
         Map<String, BigDecimal> parsed = new HashMap<>();
         ConfigurationSection sec = cfg.getConfigurationSection("salaries.amount");

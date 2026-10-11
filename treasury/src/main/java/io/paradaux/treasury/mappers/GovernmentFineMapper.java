@@ -36,6 +36,19 @@ public interface GovernmentFineMapper {
     })
     GovernmentFine findFineById(@Param("fineId") long fineId);
 
+    /**
+     * The fine recorded against a ledger debit ({@code uq_fines_txn}: at most one), or
+     * {@code null}. A locking read, so it sees a fine committed by a concurrent
+     * double-submit after this transaction's snapshot was taken. Only call it for a
+     * txn that already existed — probing a not-yet-recorded txn_id would gap-lock the
+     * index tail and deadlock concurrent fine inserts.
+     */
+    @Select("SELECT fine_id, player_uuid_bin, debtor_account_id, gov_account_id, amount, reason, txn_id, " +
+            "issued_by_uuid_bin, issued_at, revoked, revoked_by_uuid_bin, revoke_txn_id, revoked_at " +
+            "FROM government_fines WHERE txn_id = #{txnId} FOR UPDATE")
+    @ResultMap("fineResultMap")
+    GovernmentFine findFineByTxnIdForUpdate(@Param("txnId") long txnId);
+
     @Select("SELECT fine_id, player_uuid_bin, debtor_account_id, gov_account_id, amount, reason, txn_id, " +
             "issued_by_uuid_bin, issued_at, revoked, revoked_by_uuid_bin, revoke_txn_id, revoked_at " +
             "FROM government_fines WHERE player_uuid_bin = #{playerUuid} ORDER BY issued_at DESC")

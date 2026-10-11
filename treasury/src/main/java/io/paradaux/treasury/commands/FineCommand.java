@@ -136,14 +136,16 @@ public class FineCommand implements CommandHandler {
                 "player", targetName,
                 "amount", formattedAmount,
                 "reason", reason);
-        fineWebhook.sendFineIssued(fine);
 
+        // Notify the fined player before the webhook: the Discord POST is a blocking
+        // network call and must not delay (or, if it fails, lose) the in-game notice.
         Player online = Bukkit.getPlayer(targetUuid);
         if (online != null) {
             message.send(online, "treasury.fine.issued.notify",
                     "amount", formattedAmount,
                     "reason", reason);
         }
+        fineWebhook.sendFineIssued(fine);
     }
 
     @Route("firm <account> <firm> <amount> <reason>")
@@ -161,7 +163,9 @@ public class FineCommand implements CommandHandler {
             return;
         }
 
-        Account business = accountService.getBusinessAccountByName(firmAccountName);
+        // Firm accounts are named "<firm> Corporate Account" (FirmServiceImpl), which a
+        // single-word argument can never spell out — resolve the bare firm name too.
+        Account business = accountService.resolveBusinessAccountByToken(firmAccountName);
         if (business == null) {
             message.send(sender, "treasury.fine.firm.not-found", "firm", firmAccountName);
             return;
@@ -234,14 +238,18 @@ public class FineCommand implements CommandHandler {
                 "id", String.valueOf(fineId),
                 "player", playerName,
                 "amount", formattedAmount);
-        fineWebhook.sendFineRevoked(fine);
 
-        Player online = Bukkit.getPlayer(fine.getPlayerUuid());
-        if (online != null) {
-            message.send(online, "treasury.fine.revoked.notify",
-                    "amount", formattedAmount,
-                    "reason", fine.getReason());
+        // Firm fines have no player to notify (null playerUuid — Bukkit.getPlayer
+        // rejects a null id, and by now the refund has already committed).
+        if (fine.getPlayerUuid() != null) {
+            Player online = Bukkit.getPlayer(fine.getPlayerUuid());
+            if (online != null) {
+                message.send(online, "treasury.fine.revoked.notify",
+                        "amount", formattedAmount,
+                        "reason", fine.getReason());
+            }
         }
+        fineWebhook.sendFineRevoked(fine);
     }
 
     @Route("list")

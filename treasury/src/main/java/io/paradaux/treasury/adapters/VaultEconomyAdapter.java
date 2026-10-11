@@ -153,10 +153,12 @@ public class VaultEconomyAdapter implements Economy {
             ledgerService.vaultWithdraw(pluginKey, playerUuid, bd,
                     memo != null ? memo : "Vault withdraw (" + pluginKey + ")",
                     TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, null);
-            return success(amount, getBalance(playerUuid), "OK");
         } catch (Exception e) {
-            return failure(amount, getBalance(playerUuid), e.getMessage());
+            return failure(amount, balanceForResponse(playerUuid), e.getMessage());
         }
+        // Committed: like a deposit, the outcome must be reported truthfully even if
+        // the follow-up balance read fails.
+        return success(amount, balanceForResponse(playerUuid), "OK");
     }
 
     /* ========================= Deposit ========================= */
@@ -183,7 +185,7 @@ public class VaultEconomyAdapter implements Economy {
                     memo != null ? memo : "Vault deposit (" + pluginKey + ")",
                     TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, null);
         } catch (Exception e) {
-            return failure(amount, getBalance(playerUuid), e.getMessage());
+            return failure(amount, balanceForResponse(playerUuid), e.getMessage());
         }
 
         // Source income tax runs only after the deposit has committed and must not
@@ -202,7 +204,26 @@ public class VaultEconomyAdapter implements Economy {
                     playerUuid, pluginKey, bd, e.getMessage());
         }
 
-        return success(amount, getBalance(playerUuid), "OK");
+        // The balance read is informational. It runs after the commit, so it must not
+        // be able to throw either: an exception here would reach the Vault caller as
+        // a failed deposit and invite the same double-credit retry.
+        return success(amount, balanceForResponse(playerUuid), "OK");
+    }
+
+    /**
+     * The balance to report in an {@link EconomyResponse}. Never throws — the money
+     * movement it accompanies has already committed (or already failed), and a
+     * failed read must not change that reported outcome. Falls back to 0 when the
+     * balance can't be read.
+     */
+    private double balanceForResponse(@NotNull UUID playerUuid) {
+        try {
+            return getBalance(playerUuid);
+        } catch (Exception e) {
+            log.warn("Balance read failed for player {} while building a Vault response: {}",
+                    playerUuid, e.getMessage());
+            return 0.0D;
+        }
     }
 
     /* ========================= Bank (not supported) ========================= */

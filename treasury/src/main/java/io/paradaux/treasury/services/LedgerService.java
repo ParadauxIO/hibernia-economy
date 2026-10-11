@@ -72,6 +72,13 @@ public interface LedgerService {
      */
     long adminTransfer(TransferRequest req);
 
+    /**
+     * {@link #adminTransfer(TransferRequest)} that also reports whether it created a
+     * new txn or deduplicated onto an existing one — for callers that record a row
+     * per debit (fines) and must not record a second one for a collapsed double-submit.
+     */
+    TransferResult adminTransferChecked(TransferRequest req);
+
     /** Vault-style: withdraw from player's account into plugin SYSTEM (burn). */
     long vaultWithdraw(String pluginName, UUID playerUuid, BigDecimal amount, String memo,
                        UUID initiator, @Nullable UUID authorizer, @Nullable String idempotencyKey);
