@@ -154,6 +154,35 @@ class FirmRequestMapperIT extends IntegrationTestBase {
         assertThat(requests.acceptTransfer(firmId, invited.toString())).isEqualTo(1);
     }
 
+    /**
+     * A lapsed transfer is still active until something expires it, so it keeps
+     * occupying uq_one_active_transfer while rejectTransfer (unexpired only) can't
+     * cancel it. expireStaleTransfer must free the slot for a new transfer.
+     */
+    @Test
+    void expireStaleTransfer_freesTheUniqueSlotForANewTransfer() {
+        requests.createTransferRequest(firmId, invited.toString(), "tok-lapsed",
+                LocalDateTime.now().minusMinutes(1));
+        assertThat(requests.rejectTransfer(firmId, invited.toString())).isZero();
+        assertThatThrownBy(() ->
+                requests.createTransferRequest(firmId, invited.toString(), "tok-new",
+                        LocalDateTime.now().plusMinutes(5)))
+                .isInstanceOf(PersistenceException.class);
+
+        assertThat(requests.expireStaleTransfer(firmId)).isEqualTo(1);
+
+        assertThat(requests.createTransferRequest(firmId, invited.toString(), "tok-new",
+                LocalDateTime.now().plusMinutes(5))).isEqualTo(1);
+    }
+
+    @Test
+    void expireStaleTransfer_leavesALiveTransferAlone() {
+        requests.createTransferRequest(firmId, invited.toString(), "tok-live",
+                LocalDateTime.now().plusMinutes(5));
+        assertThat(requests.expireStaleTransfer(firmId)).isZero();
+        assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-live")).isEqualTo(1);
+    }
+
     @Test
     void expireStaleTransfers_marksOverdue() {
         requests.createTransferRequest(firmId, invited.toString(), "tok-1",

@@ -129,7 +129,7 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 |---|---|---|
 | `/iteminfo` (`/iinfo`) | `ChestShop.iteminfo` | `true` |
 | `/shopinfo` (`/sinfo`, `/shop`) | `ChestShop.shopinfo` | `true` |
-| `/find` | `ChestShop.find` | `op` (not declared by the plugin — grant it to players) |
+| `/find` | `ChestShop.find` | `true` |
 | `/chestshop notify` | `ChestShop.toggle` | `true` |
 | `/chestshop toggle visibility` · `toggle hologram` | shop owner, or `ChestShop.admin` | — |
 | `/chestshop toggle preview` | none | everyone |

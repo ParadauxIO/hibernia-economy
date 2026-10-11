@@ -248,6 +248,11 @@ public class FirmRequestServiceImpl implements FirmRequestService {
             throw new BadCommandException("You cannot do this to yourself.");
         }
 
+        // A transfer that lapsed unanswered stays active until the periodic expiry job
+        // runs, holding the one-active-transfer slot while being impossible to cancel.
+        // Expire it now so the proprietor isn't told to cancel a request they can't.
+        requests.expireStaleTransfer(firm.getFirmId());
+
         String code = random32();
         try {
             requests.createTransferRequest(firm.getFirmId(), newProprietorId.toString(), code ,LocalDateTime.now().plusMinutes(OFFER_EXPIRATION_MINUTES));

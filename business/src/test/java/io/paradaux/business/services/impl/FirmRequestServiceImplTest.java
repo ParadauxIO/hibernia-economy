@@ -391,6 +391,17 @@ class FirmRequestServiceImplTest {
     }
 
     @Test
+    void beginTransferProprietorship_expiresALapsedTransferBeforeInserting() {
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firmOwnedBy(actor));
+
+        svc.beginTransferProprietorship("Acme", target, actor);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(requests);
+        order.verify(requests).expireStaleTransfer(1);
+        order.verify(requests).createTransferRequest(eq(1), eq(target.toString()), anyString(), any());
+    }
+
+    @Test
     void beginTransferProprietorship_duplicateGetsFriendlyError() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firmOwnedBy(actor));
         PersistenceException pex = new PersistenceException(new SQLIntegrityConstraintViolationException("dup"));

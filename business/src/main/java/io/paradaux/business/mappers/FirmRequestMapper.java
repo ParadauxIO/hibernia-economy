@@ -175,6 +175,21 @@ public interface FirmRequestMapper {
                             @Param("token") String token);
 
     /**
+     * Expire this firm's in-flight transfer if it is past its expiry. Such a row can
+     * no longer be confirmed, accepted or cancelled (all three require an unexpired
+     * request) yet still occupies the {@code uq_one_active_transfer} slot until the
+     * periodic expiry job gets to it, so a new transfer must clear it first.
+     */
+    @Update("""
+            UPDATE firm_transfer_requests
+               SET status = 'EXPIRED'
+             WHERE firm_id = #{firmId}
+               AND status IN ('PENDING', 'CONFIRMED')
+               AND expires_at <= NOW()
+            """)
+    int expireStaleTransfer(@Param("firmId") int firmId);
+
+    /**
      * Cancel any in-flight (PENDING or CONFIRMED) proprietorship transfer for a firm.
      * Used by the admin proprietor override so a transfer the previous proprietor had
      * in flight can't later be completed and re-hand the firm to a third party. At

@@ -62,6 +62,9 @@ permissions:
   ChestShop.toggle:
     description: Allows user to toggle messages.
     default: true
+  ChestShop.find:
+    description: Allows user to search shops for an item with /find.
+    default: true
   ChestShop.iteminfo:
     description: Allows user to see item info with the command.
     default: true
