@@ -58,8 +58,16 @@ tasks.named<ProcessResources>("processResources") {
         "name" to project.name,
         "description" to (project.description ?: ""),
     )
-    filesMatching(listOf("**/*.properties", "plugin.yml", "paper-plugin.yml", "application*.yml")) {
-        // Expands ${...} from these project properties only in these files.
+    // Expands ${...} from these project properties only in these files. NOT the
+    // *.properties message bundles: `expand` is a Groovy template pass, which also
+    // interprets backslash escapes, so a `\n` in a message became a real line break
+    // and the rest of that message was cut off in the shipped jar.
+    val expandedFiles = listOf("plugin.yml", "paper-plugin.yml", "application*.yml")
+    // The filesMatching action isn't a task input by itself; declare what it covers
+    // so changing this list re-runs the task instead of reusing stale output.
+    inputs.property("expandedFiles", expandedFiles)
+    inputs.properties(expansions)
+    filesMatching(expandedFiles) {
         expand(expansions)
     }
 }

@@ -23,9 +23,14 @@ INSERT INTO economy_players (player_uuid_bin, current_name, first_seen, last_see
     FROM firm_players;
 
 -- Fold in each player's last-login epoch where Treasury has recorded one.
+-- last_seen is assigned to itself on purpose: the column is ON UPDATE
+-- CURRENT_TIMESTAMP, so an UPDATE that changes last_login_epoch without naming
+-- last_seen would stamp every matched row with the migration time, wiping the
+-- last_seen just copied from firm_players. An explicit assignment suppresses it.
 UPDATE economy_players ep
   JOIN player_login_times plt ON plt.player_uuid_bin = ep.player_uuid_bin
-   SET ep.last_login_epoch = plt.last_login_epoch;
+   SET ep.last_login_epoch = plt.last_login_epoch,
+       ep.last_seen = ep.last_seen;
 
 -- Seed rows for players Treasury has a login epoch for but who were never in the
 -- firm_players directory (they logged in but never touched a firm). Without this,

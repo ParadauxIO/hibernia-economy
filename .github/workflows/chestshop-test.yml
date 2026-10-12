@@ -7,6 +7,7 @@ on:
       - 'chestshop/**'
       - 'business/business-api/**'
       - 'treasury/treasury-api/**'
+      - 'test-support/**'            # testImplementation(project(":test-support"))
       - '.github/workflows/chestshop-test.yml'
   pull_request:
     branches: [ main, develop ]
@@ -14,6 +15,7 @@ on:
       - 'chestshop/**'
       - 'business/business-api/**'
       - 'treasury/treasury-api/**'
+      - 'test-support/**'            # testImplementation(project(":test-support"))
       - '.github/workflows/chestshop-test.yml'
   workflow_dispatch:
 

@@ -37,7 +37,13 @@ public interface ChestShopMarketMapper {
     // visible/hologram are owner-controlled (set via the toggle writes below) and so
     // are deliberately NOT in the column list — a create/restock/price upsert must not
     // reset an owner's choices. On INSERT they take the schema DEFAULT 1; on UPDATE the
-    // ON DUPLICATE KEY clause leaves them untouched.
+    // ON DUPLICATE KEY clause leaves them untouched for a live shop.
+    //
+    // The one exception is a row being revived (active = 0 -> 1): that is a NEW shop on
+    // a destroyed shop's tombstone, and it must not inherit the previous shop's flags, so
+    // they go back to the default. MariaDB applies the assignments left to right and a
+    // bare column name reads the row's current value — so both resets must stay ABOVE
+    // `active = 1`, where `active` is still the pre-update value.
     @Insert("""
             INSERT INTO chestshop_shop
               (world, world_uuid, sign_x, sign_y, sign_z, is_admin_shop, shop_account_id, shop_account_type,
@@ -62,6 +68,8 @@ public interface ChestShopMarketMapper {
                buy_price = VALUES(buy_price), sell_price = VALUES(sell_price), batch_qty = VALUES(batch_qty),
                current_stock = VALUES(current_stock), estimated_capacity = VALUES(estimated_capacity),
                stock_at = CASE WHEN VALUES(current_stock) IS NULL THEN stock_at ELSE NOW() END,
+               visible = IF(active = 0, 1, visible),
+               hologram = IF(active = 0, 1, hologram),
                active = 1
             """)
     void upsertShop(Map<String, Object> p);

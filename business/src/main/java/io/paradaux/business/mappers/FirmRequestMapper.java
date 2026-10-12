@@ -71,6 +71,23 @@ public interface FirmRequestMapper {
                       @Param("playerUuid") String playerUuid);
 
     /**
+     * Expire this firm+player's invite if it is PENDING but past its expiry. Such a
+     * row is invisible to {@link #hasPendingJobOffer} (which requires an unexpired
+     * invite) yet still occupies the {@code uq_one_pending_invite} slot until the
+     * periodic expiry job gets to it, so a re-offer must clear it first.
+     */
+    @Update("""
+            UPDATE firm_invites
+               SET status = 'EXPIRED'
+             WHERE firm_id = #{firmId}
+               AND player_uuid_bin = uuid_to_bin(#{playerUuid})
+               AND status = 'PENDING'
+               AND expires_at <= NOW()
+            """)
+    int expireStaleInvite(@Param("firmId") int firmId,
+                          @Param("playerUuid") String playerUuid);
+
+    /**
      * Expire any invites that are not yet ACCEPTED or DENIED
      * and whose expiry has passed.
      */
@@ -158,6 +175,21 @@ public interface FirmRequestMapper {
                             @Param("token") String token);
 
     /**
+     * Expire this firm's in-flight transfer if it is past its expiry. Such a row can
+     * no longer be confirmed, accepted or cancelled (all three require an unexpired
+     * request) yet still occupies the {@code uq_one_active_transfer} slot until the
+     * periodic expiry job gets to it, so a new transfer must clear it first.
+     */
+    @Update("""
+            UPDATE firm_transfer_requests
+               SET status = 'EXPIRED'
+             WHERE firm_id = #{firmId}
+               AND status IN ('PENDING', 'CONFIRMED')
+               AND expires_at <= NOW()
+            """)
+    int expireStaleTransfer(@Param("firmId") int firmId);
+
+    /**
      * Cancel any in-flight (PENDING or CONFIRMED) proprietorship transfer for a firm.
      * Used by the admin proprietor override so a transfer the previous proprietor had
      * in flight can't later be completed and re-hand the firm to a third party. At
@@ -221,10 +253,16 @@ public interface FirmRequestMapper {
 
     // House-keeping methods
 
+    /**
+     * Expire in-flight transfers whose expiry has passed. Only the two open states
+     * (PENDING, CONFIRMED) can expire; every other status is terminal — notably
+     * ADMIN_OVERRIDE, an audit row written with {@code expires_at = now} that a
+     * "not in (terminal…)" predicate would rewrite to EXPIRED on the next run.
+     */
     @Update("""
             UPDATE firm_transfer_requests
                SET status = 'EXPIRED'
-             WHERE status NOT IN ('ACCEPTED','CANCELLED','EXPIRED')
+             WHERE status IN ('PENDING','CONFIRMED')
                AND expires_at <= NOW()
             """)
     int expireStaleTransfers();

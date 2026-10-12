@@ -4,6 +4,7 @@ import io.paradaux.chestshop.utils.StringUtil;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.nexomc.nexo.api.NexoItems;
+import com.nexomc.nexo.api.events.NexoItemsLoadedEvent;
 import com.nexomc.nexo.items.ItemBuilder;
 import io.paradaux.chestshop.ChestShop;
 import io.paradaux.chestshop.services.CustomItemResolver;
@@ -21,12 +22,15 @@ import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -64,6 +68,7 @@ public class NexoIntegration implements Integration, CustomItemResolver {
     @Override
     public boolean hook(Plugin plugin) {
         Nexo.init(itemCodes);
+        Nexo.listenForItemReloads();
         items.registerCustomItemResolver(this);
         return true;
     }
@@ -132,6 +137,19 @@ public class NexoIntegration implements Integration, CustomItemResolver {
         public static void init(ItemCodeService codes) {
             itemCodes = codes;
             reload();
+        }
+
+        /**
+         * Drop the cached base items whenever Nexo (re)loads its own item definitions
+         * ({@code /nexo reload}), so a changed item isn't served stale until a ChestShop reload.
+         */
+        public static void listenForItemReloads() {
+            Bukkit.getPluginManager().registerEvents(new Listener() {
+                @EventHandler
+                public void onItemsLoaded(NexoItemsLoadedEvent event) {
+                    baseItemCache.clear();
+                }
+            }, ChestShop.getPlugin());
         }
 
         /** Reload {@code nexo.yml} (aliases + display/input settings), writing a defaulted file if absent. */

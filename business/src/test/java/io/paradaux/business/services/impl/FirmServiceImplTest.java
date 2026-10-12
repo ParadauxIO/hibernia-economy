@@ -3,6 +3,7 @@ package io.paradaux.business.services.impl;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
@@ -13,6 +14,7 @@ import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmAreaShopService;
+import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
@@ -58,13 +60,14 @@ class FirmServiceImplTest {
     @Mock FirmAccountService firmAccountService;
     @Mock FirmConfiguration firmConfig;
     @Mock FirmAreaShopService areas;
+    @Mock FirmChatService chat;
 
     private FirmServiceImpl svc;
     private MockedStatic<Bukkit> bukkit;
 
     @BeforeEach
     void setUp() {
-        svc = new FirmServiceImpl(firms, treasury, accounts, roles, requests, () -> staffService, () -> firmAccountService, firmConfig, areas);
+        svc = new FirmServiceImpl(firms, treasury, accounts, roles, requests, () -> staffService, () -> firmAccountService, firmConfig, areas, () -> chat);
         bukkit = org.mockito.Mockito.mockStatic(Bukkit.class);
         // Default to the production limit of 3 (lenient — not every test reaches the check).
         org.mockito.Mockito.lenient().when(firmConfig.hasOwnedFirmLimit()).thenReturn(true);
@@ -311,7 +314,7 @@ class FirmServiceImplTest {
                 .thenThrow(new RuntimeException("treasury down"));
         when(firms.archiveFirm(1)).thenReturn(1);
 
-        svc.disbandFirm("Acme", proprietor);
+        FirmService.DisbandResult result = svc.disbandFirm("Acme", proprietor);
 
         verify(firms).archiveFirm(1);
         verify(treasury).archiveAccount(11);
@@ -319,6 +322,162 @@ class FirmServiceImplTest {
         // The failed account is left linked for a later reconciliation.
         verify(treasury, never()).archiveAccount(10);
         verify(accounts, never()).removeFirmAccount(1, 10);
+        // ...and the caller is told, not handed a silent success.
+        assertThat(result.complete()).isFalse();
+        assertThat(result.resumed()).isFalse();
+        assertThat(result.undrainedAccountIds()).containsExactly(10);
+    }
+
+    /**
+     * Regression for the stranded-funds bug: a drain that fails partway leaves an
+     * archived firm with live, funded accounts. Disbanding that firm again must
+     * resume the drain over what is left — previously both entry points rejected it
+     * as "already disbanded" and the archive gate blocked a re-run, so the money
+     * could never be returned.
+     */
+    @Test
+    void disbandFirm_partialDrain_thenRetry_drainsTheRemainder() {
+        UUID proprietor = UUID.randomUUID();
+        Firm firm = new Firm();
+        firm.setFirmId(1);
+        firm.setDisplayName("Acme");
+        firm.setProprietorUuid(proprietor.toString());
+        when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(firms.isProprietorByFirmId(1, proprietor.toString())).thenReturn(true);
+
+        Account personal = new Account();
+        personal.setAccountId(99);
+        when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
+
+        // Three accounts. First run: 10 drains; 11's sweep fails (money never moved);
+        // 12 is swept but its archive fails (emptied, yet still live and linked).
+        when(accounts.listAccountsByFirm(1)).thenReturn(List.of(
+                new FirmAccount(1, 10, null), new FirmAccount(1, 11, null), new FirmAccount(1, 12, null)));
+        // lenient: account 10 is swept (different args) before this stubbing is hit.
+        org.mockito.Mockito.lenient().when(treasury.sweepAll(11, 99, "Firm disbanded", proprietor, "BusinessPlugin"))
+                .thenThrow(new RuntimeException("treasury down"));
+        org.mockito.Mockito.lenient().doThrow(new RuntimeException("treasury down")).when(treasury).archiveAccount(12);
+        when(firms.archiveFirm(1)).thenReturn(1);
+
+        FirmService.DisbandResult first = svc.disbandFirm("Acme", proprietor);
+
+        assertThat(first.complete()).isFalse();
+        assertThat(first.resumed()).isFalse();
+        assertThat(first.undrainedAccountIds()).containsExactly(11, 12);
+        verify(accounts).removeFirmAccount(1, 10);
+        verify(accounts, never()).removeFirmAccount(1, 11);
+        verify(accounts, never()).removeFirmAccount(1, 12);
+
+        // The firm is now archived with accounts 11 and 12 still linked; Treasury recovers.
+        firm.setArchived(true);
+        when(accounts.listAccountsByFirm(1)).thenReturn(List.of(
+                new FirmAccount(1, 11, null), new FirmAccount(1, 12, null)));
+        org.mockito.Mockito.reset(treasury);
+        when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
+
+        assertThat(svc.isDisbandIncomplete(firm)).isTrue();
+        FirmService.DisbandResult second = svc.disbandFirm("Acme", proprietor);
+
+        assertThat(second.complete()).isTrue();
+        assertThat(second.resumed()).isTrue();
+        // Both leftovers are swept again (12's second sweep finds a zero locked balance
+        // inside Treasury and moves nothing), archived and unlinked...
+        verify(treasury).sweepAll(11, 99, "Firm disbanded", proprietor, "BusinessPlugin");
+        verify(treasury).sweepAll(12, 99, "Firm disbanded", proprietor, "BusinessPlugin");
+        verify(treasury).archiveAccount(11);
+        verify(treasury).archiveAccount(12);
+        verify(accounts).removeFirmAccount(1, 11);
+        verify(accounts).removeFirmAccount(1, 12);
+        // ...the already-drained account is not touched a second time...
+        verify(treasury, never()).sweepAll(eq(10), anyInt(), any(), any(), any());
+        // ...and the firm is not re-archived, nor its chat re-invalidated.
+        verify(firms, times(1)).archiveFirm(1);
+        verify(chat, times(1)).membershipChanged(1);
+    }
+
+    @Test
+    void disbandFirm_resume_stillRequiresTheProprietor() {
+        UUID proprietor = UUID.randomUUID();
+        UUID stranger = UUID.randomUUID();
+        Firm firm = new Firm();
+        firm.setFirmId(1);
+        firm.setDisplayName("Acme");
+        firm.setProprietorUuid(proprietor.toString());
+        firm.setArchived(true);
+        when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 11, null))); // half-drained
+        when(firms.isProprietorByFirmId(1, stranger.toString())).thenReturn(false);
+
+        assertThatThrownBy(() -> svc.disbandFirm("Acme", stranger))
+                .isInstanceOf(NoPermissionException.class);
+        verify(treasury, never()).sweepAll(anyInt(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void adminDisbandFirm_resumesAHalfDrainedFirm() {
+        UUID proprietor = UUID.randomUUID();
+        Firm firm = new Firm();
+        firm.setFirmId(1);
+        firm.setDisplayName("Acme");
+        firm.setProprietorUuid(proprietor.toString());
+        firm.setArchived(true);
+        when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 11, null)));
+        Account personal = new Account();
+        personal.setAccountId(99);
+        when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
+
+        FirmService.DisbandResult result = svc.adminDisbandFirm("Acme");
+
+        assertThat(result.complete()).isTrue();
+        assertThat(result.resumed()).isTrue();
+        verify(treasury).sweepAll(11, 99, "Firm disbanded", proprietor, "BusinessPlugin");
+        verify(accounts).removeFirmAccount(1, 11);
+        verify(firms, never()).archiveFirm(anyInt());
+    }
+
+    @Test
+    void adminDisbandFirm_alreadyFullyDisbanded_throws() {
+        Firm firm = new Firm();
+        firm.setFirmId(1);
+        firm.setProprietorUuid(UUID.randomUUID().toString());
+        firm.setArchived(true);
+        when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(accounts.listAccountsByFirm(1)).thenReturn(List.of()); // nothing left to drain
+
+        assertThat(svc.isDisbandIncomplete(firm)).isFalse();
+        assertThatThrownBy(() -> svc.adminDisbandFirm("Acme"))
+                .isInstanceOf(BadCommandException.class);
+        verify(treasury, never()).sweepAll(anyInt(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void disbandFirm_whileADrainIsRunning_isRejected() {
+        // A second disband of the same firm arriving mid-drain must not start an
+        // interleaved drain of its own.
+        UUID proprietor = UUID.randomUUID();
+        Firm firm = new Firm();
+        firm.setFirmId(1);
+        firm.setDisplayName("Acme");
+        firm.setProprietorUuid(proprietor.toString());
+        when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
+        when(firms.archiveFirm(1)).thenReturn(1);
+
+        Account personal = new Account();
+        personal.setAccountId(99);
+        when(treasury.resolveOrCreatePersonal(proprietor)).thenAnswer(inv -> {
+            assertThatThrownBy(() -> svc.adminDisbandFirm("Acme"))
+                    .isInstanceOf(BadCommandException.class)
+                    .hasMessageContaining("already in progress");
+            return personal;
+        });
+
+        assertThat(svc.adminDisbandFirm("Acme").complete()).isTrue();
+        // Exactly one drain ran, and the guard was released afterwards.
+        verify(treasury, times(1)).sweepAll(10, 99, "Firm disbanded", proprietor, "BusinessPlugin");
+        firm.setArchived(true);
+        assertThat(svc.adminDisbandFirm("Acme").resumed()).isTrue();
     }
 
     @Test
@@ -347,7 +506,11 @@ class FirmServiceImplTest {
         // the winner, so the conditional UPDATE touches 0 rows.
         when(firms.archiveFirm(1)).thenReturn(0);
 
-        svc.disbandFirm("Acme", proprietor);
+        FirmService.DisbandResult result = svc.disbandFirm("Acme", proprietor);
+
+        // The winner owns the drain (and the announcement); the loser reports nothing failed.
+        assertThat(result.resumed()).isTrue();
+        assertThat(result.complete()).isTrue();
 
         // No drain of any kind: no sweep, no balance read, no transfer, no account teardown.
         verify(treasury, never()).sweepAll(org.mockito.ArgumentMatchers.anyInt(),

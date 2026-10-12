@@ -59,6 +59,17 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         createRoleInternal(firms.getFirmById(firmId), roleName, rankOrder, actorId);
     }
 
+    /** A mistyped permission name is the player's mistake, not an internal error. */
+    private static RolePermission parsePermission(String permission) {
+        try {
+            return RolePermission.fromString(permission);
+        } catch (IllegalArgumentException e) {
+            throw new BadCommandException("Unknown permission '" + permission + "'. Valid permissions: "
+                    + java.util.Arrays.stream(RolePermission.values()).map(Enum::name)
+                            .collect(java.util.stream.Collectors.joining(", ")) + ".");
+        }
+    }
+
     private void createRoleInternal(Firm firm, String roleName, int rankOrder, UUID actorId) {
         if (firm == null) {
             throw new NotFoundException("Firm not found.");
@@ -75,11 +86,20 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         }
 
         String normalizedName = normalizeRoleName(roleName);
+        // insertRole is an upsert so it can revive a soft-deleted role under its old
+        // role_id. A LIVE role of that name must be refused here, or "create" would
+        // quietly re-rank it.
+        boolean nameTaken = roles.listRolesByFirm(firm.getFirmId()).stream()
+                .anyMatch(r -> r.getRoleName().equalsIgnoreCase(normalizedName));
+        if (nameTaken) {
+            throw new ConflictException("Could not create role (name or rank already used in this firm).");
+        }
         FirmRole role = new FirmRole(firm.getFirmId(), normalizedName, rankOrder);
 
         try {
+            // 1 row = inserted, 2 = a soft-deleted role revived (ON DUPLICATE KEY UPDATE).
             int inserted = roles.insertRole(role);
-            if (inserted != 1) throw new IllegalStateException("Insert failed for role: " + roleName);
+            if (inserted < 1) throw new IllegalStateException("Insert failed for role: " + roleName);
             // Grant the baseline DEFAULT permission in the same transaction so a
             // role is never persisted without it.
             roles.addRolePermission(new FirmRolePermission(firm.getFirmId(), normalizedName, RolePermission.DEFAULT));
@@ -175,7 +195,7 @@ public class FirmRoleServiceImpl implements FirmRoleService {
             throw new NotFoundException("Role not found: " + roleName);
         }
 
-        RolePermission rolePermission = RolePermission.fromString(permission);
+        RolePermission rolePermission = parsePermission(permission);
 
         FirmRolePermission frp = new FirmRolePermission(firm.getFirmId(), normalizeRoleName(roleName), rolePermission);
 
@@ -209,7 +229,7 @@ public class FirmRoleServiceImpl implements FirmRoleService {
             throw new NoPermissionException("You don’t have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
-        RolePermission rolePermission = RolePermission.fromString(permission);
+        RolePermission rolePermission = parsePermission(permission);
         int removed = roles.deleteRolePermission(firm.getFirmId(), normalizeRoleName(roleName), rolePermission);
         if (removed == 0) {
             throw new NotFoundException("Permission not found on role.");

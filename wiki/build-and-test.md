@@ -148,6 +148,38 @@ Things worth knowing if you touch it:
 > issue. Use `-PskipIT` for fast iteration, or point the tests at a real MariaDB
 > the way CI does.
 
+## Live integration tests
+
+The end-to-end suite lives in [`integration-tests/`](../integration-tests/README.md):
+a mock Minecraft client, RCON and direct MariaDB assertions against a **real Paper
+server** running the plugins built from this checkout. It is its own Gradle build
+(not part of the root one, so `./gradlew check` never needs a server). One script is
+the whole environment:
+
+```bash
+ops/integration/run.sh
+ops/integration/run.sh -- --tests '*PayCommandTest'   # a subset
+ops/integration/run.sh --keep                          # leave the stack up
+```
+
+It builds the plugin jars and the REST API, downloads Paper, LuckPerms, WorldEdit,
+WorldGuard and GriefPrevention (cached in `~/.cache/hibernia-it`), migrates an empty
+database with `economy-flyway`, starts Paper (offline mode, RCON) and the REST API,
+runs the tests and tears everything down. Work files and logs go to
+`build/integration/`.
+
+- **Needs:** JDK 21, `curl`, and either a local `mariadbd` (a scratch
+  instance is started on port 33306) or `IT_DB_EXTERNAL=1` plus `IT_DB_*` pointing at
+  a running server whose `IT_DB_NAME` database may be dropped.
+- **Ports:** 25565 (game), 25575 (RCON), 8080 (REST) by default; override with
+  `IT_MC_PORT`, `IT_RCON_PORT`, `IT_REST_PORT`, `IT_DB_PORT` to run several stacks
+  side by side, each with its own `IT_WORK_DIR`.
+- **Iterating:** `IT_SKIP_BUILD=1` reuses the jars from the last run;
+  `IT_GRADLE_ARGS` passes extra arguments to the plugin build (for example
+  `-PuseMavenLocal` to test against a locally published hibernia-framework).
+- **In CI:** the **Integration Tests (live server)** workflow runs the same script
+  on pull requests that touch a plugin, the REST API, the migrations or the suite.
+
 ## The web app (`economy-explorer`)
 
 Not part of the Gradle build — it has its own npm toolchain (Node **22**):
@@ -160,6 +192,21 @@ npm run build      # production build
 npm run typecheck && npm run lint
 npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
+
+The SQL integration suite and the Playwright end-to-end suite both need a
+**disposable** MariaDB — every table in it is dropped and reseeded from
+`test/integration/schema.sql` + `seed.sql`:
+
+```bash
+export DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=economy_test DB_USERNAME=... DB_PASSWORD=...
+RUN_INTEGRATION=1 npm test          # unit + SQL integration (skipped without RUN_INTEGRATION=1)
+npx playwright install chromium     # once
+npm run test:e2e                    # seeds the DB, builds + starts the app, runs every spec
+```
+
+`test:e2e` refuses a `DB_NAME` that doesn't contain `test`. Set `E2E_BASE_URL` to
+run only the public specs against an instance that is already running; nothing is
+seeded or started in that mode. CI runs both suites in **Economy Explorer · CI**.
 
 ## Adding a new module
 

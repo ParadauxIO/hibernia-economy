@@ -89,6 +89,12 @@ dependencies {
     // Player when testing classes that read config from a Bukkit plugin.
     testImplementation(libs.paper.api)
 
+    // Vault API at test scope (compileOnly in production) so VaultEconomyAdapterTest
+    // can drive the adapter and read its EconomyResponse.
+    testImplementation("com.github.MilkBowl:VaultAPI:1.7") {
+        exclude(group = "org.bukkit", module = "bukkit")
+    }
+
     // SLF4J impl for tests so Lombok @Slf4j calls have a backing logger
     testRuntimeOnly(libs.slf4j.simple)
 

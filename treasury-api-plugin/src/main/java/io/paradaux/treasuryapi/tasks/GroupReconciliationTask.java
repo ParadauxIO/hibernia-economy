@@ -5,6 +5,7 @@ import io.paradaux.treasuryapi.TreasuryAPI;
 import io.paradaux.treasuryapi.mappers.ExplorerGroupMapper;
 import io.paradaux.treasuryapi.model.ReconciliationDiff;
 import io.paradaux.treasuryapi.model.SyncedGroup;
+import io.paradaux.treasuryapi.services.PlayerGroupSync;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.group.GroupManager;
@@ -30,7 +31,7 @@ import java.util.logging.Logger;
  * DB + LuckPerms storage lookups). Manual memberships are never touched — only
  * {@code source = 'luckperms'} rows are added/removed.
  */
-public class GroupReconciliationTask extends BukkitRunnable {
+public class GroupReconciliationTask extends BukkitRunnable implements PlayerGroupSync {
 
     private final TreasuryAPI plugin;
     private final ExplorerGroupMapper mapper;
@@ -111,6 +112,7 @@ public class GroupReconciliationTask extends BukkitRunnable {
      * checking {@code contains(playerId)}. A failed user load is treated as transient
      * and never prunes the player.
      */
+    @Override
     public void reconcilePlayer(UUID playerId) {
         User user;
         try {

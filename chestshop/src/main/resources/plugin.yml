@@ -4,7 +4,7 @@ version: '${bukkit.plugin.version}'
 author: Acrobot
 authors: ['https://github.com/ChestShop-authors/ChestShop-3/contributors']
 description: A chest shop for economy plugins.
-softdepend: [Treasury, Business, WorldGuard, GriefPrevention, Nexo]
+softdepend: [Treasury, Business, WorldEdit, FastAsyncWorldEdit, WorldGuard, GriefPrevention, Nexo]
 api-version: '1.13'
 # Not Folia-ready: scheduling uses a plain ExecutorService and synchronous
 # callEvent, and shared singleton state (AccountService caches, MetricsModule counters)
@@ -61,6 +61,9 @@ permissions:
     description: User doesn't have to pay tax when selling to a shop.
   ChestShop.toggle:
     description: Allows user to toggle messages.
+    default: true
+  ChestShop.find:
+    description: Allows user to search shops for an item with /find.
     default: true
   ChestShop.iteminfo:
     description: Allows user to see item info with the command.

@@ -3,6 +3,7 @@ package io.paradaux.chestshop.services;
 import io.paradaux.chestshop.model.CreatedShop;
 import io.paradaux.chestshop.model.DestroyedShop;
 import io.paradaux.chestshop.model.Transaction;
+import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
@@ -29,4 +30,20 @@ public interface MarketSyncService {
 
     /** Recount stock for every shop sign connected to a closed container. */
     void onInventoryClose(InventoryHolder holder, Inventory inventory);
+
+    /**
+     * Build a registry row from a live shop sign and upsert it (resync discovery, and making
+     * sure a row exists before an owner toggle is written to it).
+     *
+     * @return {@code false} if the sign's item or owner can't be resolved, or the market is off
+     */
+    boolean registerShop(Sign sign);
+
+    /**
+     * Reconcile one sign position against the world after a block change that bypassed the
+     * Bukkit events (WorldEdit): a valid shop sign standing there is (re-)registered, anything
+     * else deactivates the row. A position in an unloaded chunk can't be inspected and is
+     * deactivated.
+     */
+    void onBlockReplaced(String world, int x, int y, int z);
 }

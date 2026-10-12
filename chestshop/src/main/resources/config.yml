@@ -121,10 +121,10 @@ SHOW_MESSAGE_FULL_SHOP: true
 # How many seconds do you want to wait before showing notifications for the same shop to the owner again?
 NOTIFICATION_MESSAGE_COOLDOWN: 10
 
-# Can players hide the "Out of stock" messages with /cstoggle?
+# Can players hide the "Out of stock" messages with /chestshop notify?
 CSTOGGLE_TOGGLES_OUT_OF_STOCK: false
 
-# Can players hide the "Full shop" messages with /cstoggle?
+# Can players hide the "Full shop" messages with /chestshop notify?
 CSTOGGLE_TOGGLES_FULL_SHOP: false
 
 # Do you want to show "You bought/sold... " messages?

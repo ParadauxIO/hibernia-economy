@@ -23,6 +23,11 @@ public class AdminRateLimitService {
 
     private static final Logger log = LoggerFactory.getLogger(AdminRateLimitService.class);
 
+    /** Smallest value that still rounds (half-up) to 0.01 in DECIMAL(6,2). */
+    private static final BigDecimal MIN_STORABLE_MULTIPLIER = new BigDecimal("0.005");
+    /** First value that rounds (half-up) past 9999.99, the DECIMAL(6,2) maximum. */
+    private static final BigDecimal MAX_STORABLE_MULTIPLIER = new BigDecimal("9999.995");
+
     private final RateLimitOverrideService overrides;
 
     public AdminRateLimitService(RateLimitOverrideService overrides) {
@@ -33,6 +38,13 @@ public class AdminRateLimitService {
         AdminScope.require(verified);
         if (multiplier == null || multiplier.signum() <= 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY", "Field 'multiplier' must be > 0.");
+        }
+        // api_rate_limit_override.multiplier is DECIMAL(6,2). Bound it to what the
+        // column can hold after the DB rounds to 2 places: above the range is an
+        // out-of-range driver error (500), and below 0.005 it would silently store 0.00.
+        if (multiplier.compareTo(MIN_STORABLE_MULTIPLIER) < 0 || multiplier.compareTo(MAX_STORABLE_MULTIPLIER) >= 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+                    "Field 'multiplier' must be between 0.01 and 9999.99.");
         }
         // api_rate_limit_override.note is VARCHAR(255): bound it up front so an
         // over-long note returns a clean 400 rather than a driver 500 (ADT-118).

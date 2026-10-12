@@ -1,10 +1,10 @@
 package io.paradaux.treasury.mappers;
 
-import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.UUID;
 
@@ -35,10 +35,24 @@ public interface EconomyPlayerMapper {
      * belongs to exactly one player at a time (Java via Mojang; Bedrock via the
      * unique {@code .}-prefixed Floodgate name), so on a name change/reuse the
      * previous holder's row must give it up before the new owner is upserted —
-     * otherwise the {@code UNIQUE(name_lower)} constraint collides. The old holder
-     * is re-added on their next login. Matched on the indexed {@code name_lower}.
+     * otherwise the {@code UNIQUE(name_lower)} constraint collides. Matched on the
+     * indexed {@code name_lower}.
+     *
+     * <p>Only the name is released: the row is kept and renamed to the same
+     * {@code HEX(uuid)} placeholder the V17 backfill seeds (32 chars, unique, never a
+     * real IGN), so the previous holder keeps {@code last_login_epoch} and
+     * {@code first_seen}. Deleting the row made their next login look like a first
+     * login and skipped the balance tax owed for the whole elapsed period. The
+     * placeholder self-heals: their next login upserts the real name back.
+     * {@code last_seen = last_seen} stops {@code ON UPDATE CURRENT_TIMESTAMP} from
+     * bumping a timestamp for a player who was not seen.
      */
-    @Delete("DELETE FROM economy_players WHERE name_lower = LOWER(#{name}) AND player_uuid_bin <> #{keepUuid}")
+    @Update("""
+            UPDATE economy_players
+               SET current_name = HEX(player_uuid_bin),
+                   last_seen    = last_seen
+             WHERE name_lower = LOWER(#{name}) AND player_uuid_bin <> #{keepUuid}
+            """)
     void releaseNameFromOthers(@Param("name") String name, @Param("keepUuid") UUID keepUuid);
 
     /** The player's last-login epoch (seconds), or {@code null} if never recorded. */
@@ -54,11 +68,24 @@ public interface EconomyPlayerMapper {
     @Select("SELECT last_login_epoch FROM economy_players WHERE player_uuid_bin = #{playerUuid} FOR UPDATE")
     Long findLastLoginForUpdate(@Param("playerUuid") UUID playerUuid);
 
-    /** Resolves a current name (case-insensitive) to a UUID, or {@code null} if unknown. */
-    @Select("SELECT player_uuid_bin FROM economy_players WHERE name_lower = LOWER(#{name})")
+    /**
+     * Resolves a current name (case-insensitive) to a UUID, or {@code null} if unknown.
+     * A {@code HEX(uuid)} placeholder row (name unknown/released) is not a name and
+     * never resolves.
+     */
+    @Select("""
+            SELECT player_uuid_bin FROM economy_players
+             WHERE name_lower = LOWER(#{name}) AND current_name <> HEX(player_uuid_bin)
+            """)
     UUID findUuidByName(@Param("name") String name);
 
-    /** The player's last-known name, or {@code null} if the player isn't in the directory. */
-    @Select("SELECT current_name FROM economy_players WHERE player_uuid_bin = #{playerUuid}")
+    /**
+     * The player's last-known name, or {@code null} if the player isn't in the
+     * directory or only holds a {@code HEX(uuid)} placeholder (name unknown/released).
+     */
+    @Select("""
+            SELECT current_name FROM economy_players
+             WHERE player_uuid_bin = #{playerUuid} AND current_name <> HEX(player_uuid_bin)
+            """)
     String findNameByUuid(@Param("playerUuid") UUID playerUuid);
 }

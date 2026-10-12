@@ -1,8 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Point at a running instance. In CI the e2e job builds + starts the app
-// against the seeded test DB with E2E_TEST_AUTH=1 and sets E2E_BASE_URL.
-const baseURL = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
+// Two modes:
+//   * E2E_BASE_URL set   — point at an already-running instance (e.g. a real
+//     deployment). Only the public specs run; nothing is seeded or started.
+//   * E2E_BASE_URL unset — managed: seed the disposable DB named by DB_* (see
+//     test/e2e/global-setup.ts), build and start the app here with the auth shim
+//     (E2E_TEST_AUTH=1), and run every spec against it. This is what
+//     `npm run test:e2e` does locally and what the CI e2e job runs.
+const managed = !process.env.E2E_BASE_URL;
+const port = Number(process.env.E2E_PORT ?? 3100);
+const baseURL = process.env.E2E_BASE_URL || `http://127.0.0.1:${port}`;
+
+if (managed) {
+  // Read by the specs (in the workers, which inherit this env): the app below
+  // runs with the auth shim, so the role-gated specs can run.
+  process.env.E2E_AUTH_SHIM = '1';
+  process.env.E2E_BASE_URL = baseURL;
+}
 
 export default defineConfig({
   testDir: './test/e2e',
@@ -13,6 +27,26 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  globalSetup: managed ? './test/e2e/global-setup.ts' : undefined,
+  webServer: managed
+    ? {
+        command: `npm run build && npm run start -- --hostname 127.0.0.1 --port ${port}`,
+        // Not '/': the server is started before global-setup seeds the DB, and
+        // the dashboard 500s on an empty schema.
+        url: `${baseURL}/healthz`,
+        timeout: 300_000,
+        reuseExistingServer: false,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: {
+          E2E_TEST_AUTH: '1',
+          AUTH_SECRET: 'e2e-only-not-a-secret',
+          AUTH_URL: baseURL,
+          AUTH_TRUST_HOST: 'true',
+          SITE_URL: baseURL,
+        },
+      }
+    : undefined,
   use: {
     baseURL,
     trace: 'on-first-retry',
@@ -20,6 +54,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile', use: { ...devices['iPhone 13'] } },
+    // Chromium-based phone preset: the iPhone presets need WebKit, which we don't install.
+    { name: 'mobile', use: { ...devices['Pixel 7'] } },
   ],
 });

@@ -69,11 +69,21 @@ public class MarketServiceImpl implements MarketService {
         market = load(MarketApi.class);
         shopQuery = load(ShopQueryApi.class);
         treasury = load(TreasuryApi.class);
-        business = load(BusinessApi.class);
+        // Business is a soft dependency: its API classes only exist when the plugin is installed,
+        // so the class literal must not be touched otherwise (NoClassDefFoundError at enable).
+        business = businessInstalled() ? load(BusinessApi.class) : null;
         log.info("ChestShop market tracker {}",
                 enabled() ? "enabled" : "disabled (Treasury MarketApi not available)");
         log.info("ChestShop /find search {}",
                 searchEnabled() ? "enabled" : "disabled (Treasury ShopQueryApi not available)");
+    }
+
+    private static boolean businessInstalled() {
+        try {
+            return Bukkit.getPluginManager().getPlugin("Business") != null;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private static <T> T load(Class<T> type) {

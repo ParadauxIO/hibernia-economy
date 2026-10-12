@@ -107,6 +107,31 @@ class FirmRoleServiceImplTest {
     }
 
     @Test
+    void createRole_liveRoleOfThatName_isRefusedWithoutTouchingIt() {
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
+        when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
+        when(roles.findMinRankOrder(1)).thenReturn(1);
+        when(roles.listRolesByFirm(1)).thenReturn(List.of(new FirmRole(1, "Lead", 3)));
+
+        // insertRole is an upsert: reaching it would re-rank the existing role.
+        assertThatThrownBy(() -> svc.createRole("Acme", "lead", 7, actor))
+                .isInstanceOf(ConflictException.class);
+        verify(roles, never()).insertRole(any());
+    }
+
+    @Test
+    void createRole_revivingASoftDeletedRole_reportsTwoRowsAndSucceeds() {
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
+        when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
+        when(roles.findMinRankOrder(1)).thenReturn(1);
+        when(roles.insertRole(any())).thenReturn(2); // ON DUPLICATE KEY UPDATE
+
+        svc.createRole("Acme", "Lead", 3, actor);
+
+        verify(roles).addRolePermission(any());
+    }
+
+    @Test
     void createRole_duplicateMappedToConflict() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
@@ -238,8 +263,19 @@ class FirmRoleServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.listRolesByFirm(1)).thenReturn(List.of(new FirmRole(1, "Lead", 3)));
+        // A typo is the player's mistake: a usable message, not an internal error.
         assertThatThrownBy(() -> svc.addRolePermission("Acme", "Lead", "WAT", actor))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("WAT")
+                .hasMessageContaining("FINANCIAL");
+    }
+
+    @Test
+    void removeRolePermission_invalidPermission_throwsBadCommand() {
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
+        when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
+        assertThatThrownBy(() -> svc.removeRolePermission("Acme", "Lead", "WAT", actor))
+                .isInstanceOf(BadCommandException.class);
     }
 
     @Test

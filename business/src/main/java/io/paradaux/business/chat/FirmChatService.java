@@ -26,8 +26,19 @@ public interface FirmChatService {
     /** Whether firm chat is usable (CarbonChat present + channel registered). */
     boolean available();
 
-    /** The firm whose chat the player is currently in, if any. */
+    /**
+     * The firm whose chat the player is currently in, if any. Only honoured while
+     * the player is still a member of that firm — a selection that outlived the
+     * membership is dropped (see {@link #membershipChanged(int)}).
+     */
     Optional<Integer> activeFirm(UUID uuid);
+
+    /**
+     * Signal that a firm's membership changed (an employee was fired or resigned,
+     * the proprietor changed, the firm was disbanded), so every player tuned into
+     * its chat is re-checked on their next message rather than on a stale cache.
+     */
+    void membershipChanged(int firmId);
 
     /**
      * Online recipients for a sender's active firm: its online staff who are also

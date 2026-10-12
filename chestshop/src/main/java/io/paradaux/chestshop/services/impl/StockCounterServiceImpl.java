@@ -114,6 +114,11 @@ public class StockCounterServiceImpl implements StockCounterService {
             return;
         }
 
+        // A chestless admin shop has no container to count (and no holder to find signs through).
+        if (event.isUnlimitedOwner() || event.getOwnerInventory() == null) {
+            return;
+        }
+
         for (Sign shopSign : shopBlockService.findConnectedShopSigns( getHolder(event.getOwnerInventory(), false))) {
             updateCounterOnQuantityLine(shopSign, event.getOwnerInventory());
         }

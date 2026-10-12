@@ -1,11 +1,13 @@
 package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
+import com.google.inject.Provider;
 import com.google.inject.Singleton;
 
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.InternalException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
 import io.paradaux.business.model.Firm;
@@ -29,13 +31,17 @@ public class FirmStaffServiceImpl implements FirmStaffService {
     private final FirmRoleMapper roles;
     private final FirmStaffMapper staff;
     private final FirmAccountService accounts;
+    /** Lazy-injected to break the FirmStaffService ↔ FirmChatService cycle. */
+    private final Provider<FirmChatService> chatProvider;
 
     @Inject
-    public FirmStaffServiceImpl(FirmService firms, FirmRoleMapper roles, FirmStaffMapper staff, FirmAccountService accounts) {
+    public FirmStaffServiceImpl(FirmService firms, FirmRoleMapper roles, FirmStaffMapper staff, FirmAccountService accounts,
+                                Provider<FirmChatService> chatProvider) {
         this.firms = firms;
         this.roles = roles;
         this.staff = staff;
         this.accounts = accounts;
+        this.chatProvider = chatProvider;
     }
 
     /**
@@ -75,8 +81,11 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         }
 
         int rows = staff.endCurrentEmployment(firm.getFirmId(), playerId.toString(), actorId.toString());
+        if (rows == 0) throw new BadCommandException("That player isn't employed by " + firm.getDisplayName() + ".");
         if (rows != 1) throw new InternalException("Failed to end this employment.");
 
+        // A fired employee must stop posting to the firm's chat straight away.
+        chatProvider.get().membershipChanged(firm.getFirmId());
         accounts.syncAllFirmAccounts(firm.getFirmId());
     }
 
@@ -246,6 +255,7 @@ public class FirmStaffServiceImpl implements FirmStaffService {
 
         staff.endCurrentEmployment(firm.getFirmId(), playerId.toString(), playerId.toString());
 
+        chatProvider.get().membershipChanged(firm.getFirmId());
         accounts.syncAllFirmAccounts(firm.getFirmId());
     }
 

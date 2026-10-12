@@ -6,12 +6,14 @@ on:
     paths:
       - 'business/**'
       - 'treasury/treasury-api/**'   # ADT-170: depends on project(":treasury:treasury-api")
+      - 'common/**'                  # implementation(project(":common")), shaded into the jar
       - '.github/workflows/business-build.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'business/**'
       - 'treasury/treasury-api/**'   # ADT-170: depends on project(":treasury:treasury-api")
+      - 'common/**'                  # implementation(project(":common")), shaded into the jar
       - '.github/workflows/business-build.yml'
   workflow_dispatch:
 

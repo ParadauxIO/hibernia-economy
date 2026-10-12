@@ -20,6 +20,8 @@ the code.
   deploys are gated.
 - **[CI/CD](ci-cd.md)** — the GitHub Actions workflows, container builds, and the
   release flow.
+- **[Release runbook](release-runbook.md)** — the order of operations for a
+  release that changes the schema: backup, stop, migrate, deploy, verify, rollback.
 - **[Conventions](conventions.md)** — the rules that keep the monorepo coherent.
 
 ## Quick links

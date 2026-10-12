@@ -5,9 +5,21 @@ on:
     branches:
       - main
       - develop
+    # Everything that ends up in (or gates) the image: the service itself, its
+    # one project() dependency (:common, shaded into the bootJar), the shared
+    # build inputs that decide which library versions get bundled (version
+    # catalog, convention plugins, root build/settings), and the reused test
+    # workflow. Without these, a :common fix or a dependency bump merges without
+    # ever producing a new image.
     paths:
       - 'treasury-rest-api/**'
+      - 'common/**'                # implementation(project(":common"))
+      - 'gradle/**'                # libs.versions.toml + wrapper
+      - 'build-logic/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
       - '.github/workflows/treasury-rest-api-docker.yml'
+      - '.github/workflows/treasury-rest-api-test.yml'
 
 # The called treasury-rest-api-test.yml requests checks: write to surface JUnit
 # results; a reusable workflow can't exceed its caller's permissions, and this
@@ -31,20 +43,20 @@ jobs:
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Validate Gradle wrapper   # ADT-171: verify wrapper jar before running it with Harbor creds
-        uses: gradle/actions/wrapper-validation@v4
+        uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
@@ -93,22 +105,23 @@ jobs:
       # driver. Without this step build-push-action falls back to the default
       # `docker` driver, which can't emit them, and the build fails outright.
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Log in to Harbor registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ secrets.HARBOR_REGISTRY }}
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
       # Build + push via docker/build-push-action so images carry provenance
-      # attestations and an SBOM (global/infra/0004). Pinned to the current major
-      # tag: an exact SHA pin isn't knowable offline — resolve to a commit SHA when
-      # network access is available. Immutable env-sha tag + mutable tag and the
-      # Harbor registry auth (docker/login-action above) are unchanged.
+      # attestations and an SBOM (global/infra/0004). Every action in this
+      # release path is pinned to a full commit SHA (the trailing comment is the
+      # release it corresponds to) — bump SHA and comment together. Immutable
+      # env-sha tag + mutable tag and the Harbor registry auth (docker/login-action
+      # above) are unchanged.
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: treasury-rest-api
           push: true

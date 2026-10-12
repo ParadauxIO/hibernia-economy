@@ -25,6 +25,29 @@ export function isStaff(v: Viewer): boolean {
 }
 
 /**
+ * Does this viewer hold ANY global elevation that lets them read other people's
+ * data — the `viewer` capability (which admin and legacy government imply) or
+ * the admin/government tier itself? This is the audit predicate: every read a
+ * page grants on the strength of elevation must be audited, and it has to cover
+ * the read-only `viewer` role (PAR-265), whose `role` collapses to 'player' —
+ * so a `role === 'admin' || role === 'government'` check silently skips it.
+ */
+export function hasElevatedRead(v: Viewer): boolean {
+  if (v.anon) return false;
+  return isStaff(v) || v.role === 'admin' || v.role === 'government';
+}
+
+/**
+ * The role to record against an audited access. `viewer.role` is the legacy
+ * three-tier enum, which reports a viewer-only user as 'player'; the audit log
+ * should name the elevation that was actually used.
+ */
+export function auditRole(v: Extract<Viewer, { anon: false }>): 'admin' | 'government' | 'viewer' | 'player' {
+  if (v.role === 'player' && v.capabilities.includes('viewer')) return 'viewer';
+  return v.role;
+}
+
+/**
  * Can this viewer see a single firm's financial drilldown (its ChestShop
  * sales / volume / quantity)? True for staff, or a current employee of that
  * firm whose role grants the FINANCIAL/ADMIN permission.

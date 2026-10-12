@@ -121,6 +121,21 @@ class PersonalKeyHandlerTest {
     }
 
     @Test
+    void serviceKey_isInvisibleToThePersonalCommands_evenForItsOwner() {
+        ApiKey serviceKey = personalKey(ownerId, false);
+        serviceKey.setKeyType(KeyType.SERVICE);
+        when(apiKeyService.getKey(11)).thenReturn(serviceKey);
+
+        handler.doReissue(owner, 11);
+        handler.doRevoke(owner, 11);
+
+        verify(message).send(owner, "treasuryapi.personal.reissue.not-found");
+        verify(message).send(owner, "treasuryapi.personal.revoke.not-found");
+        verify(apiKeyService, never()).reissueKey(anyInt(), any());
+        verify(apiKeyService, never()).revokeKey(anyInt(), any());
+    }
+
+    @Test
     void doReissue_revokedKey_ownerToldTerminal_neverReissues() {
         when(apiKeyService.getKey(11)).thenReturn(personalKey(ownerId, true));
 

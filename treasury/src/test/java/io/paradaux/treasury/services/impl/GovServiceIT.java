@@ -9,12 +9,21 @@ import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.GovernmentFine;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.GovService;
+import io.paradaux.treasury.mappers.GovernmentFineMapper;
+import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.services.LedgerService;
+import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -533,5 +542,86 @@ class GovServiceIT extends IntegrationTestBase {
         assertThat(govService.getActivePlayerFines(player))
                 .hasSize(1)
                 .allMatch(f -> !f.isRevoked());
+    }
+
+    // ---- Double-submit: one fine row per ledger debit ----
+
+    /** A GovService on a pinned clock, so two issues share the per-second dedup key. */
+    private GovService govServiceAt(Instant now) {
+        return new GovServiceImpl(accountService, ledgerService,
+                injector.getInstance(GovernmentFineMapper.class),
+                injector.getInstance(GovernmentConfiguration.class),
+                injector.getInstance(PlayerDirectoryService.class),
+                Clock.fixed(now, ZoneOffset.UTC));
+    }
+
+    private long countFines() throws Exception {
+        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM government_fines")) {
+            rs.next();
+            return rs.getLong(1);
+        }
+    }
+
+    @Test
+    void issueFine_doubleSubmitInTheSameSecond_recordsOneFineAndRefundsOnce() throws Exception {
+        UUID player = UUID.randomUUID();
+        UUID issuer = UUID.randomUUID();
+        ledgerService.resolveOrCreatePersonal(player);
+        GovService gov = govServiceAt(Instant.parse("2026-01-01T12:00:00.250Z"));
+
+        GovernmentFine first  = gov.issueFine(player, new BigDecimal("250.00"), "speeding", issuer);
+        GovernmentFine second = gov.issueFine(player, new BigDecimal("250.00"), "speeding", issuer);
+
+        // The ledger collapsed the second debit; the fine must collapse with it.
+        assertThat(second.getFineId()).isEqualTo(first.getFineId());
+        assertThat(second.getTxnId()).isEqualTo(first.getTxnId());
+        assertThat(countFines()).isEqualTo(1);
+        assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("9750.00");
+
+        // One debit → exactly one refund. Before the fix the second row was revocable
+        // too (the revoke dedup key is per fine id), refunding 500 for a 250 debit.
+        gov.revokeFine(first.getFineId(), issuer);
+        assertThatThrownBy(() -> gov.revokeFine(second.getFineId(), issuer))
+                .isInstanceOf(FineAlreadyRevokedException.class);
+        assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("10000.00");
+    }
+
+    @Test
+    void issueFine_sameSecondButDifferentReason_areTwoDistinctFines() throws Exception {
+        UUID player = UUID.randomUUID();
+        UUID issuer = UUID.randomUUID();
+        ledgerService.resolveOrCreatePersonal(player);
+        GovService gov = govServiceAt(Instant.parse("2026-01-01T12:00:00Z"));
+
+        GovernmentFine a = gov.issueFine(player, new BigDecimal("100.00"), "speeding", issuer);
+        GovernmentFine b = gov.issueFine(player, new BigDecimal("100.00"), "littering", issuer);
+
+        assertThat(b.getFineId()).isNotEqualTo(a.getFineId());
+        assertThat(countFines()).isEqualTo(2);
+        assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("9800.00");
+    }
+
+    @Test
+    void governmentFines_rejectASecondRowForTheSameDebit() {
+        // uq_fines_txn (V29) is the database backstop behind the service-level guard.
+        UUID player = UUID.randomUUID();
+        UUID issuer = UUID.randomUUID();
+        ledgerService.resolveOrCreatePersonal(player);
+        GovernmentFine fine = govService.issueFine(player, new BigDecimal("10.00"), "x", issuer);
+
+        GovernmentFineMapper mapper = injector.getInstance(GovernmentFineMapper.class);
+        GovernmentFine duplicate = GovernmentFine.builder()
+                .playerUuid(player)
+                .debtorAccountId(fine.getDebtorAccountId())
+                .govAccountId(fine.getGovAccountId())
+                .amount(fine.getAmount())
+                .reason("x")
+                .txnId(fine.getTxnId())
+                .issuedBy(issuer)
+                .build();
+
+        assertThatThrownBy(() -> mapper.insertFine(duplicate))
+                .hasMessageContaining("uq_fines_txn");
     }
 }

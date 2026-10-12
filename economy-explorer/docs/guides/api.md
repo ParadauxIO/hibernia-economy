@@ -53,10 +53,9 @@ copy). For a **firm** account, issue a business key instead:
 ```
 
 > [!WARNING]
-> The token is shown **once**, when it's issued. Copy it somewhere safe. You can
-> re-retrieve it later with `/treasuryapi personal export <keyId>` (it gives you a
-> shareable link to the token), or replace it with `/treasuryapi personal reissue
-> <keyId>`.
+> The token is shown **once**, when it's issued, and is never stored — it can't be
+> retrieved later. Copy it somewhere safe. If you lose it, replace it with
+> `/treasuryapi personal reissue <keyId>` (the old token stops working).
 
 Manage your keys any time:
 
@@ -65,7 +64,7 @@ Manage your keys any time:
 /treasuryapi personal revoke <keyId>  # kill a key immediately
 ```
 
-Business keys have the same `list` / `export` / `reissue` / `revoke` subcommands under
+Business keys have the same `list` / `reissue` / `revoke` subcommands under
 `/treasuryapi business`. Firm staff can also run `/treasuryapi business list access` to
 see the keys issued for firms they're employed at.
 

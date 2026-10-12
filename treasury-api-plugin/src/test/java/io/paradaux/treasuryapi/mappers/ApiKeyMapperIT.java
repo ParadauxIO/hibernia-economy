@@ -111,10 +111,62 @@ class ApiKeyMapperIT extends IntegrationTestBase {
 
         String newJwt = UUID.randomUUID().toString();
         Instant now = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
-        int rows = mapper.reissue(k.getKeyId(), newJwt, now, now.plus(180, ChronoUnit.DAYS));
+        int rows = mapper.reissue(k.getKeyId(), k.getOwnerUuid(), newJwt, now, now.plus(180, ChronoUnit.DAYS));
 
         assertThat(rows).isEqualTo(1);
         assertThat(mapper.findById(k.getKeyId()).getJwtId()).isEqualTo(newJwt);
+    }
+
+    @Test
+    void reissue_movesOwnerToTheReissuingPlayer() throws Exception {
+        // A BUSINESS key reissued by a different (current) proprietor: the row's owner
+        // must follow the identity baked into the new token.
+        UUID formerProprietor = UUID.randomUUID();
+        UUID currentProprietor = UUID.randomUUID();
+        int firmId = insertFirm("Handover", currentProprietor);
+        ApiKey k = new ApiKey();
+        k.setKeyType(KeyType.BUSINESS);
+        k.setFirmId(firmId);
+        k.setOwnerUuid(formerProprietor);
+        k.setJwtId(UUID.randomUUID().toString());
+        k.setIssuedAt(Instant.now().truncatedTo(ChronoUnit.SECONDS));
+        k.setExpiresAt(Instant.now().plus(180, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS));
+        mapper.insert(k);
+
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        assertThat(mapper.reissue(k.getKeyId(), currentProprietor, UUID.randomUUID().toString(),
+                now, now.plus(180, ChronoUnit.DAYS))).isEqualTo(1);
+
+        assertThat(mapper.findById(k.getKeyId()).getOwnerUuid()).isEqualTo(currentProprietor);
+        assertThat(mapper.findByOwnerAndType(currentProprietor, KeyType.BUSINESS))
+                .extracting(ApiKey::getKeyId).containsExactly(k.getKeyId());
+        assertThat(mapper.findByOwnerAndType(formerProprietor, KeyType.BUSINESS)).isEmpty();
+    }
+
+    @Test
+    void findById_mapsServiceKeyRow() throws Exception {
+        // api_keys.key_type gained SERVICE in V15; a row of that type (created by ops,
+        // never by this plugin) must map instead of failing enum conversion.
+        UUID owner = UUID.randomUUID();
+        int keyId;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO api_keys (key_type, owner_uuid_bin, jwt_id, issued_at, expires_at) "
+                             + "VALUES ('SERVICE', uuid_to_bin(?), ?, NOW(), NOW() + INTERVAL 180 DAY)",
+                     Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, owner.toString());
+            ps.setString(2, UUID.randomUUID().toString());
+            ps.executeUpdate();
+            try (var rs = ps.getGeneratedKeys()) { rs.next(); keyId = rs.getInt(1); }
+        }
+
+        ApiKey found = mapper.findById(keyId);
+        assertThat(found.getKeyType()).isEqualTo(KeyType.SERVICE);
+        assertThat(found.getAccountId()).isNull();
+        assertThat(found.getFirmId()).isNull();
+        // Not reachable through the player-facing list queries.
+        assertThat(mapper.findByOwnerAndType(owner, KeyType.PERSONAL)).isEmpty();
+        assertThat(mapper.findByOwnerAndType(owner, KeyType.BUSINESS)).isEmpty();
     }
 
     @Test
@@ -126,7 +178,7 @@ class ApiKeyMapperIT extends IntegrationTestBase {
         mapper.insert(k);
         assertThat(mapper.revoke(k.getKeyId())).isEqualTo(1);
 
-        int rows = mapper.reissue(k.getKeyId(), UUID.randomUUID().toString(),
+        int rows = mapper.reissue(k.getKeyId(), k.getOwnerUuid(), UUID.randomUUID().toString(),
                 Instant.now(), Instant.now().plus(180, ChronoUnit.DAYS));
 
         assertThat(rows).isZero();

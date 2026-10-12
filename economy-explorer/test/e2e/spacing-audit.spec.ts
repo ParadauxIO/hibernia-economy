@@ -36,7 +36,6 @@ const ROUTES: { path: string; name: string; viewer?: 'admin' }[] = [
   { path: '/me', name: 'me', viewer: 'admin' },
   { path: '/me/market', name: 'me-market', viewer: 'admin' },
   { path: '/admin/api-keys', name: 'admin-api-keys', viewer: 'admin' },
-  { path: '/admin/audit', name: 'admin-audit', viewer: 'admin' },
   { path: '/docs', name: 'docs' },
   { path: '/link', name: 'link', viewer: 'admin' },
 ];

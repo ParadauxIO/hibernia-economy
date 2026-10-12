@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
+import java.time.Duration;
 
 /**
  * Shared helpers for posting Discord webhook embeds — the small HTTP/JSON
@@ -19,15 +20,26 @@ import java.text.DecimalFormat;
 @Slf4j
 final class DiscordWebhooks {
 
+    /**
+     * Upper bound on one webhook POST. The JDK client has no default timeout, so an
+     * unresponsive endpoint would otherwise pin the calling (command/tax) thread forever.
+     */
+    static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+
     private DiscordWebhooks() {}
 
     /** POSTs a Discord webhook JSON payload; logs and swallows any failure. */
     static void post(HttpClient client, String url, String payload, String context) {
+        post(client, url, payload, context, REQUEST_TIMEOUT);
+    }
+
+    static void post(HttpClient client, String url, String payload, String context, Duration timeout) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
                     .header("User-Agent", "Treasury-Plugin/1.0")
+                    .timeout(timeout)
                     .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
                     .build();
 

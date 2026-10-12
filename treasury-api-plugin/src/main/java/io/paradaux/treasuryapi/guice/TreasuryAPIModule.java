@@ -2,6 +2,7 @@ package io.paradaux.treasuryapi.guice;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;
+import com.google.inject.multibindings.OptionalBinder;
 import io.paradaux.business.api.BusinessApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasuryapi.TreasuryAPI;
@@ -11,6 +12,7 @@ import io.paradaux.treasuryapi.commands.UiAccessHandler;
 import io.paradaux.treasuryapi.services.ApiKeyService;
 import io.paradaux.treasuryapi.services.ExplorerUiService;
 import io.paradaux.treasuryapi.services.KeycloakAdminClient;
+import io.paradaux.treasuryapi.services.PlayerGroupSync;
 import io.paradaux.treasuryapi.services.impl.ApiKeyServiceImpl;
 import io.paradaux.treasuryapi.services.impl.ExplorerUiServiceImpl;
 import io.paradaux.treasuryapi.services.impl.KeycloakAdminClientImpl;
@@ -65,8 +67,13 @@ public class TreasuryAPIModule extends AbstractModule {
         bind(BusinessKeyHandler.class).in(Singleton.class);
         bind(UiAccessHandler.class).in(Singleton.class);
 
-        // LuckPerms (optional softdepend) for the group reconciliation cron. Guard
-        // the class reference behind Class.forName so the bare LuckPerms.class
+        // LuckPerms (optional softdepend) for the group reconciliation cron and the
+        // on-demand self-sync. Services inject Optional<PlayerGroupSync>, which stays
+        // empty unless bindLuckPerms() supplies the LuckPerms-backed implementation —
+        // so nothing in the always-built graph requires LuckPerms.
+        OptionalBinder.newOptionalBinder(binder(), PlayerGroupSync.class);
+
+        // Guard the class reference behind Class.forName so the bare LuckPerms.class
         // literal never throws NoClassDefFoundError when LuckPerms is absent.
         if (isClassPresent("net.luckperms.api.LuckPerms")) {
             bindLuckPerms();
@@ -78,6 +85,8 @@ public class TreasuryAPIModule extends AbstractModule {
                 org.bukkit.Bukkit.getServicesManager().load(net.luckperms.api.LuckPerms.class);
         if (lp != null) {
             bind(net.luckperms.api.LuckPerms.class).toInstance(lp);
+            OptionalBinder.newOptionalBinder(binder(), PlayerGroupSync.class)
+                    .setBinding().to(io.paradaux.treasuryapi.tasks.GroupReconciliationTask.class);
         }
     }
 

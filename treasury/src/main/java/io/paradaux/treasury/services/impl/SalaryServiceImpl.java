@@ -176,7 +176,9 @@ public class SalaryServiceImpl implements SalaryService {
     /**
      * Start-of-period epoch seconds for the current payout, bucketed by the
      * configured interval. Stable for the whole interval (so retries/overlaps
-     * dedup) and advances each interval (so the next run pays again).
+     * dedup) and advances each interval (so the next run pays again). The bucket
+     * width must match the SalaryTask timer's period, which is why
+     * {@link SalaryConfiguration} pins the interval at startup and ignores reloads.
      */
     private long currentPeriodStart() {
         long interval = Math.max(1L, config.getIntervalSeconds());

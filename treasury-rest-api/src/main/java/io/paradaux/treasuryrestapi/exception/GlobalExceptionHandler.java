@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.util.Comparator;
+import java.util.Map;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -33,20 +36,43 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Bean-validation failure on a {@code @Valid @RequestBody} DTO. Surfaces the
-     * first field error in the stable {@link ErrorResponse} envelope rather than
-     * Spring's default validation payload, so the error contract is uniform.
+     * Error codes for fields whose service-layer validation already answers with
+     * something more specific than {@code INVALID_BODY}. Bean validation runs before
+     * the service, so without this a blank {@code amount} would stop being
+     * {@code INVALID_AMOUNT} (and a blank webhook URL {@code INVALID_WEBHOOK_URL}) the
+     * moment a constraint annotation is added to the DTO — a silent contract break.
+     */
+    private static final Map<String, String> FIELD_ERROR_CODES = Map.of(
+            "amount", "INVALID_AMOUNT",
+            "url", "INVALID_WEBHOOK_URL",
+            "targetUrl", "INVALID_WEBHOOK_URL");
+
+    /**
+     * Bean-validation failure on a {@code @Valid @RequestBody} DTO. Surfaces one
+     * field error in the stable {@link ErrorResponse} envelope rather than Spring's
+     * default validation payload, under the same code the service layer uses for
+     * that field ({@code INVALID_BODY} unless listed in {@link #FIELD_ERROR_CODES}).
+     *
+     * <p>When several fields fail, plain body errors are reported ahead of the
+     * specifically-coded ones — the order the services check them in — and ties
+     * break on field name, so the response never depends on validator iteration order.
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
-        FieldError first = ex.getBindingResult().getFieldError();
+        FieldError first = ex.getBindingResult().getFieldErrors().stream()
+                .min(Comparator.comparing((FieldError e) -> FIELD_ERROR_CODES.containsKey(e.getField()))
+                        .thenComparing(FieldError::getField))
+                .orElse(null);
+        String code = first != null
+                ? FIELD_ERROR_CODES.getOrDefault(first.getField(), "INVALID_BODY")
+                : "INVALID_BODY";
         String message = first != null
                 ? "Field '" + first.getField() + "' " + first.getDefaultMessage() + "."
                 : "Request body failed validation.";
-        log.warn("Request validation failed: {}", message);
+        log.warn("Request validation failed: [{}] {}", code, message);
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse("VALIDATION_ERROR", message));
+                .body(new ErrorResponse(code, message));
     }
 
     /** Malformed or missing request body. */

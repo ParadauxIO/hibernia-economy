@@ -1,4 +1,6 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
+import { parseDaysWindow } from '@/lib/util/daysWindow';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
@@ -23,21 +25,31 @@ export async function generateMetadata({ params }: { params: Promise<{ firmId: s
 
 export default async function MarketFirmDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ firmId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { firmId: raw } = await params;
   const firmId = Number(raw);
   if (!Number.isInteger(firmId) || firmId <= 0) notFound();
+
+  // `?days=N` — the trailing window the in-game `/firm sales export <firm> <days>`
+  // link asks for. Absent/malformed means all-time; oversized values are clamped.
+  const days = parseDaysWindow(flattenSearchParams(await searchParams).days);
+  const windowLabel = days == null ? 'all-time' : `last ${fmtN(days)} ${days === 1 ? 'day' : 'days'}`;
+  const fileSuffix = days == null ? '' : `-${days}d`;
 
   const viewer = await getViewer();
   const canSeeFinancials = await canViewFirmFinancials(firmId, viewer);
 
   // Resolve identity for the heading + existence check regardless of access;
   // the financial figures (KPIs + per-item volume) only render when allowed.
-  const firm = await getMarketFirm(firmId);
+  // The window narrows the figures only — a firm with no sales inside it still
+  // resolves (zero totals) rather than 404ing.
+  const firm = await getMarketFirm(firmId, days);
   if (!firm) notFound();
-  const items = canSeeFinancials ? await listFirmMarketItems(firmId, 50, 0) : [];
+  const items = canSeeFinancials ? await listFirmMarketItems(firmId, 50, 0, days) : [];
 
   // Audit privileged inspection: staff viewing a firm's books via elevation
   // (i.e. not one of that firm's own finance-role employees).
@@ -68,6 +80,15 @@ export default async function MarketFirmDetailPage({
         />
       ) : (
         <>
+          {days != null && (
+            <div className="card-title">
+              <span className="sub">Showing the {windowLabel}</span>
+              <span className="window-tabs">
+                <Link href={`/chestshop/firms/${firm.firm_id}` as Route} prefetch={false}>Show all time</Link>
+              </span>
+            </div>
+          )}
+
           <div className="kpi-grid">
             <div className="kpi">
               <div className="kpi-label">Sales</div>
@@ -89,10 +110,10 @@ export default async function MarketFirmDetailPage({
 
           <div className="card">
             <div className="card-title">
-              Items sold <span className="sub">all-time, sorted by trade count</span>
+              Items sold <span className="sub">{windowLabel}, sorted by trade count</span>
               <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
                 <CsvButton
-                  filename={`firm-${firm.firm_id}-items.csv`}
+                  filename={`firm-${firm.firm_id}-items${fileSuffix}.csv`}
                   headers={['Item key', 'Item name', 'Material', 'Trades', 'Quantity', 'Volume']}
                   rows={items.map((i) => [
                     i.item_key,
@@ -103,7 +124,7 @@ export default async function MarketFirmDetailPage({
                     i.total_volume,
                   ])}
                 />
-                <JsonButton filename={`firm-${firm.firm_id}-items.json`} data={items} />
+                <JsonButton filename={`firm-${firm.firm_id}-items${fileSuffix}.json`} data={items} />
               </span>
             </div>
             <div className="table-wrap">
@@ -119,7 +140,7 @@ export default async function MarketFirmDetailPage({
                 </thead>
                 <tbody>
                   {items.length === 0 && (
-                    <tr><td colSpan={5} className="empty">No items.</td></tr>
+                    <tr><td colSpan={5} className="empty">{days == null ? 'No items.' : 'No sales in this window.'}</td></tr>
                   )}
                   {items.map((i) => (
                     <tr key={i.item_key}>

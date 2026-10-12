@@ -17,6 +17,15 @@
 -- deleted through the constraint. The columns are already indexed
 -- (idx_cs_txn/idx_cs_acct/idx_cs_firm, idx_shop_acct/idx_shop_firm), so the FKs
 -- reuse those indexes. chestshop_shop has no txn_id, so it gets two FKs.
+--
+-- The constraints are added with foreign_key_checks = 0. With checks on, InnoDB
+-- can only add a foreign key by COPYING the table and validating every row against
+-- its parents; on a multi-million-row chestshop_sale that is minutes of exclusive
+-- lock on a small buffer pool. With checks off the same ALTER is an in-place
+-- metadata change. Nothing is lost by skipping the validation: the orphan pass
+-- directly above each ALTER has just established that every non-NULL value has a
+-- parent. That holds only while nothing else is writing — run this with the
+-- plugins and the REST API stopped, as the release runbook requires.
 
 -- ── chestshop_sale ────────────────────────────────────────────────────────────
 
@@ -35,6 +44,8 @@ LEFT JOIN firm f ON s.shop_firm_id = f.firm_id
 SET s.shop_firm_id = NULL
 WHERE s.shop_firm_id IS NOT NULL AND f.firm_id IS NULL;
 
+SET SESSION foreign_key_checks = 0;
+
 ALTER TABLE chestshop_sale
     ADD CONSTRAINT fk_cs_sale_txn
         FOREIGN KEY (txn_id) REFERENCES ledger_txns (txn_id) ON DELETE SET NULL,
@@ -42,6 +53,8 @@ ALTER TABLE chestshop_sale
         FOREIGN KEY (shop_account_id) REFERENCES accounts (account_id) ON DELETE SET NULL,
     ADD CONSTRAINT fk_cs_sale_firm
         FOREIGN KEY (shop_firm_id) REFERENCES firm (firm_id) ON DELETE SET NULL;
+
+SET SESSION foreign_key_checks = 1;
 
 -- ── chestshop_shop ────────────────────────────────────────────────────────────
 
@@ -55,8 +68,12 @@ LEFT JOIN firm f ON s.shop_firm_id = f.firm_id
 SET s.shop_firm_id = NULL
 WHERE s.shop_firm_id IS NOT NULL AND f.firm_id IS NULL;
 
+SET SESSION foreign_key_checks = 0;
+
 ALTER TABLE chestshop_shop
     ADD CONSTRAINT fk_cs_shop_account
         FOREIGN KEY (shop_account_id) REFERENCES accounts (account_id) ON DELETE SET NULL,
     ADD CONSTRAINT fk_cs_shop_firm
         FOREIGN KEY (shop_firm_id) REFERENCES firm (firm_id) ON DELETE SET NULL;
+
+SET SESSION foreign_key_checks = 1;

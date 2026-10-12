@@ -52,6 +52,37 @@ class FirmRequestMapperIT extends IntegrationTestBase {
                 .isInstanceOf(PersistenceException.class);
     }
 
+    /**
+     * A lapsed invite is still PENDING until something expires it, so it keeps
+     * occupying uq_one_pending_invite even though hasPendingJobOffer no longer sees
+     * it. expireStaleInvite must free the slot so the firm can re-offer.
+     */
+    @Test
+    void expireStaleInvite_freesTheUniqueSlotForAReoffer() {
+        requests.createInvite(firmId, invited.toString(), inviter.toString(),
+                LocalDateTime.now().minusMinutes(1));
+        assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
+        // The bug: the guard says "no pending offer" but the insert collides.
+        assertThatThrownBy(() ->
+                requests.createInvite(firmId, invited.toString(), inviter.toString(),
+                        LocalDateTime.now().plusMinutes(5)))
+                .isInstanceOf(PersistenceException.class);
+
+        assertThat(requests.expireStaleInvite(firmId, invited.toString())).isEqualTo(1);
+
+        assertThat(requests.createInvite(firmId, invited.toString(), inviter.toString(),
+                LocalDateTime.now().plusMinutes(5))).isEqualTo(1);
+        assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
+    }
+
+    @Test
+    void expireStaleInvite_leavesALiveInviteAlone() {
+        requests.createInvite(firmId, invited.toString(), inviter.toString(),
+                LocalDateTime.now().plusMinutes(5));
+        assertThat(requests.expireStaleInvite(firmId, invited.toString())).isZero();
+        assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
+    }
+
     @Test
     void acceptInvite_flipsStatus() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
@@ -123,6 +154,35 @@ class FirmRequestMapperIT extends IntegrationTestBase {
         assertThat(requests.acceptTransfer(firmId, invited.toString())).isEqualTo(1);
     }
 
+    /**
+     * A lapsed transfer is still active until something expires it, so it keeps
+     * occupying uq_one_active_transfer while rejectTransfer (unexpired only) can't
+     * cancel it. expireStaleTransfer must free the slot for a new transfer.
+     */
+    @Test
+    void expireStaleTransfer_freesTheUniqueSlotForANewTransfer() {
+        requests.createTransferRequest(firmId, invited.toString(), "tok-lapsed",
+                LocalDateTime.now().minusMinutes(1));
+        assertThat(requests.rejectTransfer(firmId, invited.toString())).isZero();
+        assertThatThrownBy(() ->
+                requests.createTransferRequest(firmId, invited.toString(), "tok-new",
+                        LocalDateTime.now().plusMinutes(5)))
+                .isInstanceOf(PersistenceException.class);
+
+        assertThat(requests.expireStaleTransfer(firmId)).isEqualTo(1);
+
+        assertThat(requests.createTransferRequest(firmId, invited.toString(), "tok-new",
+                LocalDateTime.now().plusMinutes(5))).isEqualTo(1);
+    }
+
+    @Test
+    void expireStaleTransfer_leavesALiveTransferAlone() {
+        requests.createTransferRequest(firmId, invited.toString(), "tok-live",
+                LocalDateTime.now().plusMinutes(5));
+        assertThat(requests.expireStaleTransfer(firmId)).isZero();
+        assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-live")).isEqualTo(1);
+    }
+
     @Test
     void expireStaleTransfers_marksOverdue() {
         requests.createTransferRequest(firmId, invited.toString(), "tok-1",
@@ -160,5 +220,42 @@ class FirmRequestMapperIT extends IntegrationTestBase {
         // the same firm must not collide with uq_one_active_transfer.
         assertThat(requests.recordAdminOverride(firmId, from.toString(), to.toString(),
                 actor.toString(), "override-tok-2")).isEqualTo(1);
+    }
+
+    /**
+     * The override audit row is written with expires_at = now, so it is "overdue"
+     * from the moment it exists. The expiry job must only touch in-flight
+     * (PENDING / CONFIRMED) transfers, or it rewrites the audit trail to EXPIRED.
+     */
+    @Test
+    void expireStaleTransfers_leavesAdminOverrideAuditRowsIntact() throws Exception {
+        requests.recordAdminOverride(firmId, inviter.toString(), UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(), "override-tok-3");
+        // Backdate it so the row is unambiguously past its expiry.
+        try (var conn = dataSource.getConnection();
+             var ps = conn.prepareStatement(
+                     "UPDATE firm_transfer_requests SET expires_at = NOW() - INTERVAL 1 HOUR WHERE firm_id = ?")) {
+            ps.setInt(1, firmId);
+            assertThat(ps.executeUpdate()).isEqualTo(1);
+        }
+        // An overdue in-flight transfer alongside it IS expired.
+        requests.createTransferRequest(firmId, invited.toString(), "tok-overdue",
+                LocalDateTime.now().minusMinutes(1));
+
+        assertThat(requests.expireStaleTransfers()).isEqualTo(1);
+
+        try (var conn = dataSource.getConnection();
+             var ps = conn.prepareStatement(
+                     "SELECT token, status FROM firm_transfer_requests WHERE firm_id = ? ORDER BY token")) {
+            ps.setInt(1, firmId);
+            try (var rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getString(1)).isEqualTo("override-tok-3");
+                assertThat(rs.getString(2)).isEqualTo("ADMIN_OVERRIDE");
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getString(1)).isEqualTo("tok-overdue");
+                assertThat(rs.getString(2)).isEqualTo("EXPIRED");
+            }
+        }
     }
 }

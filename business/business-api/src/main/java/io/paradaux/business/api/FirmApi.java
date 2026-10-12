@@ -75,8 +75,15 @@ public interface FirmApi {
     /**
      * Disbands (archives) a firm. The actor must be the firm's proprietor.
      *
+     * <p>Each of the firm's accounts is drained to the proprietor independently. If
+     * any could not be drained the firm is still archived, the affected accounts
+     * keep their balance, and this throws {@link IllegalStateException}; calling it
+     * again on the same firm retries just those accounts.
+     *
      * @param firmId  the firm ID
      * @param actorId UUID of the player performing the action
+     * @throws IllegalStateException if the actor is not the proprietor, or the
+     *                               firm was disbanded but not fully drained
      */
     void disbandFirm(int firmId, UUID actorId);
 

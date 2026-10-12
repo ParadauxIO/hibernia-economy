@@ -98,7 +98,15 @@ public class BusinessApiImpl implements BusinessApi {
             if (!service.isProprietor(firmId, actorId)) {
                 throw new IllegalStateException("Only the proprietor can disband a firm.");
             }
-            service.disbandFirm(firmId, actorId);
+            FirmService.DisbandResult result = service.disbandFirm(firmId, actorId);
+            if (!result.complete()) {
+                // The API method is void, so a partial drain can only be surfaced by
+                // throwing — returning normally would report money as returned when
+                // some is still sitting in the archived firm's accounts.
+                throw new IllegalStateException("Firm " + firmId + " was disbanded, but "
+                        + result.undrainedAccountIds().size() + " account(s) could not be drained "
+                        + result.undrainedAccountIds() + "; call disbandFirm again to finish.");
+            }
         }
 
         @Override

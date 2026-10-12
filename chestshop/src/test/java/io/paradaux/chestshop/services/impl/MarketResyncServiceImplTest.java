@@ -1,26 +1,20 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.model.Account;
-import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.services.MarketSyncService;
+import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.ShopQueryApi;
-import io.paradaux.treasury.api.market.ChestShopShopRecord;
 import io.paradaux.treasury.api.market.ShopLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.block.BlockState;
-import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
@@ -38,12 +32,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,9 +54,8 @@ class MarketResyncServiceImplTest {
     private MarketApi marketApi;
     private ShopQueryApi shopQueryApi;
     private SignService signService;
-    private ShopBlockService shopBlockService;
-    private ItemCodeService itemCodes;
-    private AccountService accounts;
+    private MarketSyncService marketSync;
+    private PreviewService previews;
     private Message message;
     private MarketResyncServiceImpl service;
     private Player initiator;
@@ -83,9 +74,8 @@ class MarketResyncServiceImplTest {
         marketApi = mock(MarketApi.class);
         shopQueryApi = mock(ShopQueryApi.class);
         signService = mock(SignService.class);
-        shopBlockService = mock(ShopBlockService.class);
-        itemCodes = mock(ItemCodeService.class);
-        accounts = mock(AccountService.class);
+        marketSync = mock(MarketSyncService.class);
+        previews = mock(PreviewService.class);
         message = mock(Message.class);
         initiator = mock(Player.class);
 
@@ -123,8 +113,7 @@ class MarketResyncServiceImplTest {
         previousBukkitServer = (Server) bukkitServer.get(null);
         bukkitServer.set(null, server);
 
-        service = new MarketResyncServiceImpl(plugin, marketService, signService, shopBlockService,
-                itemCodes, accounts, message);
+        service = new MarketResyncServiceImpl(plugin, marketService, signService, marketSync, previews, message);
     }
 
     @AfterEach
@@ -208,81 +197,82 @@ class MarketResyncServiceImplTest {
         when(world.getName()).thenReturn("world");
         when(server.getWorlds()).thenReturn(List.of(world));
 
-        UUID u1 = UUID.randomUUID();
-        UUID u2 = UUID.randomUUID();
-        ItemStack diamond = mock(ItemStack.class);
-        ItemStack stone = mock(ItemStack.class);
-        ItemStack gold = mock(ItemStack.class);
-        ItemStack iron = mock(ItemStack.class);
-        ItemStack coal = mock(ItemStack.class);
-        when(itemCodes.decode("Diamond")).thenReturn(diamond);
-        when(itemCodes.decode("Stone")).thenReturn(stone);
-        when(itemCodes.decode("Gold")).thenReturn(gold);
-        when(itemCodes.decode("Bad")).thenReturn(null);
-        when(itemCodes.decode("Iron")).thenReturn(iron);
-        when(itemCodes.decode("Coal")).thenReturn(coal);
-        when(itemCodes.decode("Boom")).thenThrow(new RuntimeException("bad blob"));
-
-        // Signs.
-        Sign personalOk = sign(5, 64, 5, "Owner", "Diamond");
-        Sign adminOk = sign(6, 64, 6, "admin", "Stone");
-        Sign personalNoChest = sign(7, 64, 7, "Owner2", "Gold");
-        Sign itemNull = mock(Sign.class);
-        lenient().when(itemNull.getLines()).thenReturn(new String[]{"O", "1", "B 1", null}); // item line null
-        Sign decodeNull = sign(0, 0, 0, "O", "Bad");
-        Sign accountNull = sign(0, 0, 0, "NoAcc", "Iron");
-        Sign uuidNull = sign(0, 0, 0, "NoUuid", "Coal");
-        Sign throwing = sign(0, 0, 0, "T", "Boom");
-        Sign invalid = sign(0, 0, 0, "X", "Diamond");
+        Sign registered = sign(5, 64, 5, "Owner", "Diamond");
+        Sign alsoRegistered = sign(6, 64, 6, "admin", "Stone");
+        Sign unresolvable = sign(7, 64, 7, "Owner2", "ruby_sword"); // present, but its row can't be built
+        Sign invalid = sign(8, 64, 8, "X", "Diamond");
         BlockState nonSign = mock(BlockState.class);
 
-        // Validity / admin classification.
-        for (Sign s : List.of(personalOk, adminOk, personalNoChest, itemNull, decodeNull, accountNull, uuidNull, throwing)) {
+        for (Sign s : List.of(registered, alsoRegistered, unresolvable)) {
             when(signService.isValid(s)).thenReturn(true);
-            lenient().when(signService.isAdminShop(s)).thenReturn(false);
         }
         when(signService.isValid(invalid)).thenReturn(false);
-        when(signService.isAdminShop(adminOk)).thenReturn(true);
+        when(marketSync.registerShop(registered)).thenReturn(true);
+        when(marketSync.registerShop(alsoRegistered)).thenReturn(true);
+        when(marketSync.registerShop(unresolvable)).thenReturn(false);
 
-        // Owner resolution.
-        when(accounts.resolveAccount("Owner")).thenReturn(new Account("Owner", "o", u1));
-        when(accounts.resolveAccount("Owner2")).thenReturn(new Account("Owner2", "o2", u2));
-        when(accounts.resolveAccount("NoAcc")).thenReturn(null);
-        when(accounts.resolveAccount("NoUuid")).thenReturn(new Account("NoUuid", "n", null));
-        MarketService.Owner ownerP = new MarketService.Owner(1, "PERSONAL", null, u1, false);
-        MarketService.Owner ownerP2 = new MarketService.Owner(2, "PERSONAL", null, u2, false);
-        MarketService.Owner ownerAdmin = new MarketService.Owner(null, null, null, null, true);
-        when(marketService.ownerFromUuid(u1, false)).thenReturn(ownerP);
-        when(marketService.ownerFromUuid(u2, false)).thenReturn(ownerP2);
-        when(marketService.ownerFromUuid(null, true)).thenReturn(ownerAdmin);
-
-        // Containers / stock.
-        Container container = mock(Container.class);
-        Inventory inv = mock(Inventory.class);
-        when(container.getInventory()).thenReturn(inv);
-        when(shopBlockService.findConnectedContainer(personalOk)).thenReturn(container);
-        when(shopBlockService.findConnectedContainer(personalNoChest)).thenReturn(null);
-        lenient().when(marketService.stockOf(any(), eq(inv))).thenReturn(12);
-        lenient().when(marketService.capacityOf(any(), eq(inv))).thenReturn(52);
-        lenient().when(marketService.shop(any(), any(), any(), any(), any())).thenReturn(mock(ChestShopShopRecord.class));
-
-        // Known shops: one still-present (skipped), one vanished (deactivated).
         when(shopQueryApi.activeShopLocations(null)).thenReturn(List.of(
-                new ShopLocation("world", UUID.randomUUID(), 5, 64, 5),   // matches personalOk -> kept
-                new ShopLocation("world", UUID.randomUUID(), 9, 64, 9))); // no live sign -> deactivate
+                new ShopLocation("world", UUID.randomUUID(), 5, 64, 5),   // registered -> kept
+                new ShopLocation("world", UUID.randomUUID(), 7, 64, 7),   // sign present, upsert failed -> kept
+                new ShopLocation("world", UUID.randomUUID(), 8, 64, 8),   // no longer a valid shop sign -> deactivate
+                new ShopLocation("world", UUID.randomUUID(), 9, 64, 9))); // no sign at all -> deactivate
 
-        Chunk c1 = chunk(world, 0, 0, true, personalOk, adminOk, personalNoChest, itemNull,
-                decodeNull, accountNull, uuidNull, throwing, invalid, nonSign);
+        Chunk c1 = chunk(world, 0, 0, true, registered, alsoRegistered, unresolvable, invalid, nonSign);
         Chunk c2 = chunk(world, 1, 0, false); // enqueued but unloaded before processing -> skipped
         when(world.getLoadedChunks()).thenReturn(new Chunk[]{c1, c2});
 
         service.resync(initiator, 3);
         driveScan();
 
-        verify(marketApi, times(3)).upsertShop(any()); // personalOk, adminOk, personalNoChest
+        verify(marketSync, never()).registerShop(invalid);
+        // A shop whose sign is physically present is never deactivated just because it couldn't be upserted.
+        verify(marketApi, never()).deactivateShop("world", 7, 64, 7);
+        verify(previews, never()).destroy("world", 7, 64, 7);
+        verify(marketApi).deactivateShop("world", 8, 64, 8);
         verify(marketApi).deactivateShop("world", 9, 64, 9);
+        verify(previews).destroy("world", 8, 64, 8);   // the vanished shops' holograms go with them
+        verify(previews).destroy("world", 9, 64, 9);
+        verify(previews).loadChunk("world", 0, 0);     // previews for the shops just (re)discovered
         verify(message).send(initiator, "chestshop.resync.started", "chunks", 2);
-        verify(message).send(initiator, "chestshop.resync.complete", "upserted", 3, "deactivated", 1);
+        verify(message).send(initiator, "chestshop.resync.complete", "upserted", 2, "deactivated", 2);
+    }
+
+    @Test
+    void resync_chunkWithNothingToRegister_doesNotReloadItsPreviews() {
+        World world = mock(World.class);
+        when(world.getName()).thenReturn("world");
+        when(server.getWorlds()).thenReturn(List.of(world));
+        when(shopQueryApi.activeShopLocations(null)).thenReturn(List.of());
+        Chunk empty = chunk(world, 0, 0, true);
+        when(world.getLoadedChunks()).thenReturn(new Chunk[]{empty});
+
+        service.resync(initiator, 1);
+        driveScan();
+
+        verify(previews, never()).loadChunk(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    void resync_clampsChunksPerTick_soOneTickCannotScanTheWholeWorld() {
+        World world = mock(World.class);
+        lenient().when(world.getName()).thenReturn("world");
+        when(server.getWorlds()).thenReturn(List.of(world));
+        when(shopQueryApi.activeShopLocations(null)).thenReturn(List.of());
+        Chunk[] chunks = new Chunk[MarketResyncServiceImpl.MAX_CHUNKS_PER_TICK + 1];
+        for (int i = 0; i < chunks.length; i++) {
+            chunks[i] = chunk(world, i, 0, true);
+        }
+        when(world.getLoadedChunks()).thenReturn(chunks);
+
+        service.resync(initiator, Integer.MAX_VALUE);
+
+        capturedTimer.run(); // first tick: only the clamped batch
+        verify(chunks[MarketResyncServiceImpl.MAX_CHUNKS_PER_TICK - 1]).getTileEntities(false);
+        verify(chunks[MarketResyncServiceImpl.MAX_CHUNKS_PER_TICK], never()).getTileEntities(false);
+        verify(message, never()).send(eq(initiator), eq("chestshop.resync.complete"), any(), any(), any(), any());
+
+        capturedTimer.run(); // second tick finishes the remainder
+        verify(message).send(initiator, "chestshop.resync.complete", "upserted", 0, "deactivated", 0);
     }
 
     @Test

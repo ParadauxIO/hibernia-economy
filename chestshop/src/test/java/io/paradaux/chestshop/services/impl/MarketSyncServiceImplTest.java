@@ -4,21 +4,27 @@ import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.CreatedShop;
 import io.paradaux.chestshop.model.DestroyedShop;
 import io.paradaux.chestshop.model.Transaction;
-import io.paradaux.chestshop.services.ItemCodeService;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.ChestShopShopRecord;
 import org.bukkit.Location;
+import org.bukkit.Server;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -36,30 +42,41 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Pure-Mockito coverage of {@link MarketSyncServiceImpl}. Every collaborator is a mock; the
  * class only threads its inputs to {@link MarketService}/{@link MarketApi}, so no live Bukkit
- * server is needed. Each of the four hooks exercises the disabled short-circuit, its branches,
+ * server is needed. Each of the hooks exercises the disabled short-circuit, its branches,
  * and its guarding catch (a collaborator throwing a {@link Throwable}).
  */
 class MarketSyncServiceImplTest {
 
     private MarketService marketService;
-    private ItemCodeService itemCodes;
+    private JavaPlugin plugin;
+    private Server server;
+    private ItemService items;
     private SignService signService;
     private ShopBlockService shopBlockService;
+    private AccountService accounts;
+    private PreviewService previews;
     private MarketApi market;
     private MarketSyncServiceImpl sync;
 
     @BeforeEach
     void wire() {
         marketService = mock(MarketService.class);
-        itemCodes = mock(ItemCodeService.class);
+        plugin = mock(JavaPlugin.class);
+        server = mock(Server.class);
+        lenient().when(plugin.getServer()).thenReturn(server);
+        items = mock(ItemService.class);
+        accounts = mock(AccountService.class);
+        previews = mock(PreviewService.class);
         signService = mock(SignService.class);
         shopBlockService = mock(ShopBlockService.class);
         market = mock(MarketApi.class);
-        sync = new MarketSyncServiceImpl(marketService, itemCodes, signService, shopBlockService);
+        sync = new MarketSyncServiceImpl(plugin, marketService, items, signService, shopBlockService,
+                accounts, previews);
         lenient().when(marketService.enabled()).thenReturn(true);
         lenient().when(marketService.market()).thenReturn(market);
     }
@@ -226,7 +243,7 @@ class MarketSyncServiceImplTest {
         String[] lines = {"Owner", "1", "B 10", "Rubbish"};
         when(event.getSign()).thenReturn(mock(Sign.class));
         when(event.getSignLines()).thenReturn(lines);
-        when(itemCodes.decode(lines[SignService.ITEM_LINE])).thenReturn(null);
+        when(items.parse(lines[SignService.ITEM_LINE])).thenReturn(null);
 
         sync.onShopCreated(event);
         verify(marketService, never()).market();
@@ -253,15 +270,18 @@ class MarketSyncServiceImplTest {
         when(event.getOwnerAccount()).thenReturn(ownerAccount);
         when(event.getContainer()).thenReturn(container);
 
-        when(itemCodes.decode("Diamond")).thenReturn(item);
+        when(items.parse("Diamond")).thenReturn(item);
         when(signService.isAdminShop(lines)).thenReturn(false);
         when(marketService.ownerFromUuid(ownerUuid, false)).thenReturn(owner);
         when(marketService.stockOf(item, inv)).thenReturn(20);
         when(marketService.capacityOf(item, inv)).thenReturn(30);
         when(marketService.shop(sign, item, owner, 20, 30)).thenReturn(shopRec);
+        Location l = location(world("world"), 1, 2, 3);
+        when(sign.getLocation()).thenReturn(l);
 
         sync.onShopCreated(event);
         verify(market).upsertShop(shopRec);
+        verify(previews).refresh("world", 1, 2, 3); // a new shop gets its hologram straight away
     }
 
     @Test
@@ -278,10 +298,12 @@ class MarketSyncServiceImplTest {
         when(event.getOwnerAccount()).thenReturn(null); // ownerUuid -> null
         when(event.getContainer()).thenReturn(null);    // container stays null (admin anyway)
 
-        when(itemCodes.decode("Diamond")).thenReturn(item);
+        when(items.parse("Diamond")).thenReturn(item);
         when(signService.isAdminShop(lines)).thenReturn(true);
         when(marketService.ownerFromUuid(null, true)).thenReturn(owner);
         when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
+        Location l = location(null, 1, 2, 3);
+        when(sign.getLocation()).thenReturn(l);
 
         sync.onShopCreated(event);
 
@@ -305,10 +327,12 @@ class MarketSyncServiceImplTest {
         when(event.getOwnerAccount()).thenReturn(null);
         when(event.getContainer()).thenReturn(null);
 
-        when(itemCodes.decode("Diamond")).thenReturn(item);
+        when(items.parse("Diamond")).thenReturn(item);
         when(signService.isAdminShop(lines)).thenReturn(false);
         when(marketService.ownerFromUuid(null, false)).thenReturn(owner);
         when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
+        Location l = location(null, 1, 2, 3);
+        when(sign.getLocation()).thenReturn(l);
 
         sync.onShopCreated(event);
 
@@ -348,6 +372,7 @@ class MarketSyncServiceImplTest {
 
         sync.onShopDestroyed(event);
         verify(market).deactivateShop("world", 1, 2, 3);
+        verify(previews).destroy("world", 1, 2, 3); // the hologram goes with the shop
     }
 
     @Test
@@ -423,7 +448,6 @@ class MarketSyncServiceImplTest {
             statics.when(() -> SignService.getItem(sign)).thenReturn(null); // itemName null -> item null
             sync.onInventoryClose(holder, inv);
         }
-        verify(itemCodes, never()).decode(any());
         verify(market, never()).updateShopStock(any(), anyInt(), anyInt(), anyInt(), anyInt(), any());
     }
 
@@ -437,7 +461,7 @@ class MarketSyncServiceImplTest {
 
         try (MockedStatic<SignService> statics = mockStatic(SignService.class)) {
             statics.when(() -> SignService.getItem(sign)).thenReturn("Diamond");
-            when(itemCodes.decode("Diamond")).thenReturn(null); // item null -> skip
+            when(items.parse("Diamond")).thenReturn(null); // item null -> skip
             sync.onInventoryClose(holder, inv);
         }
         verify(market, never()).updateShopStock(any(), anyInt(), anyInt(), anyInt(), anyInt(), any());
@@ -453,7 +477,7 @@ class MarketSyncServiceImplTest {
         when(sign.getLocation()).thenReturn(l);
         when(shopBlockService.findConnectedShopSigns(holder)).thenReturn(List.of(sign));
         when(signService.isAdminShop(sign)).thenReturn(false);
-        when(itemCodes.decode("Diamond")).thenReturn(item);
+        when(items.parse("Diamond")).thenReturn(item);
         when(marketService.stockOf(item, inv)).thenReturn(11);
         when(marketService.capacityOf(item, inv)).thenReturn(22);
 
@@ -474,7 +498,7 @@ class MarketSyncServiceImplTest {
         when(sign.getLocation()).thenReturn(l);
         when(shopBlockService.findConnectedShopSigns(holder)).thenReturn(List.of(sign));
         when(signService.isAdminShop(sign)).thenReturn(false);
-        when(itemCodes.decode("Diamond")).thenReturn(item);
+        when(items.parse("Diamond")).thenReturn(item);
         when(marketService.stockOf(item, inv)).thenReturn(0);
         when(marketService.capacityOf(item, inv)).thenReturn(5);
 
@@ -492,5 +516,235 @@ class MarketSyncServiceImplTest {
         when(shopBlockService.findConnectedShopSigns(holder)).thenThrow(new RuntimeException("boom"));
 
         sync.onInventoryClose(holder, mock(Inventory.class)); // must not throw
+    }
+
+    // ─────────────────────────── custom-item resolution ───────────────────────────
+
+    @Test
+    void onShopCreated_customItemShop_isRegistered() {
+        // A Nexo-id / alias item line only resolves through ItemService.parse — the vanilla
+        // item-code decoder knows nothing about it, and such shops were never registered.
+        Sign sign = mock(Sign.class);
+        ItemStack ruby = mock(ItemStack.class);
+        String[] lines = {"Owner", "1", "B 10", "ruby_sword"};
+        MarketService.Owner owner = anOwner();
+        ChestShopShopRecord shopRec = mock(ChestShopShopRecord.class);
+        Location l = location(world("world"), 1, 2, 3);
+        when(sign.getLocation()).thenReturn(l);
+
+        CreatedShop event = mock(CreatedShop.class);
+        when(event.getSign()).thenReturn(sign);
+        when(event.getSignLines()).thenReturn(lines);
+        when(items.parse("ruby_sword")).thenReturn(ruby);
+        when(marketService.ownerFromUuid(null, false)).thenReturn(owner);
+        when(marketService.shop(sign, ruby, owner, null, null)).thenReturn(shopRec);
+
+        sync.onShopCreated(event);
+        verify(market).upsertShop(shopRec);
+    }
+
+    // ─────────────────────────── registerShop ───────────────────────────
+
+    private Sign shopSign(String owner, String item) {
+        Sign s = mock(Sign.class);
+        lenient().when(s.getLines()).thenReturn(new String[]{owner, "1", "B 10", item});
+        return s;
+    }
+
+    @Test
+    void registerShop_disabled_returnsFalse() {
+        when(marketService.enabled()).thenReturn(false);
+        assertThat(sync.registerShop(shopSign("Owner", "Diamond"))).isFalse();
+        verify(marketService, never()).market();
+    }
+
+    @Test
+    void registerShop_unresolvableItem_returnsFalse() {
+        when(items.parse("Rubbish")).thenReturn(null);
+        assertThat(sync.registerShop(shopSign("Owner", "Rubbish"))).isFalse();
+        verify(marketService, never()).market();
+    }
+
+    @Test
+    void registerShop_personalShopWithChest_upsertsWithStock() {
+        Sign sign = shopSign("Owner", "ruby_sword");
+        ItemStack item = mock(ItemStack.class);
+        UUID uuid = UUID.randomUUID();
+        Container container = mock(Container.class);
+        Inventory inv = mock(Inventory.class);
+        MarketService.Owner owner = anOwner();
+        ChestShopShopRecord shopRec = mock(ChestShopShopRecord.class);
+        when(items.parse("ruby_sword")).thenReturn(item);
+        when(signService.isAdminShop(sign)).thenReturn(false);
+        when(accounts.resolveAccount("Owner")).thenReturn(new Account("Owner", "o", uuid));
+        when(marketService.ownerFromUuid(uuid, false)).thenReturn(owner);
+        when(shopBlockService.findConnectedContainer(sign)).thenReturn(container);
+        when(container.getInventory()).thenReturn(inv);
+        when(marketService.stockOf(item, inv)).thenReturn(12);
+        when(marketService.capacityOf(item, inv)).thenReturn(52);
+        when(marketService.shop(sign, item, owner, 12, 52)).thenReturn(shopRec);
+
+        assertThat(sync.registerShop(sign)).isTrue();
+        verify(market).upsertShop(shopRec);
+    }
+
+    @Test
+    void registerShop_personalShopWithoutChest_upsertsWithNullStock() {
+        Sign sign = shopSign("Owner", "Diamond");
+        ItemStack item = mock(ItemStack.class);
+        UUID uuid = UUID.randomUUID();
+        MarketService.Owner owner = anOwner();
+        ChestShopShopRecord shopRec = mock(ChestShopShopRecord.class);
+        when(items.parse("Diamond")).thenReturn(item);
+        when(accounts.resolveAccount("Owner")).thenReturn(new Account("Owner", "o", uuid));
+        when(marketService.ownerFromUuid(uuid, false)).thenReturn(owner);
+        when(shopBlockService.findConnectedContainer(sign)).thenReturn(null);
+        when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
+
+        assertThat(sync.registerShop(sign)).isTrue();
+        verify(market).upsertShop(shopRec);
+    }
+
+    @Test
+    void registerShop_adminShop_upsertsWithoutOwnerOrContainerLookup() {
+        Sign sign = shopSign("Admin Shop", "Diamond");
+        ItemStack item = mock(ItemStack.class);
+        MarketService.Owner owner = new MarketService.Owner(null, null, null, null, true);
+        ChestShopShopRecord shopRec = mock(ChestShopShopRecord.class);
+        when(items.parse("Diamond")).thenReturn(item);
+        when(signService.isAdminShop(sign)).thenReturn(true);
+        when(marketService.ownerFromUuid(null, true)).thenReturn(owner);
+        when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
+
+        assertThat(sync.registerShop(sign)).isTrue();
+        verify(market).upsertShop(shopRec);
+        verifyNoInteractions(accounts, shopBlockService);
+    }
+
+    @Test
+    void registerShop_unknownOwner_returnsFalse() {
+        Sign sign = shopSign("NoAcc", "Diamond");
+        when(items.parse("Diamond")).thenReturn(mock(ItemStack.class));
+        when(accounts.resolveAccount("NoAcc")).thenReturn(null);
+
+        assertThat(sync.registerShop(sign)).isFalse();
+        verify(marketService, never()).market();
+    }
+
+    @Test
+    void registerShop_ownerWithoutUuid_returnsFalse() {
+        Sign sign = shopSign("NoUuid", "Diamond");
+        when(items.parse("Diamond")).thenReturn(mock(ItemStack.class));
+        when(accounts.resolveAccount("NoUuid")).thenReturn(new Account("NoUuid", "n", null));
+
+        assertThat(sync.registerShop(sign)).isFalse();
+        verify(marketService, never()).market();
+    }
+
+    @Test
+    void registerShop_throwable_isSwallowed() {
+        Sign sign = shopSign("Owner", "Boom");
+        when(items.parse("Boom")).thenThrow(new RuntimeException("bad blob"));
+        assertThat(sync.registerShop(sign)).isFalse();
+    }
+
+    // ─────────────────────────── onBlockReplaced ───────────────────────────
+
+    /** A loaded world whose block at (x,y,z) holds the given state. */
+    private World loadedWorldWith(String name, int x, int y, int z, BlockState state) {
+        World w = world(name);
+        Block block = mock(Block.class);
+        when(server.getWorld(name)).thenReturn(w);
+        when(w.isChunkLoaded(x >> 4, z >> 4)).thenReturn(true);
+        when(w.getBlockAt(x, y, z)).thenReturn(block);
+        when(block.getState(false)).thenReturn(state);
+        return w;
+    }
+
+    @Test
+    void onBlockReplaced_disabled_returnsImmediately() {
+        when(marketService.enabled()).thenReturn(false);
+        sync.onBlockReplaced("world", 1, 2, 3);
+        verifyNoInteractions(previews, server);
+    }
+
+    @Test
+    void onBlockReplaced_shopSignStillStanding_reRegistersInsteadOfDeactivating() {
+        // e.g. an edit that rewrote the same sign, or an //undo that put it back
+        Sign sign = shopSign("Admin Shop", "Diamond");
+        loadedWorldWith("world", 17, 64, 33, sign);
+        ItemStack item = mock(ItemStack.class);
+        MarketService.Owner owner = new MarketService.Owner(null, null, null, null, true);
+        ChestShopShopRecord shopRec = mock(ChestShopShopRecord.class);
+        when(signService.isValid(sign)).thenReturn(true);
+        when(items.parse("Diamond")).thenReturn(item);
+        when(signService.isAdminShop(sign)).thenReturn(true);
+        when(marketService.ownerFromUuid(null, true)).thenReturn(owner);
+        when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
+
+        sync.onBlockReplaced("world", 17, 64, 33);
+
+        verify(market).upsertShop(shopRec);
+        verify(previews).refresh("world", 17, 64, 33);
+        verify(market, never()).deactivateShop(any(), anyInt(), anyInt(), anyInt());
+    }
+
+    @Test
+    void onBlockReplaced_presentButUnresolvableShop_isLeftAlone() {
+        Sign sign = shopSign("Owner", "Rubbish");
+        loadedWorldWith("world", 1, 2, 3, sign);
+        when(signService.isValid(sign)).thenReturn(true);
+
+        sync.onBlockReplaced("world", 1, 2, 3);
+
+        verify(market, never()).upsertShop(any());
+        verify(market, never()).deactivateShop(any(), anyInt(), anyInt(), anyInt());
+    }
+
+    @Test
+    void onBlockReplaced_signNoLongerAShop_deactivates() {
+        Sign sign = shopSign("just", "text");
+        loadedWorldWith("world", 1, 2, 3, sign);
+        when(signService.isValid(sign)).thenReturn(false);
+
+        sync.onBlockReplaced("world", 1, 2, 3);
+
+        verify(market).deactivateShop("world", 1, 2, 3);
+        verify(previews).destroy("world", 1, 2, 3);
+    }
+
+    @Test
+    void onBlockReplaced_signGone_deactivates() {
+        loadedWorldWith("world", 1, 2, 3, mock(BlockState.class));
+
+        sync.onBlockReplaced("world", 1, 2, 3);
+
+        verify(market).deactivateShop("world", 1, 2, 3);
+        verify(previews).destroy("world", 1, 2, 3);
+    }
+
+    @Test
+    void onBlockReplaced_unloadedChunk_deactivatesWithoutLoadingIt() {
+        World w = world("world");
+        when(server.getWorld("world")).thenReturn(w);
+        when(w.isChunkLoaded(0, 0)).thenReturn(false);
+
+        sync.onBlockReplaced("world", 1, 2, 3);
+
+        verify(w, never()).getBlockAt(anyInt(), anyInt(), anyInt());
+        verify(market).deactivateShop("world", 1, 2, 3);
+    }
+
+    @Test
+    void onBlockReplaced_unknownWorld_deactivates() {
+        when(server.getWorld("gone")).thenReturn(null);
+        sync.onBlockReplaced("gone", 1, 2, 3);
+        verify(market).deactivateShop("gone", 1, 2, 3);
+    }
+
+    @Test
+    void onBlockReplaced_throwable_isSwallowed() {
+        when(server.getWorld("world")).thenThrow(new RuntimeException("boom"));
+        sync.onBlockReplaced("world", 1, 2, 3); // must not throw
     }
 }

@@ -209,6 +209,12 @@ public class EconomyServiceImpl implements EconomyService {
 
     @Override
     public boolean settle(BigDecimal amount, Player initiator, UUID partner, Transaction txn) {
+        // A free trade (ALLOW_FREE_SHOPS, e.g. "B 0") is goods-only: Treasury rejects non-positive
+        // amounts, so no transfer and no tax leg is posted and the sale is recorded without a
+        // ledger txn (chestshop_sale.txn_id stays NULL).
+        if (amount.signum() == 0) {
+            return true;
+        }
         boolean buy = txn.getTransactionType() == io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
         UUID resolvedPartner = partner;
         if (accounts.isAdminShop(resolvedPartner) && !accounts.isServerEconomyAccount(resolvedPartner)) {

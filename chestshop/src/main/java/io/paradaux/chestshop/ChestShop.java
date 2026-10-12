@@ -154,6 +154,8 @@ public class ChestShop extends JavaPlugin {
         // Register every Bukkit listener bound via HiberniaModule.listeners(...) above.
         injector.getInstance(io.paradaux.hibernia.framework.events.ListenerManager.class).registerAll();
         injector.getInstance(MarketService.class).init();
+        // Chunks already loaded at enable never fire a ChunkLoadEvent for us — give them their previews.
+        injector.getInstance(io.paradaux.chestshop.services.PreviewService.class).loadAll();
 
         // Optional: keep the shop registry clean when WorldEdit/FAWE bulk-removes
         // shops (WE bypasses Bukkit block events). Only touched when WE is present,
@@ -161,7 +163,9 @@ public class ChestShop extends JavaPlugin {
         if (getServer().getPluginManager().getPlugin("WorldEdit") != null
                 || getServer().getPluginManager().getPlugin("FastAsyncWorldEdit") != null) {
             try {
-                new io.paradaux.chestshop.listeners.WorldEditShopCleanupListener(this, injector.getInstance(io.paradaux.chestshop.services.MarketService.class)).register();
+                new io.paradaux.chestshop.listeners.WorldEditShopCleanupListener(this,
+                        injector.getInstance(io.paradaux.chestshop.services.MarketService.class),
+                        injector.getInstance(io.paradaux.chestshop.services.MarketSyncService.class)).register();
             } catch (Throwable t) {
                 log.warn("WorldEdit shop-cleanup adapter unavailable", t);
             }
@@ -209,6 +213,8 @@ public class ChestShop extends JavaPlugin {
         } catch (InterruptedException ignored) {}
 
         if (injector != null) {
+            // The preview displays are live entities; untracked, they'd float on until chunk unload.
+            injector.getInstance(io.paradaux.chestshop.services.PreviewService.class).destroyAll();
             injector.getInstance(io.paradaux.chestshop.guice.ChestShopDatabases.class).close();
         }
     }

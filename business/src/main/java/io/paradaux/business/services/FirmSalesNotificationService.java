@@ -14,7 +14,8 @@ public interface FirmSalesNotificationService {
 
     /**
      * Flush every buffered firm — sending one message each (single line or digest)
-     * to firms that have notifications enabled. Runs on the main thread.
+     * to firms that have notifications enabled. Reads the database, so it must
+     * run off the main thread (it is driven by an async scheduler task).
      */
     void flush();
 

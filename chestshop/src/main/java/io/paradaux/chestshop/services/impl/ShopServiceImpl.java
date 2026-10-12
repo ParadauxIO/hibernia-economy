@@ -620,6 +620,11 @@ public class ShopServiceImpl implements ShopService {
         }
 
         if (!economy.deposit(account.getUuid(), refund, sign.getWorld())) {
+            // The mirror leg already left the server-economy account; put it back rather than
+            // leave the refund debited from the server and paid to nobody.
+            log.warn("ChestShop: shop-removal refund debited from the server economy but the credit to "
+                    + account.getName() + " failed; restoring the server economy.");
+            creditServerEconomy(refund, sign.getWorld());
             return;
         }
 

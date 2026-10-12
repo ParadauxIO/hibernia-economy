@@ -27,6 +27,10 @@ public class SalesCommand implements CommandHandler {
 
     private static final int PAGE_SIZE = 10;
     private static final int DEFAULT_SUMMARY_DAYS = 30;
+    /** Upper bound on the summary window; anything larger is already "all time". */
+    private static final int MAX_SUMMARY_DAYS = 3650;
+    /** Upper bound on a typed page, so {@code (page - 1) * PAGE_SIZE} can't overflow int. */
+    private static final int MAX_PAGE = 100_000;
     private static final int TOP_N = 5;
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("MMM d HH:mm");
 
@@ -76,7 +80,9 @@ public class SalesCommand implements CommandHandler {
     }
 
     private void list(Player sender, int page) {
-        if (page < 1) page = 1;
+        // Clamp user input: an unbounded page overflows the offset into a negative
+        // OFFSET (a SQL error rather than an empty page).
+        page = Math.max(1, Math.min(page, MAX_PAGE));
         int offset = (page - 1) * PAGE_SIZE;
         SalesQuery query = SalesQuery.builder()
                 .ownerUuid(sender.getUniqueId())
@@ -115,6 +121,7 @@ public class SalesCommand implements CommandHandler {
 
     private void summary(Player sender, int days) {
         if (days < 1) days = DEFAULT_SUMMARY_DAYS;
+        days = Math.min(days, MAX_SUMMARY_DAYS);
         SalesQuery query = SalesQuery.builder()
                 .ownerUuid(sender.getUniqueId())
                 .windowDays(days)

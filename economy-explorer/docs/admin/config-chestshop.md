@@ -8,7 +8,7 @@ description: ChestShop's trade limits and rules — and why its sales tax is act
 
 ChestShop's settings live in `plugins/ChestShop/config.yml`. It's a large upstream file;
 below are the settings a DemocracyCraft operator actually cares about. After editing,
-reload the config with **`/csVersion reload`** (alias `/chestshop reload`) — a full
+reload the config with **`/chestshop reload`** (alias `/cs reload`) — a full
 restart isn't required.
 
 > [!IMPORTANT]

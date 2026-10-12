@@ -269,6 +269,26 @@ class EconomyServiceImplTest extends ServerTest {
         verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
     }
 
+    // ---- settle: free trade (ALLOW_FREE_SHOPS) → goods only, Treasury never asked ----
+
+    @Test
+    void settle_zeroAmount_isGoodsOnly_noTransferNoTaxNoLedgerLink() {
+        // Treasury rejects non-positive amounts; a "B 0" trade must not be sent there (it would
+        // throw, fail the settle and reverse the goods). It succeeds with nothing posted.
+        Player buyer = player("BuyerFree");
+        UUID seller = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(treasury.transfer(any())).thenThrow(new IllegalArgumentException("amount > 0"));
+
+        Transaction t = txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID());
+        boolean ok = service.settle(new BigDecimal("0.00"), buyer, seller, t);
+
+        assertThat(ok).isTrue();
+        verify(treasury, never()).transfer(any());
+        verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(t, never()).setSettlementTxnId(any()); // the sale is recorded with a NULL txn id
+        verify(t, never()).setSalesTax(any());
+    }
+
     // ---- settle: treasury throws → rollback path returns false -----------------
 
     @Test

@@ -23,7 +23,7 @@ import io.paradaux.treasury.utils.TreasuryConstants;
 import org.mybatis.guice.transactional.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +36,7 @@ public class GovServiceImpl implements GovService {
     private final GovernmentFineMapper fineMapper;
     private final GovernmentConfiguration govConfig;
     private final PlayerDirectoryService playerDirectory;
+    private final Clock clock;
 
     @Inject
     public GovServiceImpl(AccountService accountService,
@@ -43,11 +44,22 @@ public class GovServiceImpl implements GovService {
                           GovernmentFineMapper fineMapper,
                           GovernmentConfiguration govConfig,
                           PlayerDirectoryService playerDirectory) {
+        this(accountService, ledgerService, fineMapper, govConfig, playerDirectory, Clock.systemUTC());
+    }
+
+    /** Test seam: lets a test pin the clock so the per-second fine dedup key is deterministic. */
+    GovServiceImpl(AccountService accountService,
+                   LedgerService ledgerService,
+                   GovernmentFineMapper fineMapper,
+                   GovernmentConfiguration govConfig,
+                   PlayerDirectoryService playerDirectory,
+                   Clock clock) {
         this.accountService = accountService;
         this.ledgerService  = ledgerService;
         this.fineMapper     = fineMapper;
         this.govConfig      = govConfig;
         this.playerDirectory = playerDirectory;
+        this.clock          = clock;
     }
 
     // ---- Account management ----
@@ -154,15 +166,15 @@ public class GovServiceImpl implements GovService {
         // also share amount and reason in the same second are treated as a double-submit.
         byte[] dedupKey = Idempotency.sha256("fine:" + issuedBy + ":" + debtorAccountId + ":"
                 + normalized.toPlainString() + ":" + reason + ":"
-                + Instant.now().truncatedTo(ChronoUnit.SECONDS));
+                + clock.instant().truncatedTo(ChronoUnit.SECONDS));
 
-        long txnId;
+        LedgerService.TransferResult debit;
         try {
             // A fine is an administrative debit by authority of permission, so it
             // must bypass the debtor's requires_authorization gate (you can't dodge
             // a fine by demanding an authorizer) — adminTransfer skips ONLY that gate
             // and still fails on insufficient funds (ADT fine-debtor-auth-not-wrapped).
-            txnId = ledgerService.adminTransfer(new TransferRequest(
+            debit = ledgerService.adminTransferChecked(new TransferRequest(
                     debtorAccountId,
                     govAccount.getAccountId(),
                     normalized,
@@ -179,6 +191,21 @@ public class GovServiceImpl implements GovService {
             throw playerUuid != null
                     ? new InsufficientFineFundsException(playerUuid, e)
                     : new InsufficientFineFundsException(debtorAccountId, e);
+        }
+        long txnId = debit.txnId();
+
+        if (!debit.created()) {
+            // Double-submit: the ledger collapsed this debit onto an existing txn, so
+            // no new money moved. Return the fine already recorded for that txn rather
+            // than inserting a second row for the same debit — each row is separately
+            // revocable (the revoke dedup key is per fine id), so a duplicate would let
+            // the debtor be refunded twice for one debit. uq_fines_txn backstops this.
+            GovernmentFine existing = fineMapper.findFineByTxnIdForUpdate(txnId);
+            if (existing != null) {
+                log.info("Fine double-submit collapsed onto existing fine: id={} txn={} issuedBy={}",
+                        existing.getFineId(), txnId, issuedBy);
+                return existing;
+            }
         }
 
         GovernmentFine fine = GovernmentFine.builder()

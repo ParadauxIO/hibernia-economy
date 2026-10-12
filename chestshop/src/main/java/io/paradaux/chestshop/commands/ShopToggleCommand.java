@@ -1,8 +1,11 @@
 package io.paradaux.chestshop.commands;
 
 import com.google.inject.Inject;
-import io.paradaux.chestshop.services.ItemCodeService;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.AdminBypassService;
+import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.Permissions;
@@ -33,17 +36,24 @@ import org.bukkit.inventory.ItemStack;
 public final class ShopToggleCommand implements CommandHandler {
 
     private final MarketService marketService;
+    private final MarketSyncService marketSync;
     private final SignService signService;
-    private final ItemCodeService itemCodes;
+    private final ItemService items;
+    private final AccountService accounts;
+    private final AdminBypassService adminBypass;
     private final PreviewService previews;
     private final Message message;
 
     @Inject
-    public ShopToggleCommand(MarketService marketService, SignService signService,
-                             ItemCodeService itemCodes, PreviewService previews, Message message) {
+    public ShopToggleCommand(MarketService marketService, MarketSyncService marketSync, SignService signService,
+                             ItemService items, AccountService accounts, AdminBypassService adminBypass,
+                             PreviewService previews, Message message) {
         this.marketService = marketService;
+        this.marketSync = marketSync;
         this.signService = signService;
-        this.itemCodes = itemCodes;
+        this.items = items;
+        this.accounts = accounts;
+        this.adminBypass = adminBypass;
         this.previews = previews;
         this.message = message;
     }
@@ -62,8 +72,7 @@ public final class ShopToggleCommand implements CommandHandler {
         if (sign == null) {
             return; // a reason was already sent
         }
-        if (!marketService.enabled()) {
-            message.send(player, "find.no-search");
+        if (!ensureRegistered(player, sign)) {
             return;
         }
         Location l = sign.getLocation();
@@ -86,16 +95,14 @@ public final class ShopToggleCommand implements CommandHandler {
         if (sign == null) {
             return;
         }
-        if (!marketService.enabled()) {
-            message.send(player, "find.no-search");
+        if (!ensureRegistered(player, sign)) {
             return;
         }
         Location l = sign.getLocation();
         String world = l.getWorld().getName();
         marketService.market().setShopHologram(world, l.getBlockX(), l.getBlockY(), l.getBlockZ(), visible);
         if (visible) {
-            String itemCode = SignService.getItem(sign);
-            ItemStack item = itemCode != null ? itemCodes.decode(itemCode) : null;
+            ItemStack item = items.parse(SignService.getItem(sign));
             if (item != null) {
                 previews.render(world, l.getBlockX(), l.getBlockY(), l.getBlockZ(), item);
             }
@@ -135,11 +142,29 @@ public final class ShopToggleCommand implements CommandHandler {
             message.send(player, "shop.sign-target");
             return null;
         }
-        String owner = SignService.getOwner(sign);
-        if (!player.getName().equalsIgnoreCase(owner) && !player.hasPermission(Permissions.ADMIN)) {
+        // Ownership as the trade path sees it (account UUID, or firm access for a business shop) —
+        // not the raw name line, which refuses firm shops and trusts whoever now holds the name.
+        if (!accounts.isOwner(player, sign) && !adminBypass.has(player, Permissions.ADMIN)) {
             message.send(player, "shop.sign-no-access");
             return null;
         }
         return sign;
+    }
+
+    /**
+     * Make sure the shop has a registry row for the toggle to land on: the flag writes are
+     * plain UPDATEs, so on a shop that was never registered they would store nothing while
+     * still reporting success. False (with a message sent) if the row can't be written.
+     */
+    private boolean ensureRegistered(Player player, Sign sign) {
+        if (!marketService.enabled()) {
+            message.send(player, "find.no-search");
+            return false;
+        }
+        if (!marketSync.registerShop(sign)) {
+            message.send(player, "shop.not-registered");
+            return false;
+        }
+        return true;
     }
 }

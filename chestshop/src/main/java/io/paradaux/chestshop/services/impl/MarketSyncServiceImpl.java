@@ -2,21 +2,28 @@ package io.paradaux.chestshop.services.impl;
 
 import lombok.extern.slf4j.Slf4j;
 
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.MarketSyncService;
+import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.CreatedShop;
 import io.paradaux.chestshop.model.DestroyedShop;
 import io.paradaux.chestshop.model.Transaction;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.treasury.api.MarketApi;
 import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,23 +34,34 @@ import java.util.UUID;
  * handler stays in the listener and delegates to {@link #onInventoryClose}; the other three hooks
  * are invoked directly by {@code TransactionService}/{@code ShopService}. All are fully guarded —
  * analytics must never disrupt a trade.
+ *
+ * <p>Sign item lines are resolved through {@link ItemService#parse} (custom item → alias →
+ * vanilla), never the vanilla-only item-code decoder, so Nexo-id and alias shops are registered
+ * like any other. The shop's floating preview follows the registry from here too.
  */
 @Singleton
 @Slf4j
 public class MarketSyncServiceImpl implements MarketSyncService {
 
+    private final JavaPlugin plugin;
     private final MarketService marketService;
-    private final io.paradaux.chestshop.services.ItemCodeService itemCodes;
+    private final ItemService items;
     private final SignService signService;
     private final ShopBlockService shopBlockService;
+    private final AccountService accounts;
+    private final PreviewService previews;
 
     @Inject
-    public MarketSyncServiceImpl(MarketService marketService, io.paradaux.chestshop.services.ItemCodeService itemCodes,
-                                 SignService signService, ShopBlockService shopBlockService) {
+    public MarketSyncServiceImpl(JavaPlugin plugin, MarketService marketService, ItemService items,
+                                 SignService signService, ShopBlockService shopBlockService,
+                                 AccountService accounts, PreviewService previews) {
+        this.plugin = plugin;
         this.marketService = marketService;
-        this.itemCodes = itemCodes;
+        this.items = items;
         this.signService = signService;
         this.shopBlockService = shopBlockService;
+        this.accounts = accounts;
+        this.previews = previews;
     }
 
     // Invoked directly by TransactionService#process (was a @MONITOR Transaction listener).
@@ -79,7 +97,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
         if (!marketService.enabled()) return;
         try {
             Sign sign = event.getSign();
-            ItemStack item = itemCodes.decode(event.getSignLines()[SignService.ITEM_LINE]);
+            ItemStack item = items.parse(event.getSignLines()[SignService.ITEM_LINE]);
             if (item == null) return;
             boolean admin = signService.isAdminShop(event.getSignLines());
             UUID ownerUuid = event.getOwnerAccount() != null ? event.getOwnerAccount().getUuid() : null;
@@ -89,6 +107,8 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             Integer stock = container != null ? marketService.stockOf(item, container) : null;
             Integer capacity = container != null ? marketService.capacityOf(item, container) : null;
             marketService.market().upsertShop(marketService.shop(sign, item, owner, stock, capacity));
+            Location l = sign.getLocation();
+            previews.refresh(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
         }
@@ -100,9 +120,8 @@ public class MarketSyncServiceImpl implements MarketSyncService {
         if (!marketService.enabled()) return;
         try {
             Location l = event.getSign().getLocation();
-            marketService.market().deactivateShop(
-                    l.getWorld() != null ? l.getWorld().getName() : null,
-                    l.getBlockX(), l.getBlockY(), l.getBlockZ());
+            previews.destroy(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
+            marketService.market().deactivateShop(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
         }
@@ -118,17 +137,75 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             MarketApi market = marketService.market();
             for (Sign sign : signs) {
                 if (signService.isAdminShop(sign)) continue;
-                String itemName = SignService.getItem(sign);
-                ItemStack item = itemName != null ? itemCodes.decode(itemName) : null;
+                ItemStack item = items.parse(SignService.getItem(sign));
                 if (item == null) continue;
                 Location l = sign.getLocation();
-                market.updateShopStock(
-                        l.getWorld() != null ? l.getWorld().getName() : null,
-                        l.getBlockX(), l.getBlockY(), l.getBlockZ(),
+                market.updateShopStock(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ(),
                         marketService.stockOf(item, inv), marketService.capacityOf(item, inv));
             }
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
         }
+    }
+
+    @Override
+    public boolean registerShop(Sign sign) {
+        if (!marketService.enabled()) return false;
+        try {
+            ItemStack item = items.parse(SignService.getItem(sign));
+            if (item == null) return false;
+            boolean admin = signService.isAdminShop(sign);
+            MarketService.Owner owner;
+            if (admin) {
+                owner = marketService.ownerFromUuid(null, true);
+            } else {
+                Account account = accounts.resolveAccount(SignService.getOwner(sign));
+                if (account == null || account.getUuid() == null) {
+                    return false; // owner not resolvable — skip rather than write a half row
+                }
+                owner = marketService.ownerFromUuid(account.getUuid(), false);
+            }
+            Container container = admin ? null : shopBlockService.findConnectedContainer(sign);
+            Integer stock = container != null ? marketService.stockOf(item, container.getInventory()) : null;
+            Integer capacity = container != null ? marketService.capacityOf(item, container.getInventory()) : null;
+            marketService.market().upsertShop(marketService.shop(sign, item, owner, stock, capacity));
+            return true;
+        } catch (Throwable t) {
+            log.debug("market analytics hook failed (non-fatal)", t);
+            return false;
+        }
+    }
+
+    @Override
+    public void onBlockReplaced(String world, int x, int y, int z) {
+        if (!marketService.enabled()) return;
+        try {
+            Sign sign = shopSignAt(world, x, y, z);
+            if (sign != null) {
+                // Still (or again, after an undo) a shop: keep the row live and current. A row that
+                // can't be rebuilt right now is left as it was rather than deactivated.
+                registerShop(sign);
+                previews.refresh(world, x, y, z);
+                return;
+            }
+            previews.destroy(world, x, y, z);
+            marketService.market().deactivateShop(world, x, y, z);
+        } catch (Throwable t) {
+            log.debug("market analytics hook failed (non-fatal)", t);
+        }
+    }
+
+    /** The valid shop sign at a position, or null — never loads a chunk to look. */
+    private Sign shopSignAt(String worldName, int x, int y, int z) {
+        World world = plugin.getServer().getWorld(worldName);
+        if (world == null || !world.isChunkLoaded(x >> 4, z >> 4)) {
+            return null;
+        }
+        return world.getBlockAt(x, y, z).getState(false) instanceof Sign sign && signService.isValid(sign)
+                ? sign : null;
+    }
+
+    private static String worldName(Location l) {
+        return l.getWorld() != null ? l.getWorld().getName() : null;
     }
 }

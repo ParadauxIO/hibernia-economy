@@ -8,6 +8,7 @@ import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import io.paradaux.hibernia.framework.utils.StringUtils;
+import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
@@ -31,8 +32,11 @@ import org.mybatis.guice.transactional.Transactional;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -53,6 +57,11 @@ public class FirmServiceImpl implements FirmService {
     private final Provider<FirmAccountService> firmAccountServiceProvider;
     private final FirmConfiguration firmConfig;
     private final FirmAreaShopService areas;
+    /** Lazy-injected to break the FirmService ↔ FirmChatService cycle. */
+    private final Provider<FirmChatService> chatProvider;
+
+    /** Firms with a disband drain currently running in this JVM (see disbandInternal). */
+    private final Set<Integer> draining = ConcurrentHashMap.newKeySet();
 
     @Inject
     public FirmServiceImpl(FirmMapper firms,
@@ -63,7 +72,8 @@ public class FirmServiceImpl implements FirmService {
                            Provider<FirmStaffService> staffProvider,
                            Provider<FirmAccountService> firmAccountServiceProvider,
                            FirmConfiguration firmConfig,
-                           FirmAreaShopService areas) {
+                           FirmAreaShopService areas,
+                           Provider<FirmChatService> chatProvider) {
         this.firms = firms;
         this.treasury = treasury;
         this.accounts = accounts;
@@ -73,6 +83,7 @@ public class FirmServiceImpl implements FirmService {
         this.firmAccountServiceProvider = firmAccountServiceProvider;
         this.firmConfig = firmConfig;
         this.areas = areas;
+        this.chatProvider = chatProvider;
     }
 
     private boolean canAdministerFirm(int firmId, UUID actorId) {
@@ -184,39 +195,53 @@ public class FirmServiceImpl implements FirmService {
     // money moves (see disbandInternal), which a single enclosing JDBC
     // transaction would prevent (ADT-11).
     @Override
-    public void disbandFirm(String firmName, UUID actorId) {
+    public DisbandResult disbandFirm(String firmName, UUID actorId) {
         // Archived-inclusive: a disbanded firm must report "already disbanded", not "not found".
-        disbandFirm(getAnyFirmByNameOrId(firmName), actorId);
+        return disbandFirm(getAnyFirmByNameOrId(firmName), actorId);
     }
 
     @Override
-    public void disbandFirm(int firmId, UUID actorId) {
-        disbandFirm(getAnyFirmById(firmId), actorId);
+    public DisbandResult disbandFirm(int firmId, UUID actorId) {
+        return disbandFirm(getAnyFirmById(firmId), actorId);
     }
 
-    private void disbandFirm(Firm firm, UUID actorId) {
+    private DisbandResult disbandFirm(Firm firm, UUID actorId) {
         if (firm == null) {
             throw new BadCommandException("Firm not found.");
         }
-        if (Boolean.TRUE.equals(firm.getArchived())) {
-            throw new BadCommandException("Firm already disbanded: " + firm.getDisplayName());
-        }
+        requireNotFullyDisbanded(firm, firm.getDisplayName());
+        // Applies to a resumed disband too: only the proprietor may finish draining
+        // their archived firm (the proprietor lookup is archived-inclusive).
         if (!isProprietor(firm.getFirmId(), actorId)) {
             throw new NoPermissionException("Only the proprietor can disband a firm.");
         }
-        disbandInternal(firm);
+        return disbandInternal(firm);
     }
 
     @Override
-    public void adminDisbandFirm(String firmName) {
+    public DisbandResult adminDisbandFirm(String firmName) {
         Firm firm = getAnyFirmByNameOrId(firmName);
         if (firm == null) {
             throw new BadCommandException("Firm not found: " + firmName);
         }
-        if (Boolean.TRUE.equals(firm.getArchived())) {
-            throw new BadCommandException("Firm already disbanded: " + firmName);
+        requireNotFullyDisbanded(firm, firmName);
+        return disbandInternal(firm);
+    }
+
+    @Override
+    public boolean isDisbandIncomplete(Firm firm) {
+        return Boolean.TRUE.equals(firm.getArchived()) && !accounts.listAccountsByFirm(firm.getFirmId()).isEmpty();
+    }
+
+    /**
+     * An archived firm with no accounts left is done — reject it. An archived firm
+     * that still has linked accounts is a disband that failed partway through
+     * draining, and must stay disbandable or its money is stranded for good.
+     */
+    private void requireNotFullyDisbanded(Firm firm, String label) {
+        if (Boolean.TRUE.equals(firm.getArchived()) && !isDisbandIncomplete(firm)) {
+            throw new BadCommandException("Firm already disbanded: " + label);
         }
-        disbandInternal(firm);
     }
 
     /**
@@ -225,10 +250,34 @@ public class FirmServiceImpl implements FirmService {
      * through draining can never leave the firm looking alive while its accounts
      * are emptied. Each account is drained, archived, and unlinked
      * independently; a step that fails leaves that account still linked with its
-     * balance intact, so the drain is idempotent and safe to re-run (ADT-11).
+     * balance intact and is reported in the result, never swallowed as success
+     * (ADT-11).
+     *
+     * <p>The drain is resumable: disbanding an already-archived firm that still
+     * has linked accounts re-runs it over whatever is left. Every step is
+     * idempotent — sweepAll moves the account's balance as read under its row
+     * lock, so sweeping an already-emptied account moves nothing; archiving an
+     * archived account and unlinking an unlinked one are no-ops — so a retry, or
+     * two drains racing each other, can never pay the proprietor twice.
      */
-    private void disbandInternal(Firm firm) {
+    private DisbandResult disbandInternal(Firm firm) {
+        int firmId = firm.getFirmId();
+        // One drain per firm at a time in this JVM. Not needed for conservation (see
+        // above), but two interleaved drains would each report the other's
+        // half-finished accounts as failures.
+        if (!draining.add(firmId)) {
+            throw new BadCommandException("A disband of " + firm.getDisplayName() + " is already in progress.");
+        }
+        try {
+            return drain(firm);
+        } finally {
+            draining.remove(firmId);
+        }
+    }
+
+    private DisbandResult drain(Firm firm) {
         UUID proprietorUuid = UUID.fromString(firm.getProprietorUuid());
+        boolean resumed = Boolean.TRUE.equals(firm.getArchived());
 
         // Snapshot the linked accounts and resolve the payout target before any
         // destructive step — a failure here aborts cleanly with no money moved
@@ -239,16 +288,22 @@ public class FirmServiceImpl implements FirmService {
         // Mark disbanded first (auto-commits — this method isn't @Transactional)
         // so money only ever moves once the firm is durably archived. The archive
         // is a conditional UPDATE (WHERE is_archived = 0), so this is also the
-        // atomic gate that serialises concurrent disbands: whoever flips the flag
-        // (1 row affected) owns the drain; a loser that sees 0 rows short-circuits
-        // here, before touching any balance, rather than leaning on Treasury's
-        // overdraft floor to no-op a second drain (business/behaviour/0002).
-        if (firms.archiveFirm(firm.getFirmId()) == 0) {
-            LOG.log(Level.FINE, "Firm {0} was already archived by a concurrent disband; skipping drain.",
-                    firm.getFirmId());
-            return;
+        // atomic gate that serialises concurrent first-time disbands: whoever flips
+        // the flag (1 row affected) owns the drain; a loser that sees 0 rows
+        // short-circuits here, before touching any balance, and leaves it to the
+        // winner (business/behaviour/0002). A resumed disband skips the gate — the
+        // flag was flipped by the run it is finishing.
+        if (!resumed) {
+            if (firms.archiveFirm(firm.getFirmId()) == 0) {
+                LOG.log(Level.FINE, "Firm {0} was already archived by a concurrent disband; skipping drain.",
+                        firm.getFirmId());
+                return new DisbandResult(true, List.of());
+            }
+            // The firm no longer exists for its members: drop them out of its chat.
+            chatProvider.get().membershipChanged(firm.getFirmId());
         }
 
+        List<Integer> undrained = new ArrayList<>();
         for (FirmAccount fa : firmAccountList) {
             try {
                 // Sweep the account's FRESHLY LOCKED balance rather than a
@@ -263,13 +318,15 @@ public class FirmServiceImpl implements FirmService {
                 treasury.archiveAccount(fa.getAccountId());
                 accounts.removeFirmAccount(firm.getFirmId(), fa.getAccountId());
             } catch (RuntimeException ex) {
-                // Leave this account linked so a later disband re-run (or
-                // reconciliation) can finish draining it; don't strand the rest.
+                // Leave this account linked so re-running the disband can finish
+                // draining it; don't strand the rest. Reported to the caller below.
+                undrained.add(fa.getAccountId());
                 LOG.log(Level.WARNING, "Failed to drain/archive account " + fa.getAccountId()
                         + " while disbanding firm " + firm.getFirmId()
-                        + "; it stays linked for a later reconciliation.", ex);
+                        + "; it stays linked until the disband is re-run.", ex);
             }
         }
+        return new DisbandResult(resumed, List.copyOf(undrained));
     }
 
     @Transactional
@@ -366,6 +423,8 @@ public class FirmServiceImpl implements FirmService {
         firm.setFirmId(firmId);
         firm.setProprietorUuid(playerId.toString());
         firms.updateFirm(firm);
+        // The outgoing proprietor is no longer a member: re-check the firm's chat.
+        chatProvider.get().membershipChanged(firmId);
     }
 
     // ---- Staff/DOC administrative overrides (PAR-11) -------------------------

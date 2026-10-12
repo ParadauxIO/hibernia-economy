@@ -97,6 +97,43 @@ class FirmSalesNotificationServiceImplTest {
         verify(notifications, never()).notifyFirm(anyInt(), any(), any());
     }
 
+    /**
+     * flush() runs on an async task (it reads the database) while record() runs on
+     * the main thread. However the two interleave, every sale must be delivered
+     * exactly once — none lost to a buffer drained mid-add, none double-counted.
+     */
+    @Test
+    void recordRacingFlush_deliversEverySaleExactlyOnce() throws Exception {
+        int total = 20_000;
+        lenient().when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY))
+                .thenReturn(Optional.of(true));
+        lenient().when(players.findByUuid(any(UUID.class))).thenReturn(Optional.empty());
+        java.util.concurrent.atomic.AtomicLong delivered = new java.util.concurrent.atomic.AtomicLong();
+        lenient().doAnswer(inv -> {
+            Object[] ph = (Object[]) inv.getRawArguments()[2]; // the varargs array itself
+            Object count = placeholder(ph, "count");
+            delivered.addAndGet(count == null ? 1L : (Long) count); // the single-line form has no count
+            return null;
+        }).when(notifications).notifyFirm(anyInt(), any(), any(Object[].class));
+
+        ChestShopSaleRecord sale = sale(7, "BUY", "Cobblestone", 1, "1.00");
+        java.util.concurrent.atomic.AtomicBoolean recording = new java.util.concurrent.atomic.AtomicBoolean(true);
+        Thread flusher = new Thread(() -> {
+            while (recording.get()) {
+                svc.flush();
+            }
+        });
+        flusher.start();
+        for (int i = 0; i < total; i++) {
+            svc.record(sale);
+        }
+        recording.set(false);
+        flusher.join();
+        svc.flush(); // whatever the last racing flush left buffered
+
+        assertThat(delivered.get()).isEqualTo(total);
+    }
+
     @Test
     void toggle_flipsAndPersists() {
         when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY)).thenReturn(Optional.of(false));

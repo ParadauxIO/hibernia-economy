@@ -44,15 +44,21 @@ public interface ApiKeyMapper {
     // result is treated as a terminal-state rejection by the service. Mirrors the
     // treasury-rest-api ApiKeyMapper.rotateKey guard so both writers to api_keys
     // agree on the revoke invariant.
+    //
+    // owner_uuid_bin is rewritten with the reissuing player so the row always names
+    // the same identity as the freshly minted JWT's subject (a BUSINESS key may be
+    // reissued by a proprietor other than its original issuer).
     @Update("""
             UPDATE api_keys
-               SET jwt_id     = #{jwtId},
-                   issued_at  = #{issuedAt},
-                   expires_at = #{expiresAt}
+               SET owner_uuid_bin = #{ownerUuid},
+                   jwt_id         = #{jwtId},
+                   issued_at      = #{issuedAt},
+                   expires_at     = #{expiresAt}
              WHERE key_id = #{keyId}
                AND revoked = 0
             """)
     int reissue(@Param("keyId") int keyId,
+                @Param("ownerUuid") UUID ownerUuid,
                 @Param("jwtId") String jwtId,
                 @Param("issuedAt") Instant issuedAt,
                 @Param("expiresAt") Instant expiresAt);
