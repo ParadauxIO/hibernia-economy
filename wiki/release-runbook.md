@@ -24,6 +24,28 @@ V28 drops `firm_sale` (unused by any code, old or new), V29 deletes duplicate
 fails midway leaves the earlier ones applied — **the pre-migration backup is the
 only way back.**
 
+## How long it takes
+
+Plan a **two-hour window and expect about one hour**. Nothing here scales with the
+ledger (19.6 M postings, 9.4 M transactions): no pending migration alters those tables.
+
+| Step | Expect |
+|---|---|
+| Stop the game server, REST API and explorer; confirm no connections | 5 min |
+| Back up and verify (7.6 GB of data + indexes on disk) | 10–15 min |
+| Run V16–V29 | 2–10 min |
+| Swap jars, set the new secret, start everything | 10 min |
+| Re-mint the explorer's SERVICE token | 5 min |
+| Verification (step 6) | 15 min |
+
+The migration figure comes from a synthetic database with production's row counts
+and its 128 MB buffer pool: about 35 s for V20's orphan checks over 3.3 M shop sales,
+and seconds for everything else. (V20 adds its foreign keys with
+`foreign_key_checks = 0`, an in-place change; with checks on, the same step copied
+the table and took 3.5 minutes on fast storage, far longer on slow.) The second
+hour is for a rollback: restoring the dump rebuilds every index, which on a small
+buffer pool is the slowest thing that can happen in the window.
+
 ## 0. Before the window
 
 1. **Freeze `develop`.** The release is one commit; note its SHA.
