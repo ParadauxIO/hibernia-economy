@@ -46,8 +46,8 @@ only way back.**
 4. **Build the plugin jars** from the release SHA: `./gradlew release` → `release/`
    (Treasury, Business, TreasuryAPI, ChestShop).
 5. **Generate the new token-signing secret** (`openssl rand -base64 48`, used as
-   `base64:<value>` — see step 5 below) and have a way to re-mint the explorer's
-   SERVICE token against it.
+   `base64:<value>` — see step 5 below). The explorer's SERVICE token is
+   re-minted against it in step 5 with `ops/mint-service-token.py`.
 6. **Disable any scheduled run of `ops/backfill-firm-account-owners.sql`.** Copies
    older than this release write `account_members` / `account_authorizers` and
    fail once V18 has run.
@@ -110,11 +110,24 @@ secret (`common/…/JwtKeys.java`); they must be byte-identical.
    `/treasuryapi personal reissue <keyId>` / `/treasuryapi business reissue <keyId>`
    (`… list` shows the IDs). Tokens are shown once and no longer stored (V23), so
    there is nothing to recover from the database.
-3. Re-mint the explorer's **SERVICE** token against the new secret and update its
-   `TREASURY_ADMIN_TOKEN`. Nothing in this repo mints SERVICE tokens — the plugin
-   refuses to let a player manage one — so provision it the way it was originally
-   created. Until this is done the explorer's admin actions and webhook management
-   fail; read-only pages are unaffected.
+3. Re-mint the explorer's **SERVICE** token against the new secret with
+   `ops/mint-service-token.py` (no player can issue or manage a SERVICE key, so it
+   is minted offline). Per tenant:
+   ```bash
+   # the existing key:
+   #   SELECT key_id, bin_to_uuid(owner_uuid_bin), revoked, expires_at
+   #     FROM api_keys WHERE key_type = 'SERVICE';
+   JWT_SECRET='base64:<value>' ops/mint-service-token.py \
+       --key-id <key_id> --owner <owner uuid> > token.txt 2> apply.sql
+   mariadb … <db> < apply.sql      # must report 1 row changed
+   ```
+   Set the contents of `token.txt` as the explorer's `TREASURY_ADMIN_TOKEN` and
+   restart it, then delete the file. The token is only accepted once `apply.sql`
+   has run, and running it invalidates the previous token. If no SERVICE row
+   exists, `--create --owner <uuid>` prints the `INSERT` for one. Tokens last 180
+   days; re-mint the same way before `expires_at`. Until this is done the
+   explorer's admin actions and webhook management fail; read-only pages are
+   unaffected.
 
 ## 6. Verify
 
