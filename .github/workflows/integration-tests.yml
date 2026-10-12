@@ -1,13 +1,9 @@
 name: Integration Tests (live server)
 
 # Boots a real Paper server with the plugins built from this commit, a migrated
-# MariaDB and the REST API, then runs the mock-client suite from the private
-# economy-system-integration-tests repository against it. ops/integration/run.sh
-# is the whole environment — the same script runs locally.
-#
-# Needs the INTEGRATION_TESTS_TOKEN secret: a read-only token (fine-grained PAT or
-# deploy key equivalent) for MCCitiesNetwork/economy-system-integration-tests.
-# Without it — forks, Dependabot — the job is skipped rather than failed.
+# MariaDB and the REST API, then runs the mock-client suite in integration-tests/
+# against it. ops/integration/run.sh is the whole environment — the same script
+# runs locally.
 
 on:
   pull_request:
@@ -25,12 +21,10 @@ on:
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'ops/integration/**'
+      - 'integration-tests/**'
       - '.github/workflows/integration-tests.yml'
   workflow_dispatch:
     inputs:
-      tests_ref:
-        description: Branch, tag or SHA of the integration-tests repository
-        default: main
       test_filter:
         description: Optional Gradle test filter, e.g. '*PayCommandTest'
         default: ''
@@ -46,8 +40,6 @@ jobs:
   live:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      HAS_TESTS_TOKEN: ${{ secrets.INTEGRATION_TESTS_TOKEN != '' }}
 
     services:
       mariadb:
@@ -61,48 +53,28 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=20
 
     steps:
-      - name: Skip notice
-        if: env.HAS_TESTS_TOKEN != 'true'
-        run: echo "::notice::INTEGRATION_TESTS_TOKEN is not available to this run; live integration tests skipped."
-
       - name: Checkout
-        if: env.HAS_TESTS_TOKEN == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Checkout the integration tests
-        if: env.HAS_TESTS_TOKEN == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: MCCitiesNetwork/economy-system-integration-tests
-          ref: ${{ inputs.tests_ref || 'main' }}
-          token: ${{ secrets.INTEGRATION_TESTS_TOKEN }}
-          path: integration-tests
-          persist-credentials: false
 
       - name: Validate Gradle wrapper
-        if: env.HAS_TESTS_TOKEN == 'true'
         uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
 
       - name: Set up JDK 21
-        if: env.HAS_TESTS_TOKEN == 'true'
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Setup Gradle
-        if: env.HAS_TESTS_TOKEN == 'true'
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
 
       - name: Cache server downloads
-        if: env.HAS_TESTS_TOKEN == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/hibernia-it
           key: hibernia-it-${{ hashFiles('ops/integration/run.sh') }}
 
       - name: Run the live integration tests
-        if: env.HAS_TESTS_TOKEN == 'true'
         env:
           IT_DB_EXTERNAL: '1'
           IT_DB_HOST: 127.0.0.1
@@ -113,10 +85,10 @@ jobs:
         run: |
           args=()
           if [ -n "$TEST_FILTER" ]; then args=(-- --tests "$TEST_FILTER"); fi
-          bash ops/integration/run.sh --tests-dir integration-tests "${args[@]}"
+          bash ops/integration/run.sh "${args[@]}"
 
       - name: Upload logs and test reports
-        if: always() && env.HAS_TESTS_TOKEN == 'true'
+        if: always()
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

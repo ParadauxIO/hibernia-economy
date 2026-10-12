@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Boots a throwaway economy stack and runs the live integration tests against it.
 #
-# The tests live in a separate repository (economy-system-integration-tests): a
-# mock Minecraft client, RCON and direct MariaDB assertions against a real Paper
-# server running the plugins built from THIS checkout. This script is the whole
-# environment, so the same command works locally and in CI:
+# The tests (integration-tests/ — its own Gradle build) drive a real Paper server
+# running the plugins built from THIS checkout with a mock Minecraft client, RCON
+# and direct MariaDB assertions. This script is the whole environment, so the same
+# command works locally and in CI:
 #
-#   ops/integration/run.sh --tests-dir ../economy-system-integration-tests
-#   ops/integration/run.sh --tests-dir … -- --tests '*PayCommandTest'
+#   ops/integration/run.sh
+#   ops/integration/run.sh -- --tests '*PayCommandTest'
 #
 # What it does: builds the plugin jars + REST API from this checkout and the
-# DcDiag / Nexo-stub plugins from the tests checkout; downloads Paper, LuckPerms
+# DcDiag / Nexo-stub plugins from integration-tests/; downloads Paper, LuckPerms
 # WorldEdit, WorldGuard and GriefPrevention (cached); migrates an empty database with economy-flyway;
 # starts Paper (offline mode, RCON) and the REST API; runs `:tests:test`; stops
 # everything. Nothing outside the work dir and the download cache is touched.
@@ -25,19 +25,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-TESTS_DIR="${IT_TESTS_DIR:-}"
+TESTS_DIR="${IT_TESTS_DIR:-$ROOT/integration-tests}"
 KEEP=0
 TEST_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --tests-dir) TESTS_DIR="$2"; shift 2 ;;
+    --tests-dir) TESTS_DIR="$2"; shift 2 ;;   # a different copy of the suite
     --keep) KEEP=1; shift ;;          # leave the stack running after the tests
     --) shift; TEST_ARGS=("$@"); break ;;
     -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-[ -n "$TESTS_DIR" ] || { echo "pass --tests-dir <economy-system-integration-tests checkout> (or IT_TESTS_DIR)" >&2; exit 2; }
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
 WORK="${IT_WORK_DIR:-$ROOT/build/integration}"
@@ -135,7 +134,7 @@ else
 fi
 
 log "Building DcDiag, Nexo stub and tests from $TESTS_DIR"
-(cd "$TESTS_DIR" && sh ./gradlew --console=plain -q :diag-plugin:jar :nexo-stub:jar :tests:testClasses \
+(cd "$ROOT" && sh ./gradlew -p "$TESTS_DIR" --console=plain -q :diag-plugin:jar :nexo-stub:jar :tests:testClasses \
     -PgriefPreventionJar="$CACHE/$GP_JAR")
 
 # ── Database ─────────────────────────────────────────────────────────────────
@@ -248,8 +247,8 @@ wait_for_port "$REST_PORT" 120 "REST API" "${PIDS[-1]}"
 log "Running the integration tests"
 # The REST settings go by env var: tests/build.gradle.kts only forwards the
 # connection -D properties listed there to the forked test JVM.
-(cd "$TESTS_DIR" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
-    sh ./gradlew --console=plain :tests:test \
+(cd "$ROOT" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
+    sh ./gradlew -p "$TESTS_DIR" --console=plain :tests:test \
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \
     -Ddevserver.host=127.0.0.1 -Ddevserver.port="$MC_PORT" \

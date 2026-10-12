@@ -150,15 +150,16 @@ Things worth knowing if you touch it:
 
 ## Live integration tests
 
-The end-to-end suite lives in a separate repository
-(`MCCitiesNetwork/economy-system-integration-tests`): a mock Minecraft client, RCON
-and direct MariaDB assertions against a **real Paper server** running the plugins
-built from this checkout. One script is the whole environment:
+The end-to-end suite lives in [`integration-tests/`](../integration-tests/README.md):
+a mock Minecraft client, RCON and direct MariaDB assertions against a **real Paper
+server** running the plugins built from this checkout. It is its own Gradle build
+(not part of the root one, so `./gradlew check` never needs a server). One script is
+the whole environment:
 
 ```bash
-ops/integration/run.sh --tests-dir ../economy-system-integration-tests
-ops/integration/run.sh --tests-dir … -- --tests '*PayCommandTest'   # a subset
-ops/integration/run.sh --tests-dir … --keep                          # leave the stack up
+ops/integration/run.sh
+ops/integration/run.sh -- --tests '*PayCommandTest'   # a subset
+ops/integration/run.sh --keep                          # leave the stack up
 ```
 
 It builds the plugin jars and the REST API, downloads Paper, LuckPerms, WorldEdit,
@@ -176,9 +177,8 @@ runs the tests and tears everything down. Work files and logs go to
 - **Iterating:** `IT_SKIP_BUILD=1` reuses the jars from the last run;
   `IT_GRADLE_ARGS` passes extra arguments to the plugin build (for example
   `-PuseMavenLocal` to test against a locally published hibernia-framework).
-- **In CI:** the **Integration Tests (live server)** workflow runs the same script.
-  It needs the `INTEGRATION_TESTS_TOKEN` secret (read access to the tests
-  repository) and skips itself when the secret isn't available.
+- **In CI:** the **Integration Tests (live server)** workflow runs the same script
+  on pull requests that touch a plugin, the REST API, the migrations or the suite.
 
 ## The web app (`economy-explorer`)
 
