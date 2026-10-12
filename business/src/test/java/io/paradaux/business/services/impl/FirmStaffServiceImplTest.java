@@ -224,12 +224,24 @@ class FirmStaffServiceImplTest {
     }
 
     @Test
-    void fireEmployee_throwsInternalWhenEndReturnsNotOne() {
+    void fireEmployee_notEmployed_isABadCommand() {
         Firm firm = acme();
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
         when(firms.isProprietor(1, actor)).thenReturn(true);
         when(firms.isProprietor(1, target)).thenReturn(false);
         when(staff.endCurrentEmployment(1, target.toString(), actor.toString())).thenReturn(0);
+
+        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor))
+                .isInstanceOf(BadCommandException.class);
+    }
+
+    @Test
+    void fireEmployee_throwsInternalWhenEndTouchesSeveralRows() {
+        Firm firm = acme();
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
+        when(firms.isProprietor(1, actor)).thenReturn(true);
+        when(firms.isProprietor(1, target)).thenReturn(false);
+        when(staff.endCurrentEmployment(1, target.toString(), actor.toString())).thenReturn(2);
 
         assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor))
                 .isInstanceOf(InternalException.class);

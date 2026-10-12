@@ -321,7 +321,12 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     @Override
     public void addAuthorizerToAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId) {
         validateAccountAccess(firmId, accountId, actorId);
-        treasury.addAuthorizer(accountId, authorizerUuid, actorId);
+        try {
+            treasury.addAuthorizer(accountId, authorizerUuid, actorId);
+        } catch (IllegalStateException e) {
+            // Treasury only promotes existing members; say so instead of an internal error.
+            throw new BadCommandException("That player must be a member of the account before they can be made an authorizer.");
+        }
         // Access is role-derived (PAR-77): reconcile immediately so the account
         // always reflects firm roles and never drifts until a manual resync.
         syncAccountMembers(firmId, accountId);

@@ -81,6 +81,7 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         }
 
         int rows = staff.endCurrentEmployment(firm.getFirmId(), playerId.toString(), actorId.toString());
+        if (rows == 0) throw new BadCommandException("That player isn't employed by " + firm.getDisplayName() + ".");
         if (rows != 1) throw new InternalException("Failed to end this employment.");
 
         // A fired employee must stop posting to the firm's chat straight away.

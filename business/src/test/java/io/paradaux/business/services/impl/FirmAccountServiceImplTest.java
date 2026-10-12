@@ -401,6 +401,19 @@ class FirmAccountServiceImplTest {
     }
 
     @Test
+    void addAuthorizerToAccount_nonMember_isABadCommand() {
+        UUID auth = UUID.randomUUID();
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
+        org.mockito.Mockito.doThrow(new IllegalStateException("UUID must be a member before being made an authorizer"))
+                .when(treasury).addAuthorizer(10, auth, actor);
+
+        assertThatThrownBy(() -> svc.addAuthorizerToAccount(1, 10, auth, actor))
+                .isInstanceOf(BadCommandException.class);
+    }
+
+    @Test
     void addAuthorizerToAccount_succeeds() {
         UUID auth = UUID.randomUUID();
         when(firms.getFirmById(1)).thenReturn(firm(1));
