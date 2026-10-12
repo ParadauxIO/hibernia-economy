@@ -53,7 +53,8 @@ function deriveKey(secret) {
     }
     const key = Buffer.from(encoded, 'base64');
     if (key.length < MIN_KEY_BYTES) {
-      fail(`JWT 'base64:' key material must be at least ${MIN_KEY_BYTES} bytes (got ${key.length}).`);
+      // Deliberately says nothing about the value itself, not even its length.
+      fail(`JWT 'base64:' key material must be at least ${MIN_KEY_BYTES} bytes.`);
     }
     return key;
   }
