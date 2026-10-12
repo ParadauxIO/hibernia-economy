@@ -37,12 +37,28 @@ only way back.**
      after they first merged (older copies are on `main`); that is only safe on a
      database that has never run them. Such a target needs a deliberate
      `flywayRepair`/manual reconciliation first — do not continue on autopilot.
-3. **Pre-check V24** (adds a `UNIQUE` over SYSTEM account names; it fails, mid-run,
-   if duplicates exist). Must return no rows on every target:
+3. **Pre-check the data the migrations assume.** A violated assumption fails the
+   run partway (V17, V24) or silently drops someone's access (V18). Every row must
+   be `0`, on every target:
    ```sql
-   SELECT display_name, COUNT(*) FROM accounts
-    WHERE account_type = 'SYSTEM' GROUP BY display_name HAVING COUNT(*) > 1;
+   -- V17: economy_players.name_lower is UNIQUE
+   SELECT 'names colliding case-insensitively', COUNT(*) FROM (
+     SELECT 1 FROM firm_players GROUP BY LOWER(current_name) HAVING COUNT(*) > 1) t
+   -- V18: account_access is keyed (account_id, subject) and built from account_members
+   UNION ALL SELECT 'duplicate account members', COUNT(*) FROM (
+     SELECT 1 FROM account_members GROUP BY account_id, member_uuid_bin HAVING COUNT(*) > 1) t
+   UNION ALL SELECT 'active authorizers with no active member row', COUNT(*)
+     FROM account_authorizers au
+     LEFT JOIN account_members m ON m.account_id = au.account_id
+          AND m.member_uuid_bin = au.authorizer_uuid_bin AND m.left_at IS NULL
+    WHERE au.revoked_at IS NULL AND m.account_id IS NULL
+   -- V24: UNIQUE over SYSTEM account names
+   UNION ALL SELECT 'duplicate SYSTEM account names', COUNT(*) FROM (
+     SELECT 1 FROM accounts WHERE account_type = 'SYSTEM'
+      GROUP BY display_name HAVING COUNT(*) > 1) t;
    ```
+   V29 removes duplicate fine rows by itself; to see whether it will,
+   `SELECT COUNT(*) FROM (SELECT 1 FROM government_fines GROUP BY txn_id HAVING COUNT(*) > 1) t;`
 4. **Build the plugin jars** from the release SHA: `./gradlew release` → `release/`
    (Treasury, Business, TreasuryAPI, ChestShop).
 5. **Generate the new token-signing secret** (`openssl rand -base64 48`, used as
@@ -126,7 +142,8 @@ secret (`common/…/JwtKeys.java`); they must be byte-identical.
    restart it, then delete the file. The token is only accepted once `apply.sql`
    has run, and running it invalidates the previous token. If no SERVICE row
    exists, `--create --owner <uuid>` prints the `INSERT` for one. Tokens last 180
-   days; re-mint the same way before `expires_at`. Until this is done the
+   days unless `--days` says otherwise (pass the lifetime the existing key was
+   given if it should stay long-lived); re-mint the same way before `expires_at`. Until this is done the
    explorer's admin actions and webhook management fail; read-only pages are
    unaffected.
 
