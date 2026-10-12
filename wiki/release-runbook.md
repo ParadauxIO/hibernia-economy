@@ -47,7 +47,8 @@ only way back.**
    (Treasury, Business, TreasuryAPI, ChestShop).
 5. **Generate the new token-signing secret** (`openssl rand -base64 48`, used as
    `base64:<value>` — see step 5 below). The explorer's SERVICE token is
-   re-minted against it in step 5 with `ops/mint-service-token.py`.
+   re-minted against it in step 5 with
+   `economy-explorer/scripts/mint-service-token.mjs`.
 6. **Disable any scheduled run of `ops/backfill-firm-account-owners.sql`.** Copies
    older than this release write `account_members` / `account_authorizers` and
    fail once V18 has run.
@@ -111,13 +112,13 @@ secret (`common/…/JwtKeys.java`); they must be byte-identical.
    (`… list` shows the IDs). Tokens are shown once and no longer stored (V23), so
    there is nothing to recover from the database.
 3. Re-mint the explorer's **SERVICE** token against the new secret with
-   `ops/mint-service-token.py` (no player can issue or manage a SERVICE key, so it
+   `economy-explorer/scripts/mint-service-token.mjs` (no player can issue or manage a SERVICE key, so it
    is minted offline). Per tenant:
    ```bash
    # the existing key:
    #   SELECT key_id, bin_to_uuid(owner_uuid_bin), revoked, expires_at
    #     FROM api_keys WHERE key_type = 'SERVICE';
-   JWT_SECRET='base64:<value>' ops/mint-service-token.py \
+   JWT_SECRET='base64:<value>' node economy-explorer/scripts/mint-service-token.mjs \
        --key-id <key_id> --owner <owner uuid> > token.txt 2> apply.sql
    mariadb … <db> < apply.sql      # must report 1 row changed
    ```

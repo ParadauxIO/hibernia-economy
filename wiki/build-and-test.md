@@ -168,7 +168,7 @@ database with `economy-flyway`, starts Paper (offline mode, RCON) and the REST A
 runs the tests and tears everything down. Work files and logs go to
 `build/integration/`.
 
-- **Needs:** JDK 21, `curl`, `python3`, and either a local `mariadbd` (a scratch
+- **Needs:** JDK 21, `curl`, and either a local `mariadbd` (a scratch
   instance is started on port 33306) or `IT_DB_EXTERNAL=1` plus `IT_DB_*` pointing at
   a running server whose `IT_DB_NAME` database may be dropped.
 - **Ports:** 25565 (game), 25575 (RCON), 8080 (REST) by default; override with

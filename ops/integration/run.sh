@@ -20,7 +20,7 @@
 # already-running server instead (CI service container) — the database named by
 # IT_DB_NAME is DROPPED and recreated.
 #
-# Requires: JDK 21 on PATH/JAVA_HOME, curl, python3 and a mariadb/mysql client.
+# Requires: JDK 21 on PATH/JAVA_HOME, curl and a mariadb/mysql client.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -196,26 +196,30 @@ EOF
 
 # Each plugin's shipped config.yml with only the database block (and the JWT
 # secret) pointed at this run's stack, so every other default is the real one.
-python3 - "$ROOT" "$SERVER" "$DB_HOST" "$DB_PORT" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$JWT_SECRET" <<'PY'
-import pathlib, re, sys
-root, server, host, port, name, user, password, secret = sys.argv[1:]
-db = {"host": host, "port": port, "database": name, "username": user, "password": password}
-for module, plugin in (("treasury", "Treasury"), ("business", "Business"), ("treasury-api-plugin", "TreasuryAPI")):
-    lines = (pathlib.Path(root) / module / "src/main/resources/config.yml").read_text().splitlines()
-    out, in_db = [], False
-    for line in lines:
-        if re.match(r"^\S", line):
-            in_db = line.startswith("database:")
-        m = re.match(r"^(\s+)(host|port|database|username|password):", line) if in_db else None
-        if m:
-            line = f"{m.group(1)}{m.group(2)}: \"{db[m.group(2)]}\"" if m.group(2) != "port" else f"{m.group(1)}port: {port}"
-        elif re.match(r"^\s+jwt-secret:", line):
-            line = re.sub(r"jwt-secret:.*", f"jwt-secret: \"{secret}\"", line)
-        out.append(line)
-    target = pathlib.Path(server) / "plugins" / plugin
-    target.mkdir(parents=True, exist_ok=True)
-    (target / "config.yml").write_text("\n".join(out) + "\n")
-PY
+render_config() { # render_config <module dir> <plugin data folder>
+  mkdir -p "$SERVER/plugins/$2"
+  CFG_HOST="$DB_HOST" CFG_PORT="$DB_PORT" CFG_DATABASE="$DB_NAME" CFG_USERNAME="$DB_USER" \
+  CFG_PASSWORD="$DB_PASSWORD" CFG_SECRET="$JWT_SECRET" awk '
+    function quoted(v) { gsub(/\\/, "\\\\", v); gsub(/"/, "\\\"", v); return "\"" v "\"" }
+    /^[^ \t#]/ { in_db = ($0 ~ /^database:/) }
+    in_db && /^[ \t]+(host|port|database|username|password):/ {
+      indent = $0; sub(/[^ \t].*/, "", indent)
+      key = $0; sub(/^[ \t]+/, "", key); sub(/:.*/, "", key)
+      if (key == "port") print indent "port: " ENVIRON["CFG_PORT"]
+      else print indent key ": " quoted(ENVIRON["CFG_" toupper(key)])
+      next
+    }
+    /^[ \t]+jwt-secret:/ {
+      indent = $0; sub(/[^ \t].*/, "", indent)
+      print indent "jwt-secret: " quoted(ENVIRON["CFG_SECRET"])
+      next
+    }
+    { print }
+  ' "$ROOT/$1/src/main/resources/config.yml" >"$SERVER/plugins/$2/config.yml"
+}
+render_config treasury Treasury
+render_config business Business
+render_config treasury-api-plugin TreasuryAPI
 
 # Every mock player connects from 127.0.0.1; GriefPrevention's default of three
 # logins per address kicks the fourth.
