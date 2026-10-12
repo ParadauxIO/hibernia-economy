@@ -148,6 +148,38 @@ Things worth knowing if you touch it:
 > issue. Use `-PskipIT` for fast iteration, or point the tests at a real MariaDB
 > the way CI does.
 
+## Live integration tests
+
+The end-to-end suite lives in a separate repository
+(`MCCitiesNetwork/economy-system-integration-tests`): a mock Minecraft client, RCON
+and direct MariaDB assertions against a **real Paper server** running the plugins
+built from this checkout. One script is the whole environment:
+
+```bash
+ops/integration/run.sh --tests-dir ../economy-system-integration-tests
+ops/integration/run.sh --tests-dir … -- --tests '*PayCommandTest'   # a subset
+ops/integration/run.sh --tests-dir … --keep                          # leave the stack up
+```
+
+It builds the plugin jars and the REST API, downloads Paper, LuckPerms, WorldEdit,
+WorldGuard and GriefPrevention (cached in `~/.cache/hibernia-it`), migrates an empty
+database with `economy-flyway`, starts Paper (offline mode, RCON) and the REST API,
+runs the tests and tears everything down. Work files and logs go to
+`build/integration/`.
+
+- **Needs:** JDK 21, `curl`, `python3`, and either a local `mariadbd` (a scratch
+  instance is started on port 33306) or `IT_DB_EXTERNAL=1` plus `IT_DB_*` pointing at
+  a running server whose `IT_DB_NAME` database may be dropped.
+- **Ports:** 25565 (game), 25575 (RCON), 8080 (REST) by default; override with
+  `IT_MC_PORT`, `IT_RCON_PORT`, `IT_REST_PORT`, `IT_DB_PORT` to run several stacks
+  side by side, each with its own `IT_WORK_DIR`.
+- **Iterating:** `IT_SKIP_BUILD=1` reuses the jars from the last run;
+  `IT_GRADLE_ARGS` passes extra arguments to the plugin build (for example
+  `-PuseMavenLocal` to test against a locally published hibernia-framework).
+- **In CI:** the **Integration Tests (live server)** workflow runs the same script.
+  It needs the `INTEGRATION_TESTS_TOKEN` secret (read access to the tests
+  repository) and skips itself when the secret isn't available.
+
 ## The web app (`economy-explorer`)
 
 Not part of the Gradle build — it has its own npm toolchain (Node **22**):
