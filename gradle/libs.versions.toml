@@ -12,7 +12,7 @@
 [versions]
 # Server / framework
 paper = "1.21.11-R0.1-SNAPSHOT"
-hibernia = "1.2.0-SNAPSHOT"
+hibernia = "1.2.0"
 luckperms = "5.4"
 log4j = "2.26.0"
 annotations = "26.1.0"
