@@ -153,8 +153,11 @@ npm ci
 npm run dev        # http://localhost:3000  (docs at /docs)
 ```
 
-Copy `economy-explorer/.env.example` to `.env` and fill in the database/Redis
-settings before running against real data.
+Copy `economy-explorer/.env.example` to `.env` and fill in the database settings
+before running against real data. Every variable the app reads is listed there,
+with the optional ones commented out next to their defaults. The REST API and the
+migrations have the same kind of file: `treasury-rest-api/.env.example` and
+`economy-flyway/.env.example`.
 
 ## Building the plugins
 
