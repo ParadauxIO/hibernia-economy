@@ -14,8 +14,8 @@ commands:
 
 permissions:
     treasuryapi.command:
-        description: Access to /treasuryapi
-        default: op
+        description: Access to /treasuryapi (subcommands enforce their own permissions)
+        default: true
 
     # Personal key permissions
     treasuryapi.personal.issue:
@@ -54,4 +54,8 @@ permissions:
         default: true
     treasuryapi.ui.sync:
         description: Sync your own explorer roles from your in-game ranks
+        default: true
+
+    treasuryapi.ui.resetpassword:
+        description: Reset your own linked web account password
         default: true
