@@ -2,6 +2,7 @@ package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.Ledger;
+import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.Test;
@@ -80,6 +81,61 @@ class GovMemberTransferTest {
             } finally {
                 net.democracycraft.inttests.support.RconClient.send(
                         "lp user " + member + " permission unset treasury.gov");
+            }
+        }
+    }
+
+    /**
+     * The LP-group form of the same delegation: the group is added as a member with
+     * {@code /gov account member addgroup}, and a player whose only link to the
+     * account is belonging to that LuckPerms group can spend from it.
+     */
+    @Test
+    void groupMemberCanPayoutFromAccountTheirGroupBelongsTo() {
+        String owner = Usernames.fresh("GgO");
+        String member = Usernames.fresh("GgM");
+        String recipient = Usernames.fresh("GgR");
+        String account = acct("DeptG");
+        // Mixed case on purpose: staff type group names as they read them, while
+        // LuckPerms always stores and reports them lower-cased.
+        String typedGroup = "Dept" + Long.toHexString(Instant.now().toEpochMilli());
+        String lpGroup = typedGroup.toLowerCase(java.util.Locale.ROOT);
+
+        try (MockPlayer o = MockPlayer.connectLocal(owner);
+             MockPlayer m = MockPlayer.connectLocal(member);
+             MockPlayer r = MockPlayer.connectLocal(recipient)) {
+            Ledger.waitForPersonalBalance(o.getUuid(), TIMEOUT);
+            Ledger.waitForPersonalBalance(m.getUuid(), TIMEOUT);
+            BigDecimal recipientStart = Ledger.waitForPersonalBalance(r.getUuid(), TIMEOUT);
+
+            Ops.run(owner, () -> {
+                o.chatCommand("/gov account create " + account);
+                Ledger.waitForGovernmentAccount(account, TIMEOUT);
+                Ledger.asyncSettle();
+                o.chatCommand("/gov account transfer DCGovernment " + account + " 1000 seed");
+                waitForGovBalanceAtLeast(account, new BigDecimal("1000"));
+                o.drainMessages();
+                o.chatCommand("/gov account member addgroup " + account + " " + typedGroup);
+                o.awaitMessageContaining(typedGroup, TIMEOUT);
+            });
+
+            RconClient.send("lp creategroup " + lpGroup);
+            // The group carries the command node, as a real "department" group would.
+            RconClient.send("lp group " + lpGroup + " permission set treasury.gov true");
+            RconClient.send("lp user " + member + " parent add " + lpGroup);
+            try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            try {
+                m.drainMessages();
+                m.chatCommand("/gov payout " + account + " " + recipient + " 250 dept stipend");
+
+                Ledger.waitForPersonalBalance(r.getUuid(),
+                        recipientStart.add(new BigDecimal("250.00")), TIMEOUT);
+                assertThat(Ledger.governmentBalance(account).orElseThrow())
+                        .as("source gov account is debited by the group member's payout")
+                        .isEqualByComparingTo("750");
+            } finally {
+                RconClient.send("lp user " + member + " parent remove " + lpGroup);
+                RconClient.send("lp deletegroup " + lpGroup);
             }
         }
     }
