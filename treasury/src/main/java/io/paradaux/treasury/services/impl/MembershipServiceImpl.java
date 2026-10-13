@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import org.mybatis.guice.transactional.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -131,6 +132,13 @@ public class MembershipServiceImpl implements MembershipService {
     }
 
     // ── LP Group CRUD ──
+
+    @Override
+    public boolean isKnownGroup(String lpGroup) {
+        if (luckPerms == null || lpGroup == null) return true;
+        // LuckPerms group names are always lower-case; every group is loaded.
+        return luckPerms.getGroupManager().getGroup(lpGroup.toLowerCase(Locale.ROOT)) != null;
+    }
 
     @Override
     @Transactional

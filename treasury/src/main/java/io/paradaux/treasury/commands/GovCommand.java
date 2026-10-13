@@ -320,6 +320,7 @@ public class GovCommand implements CommandHandler {
         membershipService.addGroupMember(account.getAccountId(), group, actorOf(sender));
         message.send(sender, "treasury.gov.member.group-added",
                 "group", group, "account", account.getDisplayName());
+        warnIfUnknownGroup(sender, group);
     }
 
     @Route("account member removegroup <account> <group>")
@@ -449,6 +450,7 @@ public class GovCommand implements CommandHandler {
         membershipService.addGroupViewer(account.getAccountId(), group, actorOf(sender));
         message.send(sender, "treasury.gov.viewer.group-added",
                 "group", group, "account", account.getDisplayName());
+        warnIfUnknownGroup(sender, group);
     }
 
     @Route("account viewer removegroup <account> <group>")
@@ -585,7 +587,7 @@ public class GovCommand implements CommandHandler {
         // `treasury.gov.auth.group-not-member` i18n key unreachable and
         // hid mis-typed group names behind a successful-looking message.
         List<String> groupMembers = membershipService.getGroupMembers(account.getAccountId());
-        if (!groupMembers.contains(group)) {
+        if (groupMembers.stream().noneMatch(group::equalsIgnoreCase)) {
             message.send(sender, "treasury.gov.auth.group-not-member", "group", group);
             return;
         }
@@ -597,6 +599,7 @@ public class GovCommand implements CommandHandler {
         }
         message.send(sender, "treasury.gov.auth.group-added",
                 "group", group, "account", account.getDisplayName());
+        warnIfUnknownGroup(sender, group);
     }
 
     @Route("account auth removegroup <account> <group>")
@@ -950,6 +953,18 @@ public class GovCommand implements CommandHandler {
         }
         return p.hasPermission("treasury.gov.admin")
                 || membershipService.isAuthorizer(account.getAccountId(), p.getUniqueId());
+    }
+
+    /**
+     * A group grant is stored whether or not the group exists, and a name that
+     * matches no LuckPerms group never grants anyone anything. Say so at the point
+     * of the mistake (usually a typo, or the display name in place of the internal
+     * one); the grant is kept, so creating the group later makes it take effect.
+     */
+    private void warnIfUnknownGroup(CommandSender sender, String group) {
+        if (!membershipService.isKnownGroup(group)) {
+            message.send(sender, "treasury.gov.group-unknown", "group", group);
+        }
     }
 
     /** A permission gate that always passes for console / RCON (non-player

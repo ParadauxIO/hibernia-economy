@@ -103,10 +103,14 @@ permissions:
   treasury.eco.reset:
     description: Reset a player's balance
     default: op
+  treasury.gov:
+    description: Use /government at all. Needed on top of any account access - including by members of a group added with "account member addgroup"
+    default: op
   treasury.gov.*:
     description: All government operations
     default: false
     children:
+      treasury.gov: true
       treasury.gov.admin: true
       treasury.gov.account.create: true
       treasury.gov.account.list: true

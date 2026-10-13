@@ -114,12 +114,14 @@ class GovMemberTransferTest {
                 Ledger.asyncSettle();
                 o.chatCommand("/gov account transfer DCGovernment " + account + " 1000 seed");
                 waitForGovBalanceAtLeast(account, new BigDecimal("1000"));
-                o.drainMessages();
-                o.chatCommand("/gov account member addgroup " + account + " " + typedGroup);
-                o.awaitMessageContaining(typedGroup, TIMEOUT);
             });
 
             RconClient.send("lp creategroup " + lpGroup);
+            Ops.run(owner, () -> {
+                o.drainMessages();
+                o.chatCommand("/gov account member addgroup " + account + " " + typedGroup);
+                o.awaitMessageContaining("as a member", TIMEOUT);
+            });
             // The group carries the command node, as a real "department" group would.
             RconClient.send("lp group " + lpGroup + " permission set treasury.gov true");
             RconClient.send("lp user " + member + " parent add " + lpGroup);
@@ -137,6 +139,27 @@ class GovMemberTransferTest {
                 RconClient.send("lp user " + member + " parent remove " + lpGroup);
                 RconClient.send("lp deletegroup " + lpGroup);
             }
+        }
+    }
+
+    /** A group name LuckPerms doesn't know is still stored, but the admin is told it grants nothing. */
+    @Test
+    void addgroupWarnsWhenLuckPermsHasNoSuchGroup() {
+        String owner = Usernames.fresh("GwO");
+        String account = acct("DeptW");
+        String typo = "nosuchgroup" + Long.toHexString(Instant.now().toEpochMilli());
+
+        try (MockPlayer o = MockPlayer.connectLocal(owner)) {
+            Ledger.waitForPersonalBalance(o.getUuid(), TIMEOUT);
+            Ops.run(owner, () -> {
+                o.chatCommand("/gov account create " + account);
+                Ledger.waitForGovernmentAccount(account, TIMEOUT);
+                Ledger.asyncSettle();
+                o.drainMessages();
+                o.chatCommand("/gov account member addgroup " + account + " " + typo);
+                o.awaitMessageContaining("as a member", TIMEOUT);
+                assertThat(o.awaitMessageContaining("LuckPerms has no group", TIMEOUT)).contains(typo);
+            });
         }
     }
 

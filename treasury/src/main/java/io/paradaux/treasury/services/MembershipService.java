@@ -43,6 +43,14 @@ public interface MembershipService {
 
     // ── LP Group CRUD ──
 
+    /**
+     * Whether LuckPerms has a group of this name. Group grants are stored as plain
+     * names and never validated on write, so a typo (or a display name in place of
+     * the internal one) is accepted and simply never matches anyone. Returns
+     * {@code true} when LuckPerms is unavailable, since the name cannot be judged.
+     */
+    boolean isKnownGroup(String lpGroup);
+
     void addGroupMember(int accountId, String lpGroup, UUID addedByUuid);
     void removeGroupMember(int accountId, String lpGroup);
     List<String> getGroupMembers(int accountId);
