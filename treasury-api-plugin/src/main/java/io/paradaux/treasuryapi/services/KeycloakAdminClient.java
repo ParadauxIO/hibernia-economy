@@ -9,6 +9,9 @@ import java.util.UUID;
  */
 public interface KeycloakAdminClient {
 
+    /** Sets a temporary password, requiring a change at the next login. */
+    void resetPassword(String sub, String password) throws Exception;
+
     /** Whether the Keycloak integration is configured/enabled. */
     boolean isEnabled();
 

@@ -34,6 +34,15 @@ public class UiAccessHandler {
         this.message = message;
     }
 
+    public void doResetPassword(Player player, boolean confirmed) {
+        if (!confirmed) {
+            message.send(player, "treasuryapi.ui.reset.confirm");
+            return;
+        }
+        String password = service.resetPassword(player.getUniqueId());
+        message.send(player, "treasuryapi.ui.reset.success", "password", password);
+    }
+
     /**
      * On-demand self-sync: reconcile the calling player's LuckPerms-sourced explorer
      * group memberships now, instead of waiting for the cron. The service throws a

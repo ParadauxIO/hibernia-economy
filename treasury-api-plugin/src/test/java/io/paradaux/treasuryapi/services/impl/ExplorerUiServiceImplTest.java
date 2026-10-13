@@ -168,4 +168,47 @@ class ExplorerUiServiceImplTest {
         ConflictException ex = assertThrows(ConflictException.class, () -> service.selfSync(playerId));
         assertEquals("treasuryapi.ui.sync.failed", ex.getMessage());
     }
+    @Test
+    void resetPassword_disabled_neverCallsKeycloak() throws Exception {
+        assertThrows(ConflictException.class, () -> service.resetPassword(playerId));
+        verify(keycloak, never()).resetPassword(anyString(), anyString());
+    }
+
+    @Test
+    void resetPassword_missingOrAmbiguousLink_neverCallsKeycloak() throws Exception {
+        when(keycloak.isEnabled()).thenReturn(true);
+        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of());
+        assertThrows(NotFoundException.class, () -> service.resetPassword(playerId));
+        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of("one", "two"));
+        assertThrows(ConflictException.class, () -> service.resetPassword(playerId));
+        verify(keycloak, never()).resetPassword(anyString(), anyString());
+    }
+
+    @Test
+    void resetPassword_usesLinkedSubject_returnsSecret_andLimitsRepeatedAttempts() throws Exception {
+        when(keycloak.isEnabled()).thenReturn(true);
+        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of("own-sub"));
+        String password = service.resetPassword(playerId);
+        org.junit.jupiter.api.Assertions.assertTrue(password.matches("Aa1![A-Za-z0-9_-]{32}"));
+        verify(keycloak).resetPassword("own-sub", password);
+        assertEquals("treasuryapi.ui.reset.cooldown",
+                assertThrows(ConflictException.class, () -> service.resetPassword(playerId)).getMessage());
+        UUID other = UUID.randomUUID();
+        when(mapper.findLinkedSubjects(other)).thenReturn(java.util.List.of("other-sub"));
+        org.junit.jupiter.api.Assertions.assertNotEquals(password, service.resetPassword(other));
+    }
+
+    @Test
+    void resetPassword_upstreamFailure_isSanitized_andStillRateLimited() throws Exception {
+        when(keycloak.isEnabled()).thenReturn(true);
+        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of("own-sub"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("sensitive upstream response"))
+                .when(keycloak).resetPassword(anyString(), anyString());
+        ConflictException error = assertThrows(ConflictException.class, () -> service.resetPassword(playerId));
+        assertEquals("treasuryapi.ui.reset.failed", error.getMessage());
+        org.junit.jupiter.api.Assertions.assertNull(error.getCause());
+        assertEquals("treasuryapi.ui.reset.cooldown",
+                assertThrows(ConflictException.class, () -> service.resetPassword(playerId)).getMessage());
+    }
+
 }

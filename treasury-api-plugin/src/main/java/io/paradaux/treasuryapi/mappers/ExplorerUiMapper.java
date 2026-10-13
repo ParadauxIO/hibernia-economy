@@ -27,6 +27,10 @@ public interface ExplorerUiMapper {
     @Select("SELECT role FROM explorer_role WHERE player_uuid_bin = #{uuid} ORDER BY role")
     List<String> listRoles(@Param("uuid") UUID uuid);
 
+    /** Up to two matches: recovery must reject ambiguous identity links. */
+    @Select("SELECT keycloak_sub FROM explorer_identity WHERE player_uuid_bin = #{uuid} LIMIT 2")
+    List<String> findLinkedSubjects(@Param("uuid") UUID uuid);
+
     /** Returns the keycloak_sub for a valid (unexpired) code, or null. */
     @Select("SELECT keycloak_sub FROM explorer_link_code WHERE code = #{code} AND expires_at > NOW()")
     String findValidLinkSub(@Param("code") String code);

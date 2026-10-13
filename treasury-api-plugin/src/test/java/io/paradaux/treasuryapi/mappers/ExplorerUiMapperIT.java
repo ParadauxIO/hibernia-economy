@@ -112,6 +112,19 @@ class ExplorerUiMapperIT extends IntegrationTestBase {
         assertThat(identityName("sub-x")).isEqualTo("Bob");
     }
 
+    @Test
+    void findLinkedSubjects_matchesOnlyOwner_andDetectsAmbiguousLinks() {
+        UUID player = UUID.randomUUID();
+        assertThat(mapper.findLinkedSubjects(player)).isEmpty();
+        mapper.upsertIdentity("owned-1", player, "Alice", "in-game:Alice");
+        mapper.upsertIdentity("unrelated", UUID.randomUUID(), "Bob", "in-game:Bob");
+        assertThat(mapper.findLinkedSubjects(player)).containsExactly("owned-1");
+        mapper.upsertIdentity("owned-2", player, "Alice", "in-game:Alice");
+        assertThat(mapper.findLinkedSubjects(player)).containsExactlyInAnyOrder("owned-1", "owned-2");
+        mapper.upsertIdentity("owned-3", player, "Alice", "in-game:Alice");
+        assertThat(mapper.findLinkedSubjects(player)).hasSize(2);
+    }
+
     private UUID identityPlayer(String sub) throws Exception {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(

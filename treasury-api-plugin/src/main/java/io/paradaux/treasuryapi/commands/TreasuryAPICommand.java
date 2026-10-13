@@ -165,6 +165,21 @@ public class TreasuryAPICommand implements CommandHandler {
         uiHandler.doLink(sender, code);
     }
 
+    @Route("ui resetpassword")
+    @Permission("treasuryapi.ui.resetpassword")
+    @Description("Reset your linked web account password without email")
+    public void uiResetPassword(@Sender Player sender) {
+        uiHandler.doResetPassword(sender, false);
+    }
+
+    @Route("ui resetpassword confirm")
+    @Permission("treasuryapi.ui.resetpassword")
+    @Async
+    @Description("Confirm replacing your linked web account password")
+    public void uiResetPasswordConfirm(@Sender Player sender) {
+        uiHandler.doResetPassword(sender, true);
+    }
+
     @Route("ui sync")
     @Permission("treasuryapi.ui.sync")
     @Async

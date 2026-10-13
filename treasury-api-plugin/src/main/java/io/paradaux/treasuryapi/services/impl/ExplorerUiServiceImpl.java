@@ -11,11 +11,15 @@ import io.paradaux.treasuryapi.services.ExplorerUiService;
 import io.paradaux.treasuryapi.services.KeycloakAdminClient;
 import io.paradaux.treasuryapi.services.PlayerGroupSync;
 
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
@@ -28,6 +32,11 @@ import java.util.logging.Level;
 public class ExplorerUiServiceImpl implements ExplorerUiService {
 
     private static final Set<String> VALID_ROLES = Set.of("admin", "government");
+
+    private final SecureRandom passwordRandom = new SecureRandom();
+    private final ConcurrentHashMap<UUID, Long> resetAttempts =
+            new ConcurrentHashMap<>();
+    private static final long RESET_COOLDOWN_NANOS = Duration.ofMinutes(1).toNanos();
 
     private final ExplorerUiMapper mapper;
     private final KeycloakAdminClient keycloak;
@@ -107,6 +116,35 @@ public class ExplorerUiServiceImpl implements ExplorerUiService {
             }
         }
         return LinkOutcome.LINKED;
+    }
+
+    @Override
+    public String resetPassword(UUID playerUuid) {
+        if (!keycloak.isEnabled()) {
+            throw new ConflictException("treasuryapi.ui.reset.unavailable");
+        }
+        List<String> subjects = mapper.findLinkedSubjects(playerUuid);
+        if (subjects.isEmpty()) throw new NotFoundException("treasuryapi.ui.reset.unlinked");
+        if (subjects.size() != 1) throw new ConflictException("treasuryapi.ui.reset.ambiguous");
+        long now = System.nanoTime();
+        resetAttempts.entrySet().removeIf(entry -> now - entry.getValue() >= RESET_COOLDOWN_NANOS);
+        if (resetAttempts.putIfAbsent(playerUuid, now) != null) {
+            throw new ConflictException("treasuryapi.ui.reset.cooldown");
+        }
+        // 192 random bits plus fixed character classes for typical realm policies.
+        byte[] bytes = new byte[24];
+        passwordRandom.nextBytes(bytes);
+        String password = "Aa1!" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        try {
+            keycloak.resetPassword(subjects.getFirst(), password);
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            // Do not attach arbitrary upstream exceptions: credentials must never reach logs.
+            plugin.getLogger().warning("Keycloak password reset failed for player " + playerUuid);
+            throw new ConflictException("treasuryapi.ui.reset.failed");
+        }
+        plugin.getLogger().info("Keycloak password reset by player " + playerUuid);
+        return password;
     }
 
     @Override

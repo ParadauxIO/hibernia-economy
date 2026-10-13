@@ -155,6 +155,44 @@ class KeycloakAdminClientTest {
                 () -> client.setMinecraftAttributes("missing-sub", UUID.randomUUID(), "Bob"));
     }
 
+
+    @Test
+    void resetPassword_sendsTemporaryCredentialToExactSubject_withoutEmail() throws Exception {
+        List<String> requests = new CopyOnWriteArrayList<>();
+        List<String> bodies = new CopyOnWriteArrayList<>();
+        List<String> authorizations = new CopyOnWriteArrayList<>();
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/realms/minecraft/protocol/openid-connect/token",
+                ex -> respond(ex, 200, "{\"access_token\":\"tok\"}"));
+        server.createContext("/admin/realms/minecraft/users/", ex -> {
+            requests.add(ex.getRequestMethod() + " " + ex.getRequestURI());
+            bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            authorizations.add(ex.getRequestHeaders().getFirst("Authorization"));
+            respond(ex, 204, "");
+        });
+        server.start();
+        var client = new KeycloakAdminClientImpl(config("http://127.0.0.1:" + server.getAddress().getPort(), true));
+        client.resetPassword("own-sub", "generated-password");
+        assertEquals(List.of("PUT /admin/realms/minecraft/users/own-sub/reset-password"), requests);
+        assertEquals(List.of("Bearer tok"), authorizations);
+        JsonObject credential = JsonParser.parseString(bodies.getFirst()).getAsJsonObject();
+        assertEquals("password", credential.get("type").getAsString());
+        assertEquals("generated-password", credential.get("value").getAsString());
+        assertTrue(credential.get("temporary").getAsBoolean());
+    }
+
+    @Test
+    void resetPassword_rejectionDoesNotExposeResponseOrPassword() throws Exception {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/realms/minecraft/protocol/openid-connect/token",
+                ex -> respond(ex, 200, "{\"access_token\":\"tok\"}"));
+        server.createContext("/admin/realms/minecraft/users/", ex -> respond(ex, 400, "secret-password"));
+        server.start();
+        var client = new KeycloakAdminClientImpl(config("http://127.0.0.1:" + server.getAddress().getPort(), true));
+        Exception error = assertThrows(Exception.class, () -> client.resetPassword("own-sub", "secret-password"));
+        assertEquals("Keycloak password reset failed: HTTP 400", error.getMessage());
+    }
+
     private static void respond(com.sun.net.httpserver.HttpExchange ex, int status, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         if (bytes.length == 0) {
