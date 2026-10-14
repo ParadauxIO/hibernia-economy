@@ -458,12 +458,18 @@ async function main() {
     });
   }
 
-  if (state.paused) log('paused; run `ctl resume` to start the server');
-  else startServer();
+  if (state.paused) {
+    log('paused; run `ctl resume` to start the server');
+  } else {
+    // Deploy a build that landed while the agent was down before starting,
+    // rather than starting the server only to bounce it straight away.
+    await check();
+    if (!server) startServer();
+  }
 
   for (;;) {
-    await check();
     await sleep(POLL_SECONDS * 1000);
+    await check();
   }
 }
 
