@@ -232,6 +232,13 @@ export interface ExplorerLpGroupMember {
   syncedAt: Generated<Date>;
 }
 
+export interface ExplorerRole {
+  grantedAt: Generated<Date>;
+  grantedByUuidBin: Generated<Buffer | null>;
+  playerUuidBin: Buffer;
+  role: string;
+}
+
 export interface ExplorerRoleDefinition {
   description: Generated<string | null>;
   name: string;
@@ -242,13 +249,6 @@ export interface ExplorerRoleDefinition {
 export interface ExplorerRolePermission {
   permission: string;
   roleKey: string;
-}
-
-export interface ExplorerRole {
-  grantedAt: Generated<Date>;
-  grantedByUuidBin: Generated<Buffer | null>;
-  playerUuidBin: Buffer;
-  role: string;
 }
 
 export interface Firm {
@@ -459,8 +459,8 @@ export interface DB {
   explorerLinkCode: ExplorerLinkCode;
   explorerLpGroupMember: ExplorerLpGroupMember;
   explorerRole: ExplorerRole;
-  explorerRolePermission: ExplorerRolePermission;
   explorerRoleDefinition: ExplorerRoleDefinition;
+  explorerRolePermission: ExplorerRolePermission;
   firm: Firm;
   firmAccounts: FirmAccounts;
   firmEmployee: FirmEmployee;
