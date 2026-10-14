@@ -1,0 +1,82 @@
+name: Dev server · Publish plugins
+
+# Builds the Paper plugin bundle from `develop` and publishes it as the rolling
+# `dev-latest` prerelease. Nothing here reaches the dev server directly: the
+# deploy agent on that machine (ops/dev-server/agent.mjs) polls this release,
+# and when its commit changes it migrates the sandbox database, swaps the jars
+# and bounces the server. See wiki/ci-cd.md.
+
+on:
+  push:
+    branches: [ develop ]
+    # Everything that ends up in a plugin jar or the schema it runs against.
+    paths:
+      - 'treasury/**'
+      - 'business/**'
+      - 'chestshop/**'
+      - 'treasury-api-plugin/**'
+      - 'common/**'
+      - 'economy-flyway/**'
+      - 'build-logic/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/dev-server-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write        # recreate the dev-latest release and its tag
+
+# Queue rather than cancel, so releases are replaced in push order; a pending
+# run is superseded by a newer one, which is what we want.
+concurrency:
+  group: dev-server-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+
+      - name: Build plugin bundle
+        run: sh ./gradlew --no-daemon release -Pci=true
+
+      - name: Write manifest
+        run: |
+          node -e '
+            const fs = require("fs");
+            const jars = fs.readdirSync("release").filter(f => f.endsWith(".jar")).sort();
+            fs.writeFileSync("release/manifest.json", JSON.stringify({
+              sha: process.env.GITHUB_SHA,
+              run: Number(process.env.GITHUB_RUN_ID),
+              builtAt: new Date().toISOString(),
+              jars,
+            }, null, 2) + "\n");
+          '
+          cat release/manifest.json
+
+      - name: Replace dev-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete dev-latest --cleanup-tag --yes || true
+          gh release create dev-latest release/*.jar release/manifest.json \
+            --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "Dev server build (${GITHUB_SHA::7})" \
+            --notes "Rolling build of \`develop\` at ${GITHUB_SHA}, picked up by the dev server's deploy agent. Not a release."

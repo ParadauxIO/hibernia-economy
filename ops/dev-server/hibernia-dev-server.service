@@ -1,0 +1,34 @@
+# systemd unit for the DemocracyCraft dev server and its deploy agent
+# (agent.mjs next to this file). Install as root:
+#
+#   install -D -m 0644 ops/dev-server/agent.mjs /home/paseo/democracycraft-clone/dev-deploy/agent.mjs
+#   install -m 0644 ops/dev-server/hibernia-dev-server.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now hibernia-dev-server
+#
+# The agent is copied out of the repository so that switching branches in a
+# checkout does not change what runs. Logs, including the server console:
+#   journalctl -u hibernia-dev-server -f
+
+[Unit]
+Description=DemocracyCraft dev server (deploys develop builds of hibernia-economy)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=paseo
+Group=paseo
+WorkingDirectory=/home/paseo/democracycraft-clone
+ExecStart=/usr/bin/node /home/paseo/democracycraft-clone/dev-deploy/agent.mjs
+Environment=SERVER_DIR=/home/paseo/democracycraft-clone
+Environment=REPO=ParadauxIO/hibernia-economy
+Environment=POLL_SECONDS=60
+Environment=FLYWAY_JAVA_HOME=/home/paseo/.jdks/jdk-21.0.12.1+1
+# The agent sends `stop` to the server on SIGTERM; a world save can take a while.
+KillMode=mixed
+TimeoutStopSec=6min
+Restart=on-failure
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target

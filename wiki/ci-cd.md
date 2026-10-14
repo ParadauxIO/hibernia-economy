@@ -18,6 +18,7 @@ Treasury doesn't rebuild ChestShop and vice versa.
 | `economy-explorer-ci` | push/PR | Typecheck, lint, test (MariaDB service container), then build + push the Docker image. |
 | `economy-explorer-schema-drift` | PR touching `economy-flyway/**` | Regenerate the explorer's kysely types from the migrated schema and fail if `lib/db.generated.ts` is stale. |
 | `economy-flyway-info` / `-migrate` / `-staging-clean` | manual (`workflow_dispatch`) | Gated schema operations (see [database.md](database.md)). |
+| `dev-server-publish` | push to `develop` on a plugin or `economy-flyway/**` | Build the plugin bundle and replace the rolling `dev-latest` prerelease, which the dev server deploys (below). |
 
 **Path filters follow the Gradle `project(...)` edges**, not just the module's own
 folder: a workflow must also list every in-repo project its module depends on
@@ -49,6 +50,28 @@ registry and are rolled out by **Argo CD Image Updater**. Images are tagged
 
 Registry credentials and Harbor coordinates come from repo/organization secrets
 (`HARBOR_REGISTRY`, `HARBOR_USERNAME`, `HARBOR_PASSWORD`).
+
+### Dev server
+
+The sandboxed copy of the production server on the paseo machine
+(`~/democracycraft-clone`, started by its `start-local.sh`) runs `develop`.
+CI never connects to it: `dev-server-publish` publishes the jars and a
+`manifest.json` (commit, jar names) as the `dev-latest` prerelease, and
+[`ops/dev-server/agent.mjs`](../ops/dev-server/agent.mjs), run by the
+`hibernia-dev-server` systemd unit on that machine, polls it every minute.
+On a new commit the agent stops the server, runs `:economy-flyway:flywayMigrate`
+at that commit against the sandbox database, swaps the plugin jars and starts
+the server again. If the server does not reach `Done`, or one of our plugins
+fails to enable, it puts the previous jars back (migrations stay applied). Each
+deploy shows up as a GitHub deployment to the `democracycraft-dev` environment.
+The agent also restarts the server if it crashes.
+
+- Console and agent logs: `journalctl -u hibernia-dev-server -f`
+- `node ~/democracycraft-clone/dev-deploy/agent.mjs ctl status | console <cmd> | deploy | pause | resume`
+- Pause before running `clone.sh`, then `ctl deploy` after resuming to put the
+  `develop` jars back over the production ones it downloads.
+- Installing or updating the agent: see the header of
+  [`hibernia-dev-server.service`](../ops/dev-server/hibernia-dev-server.service).
 
 ## Release flow
 
