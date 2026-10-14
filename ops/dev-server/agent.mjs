@@ -24,6 +24,9 @@
 //                                  is already deployed or failed before
 //   node agent.mjs ctl console <command...>
 //                                  type a command into the server console
+//   node agent.mjs ctl restart     stop the server and restart the agent, to
+//                                  pick up a new agent.mjs (systemd brings
+//                                  it back)
 //
 // Settings come from the environment; see hibernia-dev-server.service.
 
@@ -287,13 +290,20 @@ async function migrate(sha) {
   try {
     if (!(await waitForLine(db, [/Sandbox database is up/], 5 * 60_000))) throw new Error('sandbox database did not start');
     const schema = 's80037_economy';
+    // start-local.sh keeps the sandbox password here; through the environment
+    // rather than -P so it stays out of `ps`.
+    const password = fs.readFileSync(path.join(SERVER_DIR, '.sandbox', 'secrets', 'db-sandbox'), 'utf8').trim();
     const result = await run('sh', [
       './gradlew', '--no-daemon', '--quiet', ':economy-flyway:flywayMigrate',
-      `-PflywayUrl=jdbc:mysql://127.0.0.1:${DB_PORT}/${schema}`,
-      '-PflywayUser=sandbox', '-PflywayPassword=sandbox', `-PflywaySchema=${schema}`,
+      `-PflywayUrl=jdbc:mysql://127.0.0.1:${DB_PORT}/${schema}`, `-PflywaySchema=${schema}`,
     ], {
       cwd: CHECKOUT_DIR,
-      env: { JAVA_HOME: FLYWAY_JAVA_HOME, PATH: `${FLYWAY_JAVA_HOME}/bin:${process.env.PATH}` },
+      env: {
+        JAVA_HOME: FLYWAY_JAVA_HOME,
+        PATH: `${FLYWAY_JAVA_HOME}/bin:${process.env.PATH}`,
+        FLYWAY_USER: 'sandbox',
+        FLYWAY_PASSWORD: password,
+      },
       inherit: true,
     });
     if (result.code !== 0) throw new Error(`flywayMigrate exited ${result.code}`);
@@ -416,6 +426,14 @@ async function handleControl(line) {
       if (busy) return 'a deploy is already running';
       check({ force: true });
       return 'deploying the current dev-latest build';
+    case 'restart':
+      // Stops the server cleanly and exits non-zero, so systemd
+      // (Restart=on-failure) starts the agent again with its file as it is
+      // now. How to pick up a new agent.mjs without root.
+      while (busy) await sleep(1000);
+      await stopServer();
+      setTimeout(() => process.exit(75), 500);
+      return 'server stopped; the agent restarts in about 30 seconds';
     default:
       return `unknown command: ${command}`;
   }

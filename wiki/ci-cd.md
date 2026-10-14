@@ -70,8 +70,20 @@ The agent also restarts the server if it crashes.
 - `node ~/democracycraft-clone/dev-deploy/agent.mjs ctl status | console <cmd> | deploy | pause | resume`
 - Pause before running `clone.sh`, then `ctl deploy` after resuming to put the
   `develop` jars back over the production ones it downloads.
-- Installing or updating the agent: see the header of
+- Installing the agent: see the header of
   [`hibernia-dev-server.service`](../ops/dev-server/hibernia-dev-server.service).
+  To update it, copy the new `agent.mjs` over the installed one and run
+  `ctl restart`.
+
+The development `treasury-rest-api` and `economy-explorer` in the cluster use
+the same sandbox database, so the dev API, explorer and server all see the same
+data. `start-local.sh` relays the database to srv3's `cilium_host` address
+(pods only), the gitops `dev-server-db` Service in `development` points there,
+and the `economy-dev-server` Secret holds the `economy_dev` login, the dev
+server plugin's JWT secret and the explorer's admin token.
+[`setup-cluster-secret.sh`](../ops/dev-server/setup-cluster-secret.sh) creates
+or refreshes that Secret; run it on srv3 when the token nears expiry (180
+days) or the dev server's secrets change.
 
 ## Release flow
 
