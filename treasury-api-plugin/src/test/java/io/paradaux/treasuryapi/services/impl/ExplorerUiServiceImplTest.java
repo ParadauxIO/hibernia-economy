@@ -59,10 +59,18 @@ class ExplorerUiServiceImplTest {
         UUID target = UUID.randomUUID();
         UUID by = UUID.randomUUID();
 
+        when(mapper.roleExists("admin")).thenReturn(true);
         String granted = service.grantRole(target, "ADMIN", by);
 
         assertEquals("admin", granted);
         verify(mapper).addRole(target, "admin", by);
+    }
+
+    @Test
+    void grantRole_customConfiguredRole_isAccepted() {
+        when(mapper.roleExists("auditor")).thenReturn(true);
+        assertEquals("auditor", service.grantRole(playerId, "auditor", null));
+        verify(mapper).addRole(playerId, "auditor", null);
     }
 
     @Test

@@ -7,10 +7,12 @@ on:
       - develop
     paths:
       - 'economy-explorer/**'
+      - 'economy-flyway/**'
       - '.github/workflows/economy-explorer-ci.yml'
   pull_request:
     paths:
       - 'economy-explorer/**'
+      - 'economy-flyway/**'
       - '.github/workflows/economy-explorer-ci.yml'
   # Manual trigger so a release on `main` (production) can be (re)built and
   # deployed on demand — e.g. when `main` is created/advanced to an existing
@@ -74,7 +76,7 @@ jobs:
 
   # ── Browser end-to-end tests (Playwright, real MariaDB, real production build) ──
   # playwright.config.ts seeds the service DB, builds and starts the app with the
-  # auth shim (E2E_TEST_AUTH=1 — the only mocked seam) and runs every spec on a
+  # role shim for smoke tests and signed Auth.js sessions for real DB-grant tests, on a
   # desktop and a phone viewport.
   e2e:
     runs-on: ubuntu-latest

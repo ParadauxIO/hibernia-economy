@@ -102,5 +102,5 @@ balanced. Operators only.
 
 ## See also
 
-- [Managing Explorer access](/docs/admin/roles) — granting admin/government roles.
+- [Managing Explorer access](/docs/admin/roles) — configuring permissions and granting Explorer roles.
 - The full [Treasury reference](/docs/reference/treasury#admin-commands).

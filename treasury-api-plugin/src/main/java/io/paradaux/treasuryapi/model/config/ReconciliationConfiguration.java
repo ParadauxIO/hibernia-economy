@@ -5,14 +5,14 @@ import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationValu
 import lombok.Getter;
 
 /**
- * Settings for the LuckPerms → explorer-group reconciliation cron. Disabled by
+ * Settings for the LuckPerms → explorer-group reconciliation cron. Enabled by
  * default; the task is only scheduled when enabled and LuckPerms is present.
  */
 @ConfigurationComponent
 @Getter
 public class ReconciliationConfiguration {
 
-    @ConfigurationValue(path = "reconciliation.enabled", defaultValue = "false")
+    @ConfigurationValue(path = "reconciliation.enabled", defaultValue = "true")
     private boolean enabled;
 
     @ConfigurationValue(path = "reconciliation.interval-seconds", defaultValue = "1800")

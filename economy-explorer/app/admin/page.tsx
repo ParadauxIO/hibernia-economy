@@ -1,3 +1,5 @@
+import { ADMIN_TOOLS, canAccessAdmin } from '@/lib/auth/admin';
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -10,19 +12,9 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Admin', description: 'Admin tools for the {server} economy.', path: '/admin' });
 }
 
-// The layout already gated to admin; this is the landing for the admin section.
-const TOOLS: { href: Route; title: string; desc: string }[] = [
-  { href: '/admin/players', title: 'Players', desc: 'Look up any player and view their personal data dashboard (balances, transactions, counterparties).' },
-  { href: '/admin/accounts', title: 'Accounts', desc: 'Move money between accounts, rename, change owner, archive/unarchive — ledger-safe, audited.' },
-  { href: '/transactions', title: 'Transactions', desc: 'The whole-economy transaction firehose — powerful filters over every ledger transfer.' },
-  { href: '/admin/api-keys', title: 'API keys', desc: 'Programmatic API keys, usage, and per-issuer rate-limit overrides.' },
-  { href: '/admin/groups', title: 'Groups', desc: 'RBAC access groups and capabilities (manual + LuckPerms-fed).' },
-  { href: '/admin/webhooks', title: 'Webhooks', desc: 'Every transaction-feed webhook — search, manage, and register for any account.' },
-  { href: '/admin/firms', title: 'Firms', desc: 'Disband or rename a firm — destructive, ledger-safe, audited (separate from the public firm page).' },
-];
-
 export default async function AdminHomePage() {
   const viewer = await getViewer();
+  if (!canAccessAdmin(viewer)) return null; // layout renders the access gate
   await auditView(viewer, { path: '/admin', targetType: 'global' });
 
   return (
@@ -33,8 +25,8 @@ export default async function AdminHomePage() {
       </div>
 
       <div className="admin-tool-grid">
-        {TOOLS.map((t) => (
-          <Link key={t.href} href={t.href} className="card admin-tool-card" prefetch={false}>
+        {ADMIN_TOOLS.filter(t => hasPermission(viewer, t.permission)).map((t) => (
+          <Link key={t.href} href={t.href as Route} className="card admin-tool-card" prefetch={false}>
             <div className="card-title">{t.title} →</div>
             <p className="muted small" style={{ margin: 0 }}>{t.desc}</p>
           </Link>

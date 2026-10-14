@@ -1,91 +1,30 @@
-import 'server-only';
-
-/**
- * The explorer's capability vocabulary. Groups grant capabilities (see
- * lib/sql/group.ts), and a viewer's effective set is the union across every
- * group they belong to plus their legacy explorer_role grants. Gates check
- * capabilities via hasCapability() in lib/auth/access.ts.
- *
- * This list is the single source of truth the admin tool offers when editing a
- * group. The reconciliation plugin deals only in membership, never capabilities,
- * so this vocabulary stays explorer-local.
- *
- * `viewer` is the user-facing read-only financial-oversight role (PAR-265). It
- * was originally shipped under the internal name `staff.audit` (PAR-98); that
- * string is now a legacy alias — see CAPABILITY_ALIASES / normalizeCapability.
- */
-export const CAPABILITIES = ['admin', 'viewer', 'government'] as const;
-
-export type Capability = (typeof CAPABILITIES)[number];
-
-/**
- * Capability strings that have since been renamed. Group-capability rows written
- * before the rename (and any production row not yet migrated by Flyway V21) still
- * resolve to the current vocabulary, so a viewer's access never silently
- * regresses. `staff.audit` was the internal name for what is now `viewer`.
- */
-const CAPABILITY_ALIASES: Record<string, Capability> = {
-  'staff.audit': 'viewer',
-};
-
-export function isCapability(s: string): s is Capability {
+/** Default role display metadata only; the database registry is authoritative. */
+export const CAPABILITIES = ['player', 'government', 'moderator', 'admin'] as const;
+export type DefaultRole = (typeof CAPABILITIES)[number];
+export type Capability = string;
+export type Role = Capability;
+export function isCapability(s: string): s is DefaultRole {
   return (CAPABILITIES as readonly string[]).includes(s);
 }
-
-/**
- * Map a stored capability string onto the current vocabulary (resolving legacy
- * aliases), or null if it isn't a capability the explorer recognizes. This is
- * the seam every read of a persisted capability should pass through.
- */
+/** Old viewer grants now mean player, never global oversight. */
 export function normalizeCapability(s: string): Capability | null {
-  if (isCapability(s)) return s;
-  return CAPABILITY_ALIASES[s] ?? null;
+  if (s === 'viewer' || s === 'staff.audit') return 'player';
+  return /^[a-z][a-z0-9_-]{0,31}$/.test(s) ? s : null;
 }
-
-/** Short human label for a capability, for the admin UI. */
-export const CAPABILITY_LABELS: Record<Capability, string> = {
-  admin: 'Admin',
-  viewer: 'Viewer',
-  government: 'Government tier',
+export const CAPABILITY_LABELS: Record<DefaultRole, string> = {
+  player: 'Player', government: 'Government', moderator: 'Moderator', admin: 'Admin',
 };
-
-/**
- * Plain-language explanation of what each capability unlocks, shown next to the
- * checkbox on the group permissions screen. Keep these accurate to the gates in
- * lib/auth/access.ts and the per-page checks.
- */
-export const CAPABILITY_DESCRIPTIONS: Record<Capability, string> = {
-  admin:
-    'Full control of the admin surface — manage access groups and their members, view and revoke API keys, and read the audit log. Implies everything Viewer and Government tier grant.',
-  viewer:
-    'Read-only financial oversight: see any firm or player’s balances, transactions, and per-entity drilldown (ChestShop sales, volume, quantities), including the cross-firm leaderboards. Does not include the trade-by-trade customer-attribution sales feed, the admin console, or the ability to change anything.',
-  government:
-    'Government tier: the government dashboard and fines, plus the trade-by-trade ChestShop sales feed (who bought from whom).',
+export const CAPABILITY_DESCRIPTIONS: Record<DefaultRole, string> = {
+  player: 'Read your own data and accounts or firms to which you have an appropriate relationship.',
+  government: 'Read government records for accounts you own or have direct or group access to.',
+  moderator: 'Read-only investigations across accounts, firms, transactions and sales. No administrative changes.',
+  admin: 'All permissions, including access management and administrative changes.',
 };
-
-/**
- * Legacy explorer_role → capabilities, so the existing flat admin/government
- * grants keep working unchanged while the group layer rolls out. Mirrors the
- * effective access each role had before capabilities existed: admin implied
- * everything; government implied viewer (financial-oversight) visibility.
- */
-export function legacyRoleCapabilities(role: 'admin' | 'government' | 'player'): Capability[] {
-  switch (role) {
-    case 'admin':
-      return ['admin', 'viewer', 'government'];
-    case 'government':
-      return ['viewer', 'government'];
-    default:
-      return [];
+export function legacyRoleCapabilities(role: Role): Capability[] { return [role]; }
+/** Display label only: roles are not an authorization hierarchy. */
+export function roleFromCapabilities(caps: readonly string[]): Role {
+  for (const role of ['admin', 'moderator', 'government'] as const) {
+    if (caps.includes(role)) return role;
   }
-}
-
-/**
- * Collapse a capability set back to the legacy single-role enum so existing
- * viewer.role / requireRole checks are untouched. admin > government > player.
- */
-export function roleFromCapabilities(caps: readonly string[]): 'admin' | 'government' | 'player' {
-  if (caps.includes('admin')) return 'admin';
-  if (caps.includes('government')) return 'government';
-  return 'player';
+  return caps.find(role => role !== 'player') ?? 'player';
 }

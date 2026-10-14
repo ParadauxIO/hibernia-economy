@@ -130,7 +130,7 @@ public class TreasuryAPICommand implements CommandHandler {
     @Route("ui user add <role> <player>")
     @Permission("treasuryapi.ui.user")
     @Async
-    @Description("Grant an explorer role (admin|government) to a player")
+    @Description("Grant a configured explorer role to a player")
     public void uiUserAdd(@Sender CommandSender sender,
                           @Arg("role") String role,
                           @Arg("player") String player) {

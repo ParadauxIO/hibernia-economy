@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -26,6 +27,7 @@ export default async function AdminPlayersPage({
 }) {
   // The /admin layout gates the whole section to admins; audit the access here.
   const viewer = await getViewer();
+  if (!hasPermission(viewer, 'player.read.all')) return null; // layout renders the access gate
   await auditView(viewer, { path: '/admin/players', targetType: 'global' });
 
   const sp = SP_SCHEMA.safeParse(flattenSearchParams(await searchParams)).data ?? {};

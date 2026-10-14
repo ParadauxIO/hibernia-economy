@@ -66,10 +66,10 @@ test.describe('anonymous browsing', () => {
     await expect(page.locator('.privacy-gate')).toBeVisible();
   });
 
-  test('government dashboard is public', async ({ page }) => {
+  test('government dashboard requires a role and relationship', async ({ page }) => {
     await visit(page, '/government');
-    await expect(page.getByRole('heading', { name: 'Government', level: 1 })).toBeVisible();
-    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(dataTable(page)).toHaveCount(0);
   });
 
   test('money-flow explains cross-type and offers window tabs', async ({ page }) => {

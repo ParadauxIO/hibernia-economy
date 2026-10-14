@@ -124,6 +124,8 @@ public final class MariadbContainerExtension {
              Statement st = conn.createStatement()) {
             st.execute("SET FOREIGN_KEY_CHECKS = 0");
             st.execute("TRUNCATE TABLE api_keys");
+            st.execute("TRUNCATE TABLE explorer_group_capability");
+            st.execute("TRUNCATE TABLE explorer_lp_group_member");
             st.execute("TRUNCATE TABLE explorer_group_member");
             st.execute("TRUNCATE TABLE explorer_group");
             st.execute("TRUNCATE TABLE explorer_role");
@@ -132,8 +134,13 @@ public final class MariadbContainerExtension {
             st.execute("TRUNCATE TABLE firm_employee");
             st.execute("TRUNCATE TABLE firm_role");
             st.execute("TRUNCATE TABLE firm");
+            st.execute("TRUNCATE TABLE account_access");
+            st.execute("TRUNCATE TABLE account_group_access");
+            st.execute("TRUNCATE TABLE firm_accounts");
+            st.execute("TRUNCATE TABLE firm_role_permission");
             st.execute("TRUNCATE TABLE accounts");
             st.execute("SET FOREIGN_KEY_CHECKS = 1");
+            st.execute("DELETE FROM explorer_role_definition WHERE role_key NOT IN ('player', 'government', 'moderator', 'admin')");
         }
     }
 }

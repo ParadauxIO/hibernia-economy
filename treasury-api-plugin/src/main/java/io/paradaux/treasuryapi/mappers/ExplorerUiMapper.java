@@ -17,8 +17,12 @@ import java.util.UUID;
 @Mapper
 public interface ExplorerUiMapper {
 
-    @Insert("INSERT IGNORE INTO explorer_role (player_uuid_bin, role, granted_by_uuid_bin) " +
-            "VALUES (#{uuid}, #{role}, #{grantedBy})")
+    @Select("SELECT EXISTS(SELECT 1 FROM explorer_role_definition WHERE role_key = #{role})")
+    boolean roleExists(@Param("role") String role);
+
+
+    @Insert("INSERT INTO explorer_role (player_uuid_bin, role, granted_by_uuid_bin) " +
+            "VALUES (#{uuid}, #{role}, #{grantedBy}) ON DUPLICATE KEY UPDATE role = VALUES(role)")
     void addRole(@Param("uuid") UUID uuid, @Param("role") String role, @Param("grantedBy") UUID grantedBy);
 
     @Delete("DELETE FROM explorer_role WHERE player_uuid_bin = #{uuid} AND role = #{role}")

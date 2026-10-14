@@ -6,10 +6,12 @@ export function CapabilitiesForm({
   groupId,
   all,
   selected,
+  disabled = false,
 }: {
   groupId: number;
   all: { value: string; label: string; description: string }[];
   selected: string[];
+  disabled?: boolean;
 }) {
   const [pending, start] = useTransition();
   const [chosen, setChosen] = useState<Set<string>>(new Set(selected));
@@ -39,6 +41,7 @@ export function CapabilitiesForm({
       } else {
         setSavedSet(new Set(chosen));
         setJustSaved(true);
+        window.location.reload();
       }
     });
   }
@@ -63,6 +66,7 @@ export function CapabilitiesForm({
           >
             <input
               type="checkbox"
+              disabled={disabled || pending}
               checked={chosen.has(c.value)}
               onChange={() => toggle(c.value)}
               style={{ marginTop: 3 }}
@@ -77,8 +81,8 @@ export function CapabilitiesForm({
           </label>
         ))}
       </div>
-      <button className="btn" disabled={pending || !dirty} onClick={onSave}>
-        {pending ? 'Saving…' : 'Save permissions'}
+      <button className="btn" disabled={disabled || pending || !dirty} onClick={onSave}>
+        {pending ? 'Saving…' : 'Save roles'}
       </button>
       {dirty
         ? <span className="sub" style={{ marginLeft: 8 }}>Unsaved changes.</span>

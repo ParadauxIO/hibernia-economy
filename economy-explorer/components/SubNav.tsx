@@ -43,7 +43,7 @@ export const ECONOMY_SUB: SubNavItem[] = [
 ];
 
 // Items + Shops are public. The per-firm market "Firms" tab was removed (it
-// duplicated the main Firms page). The raw Sales feed is admin-only — regular
+// duplicated the main Firms page). The raw Sales feed is for moderators and admins — regular
 // players don't need to know it exists.
 export const MARKET_SUB: SubNavItem[] = [
   { href: '/market', label: 'Overview', match: (p) => p === '/market' },
@@ -58,7 +58,7 @@ const MARKET_SALES: SubNavItem = {
 };
 
 // Pure-function path-matcher so the nav can choose which list to render.
-export function pickSubNav(path: string, isAdmin: boolean): SubNavItem[] | null {
+export function pickSubNav(path: string, canInvestigate: boolean): SubNavItem[] | null {
   if (
     path === '/' ||
     path.startsWith('/economy/health') ||
@@ -68,7 +68,7 @@ export function pickSubNav(path: string, isAdmin: boolean): SubNavItem[] | null 
     return ECONOMY_SUB;
   }
   if (path.startsWith('/market') || path.startsWith('/chestshop')) {
-    return isAdmin ? [...MARKET_SUB, MARKET_SALES] : MARKET_SUB;
+    return canInvestigate ? [...MARKET_SUB, MARKET_SALES] : MARKET_SUB;
   }
   return null;
 }

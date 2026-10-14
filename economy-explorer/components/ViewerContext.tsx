@@ -7,16 +7,17 @@
 // `loading` is true until the fetch resolves; consumers render the anonymous
 // baseline until then (a brief header settle, never a content gate — page-level
 // access is still decided server-side via getViewer in each page).
+import type { Permission } from '@/lib/auth/policy';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 export interface ViewerCtx {
   anon: boolean;
   loggedIn: boolean;
   isAdmin: boolean;
-  // Holds the read-only financial-oversight (viewer) capability. admin/government
-  // imply it; a plain player can also hold it via a group.
-  isViewer: boolean;
-  role: 'admin' | 'government' | 'player' | null;
+  // Global read-only investigations (moderator/admin).
+  canInvestigate: boolean;
+  role: string | null;
+  permissions: readonly Permission[];
   minecraftName: string | null;
   loading: boolean;
 }
@@ -25,8 +26,9 @@ const ANON: ViewerCtx = {
   anon: true,
   loggedIn: false,
   isAdmin: false,
-  isViewer: false,
+  canInvestigate: false,
   role: null,
+  permissions: [],
   minecraftName: null,
   loading: true,
 };

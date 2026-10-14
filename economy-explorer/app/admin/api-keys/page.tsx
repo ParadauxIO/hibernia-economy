@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
@@ -32,8 +33,8 @@ export async function generateMetadata() {
 
 export default async function AdminApiKeysPage() {
   const viewer = await getViewer();
-  if (viewer.anon) return <PrivacyGate kind="login" title="Admin API keys" hint="Sign in as admin to manage API keys." />;
-  if (viewer.role !== 'admin') return <PrivacyGate kind="private" title="Admin only" />;
+  if (viewer.anon) return <PrivacyGate kind="login" title="Admin API keys" hint="Sign in to manage API keys." />;
+  if (!hasPermission(viewer, 'api_keys.read')) return <PrivacyGate kind="private" title="Permission required" />;
   await auditView(viewer, { path: '/admin/api-keys', targetType: 'global' });
 
   const [keys, overrides, usageEntries] = await Promise.all([
@@ -119,7 +120,7 @@ export default async function AdminApiKeysPage() {
                         : <span className="badge badge-active">Active</span>}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {k.owner_uuid && (
+                      {k.owner_uuid && hasPermission(viewer, 'rate_limits.update') && (
                         <LimitDialog
                           ownerUuid={k.owner_uuid}
                           ownerName={k.owner_name ?? k.owner_uuid.slice(0, 8) + '…'}
@@ -128,8 +129,8 @@ export default async function AdminApiKeysPage() {
                       )}{' '}
                       {!k.revoked && (
                         <>
-                          <RotateButton keyId={k.key_id} />{' '}
-                          <RevokeButton keyId={k.key_id} />
+                          {hasPermission(viewer, 'api_keys.rotate') && <RotateButton keyId={k.key_id} />}{' '}
+                          {hasPermission(viewer, 'api_keys.revoke') && <RevokeButton keyId={k.key_id} />}
                         </>
                       )}
                     </td>

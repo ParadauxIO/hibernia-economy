@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -46,12 +47,12 @@ export default async function TransactionsPage({
       <PrivacyGate
         kind="login"
         title="Transactions firehose is private"
-        hint="Sign in with admin access to view the whole-economy transaction list."
+        hint="Sign in with moderator or admin access to view the whole-economy transaction list."
       />
     );
   }
-  if (viewer.role !== 'admin') {
-    return <PrivacyGate kind="private" title="Admin only" hint="Only admins can view the whole-economy transactions list." />;
+  if (!hasPermission(viewer, 'transactions.read')) {
+    return <PrivacyGate kind="private" title="Moderator / admin only" hint="Only moderators and admins can view the whole-economy transactions list." />;
   }
 
   const raw = await searchParams;

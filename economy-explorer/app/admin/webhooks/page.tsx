@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -35,8 +36,8 @@ export default async function AdminWebhooksPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const viewer = await getViewer();
-  if (viewer.anon) return <PrivacyGate kind="login" title="Admin webhooks" hint="Sign in as admin to manage webhooks." />;
-  if (viewer.role !== 'admin') return <PrivacyGate kind="private" title="Admin only" />;
+  if (viewer.anon) return <PrivacyGate kind="login" title="Admin webhooks" hint="Sign in to manage webhooks." />;
+  if (!hasPermission(viewer, 'webhooks.read.all')) return <PrivacyGate kind="private" title="Permission required" />;
   await auditView(viewer, { path: '/admin/webhooks', targetType: 'global' });
 
   const sp = SP_SCHEMA.safeParse(flattenSearchParams(await searchParams)).data ?? SP_SCHEMA.parse({});
@@ -56,7 +57,7 @@ export default async function AdminWebhooksPage({
 
       <div className="card">
         <div className="card-title">Create webhook for an account</div>
-        <CreateAdminWebhookForm />
+        {hasPermission(viewer, 'webhooks.create.all') && <CreateAdminWebhookForm />}
         <p className="muted small" style={{ marginTop: 10, marginBottom: 0 }}>
           Registers an account-scoped webhook attributed to the account&apos;s owner (they&apos;ll see it under their own
           webhooks too). The endpoint must be a public <span className="mono">https://</span> URL; the signing secret is

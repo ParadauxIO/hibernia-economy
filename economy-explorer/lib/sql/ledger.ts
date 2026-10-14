@@ -190,22 +190,10 @@ export async function findAccount(accountId: number): Promise<ExplorerAccountRow
   return row ? toExplorerAccountRow(row) : null;
 }
 
-/**
- * True when {@code viewerUuid} has explicit read access to an account — an active
- * member, authorizer, or read-only viewer (PAR-237) of it. Mirrors the in-game
- * `canView` gate's direct-UUID path; LuckPerms-group grants (account_group_*) are
- * resolved in-game only, so web access is granted by UUID. Lets e.g. a government
- * department secretary (a viewer) see their department's ledger history here —
- * scoped to the specific accounts they're attached to, never blanket.
- */
+/** Account relationship lookup, including fresh effective LP group memberships.
+ * Call Auth.canViewAccount for the full RBAC + relationship decision. */
 export async function canReadAccount(accountId: number, viewerUuid: string): Promise<boolean> {
   const bin = uuidToBin(viewerUuid);
-  // Reads account_read_access_web (ADT-13) — the single source of truth for the
-  // WEB read rule: any active account_access grant (VIEWER, MEMBER, or
-  // AUTHORIZER). VIEWER is included on purpose so a department secretary reads
-  // their account's history (PAR-237); the public REST API is stricter
-  // (account_read_access_api). LuckPerms-group grants (account_group_access)
-  // resolve in-game only, so web access is by UUID.
   const result = await sql<{ allowed: number }>`
     SELECT EXISTS(
       SELECT 1 FROM account_read_access_web

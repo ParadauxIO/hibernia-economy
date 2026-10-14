@@ -305,7 +305,7 @@ export async function countItemSellers(itemKey: string): Promise<number> {
 }
 
 // NOTE: topSellers/topBuyers expose per-seller money + quantity. They are
-// currently unused. Do NOT wire either into a public page without an isStaff
+// currently unused. Do NOT wire either into a public page without the appropriate market permission
 // gate (see the financial-privacy model) — per-entity figures are staff-only.
 export async function topSellers(days: number, limit: number): Promise<MarketSellerRow[]> {
   const r = await sql<RawSeller>`
