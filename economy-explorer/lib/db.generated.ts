@@ -46,8 +46,8 @@ export interface AccountReadAccessApi {
 }
 
 export interface AccountReadAccessWeb {
-  accountId: number;
-  subjectUuidBin: Buffer;
+  accountId: Generated<number>;
+  subjectUuidBin: Generated<Buffer>;
 }
 
 export interface AccountRedirects {
@@ -207,6 +207,7 @@ export interface ExplorerGroupMember {
   groupId: number;
   playerUuidBin: Buffer;
   source: Generated<"luckperms" | "manual">;
+  syncedAt: Generated<Date | null>;
 }
 
 export interface ExplorerIdentity {
@@ -225,11 +226,29 @@ export interface ExplorerLinkCode {
   minecraftName: Generated<string | null>;
 }
 
+export interface ExplorerLpGroupMember {
+  lpGroup: string;
+  playerUuidBin: Buffer;
+  syncedAt: Generated<Date>;
+}
+
 export interface ExplorerRole {
   grantedAt: Generated<Date>;
   grantedByUuidBin: Generated<Buffer | null>;
   playerUuidBin: Buffer;
   role: string;
+}
+
+export interface ExplorerRoleDefinition {
+  description: Generated<string | null>;
+  name: string;
+  revision: Generated<number>;
+  roleKey: string;
+}
+
+export interface ExplorerRolePermission {
+  permission: string;
+  roleKey: string;
 }
 
 export interface Firm {
@@ -260,6 +279,11 @@ export interface FirmEmployee {
   playerUuidBin: Buffer;
   removedByUuidBin: Generated<Buffer | null>;
   roleId: number;
+}
+
+export interface FirmFinancialAccessWeb {
+  firmId: Generated<number>;
+  subjectUuidBin: Generated<Buffer>;
 }
 
 export interface FirmInvites {
@@ -433,10 +457,14 @@ export interface DB {
   explorerGroupMember: ExplorerGroupMember;
   explorerIdentity: ExplorerIdentity;
   explorerLinkCode: ExplorerLinkCode;
+  explorerLpGroupMember: ExplorerLpGroupMember;
   explorerRole: ExplorerRole;
+  explorerRoleDefinition: ExplorerRoleDefinition;
+  explorerRolePermission: ExplorerRolePermission;
   firm: Firm;
   firmAccounts: FirmAccounts;
   firmEmployee: FirmEmployee;
+  firmFinancialAccessWeb: FirmFinancialAccessWeb;
   firmInvites: FirmInvites;
   firmProperties: FirmProperties;
   firmRole: FirmRole;

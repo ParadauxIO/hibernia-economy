@@ -35,7 +35,8 @@ keycloak:
 # members reconciled to match that node. The node is interpreted as a LuckPerms
 # group name by default ("doc" or "group.doc"); a node containing a dot that is
 # not "group.*" is treated as a permission node (e.g. "explorer.audit").
-# Requires LuckPerms; the task is not scheduled if it is absent.
+# Also syncs account_group_access relationships. Requires LuckPerms.
+# Runs at startup, then at most every 1800s; LP snapshots expire after one hour.
 reconciliation:
-  enabled: false
+  enabled: true
   interval-seconds: 1800

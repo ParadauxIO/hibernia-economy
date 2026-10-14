@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { randomBytes } from 'node:crypto';
 import { getViewer, type Viewer } from '@/lib/auth/viewer';
 import { ForbiddenError } from '@/lib/errors';
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requirePermission } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import { assertPublicHttpsUrl } from '@/lib/util/ssrf';
 import { findAccountsForPlayer } from '@/lib/sql/me';
@@ -26,6 +26,7 @@ function newSecret(): string {
 
 /** Asserts a signed-in, account-linked viewer and returns their Minecraft UUID. */
 function requireLinkedUuid(viewer: Viewer): string {
+  requirePermission(viewer, 'webhooks.manage');
   if (viewer.anon || !viewer.linked || !viewer.minecraftUuid) {
     throw new ForbiddenError('Sign in and link your Minecraft account to manage webhooks.');
   }
@@ -162,7 +163,7 @@ function keyTypeForAccount(accountType: string): 'PERSONAL' | 'BUSINESS' | 'GOVE
  */
 export async function adminCreateWebhookAction(args: { accountId: number; url: string }): Promise<WebhookActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'webhooks.create.all');
   try {
     await assertPublicHttpsUrl(args.url);
     const account = await findAccount(args.accountId);
@@ -189,7 +190,7 @@ export async function adminCreateWebhookAction(args: { accountId: number; url: s
 
 export async function adminSetWebhookActiveAction(id: number, active: boolean): Promise<WebhookActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'webhooks.update.all');
   try {
     const { affected: n } = await setWebhookActive(id, active);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
@@ -203,7 +204,7 @@ export async function adminSetWebhookActiveAction(id: number, active: boolean): 
 
 export async function adminDeleteWebhookAction(id: number): Promise<WebhookActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'webhooks.delete.all');
   try {
     const { affected: n } = await deleteWebhook(id);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };

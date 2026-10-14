@@ -101,7 +101,7 @@ public final class TreasuryAPI extends JavaPlugin {
         // 5) Register commands (/treasuryapi … and /treasuryapi help).
         injector.getInstance(CommandManager.class).registerAll();
 
-        // 6) Schedule the LuckPerms → explorer-group reconciliation cron (opt-in,
+        // 6) Schedule the LuckPerms → explorer-group reconciliation cron (enabled by default,
         //    requires LuckPerms). Check the plugin by name so the LuckPerms class
         //    is never referenced when it is absent.
         ReconciliationConfiguration reconCfg = hibernia.configuration(ReconciliationConfiguration.class);
@@ -110,7 +110,7 @@ public final class TreasuryAPI extends JavaPlugin {
                 try {
                     injector.getInstance(GroupReconciliationTask.class).schedule(reconCfg.getIntervalSeconds());
                     getLogger().info("Group reconciliation cron scheduled (every "
-                            + reconCfg.getIntervalSeconds() + "s).");
+                            + Math.max(1L, Math.min(reconCfg.getIntervalSeconds(), 1800L)) + "s).");
                 } catch (RuntimeException | LinkageError e) {
                     // LuckPerms is installed but never registered its service (it failed
                     // to enable), so the task can't be built. Skip the cron rather than

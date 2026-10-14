@@ -16,7 +16,7 @@ import { JsonButton } from '@/components/JsonButton';
 import { resolveTheme } from '@/lib/theme';
 import { serverIdentity, blueMapUrl } from '@/lib/serverIdentity';
 import { getViewer } from '@/lib/auth/viewer';
-import { isStaff } from '@/lib/auth/access';
+import { hasPermission } from '@/lib/auth/access';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -67,7 +67,7 @@ export default async function ItemDetailPage({
   // Item-level aggregates (totals, price, who sells it) are public; per-seller
   // money/quantity and the individual-sale feed are financial drilldown — staff
   // only. A firm's own finance staff see their detail on the firm page.
-  const showSaleFigures = isStaff(viewer);
+  const showSaleFigures = hasPermission(viewer, 'market.figures.read');
 
   const totalPages = Math.max(1, Math.ceil(totalSales / sp.limit));
   const headerName = sales[0]?.item_name ?? sellers[0]?.owner_name ?? itemKey;

@@ -19,6 +19,7 @@ vi.mock('@/lib/sql/group', () => ({
   removeManualMember: vi.fn(),
 }));
 vi.mock('@/lib/db', () => ({ db: {} }));
+vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 
 import { resolvePlayerUuid } from '@/lib/services/group';
 

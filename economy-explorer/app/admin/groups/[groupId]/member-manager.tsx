@@ -6,19 +6,22 @@ interface Member {
   uuid: string;
   name: string | null;
   source: 'manual' | 'luckperms';
+  syncActive: boolean;
 }
 
-export function MemberManager({ groupId, members }: { groupId: number; members: Member[] }) {
+export function MemberManager({ groupId, members, disabled = false }: { groupId: number; members: Member[]; disabled?: boolean }) {
   const [pending, start] = useTransition();
   const [identifier, setIdentifier] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
+  // Reload the authoritative snapshot after writes; streamed revalidation alone
+  // can leave group controls pending during concurrent policy edits.
   function onAdd(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
     start(async () => {
       const r = await addGroupMemberAction(groupId, identifier);
-      if (!r.ok) setErr(r.error ?? 'Failed'); else setIdentifier('');
+      if (!r.ok) setErr(r.error ?? 'Failed'); else window.location.reload();
     });
   }
 
@@ -27,7 +30,7 @@ export function MemberManager({ groupId, members }: { groupId: number; members: 
     setErr(null);
     start(async () => {
       const r = await removeGroupMemberAction(groupId, uuid);
-      if (!r.ok) setErr(r.error ?? 'Failed');
+      if (!r.ok) setErr(r.error ?? 'Failed'); else window.location.reload();
     });
   }
 
@@ -41,7 +44,7 @@ export function MemberManager({ groupId, members }: { groupId: number; members: 
           onChange={(e) => setIdentifier(e.target.value)}
           style={{ minWidth: 260 }}
         />
-        <button className="btn" disabled={pending || !identifier.trim()}>{pending ? 'Adding…' : 'Add member'}</button>
+        <button className="btn" disabled={disabled || pending || !identifier.trim()}>{pending ? 'Adding…' : 'Add member'}</button>
         {err && <span className="state-error" style={{ fontSize: 11 }}>{err}</span>}
       </form>
 
@@ -53,16 +56,16 @@ export function MemberManager({ groupId, members }: { groupId: number; members: 
           <tbody>
             {members.length === 0 && <tr><td colSpan={3} className="empty">No members.</td></tr>}
             {members.map((m) => (
-              <tr key={m.uuid}>
+              <tr key={`${m.uuid}:${m.source}`}>
                 <td>{m.name ?? <span className="mono">{m.uuid}</span>}</td>
                 <td>
                   {m.source === 'luckperms'
-                    ? <span className="badge">synced</span>
+                    ? <span className="badge">{m.syncActive ? 'synced' : 'sync expired'}</span>
                     : <span className="badge badge-active">manual</span>}
                 </td>
                 <td>
                   {m.source === 'manual'
-                    ? <button className="btn" disabled={pending} onClick={() => onRemove(m.uuid, m.name)}>Remove</button>
+                    ? <button className="btn" disabled={disabled || pending} onClick={() => onRemove(m.uuid, m.name)}>Remove</button>
                     : <span className="sub">managed by cron</span>}
                 </td>
               </tr>

@@ -1,6 +1,6 @@
 import 'server-only';
 import { sql } from 'kysely';
-import { db, binToUuid } from '@/lib/db';
+import { db, binToUuid, uuidToBin } from '@/lib/db';
 
 export interface FineCategoryRow {
   category: string;
@@ -26,7 +26,7 @@ export interface FineRow {
 }
 
 /** Mirrors LedgerExplorerMapper.getRecentFines (line 434-447). */
-export async function getRecentFines(days: number, limit: number): Promise<FineRow[]> {
+export async function getRecentFines(days: number, limit: number, accountIds: readonly number[] | null = []): Promise<FineRow[]> {
   const r = await sql<{
     fineId: number;
     playerUuidBin: Buffer | null;
@@ -52,6 +52,7 @@ export async function getRecentFines(days: number, limit: number): Promise<FineR
     LEFT JOIN economy_players fp_i ON fp_i.player_uuid_bin = gf.issued_by_uuid_bin
     LEFT JOIN accounts a ON a.account_id = gf.gov_account_id
     WHERE gf.issued_at >= NOW() - INTERVAL ${days} DAY
+      AND ${accountIds === null ? sql`TRUE` : accountIds.length ? sql`gf.gov_account_id IN (${sql.join(accountIds)})` : sql`FALSE`}
     ORDER BY gf.issued_at DESC
     LIMIT ${limit}
   `.execute(db);
@@ -73,7 +74,7 @@ export async function getRecentFines(days: number, limit: number): Promise<FineR
 }
 
 /** Mirrors LedgerExplorerMapper.getFineCategorySummary (line 454-467). */
-export async function getFineCategorySummary(days: number): Promise<FineCategoryRow[]> {
+export async function getFineCategorySummary(days: number, accountIds: readonly number[] | null = []): Promise<FineCategoryRow[]> {
   const r = await sql<{
     category: string | null;
     fineCount: string | number;
@@ -91,6 +92,7 @@ export async function getFineCategorySummary(days: number): Promise<FineCategory
              SUBSTRING_INDEX(SUBSTRING_INDEX(TRIM(reason), ' ', 1), ',', 1) AS category
       FROM government_fines
       WHERE issued_at >= NOW() - INTERVAL ${days} DAY
+        AND ${accountIds === null ? sql`TRUE` : accountIds.length ? sql`gov_account_id IN (${sql.join(accountIds)})` : sql`FALSE`}
     ) t
     GROUP BY category
     ORDER BY totalAmount DESC
@@ -114,7 +116,7 @@ export interface GovAccountRow {
 }
 
 /** Mirrors LedgerExplorerMapper.getGovernmentAccounts (line 506-513). */
-export async function getGovernmentAccounts(): Promise<GovAccountRow[]> {
+export async function getGovernmentAccounts(scope: { all: true } | { playerUuid: string }): Promise<GovAccountRow[]> {
   const r = await sql<{
     account_id: number;
     display_name: string | null;
@@ -129,6 +131,7 @@ export async function getGovernmentAccounts(): Promise<GovAccountRow[]> {
     LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
     LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE a.is_archived = 0 AND a.account_type = 'GOVERNMENT'
+      AND ${'all' in scope ? sql`TRUE` : sql`(a.owner_uuid_bin = ${uuidToBin(scope.playerUuid)} OR EXISTS (SELECT 1 FROM account_read_access_web ar WHERE ar.account_id = a.account_id AND ar.subject_uuid_bin = ${uuidToBin(scope.playerUuid)}))`}
     ORDER BY abm.balance DESC
   `.execute(db);
   return r.rows.map((row) => ({

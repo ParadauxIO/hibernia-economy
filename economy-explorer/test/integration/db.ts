@@ -43,6 +43,7 @@ export async function resetDb(): Promise<void> {
     await conn.query('SET FOREIGN_KEY_CHECKS=1');
     await conn.query(readFileSync(file('./schema.sql'), 'utf8'));
     await conn.query(readFileSync(file('./seed.sql'), 'utf8'));
+    await conn.query(readFileSync(resolve(process.cwd(), '../economy-flyway/src/main/resources/db/migration/V31__configurable_explorer_roles.sql'), 'utf8'));
   } finally {
     await conn.end();
   }

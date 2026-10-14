@@ -1,5 +1,6 @@
 'use client';
 
+import { useViewer } from '@/components/ViewerContext';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { disbandFirmAction, renameFirmAction, updateFirmDetailsAction } from '@/lib/actions/admin-firms';
@@ -14,6 +15,7 @@ export function FirmAdminPanel({
   firmId, name, totalBalance, discordUrl, hqRegion, disabled,
 }: { firmId: number; name: string; totalBalance: string; discordUrl: string | null; hqRegion: string | null; disabled: boolean }) {
   const router = useRouter();
+  const { permissions } = useViewer();
   const [pending, start] = useTransition();
   const [newName, setNewName] = useState(name);
   const [discord, setDiscord] = useState(discordUrl ?? '');
@@ -66,7 +68,7 @@ export function FirmAdminPanel({
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <form onSubmit={doRename} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="New firm name" style={{ minWidth: 220 }} />
-        <button className="btn" disabled={disabled || pending || !newName.trim() || newName.trim() === name}>
+        <button className="btn" disabled={!permissions.includes('firm.rename') || disabled || pending || !newName.trim() || newName.trim() === name}>
           {pending ? 'Working…' : 'Rename'}
         </button>
       </form>
@@ -74,7 +76,7 @@ export function FirmAdminPanel({
       <form onSubmit={doDetails} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <input className="input" value={hq} onChange={(e) => setHq(e.target.value)} aria-label="HQ region" placeholder="HQ region" style={{ minWidth: 160 }} />
         <input className="input" value={discord} onChange={(e) => setDiscord(e.target.value)} aria-label="Discord URL" placeholder="Discord URL" style={{ minWidth: 220 }} />
-        <button className="btn" disabled={disabled || pending || (discord.trim() === (discordUrl ?? '') && hq.trim() === (hqRegion ?? ''))}>
+        <button className="btn" disabled={!permissions.includes('firm.details.update') || disabled || pending || (discord.trim() === (discordUrl ?? '') && hq.trim() === (hqRegion ?? ''))}>
           {pending ? 'Working…' : 'Save details'}
         </button>
       </form>
@@ -88,7 +90,7 @@ export function FirmAdminPanel({
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input className="input" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={name} aria-label="Type firm name to confirm" style={{ minWidth: 220 }} />
-            <button className="btn" style={{ background: 'var(--bad)', color: '#fff' }} disabled={disabled || pending || !confirmMatches}>
+            <button className="btn" style={{ background: 'var(--bad)', color: '#fff' }} disabled={!permissions.includes('firm.disband') || disabled || pending || !confirmMatches}>
               {pending ? 'Working…' : 'Disband'}
             </button>
           </div>

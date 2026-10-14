@@ -20,3 +20,11 @@ export async function visit(page: Page, path: string): Promise<void> {
 export function dataTable(page: Page): Locator {
   return page.locator('table.data-table').last();
 }
+
+/** Complete a successful mutation's document navigation before interacting again.
+ * DB writes and streamed revalidation can become visible before location.assign/reload.
+ */
+export async function submitReload(page: Page, button: Locator): Promise<void> {
+  await Promise.all([page.waitForEvent('load'), button.click()]);
+  await expect(page.locator('[aria-busy="true"], div[hidden][id^="S:"]')).toHaveCount(0);
+}

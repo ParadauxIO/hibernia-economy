@@ -6,8 +6,8 @@ import type { Viewer } from '@/lib/auth/viewer';
 import { auditRole } from '@/lib/auth/access';
 
 /**
- * Per-page audit insert for privacy-sensitive accesses (admin / government /
- * read-only viewer inspecting another player's data). Mirrors Spring's ExplorerAuditInterceptor
+ * Per-page audit insert for privacy-sensitive accesses (admin / moderator /
+ * scoped government inspecting another player's data). Mirrors Spring's ExplorerAuditInterceptor
  * but called explicitly from the RSC page once it has decided to render gated
  * content — middleware can't know which tier the route required.
  *

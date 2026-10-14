@@ -12,7 +12,7 @@ import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { getViewer } from '@/lib/auth/viewer';
-import { canViewFirmFinancials, isStaff } from '@/lib/auth/access';
+import { canViewFirmFinancials, hasPermission } from '@/lib/auth/access';
 import { hasFirmFinancialAccess } from '@/lib/sql/firm';
 import { auditView } from '@/lib/audit';
 
@@ -53,7 +53,7 @@ export default async function MarketFirmDetailPage({
 
   // Audit privileged inspection: staff viewing a firm's books via elevation
   // (i.e. not one of that firm's own finance-role employees).
-  if (canSeeFinancials && isStaff(viewer)) {
+  if (canSeeFinancials && hasPermission(viewer, 'firm.financials.read.all')) {
     const financeEmployee = viewer.minecraftUuid
       ? await hasFirmFinancialAccess(firmId, viewer.minecraftUuid)
       : false;

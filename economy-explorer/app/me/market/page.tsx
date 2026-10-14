@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -28,6 +29,7 @@ export default async function MyMarketPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const viewer = await getViewer();
+  if (!viewer.anon && !hasPermission(viewer, 'player.read')) return <PrivacyGate kind="private" title="Permission required" />;
   if (viewer.anon) {
     return (
       <PrivacyGate kind="login" title="My market activity" hint="Sign in to see your own ChestShop trades." />

@@ -3,8 +3,9 @@ import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
-import { getRecentFines, getFineCategorySummary, getGovernmentAccounts } from '@/lib/sql/government';
-import { memo } from '@/lib/cache';
+import { getGovernmentDashboard } from '@/lib/services/government';
+import { getViewer, hasPermission } from '@/lib/auth';
+import { PrivacyGate } from '@/components/PrivacyGate';
 import { accountLabel, fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
 import { Player } from '@/components/Player';
 import { SectionTabs } from '@/components/SectionTabs';
@@ -23,16 +24,12 @@ export default async function GovernmentPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // Public — players are expected to see government account holdings and the
-  // public record of fines.
+  const viewer = await getViewer();
+  if (!hasPermission(viewer, 'government.read') && !hasPermission(viewer, 'government.read.all')) {
+    return <PrivacyGate kind={viewer.anon ? 'login' : 'private'} title="Government access required" />;
+  }
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
-  const [cats, fines, govAccounts] = await memo(`government:${sp.days}`, 60_000, () =>
-    Promise.all([
-      getFineCategorySummary(sp.days),
-      getRecentFines(sp.days, 100),
-      getGovernmentAccounts(),
-    ]),
-  );
+  const { cats, fines, govAccounts } = await getGovernmentDashboard(sp.days);
 
   const totalFineAmount = fines.reduce((s, f) => s + (f.revoked ? 0 : parseFloat(f.amount)), 0);
   const activeFines = fines.filter((f) => !f.revoked).length;

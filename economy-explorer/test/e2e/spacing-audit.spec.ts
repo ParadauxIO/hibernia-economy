@@ -36,6 +36,9 @@ const ROUTES: { path: string; name: string; viewer?: 'admin' }[] = [
   { path: '/me', name: 'me', viewer: 'admin' },
   { path: '/me/market', name: 'me-market', viewer: 'admin' },
   { path: '/admin/api-keys', name: 'admin-api-keys', viewer: 'admin' },
+  { path: '/admin/roles', name: 'admin-roles', viewer: 'admin' },
+  { path: '/admin/roles/player', name: 'admin-role-player', viewer: 'admin' },
+  { path: '/admin/groups/1', name: 'admin-group', viewer: 'admin' },
   { path: '/docs', name: 'docs' },
   { path: '/link', name: 'link', viewer: 'admin' },
 ];
@@ -46,7 +49,7 @@ mkdirSync(OUT, { recursive: true });
 for (const route of ROUTES) {
   test(`audit ${route.name}`, async ({ page, context }) => {
     if (route.viewer) {
-      await context.addCookies([{ name: 'e2e_viewer', value: route.viewer, url: 'http://127.0.0.1:3000' }]);
+      await context.addCookies([{ name: 'e2e_viewer', value: route.viewer, url: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100' }]);
     }
 
     const failures: string[] = [];

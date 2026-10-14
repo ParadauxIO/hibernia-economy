@@ -1,4 +1,5 @@
 import 'server-only';
+import { getViewer, requirePlayerRead, canViewAccount } from '@/lib/auth';
 import Link from 'next/link';
 import type { Route } from 'next';
 import {
@@ -21,7 +22,11 @@ const DAYS = 90;
  * The caller renders the page heading + access gate; this is the body only.
  */
 export async function PlayerDashboard({ uuid, name, self = false }: { uuid: string; name: string | null; self?: boolean }) {
-  const accounts = await findAccountsForPlayer(uuid);
+  const viewer = await getViewer();
+  requirePlayerRead(uuid, viewer);
+  const candidates = await findAccountsForPlayer(uuid);
+  const allowed = await Promise.all(candidates.map(a => canViewAccount(a.account_id, viewer)));
+  const accounts = candidates.filter((_, index) => allowed[index]);
   const accountIds = accounts.map((a) => a.account_id);
   const [totals, txnCount, partners, recentTxns] = await Promise.all([
     getPlayerTotals(accountIds, DAYS),

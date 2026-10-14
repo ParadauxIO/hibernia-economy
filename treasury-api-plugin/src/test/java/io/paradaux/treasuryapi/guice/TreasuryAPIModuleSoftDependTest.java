@@ -61,11 +61,12 @@ class TreasuryAPIModuleSoftDependTest {
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
             ServicesManager services = mock(ServicesManager.class);
             bukkit.when(Bukkit::getServicesManager).thenReturn(services);
-            // A bare mock has no UserManager, so the task's user load fails and is
-            // swallowed as transient — reaching it at all (no "unavailable") is the point.
+            // A broken registered provider must report sync.failed, not silently
+            // report success or claim the optional integration is unavailable.
             when(services.load(LuckPerms.class)).thenReturn(mock(LuckPerms.class));
 
-            assertDoesNotThrow(SoftDependInjectorProbe::selfSync);
+            ConflictException ex = assertThrows(ConflictException.class, SoftDependInjectorProbe::selfSync);
+            assertEquals("treasuryapi.ui.sync.failed", ex.getMessage());
         }
     }
 

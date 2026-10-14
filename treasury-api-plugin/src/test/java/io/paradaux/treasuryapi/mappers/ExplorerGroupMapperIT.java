@@ -104,6 +104,38 @@ class ExplorerGroupMapperIT extends IntegrationTestBase {
         assertThat(manualMemberCount(groupId, player)).isEqualTo(1);
     }
 
+    @Test
+    void refreshLeasesAndSourceComparisonPreserveManualGrants() throws Exception {
+        int group = insertGroup("Staff", "group.staff");
+        UUID player = UUID.randomUUID();
+        insertManualMember(group, player);
+        mapper.refreshLuckpermsMember(group, player, "group.staff");
+        mapper.refreshLuckpermsMember(group, player, "group.staff");
+        assertThat(mapper.listLuckpermsMemberUuids(group)).containsExactly(player);
+        try (Connection c = dataSource.getConnection();
+             Statement st = c.createStatement()) {
+            try (var rs = st.executeQuery("SELECT COUNT(*) FROM explorer_group_member WHERE source = 'luckperms' AND synced_at > NOW() - INTERVAL 1 HOUR")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(1);
+            }
+            st.executeUpdate("UPDATE explorer_group SET luckperms_node = NULL WHERE group_id = " + group);
+        }
+        mapper.removeLuckpermsMember(group, player);
+        mapper.refreshLuckpermsMember(group, player, "group.staff");
+        assertThat(mapper.listLuckpermsMemberUuids(group)).isEmpty();
+        assertThat(manualMemberCount(group, player)).isEqualTo(1);
+    }
+
+    @Test
+    void accountGroupSnapshotCanBeRefreshedAndRevoked() {
+        UUID player = UUID.randomUUID();
+        mapper.refreshAccountGroupMember("staff", player);
+        mapper.refreshAccountGroupMember("staff", player);
+        assertThat(mapper.listAccountGroupMembers("staff")).containsExactly(player);
+        mapper.removeAccountGroupMember("staff", player);
+        assertThat(mapper.listAccountGroupMembers("staff")).isEmpty();
+    }
+
     private int manualMemberCount(int groupId, UUID player) throws Exception {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(

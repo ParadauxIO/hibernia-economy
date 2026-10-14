@@ -17,7 +17,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -31,7 +30,6 @@ import java.util.logging.Level;
 @Singleton
 public class ExplorerUiServiceImpl implements ExplorerUiService {
 
-    private static final Set<String> VALID_ROLES = Set.of("admin", "government");
 
     private final SecureRandom passwordRandom = new SecureRandom();
     private final ConcurrentHashMap<UUID, Long> resetAttempts =
@@ -63,7 +61,7 @@ public class ExplorerUiServiceImpl implements ExplorerUiService {
     @Override
     public String grantRole(UUID targetUuid, String role, UUID grantedBy) {
         String r = role.toLowerCase(Locale.ROOT);
-        if (!VALID_ROLES.contains(r)) {
+        if (!mapper.roleExists(r)) {
             throw new BadCommandException("treasuryapi.ui.user.invalid-role", "role", role);
         }
         mapper.addRole(targetUuid, r, grantedBy);

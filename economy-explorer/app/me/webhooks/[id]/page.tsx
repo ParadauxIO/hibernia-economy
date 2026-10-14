@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -25,6 +26,7 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
   const id = Number(idStr);
 
   const viewer = await getViewer();
+  if (!viewer.anon && !hasPermission(viewer, 'webhooks.read')) return <PrivacyGate kind="private" title="Permission required" />;
   if (viewer.anon) return <PrivacyGate kind="login" title="Webhook deliveries" hint="Sign in to view your webhook delivery history." />;
   if (!viewer.linked || !viewer.minecraftUuid) {
     return <PrivacyGate kind="link" title="Link your Minecraft account" hint="You're signed in but not yet linked." />;
@@ -57,7 +59,7 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
             : <span className="badge badge-archived">{hook.disabledAt ? 'auto-disabled' : 'paused'}</span>}
           <span className="muted small">consecutive failures: <span className="mono">{fmtN(hook.consecutiveFailures)}</span></span>
           {hook.disabledAt && <span className="muted small">disabled {fmtTs(hook.disabledAt)}</span>}
-          <span style={{ marginLeft: 'auto' }}><RotateSecretButton id={hook.id} /></span>
+          <span style={{ marginLeft: 'auto' }}>{hasPermission(viewer, 'webhooks.manage') && <RotateSecretButton id={hook.id} />}</span>
         </div>
       </div>
 

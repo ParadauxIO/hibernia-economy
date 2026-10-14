@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import type { DocsNavGroup } from '@/lib/docs';
-import { useIsAdmin } from '@/components/ViewerContext';
+import { useViewer } from '@/components/ViewerContext';
 
 // Admin-only section. Kept out of the server-built public tree (so it never
 // reaches non-admins or the sitemap); shown here only when the viewer is an
@@ -26,7 +26,7 @@ const ADMIN_GROUP: DocsNavGroup = {
 
 export function DocsSidebar({ tree }: { tree: DocsNavGroup[] }) {
   const path = usePathname();
-  const isAdmin = useIsAdmin();
+  const isAdmin = useViewer().permissions.includes('docs.admin.read');
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const groups = isAdmin ? [...tree, ADMIN_GROUP] : tree;

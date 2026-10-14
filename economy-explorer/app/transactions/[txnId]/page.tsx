@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -28,12 +29,12 @@ export default async function TransactionDetailPage({
       <PrivacyGate
         kind="login"
         title="Transaction detail is private"
-        hint="Sign in with admin access to view transaction detail."
+        hint="Sign in with moderator or admin access to view transaction detail."
       />
     );
   }
-  if (viewer.role !== 'admin') {
-    return <PrivacyGate kind="private" title="Admin only" hint="Only admins can view individual transactions." />;
+  if (!hasPermission(viewer, 'transactions.read')) {
+    return <PrivacyGate kind="private" title="Moderator / admin only" hint="Only moderators and admins can view individual transactions." />;
   }
 
   const { txnId: idStr } = await params;

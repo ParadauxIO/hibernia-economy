@@ -34,4 +34,33 @@ public interface ExplorerGroupMapper {
     @Delete("DELETE FROM explorer_group_member "
             + "WHERE group_id = #{groupId} AND player_uuid_bin = #{uuid} AND source = 'luckperms'")
     void removeLuckpermsMember(@Param("groupId") int groupId, @Param("uuid") UUID uuid);
+
+    @Select("SELECT DISTINCT lp_group FROM account_group_access WHERE removed_at IS NULL")
+    List<String> listAccountGroups();
+
+    @Select("SELECT player_uuid_bin FROM explorer_group_member WHERE source = 'luckperms' "
+            + "UNION SELECT player_uuid_bin FROM explorer_lp_group_member "
+            + "UNION SELECT player_uuid_bin FROM economy_players")
+    List<UUID> listSyncedPlayers();
+
+    // Compare the source node on INSERT: a web edit cannot republish the old node's grants.
+    @Insert("INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at) "
+            + "SELECT group_id, #{uuid}, 'luckperms', CURRENT_TIMESTAMP FROM explorer_group "
+            + "WHERE group_id = #{groupId} AND luckperms_node = #{node} "
+            + "ON DUPLICATE KEY UPDATE synced_at = CURRENT_TIMESTAMP")
+    void refreshLuckpermsMember(@Param("groupId") int groupId, @Param("uuid") UUID uuid, @Param("node") String node);
+
+    @Select("SELECT player_uuid_bin FROM explorer_lp_group_member WHERE lp_group = #{group}")
+    List<UUID> listAccountGroupMembers(@Param("group") String group);
+
+    @Insert("INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin, synced_at) "
+            + "VALUES (#{group}, #{uuid}, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE synced_at = CURRENT_TIMESTAMP")
+    void refreshAccountGroupMember(@Param("group") String group, @Param("uuid") UUID uuid);
+
+    @Delete("DELETE FROM explorer_lp_group_member WHERE lp_group = #{group} AND player_uuid_bin = #{uuid}")
+    void removeAccountGroupMember(@Param("group") String group, @Param("uuid") UUID uuid);
+
+    @Delete("DELETE FROM explorer_lp_group_member WHERE lp_group NOT IN "
+            + "(SELECT lp_group FROM account_group_access WHERE removed_at IS NULL)")
+    void removeUnusedAccountGroups();
 }

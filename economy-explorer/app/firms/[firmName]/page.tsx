@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
-import { canViewFirmFinancials, hasElevatedRead } from '@/lib/auth/access';
+import { canViewFirmFinancials, canViewFirmInternals, hasElevatedRead } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import {
   findFirmByDisplayName,
@@ -39,16 +39,9 @@ export default async function FirmDetailPage({
 
   // Public identity (name, HQ, founded, default account, archived flag) is
   // always shown. Employees / roles / accounts are gated to: firm member ∨
-  // government ∨ admin. Mirrors AUTH-SPEC §9.
+  // proprietor ∨ moderator ∨ admin.
   const viewer = await getViewer();
-  let canSeeInternals = false;
-  if (!viewer.anon) {
-    if (viewer.role === 'admin' || viewer.role === 'government') {
-      canSeeInternals = true;
-    } else if (viewer.minecraftUuid) {
-      canSeeInternals = await isFirmMember(firm.firm_id, viewer.minecraftUuid);
-    }
-  }
+  const canSeeInternals = await canViewFirmInternals(firm.firm_id, viewer);
 
   // ChestShop sales/volume is financial drilldown — narrower than internals:
   // only finance-role employees (FINANCIAL/ADMIN) + staff. A plain member can
@@ -57,8 +50,6 @@ export default async function FirmDetailPage({
 
   // Audit privileged inspection: a staff member using elevated access to view a
   // firm's internals/financials when they aren't actually part of that firm.
-  // hasElevatedRead also covers the read-only `viewer` role (PAR-265), which
-  // gets the financials via canViewFirmFinancials → isStaff.
   if (hasElevatedRead(viewer)) {
     const member = viewer.minecraftUuid ? await isFirmMember(firm.firm_id, viewer.minecraftUuid) : false;
     if (!member) {
@@ -191,7 +182,7 @@ export default async function FirmDetailPage({
         <PrivacyGate
           kind={viewer.anon ? 'login' : 'private'}
           title="Firm internals are private"
-          hint="Employees, roles, and accounts are only visible to firm members, government, and admins."
+          hint="Employees, roles, and accounts require firm membership or permission to read all firms."
         />
       )}
 

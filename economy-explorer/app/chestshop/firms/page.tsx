@@ -10,7 +10,7 @@ import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { getViewer } from '@/lib/auth/viewer';
-import { isStaff } from '@/lib/auth/access';
+import { hasPermission } from '@/lib/auth/access';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -38,7 +38,7 @@ export default async function ChestShopFirmsPage({
   // Per-firm sales/quantity/volume is financial drilldown across many firms;
   // no single firm employee could have access to all of them, so the figures
   // are staff-only. Everyone still gets the firm directory (names + ranking).
-  const showFigures = isStaff(viewer);
+  const showFigures = hasPermission(viewer, 'market.figures.read');
 
   // Sales/quantity/volume are staff-only financial drilldown — whitelist the
   // public fields for the JSON export when the viewer can't see figures.

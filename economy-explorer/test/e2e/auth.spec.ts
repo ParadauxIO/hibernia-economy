@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
 import mysql from 'mysql2/promise';
-import { dataTable, visit } from './helpers';
+import { dataTable, visit, submitReload } from './helpers';
 
 // These require the app running with E2E_TEST_AUTH=1 against the seeded test DB
 // (the CI e2e job sets E2E_AUTH_SHIM=1 to enable them). Skipped otherwise so a
@@ -9,7 +9,7 @@ test.skip(!process.env.E2E_AUTH_SHIM, 'auth shim not enabled (set E2E_AUTH_SHIM=
 
 const baseURL = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
 
-async function loginAs(context: BrowserContext, role: 'player' | 'admin' | 'government') {
+async function loginAs(context: BrowserContext, role: string) {
   await context.addCookies([{ name: 'e2e_viewer', value: role, url: baseURL }]);
 }
 
@@ -70,4 +70,83 @@ test.describe('player own-data', () => {
     await visit(page, '/accounts/2'); // Bob's account
     await expect(page.locator('.privacy-gate')).toBeVisible();
   });
+});
+
+
+test.describe('moderator investigations', () => {
+  test.beforeEach(({ context }) => loginAs(context, 'moderator'));
+  test('can investigate but cannot open administrative controls', async ({ page }) => {
+    await visit(page, '/transactions');
+    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+    await visit(page, '/admin/groups');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+  });
+});
+test.describe('government relationships', () => {
+  test.beforeEach(({ context }) => loginAs(context, 'government'));
+  test('cannot inspect unrelated players or the global sales feed', async ({ page }) => {
+    await visit(page, '/accounts/2');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await visit(page, '/chestshop/sales');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+  });
+});
+
+
+test('configures custom roles and enforces changes in the admin tools', async ({ page, context }, testInfo) => {
+  const key = `test_reader_${testInfo.project.name}`;
+  const conn = await mysql.createConnection({ host: process.env.DB_HOST, port: Number(process.env.DB_PORT ?? 3306), user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, database: process.env.DB_NAME });
+  try {
+    // The shim authenticates Alice; policy mutations also verify her live DB grants.
+    await conn.query("INSERT IGNORE INTO explorer_role (player_uuid_bin, role) VALUES (UNHEX('0000000000000000000000000000A1CE'), 'admin')");
+    await conn.query('DELETE FROM explorer_role_definition WHERE role_key = ?', [key]);
+    await loginAs(context, 'admin');
+    await visit(page, '/admin/roles');
+    await page.getByLabel('Role key', { exact: true }).fill(key);
+    await page.getByLabel('Display name', { exact: true }).fill('Test key reader');
+    await page.getByRole('checkbox', { name: /^api_keys\.read\b/ }).check();
+    await submitReload(page, page.getByRole('button', { name: 'Create role', exact: true }));
+    await expect(page).toHaveURL(new RegExp(`/admin/roles/${key}$`));
+    await page.getByLabel('Player name or UUID').fill('Bob');
+    await submitReload(page, page.getByRole('button', { name: 'Assign role', exact: true }));
+    await expect(page.getByRole('cell', { name: 'Bob', exact: true })).toBeVisible();
+
+    await loginAs(context, key);
+    await visit(page, '/admin/api-keys');
+    await expect(page.getByRole('heading', { name: 'API keys', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Revoke|Rotate|Limit/ })).toHaveCount(0);
+    await visit(page, '/admin/groups');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await visit(page, '/admin/roles');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+
+    await loginAs(context, 'admin');
+    await visit(page, `/admin/roles/${key}`);
+    await page.getByRole('checkbox', { name: /^api_keys\.read\b/ }).uncheck();
+    await page.getByRole('checkbox', { name: /^market\.sales\.read\b/ }).check();
+    await submitReload(page, page.getByRole('button', { name: 'Save permissions', exact: true }));
+    await expect.poll(async () => {
+      const [rows] = await conn.query<mysql.RowDataPacket[]>('SELECT revision FROM explorer_role_definition WHERE role_key = ?', [key]);
+      return rows[0]?.revision;
+    }).toBe(2);
+    await loginAs(context, key);
+    await visit(page, '/admin/api-keys');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await visit(page, '/chestshop/sales');
+    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+
+    await loginAs(context, 'admin');
+    await visit(page, `/admin/roles/${key}`);
+    page.once('dialog', dialog => dialog.accept());
+    await submitReload(page, page.getByRole('button', { name: 'Delete role', exact: true }));
+    await expect(page).toHaveURL(/\/admin\/roles$/);
+    const [grants] = await conn.query<mysql.RowDataPacket[]>('SELECT role FROM explorer_role WHERE role = ?', [key]);
+    expect(grants).toHaveLength(0);
+    await loginAs(context, key);
+    await visit(page, '/chestshop/sales');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+  } finally {
+    await conn.query('DELETE FROM explorer_role_definition WHERE role_key = ?', [key]);
+    await conn.end();
+  }
 });

@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -44,12 +45,12 @@ export default async function SalesFeedPage({
       <PrivacyGate
         kind="login"
         title="ChestShop sales feed"
-        hint="Sign in with admin or government access to view trade-by-trade detail with customer attribution."
+        hint="Sign in with moderator or admin access to view trade-by-trade detail with customer attribution."
       />
     );
   }
-  if (viewer.role !== 'admin' && viewer.role !== 'government') {
-    return <PrivacyGate kind="private" title="Government / admin only" />;
+  if (!hasPermission(viewer, 'market.sales.read')) {
+    return <PrivacyGate kind="private" title="Moderator / admin only" />;
   }
 
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));

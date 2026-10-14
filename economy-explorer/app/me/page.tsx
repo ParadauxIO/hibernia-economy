@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import { getViewer } from '@/lib/auth/viewer';
@@ -12,6 +13,7 @@ export async function generateMetadata() {
 
 export default async function MyDataPage() {
   const viewer = await getViewer();
+  if (!viewer.anon && !hasPermission(viewer, 'player.read')) return <PrivacyGate kind="private" title="Permission required" />;
   if (viewer.anon) {
     return (
       <PrivacyGate

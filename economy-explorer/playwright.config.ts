@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Two modes:
 //   * E2E_BASE_URL set   — point at an already-running instance (e.g. a real
-//     deployment). Only the public specs run; nothing is seeded or started.
+//     deployment). Nothing is seeded or started; auth specs require explicit
+//     test credentials/shim flags and the mutating suite requires a test DB.
 //   * E2E_BASE_URL unset — managed: seed the disposable DB named by DB_* (see
 //     test/e2e/global-setup.ts), build and start the app here with the auth shim
 //     (E2E_TEST_AUTH=1), and run every spec against it. This is what
@@ -15,6 +16,7 @@ if (managed) {
   // Read by the specs (in the workers, which inherit this env): the app below
   // runs with the auth shim, so the role-gated specs can run.
   process.env.E2E_AUTH_SHIM = '1';
+  process.env.E2E_AUTH_SECRET = 'e2e-only-not-a-secret';
   process.env.E2E_BASE_URL = baseURL;
 }
 
@@ -43,6 +45,10 @@ export default defineConfig({
           AUTH_SECRET: 'e2e-only-not-a-secret',
           AUTH_URL: baseURL,
           AUTH_TRUST_HOST: 'true',
+          // Signed-session tests bypass external OAuth but Auth.js still needs
+          // a valid provider configuration in clean CI environments.
+          AUTH_KEYCLOAK_ISSUER: 'https://identity.example.test/realms/test',
+          AUTH_KEYCLOAK_ID: 'explorer',
           SITE_URL: baseURL,
         },
       }

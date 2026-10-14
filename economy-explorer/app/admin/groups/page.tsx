@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -5,7 +6,6 @@ import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { listGroups } from '@/lib/services/group';
-import { normalizeCapability } from '@/lib/auth/capabilities';
 import { fmtN } from '@/lib/format';
 import { CreateGroupForm } from './create-group-form';
 import { DeleteGroupButton } from './delete-group-button';
@@ -18,8 +18,8 @@ export async function generateMetadata() {
 
 export default async function AdminGroupsPage() {
   const viewer = await getViewer();
-  if (viewer.anon) return <PrivacyGate kind="login" title="Access groups" hint="Sign in as admin to manage groups." />;
-  if (viewer.role !== 'admin') return <PrivacyGate kind="private" title="Admin only" />;
+  if (viewer.anon) return <PrivacyGate kind="login" title="Access groups" hint="Sign in to manage groups." />;
+  if (!hasPermission(viewer, 'groups.read')) return <PrivacyGate kind="private" title="Permission required" />;
   await auditView(viewer, { path: '/admin/groups', targetType: 'global' });
 
   const groups = await listGroups();
@@ -33,7 +33,7 @@ export default async function AdminGroupsPage() {
 
       <div className="card">
         <div className="card-title">New group</div>
-        <CreateGroupForm />
+        {hasPermission(viewer, 'groups.create') && <CreateGroupForm />}
       </div>
 
       <div className="card">
@@ -60,7 +60,7 @@ export default async function AdminGroupsPage() {
                   <td>
                     {g.capabilities.length === 0
                       ? <span className="muted">—</span>
-                      : g.capabilities.map((c) => <span key={c} className="badge" style={{ marginRight: 4 }}>{normalizeCapability(c) ?? c}</span>)}
+                      : g.capabilities.map((c) => <span key={c} className="badge" style={{ marginRight: 4 }}>{c}</span>)}
                   </td>
                   <td>{g.luckpermsNode ? <span className="mono">{g.luckpermsNode}</span> : <span className="muted">manual only</span>}</td>
                   <td className="amount mono">
@@ -69,7 +69,7 @@ export default async function AdminGroupsPage() {
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <Link href={`/admin/groups/${g.groupId}` as Route} className="btn" prefetch={false}>Manage</Link>{' '}
-                    <DeleteGroupButton groupId={g.groupId} name={g.name} />
+                    {hasPermission(viewer, 'groups.delete') && <DeleteGroupButton groupId={g.groupId} name={g.name} />}
                   </td>
                 </tr>
               ))}

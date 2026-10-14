@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -25,7 +26,7 @@ const SP = z.object({ q: z.string().trim().min(1).optional() });
  *  treasury admin API, audited. */
 export default async function AdminAccountsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
-  if (viewer.anon || viewer.role !== 'admin') return null; // layout gates; defence in depth
+  if (viewer.anon || !hasPermission(viewer, 'account.admin.read')) return null; // layout gates; defence in depth
   const sp = SP.safeParse(flattenSearchParams(await searchParams)).data ?? {};
   const q = sp.q ?? null;
   await auditView(viewer, { path: '/admin/accounts', targetType: 'global', targetId: q });
@@ -48,7 +49,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
         </p>
       )}
 
-      <MoveMoneyPanel disabled={!configured} />
+      {hasPermission(viewer, 'account.transfer') && <MoveMoneyPanel disabled={!configured} />}
 
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card-title">Find an account</div>

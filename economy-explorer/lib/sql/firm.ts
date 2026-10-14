@@ -279,21 +279,9 @@ export async function isFirmMember(firmId: number, playerUuid: string): Promise<
  */
 export async function hasFirmFinancialAccess(firmId: number, playerUuid: string): Promise<boolean> {
   const r = await sql<{ c: string | number }>`
-    SELECT (
-      EXISTS (
-        SELECT 1 FROM firm
-        WHERE firm_id = ${firmId}
-          AND proprietor_uuid_bin = ${uuidToBin(playerUuid)}
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM firm_employee fe
-        JOIN firm_role_permission rp ON rp.role_id = fe.role_id AND rp.deleted_at IS NULL
-        WHERE fe.firm_id = ${firmId}
-          AND fe.player_uuid_bin = ${uuidToBin(playerUuid)}
-          AND fe.left_at IS NULL
-          AND rp.permission IN ('FINANCIAL', 'ADMIN')
-      )
+    SELECT EXISTS (
+      SELECT 1 FROM firm_financial_access_web
+      WHERE firm_id = ${firmId} AND subject_uuid_bin = ${uuidToBin(playerUuid)}
     ) AS c
   `.execute(db);
   return Number(r.rows[0]?.c ?? 0) > 0;

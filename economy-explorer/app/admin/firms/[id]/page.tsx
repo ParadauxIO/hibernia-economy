@@ -1,3 +1,6 @@
+import { canViewFirmInternals } from '@/lib/auth';
+import { PrivacyGate } from '@/components/PrivacyGate';
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -19,10 +22,11 @@ export async function generateMetadata() {
  *  roster — read-only, audited, with CSV export. */
 export default async function FirmReportPage({ params }: { params: Promise<{ id: string }> }) {
   const viewer = await getViewer();
-  if (viewer.anon || viewer.role !== 'admin') return null; // layout gates
+  if (viewer.anon || !hasPermission(viewer, 'firm.admin.read')) return null; // layout gates
   const firmId = Number((await params).id);
   if (!Number.isInteger(firmId) || firmId <= 0) notFound();
 
+  if (!await canViewFirmInternals(firmId, viewer)) return <PrivacyGate kind="private" title="Firm roster permission required" />;
   const firm = await getFirmHeader(firmId);
   if (!firm) notFound();
   await auditView(viewer, { path: `/admin/firms/${firmId}`, targetType: 'firm', targetId: String(firmId) });

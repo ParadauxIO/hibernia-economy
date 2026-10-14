@@ -17,8 +17,7 @@ import {
   removeManualMember,
   resolvePlayerUuid,
 } from '@/lib/services/group';
-import { isCapability } from '@/lib/auth/capabilities';
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { requirePermission } from '@/lib/auth/access';
 
 // ---- Group RBAC management -------------------------------------------------
 
@@ -26,7 +25,7 @@ type ActionResult = { ok: boolean; error?: string };
 
 export async function createGroupAction(args: { name: string; description: string | null }): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.create');
   try {
     const name = args.name.trim();
     if (!name) return { ok: false, error: 'Name is required.' };
@@ -41,7 +40,7 @@ export async function createGroupAction(args: { name: string; description: strin
 
 export async function deleteGroupAction(groupId: number): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.delete');
   try {
     await deleteGroup(groupId);
     await auditView(viewer, { method: 'POST', path: '/admin/groups/delete', targetType: 'global', targetId: `group:${groupId}` });
@@ -54,10 +53,9 @@ export async function deleteGroupAction(groupId: number): Promise<ActionResult> 
 
 export async function setGroupCapabilitiesAction(groupId: number, capabilities: string[]): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.roles.update');
   try {
-    const valid = capabilities.filter(isCapability);
-    await setGroupCapabilities(groupId, valid);
+    await setGroupCapabilities(groupId, capabilities);
     await auditView(viewer, { method: 'POST', path: '/admin/groups/capabilities', targetType: 'global', targetId: `group:${groupId}` });
     revalidatePath(`/admin/groups/${groupId}`);
     revalidatePath('/admin/groups');
@@ -69,7 +67,7 @@ export async function setGroupCapabilitiesAction(groupId: number, capabilities: 
 
 export async function setLuckpermsNodeAction(groupId: number, node: string | null): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.sync.update');
   try {
     await setLuckpermsNode(groupId, node?.trim() || null);
     await auditView(viewer, { method: 'POST', path: '/admin/groups/luckperms-node', targetType: 'global', targetId: `group:${groupId}` });
@@ -83,7 +81,7 @@ export async function setLuckpermsNodeAction(groupId: number, node: string | nul
 
 export async function addGroupMemberAction(groupId: number, identifier: string): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.members.update');
   try {
     const uuid = await resolvePlayerUuid(identifier);
     if (!uuid) return { ok: false, error: `No player found for "${identifier}".` };
@@ -98,7 +96,7 @@ export async function addGroupMemberAction(groupId: number, identifier: string):
 
 export async function removeGroupMemberAction(groupId: number, playerUuid: string): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.members.update');
   try {
     await removeManualMember(groupId, playerUuid);
     await auditView(viewer, { method: 'POST', path: '/admin/groups/member-remove', targetType: 'player', targetId: playerUuid });
@@ -111,7 +109,7 @@ export async function removeGroupMemberAction(groupId: number, playerUuid: strin
 
 export async function revokeApiKeyAction(keyId: number): Promise<{ ok: boolean; error?: string }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'api_keys.revoke');
   try {
     // ADT-14: route through the REST admin API (kysely stays read-only).
     await revokeApiKey(keyId);
@@ -132,7 +130,7 @@ export async function revokeApiKeyAction(keyId: number): Promise<{ ok: boolean; 
  */
 export async function rotateApiKeyAction(keyId: number): Promise<{ ok: boolean; expiresAt?: string; error?: string }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'api_keys.rotate');
   try {
     const { expiresAt } = await rotateApiKey(keyId);
     await auditView(viewer, { method: 'POST', path: '/admin/api-keys/rotate', targetType: 'global', targetId: `key:${keyId}` });
@@ -154,7 +152,7 @@ export async function setRateLimitAction(args: {
   note: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'rate_limits.update');
   try {
     const mult = clamp(args.multiplier, 0.1, 1000);
     // Route the write through the REST admin API (ADT-14) — kysely stays read-only.

@@ -1,59 +1,55 @@
 import 'server-only';
-import type { Viewer } from '@/lib/auth/viewer';
-import type { Capability } from '@/lib/auth/capabilities';
-import { hasFirmFinancialAccess } from '@/lib/sql/firm';
+import type { Viewer } from './viewer';
+import type { Capability, Role } from './capabilities';
+import { hasPermission, hasAnyPermission, type Permission } from './policy';
+import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
+import { hasFirmFinancialAccess, isFirmMember } from '@/lib/sql/firm';
+import { findAccount, canReadAccount } from '@/lib/sql/ledger';
+export { hasPermission } from './policy';
 
-/** Does the viewer hold a given capability (via any group or legacy role)? */
 export function hasCapability(v: Viewer, cap: Capability): boolean {
   return !v.anon && v.capabilities.includes(cap);
 }
-
-/**
- * Financial-privacy model (see wiki / memory): balances are public, but
- * per-entity money & quantity drilldown (sales, volume, profitability,
- * who-paid-whom) is not. Aggregates stay public — market/item totals and
- * *who* the top sellers are — just not the figures attributed to each seller.
- */
-
-/**
- * Global oversight roles. Staff see every per-entity financial figure,
- * including the cross-firm leaderboards where no single firm employee could
- * legitimately have access to every row.
- */
-export function isStaff(v: Viewer): boolean {
-  return hasCapability(v, 'viewer');
+export function requirePermission(v: Viewer, permission: Permission): asserts v is Extract<Viewer, { anon: false }> {
+  if (v.anon) throw new UnauthorizedError();
+  if (!hasPermission(v, permission)) throw new ForbiddenError();
 }
-
-/**
- * Does this viewer hold ANY global elevation that lets them read other people's
- * data — the `viewer` capability (which admin and legacy government imply) or
- * the admin/government tier itself? This is the audit predicate: every read a
- * page grants on the strength of elevation must be audited, and it has to cover
- * the read-only `viewer` role (PAR-265), whose `role` collapses to 'player' —
- * so a `role === 'admin' || role === 'government'` check silently skips it.
- */
 export function hasElevatedRead(v: Viewer): boolean {
-  if (v.anon) return false;
-  return isStaff(v) || v.role === 'admin' || v.role === 'government';
+  return hasAnyPermission(v, ['player.read.all', 'account.read.all', 'firm.read.all', 'firm.financials.read.all', 'government.read.all', 'transactions.read', 'market.sales.read', 'market.figures.read']);
 }
+/** Audit predicate only. Never use this as a resource authorization gate. */
+export const isStaff = hasElevatedRead;
+export function auditRole(v: Extract<Viewer, { anon: false }>): Role { return v.role; }
 
-/**
- * The role to record against an audited access. `viewer.role` is the legacy
- * three-tier enum, which reports a viewer-only user as 'player'; the audit log
- * should name the elevation that was actually used.
- */
-export function auditRole(v: Extract<Viewer, { anon: false }>): 'admin' | 'government' | 'viewer' | 'player' {
-  if (v.role === 'player' && v.capabilities.includes('viewer')) return 'viewer';
-  return v.role;
+/** RBAC AND ReBAC. A scoped account grant never grants access to the whole firm. */
+export async function canViewAccount(accountId: number, v: Viewer): Promise<boolean> {
+  if (hasPermission(v, 'account.read.all')) return true;
+  if (!hasPermission(v, 'account.read')) return false;
+  if (!v.minecraftUuid) return false;
+  const account = await findAccount(accountId);
+  if (!account) return false;
+  if (account.owner_uuid === v.minecraftUuid) return true;
+  return canReadAccount(accountId, v.minecraftUuid);
 }
-
-/**
- * Can this viewer see a single firm's financial drilldown (its ChestShop
- * sales / volume / quantity)? True for staff, or a current employee of that
- * firm whose role grants the FINANCIAL/ADMIN permission.
- */
+export async function requireAccountRead(accountId: number, v: Viewer): Promise<void> {
+  if (v.anon) throw new UnauthorizedError();
+  if (!await canViewAccount(accountId, v)) throw new ForbiddenError();
+}
+export async function canViewFirmInternals(firmId: number, v: Viewer): Promise<boolean> {
+  if (hasPermission(v, 'firm.read.all')) return true;
+  if (!hasPermission(v, 'firm.read')) return false;
+  if (!v.minecraftUuid) return false;
+  return await isFirmMember(firmId, v.minecraftUuid) || await hasFirmFinancialAccess(firmId, v.minecraftUuid);
+}
 export async function canViewFirmFinancials(firmId: number, v: Viewer): Promise<boolean> {
-  if (isStaff(v)) return true;
-  if (v.anon || !v.minecraftUuid) return false;
-  return hasFirmFinancialAccess(firmId, v.minecraftUuid);
+  if (hasPermission(v, 'firm.financials.read.all')) return true;
+  if (!hasPermission(v, 'firm.financials.read')) return false;
+  return !!v.minecraftUuid && hasFirmFinancialAccess(firmId, v.minecraftUuid);
+}
+
+/** Own-player data is never authorized by a client-supplied `self` flag. */
+export function requirePlayerRead(uuid: string, v: Viewer): void {
+  if (hasPermission(v, 'player.read.all')) return;
+  requirePermission(v, 'player.read');
+  if (v.minecraftUuid !== uuid) throw new ForbiddenError();
 }

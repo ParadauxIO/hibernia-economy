@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { sql } from 'kysely';
+import { db, uuidToBin } from '@/lib/db';
+import { getViewer } from '@/lib/auth/viewer';
+import { createRole, updateRole, deleteRole, setDirectRoleMember, type RoleInput } from '@/lib/services/role';
+import { setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, removeManualMember } from '@/lib/services/group';
+import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '@/lib/sql/role';
+vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
+import { permissionsFor } from '../role-fixtures';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { HAS_DB, resetDb, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
 import { accountLabel, looksLikeUuid } from '@/lib/format';
 import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount } from '@/lib/sql/ledger';
@@ -157,16 +165,16 @@ d('money flow counts only clean cross-type transfers', () => {
 });
 
 d('group capabilities', () => {
-  it('returns the viewer capability for a manual group member', async () => {
-    // Bob is a manual member of the "Viewers" group (grants viewer).
-    expect(await findCapabilities(BOB)).toContain('viewer');
+  it('returns the player role for a manual group member', async () => {
+    // Bob is a manual member of the "Players" group (grants player).
+    expect(await findCapabilities(BOB)).toContain('player');
   });
 
-  it('returns the viewer capability for a LuckPerms-synced member (the recon-cron path)', async () => {
+  it('returns the player role for a LuckPerms-synced member (the recon-cron path)', async () => {
     // Carol holds her membership via source='luckperms' — i.e. the reconciliation
     // cron synced her from the group's node. The same capability must resolve, so
-    // a linked player gets the viewer role purely from their in-game group.
-    expect(await findCapabilities(CAROL)).toContain('viewer');
+    // a linked player gets the player role purely from their in-game group.
+    expect(await findCapabilities(CAROL)).toContain('player');
   });
 
   it('returns nothing for a player in no groups', async () => {
@@ -178,7 +186,7 @@ d('group capabilities', () => {
 d('audit logging records privileged access', () => {
   it('persists an audit row that listAudit reads back', async () => {
     await audit({
-      viewer: { anon: false, keycloakSub: 'e2e-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['admin', 'viewer', 'government'] },
+      viewer: { anon: false, keycloakSub: 'e2e-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['player', 'admin'], permissions: permissionsFor('player', 'admin') },
       method: 'GET',
       path: '/transactions',
       targetType: 'global',
@@ -343,5 +351,201 @@ d('player KPI rollups sum money in SQL, exact to the cent (behaviour/0001)', () 
   it('is empty-safe for a player with no accounts', async () => {
     const t = await getPlayerTotals([], 90);
     expect(t).toEqual({ totalBalance: '0.00', income: '0.00', spend: '0.00', net: '0.00' });
+  });
+});
+
+// Regression coverage for the shared WEB relationship view and scoped government SQL.
+d('RBAC relationship snapshots', () => {
+  async function connect() {
+    return mysql.createConnection({ host: process.env.DB_HOST, port: Number(process.env.DB_PORT ?? 3306),
+      user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, database: process.env.DB_NAME });
+  }
+  it('LP groups grant account reads and My data, expire, and respect removal', async () => {
+    const c = await connect();
+    try {
+      await c.query("INSERT INTO account_group_access (account_id, lp_group, level, added_by_uuid_bin) VALUES (5, 'rbac-test', 'VIEWER', UNHEX(REPLACE(?, '-', '')))", [ALICE]);
+      await c.query("INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin) VALUES ('rbac-test', UNHEX(REPLACE(?, '-', '')))", [DAVE]);
+      expect(await canReadAccount(5, DAVE)).toBe(true);
+      expect(await canReadAccount(1, DAVE)).toBe(false);
+      expect((await findAccountsForPlayer(DAVE)).map(a => a.account_id)).toContain(5);
+      await c.query("UPDATE explorer_lp_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE lp_group = 'rbac-test'");
+      expect(await canReadAccount(5, DAVE)).toBe(false);
+      expect((await findAccountsForPlayer(DAVE)).map(a => a.account_id)).not.toContain(5);
+      await c.query("UPDATE explorer_lp_group_member SET synced_at = NOW() WHERE lp_group = 'rbac-test'");
+      await c.query("UPDATE account_group_access SET removed_at = NOW() WHERE lp_group = 'rbac-test'");
+      expect(await canReadAccount(5, DAVE)).toBe(false);
+    } finally {
+      await c.query("DELETE FROM account_group_access WHERE lp_group = 'rbac-test'");
+      await c.query("DELETE FROM explorer_lp_group_member WHERE lp_group = 'rbac-test'");
+      await c.end();
+    }
+  });
+  it('firm finance access agrees across detail pages and My data', async () => {
+    expect(await canReadAccount(3, BOB)).toBe(true);
+    expect((await findAccountsForPlayer(BOB)).map(a => a.account_id)).toContain(3);
+    expect(await canReadAccount(3, CAROL)).toBe(false);
+  });
+  it('expired role sync revokes roles while manual grants survive', async () => {
+    const c = await connect();
+    try {
+      await c.query("UPDATE explorer_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE source = 'luckperms'");
+      expect(await findCapabilities(CAROL)).toEqual([]);
+      expect(await findCapabilities(BOB)).toContain('player');
+    } finally {
+      await c.query("UPDATE explorer_group_member SET synced_at = NOW() WHERE source = 'luckperms'");
+      await c.end();
+    }
+  });
+  it('deleted firm roles cannot retain financial access', async () => {
+    const c = await connect();
+    try {
+      await c.query("UPDATE firm_role SET deleted_at = NOW() WHERE name = 'Finance'");
+      expect(await hasFirmFinancialAccess(1, BOB)).toBe(false);
+      expect(await canReadAccount(3, BOB)).toBe(false);
+      expect((await findAccountsForPlayer(BOB)).map(a => a.account_id)).not.toContain(3);
+    } finally {
+      await c.query("UPDATE firm_role SET deleted_at = NULL WHERE name = 'Finance'");
+      await c.end();
+    }
+  });
+  it('government queries filter both details and aggregate totals', async () => {
+    const { getGovernmentAccounts, getRecentFines, getFineCategorySummary } = await import('@/lib/sql/government');
+    expect((await getGovernmentAccounts({ playerUuid: SECRETARY })).map(a => a.account_id)).toEqual([5]);
+    expect(await getGovernmentAccounts({ playerUuid: DAVE })).toEqual([]);
+    const c = await connect();
+    try {
+      await c.query("INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin) VALUES (UNHEX(REPLACE(?, '-', '')), 5, 100, 'rbac-test', 1, UNHEX(REPLACE(?, '-', '')))", [BOB, ALICE]);
+      expect(await getRecentFines(30, 100, [])).toEqual([]);
+      expect(await getFineCategorySummary(30, [])).toEqual([]);
+      expect((await getRecentFines(30, 100, [5])).some(f => f.reason === 'rbac-test')).toBe(true);
+      expect((await getFineCategorySummary(30, [5])).find(f => f.category === 'rbac-test')?.total_amount).toBe('100.00');
+    } finally {
+      await c.query("DELETE FROM government_fines WHERE reason = 'rbac-test'");
+      await c.end();
+    }
+  });
+});
+
+d('configurable authorization policy', () => {
+  beforeEach(async () => {
+    await resetDb();
+    await sql`INSERT INTO explorer_role (player_uuid_bin, role) VALUES (${uuidToBin(ALICE)}, 'admin')`.execute(db);
+    vi.mocked(getViewer).mockResolvedValue({ anon: false, keycloakSub: 'test-policy-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['player', 'admin'], permissions: permissionsFor('admin') });
+  });
+  const custom: RoleInput = { key: 'auditor', name: 'Account auditor', description: 'Scoped custom role', permissions: ['account.read.all'] };
+  it('seeds exactly the permission catalogue for admin and the documented defaults', async () => {
+    const roles = await listRoleDefinitions();
+    for (const key of ['player', 'government', 'moderator', 'admin']) {
+      expect(roles.find(r => r.key === key)?.permissions.sort()).toEqual(permissionsFor(key).sort());
+    }
+  });
+  it('creates and assigns a custom role, then applies edited permissions on the next resolution', async () => {
+    await createRole(custom);
+    await setDirectRoleMember('auditor', BOB, true);
+    expect((await resolveAuthorization(BOB)).permissions).toContain('account.read.all');
+    await updateRole({ ...custom, permissions: ['api_keys.read'] }, 1);
+    const next = await resolveAuthorization(BOB);
+    expect(next.roles).toContain('auditor');
+    expect(next.permissions).toContain('api_keys.read');
+    expect(next.permissions).not.toContain('account.read.all');
+    await setDirectRoleMember('auditor', BOB, false);
+    expect((await resolveAuthorization(BOB)).roles).not.toContain('auditor');
+  });
+  it('resolves custom roles through fresh LP membership and revokes stale leases', async () => {
+    await createRole(custom);
+    await sql`INSERT INTO explorer_group (group_id, name, luckperms_node) VALUES (99, 'Auditors', 'group.auditor')`.execute(db);
+    await sql`INSERT INTO explorer_group_capability VALUES (99, 'auditor')`.execute(db);
+    await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at) VALUES (99, ${uuidToBin(BOB)}, 'luckperms', CURRENT_TIMESTAMP)`.execute(db);
+    expect((await resolveAuthorization(BOB)).permissions).toContain('account.read.all');
+    await sql`UPDATE explorer_group_member SET synced_at = CURRENT_TIMESTAMP - INTERVAL 2 HOUR WHERE group_id = 99`.execute(db);
+    expect((await resolveAuthorization(BOB)).permissions).not.toContain('account.read.all');
+    await addManualMember(99, BOB, ALICE);
+    expect((await resolveAuthorization(BOB)).permissions).toContain('account.read.all');
+  });
+  it('deletes direct and group grants so recreating a role cannot resurrect them', async () => {
+    await createRole(custom);
+    await setDirectRoleMember('auditor', BOB, true);
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (99, 'Auditors')`.execute(db);
+    await setGroupCapabilities(99, ['auditor']);
+    await addManualMember(99, CAROL, ALICE);
+    expect((await resolveAuthorization(CAROL)).roles).toContain('auditor');
+    await deleteRole('auditor', 1);
+    await createRole(custom);
+    expect((await resolveAuthorization(BOB)).roles).not.toContain('auditor');
+    expect((await resolveAuthorization(CAROL)).roles).not.toContain('auditor');
+  });
+  it('edits the authenticated baseline without any implicit permission fallback', async () => {
+    await updateRole({ key: 'player', name: 'Player', description: null, permissions: [] }, 1);
+    expect((await resolveAuthorization(null)).permissions).toEqual([]);
+    expect((await resolveAuthorization(DAVE)).permissions).toEqual([]);
+    await expect(deleteRole('player', 2)).rejects.toThrow('baseline');
+    await expect(deleteRole('PLAYER', 2)).rejects.toThrow();
+  });
+  it('rejects stale edits and deletes without losing the newer permission set', async () => {
+    await createRole(custom);
+    await updateRole({ ...custom, permissions: ['api_keys.read'] }, 1);
+    await expect(updateRole(custom, 1)).rejects.toThrow('Refresh');
+    await expect(deleteRole('auditor', 1)).rejects.toThrow('Refresh');
+    expect((await listRoleDefinitions()).find(r => r.key === 'auditor')?.permissions).toEqual(['api_keys.read']);
+  });
+  it('rolls back removal of the operator’s own management permission', async () => {
+    const admin = (await listRoleDefinitions()).find(r => r.key === 'admin')!;
+    await expect(updateRole({ ...admin, permissions: admin.permissions.filter(p => p !== 'roles.update') }, 1)).rejects.toThrow('own access');
+    expect((await resolveAuthorization(ALICE)).permissions).toContain('roles.update');
+    await expect(deleteRole('admin', 1)).rejects.toThrow('own access');
+    await expect(setDirectRoleMember('admin', ALICE, false)).rejects.toThrow('last role-assignment');
+    expect((await resolveAuthorization(ALICE)).roles).toContain('admin');
+  });
+  it('delegated managers cannot grant or modify more powerful roles through any assignment path', async () => {
+    await createRole({ key: 'delegator', name: 'Delegator', description: null, permissions: ['roles.create', 'roles.update', 'roles.delete', 'roles.assign', 'groups.roles.update', 'groups.members.update', 'groups.sync.update', 'groups.delete'] });
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (99, 'Admins')`.execute(db);
+    await setGroupCapabilities(99, ['admin']);
+    await setDirectRoleMember('delegator', BOB, true);
+    vi.mocked(getViewer).mockResolvedValue({ anon: false, keycloakSub: 'delegate', minecraftUuid: BOB, minecraftName: 'Bob', linked: true, role: 'delegator', capabilities: ['player', 'delegator'], permissions: await permissionsForRoles(['player', 'delegator']) });
+    await expect(createRole(custom)).rejects.toThrow('permissions you hold');
+    await expect(updateRole({ key: 'admin', name: 'Admin', description: null, permissions: [] }, 1)).rejects.toThrow('do not hold');
+    await expect(deleteRole('admin', 1)).rejects.toThrow('do not hold');
+    await expect(setDirectRoleMember('admin', BOB, true)).rejects.toThrow('do not hold');
+    await expect(addManualMember(99, BOB, BOB)).rejects.toThrow('do not hold');
+    await expect(setLuckpermsNode(99, 'group.everyone')).rejects.toThrow('do not hold');
+    await expect(setGroupCapabilities(99, [])).rejects.toThrow('do not hold');
+    await expect(deleteGroup(99)).rejects.toThrow('do not hold');
+  });
+  it('changing the LP source clears synced grants while manual and direct grants remain independent', async () => {
+    await createRole(custom);
+    await sql`INSERT INTO explorer_group (group_id, name, luckperms_node) VALUES (99, 'Auditors', 'group.old')`.execute(db);
+    await setGroupCapabilities(99, ['auditor']);
+    await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at) VALUES (99, ${uuidToBin(DAVE)}, 'luckperms', NOW())`.execute(db);
+    await addManualMember(99, DAVE, ALICE);
+    await setLuckpermsNode(99, 'group.new');
+    const synced = await sql`SELECT 1 FROM explorer_group_member WHERE group_id = 99 AND source = 'luckperms'`.execute(db);
+    expect(synced.rows).toHaveLength(0);
+    expect((await resolveAuthorization(DAVE)).roles).toContain('auditor');
+    await setDirectRoleMember('auditor', DAVE, true);
+    await removeManualMember(99, DAVE);
+    expect((await resolveAuthorization(DAVE)).roles).toContain('auditor');
+    await setDirectRoleMember('auditor', DAVE, false);
+    expect((await resolveAuthorization(DAVE)).roles).not.toContain('auditor');
+  });
+  it('deleting a group cascades its memberships and roles without deleting the role definition', async () => {
+    await createRole(custom);
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (99, 'Auditors')`.execute(db);
+    await setGroupCapabilities(99, ['auditor']);
+    await addManualMember(99, DAVE, ALICE);
+    await deleteGroup(99);
+    expect((await resolveAuthorization(DAVE)).roles).not.toContain('auditor');
+    expect((await listRoleDefinitions()).some(r => r.key === 'auditor')).toBe(true);
+    expect((await sql`SELECT 1 FROM explorer_group_member WHERE group_id = 99`.execute(db)).rows).toHaveLength(0);
+    expect((await sql`SELECT 1 FROM explorer_group_capability WHERE group_id = 99`.execute(db)).rows).toHaveLength(0);
+  });
+  it('rechecks revoked memberships even if the request started with an old viewer', async () => {
+    await sql`DELETE FROM explorer_role WHERE player_uuid_bin = ${uuidToBin(ALICE)} AND role = 'admin'`.execute(db);
+    await expect(createRole(custom)).rejects.toThrow('Forbidden');
+    expect((await listRoleDefinitions()).some(r => r.key === 'auditor')).toBe(false);
+  });
+  it('rejects invented permissions and assignments to roles outside the registry', async () => {
+    // @ts-expect-error Exercise untrusted server-action input.
+    await expect(createRole({ ...custom, permissions: ['invented'] })).rejects.toThrow('Unknown permission');
+    await expect(setDirectRoleMember('missing', BOB, true)).rejects.toThrow('Unknown role');
   });
 });

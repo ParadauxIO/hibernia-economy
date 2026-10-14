@@ -37,6 +37,8 @@ export const db = new Kysely<DB>({ dialect: new MysqlDialect({ pool: pool as any
 // entry means "no typed columns yet"; queries that use raw sql`` template literals
 // pass their own row interface and don't depend on this registry.
 export interface DB {
+  explorer_role_definition: { role_key: string; name: string; description: string | null; revision: Generated<number> };
+  explorer_role_permission: { role_key: string; permission: string };
   explorer_role: { player_uuid_bin: Buffer; role: string; granted_at: Date; granted_by_uuid_bin: Buffer | null };
   explorer_identity: {
     keycloak_sub: string;
@@ -61,11 +63,13 @@ export interface DB {
     created_at: Date;
     created_by_uuid_bin: Buffer | null;
   };
+  explorer_lp_group_member: { lp_group: string; player_uuid_bin: Buffer; synced_at: Date };
   explorer_group_capability: { group_id: number; capability: string };
   explorer_group_member: {
     group_id: number;
     player_uuid_bin: Buffer;
     source: 'manual' | 'luckperms';
+    synced_at: Date | null;
     added_at: Date;
     added_by_uuid_bin: Buffer | null;
   };

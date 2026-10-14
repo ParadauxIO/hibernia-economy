@@ -10,11 +10,10 @@ import {
   countAccountTransactions,
   getCounterparties,
   getAccountActivityCalendar,
-  canReadAccount,
 } from '@/lib/sql/ledger';
 import { accountLabel, fmtAmt, fmtAmtFull, fmtN, fmtTs, shortenUuid } from '@/lib/format';
 import { getViewer } from '@/lib/auth/viewer';
-import { hasElevatedRead, isStaff } from '@/lib/auth/access';
+import { hasElevatedRead, canViewAccount } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import { Pagination } from '@/components/Pagination';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -23,7 +22,7 @@ import { BackLink } from '@/components/BackLink';
 import { BalanceLine, InOutChart } from '@/components/charts/AreaTimeline';
 import { ActivityCalendar } from '@/components/charts/ActivityCalendar';
 import { getAccountTrajectory } from '@/lib/sql/ledger';
-import { listPlayerFirmMemberships, getAccountFirmId, hasFirmFinancialAccess } from '@/lib/sql/firm';
+import { listPlayerFirmMemberships } from '@/lib/sql/firm';
 import { memo } from '@/lib/cache';
 
 const SP_SCHEMA = z.object({
@@ -55,29 +54,12 @@ export default async function AccountDetailPage({
   const account = await findAccount(id);
   if (!account) notFound();
 
-  // Anonymous baseline: balance + metadata visible to all (matches /balance
-  // in-game). Per-account history is drilldown — own-data-only: the account
-  // owner sees their own activity; staff (admin / government) see everyone's.
+  // Balances remain public; Auth combines role permissions and relationships
+  // before any private history query or shared-cache read.
   const isOwner = !viewer.anon && !!viewer.minecraftUuid && account.owner_uuid === viewer.minecraftUuid;
-  let canSeeHistory = isStaff(viewer) || isOwner;
-  // A firm account's history is also visible to that firm's finance-role
-  // employees (FINANCIAL/ADMIN), matching the firm-financials access model.
-  if (!canSeeHistory && !viewer.anon && viewer.minecraftUuid) {
-    const firmId = await getAccountFirmId(id);
-    if (firmId) canSeeHistory = await hasFirmFinancialAccess(firmId, viewer.minecraftUuid);
-  }
-  // Explicit account access (Treasury): a member, authorizer, or read-only viewer
-  // of this account — e.g. a government department secretary (PAR-237). Scoped to
-  // the specific account, and the page only ever shows ledger postings, never the
-  // per-trade chestshop_sale breakdown.
-  if (!canSeeHistory && !viewer.anon && viewer.minecraftUuid) {
-    canSeeHistory = await canReadAccount(id, viewer.minecraftUuid);
-  }
+  const canSeeHistory = await canViewAccount(id, viewer);
 
-  // Audit privileged inspection: a staff member using elevated access to view
-  // someone ELSE's account history (their own view needs no elevation). Keyed on
-  // hasElevatedRead so the read-only `viewer` role (role 'player' + the viewer
-  // capability, PAR-265) is audited too — it reads via isStaff above.
+  // Record global staff inspections of someone else's account.
   if (hasElevatedRead(viewer) && !isOwner) {
     await auditView(viewer, { path: `/accounts/${id}`, targetType: 'account', targetId: String(id) });
   }

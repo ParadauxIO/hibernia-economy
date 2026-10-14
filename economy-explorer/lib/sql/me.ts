@@ -26,10 +26,7 @@ export async function findAccountsForPlayer(playerUuid: string): Promise<Explore
     LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
     LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
     WHERE a.owner_uuid_bin = ${bin}
-       -- Same WEB read rule as canReadAccount via the shared account_read_access_web
-       -- view (ADT-13): VIEWER counts. Previously this list filtered MEMBER/AUTHORIZER
-       -- only, so an account a player could open (canReadAccount) never appeared in
-       -- their own "my accounts" list — the explorer disagreeing with itself.
+       -- Same direct, LP and firm-finance relationships as Auth.canViewAccount.
        OR a.account_id IN (SELECT account_id FROM account_read_access_web
                            WHERE subject_uuid_bin = ${bin})
     ORDER BY balance DESC
