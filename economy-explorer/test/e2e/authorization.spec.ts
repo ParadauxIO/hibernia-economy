@@ -1,8 +1,8 @@
-import { test as base, expect, type BrowserContext, type Page, type Locator } from '@playwright/test';
+import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 import { encode } from 'next-auth/jwt';
 import { randomUUID } from 'node:crypto';
 import mysql, { type Connection, type RowDataPacket } from 'mysql2/promise';
-import { visit } from './helpers';
+import { visit, submitReload } from './helpers';
 
 // No e2e_viewer cookie: these tests use signed Auth.js sessions, the real edge
 // middleware, live identity/role resolution and the real database. Only the
@@ -58,12 +58,6 @@ async function permission(context: BrowserContext, name: string) {
   return (await response.json()).permissions.includes(name);
 }
 
-async function submitReload(page: Page, button: Locator) {
-  await Promise.all([page.waitForEvent('load'), button.click()]);
-  // A load event can precede React applying the final streamed Suspense segment.
-  await expect(page.locator('[aria-busy="true"], div[hidden][id^="S:"]')).toHaveCount(0);
-}
-
 test('edge rejects forged and expired sessions; valid sessions still need live permissions', async ({ context, page, policy }) => {
   for (const forged of ['', 'forged-session']) {
     await context.clearCookies();
@@ -96,10 +90,10 @@ test('role editor changes a real assignee’s access without replacing their ses
     await page.getByLabel('Role key', { exact: true }).fill(policy.key);
     await page.getByLabel('Display name', { exact: true }).fill(policy.key);
     await page.getByRole('checkbox', { name: /^api_keys\.read\b/ }).check();
-    await page.getByRole('button', { name: 'Create role', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Create role', exact: true }));
     await expect(page).toHaveURL(new RegExp(`/admin/roles/${policy.key}$`));
     await page.getByLabel('Player name or UUID').fill(policy.player);
-    await page.getByRole('button', { name: 'Assign role', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Assign role', exact: true }));
     await expect.poll(() => permission(recipient, 'api_keys.read')).toBe(true);
     const target = await recipient.newPage();
     await visit(target, `${baseURL}/admin/api-keys`);
@@ -107,17 +101,17 @@ test('role editor changes a real assignee’s access without replacing their ses
     await expect(target.getByRole('button', { name: /Revoke|Rotate|Limit/ })).toHaveCount(0);
     await page.getByRole('checkbox', { name: /^api_keys\.read\b/ }).uncheck();
     await page.getByRole('checkbox', { name: /^market\.sales\.read\b/ }).check();
-    await page.getByRole('button', { name: 'Save permissions', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Save permissions', exact: true }));
     await expect.poll(() => permission(recipient, 'api_keys.read')).toBe(false);
     await expect.poll(() => permission(recipient, 'market.sales.read')).toBe(true);
     await visit(target, `${baseURL}/admin/api-keys`);
     await expect(target.locator('.privacy-gate')).toBeVisible();
     await visit(page, `/admin/roles/${policy.key}`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
-    await page.getByRole('button', { name: 'Remove direct assignment' }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Remove direct assignment' }));
     await expect.poll(() => permission(recipient, 'market.sales.read')).toBe(false);
     page.once('dialog', dialog => dialog.accept());
-    await page.getByRole('button', { name: 'Delete role', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Delete role', exact: true }));
     await expect(page).toHaveURL(/\/admin\/roles$/);
     await expect(page.getByRole('link', { name: policy.key, exact: true })).toHaveCount(0);
   } finally { await recipient.close(); }

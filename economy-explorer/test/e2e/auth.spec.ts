@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
 import mysql from 'mysql2/promise';
-import { dataTable, visit } from './helpers';
+import { dataTable, visit, submitReload } from './helpers';
 
 // These require the app running with E2E_TEST_AUTH=1 against the seeded test DB
 // (the CI e2e job sets E2E_AUTH_SHIM=1 to enable them). Skipped otherwise so a
@@ -105,10 +105,10 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     await page.getByLabel('Role key', { exact: true }).fill(key);
     await page.getByLabel('Display name', { exact: true }).fill('Test key reader');
     await page.getByRole('checkbox', { name: /^api_keys\.read\b/ }).check();
-    await page.getByRole('button', { name: 'Create role', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Create role', exact: true }));
     await expect(page).toHaveURL(new RegExp(`/admin/roles/${key}$`));
     await page.getByLabel('Player name or UUID').fill('Bob');
-    await page.getByRole('button', { name: 'Assign role', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Assign role', exact: true }));
     await expect(page.getByRole('cell', { name: 'Bob', exact: true })).toBeVisible();
 
     await loginAs(context, key);
@@ -124,7 +124,7 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     await visit(page, `/admin/roles/${key}`);
     await page.getByRole('checkbox', { name: /^api_keys\.read\b/ }).uncheck();
     await page.getByRole('checkbox', { name: /^market\.sales\.read\b/ }).check();
-    await page.getByRole('button', { name: 'Save permissions', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Save permissions', exact: true }));
     await expect.poll(async () => {
       const [rows] = await conn.query<mysql.RowDataPacket[]>('SELECT revision FROM explorer_role_definition WHERE role_key = ?', [key]);
       return rows[0]?.revision;
@@ -138,7 +138,7 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     await loginAs(context, 'admin');
     await visit(page, `/admin/roles/${key}`);
     page.once('dialog', dialog => dialog.accept());
-    await page.getByRole('button', { name: 'Delete role', exact: true }).click();
+    await submitReload(page, page.getByRole('button', { name: 'Delete role', exact: true }));
     await expect(page).toHaveURL(/\/admin\/roles$/);
     const [grants] = await conn.query<mysql.RowDataPacket[]>('SELECT role FROM explorer_role WHERE role = ?', [key]);
     expect(grants).toHaveLength(0);
