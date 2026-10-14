@@ -77,10 +77,12 @@ The agent also restarts the server if it crashes.
 
 The development `treasury-rest-api` and `economy-explorer` in the cluster use
 the same sandbox database, so the dev API, explorer and server all see the same
-data. `start-local.sh` relays the database to srv3's `cilium_host` address
-(pods only), the gitops `dev-server-db` Service in `development` points there,
-and the `economy-dev-server` Secret holds the `economy_dev` login, the dev
-server plugin's JWT secret and the explorer's admin token.
+data. `start-local.sh` relays the database to srv3's `cilium_host` address,
+`10.0.1.37:33306` (pods only), which the gitops development overlays use
+directly (a selectorless Service would need an EndpointSlice, and Argo CD
+excludes those from sync). The `economy-dev-server` Secret holds the
+`economy_dev` login, the dev server plugin's JWT secret and the explorer's
+admin token.
 [`setup-cluster-secret.sh`](../ops/dev-server/setup-cluster-secret.sh) creates
 or refreshes that Secret; run it on srv3 when the token nears expiry (180
 days) or the dev server's secrets change.
