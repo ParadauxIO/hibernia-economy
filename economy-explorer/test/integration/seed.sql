@@ -133,6 +133,16 @@ INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES
 
 UPDATE explorer_group_member SET synced_at = CURRENT_TIMESTAMP WHERE source = 'luckperms';
 
+-- Published tax config as Treasury writes it (PAR-80), plus a non-tax key the
+-- tax reader must not pick up.
+INSERT INTO economy_config (config_key, owner, value_type, config_value, updated_at) VALUES
+  ('tax.balance.enabled', 'treasury', 'BOOLEAN', 'true', '2026-10-01 10:00:00'),
+  ('tax.balance.brackets', 'treasury', 'JSON', '[{"floor":"0.00","rate":"0"},{"floor":"100000.00","rate":"0.01"}]', '2026-10-02 10:00:00'),
+  ('tax.source-income-tax.enabled', 'treasury', 'BOOLEAN', 'true', '2026-10-01 10:00:00'),
+  ('tax.source-income-tax.default-rate', 'treasury', 'DECIMAL', '0.05', '2026-10-01 10:00:00'),
+  ('tax.source-income-tax.plugin-rates', 'treasury', 'JSON', '{"Jobs":"0.1"}', '2026-10-01 10:00:00'),
+  ('salaries.enabled', 'treasury', 'BOOLEAN', 'false', '2026-10-01 10:00:00');
+
 -- Public shop comparison fixtures: prices are for the sign batch.
 INSERT INTO chestshop_shop (world, sign_x, sign_y, sign_z, material, item_key, item_name, buy_price, sell_price, batch_qty, current_stock, stock_at, shop_account_id, shop_account_type, shop_firm_id)
 VALUES ('world', 101, 64, 101, 'DIAMOND', 'DIAMOND', 'Diamond', 64.00, 32.00, 64, 128, NOW(), 3, 'BUSINESS', 1),

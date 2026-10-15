@@ -163,6 +163,14 @@ export interface ChestshopShop {
   worldUuid: Generated<Buffer | null>;
 }
 
+export interface EconomyConfig {
+  configKey: string;
+  configValue: string;
+  owner: string;
+  updatedAt: Generated<Date>;
+  valueType: "BOOLEAN" | "DECIMAL" | "JSON";
+}
+
 export interface EconomyPlayers {
   currentName: string;
   firstSeen: Generated<Date>;
@@ -450,6 +458,7 @@ export interface DB {
   chestshopPreviewPreference: ChestshopPreviewPreference;
   chestshopSale: ChestshopSale;
   chestshopShop: ChestshopShop;
+  economyConfig: EconomyConfig;
   economyPlayers: EconomyPlayers;
   explorerAudit: ExplorerAudit;
   explorerGroup: ExplorerGroup;

@@ -417,3 +417,13 @@ WHERE aga.removed_at IS NULL AND gm.synced_at > CURRENT_TIMESTAMP - INTERVAL 1 H
 UNION
 SELECT fa.account_id, ff.subject_uuid_bin FROM firm_accounts fa
 JOIN firm_financial_access_web ff ON ff.firm_id = fa.firm_id;
+
+-- economy-flyway V32: plugin config published for display (PAR-80).
+CREATE TABLE `economy_config` (
+  `config_key` varchar(128) NOT NULL,
+  `owner` varchar(32) NOT NULL,
+  `value_type` enum('BOOLEAN','DECIMAL','JSON') NOT NULL,
+  `config_value` text NOT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

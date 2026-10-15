@@ -46,7 +46,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 || path.startsWith("/v3/api-docs/") || path.equals("/v3/api-docs")
                 // Public ChestShop market endpoints: no Bearer token required. The
                 // rate limiter throttles these by client IP (anonymousPerMinute).
-                || path.startsWith("/api/v1/chestshop/") || path.equals("/api/v1/chestshop");
+                || path.startsWith("/api/v1/chestshop/") || path.equals("/api/v1/chestshop")
+                // Published server config (tax rates): public, same IP throttling.
+                || path.startsWith("/api/v1/config/") || path.equals("/api/v1/config");
     }
 
     @Override

@@ -15,7 +15,9 @@ import io.paradaux.hibernia.framework.i18n.Message;
  *       re-running the framework {@code ConfigurationProcessor} over them;</li>
  *   <li>the manually-parsed config POJOs (salaries, balance tax, source-income
  *       tax) by parsing candidates first and atomically publishing each immutable snapshot;</li>
- *   <li>the log level (re-applied via {@code LoggingConfigurer}).</li>
+ *   <li>the log level (re-applied via {@code LoggingConfigurer});</li>
+ *   <li>the published tax rates in {@code economy_config}, via
+ *       {@link ConfigPublishService} (PAR-80).</li>
  * </ul>
  *
  * <p><b>Not</b> reloaded (constructed once per JVM — need a restart): the DB pool,

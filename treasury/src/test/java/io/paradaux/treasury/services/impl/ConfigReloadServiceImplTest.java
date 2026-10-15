@@ -4,6 +4,7 @@ import io.paradaux.hibernia.framework.configurator.ConfigurationLoader;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.Treasury;
 import io.paradaux.treasury.model.config.*;
+import io.paradaux.treasury.services.ConfigPublishService;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,15 +39,16 @@ class ConfigReloadServiceImplTest {
         var oldBalance = balance.snapshot();
         var oldIncome = income.snapshot();
         Message message = mock(Message.class);
+        ConfigPublishService publisher = mock(ConfigPublishService.class);
         var service = new ConfigReloadServiceImpl(plugin, message, mock(ConfigurationLoader.class),
-                salary, balance, income, mock(LoggingConfiguration.class));
+                salary, balance, income, mock(LoggingConfiguration.class), publisher);
         assertThatIllegalArgumentException().isThrownBy(service::reloadAll)
                 .withMessageContaining("tax.source-income-tax.default-rate");
         assertThat(salary.snapshot()).isSameAs(oldSalary);
         assertThat(balance.snapshot()).isSameAs(oldBalance);
         assertThat(income.snapshot()).isSameAs(oldIncome);
         verify(plugin, never()).reloadConfig();
-        verifyNoInteractions(message);
+        verifyNoInteractions(message, publisher);
     }
 
     @Test
@@ -56,7 +58,8 @@ class ConfigReloadServiceImplTest {
         when(plugin.getDataFolder()).thenReturn(directory.toFile());
         var service = new ConfigReloadServiceImpl(plugin, mock(Message.class), mock(ConfigurationLoader.class),
                 mock(SalaryConfiguration.class), mock(BalanceTaxConfiguration.class),
-                mock(SourceIncomeTaxConfiguration.class), mock(LoggingConfiguration.class));
+                mock(SourceIncomeTaxConfiguration.class), mock(LoggingConfiguration.class),
+                mock(ConfigPublishService.class));
         assertThatIllegalArgumentException().isThrownBy(service::reloadAll);
         verify(plugin, never()).reloadConfig();
         verify(plugin, never()).getConfig();
@@ -92,7 +95,10 @@ class ConfigReloadServiceImplTest {
         var loader = mock(ConfigurationLoader.class);
         when(loader.getComponents()).thenReturn(java.util.Map.of(LoggingConfiguration.class, logging));
         Message message = mock(Message.class);
-        var service = new ConfigReloadServiceImpl(plugin, message, loader, salary, balance, income, logging);
+        // Publishing the docs copy is fail-open: a failed write must not fail the reload.
+        ConfigPublishService publisher = mock(ConfigPublishService.class);
+        doThrow(new IllegalStateException("economy_config missing")).when(publisher).publish();
+        var service = new ConfigReloadServiceImpl(plugin, message, loader, salary, balance, income, logging, publisher);
         try (var levels = mockStatic(io.paradaux.treasury.utils.LoggingConfigurer.class)) {
             service.reloadAll();
             levels.verify(() -> io.paradaux.treasury.utils.LoggingConfigurer.apply("INFO"));
@@ -102,5 +108,6 @@ class ConfigReloadServiceImplTest {
         assertThat(income.getGovernmentAccount()).isEqualTo("New");
         assertThat(logging.getLevel()).isEqualTo("INFO");
         verify(message).reload();
+        verify(publisher).publish();
     }
 }

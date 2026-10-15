@@ -100,6 +100,33 @@ the rule in `V<n>`, not in a mapper or a Kysely query — cross-side conformance
 tests guard it (`MembershipAccessIT`, `MembershipServiceIT`, the explorer
 integration suite).
 
+## Published config — `economy_config`
+
+Config files stay the source of truth for plugin tunables, but some of them (tax
+rates first) are shown to players, and hand-copied numbers in the docs drift. So
+the owning plugin **publishes** the values it is applying into `economy_config`
+(`V32`) on every start and reload, and readers display them from there (PAR-80):
+
+| Writer | Keys | Read by |
+|---|---|---|
+| Treasury (`ConfigPublishService`, owner `treasury`) | `tax.balance.{enabled,brackets}`, `tax.source-income-tax.{enabled,default-rate,plugin-rates}` | explorer docs live blocks (`/api/docs/tax-rates`), REST `GET /api/v1/config/tax` |
+
+- One row per setting: `value_type` is `BOOLEAN`, `DECIMAL` or `JSON`; decimals are
+  plain strings at their configured scale. The JSON shapes are documented on
+  `ConfigPublishService`.
+- `updated_at` only moves when a value changes, so it means "in effect since".
+- A writer deletes its own (`owner`) keys it no longer publishes; it never touches
+  another owner's rows.
+- **Nothing reads this table to decide behaviour.** It is a display copy; the plugin
+  keeps using its in-memory config. Publishing is fail-open: a failed write logs a
+  warning and the plugin starts anyway.
+
+To publish another setting, add the key in the owning plugin's publisher and teach
+the reader to display it. In the explorer docs, a page shows it with a fenced
+` ```live ` block naming the widget (see `lib/docsLive.ts`); the docs stay
+statically generated and the `LiveDocBlocks` client component fills the block from
+the running server.
+
 ## Rollback
 
 There is no automated rollback. The canonical recovery path is **restore from the
