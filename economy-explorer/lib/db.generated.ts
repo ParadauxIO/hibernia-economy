@@ -259,7 +259,9 @@ export interface Firm {
   firmId: Generated<number>;
   hqRegion: Generated<string | null>;
   isArchived: Generated<number>;
+  nameReleased: Generated<number>;
   proprietorUuidBin: Buffer;
+  reservedDisplayName: Generated<string | null>;
   updatedAt: Generated<Date>;
 }
 
