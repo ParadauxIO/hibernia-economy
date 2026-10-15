@@ -27,4 +27,9 @@ public class DueDelivery {
     private LocalDateTime settlementTime;
     private UUID initiatorUuidBin;
     private String pluginSystem;
+    // the other leg's account; null if the transaction has no other posting
+    private Long counterpartyAccountId;
+    private String counterpartyAccountType;
+    private String counterpartyDisplayName;
+    private UUID counterpartyOwnerUuidBin;
 }

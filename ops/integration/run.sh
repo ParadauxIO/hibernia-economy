@@ -47,6 +47,9 @@ MC_PORT="${IT_MC_PORT:-25565}"
 RCON_PORT="${IT_RCON_PORT:-25575}"
 RCON_PASSWORD="${IT_RCON_PASSWORD:-dev}"
 REST_PORT="${IT_REST_PORT:-8080}"
+# The tests run a local HTTP receiver here; the REST API is told it may deliver
+# webhooks to it despite the SSRF guard (treasury.webhook.insecure-test-targets).
+WEBHOOK_PORT="${IT_WEBHOOK_PORT:-8099}"
 DB_EXTERNAL="${IT_DB_EXTERNAL:-0}"
 DB_HOST="${IT_DB_HOST:-127.0.0.1}"
 DB_PORT="${IT_DB_PORT:-33306}"
@@ -243,7 +246,8 @@ done
 log "Starting the REST API on :$REST_PORT"
 DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \
     java -jar "$ROOT"/treasury-rest-api/build/libs/treasury-rest-api-*.jar \
-    --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" >"$WORK/rest-api.log" 2>&1 &
+    --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" \
+    --treasury.webhook.insecure-test-targets="127.0.0.1:$WEBHOOK_PORT" >"$WORK/rest-api.log" 2>&1 &
 PIDS+=($!)
 wait_for_port "$REST_PORT" 120 "REST API" "${PIDS[-1]}"
 
@@ -252,6 +256,7 @@ log "Running the integration tests"
 # The REST settings go by env var: tests/build.gradle.kts only forwards the
 # connection -D properties listed there to the forked test JVM.
 (cd "$ROOT" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
+    WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" \
     sh ./gradlew -p "$TESTS_DIR" --console=plain :tests:test \
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \

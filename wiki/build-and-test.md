@@ -171,9 +171,15 @@ runs the tests and tears everything down. Work files and logs go to
 - **Needs:** JDK 21, `curl`, and either a local `mariadbd` (a scratch
   instance is started on port 33306) or `IT_DB_EXTERNAL=1` plus `IT_DB_*` pointing at
   a running server whose `IT_DB_NAME` database may be dropped.
-- **Ports:** 25565 (game), 25575 (RCON), 8080 (REST) by default; override with
-  `IT_MC_PORT`, `IT_RCON_PORT`, `IT_REST_PORT`, `IT_DB_PORT` to run several stacks
-  side by side, each with its own `IT_WORK_DIR`.
+- **Ports:** 25565 (game), 25575 (RCON), 8080 (REST) and 8099 (the tests' webhook
+  receiver) by default; override with `IT_MC_PORT`, `IT_RCON_PORT`, `IT_REST_PORT`,
+  `IT_WEBHOOK_PORT`, `IT_DB_PORT` to run several stacks side by side, each with its
+  own `IT_WORK_DIR`.
+- **Webhooks:** the REST API is started with
+  `--treasury.webhook.insecure-test-targets=127.0.0.1:<IT_WEBHOOK_PORT>`, which lets
+  it deliver to the receiver the tests run on that port. Only that exact `host:port`
+  skips the SSRF guard, and the API refuses to start with the setting under the
+  `prod` or `uat` profile.
 - **Iterating:** `IT_SKIP_BUILD=1` reuses the jars from the last run;
   `IT_GRADLE_ARGS` passes extra arguments to the plugin build (for example
   `-PuseMavenLocal` to test against a locally published hibernia-framework).

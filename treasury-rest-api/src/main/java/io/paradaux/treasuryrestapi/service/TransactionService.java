@@ -186,7 +186,12 @@ public class TransactionService {
                 row.getMessage(),
                 row.getSettlementTime().toInstant(ZoneOffset.UTC),
                 row.getInitiatorUuidBin() != null ? row.getInitiatorUuidBin().toString() : null,
-                row.getPluginSystem()
+                row.getPluginSystem(),
+                TransactionItem.Counterparty.of(
+                        row.getCounterpartyAccountId(),
+                        row.getCounterpartyAccountType(),
+                        row.getCounterpartyDisplayName(),
+                        row.getCounterpartyOwnerUuidBin())
         );
     }
 }
