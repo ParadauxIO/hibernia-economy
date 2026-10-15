@@ -37,7 +37,7 @@ export function SubNav({ items }: { items: SubNavItem[] }) {
 // Mirrors the SPA's ECONOMY_SUB / MARKET_SUB lists in ExplorerLayout.
 export const ECONOMY_SUB: SubNavItem[] = [
   { href: '/', label: 'Overview', match: (p) => p === '/' },
-  { href: '/economy/health', label: 'Health', match: (p) => p.startsWith('/economy/health') },
+  { href: '/economy/wealth', label: 'Wealth', match: (p) => p.startsWith('/economy/wealth') },
   { href: '/money-flow', label: 'Money Flow', match: (p) => p.startsWith('/money-flow') },
   { href: '/government', label: 'Government', match: (p) => p.startsWith('/government') },
 ];
@@ -46,9 +46,9 @@ export const ECONOMY_SUB: SubNavItem[] = [
 // duplicated the main Firms page). The raw Sales feed is for moderators and admins — regular
 // players don't need to know it exists.
 export const MARKET_SUB: SubNavItem[] = [
-  { href: '/market', label: 'Overview', match: (p) => p === '/market' },
-  { href: '/chestshop', label: 'Items', match: (p) => p.startsWith('/chestshop/items') || p === '/chestshop' },
-  { href: '/chestshop/shops', label: 'Shops', match: (p) => p.startsWith('/chestshop/shops') },
+  { href: '/market', label: 'Browse Items', match: (p) => p === '/market' || p === '/chestshop' || p.startsWith('/chestshop/items') },
+  { href: '/chestshop/shops', label: 'Find Shops', match: (p) => p.startsWith('/chestshop/shops') },
+  { href: '/market/activity', label: 'Activity', match: (p) => p.startsWith('/market/activity') },
 ];
 
 const MARKET_SALES: SubNavItem = {
@@ -61,7 +61,7 @@ const MARKET_SALES: SubNavItem = {
 export function pickSubNav(path: string, canInvestigate: boolean): SubNavItem[] | null {
   if (
     path === '/' ||
-    path.startsWith('/economy/health') ||
+    path.startsWith('/economy/') ||
     path.startsWith('/money-flow') ||
     path.startsWith('/government')
   ) {

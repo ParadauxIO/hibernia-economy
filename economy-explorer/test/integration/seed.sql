@@ -132,3 +132,8 @@ INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES
   (15, 9, -0.20), (15, 2,  0.20);
 
 UPDATE explorer_group_member SET synced_at = CURRENT_TIMESTAMP WHERE source = 'luckperms';
+
+-- Public shop comparison fixtures: prices are for the sign batch.
+INSERT INTO chestshop_shop (world, sign_x, sign_y, sign_z, material, item_key, item_name, buy_price, sell_price, batch_qty, current_stock, stock_at, shop_account_id, shop_account_type, shop_firm_id)
+VALUES ('world', 101, 64, 101, 'DIAMOND', 'DIAMOND', 'Diamond', 64.00, 32.00, 64, 128, NOW(), 3, 'BUSINESS', 1),
+       ('world', 102, 64, 101, 'DIAMOND', 'DIAMOND', 'Diamond', 2.00, 1.50, 1, 10, NOW(), 3, 'BUSINESS', 1);

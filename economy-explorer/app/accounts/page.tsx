@@ -1,3 +1,4 @@
+import { DirectorySort } from '@/components/DirectorySort';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -100,13 +101,14 @@ export default async function AccountsPage({
         }
       />
 
-      <div className="table-wrap"><table className="data-table">
+      <DirectorySort basePath="/accounts" params={raw} sort={sp.sort} dir={dir} options={[{ label: 'Richest', sort: 'balance', dir: 'DESC' }, { label: 'Newest', sort: 'created', dir: 'DESC' }, { label: 'Name A–Z', sort: 'name', dir: 'ASC' }]} />
+      <div className="table-wrap directory-wrap"><table className="data-table directory-table">
         <thead>
           <tr>
             <th>{sortHeader('Name', 'name', sp.sort, dir, raw)}</th>
-            <th>{sortHeader('Type', 'type', sp.sort, dir, raw)}</th>
+            <th data-secondary="true">{sortHeader('Type', 'type', sp.sort, dir, raw)}</th>
             <th className="amount">{sortHeader('Balance', 'balance', sp.sort, dir, raw)}</th>
-            <th className="ts">{sortHeader('Created', 'created', sp.sort, dir, raw)}</th>
+            <th data-secondary="true" className="ts">{sortHeader('Created', 'created', sp.sort, dir, raw)}</th>
           </tr>
         </thead>
         <tbody>
@@ -122,7 +124,7 @@ export default async function AccountsPage({
               <td>
                 <Link href={`/accounts/${a.account_id}` as Route} className="rowlink" prefetch={false}>
                   <span style={{ fontWeight: 500 }}>{accountLabel(a)}</span>
-                  <span className="mono muted small">{` #${a.account_id}`}</span>
+                  <span className="mono muted small desktop-only">{` #${a.account_id}`}</span>
                   {a.display_name && !looksLikeUuid(a.display_name) && a.owner_name && a.display_name !== a.owner_name && (
                     <span className="muted small">{` owner: ${a.owner_name}`}</span>
                   )}
@@ -130,12 +132,13 @@ export default async function AccountsPage({
                     <span className="mono muted small" title={a.owner_uuid}>{` ${shortenUuid(a.owner_uuid)}`}</span>
                   )}
                 </Link>
+                <details className="mobile-only directory-details"><summary>Details</summary><p>#{a.account_id} · {a.account_type}</p><p>Created {fmtTs(a.created_at)}</p></details>
               </td>
-              <td>
+              <td data-secondary="true">
                 <span className={`badge badge-${a.account_type}`}>{a.account_type}</span>
               </td>
               <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
-              <td className="ts">{fmtTs(a.created_at)}</td>
+              <td data-secondary="true" className="ts">{fmtTs(a.created_at)}</td>
             </tr>
           ))}
         </tbody>

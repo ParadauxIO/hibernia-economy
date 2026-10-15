@@ -17,10 +17,8 @@ test.describe('anonymous browsing', () => {
     await visit(page, '/');
     await expect(page.getByRole('heading', { name: 'Economy', level: 1 })).toBeVisible();
     await expect(page.getByText('Personal supply')).toBeVisible();
-    // money velocity was a regression (showed '—'); assert it computes a value
-    const velocity = page.locator('.insight', { hasText: 'Money velocity' }).locator('.value');
-    await expect(velocity).not.toHaveText('—');
-    // gini renders a number
+    await expect(page.getByText('Active players / 30d', { exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Wealth', exact: true }).click();
     const gini = page.locator('.insight', { hasText: 'Gini' }).locator('.value');
     await expect(gini).toHaveText(/^0\.\d+$/);
     await page.waitForTimeout(1500);
@@ -49,13 +47,18 @@ test.describe('anonymous browsing', () => {
     await expect(dataTable(page)).toHaveCount(0);
   });
 
-  test('market hides the Firms + Sales tabs and shows Avg sale', async ({ page }) => {
+  test('market browsing links to activity and searches the full catalogue', async ({ page }) => {
     await visit(page, '/market');
     const tabs = page.locator('.section-tabs a');
     await expect(tabs.filter({ hasText: 'Items' })).toBeVisible();
     await expect(tabs.filter({ hasText: 'Firms' })).toHaveCount(0);
     await expect(tabs.filter({ hasText: 'Sales' })).toHaveCount(0);
-    await expect(page.getByText('Avg sale')).toBeVisible();
+    await page.getByLabel('Find an item', { exact: true }).fill('Diamond');
+    await page.getByRole('button', { name: 'Search all items' }).click();
+    await expect(page).toHaveURL(/chestshop\?q=Diamond/);
+    await expect(page.getByRole('heading', { name: 'Browse items' })).toBeVisible();
+    await page.getByRole('link', { name: 'Activity', exact: true }).click();
+    await expect(page.getByText('Avg sale', { exact: true })).toBeVisible();
   });
 
   test('per-firm financials are private to anonymous viewers', async ({ page }) => {
@@ -97,4 +100,68 @@ test.describe('anonymous browsing', () => {
 test('healthz returns 200 without the DB', async ({ request }) => {
   const res = await request.get('/healthz');
   expect(res.status()).toBe(200);
+});
+
+test('Health bookmarks preserve their window on the consolidated overview', async ({ page }) => {
+  await visit(page, '/economy/health?days=7');
+  await expect(page).toHaveURL(/\?days=7$/);
+  await expect(page.getByText('Active players / 7d', { exact: true })).toBeVisible();
+});
+
+test('shop discovery normalises batches and switches to selling', async ({ page }) => {
+  await visit(page, '/chestshop/shops?item=DIAMOND');
+  await expect(page.locator('.offer-price').first()).toContainText('$1.00');
+  await page.getByLabel('Trade direction', { exact: true }).selectOption('sell');
+  await expect(page).toHaveURL(/direction=sell/);
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('.offer-price').first()).toContainText('$1.50');
+  await page.getByLabel('Price units').selectOption('64');
+  await expect(page.locator('.offer-price').first()).toContainText('$96.00');
+});
+
+test('item pages put observed offers before optional advanced history', async ({ page }) => {
+  await visit(page, '/chestshop/items/DIAMOND');
+  await expect(page.getByRole('heading', { name: 'Where to trade' })).toBeVisible();
+  await expect(page.locator('.offer-card')).toHaveCount(2);
+  await expect(page.getByText('Candles', { exact: true })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Show advanced candlesticks' }).click();
+  await expect(page.getByRole('link', { name: 'Hide advanced candlesticks' })).toBeVisible();
+});
+
+test('mobile global search opens, focuses and closes with Escape', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await visit(page, '/');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  const input = page.getByRole('searchbox', { name: 'Search', exact: true });
+  await expect(input).toBeFocused();
+  await input.fill('Alice');
+  await expect(page.getByRole('group', { name: 'Search suggestions' })).toBeVisible();
+  await input.press('Escape');
+  await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeFocused();
+  await expect(input).toBeHidden();
+});
+
+test('mobile account rows keep balances visible and expand secondary details', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await visit(page, '/accounts?sort=balance&dir=DESC');
+  const first = page.locator('.directory-table tbody tr').first();
+  await expect(first.locator('td.amount')).toBeVisible();
+  const box = await first.locator('td.amount').boundingBox();
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  await first.locator('summary').click();
+  await expect(first.locator('details')).toHaveAttribute('open', '');
+  await page.getByRole('link', { name: 'Newest', exact: true }).click();
+  await expect(page).toHaveURL(/sort=created/);
+});
+
+
+test('wealth keeps signed balances visible on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await visit(page, '/economy/wealth');
+  for (const table of await page.locator('.directory-table').all()) {
+    const balance = table.locator('tbody tr').first().locator('td.amount:visible').first();
+    await expect(balance).toBeVisible();
+    const box = await balance.boundingBox();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  }
 });

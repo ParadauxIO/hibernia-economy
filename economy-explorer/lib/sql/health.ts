@@ -71,3 +71,19 @@ export async function getNewPlayersDaily(days: number): Promise<DayCount[]> {
   `.execute(db);
   return r.rows.map((row) => ({ date: row.date, count: Number(row.count) }));
 }
+
+/** Equal rolling windows evaluated in one statement, so their boundary agrees. */
+export async function getActivityComparison(days: number) {
+  const r = await sql<{ period: string; transactions: string | number; volume: string }>`
+    SELECT CASE WHEN lt.settlement_time >= NOW() - INTERVAL ${days} DAY THEN 'current' ELSE 'previous' END AS period,
+      COUNT(DISTINCT lt.txn_id) AS transactions,
+      COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0) AS volume
+    FROM ledger_txns lt LEFT JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
+    WHERE lt.settlement_time >= NOW() - INTERVAL ${days * 2} DAY
+    GROUP BY period
+  `.execute(db);
+  const current = r.rows.find(r => r.period === 'current');
+  const previous = r.rows.find(r => r.period === 'previous');
+  return { current: { transactions: Number(current?.transactions ?? 0), volume: Number(current?.volume ?? 0) },
+    previous: { transactions: Number(previous?.transactions ?? 0), volume: Number(previous?.volume ?? 0) } };
+}

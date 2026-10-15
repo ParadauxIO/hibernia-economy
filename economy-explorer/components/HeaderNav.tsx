@@ -22,7 +22,7 @@ export function HeaderNav() {
       label: 'Economy',
       match: (p) =>
         p === '/' ||
-        p.startsWith('/economy/health') ||
+        p.startsWith('/economy/') ||
         p.startsWith('/money-flow') ||
         p.startsWith('/government'),
     },

@@ -33,11 +33,17 @@ interface VolumeTimelineProps {
 }
 
 export function VolumeTimeline({ data }: VolumeTimelineProps) {
+  const [metric, setMetric] = useState('both');
+  useEffect(() => { if (window.matchMedia('(max-width: 720px)').matches) setMetric('volume'); }, []);
   if (!data || data.length === 0) {
     return <EmptyChart>No data yet.</EmptyChart>;
   }
   const series = data.map((d) => ({ date: d.date, count: d.txn_count, volume: parseFloat(d.total_volume) }));
   return (
+    <>
+    <label className="chart-series-control">Show <select aria-label="Chart series" value={metric} onChange={e => setMetric(e.target.value)}><option value="both">Volume and transactions</option><option value="volume">Volume</option><option value="count">Transactions</option></select></label>
+    <div className="chart-legend">{metric !== 'count' && <span style={{ color: 'var(--c-1)' }}>● Volume · right axis</span>}{metric !== 'volume' && <span style={{ color: 'var(--c-3)' }}>● Transactions · left axis</span>}</div>
+    <p className="chart-subtitle">Daily buckets in UTC. The first and current day may be partial.</p>
     <RC height={230}>
       <AreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
@@ -52,8 +58,9 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
         </defs>
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis dataKey="date" tickFormatter={fmtDate} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={28} />
-        <YAxis yAxisId="vol" orientation="right" tickFormatter={(v) => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={56} />
+        <YAxis hide={metric === 'count'} yAxisId="vol" orientation="right" tickFormatter={(v) => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={56} />
         <YAxis
+          hide={metric === 'volume'}
           yAxisId="cnt"
           orientation="left"
           domain={[0, 'dataMax']}
@@ -71,10 +78,10 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
           labelFormatter={(d) => fmtDate(String(d))}
           formatter={(v: number, name: string) => name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), 'Txns']}
         />
-        <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill="url(#gVol)" dot={false} isAnimationActive={false} />
-        <Area yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill="url(#gCnt)" dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'count'} yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill="url(#gVol)" dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'volume'} yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill="url(#gCnt)" dot={false} isAnimationActive={false} />
       </AreaChart>
-    </RC>
+    </RC></>
   );
 }
 
