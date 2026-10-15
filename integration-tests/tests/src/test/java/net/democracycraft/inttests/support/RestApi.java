@@ -80,6 +80,47 @@ public final class RestApi {
         return send(req);
     }
 
+    /** GET /accounts/{accountId}/transactions/feed — the forward cursor "pull" feed. */
+    public static Response getTransactionFeed(String token, int accountId, Long since, Integer limit) {
+        StringBuilder url = new StringBuilder(BASE_URL + "/accounts/" + accountId + "/transactions/feed");
+        char sep = '?';
+        if (since != null) {
+            url.append(sep).append("since=").append(since);
+            sep = '&';
+        }
+        if (limit != null) {
+            url.append(sep).append("limit=").append(limit);
+        }
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url.toString()))
+                .timeout(Duration.ofSeconds(5))
+                .header("Authorization", "Bearer " + token)
+                .GET()
+                .build();
+        return send(req);
+    }
+
+    /** POST /webhooks — subscribe the token's account (or firm) to transaction events. */
+    public static Response postWebhook(String token, String url) {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(BASE_URL + "/webhooks"))
+                .timeout(Duration.ofSeconds(5))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"url\":\"" + url + "\"}"))
+                .build();
+        return send(req);
+    }
+
+    /** PATCH /webhooks/{id} — {@code body} is the raw JSON patch, e.g. {@code {"active":false}}. */
+    public static Response patchWebhook(String token, long id, String body) {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(BASE_URL + "/webhooks/" + id))
+                .timeout(Duration.ofSeconds(5))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return send(req);
+    }
+
     /** GET /firms/me — returns the firm associated with a BUSINESS token. */
     public static Response getMyFirm(String token) {
         HttpRequest req = HttpRequest.newBuilder(URI.create(BASE_URL + "/firms/me"))

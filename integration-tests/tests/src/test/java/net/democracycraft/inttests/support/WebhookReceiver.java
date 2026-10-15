@@ -1,0 +1,131 @@
+package net.democracycraft.inttests.support;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
+
+/**
+ * Local HTTP endpoint the REST API delivers webhooks to during the live suite.
+ * It listens on {@code 127.0.0.1:}{@value #DEFAULT_PORT} (or
+ * {@code WEBHOOK_RECEIVER_PORT}); {@code ops/integration/run.sh} starts the API
+ * with that exact {@code host:port} in {@code treasury.webhook.insecure-test-targets}
+ * so the SSRF guard lets deliveries through.
+ *
+ * <p>One receiver is shared by the whole test JVM and records every POST it
+ * gets, answering 200. Tests pick out their own deliveries by subscription id.
+ */
+public final class WebhookReceiver {
+
+    private static final int DEFAULT_PORT = 8099;
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static WebhookReceiver instance;
+
+    private final int port;
+    private final List<Delivery> received = new CopyOnWriteArrayList<>();
+
+    /** One recorded POST: its headers and the raw body (what the signature covers). */
+    public record Delivery(Map<String, List<String>> headers, byte[] rawBody) {
+        public String header(String name) {
+            return headers.entrySet().stream()
+                    .filter(e -> e.getKey().equalsIgnoreCase(name))
+                    .flatMap(e -> e.getValue().stream())
+                    .findFirst().orElse(null);
+        }
+
+        @Override
+        public String toString() {
+            return new String(rawBody, StandardCharsets.UTF_8);
+        }
+
+        public JsonNode json() {
+            try {
+                return JSON.readTree(rawBody);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Delivery body is not JSON: "
+                        + new String(rawBody, StandardCharsets.UTF_8), e);
+            }
+        }
+    }
+
+    private WebhookReceiver(int port) {
+        this.port = port;
+        try {
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+            server.createContext("/", this::handle);
+            server.start();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not start the webhook receiver on 127.0.0.1:" + port, e);
+        }
+    }
+
+    /** The shared receiver, started on first use. */
+    public static synchronized WebhookReceiver get() {
+        if (instance == null) {
+            String env = System.getenv("WEBHOOK_RECEIVER_PORT");
+            instance = new WebhookReceiver(env == null || env.isBlank() ? DEFAULT_PORT : Integer.parseInt(env));
+        }
+        return instance;
+    }
+
+    /** URL to register as a webhook target; {@code path} only labels the request. */
+    public String url(String path) {
+        return "http://127.0.0.1:" + port + "/" + path;
+    }
+
+    /** The first delivery for {@code subscriptionId} matching {@code filter}, waiting up to {@code timeout}. */
+    public Delivery await(long subscriptionId, Predicate<JsonNode> filter, Duration timeout) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            Optional<Delivery> match = find(subscriptionId, filter);
+            if (match.isPresent()) return match.get();
+            sleep(250);
+        }
+        throw new AssertionError("No webhook delivery for subscription " + subscriptionId + " within "
+                + timeout + " (received for it: " + forSubscription(subscriptionId).size() + ")");
+    }
+
+    /** Every delivery recorded so far for {@code subscriptionId}. */
+    public List<Delivery> forSubscription(long subscriptionId) {
+        List<Delivery> out = new ArrayList<>();
+        for (Delivery d : received) {
+            if (d.json().path("subscriptionId").asLong() == subscriptionId) out.add(d);
+        }
+        return out;
+    }
+
+    private Optional<Delivery> find(long subscriptionId, Predicate<JsonNode> filter) {
+        return forSubscription(subscriptionId).stream().filter(d -> filter.test(d.json())).findFirst();
+    }
+
+    private void handle(HttpExchange exchange) throws IOException {
+        try (exchange) {
+            byte[] body = exchange.getRequestBody().readAllBytes();
+            if ("POST".equals(exchange.getRequestMethod())) {
+                received.add(new Delivery(Map.copyOf(exchange.getRequestHeaders()), body));
+            }
+            exchange.sendResponseHeaders(200, -1);
+        }
+    }
+
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted", e);
+        }
+    }
+}

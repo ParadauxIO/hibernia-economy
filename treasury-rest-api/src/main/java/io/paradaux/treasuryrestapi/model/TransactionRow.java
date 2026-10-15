@@ -31,4 +31,9 @@ public class TransactionRow {
     private String pluginSystem;
     /** The posting's account — populated by the dispatcher tail query; 0 on the per-account history query. */
     private long accountId;
+    /** The other leg's account — populated by the history and feed queries; null if there is no other leg. */
+    private Long counterpartyAccountId;
+    private String counterpartyAccountType;
+    private String counterpartyDisplayName;
+    private UUID counterpartyOwnerUuidBin;
 }

@@ -53,6 +53,16 @@ public final class DiscordWebhook {
         fields.add(new Field("Amount", money(amount), true));
         fields.add(new Field("Account", "#" + d.getAccountId(), true));
         fields.add(new Field("Transaction", "#" + d.getTxnId(), true));
+        if (d.getCounterpartyAccountId() != null) {
+            String counterparty = "#" + d.getCounterpartyAccountId();
+            if (notBlank(d.getCounterpartyDisplayName())) {
+                counterparty += " " + d.getCounterpartyDisplayName();
+            }
+            if (d.getCounterpartyAccountType() != null) {
+                counterparty += " (" + d.getCounterpartyAccountType() + ")";
+            }
+            fields.add(new Field("Counterparty", trim(counterparty, 1024), false));
+        }
         if (notBlank(d.getPluginSystem())) {
             fields.add(new Field("System", trim(d.getPluginSystem(), 1024), true));
         }

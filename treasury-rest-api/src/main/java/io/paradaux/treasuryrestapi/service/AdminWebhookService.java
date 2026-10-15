@@ -6,7 +6,6 @@ import io.paradaux.treasuryrestapi.mapper.WebhookSubscriptionMapper;
 import io.paradaux.treasuryrestapi.model.WebhookSubscription;
 import io.paradaux.treasuryrestapi.security.AdminScope;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
-import io.paradaux.treasuryrestapi.util.SsrfValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -46,15 +45,17 @@ public class AdminWebhookService {
     private static final Set<String> VALID_KEY_TYPES = Set.of("PERSONAL", "BUSINESS", "GOVERNMENT");
 
     private final WebhookSubscriptionMapper mapper;
+    private final WebhookTargetPolicy targetPolicy;
 
-    public AdminWebhookService(WebhookSubscriptionMapper mapper) {
+    public AdminWebhookService(WebhookSubscriptionMapper mapper, WebhookTargetPolicy targetPolicy) {
         this.mapper = mapper;
+        this.targetPolicy = targetPolicy;
     }
 
     @Transactional
     public long create(VerifiedToken verified, WebhookCreateRequest req) {
         AdminScope.require(verified);
-        SsrfValidator.validate(req.targetUrl()); // https, public address, standard port
+        targetPolicy.validate(req.targetUrl()); // https, public address, standard port
         validateSecret(req.secret());
         validateKeyType(req.keyType());
         WebhookSubscription sub = new WebhookSubscription();
@@ -78,7 +79,7 @@ public class AdminWebhookService {
 
     public int setUrl(VerifiedToken verified, long id, UUID ownerUuid, String targetUrl) {
         AdminScope.require(verified);
-        SsrfValidator.validate(targetUrl);
+        targetPolicy.validate(targetUrl);
         return mapper.setUrlScoped(id, ownerUuid, targetUrl.trim());
     }
 

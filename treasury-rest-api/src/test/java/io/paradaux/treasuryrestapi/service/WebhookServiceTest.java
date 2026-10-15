@@ -30,7 +30,7 @@ class WebhookServiceTest {
     private static final String URL = "https://93.184.216.34/hook";
 
     private final StubMapper mapper = new StubMapper();
-    private final WebhookService service = new WebhookService(mapper, 2);
+    private final WebhookService service = new WebhookService(mapper, WebhookTargetPolicy.strict(), 2);
 
     private static VerifiedToken personal(long keyId, long accountId) {
         return new VerifiedToken(keyId, OWNER, "PERSONAL", accountId, null);

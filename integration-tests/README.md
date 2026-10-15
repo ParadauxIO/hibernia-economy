@@ -170,7 +170,9 @@ use the root wrapper and point the tests at it:
 ```
 
 `RESTAPI_BASE` and `RESTAPI_JWT_SECRET` (environment variables) point the REST tests
-at the API and its signing secret.
+at the API and its signing secret. `WEBHOOK_RECEIVER_PORT` is the local port the
+webhook tests listen on; start the API with
+`--treasury.webhook.insecure-test-targets=127.0.0.1:<that port>` so it may deliver there.
 
 ### Why JDBC for assertions, not chat scraping
 
