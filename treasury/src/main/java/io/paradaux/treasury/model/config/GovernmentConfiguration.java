@@ -8,12 +8,14 @@ import lombok.Getter;
 @Getter
 public class GovernmentConfiguration {
 
+    // Framework reload writes these fields in place; publish each value to async readers.
+
     @ConfigurationValue(path = "government.starting-balances-account", defaultValue = "starting-balances")
-    private String startingBalancesAccount;
+    private volatile String startingBalancesAccount;
 
     @ConfigurationValue(path = "government.tax-income-account", defaultValue = "DCGovernment")
-    private String taxIncomeAccount;
+    private volatile String taxIncomeAccount;
 
     @ConfigurationValue(path = "government.fines-account", defaultValue = "GovernmentFines")
-    private String finesAccount;
+    private volatile String finesAccount;
 }
