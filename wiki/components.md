@@ -51,6 +51,11 @@ sales, and per-firm tax — all money via `TreasuryApi`.
 - **Layering:** `commands/` → `services/`(+`impl/`) → `mappers/`.
 - **Depends on** `treasury-api` (compile/runtime) to move money, and registers its
   own API as a Bukkit service.
+- **PlaceholderAPI** is optional. The bundled `business` expansion resolves
+  `%business_firm_balance_<name>%` through `BusinessApi.firms()` and
+  `FirmApi.getTotalBalance`, without direct mapper access. It persists across PAPI
+  reloads and unregisters on disable. `:business:testWithoutPlaceholderApi` checks
+  startup wiring with the optional API removed from the runtime classpath.
 
 ### `business/business-api/` — public Business API (library jar)
 

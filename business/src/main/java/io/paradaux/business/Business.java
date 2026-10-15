@@ -20,6 +20,7 @@ import io.paradaux.business.commands.StaffCommands;
 import io.paradaux.business.commands.TaxCommands;
 import io.paradaux.business.guice.BusinessModule;
 import io.paradaux.business.guice.DatabaseModule;
+import io.paradaux.business.integration.BusinessPlaceholderHook;
 import io.paradaux.business.jobs.ExpireRequestsJob;
 import io.paradaux.business.listeners.ChestShopSaleListener;
 import io.paradaux.business.listeners.FirmBalanceTaxListener;
@@ -44,6 +45,7 @@ public class Business extends JavaPlugin {
 
     private Injector injector;
     private ExpireRequestsJob expireRequestsJob;
+    private Runnable unregisterPlaceholders = () -> { };
 
     @Override
     public void onEnable() {
@@ -139,6 +141,7 @@ public class Business extends JavaPlugin {
         // 4) Register public API
         BusinessApi api = injector.getInstance(BusinessApi.class);
         getServer().getServicesManager().register(BusinessApi.class, api, this, ServicePriority.Normal);
+        unregisterPlaceholders = BusinessPlaceholderHook.register(this, api);
 
         // 5) Register events via the framework ListenerManager (FirmBalanceTaxListener,
         //    ChestShopSaleListener, OnlineRosterListener — declared in HiberniaModule.listeners(...) above).
@@ -166,6 +169,8 @@ public class Business extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        unregisterPlaceholders.run();
+        unregisterPlaceholders = () -> { };
         getServer().getServicesManager().unregisterAll(this);
 
         // Stop any scheduled tasks (ExpireRequestsJob etc.) before tearing down

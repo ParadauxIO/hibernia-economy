@@ -16,6 +16,26 @@ file — four sections: `database`, `firm`, `sales`, and `tax`.
 > startup): those are fixed when the plugin loads, so changing the `database` block needs a
 > **server restart**.
 
+## PlaceholderAPI — firm balance
+
+Install PlaceholderAPI alongside Business and restart the server to use
+`%business_firm_balance_<name>%` in PlaceholderAPI-enabled displays. The expansion
+ships with Business; no separate eCloud download or configuration key is needed.
+
+For example, `%business_firm_balance_Acme%` returns Acme's total balance across all
+live Treasury accounts as a plain decimal, such as `1234.56`, without a currency
+symbol or thousands separators. Use the full firm name, preserving spaces and
+underscores: `%business_firm_balance_Acme_Holdings%` looks up `Acme_Holdings`.
+
+The placeholder works without a player context. It exposes the named firm's balance
+to anyone who can render that placeholder; it does not check firm membership.
+Unknown, incomplete, missing-firm and archived-firm placeholders remain unresolved.
+An existing firm with no live accounts returns zero.
+
+Balances are read on each request, so use a reasonable refresh interval for displays
+that render many firms. The expansion survives `/papi reload` and unregisters when
+Business disables. Without PlaceholderAPI, Business starts normally.
+
 ## Firm ownership — `firm`
 
 | Key | Default | What it does |
