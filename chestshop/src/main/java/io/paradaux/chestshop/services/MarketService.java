@@ -62,6 +62,11 @@ public interface MarketService {
     ChestShopShopRecord shop(Sign sign, ItemStack item, Owner owner,
                              Integer currentStock, Integer estimatedCapacity);
 
+    /** Build a snapshot without loading its chunk (legacy registry import). */
+    ChestShopShopRecord shop(org.bukkit.Location location, ItemStack item, Owner owner,
+                             BigDecimal buyPrice, BigDecimal sellPrice, int batch,
+                             Integer currentStock, Integer estimatedCapacity);
+
     /** Total item count across a stock array (nulls skipped). */
     int totalAmount(ItemStack[] stock);
 }

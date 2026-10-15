@@ -17,8 +17,9 @@ import java.util.Map;
 /**
  * Persists the ChestShop sales tracker + live shop registry on behalf of
  * ChestShop-3 (which has no economy-DB connection of its own). Fail-soft: a
- * persistence error is logged and swallowed so it can never break a trade or a
- * shop edit — this is analytics, not money.
+ * live persistence error is logged and swallowed so it can never break a trade or a
+ * shop edit — this is analytics, not money. The explicit legacy import propagates
+ * failures so incomplete backfills can be detected and retried.
  */
 public class MarketApiImpl implements MarketApi {
 
@@ -78,31 +79,47 @@ public class MarketApiImpl implements MarketApi {
     @Transactional
     public void upsertShop(ChestShopShopRecord sh) {
         try {
-            Map<String, Object> p = new HashMap<>();
-            p.put("world", sh.world());
-            p.put("signX", sh.signX());
-            p.put("signY", sh.signY());
-            p.put("signZ", sh.signZ());
-            p.put("adminShop", sh.adminShop());
-            p.put("shopAccountId", sh.shopAccountId());
-            p.put("shopAccountType", sh.shopAccountType());
-            p.put("shopFirmId", sh.shopFirmId());
-            p.put("shopOwnerUuid", sh.shopOwnerUuid());
-            p.put("material", sh.material());
-            p.put("itemKey", sh.itemKey());
-            p.put("itemName", sh.itemName());
-            p.put("itemCustom", sh.itemCustom());
-            p.put("itemData", sh.itemData());
-            p.put("buyPrice", sh.buyPrice());
-            p.put("sellPrice", sh.sellPrice());
-            p.put("batchQty", sh.batchQty());
-            p.put("currentStock", sh.currentStock());
-            p.put("estimatedCapacity", sh.estimatedCapacity());
-            p.put("worldUuid", sh.worldUuid());
+            Map<String, Object> p = shopParameters(sh);
             mapper.upsertShop(p);
         } catch (RuntimeException e) {
             log.warn("upsertShop failed (ignored): {}", e.toString());
         }
+    }
+
+    @Override
+    @Transactional
+    public void importShop(ChestShopShopRecord sh, boolean visible, boolean hologram,
+                           java.time.Instant observedAt) {
+        Map<String, Object> p = shopParameters(sh);
+        p.put("visible", visible);
+        p.put("hologram", hologram);
+        p.put("observedAt", observedAt == null ? null : java.sql.Timestamp.from(observedAt));
+        mapper.importShop(p);
+    }
+
+    private static Map<String, Object> shopParameters(ChestShopShopRecord sh) {
+        Map<String, Object> p = new HashMap<>();
+        p.put("world", sh.world());
+        p.put("signX", sh.signX());
+        p.put("signY", sh.signY());
+        p.put("signZ", sh.signZ());
+        p.put("adminShop", sh.adminShop());
+        p.put("shopAccountId", sh.shopAccountId());
+        p.put("shopAccountType", sh.shopAccountType());
+        p.put("shopFirmId", sh.shopFirmId());
+        p.put("shopOwnerUuid", sh.shopOwnerUuid());
+        p.put("material", sh.material());
+        p.put("itemKey", sh.itemKey());
+        p.put("itemName", sh.itemName());
+        p.put("itemCustom", sh.itemCustom());
+        p.put("itemData", sh.itemData());
+        p.put("buyPrice", sh.buyPrice());
+        p.put("sellPrice", sh.sellPrice());
+        p.put("batchQty", sh.batchQty());
+        p.put("currentStock", sh.currentStock());
+        p.put("estimatedCapacity", sh.estimatedCapacity());
+        p.put("worldUuid", sh.worldUuid());
+        return p;
     }
 
     @Override

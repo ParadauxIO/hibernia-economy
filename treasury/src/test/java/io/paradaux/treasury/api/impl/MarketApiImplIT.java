@@ -313,6 +313,96 @@ class MarketApiImplIT extends IntegrationTestBase {
         assertEquals(0, query("SELECT * FROM chestshop_shop").size());
     }
 
+    @Test
+    void importShop_preservesSnapshotAndSecondRunIsNoOp() throws Exception {
+        UUID owner = UUID.randomUUID();
+        java.time.Instant observed = java.time.Instant.parse("2025-01-02T03:04:05Z");
+        for (int i = 0; i < 100; i++) {
+            market.importShop(shop("world", i, 64, -2, "PERSONAL", null, owner,
+                    new BigDecimal("12.34"), null, 16, i), false, false, observed);
+        }
+        List<Map<String, Object>> before = query("SELECT * FROM chestshop_shop ORDER BY shop_id");
+        assertEquals(100, before.size());
+        for (var row : before) {
+            assertEquals(0, ((Number) row.get("visible")).intValue());
+            assertEquals(0, ((Number) row.get("hologram")).intValue());
+            assertEquals(java.sql.Timestamp.from(observed), row.get("stock_at"));
+            assertEquals(java.sql.Timestamp.from(observed), row.get("last_seen"));
+            assertEquals(50, ((Number) row.get("estimated_capacity")).intValue());
+            assertEquals(row.get("sign_x"), row.get("current_stock"));
+            assertEquals(16, ((Number) row.get("batch_qty")).intValue());
+            assertEquals(new BigDecimal("12.34"), row.get("buy_price"));
+            assertNull(row.get("sell_price"));
+            assertEquals("DIAMOND", row.get("item_key"));
+            assertEquals("PERSONAL", row.get("shop_account_type"));
+            assertEquals(owner, bytesToUuid((byte[]) row.get("shop_owner_uuid_bin")));
+        }
+        for (int i = 0; i < 100; i++) {
+            market.importShop(shop("world", i, 64, -2, "PERSONAL", null, owner,
+                    new BigDecimal("12.34"), null, 16, i), false, false, observed);
+        }
+        assertRowsEqual(before, query("SELECT * FROM chestshop_shop ORDER BY shop_id"));
+    }
+
+    @Test
+    void importShop_neverOverwritesLiveRowsOrRevivesTombstones() throws Exception {
+        var record = shop("world", 1, 2, 3, "PERSONAL", null, UUID.randomUUID(),
+                BigDecimal.TEN, null, 1, 10);
+        market.upsertShop(record);
+        var before = query("SELECT * FROM chestshop_shop");
+        market.importShop(record, false, false, java.time.Instant.parse("2000-01-01T00:00:00Z"));
+        assertRowsEqual(before, query("SELECT * FROM chestshop_shop"));
+        market.deactivateShop("world", 1, 2, 3);
+        before = query("SELECT * FROM chestshop_shop");
+        market.importShop(record, false, false, java.time.Instant.parse("2000-01-01T00:00:00Z"));
+        assertRowsEqual(before, query("SELECT * FROM chestshop_shop"));
+    }
+
+    @Test
+    void importShop_unknownObservationDoesNotInventStockTimestamp_andErrorsPropagate() {
+        market.importShop(shop("world", 1, 2, 3, "PERSONAL", null, UUID.randomUUID(),
+                BigDecimal.ONE, null, 1, 10), true, true, null);
+        assertNull(query("SELECT * FROM chestshop_shop").get(0).get("stock_at"));
+        var bad = new ChestShopShopRecord("world", 9, 9, 9, true, null, null, null, null,
+                null, "DIRT", "Dirt", false, null, BigDecimal.ONE, null, 1, null, null, null);
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> market.importShop(bad, true, true, null));
+        assertEquals(1, query("SELECT * FROM chestshop_shop").size());
+    }
+
+    @Test
+    void resync_unchangedUnknownStockRefreshesLastSeen_andClearsOldStockTimestamp() throws Exception {
+        var record = shop("world", 1, 2, 3, "PERSONAL", null, UUID.randomUUID(),
+                BigDecimal.ONE, null, 1, null);
+        market.upsertShop(record);
+        try (var c = dataSource.getConnection(); var st = c.createStatement()) {
+            st.execute("UPDATE chestshop_shop SET last_seen='2001-01-01', stock_at='2001-01-01'");
+        }
+        market.upsertShop(record);
+        var row = query("SELECT * FROM chestshop_shop").get(0);
+        assertNull(row.get("stock_at"));
+        assertTrue(((java.sql.Timestamp) row.get("last_seen")).toInstant()
+                .isAfter(java.time.Instant.parse("2020-01-01T00:00:00Z")));
+        market.updateShopStock("world", 1, 2, 3, 10, 20);
+        assertNotNull(query("SELECT * FROM chestshop_shop").get(0).get("stock_at"));
+        market.updateShopStock("world", 1, 2, 3, null, null);
+        assertNull(query("SELECT * FROM chestshop_shop").get(0).get("stock_at"));
+    }
+
+    private static void assertRowsEqual(List<Map<String, Object>> expected, List<Map<String, Object>> actual) {
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            for (String key : expected.get(i).keySet()) {
+                Object value = expected.get(i).get(key);
+                if (value instanceof byte[] bytes) {
+                    org.junit.jupiter.api.Assertions.assertArrayEquals(bytes, (byte[]) actual.get(i).get(key));
+                } else {
+                    assertEquals(value, actual.get(i).get(key), key);
+                }
+            }
+        }
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static ChestShopShopRecord shop(String world, int x, int y, int z, String type,
