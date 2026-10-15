@@ -27,13 +27,15 @@ class GoodsTransferTest extends ServerTest {
 
     private ChestShopConfiguration config;
     private GoodsTransfer transfer;
+    private TradeRecoveryService recovery;
 
     @BeforeEach
     void wire() {
         config = TestConfigs.defaults();
         MaterialServiceImpl material = new MaterialServiceImpl(config);
         InventoryServiceImpl inv = new InventoryServiceImpl(config, material);
-        transfer = new GoodsTransferImpl(inv, config);
+        recovery = Mockito.mock(TradeRecoveryService.class);
+        transfer = new GoodsTransferImpl(inv, config, recovery);
     }
 
     private static int count(Inventory inv, Material m) {
@@ -108,6 +110,7 @@ class GoodsTransferTest extends ServerTest {
 
         assertThat(count(client, Material.DIAMOND)).isZero();
         assertThat(count(owner, Material.DIAMOND)).isEqualTo(8);
+        Mockito.verifyNoInteractions(recovery);
     }
 
     @Test
@@ -137,6 +140,7 @@ class GoodsTransferTest extends ServerTest {
         Inventory client = chest(27); // nothing to remove — reverse fails internally, only logs
         Transaction event = txn(BUY, true, null, client, item(Material.DIAMOND, 5));
         transfer.reverse(event); // must not throw
+        Mockito.verify(recovery).record(event, null);
         assertThat(count(client, Material.DIAMOND)).isZero();
     }
 
@@ -161,6 +165,39 @@ class GoodsTransferTest extends ServerTest {
         when(event.getSign()).thenReturn(sign);
         transfer.reverse(event); // fails -> logs sign.getLocation() (getSign() != null branch)
         assertThat(count(client, Material.DIAMOND)).isZero();
+    }
+
+    @Test
+    void reverse_recordsFailedBuyAndSellForFiniteShops() {
+        for (Transaction.TransactionType direction : Transaction.TransactionType.values()) {
+            Inventory owner = chest(9);
+            Inventory client = chest(9);
+            Transaction event = txn(direction, false, owner, client, item(Material.DIAMOND, 5));
+            transfer.reverse(event);
+            Mockito.verify(recovery).record(event, null);
+        }
+    }
+
+    @Test
+    void reverse_recordsFailedUnlimitedSell() {
+        Inventory client = chest(9);
+        for (int slot = 0; slot < 9; slot++) {
+            client.setItem(slot, item(Material.STONE, 64));
+        }
+        Transaction event = txn(SELL, true, null, client, item(Material.DIAMOND, 5));
+        transfer.reverse(event);
+        Mockito.verify(recovery).record(event, null);
+        assertThat(count(client, Material.STONE)).isEqualTo(9 * 64);
+    }
+
+    @Test
+    void reverse_recordsExceptions() {
+        Inventory client = Mockito.mock(Inventory.class);
+        RuntimeException failure = new IllegalStateException("inventory unavailable");
+        when(client.getContents()).thenThrow(failure);
+        Transaction event = txn(BUY, true, null, client, item(Material.DIAMOND, 5));
+        transfer.reverse(event);
+        Mockito.verify(recovery).record(event, failure);
     }
 
     @Test
