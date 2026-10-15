@@ -9,7 +9,8 @@ import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { listSalesFeed, countSalesFeed } from '@/lib/sql/market';
 import { memo } from '@/lib/cache';
-import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { Pagination } from '@/components/Pagination';
 import { Toolbar } from '@/components/Toolbar';
@@ -148,7 +149,7 @@ export default async function SalesFeedPage({
             )}
             {rows.map((s) => (
               <tr key={s.sale_id}>
-                <td className="ts">{fmtTs(s.occurred_at)}</td>
+                <td className="ts"><LocalTimestamp value={s.occurred_at} /></td>
                 <td>
                   <span className={`badge ${s.direction === 'BUY' ? 'badge-active' : 'badge-archived'}`}>
                     {s.direction}

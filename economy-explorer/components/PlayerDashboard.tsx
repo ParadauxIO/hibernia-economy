@@ -9,7 +9,8 @@ import {
   getPlayerCounterparties,
   getPlayerTransactions,
 } from '@/lib/sql/me';
-import { accountLabel, fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 
@@ -112,7 +113,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
                   <td><span className={`badge badge-${a.account_type}`}>{a.account_type}</span></td>
                   <td><span className="badge">{a.owner_uuid === uuid ? 'owner' : 'member'}</span></td>
                   <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
-                  <td className="ts">{fmtTs(a.created_at)}</td>
+                  <td className="ts"><LocalTimestamp value={a.created_at} /></td>
                 </tr>
               ))}
             </tbody>
@@ -158,7 +159,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
                 const v = parseFloat(t.amount);
                 return (
                   <tr key={t.posting_id}>
-                    <td className="ts">{fmtTs(t.settlement_time)}</td>
+                    <td className="ts"><LocalTimestamp value={t.settlement_time} /></td>
                     <td>
                       <Link href={`/accounts/${t.account_id}` as Route} className="rowlink" prefetch={false}>
                         {t.account_name ?? `#${t.account_id}`}

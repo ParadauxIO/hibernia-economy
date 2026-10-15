@@ -13,7 +13,8 @@ import {
   listFirmAccounts,
   isFirmMember,
 } from '@/lib/sql/firm';
-import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { BackLink } from '@/components/BackLink';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -112,7 +113,7 @@ export default async function FirmDetailPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Founded</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>{fmtTs(firm.created_at)}</div>
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}><LocalTimestamp value={firm.created_at} /></div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Default account</div>
@@ -251,7 +252,7 @@ export default async function FirmDetailPage({
                     <tr key={`${e.player_uuid}-${e.joined_at?.toString()}`}>
                       <td><Player name={e.player_name} uuid={e.player_uuid} /></td>
                       <td><span className="badge">{e.role_name}</span></td>
-                      <td className="ts">{fmtTs(e.joined_at)}</td>
+                      <td className="ts"><LocalTimestamp value={e.joined_at} /></td>
                     </tr>
                   ))}
                 </tbody>

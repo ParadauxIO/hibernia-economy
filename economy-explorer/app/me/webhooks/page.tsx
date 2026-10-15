@@ -7,7 +7,8 @@ import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { findAccountsForPlayer } from '@/lib/sql/me';
 import { listForOwner, listFinanceFirms } from '@/lib/sql/webhook';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CreateWebhookForm } from './create-webhook-form';
 import { WebhookRowActions } from './webhook-row-actions';
 
@@ -119,7 +120,7 @@ export default async function WebhooksPage() {
                       : <span className="badge badge-archived">{h.disabledAt ? 'auto-disabled' : 'paused'}</span>}
                   </td>
                   <td className="amount mono">{fmtN(h.consecutiveFailures)}</td>
-                  <td className="ts">{fmtTs(h.createdAt)}</td>
+                  <td className="ts"><LocalTimestamp value={h.createdAt} /></td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <Link href={`/me/webhooks/${h.id}` as Route} className="btn" prefetch={false}>Deliveries</Link>{' '}
                     {hasPermission(viewer, 'webhooks.manage') && <WebhookRowActions id={h.id} active={h.active} url={h.url} />}

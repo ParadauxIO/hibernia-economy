@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { MarketShopRow } from '@/lib/sql/market';
 import { shopUnitPrice, formatShopPrice } from '@/lib/shopPrice';
-import { fmtTs } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { blueMapUrl } from '@/lib/serverIdentity';
 import { CopyLocation } from './CopyLocation';
 export function ShopOffers({ shops, direction, units = 1, mapBase }: { shops: MarketShopRow[]; direction: 'buy' | 'sell'; units?: number; mapBase: string }) {
@@ -17,7 +17,7 @@ export function ShopOffers({ shops, direction, units = 1, mapBase }: { shops: Ma
         <p>{direction === 'buy' ? 'Buy from' : 'Sell to'} {s.admin_shop ? 'Admin shop' : s.owner_name ?? 'Unknown owner'}</p>
         <dl><dt>Sign batch</dt><dd>{s.batch_qty} items · {formatShopPrice(Number(direction === 'buy' ? s.buy_price : s.sell_price))}</dd>
           <dt>Observed stock</dt><dd>{s.admin_shop ? 'Unlimited' : s.current_stock === null ? 'Unknown' : s.current_stock}</dd>
-          <dt>Stock checked</dt><dd>{fmtTs(s.stock_at)}</dd><dt>Shop seen</dt><dd>{fmtTs(s.last_seen)}</dd></dl>
+          <dt>Stock checked</dt><dd><LocalTimestamp value={s.stock_at} /></dd><dt>Shop seen</dt><dd><LocalTimestamp value={s.last_seen} /></dd></dl>
         <p>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{location} ↗</a> : <span>{location}</span>}</p>
         <CopyLocation location={location} />
       </article>;

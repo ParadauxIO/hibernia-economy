@@ -8,7 +8,8 @@ import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { getFirmHeader, listFirmAccounts, listFirmEmployees } from '@/lib/sql/firm';
-import { fmtAmt, fmtTs } from '@/lib/format';
+import { fmtAmt } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { CsvButton } from '@/components/CsvButton';
 
@@ -86,7 +87,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
               <tr key={i}>
                 <td><Player name={e.player_name} uuid={e.player_uuid} /></td>
                 <td>{e.role_name}</td>
-                <td className="ts">{fmtTs(e.joined_at)}</td>
+                <td className="ts"><LocalTimestamp value={e.joined_at} /></td>
               </tr>
             ))}
           </tbody>

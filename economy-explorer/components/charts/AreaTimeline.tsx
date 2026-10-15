@@ -18,14 +18,18 @@ const AXIS_TICK = { fontSize: 11, fill: 'var(--fg-muted)' };
  * mounted keeps SSR and the first client render identical, then swaps in the
  * chart with no layout shift.
  */
-function RC({ height, children }: { height: number; children: ReactElement }) {
+function RC({ height, children, daily = false }: { height: number; children: ReactElement; daily?: boolean }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return <div style={{ width: '100%', height }} aria-hidden />;
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      {children}
-    </ResponsiveContainer>
+    <>
+      {daily && <p className="chart-subtitle">Daily buckets in UTC.</p>}
+      {mounted ? (
+        <ResponsiveContainer width="100%" height={height}>
+          {children}
+        </ResponsiveContainer>
+      ) : <div style={{ width: '100%', height }} aria-hidden />}
+    </>
   );
 }
 
@@ -203,7 +207,7 @@ interface InOutProps {
 export function InOutChart({ data }: InOutProps) {
   if (data.length === 0) return <EmptyChart>No data.</EmptyChart>;
   return (
-    <RC height={210}>
+    <RC daily height={210}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis
@@ -234,7 +238,7 @@ interface BalanceLineProps {
 export function BalanceLine({ data }: BalanceLineProps) {
   if (data.length === 0) return <EmptyChart>No data.</EmptyChart>;
   return (
-    <RC height={230}>
+    <RC daily height={230}>
       <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="gBalLine" x1="0" y1="0" x2="0" y2="1">
@@ -271,7 +275,7 @@ export function PriceLine({ data }: PriceLineProps) {
   if (data.length === 0) return <EmptyChart>No data.</EmptyChart>;
   const series = data.map((d) => ({ day: d.day, price: parseFloat(d.avg_unit_price), sales: d.sales }));
   return (
-    <RC height={230}>
+    <RC daily height={230}>
       <LineChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis
@@ -303,7 +307,7 @@ function EmptyChart({ children }: { children: React.ReactNode }) {
 export function TaxRevenueTimeline({ data }: { data: ({ date: string } & Record<TaxKind, number>)[] }) {
   return <>
     <div className="chart-legend">{TAX_KINDS.map((kind, i) => <span key={kind} style={{ color: PALETTE[i] }}>● {TAX_LABELS[kind]}</span>)}</div>
-    <RC height={260}>
+    <RC daily height={260}>
       <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 12 }}>
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis dataKey="date" tickFormatter={fmtDate} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={28} />

@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { listFirms, countFirms, type FirmSortColumn, type SortDir } from '@/lib/sql/ledger';
 import { getFirmStats } from '@/lib/sql/firm';
 import { memo } from '@/lib/cache';
-import { fmtAmt, fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { fmtAmt, fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
 import { Pagination } from '@/components/Pagination';
 import { CsvButton } from '@/components/CsvButton';
@@ -150,13 +151,13 @@ export default async function FirmsPage({
                   <span className="mono muted small desktop-only">{` #${f.firm_id}`}</span>
                   {f.archived ? <span className="badge badge-archived" style={{ marginLeft: 8 }}>Archived</span> : null}
                 </Link>
-                <details className="mobile-only directory-details"><summary>Details</summary><p>#{f.firm_id} · HQ: {f.hq_region ?? 'Unknown'}</p><p>{fmtN(f.employee_count)} employees · {fmtN(f.account_count)} accounts</p><p>Founded {fmtTs(f.created_at)}</p></details>
+                <details className="mobile-only directory-details"><summary>Details</summary><p>#{f.firm_id} · HQ: {f.hq_region ?? 'Unknown'}</p><p>{fmtN(f.employee_count)} employees · {fmtN(f.account_count)} accounts</p><p>Founded <LocalTimestamp value={f.created_at} /></p></details>
               </td>
               <td data-secondary="true">{f.hq_region ?? <span className="muted">—</span>}</td>
               <td data-secondary="true" className="amount mono">{fmtN(f.employee_count)}</td>
               <td data-secondary="true" className="amount mono">{fmtN(f.account_count)}</td>
               <td className="amount neutral">{fmtAmtFull(f.total_balance)}</td>
-              <td data-secondary="true" className="ts">{fmtTs(f.created_at)}</td>
+              <td data-secondary="true" className="ts"><LocalTimestamp value={f.created_at} /></td>
             </tr>
           ))}
         </tbody>

@@ -4,7 +4,8 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { findTransaction, findPostingsByTxnId } from '@/lib/sql/ledger';
-import { accountLabel, fmtAmtFull, fmtTs } from '@/lib/format';
+import { accountLabel, fmtAmtFull } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { BackLink } from '@/components/BackLink';
@@ -60,8 +61,8 @@ export default async function TransactionDetailPage({
       <div className="kpi-grid">
         <div className="kpi">
           <div className="kpi-label">Settled</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>{fmtTs(txn.settlement_time)}</div>
-          {txn.trade_time && <div className="kpi-meta">trade: {fmtTs(txn.trade_time)}</div>}
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}><LocalTimestamp value={txn.settlement_time} /></div>
+          {txn.trade_time && <div className="kpi-meta">trade: <LocalTimestamp value={txn.trade_time} /></div>}
         </div>
         <div className="kpi">
           <div className="kpi-label">Initiator</div>

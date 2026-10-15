@@ -32,16 +32,18 @@ export function fmtDate(d: string): string {
   return new Date(d.length === 10 ? d + 'T00:00:00Z' : d).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   });
 }
 
-export function fmtTs(ts: string | Date | null): string {
+export function fmtTs(ts: string | Date | null, timeZone = 'UTC'): string {
   if (!ts) return '—';
   return new Date(ts).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone,
   });
 }
 

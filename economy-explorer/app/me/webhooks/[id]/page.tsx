@@ -6,7 +6,8 @@ import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { findForOwner, listRecentDeliveries } from '@/lib/sql/webhook';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { RotateSecretButton } from './rotate-secret-button';
 
 export const dynamic = 'force-dynamic';
@@ -58,7 +59,7 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
             ? <span className="badge badge-active">active</span>
             : <span className="badge badge-archived">{hook.disabledAt ? 'auto-disabled' : 'paused'}</span>}
           <span className="muted small">consecutive failures: <span className="mono">{fmtN(hook.consecutiveFailures)}</span></span>
-          {hook.disabledAt && <span className="muted small">disabled {fmtTs(hook.disabledAt)}</span>}
+          {hook.disabledAt && <span className="muted small">disabled <LocalTimestamp value={hook.disabledAt} /></span>}
           <span style={{ marginLeft: 'auto' }}>{hasPermission(viewer, 'webhooks.manage') && <RotateSecretButton id={hook.id} />}</span>
         </div>
       </div>
@@ -89,8 +90,8 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
                   <td className="amount mono">{fmtN(d.attempts)}</td>
                   <td className="amount mono">{d.httpStatus ?? <span className="muted">—</span>}</td>
                   <td>{d.lastError ? <span className="small">{d.lastError}</span> : <span className="muted">—</span>}</td>
-                  <td className="ts">{d.status === 'PENDING' ? fmtTs(d.nextAttemptAt) : <span className="muted">—</span>}</td>
-                  <td className="ts">{fmtTs(d.createdAt)}</td>
+                  <td className="ts">{d.status === 'PENDING' ? <LocalTimestamp value={d.nextAttemptAt} /> : <span className="muted">—</span>}</td>
+                  <td className="ts"><LocalTimestamp value={d.createdAt} /></td>
                 </tr>
               ))}
             </tbody>

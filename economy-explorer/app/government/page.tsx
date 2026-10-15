@@ -8,7 +8,8 @@ import { Pagination } from '@/components/Pagination';
 import { getGovernmentDashboard } from '@/lib/services/government';
 import { getViewer, hasPermission } from '@/lib/auth';
 import { PrivacyGate } from '@/components/PrivacyGate';
-import { accountLabel, fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { SectionTabs } from '@/components/SectionTabs';
 import { WindowTabs } from '@/components/WindowTabs';
@@ -133,7 +134,7 @@ export default async function GovernmentPage({
               )}
               {fines.map((f) => (
                 <tr key={f.fine_id}>
-                  <td className="ts">{fmtTs(f.issued_at)}</td>
+                  <td className="ts"><LocalTimestamp value={f.issued_at} /></td>
                   <td><Player name={f.player_name} uuid={f.player_uuid} /></td>
                   <td className="amount neutral">{fmtAmtFull(f.amount)}</td>
                   <td>{f.reason ?? <span className="muted">—</span>}</td>
