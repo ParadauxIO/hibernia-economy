@@ -84,6 +84,15 @@ caller. No Treasury API or schema upgrade is required for this repair.
 `io.paradaux:business-api`. Consumed by ChestShop (and anything else that needs to
 route money to a firm or check a staff permission).
 
+`FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's
+shop alias, or null. Business owns alias persistence and proprietor-only management;
+ChestShop resolves `B:@alias` through this API, checks normal shop access, and writes
+its canonical `B:<base36>` account code to the sign. Alias changes therefore do not
+retarget existing shops. Aliases are unique across `firm_accounts` (case-insensitive),
+including removed links; archived firms/accounts do not resolve. Apply migration
+`V34__business_shop_aliases.sql` before deploying the updated Business and ChestShop
+plugins together.
+
 ---
 
 ## `treasury-api-plugin/` — API-key issuer (Paper plugin)

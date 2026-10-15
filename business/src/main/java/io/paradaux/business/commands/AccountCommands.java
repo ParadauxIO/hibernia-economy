@@ -86,6 +86,38 @@ public class AccountCommands implements CommandHandler {
                 "accountId", account.getAccountId());
     }
 
+    @Route("account alias <firm> <accountId> <alias>")
+    @Permission("business.account.alias")
+    @Async
+    @Description("Set a short shop alias for a firm account")
+    public void setShopAlias(@Sender Player sender, @Arg("firm") FirmName firmRef,
+                             @Arg("accountId") Integer accountId, @Arg("alias") String alias) {
+        updateShopAlias(sender, firmRef, accountId, alias);
+    }
+
+    @Route("account clearalias <firm> <accountId>")
+    @Permission("business.account.alias")
+    @Async
+    @Description("Clear a firm account's shop alias")
+    public void clearShopAlias(@Sender Player sender, @Arg("firm") FirmName firmRef,
+                               @Arg("accountId") Integer accountId) {
+        updateShopAlias(sender, firmRef, accountId, null);
+    }
+
+    private void updateShopAlias(Player sender, FirmName firmRef, int accountId, String alias) {
+        Firm firm = firms.getFirmByNameOrId(firmRef.value());
+        if (firm == null) {
+            message.send(sender, "business.general.firm-not-found");
+            return;
+        }
+        accounts.setShopAlias(firm.getFirmId(), accountId, alias, sender.getUniqueId());
+        if (alias == null) {
+            message.send(sender, "business.account.alias.cleared", "accountId", accountId);
+        } else {
+            message.send(sender, "business.account.alias.set", "accountId", accountId, "alias", alias);
+        }
+    }
+
     @Route("account list <firm>")
     @Permission("business.account.list")
     @Async
@@ -115,6 +147,10 @@ public class AccountCommands implements CommandHandler {
                     "archived", account.isArchived() ? " [ARCHIVED]" : "",
                     "default", defaultMarker,
                     "shopId", shopId);
+            String alias = accounts.getShopAlias(firm.getFirmId(), account.getAccountId());
+            if (alias != null) {
+                message.send(sender, "business.account.alias.entry", "alias", alias);
+            }
         }
     }
 

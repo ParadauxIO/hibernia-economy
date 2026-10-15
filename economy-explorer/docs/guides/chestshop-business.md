@@ -86,3 +86,33 @@ NETHERITE_INGOT
 
 - Manage the money those shops collect: **[Business accounts](/docs/guides/business-accounts)**.
 - Sign format and commands in full: the **[ChestShop reference](/docs/reference/chestshop)**.
+
+## Shop aliases
+
+The proprietor can give each firm account one memorable alias:
+
+```text
+/business account alias Acme 16 acme-shop
+/business account list Acme
+```
+
+Use the **decimal account ID** from the account list in the command. Put
+`B:@acme-shop` on the first line of a new shop sign. ChestShop checks your usual
+`CHESTSHOP` permission and replaces the alias with the permanent account code
+(`B:G` for account 16) when the shop is created. The alias is a creation shortcut,
+not a display name: changing or clearing it cannot redirect existing shops.
+
+Aliases are globally unique, case-insensitive, and contain 1–12 letters, digits,
+underscores or hyphens, starting with a letter. The `@` distinguishes aliases from
+account codes and legacy firm names. Each alias points to one specific account,
+independently of the firm's default account. Archived accounts and disbanded firms
+cannot be resolved by alias; their aliases remain reserved.
+
+Set another alias with the same command, or clear it with:
+
+```text
+/business account clearalias Acme 16
+```
+
+Cleared or replaced aliases become available for reuse. Existing shops retain
+their original account code. Business must be installed to resolve aliases.

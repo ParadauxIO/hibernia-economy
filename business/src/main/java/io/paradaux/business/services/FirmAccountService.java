@@ -8,6 +8,15 @@ import java.util.UUID;
 
 public interface FirmAccountService {
 
+    /** Sets (or clears with null) a globally unique shop alias; proprietor only. */
+    void setShopAlias(int firmId, int accountId, String alias, UUID actorId);
+
+    String getShopAlias(int firmId, int accountId);
+
+    /** Resolves a live firm's alias to its Treasury account id, or null. */
+    Integer resolveShopAlias(String alias);
+
+
     /**
      * Creates a new Treasury account for the firm and registers it.
      * Automatically syncs current staff members/authorizers based on their roles.

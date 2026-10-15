@@ -60,7 +60,7 @@ public class SignService {
     };
     public static final String AUTOFILL_CODE = "?";
 
-    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^B:[0-9A-Z]+$");
+    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^B:(?:[0-9A-Z]+|@[A-Z][A-Z0-9_-]{0,11})$");
 
     public static boolean isBusinessAccount(String owner) {
         return BUSINESS_PATTERN.matcher(owner).matches();

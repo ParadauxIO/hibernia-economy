@@ -93,4 +93,33 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         assertThat(firmAccounts.getFirmIdByAccountId(a)).isEqualTo(firmId);
         assertThat(firmAccounts.getFirmIdByAccountId(9999)).isNull();
     }
+
+    @Test
+    void shopAliases_areUniqueCaseInsensitiveAndClearable() throws Exception {
+        int first = insertStubAccount("First");
+        int second = insertStubAccount("Second");
+        firmAccounts.insertFirmAccount(firmId, first);
+        firmAccounts.insertFirmAccount(firmId, second);
+        assertThat(firmAccounts.setShopAlias(firmId, first, "Acme")).isEqualTo(1);
+        assertThat(firmAccounts.getShopAlias(firmId, first)).isEqualTo("Acme");
+        assertThat(firmAccounts.resolveShopAlias("ACME")).isEqualTo(first);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "acme"))
+                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
+        firmAccounts.setShopAlias(firmId, first, null);
+        firmAccounts.setShopAlias(firmId, second, "acme");
+        assertThat(firmAccounts.resolveShopAlias("ACME")).isEqualTo(second);
+        firmAccounts.removeFirmAccount(firmId, second);
+        assertThat(firmAccounts.resolveShopAlias("acme")).isNull();
+        assertThat(firmAccounts.setShopAlias(firmId, second, "other")).isZero();
+    }
+
+    @Test
+    void shopAliases_disbandedFirmDoesNotResolve() throws Exception {
+        int account = insertStubAccount("Shop");
+        firmAccounts.insertFirmAccount(firmId, account);
+        firmAccounts.setShopAlias(firmId, account, "acme");
+        firms.archiveFirm(firmId);
+        assertThat(firmAccounts.resolveShopAlias("acme")).isNull();
+        assertThat(firmAccounts.setShopAlias(firmId, account, "other")).isZero();
+    }
 }
