@@ -48,7 +48,9 @@ public class TaxApiImpl implements TaxApi {
     private volatile Integer defaultTaxAccountId;
 
     /** Lazily resolved and cached ID of the source income tax destination account. */
-    private volatile Integer sourceIncomeTaxAccountId;
+    private Destination sourceIncomeTaxAccountId;
+
+    private record Destination(String name, int id) {}
 
     @Inject
     public TaxApiImpl(LedgerService ledgerService,
@@ -208,6 +210,7 @@ public class TaxApiImpl implements TaxApi {
     public TaxResult applySourceIncomeTax(@NotNull UUID playerUuid,
                                           @NotNull BigDecimal depositAmount,
                                           @NotNull String pluginName) {
+        SourceIncomeTaxConfiguration.Snapshot sourceIncomeTaxConfig = this.sourceIncomeTaxConfig.snapshot();
         if (!sourceIncomeTaxConfig.isEnabled()) {
             return new TaxResult.Skipped("Source income tax is disabled");
         }
@@ -228,7 +231,7 @@ public class TaxApiImpl implements TaxApi {
                     + " is below the $0.01 minimum (rate=" + rate + ", deposit=" + depositAmount + ")");
         }
 
-        int destinationId = resolveSourceIncomeTaxDestination();
+        int destinationId = resolveSourceIncomeTaxDestination(sourceIncomeTaxConfig.getGovernmentAccount());
 
         TaxCollection collection = TaxCollection.toAccount(
                 playerAccountId,
@@ -250,23 +253,17 @@ public class TaxApiImpl implements TaxApi {
         return explicit != null ? explicit : getDefaultTaxAccountId();
     }
 
-    private int resolveSourceIncomeTaxDestination() {
-        if (sourceIncomeTaxAccountId == null) {
-            synchronized (this) {
-                if (sourceIncomeTaxAccountId == null) {
-                    String accountName = sourceIncomeTaxConfig.getGovernmentAccount();
-                    Account account = accountMapper.findGovernmentAccountByName(accountName);
-                    if (account != null) {
-                        sourceIncomeTaxAccountId = account.getAccountId();
-                    } else {
-                        log.warn("Source income tax government account '{}' not found — routing to default tax account",
-                                accountName);
-                        sourceIncomeTaxAccountId = getDefaultTaxAccountId();
-                    }
-                }
+    private synchronized int resolveSourceIncomeTaxDestination(String accountName) {
+        if (sourceIncomeTaxAccountId == null || !sourceIncomeTaxAccountId.name().equals(accountName)) {
+            Account account = accountMapper.findGovernmentAccountByName(accountName);
+            if (account != null) {
+                sourceIncomeTaxAccountId = new Destination(accountName, account.getAccountId());
+            } else {
+                log.warn("Tax government account '{}' not found — routing to default tax account", accountName);
+                sourceIncomeTaxAccountId = new Destination(accountName, getDefaultTaxAccountId());
             }
         }
-        return sourceIncomeTaxAccountId;
+        return sourceIncomeTaxAccountId.id();
     }
 
     private int resolveOrCreateTaxAccount() {

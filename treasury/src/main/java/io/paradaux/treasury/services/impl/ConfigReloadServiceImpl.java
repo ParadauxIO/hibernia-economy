@@ -6,6 +6,11 @@ import io.paradaux.hibernia.framework.configurator.ConfigurationLoader;
 import io.paradaux.hibernia.framework.configurator.ConfigurationProcessor;
 import io.paradaux.hibernia.framework.i18n.Message;
 import lombok.extern.slf4j.Slf4j;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.InvalidConfigurationException;
+
+import java.io.File;
+import java.io.IOException;
 import io.paradaux.treasury.Treasury;
 import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.model.config.LoggingConfiguration;
@@ -49,8 +54,22 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
     }
 
     @Override
-    public void reloadAll() {
-        // 1) Re-read the files from disk.
+    public synchronized void reloadAll() {
+        // Bukkit reloadConfig logs malformed YAML and falls back to defaults.
+        // Load strictly first so an invalid file cannot replace a working config.
+        YamlConfiguration candidate = new YamlConfiguration();
+        try {
+            candidate.load(new File(plugin.getDataFolder(), "config.yml"));
+        } catch (IOException | InvalidConfigurationException e) {
+            throw new IllegalArgumentException("Cannot reload config.yml", e);
+        }
+        var defaults = plugin.getConfig().getDefaults();
+        if (defaults != null) candidate.setDefaults(defaults);
+        // Parse every manual config before publishing any of them. A parse failure
+        // leaves all three live snapshots intact.
+        var salary = salaryConfiguration.prepareReload(candidate);
+        var balanceTax = balanceTaxConfiguration.prepareReload(candidate);
+        var sourceIncomeTax = sourceIncomeTaxConfiguration.prepareReload(candidate);
         plugin.reloadConfig();
         message.reload();
 
@@ -69,9 +88,9 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
         configurationLoader.getComponents().values().forEach(processor::process);
 
         // 3) Refresh the manually-parsed config POJOs.
-        salaryConfiguration.reload();
-        balanceTaxConfiguration.reload();
-        sourceIncomeTaxConfiguration.reload();
+        salaryConfiguration.publish(salary);
+        balanceTaxConfiguration.publish(balanceTax);
+        sourceIncomeTaxConfiguration.publish(sourceIncomeTax);
 
         // 4) Re-apply startup side effects that are cheap and safe to redo.
         LoggingConfigurer.apply(loggingConfiguration.getLevel());

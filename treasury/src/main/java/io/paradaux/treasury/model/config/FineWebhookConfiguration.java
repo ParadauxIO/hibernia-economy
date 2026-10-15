@@ -8,10 +8,12 @@ import lombok.Getter;
 @Getter
 public class FineWebhookConfiguration {
 
+    // Framework reload writes these fields in place; publish each value to async readers.
+
     @ConfigurationValue(path = "fines.webhook.enabled", defaultValue = "false")
-    private boolean enabled;
+    private volatile boolean enabled;
 
     /** Discord webhook URL. Leave empty to disable even if enabled is true. */
     @ConfigurationValue(path = "fines.webhook.url", defaultValue = "")
-    private String url;
+    private volatile String url;
 }
