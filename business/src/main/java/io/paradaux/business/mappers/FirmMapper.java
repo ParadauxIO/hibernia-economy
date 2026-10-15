@@ -101,6 +101,7 @@ public interface FirmMapper {
             SELECT COUNT(*) > 0
             FROM firm
             WHERE display_name = #{firmName}
+              AND is_archived = 0
               AND proprietor_uuid_bin = uuid_to_bin(#{playerUuid})
             """)
     boolean isProprietorByFirmName(@Param("firmName") String firmName,
@@ -127,6 +128,7 @@ public interface FirmMapper {
             SELECT COUNT(1)
             FROM firm
             WHERE display_name = #{name}
+              AND is_archived = 0
             """)
     int getFirmsByNameCount(@Param("name") String name);
 
@@ -170,6 +172,7 @@ public interface FirmMapper {
                      updated_at                      AS updatedAt
                 FROM firm
                WHERE display_name = #{name}
+               ORDER BY is_archived ASC, firm_id DESC
                LIMIT 1
             """)
     Firm getFirmByName(@Param("name") String name);

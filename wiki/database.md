@@ -14,6 +14,17 @@ API, the explorer — points at the same MariaDB and agrees on that schema.
 - Flyway runs with `mysql-connector-j` on its classpath (wire-compatible with
   MariaDB).
 
+## Firm names
+
+V32 reserves names only for active firms using the nullable generated
+`active_display_name` column and its unique index. Archived rows retain their
+original `display_name`; no backfill or history rewrite is needed. Name lookups
+prefer the active firm, then the most recently created archived firm. Numeric IDs
+remain the unambiguous way to access older firms and resume a disband.
+
+Deploy V32 together with the Business plugin, REST API and Explorer changes:
+older application versions assume names identify a single row even across archives.
+
 ## Why the database owns balances
 
 Balances live in a **materialized table maintained by database triggers**, not by

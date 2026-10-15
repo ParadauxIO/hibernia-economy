@@ -114,7 +114,10 @@ CREATE TABLE `firm` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`firm_id`),
-  UNIQUE KEY `uq_firm_display_name` (`display_name`),
+  `active_display_name` varchar(255) COLLATE utf8mb4_unicode_ci GENERATED ALWAYS AS
+    (CASE WHEN `is_archived` = 0 THEN `display_name` ELSE NULL END) STORED,
+  UNIQUE KEY `uq_firm_active_display_name` (`active_display_name`),
+  KEY `idx_firm_display_name` (`display_name`),
   UNIQUE KEY `uq_firm_default_account_id` (`default_account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -625,3 +625,23 @@ d('shop offer comparisons', () => {
     } finally { await sql`DELETE FROM chestshop_shop WHERE world = 'audit'`.execute(db); }
   });
 });
+
+
+d('reused firm names', () => {
+  it('prefers the active firm and keeps archived history addressable', async () => {
+    await sql`INSERT INTO firm (firm_id, display_name, proprietor_uuid_bin, is_archived)
+      VALUES (901, 'ReusedName', ${uuidToBin(ALICE)}, 1),
+             (902, 'REUSEDNAME', ${uuidToBin(BOB)}, 1),
+             (903, 'ReusedName', ${uuidToBin(CAROL)}, 0)`.execute(db);
+    try {
+      expect((await findFirmByDisplayName('reusedname'))?.firm_id).toBe(903);
+      await sql`UPDATE firm SET is_archived = 1 WHERE firm_id = 903`.execute(db);
+      expect((await findFirmByDisplayName('reusedname'))?.firm_id).toBe(903);
+      const history = await sql<{ display_name: string }>`
+        SELECT display_name FROM firm WHERE firm_id = 901`.execute(db);
+      expect(history.rows[0].display_name).toBe('ReusedName');
+    } finally {
+      await sql`DELETE FROM firm WHERE firm_id IN (901, 902, 903)`.execute(db);
+    }
+  });
+});
