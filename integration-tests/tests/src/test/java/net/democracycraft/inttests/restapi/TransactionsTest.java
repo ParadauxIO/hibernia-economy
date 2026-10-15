@@ -65,6 +65,37 @@ class TransactionsTest {
     }
 
     @Test
+    void receiverHistoryShowsSenderAsCounterparty() {
+        String sender = Usernames.fresh("Tr");
+        String target = Usernames.fresh("Trt");
+        try (MockPlayer s = MockPlayer.connectLocal(sender);
+             MockPlayer t = MockPlayer.connectLocal(target)) {
+            Ledger.waitForPersonalBalance(s.getUuid(), TIMEOUT);
+            Ledger.waitForPersonalBalance(t.getUuid(), TIMEOUT);
+
+            IssuedKey senderKey = ApiTokens.issuePersonal(sender, s);
+            IssuedKey targetKey = ApiTokens.issuePersonal(target, t);
+
+            Response sent = RestApi.postTransfer(senderKey.token(),
+                    "{\"toAccountId\":" + targetKey.accountId() + ",\"amount\":\"7.50\",\"memo\":\"incoming\"}", null);
+            assertThat(sent.status()).as(sent.body()).isBetween(200, 299);
+            long txnId = sent.json().path("txnId").asLong();
+
+            Response r = RestApi.getTransactions(targetKey.token(), targetKey.accountId(), null, null);
+            assertThat(r.status()).isEqualTo(200);
+
+            JsonNode first = r.json().path("items").get(0);
+            assertThat(first.path("txnId").asLong()).isEqualTo(txnId);
+            assertThat(first.path("amount").asText()).isEqualTo("7.50");
+            JsonNode counterparty = first.path("counterparty");
+            assertThat(counterparty.path("accountId").asInt()).isEqualTo(senderKey.accountId());
+            assertThat(counterparty.path("accountType").asText()).isEqualTo("PERSONAL");
+            assertThat(counterparty.path("ownerUuid").asText()).isEqualTo(s.getUuid().toString());
+            assertThat(counterparty.has("displayName")).isTrue();
+        }
+    }
+
+    @Test
     void historyHonoursPaginationLimit() {
         String sender = Usernames.fresh("Tp");
         String target = Usernames.fresh("Tpt");
