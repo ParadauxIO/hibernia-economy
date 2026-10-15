@@ -106,6 +106,20 @@ Money Flow shows received, sent and net received amounts for each account type.
 Only attributable transfers between different types are counted, including initial
 player funding. Daily chart buckets use UTC; the first and current day can be partial.
 
+[Taxation](/economy/taxation) is public and shows 7- or 30-day collections,
+fine refunds, net revenue by type, and receiving government accounts. It counts
+recognised personal/corporate balance tax, source income tax, ChestShop sales tax,
+and recorded fines from the ledger. Other government transfers and property tax
+are excluded. Archived receiving accounts remain included. Refunds count on their
+settlement date, so a period can have negative net fine revenue. Individual payers,
+fine reasons and private account details are not exposed.
+
+The rates panel shows the latest published Treasury configuration, regardless of
+the selected period. It shows enabled/disabled status, personal weekly balance-tax
+brackets and per-source income-tax overrides. If live rates cannot be read, it says
+unavailable; it never substitutes shipped defaults. Corporate and ChestShop rates
+are not published in this panel.
+
 Government opens with accounts you may view. Its Fines tab supports reason search,
 active/revoked filtering and pagination. Summary totals always cover the whole
 selected period for your permitted accounts, independent of the list filter.
