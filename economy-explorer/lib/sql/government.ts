@@ -143,3 +143,13 @@ export async function getGovernmentAccounts(scope: { all: true } | { playerUuid:
     balance: row.balance,
   }));
 }
+
+export async function getFineTotals(days: number, accountIds: readonly number[] | null = []) {
+  const r = await sql<{ active_count: string | number; active_amount: string }>`
+    SELECT COUNT(*) AS active_count, COALESCE(SUM(amount), 0.00) AS active_amount
+    FROM government_fines
+    WHERE revoked = 0 AND issued_at >= NOW() - INTERVAL ${days} DAY
+      AND ${accountIds === null ? sql`TRUE` : accountIds.length ? sql`gov_account_id IN (${sql.join(accountIds)})` : sql`FALSE`}
+  `.execute(db);
+  return { activeCount: Number(r.rows[0]?.active_count ?? 0), activeAmount: r.rows[0]?.active_amount ?? '0.00' };
+}

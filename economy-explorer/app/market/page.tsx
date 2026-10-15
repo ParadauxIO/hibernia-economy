@@ -38,6 +38,7 @@ const getMarketData = (days: number) =>
       countSales(),
       sumVolume(),
       countDistinctItems(),
+      countDistinctItems(days),
     ]),
   );
 
@@ -47,7 +48,7 @@ export default async function MarketPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
-  const [items, volume, totalSales, totalVolume, distinctItems] = await getMarketData(sp.days);
+  const [items, volume, totalSales, totalVolume, distinctItems, windowItems] = await getMarketData(sp.days);
 
   const windowSales = volume.reduce((s, v) => s + v.sales, 0);
   const windowVolume = volume.reduce((s, v) => s + parseFloat(v.total_volume), 0);
@@ -78,7 +79,7 @@ export default async function MarketPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Items traded</div>
-          <div className="kpi-value">{fmtN(items.length)}</div>
+          <div className="kpi-value">{fmtN(windowItems)}</div>
           <div className="kpi-meta">{fmtN(distinctItems)} all-time</div>
         </div>
         <div className="kpi">

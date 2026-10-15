@@ -84,3 +84,14 @@ and **system** (follow your device) appearance. Your choice is remembered.
 - New to the economy itself? Start with **[Getting started](/docs/guides/getting-started)**.
 - Curious what counts as public vs. private:
   **[Accounts & money](/docs/concepts/accounts-and-money)**.
+
+## Understanding summary figures
+
+Open accounts means non-archived accounts, not players active recently. Personal
+supply is the current player-held balance; transaction activity measures transfers
+in the selected period. Balance summaries include negative net balances, while
+the positive-net-balance chart excludes types whose total is zero or negative.
+Market items traded counts every distinct item traded in the selected window,
+not just the featured cards. Government fine totals cover all non-revoked fines
+in the selected window and your permitted accounts; the recent list is limited.
+The item catalogue is ordered by item key for predictable browsing.

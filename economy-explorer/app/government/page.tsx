@@ -29,10 +29,8 @@ export default async function GovernmentPage({
     return <PrivacyGate kind={viewer.anon ? 'login' : 'private'} title="Government access required" />;
   }
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
-  const { cats, fines, govAccounts } = await getGovernmentDashboard(sp.days);
+  const { cats, fines, govAccounts, totals } = await getGovernmentDashboard(sp.days);
 
-  const totalFineAmount = fines.reduce((s, f) => s + (f.revoked ? 0 : parseFloat(f.amount)), 0);
-  const activeFines = fines.filter((f) => !f.revoked).length;
 
   return (
     <>
@@ -46,12 +44,12 @@ export default async function GovernmentPage({
       <div className="kpi-grid">
         <div className="kpi">
           <div className="kpi-label">Active fines</div>
-          <div className="kpi-value">{fmtN(activeFines)}</div>
+          <div className="kpi-value">{fmtN(totals.activeCount)}</div>
           <div className="kpi-meta">non-revoked in window</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Active fine amount</div>
-          <div className="kpi-value">{fmtAmtFull(totalFineAmount)}</div>
+          <div className="kpi-value">{fmtAmtFull(totals.activeAmount)}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Gov accounts</div>
@@ -139,7 +137,7 @@ export default async function GovernmentPage({
 
       <div className="card">
         <div className="card-title">
-          Recent fines <span className="sub">{fines.length} in this window</span>
+          Recent fines <span className="sub">latest {fines.length} in this window</span>
         </div>
         <div className="table-wrap">
           <table className="data-table">

@@ -62,8 +62,6 @@ export default async function DashboardPage() {
   const personal = parseFloat(stats.personalSupply);
   const velocity = personal > 0 ? windowVolume / personal : null;
 
-  // Denominator for the per-type balance share table.
-  const supply = parseFloat(stats.totalSupply);
 
   const sparkVol = volume.map((v) => ({ value: parseFloat(v.total_volume) }));
   const sparkCnt = volume.map((v) => ({ value: v.txn_count }));
@@ -82,10 +80,10 @@ export default async function DashboardPage() {
           <div className="kpi-label">Personal supply</div>
           <div className="kpi-value">{fmtAmt(stats.personalSupply)}</div>
           <div className="kpi-meta">held by players</div>
-          <div className="kpi-spark"><Sparkline data={sparkVol} stroke="var(--c-1)" /></div>
+
         </div>
         <div className="kpi">
-          <div className="kpi-label">Active accounts</div>
+          <div className="kpi-label">Open accounts</div>
           <div className="kpi-value">{fmtN(stats.totalAccounts)}</div>
           <div className="kpi-meta">{fmtN(stats.archivedAccounts)} archived</div>
         </div>
@@ -166,8 +164,8 @@ export default async function DashboardPage() {
         <div className="chart-card">
           <div className="chart-header">
             <div>
-              <div className="chart-title">Wealth by account type</div>
-              <div className="chart-subtitle">Total balance per type</div>
+              <div className="chart-title">Positive net balances by type</div>
+              <div className="chart-subtitle">Types with a positive net balance; negative totals excluded</div>
             </div>
           </div>
           {/* Exclude SYSTEM — it's plumbing (mint/sink), not held wealth. */}
@@ -206,21 +204,18 @@ export default async function DashboardPage() {
                 <th className="amount">Accounts</th>
                 <th className="amount">Total balance</th>
                 <th className="amount">Avg balance</th>
-                <th className="amount">Share</th>
               </tr>
             </thead>
             <tbody>
               {stats.byType.map((b) => {
                 const total = parseFloat(b.total_balance);
                 const avg = b.account_count > 0 ? total / b.account_count : 0;
-                const share = supply > 0 ? total / supply : 0;
                 return (
                   <tr key={b.account_type}>
                     <td><span className={`badge badge-${b.account_type}`}>{b.account_type}</span></td>
                     <td className="amount mono">{fmtN(b.account_count)}</td>
                     <td className="amount neutral">{fmtAmtFull(b.total_balance)}</td>
                     <td className="amount neutral">{fmtAmtFull(avg)}</td>
-                    <td className="amount mono">{fmtPct(share)}</td>
                   </tr>
                 );
               })}

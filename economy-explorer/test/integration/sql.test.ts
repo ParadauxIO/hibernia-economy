@@ -549,3 +549,40 @@ d('configurable authorization policy', () => {
     await expect(setDirectRoleMember('missing', BOB, true)).rejects.toThrow('Unknown role');
   });
 });
+
+d('explorer summary regressions', () => {
+  it('pages item keys before aggregating, and counts items beyond featured cards', async () => {
+    const { listItems, countItems, countDistinctItems } = await import('@/lib/sql/market');
+    const before = await countDistinctItems(7);
+    try {
+      for (let i = 0; i < 14; i++) {
+        await sql`INSERT INTO chestshop_sale (customer_uuid_bin, txn_id, direction, quantity, unit_price, total_price, tax_amount, item_key, material, item_name, occurred_at)
+          VALUES (${uuidToBin(ALICE)}, 1, 'BUY', 2, 3, 6, 0, ${`audit-item-${i.toString().padStart(2, '0')}`}, 'STONE', 'Audit stone', NOW())`.execute(db);
+      }
+      await sql`INSERT INTO chestshop_sale (customer_uuid_bin, txn_id, direction, quantity, unit_price, total_price, tax_amount, item_key, material, item_name, occurred_at)
+        VALUES (${uuidToBin(ALICE)}, 1, 'BUY', 1, 1, 1, 0, 'audit-item-old', 'STONE', 'Audit old stone', NOW() - INTERVAL 40 DAY)`.execute(db);
+      expect(await countDistinctItems(7)).toBe(before + 14);
+      expect(await countItems('Audit stone')).toBe(14);
+      expect(await listItems({ search: 'Audit stone', limit: 20, offset: 0 })).toHaveLength(14);
+      const page = await listItems({ search: 'audit-item-', limit: 3, offset: 2 });
+      expect(page.map(i => i.item_key)).toEqual(['audit-item-02', 'audit-item-03', 'audit-item-04']);
+      expect(page[0]).toMatchObject({ total_quantity: 2, total_volume: '6.00', trade_count: 1 });
+    } finally { await sql`DELETE FROM chestshop_sale WHERE item_key LIKE 'audit-item-%'`.execute(db); }
+  });
+
+  it('fine totals include more than the recent-list cap and respect scope', async () => {
+    const { getFineTotals, getRecentFines } = await import('@/lib/sql/government');
+    const before = await getFineTotals(30, [5]);
+    try {
+      for (let i = 0; i < 105; i++) {
+        await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin)
+          VALUES (${uuidToBin(BOB)}, 5, 2.50, 'audit-total', 1, ${uuidToBin(ALICE)})`.execute(db);
+      }
+      const total = await getFineTotals(30, [5]);
+      expect(total.activeCount).toBe(before.activeCount + 105);
+      expect(Number(total.activeAmount)).toBe(Number(before.activeAmount) + 262.5);
+      expect(await getRecentFines(30, 100, [5])).toHaveLength(100);
+      expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
+    } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-total'`.execute(db); }
+  });
+});

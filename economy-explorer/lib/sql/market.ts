@@ -123,8 +123,8 @@ export async function sumVolume(): Promise<string> {
   const r = await sql<{ v: string }>`SELECT COALESCE(SUM(total_price),0.00) AS v FROM chestshop_sale`.execute(db);
   return r.rows[0]?.v ?? '0.00';
 }
-export async function countDistinctItems(): Promise<number> {
-  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale`.execute(db);
+export async function countDistinctItems(days?: number): Promise<number> {
+  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${days == null ? sql`` : sql`WHERE occurred_at >= NOW() - INTERVAL ${days} DAY`}`.execute(db);
   return Number(r.rows[0]?.c ?? 0);
 }
 
@@ -159,27 +159,42 @@ export async function topItems(days: number, limit: number): Promise<MarketItemR
   return r.rows.map(toMarketItemRow);
 }
 
+/** Search one representative metadata row per key, rather than every trade.
+ * idx_cs_item supplies distinct keys and the latest observation for each key.
+ * This bounds name/material matching to the catalogue size, not sale history. */
+function catalogueKeys(search: string | null) {
+  if (!search) return sql`SELECT DISTINCT item_key FROM chestshop_sale`;
+  return sql`
+    SELECT keys_by_item.item_key
+    FROM (SELECT DISTINCT item_key FROM chestshop_sale) keys_by_item
+    JOIN chestshop_sale sample ON sample.sale_id = (
+      SELECT recent.sale_id FROM chestshop_sale recent
+      WHERE recent.item_key = keys_by_item.item_key
+      ORDER BY recent.occurred_at DESC, recent.sale_id DESC LIMIT 1
+    )
+    WHERE sample.item_name LIKE ${'%' + search + '%'}
+       OR sample.material LIKE ${'%' + search + '%'}
+       OR keys_by_item.item_key LIKE ${'%' + search + '%'}
+  `;
+}
+
 export async function listItems(args: { search: string | null; limit: number; offset: number }): Promise<MarketItemRow[]> {
-  const where = args.search
-    ? sql`WHERE (item_name LIKE CONCAT('%', ${args.search}, '%') OR material LIKE CONCAT('%', ${args.search}, '%') OR item_key LIKE CONCAT('%', ${args.search}, '%'))`
-    : sql``;
   const r = await sql<RawMarketItem>`
-    SELECT item_key, MAX(material) AS material, MAX(item_name) AS item_name,
-           MAX(item_custom) AS item_custom, COUNT(*) AS trade_count,
-           COALESCE(SUM(quantity),0) AS total_quantity, COALESCE(SUM(total_price),0.00) AS total_volume
-    FROM chestshop_sale
-    ${where}
-    GROUP BY item_key ORDER BY trade_count DESC, item_name ASC
-    LIMIT ${args.limit} OFFSET ${args.offset}
+    SELECT cs.item_key, MAX(cs.material) AS material, MAX(cs.item_name) AS item_name,
+           MAX(cs.item_custom) AS item_custom, COUNT(*) AS trade_count,
+           COALESCE(SUM(cs.quantity),0) AS total_quantity,
+           COALESCE(SUM(cs.total_price),0.00) AS total_volume
+    FROM (
+      ${catalogueKeys(args.search)} ORDER BY item_key LIMIT ${args.limit} OFFSET ${args.offset}
+    ) page
+    JOIN chestshop_sale cs ON cs.item_key = page.item_key
+    GROUP BY cs.item_key ORDER BY cs.item_key
   `.execute(db);
   return r.rows.map(toMarketItemRow);
 }
 
 export async function countItems(search: string | null): Promise<number> {
-  const where = search
-    ? sql`WHERE (item_name LIKE CONCAT('%', ${search}, '%') OR material LIKE CONCAT('%', ${search}, '%') OR item_key LIKE CONCAT('%', ${search}, '%'))`
-    : sql``;
-  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${where}`.execute(db);
+  const r = await sql<{ c: string | number }>`SELECT COUNT(*) AS c FROM (${catalogueKeys(search)}) catalogue`.execute(db);
   return Number(r.rows[0]?.c ?? 0);
 }
 
