@@ -185,6 +185,25 @@ locally:
 git submodule update --init --recursive
 ```
 
+### Taxation dashboard
+
+`/economy/taxation` is a public SSR aggregate view (PAR-92). The service caches
+7/30-day results with the explorer's 60-second SWR cache. `lib/sql/taxation.ts`
+counts government posting credits using the actual writer plugin/message pairs:
+`treasury` + `Personal balance tax (` / `Income tax on deposit from `,
+`business` + `Weekly Corporate Balance Tax`, and `ChestShop` + `ChestShop sales tax (`.
+The Tax API's `taxType` is not stored in the ledger. Fine collections and refunds
+are linked through `government_fines.txn_id` and `revoke_txn_id`; each posting is
+counted once even with duplicate historical fine records. Refunds belong to their
+settlement period. The public result has no payer IDs, transaction IDs or reasons.
+
+Live rates use the public PAR-80 REST contract at `/api/v1/config/tax`, via
+`TREASURY_API_BASE_URL` (with or without its `/api/v1` suffix). No admin token is
+sent. Rate reads have a three-second timeout and a separate 60-second SWR cache;
+an absent endpoint, invalid section or failed request renders that section as
+unavailable without breaking ledger aggregates. No migration or PAR-80 merge is
+required for the dashboard; published rates appear when that endpoint is deployed.
+
 ### Treasury reload concurrency
 
 The injected salary, balance-tax and source-income-tax configuration objects are

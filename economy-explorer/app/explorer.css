@@ -2359,3 +2359,7 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
   .header-me { max-width: 140px; overflow-wrap: anywhere; }
   .header-me .badge { display: none; }
 }
+
+/* Two-column tax rates stay visible together on phones. */
+.data-table.tax-rates-table { min-width: 0; width: 100%; }
+.tax-rates-table td:first-child { overflow-wrap: anywhere; }

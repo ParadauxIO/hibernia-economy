@@ -39,6 +39,7 @@ export const ECONOMY_SUB: SubNavItem[] = [
   { href: '/', label: 'Overview', match: (p) => p === '/' },
   { href: '/economy/wealth', label: 'Wealth', match: (p) => p.startsWith('/economy/wealth') },
   { href: '/money-flow', label: 'Money Flow', match: (p) => p.startsWith('/money-flow') },
+  { href: '/economy/taxation', label: 'Taxation', match: (p) => p.startsWith('/economy/taxation') },
   { href: '/government', label: 'Government', match: (p) => p.startsWith('/government') },
 ];
 

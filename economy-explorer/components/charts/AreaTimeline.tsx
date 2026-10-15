@@ -5,6 +5,7 @@ import {
   CartesianGrid, Cell, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import { TAX_KINDS, TAX_LABELS, type TaxKind } from '@/lib/taxation';
 import { fmtAmt, fmtAmtFull, fmtDate, fmtN } from '@/lib/format';
 
 const GRID_STROKE = 'var(--border-soft)';
@@ -296,4 +297,21 @@ export function PriceLine({ data }: PriceLineProps) {
 
 function EmptyChart({ children }: { children: React.ReactNode }) {
   return <div className="state-empty" style={{ height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</div>;
+}
+
+/** Unstacked lines preserve negative fine-refund days without hiding other taxes. */
+export function TaxRevenueTimeline({ data }: { data: ({ date: string } & Record<TaxKind, number>)[] }) {
+  return <>
+    <div className="chart-legend">{TAX_KINDS.map((kind, i) => <span key={kind} style={{ color: PALETTE[i] }}>● {TAX_LABELS[kind]}</span>)}</div>
+    <RC height={260}>
+      <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 12 }}>
+        <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
+        <XAxis dataKey="date" tickFormatter={fmtDate} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={28} />
+        <YAxis tickFormatter={v => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={60} />
+        <Tooltip labelFormatter={d => fmtDate(String(d))} formatter={(v: number) => fmtAmtFull(v)}
+          contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }} />
+        {TAX_KINDS.map((kind, i) => <Line key={kind} dataKey={kind} name={TAX_LABELS[kind]} stroke={PALETTE[i]} strokeWidth={2} dot={false} isAnimationActive={false} />)}
+      </LineChart>
+    </RC>
+  </>;
 }

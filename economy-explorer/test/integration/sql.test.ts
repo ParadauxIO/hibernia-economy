@@ -625,3 +625,50 @@ d('shop offer comparisons', () => {
     } finally { await sql`DELETE FROM chestshop_shop WHERE world = 'audit'`.execute(db); }
   });
 });
+
+d('public taxation ledger aggregates', () => {
+  it('counts government credits once, identifies writer tags, and dates fine refunds by settlement', async () => {
+    const { getTaxRevenue } = await import('@/lib/sql/taxation');
+    const { summarizeTaxRevenue } = await import('@/lib/taxation');
+    // Dedicated IDs; no changes to the shared seed or its balance assertions.
+    await sql`INSERT INTO accounts (account_id, account_type, display_name, is_archived, owner_uuid_bin)
+      VALUES (9201, 'GOVERNMENT', 'Archived tax office', 1, UNHEX(REPEAT('00',16))), (9202, 'PERSONAL', 'Private payer', 0, UNHEX(REPEAT('00',16)))`.execute(db);
+    const transfer = async (id: number, plugin: string, message: string, amount: string, age: number, reverse = false) => {
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        VALUES (${id}, ${message}, ${plugin}, UNHEX(REPEAT('00', 16)), UTC_TIMESTAMP() - INTERVAL ${age} DAY)`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount, memo) VALUES
+        (${id}, 9201, ${reverse ? '-' + amount : amount}, ${message}),
+        (${id}, 9202, ${reverse ? amount : '-' + amount}, ${message})`.execute(db);
+    };
+    try {
+      await transfer(9201, 'treasury', 'Personal balance tax (1d @ 1%/wk)', '0.10', 1);
+      await transfer(9202, 'business', 'Weekly Corporate Balance Tax', '0.20', 1);
+      await transfer(9203, 'treasury', 'Income tax on deposit from Jobs ($10)', '0.30', 1);
+      await transfer(9204, 'ChestShop', 'ChestShop sales tax (5% of 10) — private memo', '0.40', 1);
+      await transfer(9205, 'treasury', 'Fine: private reason', '5.00', 10);
+      await transfer(9206, 'treasury', 'Fine revoked: private reason', '5.00', 1, true);
+      await transfer(9207, 'other', 'Personal balance tax (spoof)', '99.00', 1);
+      await transfer(9208, 'treasury', 'Fine: no fine record', '99.00', 1);
+      await transfer(9209, 'ChestShop', 'ordinary sale', '99.00', 1);
+      await transfer(9210, 'treasury', 'Personal balance tax (old)', '99.00', 31);
+      await transfer(9211, 'treasury', 'Personal balance tax (not a government credit)', '99.00', 1, true);
+      await sql`INSERT INTO government_fines
+        (fine_id, player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked, revoke_txn_id)
+        VALUES (9201, UNHEX(REPEAT('00',16)), 9201, 5, 'private reason', 9205, UNHEX(REPEAT('00',16)), 1, 9206),
+               (9202, UNHEX(REPEAT('00',16)), 9201, 5, 'duplicate historic record', 9205, UNHEX(REPEAT('00',16)), 1, 9206)`.execute(db);
+      const rows = (await getTaxRevenue(7)).filter(row => row.account_id === 9201);
+      const summary = summarizeTaxRevenue(rows, 7, new Date());
+      expect(summary.totals).toEqual({ collected: '1.00', refunded: '5.00', net: '-4.00' });
+      expect(summary.byType.map(row => row.net)).toEqual(['0.10', '0.20', '0.30', '0.40', '-5.00']);
+      expect(summary.accounts[0].name).toBe('Archived tax office');
+      expect(summarizeTaxRevenue((await getTaxRevenue(30)).filter(row => row.account_id === 9201), 30, new Date()).totals)
+        .toEqual({ collected: '6.00', refunded: '5.00', net: '1.00' });
+      expect(Object.keys(rows[0]).sort()).toEqual(['account_id', 'collected', 'date', 'display_name', 'kind', 'refunded']);
+    } finally {
+      await sql`DELETE FROM government_fines WHERE fine_id BETWEEN 9201 AND 9202`.execute(db);
+      await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 9201 AND 9211`.execute(db);
+      await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 9201 AND 9211`.execute(db);
+      await sql`DELETE FROM accounts WHERE account_id IN (9201, 9202)`.execute(db);
+    }
+  });
+});
