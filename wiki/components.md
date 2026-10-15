@@ -177,3 +177,20 @@ sent. Rate reads have a three-second timeout and a separate 60-second SWR cache;
 an absent endpoint, invalid section or failed request renders that section as
 unavailable without breaking ledger aggregates. No migration or PAR-80 merge is
 required for the dashboard; published rates appear when that endpoint is deployed.
+
+### Treasury reload concurrency
+
+The injected salary, balance-tax and source-income-tax configuration objects are
+stable holders of immutable `Snapshot` records. Parse with `prepareReload` before
+publishing; retain `snapshot()` once per operation when reading multiple fields.
+`ConfigReloadServiceImpl` validates YAML and prepares all three candidates before
+publishing any. Invalid manual settings leave all three previous snapshots intact.
+The salary interval remains pinned to the startup timer. `SalaryService.Payroll`
+carries the funding account alongside the payment plan across the async boundary.
+Tax destination caches include the account name so a reload cannot reuse an ID
+resolved for a different configured account.
+
+The annotation-driven framework components still use the existing in-place reload
+for Guice compatibility; their fields are volatile for visibility. They do not
+provide a multi-field snapshot or a transaction spanning messages, logging and all
+configuration components. The snapshot guarantee above is per manual configuration.

@@ -17,6 +17,16 @@ Treasury's settings live in `plugins/Treasury/config.yml`.
 > is the economy system of record, so a bad `database.*` value or an invalid
 > `economy.format` pattern will stop the plugin from enabling.
 
+Salary, personal balance-tax, and source-income-tax settings are parsed before
+publication. Invalid YAML, malformed salary amounts, or invalid tax rates reject
+the reload and keep the previous settings. Tax rates must be between 0 and 1;
+salary amounts and balance-bracket thresholds must be non-negative. Startup still
+uses the documented defaults and warning-based recovery.
+
+An in-flight tax collection keeps its original rate and government account. A
+scheduled payroll keeps its original amounts and funding account even if a reload
+happens before its async payout. Subsequent operations use the new settings.
+
 ## Currency — `economy`
 
 | Key | Default | What it does |

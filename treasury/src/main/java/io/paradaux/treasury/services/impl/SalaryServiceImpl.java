@@ -70,6 +70,16 @@ public class SalaryServiceImpl implements SalaryService {
 
     @Override
     public List<SalaryPayment> planPayroll() {
+        return preparePayroll().payments();
+    }
+
+    @Override
+    public Payroll preparePayroll() {
+        SalaryConfiguration.Snapshot config = this.config.snapshot();
+        return new Payroll(planPayroll(config), config.getGovernmentAccount());
+    }
+
+    private List<SalaryPayment> planPayroll(SalaryConfiguration.Snapshot config) {
         if (!config.isEnabled() || config.getAmounts().isEmpty()) {
             return List.of();
         }
@@ -80,7 +90,7 @@ public class SalaryServiceImpl implements SalaryService {
 
         List<SalaryPayment> plan = new ArrayList<>();
         for (Player player : server.getOnlinePlayers()) {
-            if (config.isSkipAfk() && isAfk(player)) {
+            if (config.isSkipAfk() && isAfk(player, config)) {
                 continue; // don't pay UBI/salary to AFK-idling players (PAR-139)
             }
             UUID uuid = player.getUniqueId();
@@ -96,7 +106,7 @@ public class SalaryServiceImpl implements SalaryService {
      * or a calculator; this reads it generically so no Essentials build
      * dependency is needed. Returns false if LuckPerms can't supply a context.
      */
-    private boolean isAfk(Player player) {
+    private boolean isAfk(Player player, SalaryConfiguration.Snapshot config) {
         ContextManager contextManager = luckPerms.getContextManager();
         if (contextManager == null) {
             return false;
@@ -108,12 +118,19 @@ public class SalaryServiceImpl implements SalaryService {
 
     @Override
     public int payout(List<SalaryPayment> payments) {
+        if (payments == null || payments.isEmpty()) return 0;
+        return payoutPayroll(new Payroll(payments, config.getGovernmentAccount()));
+    }
+
+    @Override
+    public int payoutPayroll(Payroll payroll) {
+        List<SalaryPayment> payments = payroll.payments();
         if (payments == null || payments.isEmpty()) {
             return 0;
         }
-        Account gov = accountService.getGovernmentAccountByName(config.getGovernmentAccount());
+        Account gov = accountService.getGovernmentAccountByName(payroll.governmentAccount());
         if (gov == null) {
-            log.warn("Salary government account '{}' not found — no salaries paid.", config.getGovernmentAccount());
+            log.warn("Salary government account '{}' not found — no salaries paid.", payroll.governmentAccount());
             return 0;
         }
         int fromAccountId = gov.getAccountId();
@@ -168,7 +185,7 @@ public class SalaryServiceImpl implements SalaryService {
             }
         }
         if (paid > 0) {
-            log.info("Paid {} salary(ies) from {}.", paid, config.getGovernmentAccount());
+            log.info("Paid {} salary(ies) from {}.", paid, payroll.governmentAccount());
         }
         return paid;
     }

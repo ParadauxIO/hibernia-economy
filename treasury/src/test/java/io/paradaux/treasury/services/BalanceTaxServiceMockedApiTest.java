@@ -261,4 +261,35 @@ class BalanceTaxServiceMockedApiTest {
         verify(accountMapper, org.mockito.Mockito.times(1))
                 .findGovernmentAccountByName("DCGovernment");
     }
+
+    @Test
+    void reloadDuringCollectionKeepsRateAndDestinationTogetherAndRefreshesCacheNextTime() {
+        var config = enabledConfig();
+        svc = new io.paradaux.treasury.services.impl.BalanceTaxServiceImpl(config, taxApi, accountMapper);
+        UUID player = UUID.randomUUID();
+        when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
+        AccountBalance balance = new AccountBalance();
+        balance.setBalance(new BigDecimal("100000"));
+        var replacement = BalanceTaxConfiguration.forTesting(true, "NewGovernment",
+                new TreeMap<>(java.util.Map.of(BigDecimal.ZERO, new BigDecimal("0.02")))).snapshot();
+        when(accountMapper.readBalance(42)).thenAnswer(invocation -> {
+            config.publish(replacement);
+            return balance;
+        });
+        Account oldGovernment = new Account();
+        oldGovernment.setAccountId(7);
+        Account newGovernment = new Account();
+        newGovernment.setAccountId(8);
+        when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(oldGovernment);
+        when(accountMapper.findGovernmentAccountByName("NewGovernment")).thenReturn(newGovernment);
+        when(taxApi.collectTax(any())).thenReturn(new TaxResult.Skipped("test"));
+        svc.collect(player, 0L, 604800L);
+        svc.collect(player, 604800L, 1209600L);
+        var captured = ArgumentCaptor.forClass(TaxCollection.class);
+        verify(taxApi, org.mockito.Mockito.times(2)).collectTax(captured.capture());
+        assertThat(captured.getAllValues().get(0).destinationAccountId()).isEqualTo(7);
+        assertThat(captured.getAllValues().get(0).amount()).isEqualByComparingTo("1000");
+        assertThat(captured.getAllValues().get(1).destinationAccountId()).isEqualTo(8);
+        assertThat(captured.getAllValues().get(1).amount()).isEqualByComparingTo("2000");
+    }
 }

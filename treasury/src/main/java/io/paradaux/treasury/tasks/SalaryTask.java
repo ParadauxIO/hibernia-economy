@@ -1,12 +1,10 @@
 package io.paradaux.treasury.tasks;
 
 import io.paradaux.treasury.Treasury;
-import io.paradaux.treasury.model.salary.SalaryPayment;
 import io.paradaux.treasury.services.SalaryService;
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.List;
 
 /**
  * Repeating government-salary payout.
@@ -28,11 +26,11 @@ public class SalaryTask extends BukkitRunnable {
 
     @Override
     public void run() {
-        List<SalaryPayment> plan = salaryService.planPayroll(); // main thread
-        if (plan.isEmpty()) {
+        SalaryService.Payroll plan = salaryService.preparePayroll(); // main thread
+        if (plan.payments().isEmpty()) {
             return;
         }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> salaryService.payout(plan));
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> salaryService.payoutPayroll(plan));
     }
 
     /**

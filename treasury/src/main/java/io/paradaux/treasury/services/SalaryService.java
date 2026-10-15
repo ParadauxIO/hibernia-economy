@@ -13,6 +13,16 @@ import java.util.List;
  */
 public interface SalaryService {
 
+    /** Carries the funding account across the main-thread/async boundary. */
+    record Payroll(List<SalaryPayment> payments, String governmentAccount) {
+        public Payroll { payments = List.copyOf(payments); }
+    }
+
+    Payroll preparePayroll();
+
+    int payoutPayroll(Payroll payroll);
+
+
     /**
      * Resolve the salary owed to each currently-online player (highest-paying
      * matching group). MUST run on the server main thread — it reads the online
