@@ -47,13 +47,18 @@ test.describe('anonymous browsing', () => {
     await expect(dataTable(page)).toHaveCount(0);
   });
 
-  test('market hides the Firms + Sales tabs and shows Avg sale', async ({ page }) => {
+  test('market browsing links to activity and searches the full catalogue', async ({ page }) => {
     await visit(page, '/market');
     const tabs = page.locator('.section-tabs a');
     await expect(tabs.filter({ hasText: 'Items' })).toBeVisible();
     await expect(tabs.filter({ hasText: 'Firms' })).toHaveCount(0);
     await expect(tabs.filter({ hasText: 'Sales' })).toHaveCount(0);
-    await expect(page.getByText('Avg sale')).toBeVisible();
+    await page.getByLabel('Find an item', { exact: true }).fill('Diamond');
+    await page.getByRole('button', { name: 'Search all items' }).click();
+    await expect(page).toHaveURL(/chestshop\?q=Diamond/);
+    await expect(page.getByRole('heading', { name: 'Browse items' })).toBeVisible();
+    await page.getByRole('link', { name: 'Activity', exact: true }).click();
+    await expect(page.getByText('Avg sale', { exact: true })).toBeVisible();
   });
 
   test('per-firm financials are private to anonymous viewers', async ({ page }) => {

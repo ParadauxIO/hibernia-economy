@@ -109,3 +109,10 @@ player funding. Daily chart buckets use UTC; the first and current day can be pa
 Government opens with accounts you may view. Its Fines tab supports reason search,
 active/revoked filtering and pagination. Summary totals always cover the whole
 selected period for your permitted accounts, independent of the list filter.
+
+## Finding items
+
+Market starts with a search across the full catalogue and popular items for 7 or
+30 days. Browse Items includes the complete alphabetical catalogue; Find Shops
+lists observed shops; Activity contains market-wide totals and charts. Item cards
+show historical daily average prices per item, not guaranteed shop offers.

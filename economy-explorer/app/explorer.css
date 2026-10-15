@@ -2314,3 +2314,8 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
 .flow-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .flow-summary dl { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .flow-summary dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.market-search h2 { margin-top: 0; }
+.market-search label { display: block; margin-bottom: 8px; }
+.search-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.search-row input { flex: 1 1 220px; }

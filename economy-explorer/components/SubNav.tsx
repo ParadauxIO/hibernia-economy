@@ -46,9 +46,9 @@ export const ECONOMY_SUB: SubNavItem[] = [
 // duplicated the main Firms page). The raw Sales feed is for moderators and admins — regular
 // players don't need to know it exists.
 export const MARKET_SUB: SubNavItem[] = [
-  { href: '/market', label: 'Overview', match: (p) => p === '/market' },
-  { href: '/chestshop', label: 'Items', match: (p) => p.startsWith('/chestshop/items') || p === '/chestshop' },
-  { href: '/chestshop/shops', label: 'Shops', match: (p) => p.startsWith('/chestshop/shops') },
+  { href: '/market', label: 'Browse Items', match: (p) => p === '/market' || p === '/chestshop' || p.startsWith('/chestshop/items') },
+  { href: '/chestshop/shops', label: 'Find Shops', match: (p) => p.startsWith('/chestshop/shops') },
+  { href: '/market/activity', label: 'Activity', match: (p) => p.startsWith('/market/activity') },
 ];
 
 const MARKET_SALES: SubNavItem = {
