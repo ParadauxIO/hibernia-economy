@@ -124,3 +124,14 @@ break. The connection pool and `table-prefix` are not meaningfully tunable
 There's **no firm-creation fee, account-creation fee, or configurable role/permission
 defaults** — those behaviours are fixed in code. The only tax is the weekly balance tax
 above.
+
+## Automatic account-access recovery
+
+Business checks linked accounts at startup and approximately once per minute to
+repair incomplete membership updates after a Treasury/database failure. Access is
+recomputed from the current proprietor and staff roles. Failed accounts are logged
+with their firm and account IDs and retried on the next pass; restarting the server
+also resumes recovery. No configuration change is needed.
+
+Until a pass succeeds, an account may still have stale access. If warnings repeat,
+restore database/Treasury availability and check that the next pass succeeds.

@@ -22,6 +22,7 @@ import io.paradaux.business.guice.BusinessModule;
 import io.paradaux.business.guice.DatabaseModule;
 import io.paradaux.business.integration.BusinessPlaceholderHook;
 import io.paradaux.business.jobs.ExpireRequestsJob;
+import io.paradaux.business.jobs.ReconcileAccountMembersJob;
 import io.paradaux.business.listeners.ChestShopSaleListener;
 import io.paradaux.business.listeners.FirmBalanceTaxListener;
 import io.paradaux.business.listeners.OnlineRosterListener;
@@ -137,6 +138,7 @@ public class Business extends JavaPlugin {
         // Register jobs
         expireRequestsJob = injector.getInstance(ExpireRequestsJob.class);
         expireRequestsJob.schedule();
+        injector.getInstance(ReconcileAccountMembersJob.class).schedule();
 
         // 4) Register public API
         BusinessApi api = injector.getInstance(BusinessApi.class);
