@@ -107,6 +107,11 @@ public class FirmServiceImpl implements FirmService {
     public Firm createFirm(String name, UUID actorId) {
         validateFirmName(name);
 
+        // Acquire before any reads so a waiting create sees the previous
+        // transaction's committed firm, including its count and creation time.
+        // A DB row lock also serializes callers on different server instances.
+        firms.lockCreationForOwner(actorId.toString());
+
         // Create a blank firm
         Firm firm = new Firm();
         firm.setDisplayName(name);
