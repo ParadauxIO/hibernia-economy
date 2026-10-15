@@ -282,7 +282,12 @@ public class WebhookDispatcherService {
                 d.getMessage(),
                 d.getSettlementTime().toInstant(ZoneOffset.UTC),
                 d.getInitiatorUuidBin() != null ? d.getInitiatorUuidBin().toString() : null,
-                d.getPluginSystem());
+                d.getPluginSystem(),
+                TransactionItem.Counterparty.of(
+                        d.getCounterpartyAccountId(),
+                        d.getCounterpartyAccountType(),
+                        d.getCounterpartyDisplayName(),
+                        d.getCounterpartyOwnerUuidBin()));
         return new WebhookEvent("transaction", d.getDeliveryId(), d.getSubscriptionId(), d.getAccountId(), item);
     }
 

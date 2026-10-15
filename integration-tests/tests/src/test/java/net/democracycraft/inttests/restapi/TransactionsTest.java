@@ -56,6 +56,11 @@ class TransactionsTest {
             assertThat(first.path("memo").asText()).isEqualTo("second");
             assertThat(first.path("pluginSystem").asText()).isEqualTo("rest-api");
             assertThat(first.path("initiatorUuid").asText()).isEqualTo(s.getUuid().toString());
+            // The other leg is the target's personal account.
+            JsonNode counterparty = first.path("counterparty");
+            assertThat(counterparty.path("accountId").asInt()).isEqualTo(toAcct);
+            assertThat(counterparty.path("accountType").asText()).isEqualTo("PERSONAL");
+            assertThat(counterparty.path("ownerUuid").asText()).isEqualTo(t.getUuid().toString());
         }
     }
 

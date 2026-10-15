@@ -241,6 +241,22 @@ public abstract class EmbeddedDbIT {
         return txnId;
     }
 
+    /**
+     * Seed a settled two-leg transfer: a debit posting on {@code fromAccountId}
+     * then a credit posting on {@code toAccountId}. Returns txn_id.
+     */
+    protected long insertSettledTransfer(int fromAccountId, int toAccountId, String amount,
+                                         String message, UUID initiator) {
+        long txnId = insertSettledTxn(fromAccountId, "-" + amount, message, initiator);
+        exec("INSERT INTO ledger_postings (txn_id, account_id, amount, memo) VALUES (?,?,?, ?)", ps -> {
+            ps.setLong(1, txnId);
+            ps.setInt(2, toAccountId);
+            ps.setBigDecimal(3, new java.math.BigDecimal(amount));
+            ps.setString(4, message);
+        });
+        return txnId;
+    }
+
     /** Read a single string/int/timestamp column from a webhook_delivery row. */
     protected String deliveryStatus(long deliveryId) {
         try (Connection c = dataSource.getConnection();
