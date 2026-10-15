@@ -16,7 +16,7 @@ sign in and link your Minecraft account.
 Plenty is public:
 
 - **Balances and leaderboards** — who holds what, the richest accounts.
-- **Firms** — companies, their accounts, and activity.
+- **Firms** — public company profiles and directory balances; internal accounts and activity require permission.
 - **Market** — ChestShop prices, top items, and sales volume.
 - **Money flow** and other economy-wide charts.
 - **Search** — the search box up top finds accounts, players, firms, and account IDs.
@@ -93,7 +93,7 @@ in the selected period. Balance summaries include negative net balances, while
 the positive-net-balance chart excludes types whose total is zero or negative.
 Market items traded counts every distinct item traded in the selected window,
 not just the featured cards. Government fine totals cover all non-revoked fines
-in the selected window and your permitted accounts; the recent list is limited.
+in the selected window and your permitted accounts; the fines list is paginated.
 The item catalogue is ordered by item key for predictable browsing.
 
 ## Economy pages
@@ -131,3 +131,13 @@ Item pages show observed offers before historical averages. The simple daily
 price chart is followed by an optional advanced candlestick view. Historical
 sellers do not necessarily still have an active shop. Private sales figures retain
 their existing permission requirements.
+
+## Search and directories on a phone
+
+Use **Search** in the header to find accounts, firms and players. Escape closes
+search and returns focus to its button. Account and firm directories keep names
+and balances together on narrow screens; expand **Details** for other columns.
+Sort presets include Richest, Newest, Name A–Z and Largest employers (firms).
+The selected sort is shown above the table and stays in the URL with your filters.
+Account details show a single current balance; owner UUIDs are expandable.
+Authorised viewers can follow a business account back to its firm.

@@ -56,14 +56,14 @@ export default async function WealthPage() {
     </div>
       <div className="card">
         <div className="card-title">Balance summary by type <span className="sub">aggregate · all accounts</span></div>
-        <div className="table-wrap">
-          <table className="data-table">
+        <div className="table-wrap directory-wrap">
+          <table className="data-table directory-table">
             <thead>
               <tr>
                 <th>Type</th>
-                <th className="amount">Accounts</th>
+                <th data-secondary="true" className="amount">Accounts</th>
                 <th className="amount">Total balance</th>
-                <th className="amount">Avg balance</th>
+                <th data-secondary="true" className="amount">Avg balance</th>
               </tr>
             </thead>
             <tbody>
@@ -72,10 +72,10 @@ export default async function WealthPage() {
                 const avg = b.account_count > 0 ? total / b.account_count : 0;
                 return (
                   <tr key={b.account_type}>
-                    <td><span className={`badge badge-${b.account_type}`}>{b.account_type}</span></td>
-                    <td className="amount mono">{fmtN(b.account_count)}</td>
+                    <td><span className={`badge badge-${b.account_type}`}>{b.account_type}</span><details className="mobile-only directory-details"><summary>Details</summary><p>{fmtN(b.account_count)} accounts · average {fmtAmtFull(avg)}</p></details></td>
+                    <td data-secondary="true" className="amount mono">{fmtN(b.account_count)}</td>
                     <td className="amount neutral">{fmtAmtFull(b.total_balance)}</td>
-                    <td className="amount neutral">{fmtAmtFull(avg)}</td>
+                    <td data-secondary="true" className="amount neutral">{fmtAmtFull(avg)}</td>
                   </tr>
                 );
               })}
@@ -86,10 +86,10 @@ export default async function WealthPage() {
 
       <div className="card">
         <div className="card-title">Top accounts by balance <span className="sub">click to drill in</span></div>
-        <div className="table-wrap">
-          <table className="data-table">
+        <div className="table-wrap directory-wrap">
+          <table className="data-table directory-table">
             <thead>
-              <tr><th>Account</th><th>Type</th><th className="amount">Balance</th></tr>
+              <tr><th>Account</th><th data-secondary="true">Type</th><th className="amount">Balance</th></tr>
             </thead>
             <tbody>
               {stats.topAccounts.map((a) => (
@@ -106,8 +106,9 @@ export default async function WealthPage() {
                       </span>
                       <span className="mono muted small">{` #${a.account_id}`}</span>
                     </Link>
+                    <details className="mobile-only directory-details"><summary>Details</summary><p>{a.account_type}</p></details>
                   </td>
-                  <td><span className={`badge badge-${a.account_type}`}>{a.account_type}</span></td>
+                  <td data-secondary="true"><span className={`badge badge-${a.account_type}`}>{a.account_type}</span></td>
                   <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
                 </tr>
               ))}

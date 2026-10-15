@@ -17,7 +17,7 @@ export function Heatmap({ cells, label = 'Transactions' }: HeatmapProps) {
   const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
   let max = 0;
   for (const c of cells) {
-    if (c.dow0 < 0 || c.dow0 > 6) continue;
+    if (c.dow0 < 0 || c.dow0 > 6 || c.hr < 0 || c.hr > 23) continue;
     grid[c.dow0][c.hr] = c.txn_count;
     if (c.txn_count > max) max = c.txn_count;
   }
@@ -30,7 +30,7 @@ export function Heatmap({ cells, label = 'Transactions' }: HeatmapProps) {
   const height = TOP_LABEL_H + 7 * (CELL + GAP);
 
   return (
-    <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+    <div tabIndex={0} role="region" aria-label="Hourly activity; scroll horizontally for all 24 hours" style={{ overflowX: 'auto', maxWidth: '100%' }}>
       <svg width={width} height={height} role="img" aria-label={label} style={{ minWidth: width, display: 'block' }}>
         {Array.from({ length: 24 }, (_, h) => (
           <text key={`h${h}`} x={LABEL_W + h * (CELL + GAP) + CELL / 2} y={12} fontSize={9} fill="var(--fg-muted)" textAnchor="middle">

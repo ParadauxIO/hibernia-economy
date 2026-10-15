@@ -1,3 +1,4 @@
+import { DirectorySort } from '@/components/DirectorySort';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -123,15 +124,16 @@ export default async function FirmsPage({
         }
       />
 
-      <div className="table-wrap"><table className="data-table">
+      <DirectorySort basePath="/firms" params={raw} sort={sp.sort} dir={dir} options={[{ label: 'Richest', sort: 'balance', dir: 'DESC' }, { label: 'Newest', sort: 'created', dir: 'DESC' }, { label: 'Name A–Z', sort: 'name', dir: 'ASC' }, { label: 'Largest employers', sort: 'employees', dir: 'DESC' }]} />
+      <div className="table-wrap directory-wrap"><table className="data-table directory-table">
         <thead>
           <tr>
             <th>Firm</th>
-            <th>HQ</th>
-            <th className="amount">Employees</th>
-            <th className="amount">Accounts</th>
+            <th data-secondary="true">HQ</th>
+            <th data-secondary="true" className="amount">Employees</th>
+            <th data-secondary="true" className="amount">Accounts</th>
             <th className="amount">Total balance</th>
-            <th className="ts">Founded</th>
+            <th data-secondary="true" className="ts">Founded</th>
           </tr>
         </thead>
         <tbody>
@@ -145,15 +147,16 @@ export default async function FirmsPage({
               <td>
                 <Link href={`/firms/${encodeURIComponent(f.display_name)}` as Route} className="rowlink" prefetch={false}>
                   <span style={{ fontWeight: 500 }}>{f.display_name}</span>
-                  <span className="mono muted small">{` #${f.firm_id}`}</span>
+                  <span className="mono muted small desktop-only">{` #${f.firm_id}`}</span>
                   {f.archived ? <span className="badge badge-archived" style={{ marginLeft: 8 }}>Archived</span> : null}
                 </Link>
+                <details className="mobile-only directory-details"><summary>Details</summary><p>#{f.firm_id} · HQ: {f.hq_region ?? 'Unknown'}</p><p>{fmtN(f.employee_count)} employees · {fmtN(f.account_count)} accounts</p><p>Founded {fmtTs(f.created_at)}</p></details>
               </td>
-              <td>{f.hq_region ?? <span className="muted">—</span>}</td>
-              <td className="amount mono">{fmtN(f.employee_count)}</td>
-              <td className="amount mono">{fmtN(f.account_count)}</td>
+              <td data-secondary="true">{f.hq_region ?? <span className="muted">—</span>}</td>
+              <td data-secondary="true" className="amount mono">{fmtN(f.employee_count)}</td>
+              <td data-secondary="true" className="amount mono">{fmtN(f.account_count)}</td>
               <td className="amount neutral">{fmtAmtFull(f.total_balance)}</td>
-              <td className="ts">{fmtTs(f.created_at)}</td>
+              <td data-secondary="true" className="ts">{fmtTs(f.created_at)}</td>
             </tr>
           ))}
         </tbody>

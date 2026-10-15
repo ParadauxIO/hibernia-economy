@@ -150,3 +150,17 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     await conn.end();
   }
 });
+
+test('government accounts and fines have separate views with preserved filters', async ({ page, context }) => {
+  await loginAs(context, 'admin');
+  await visit(page, '/government');
+  await expect(page.getByText('Government accounts', { exact: false }).first()).toBeVisible();
+  await page.getByRole('link', { name: 'Fines', exact: true }).click();
+  await expect(page.getByLabel('Fine status')).toBeVisible();
+  await page.getByLabel('Fine status').selectOption('revoked');
+  await expect(page.getByRole('link', { name: '7d', exact: true })).toHaveAttribute('href', /status=revoked/);
+  await page.getByRole('link', { name: '7d', exact: true }).click();
+  await expect(page).toHaveURL(/view=fines/);
+  await expect(page).toHaveURL(/status=revoked/);
+  await expect(page.getByLabel('Fine status')).toHaveValue('revoked');
+});

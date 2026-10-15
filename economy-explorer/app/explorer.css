@@ -2325,3 +2325,37 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
 .offer-price { font-size: 24px; font-weight: 600; }
 .offer-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; }
 .offer-card dd { margin: 0; text-align: right; }
+
+.mobile-search-toggle, .mobile-only { display: none; }
+.directory-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.directory-sort > span { margin-right: auto; font-size: 13px; }
+@media (max-width: 720px) {
+  .mobile-search-toggle { display: inline-flex; min-height: 40px; }
+  .mobile-search-open .header-search { display: flex; position: fixed; top: 108px; left: 12px; right: 12px; z-index: 100; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); }
+  .mobile-search-open .header-search input { width: 100%; min-width: 0; font-size: 16px; }
+  .mobile-search-open .header-search-popover { position: fixed; top: 173px; left: 12px; right: 12px; width: auto; max-height: 60vh; overflow-y: auto; z-index: 101; }
+  .mobile-search-open .header-search-kbd { display: none; }
+  .explorer-logo-text { font-size: 13px; }
+  .directory-table { min-width: 0 !important; width: 100%; table-layout: fixed; }
+  .directory-table [data-secondary], .directory-table .desktop-only { display: none; }
+  .directory-table th:first-child, .directory-table td:first-child { width: 58%; }
+  .directory-table td, .directory-table th { white-space: normal; padding: 12px 8px; overflow-wrap: anywhere; }
+  .directory-table .rowlink { white-space: normal; flex-wrap: wrap; }
+  .directory-table .mobile-only { display: block; }
+  .directory-details { font-size: 12px; margin-top: 8px; color: var(--fg-muted); }
+  .directory-details p { margin: 8px 0; }
+  .directory-sort > span { flex-basis: 100%; }
+  .directory-sort .btn { min-height: 40px; }
+  .chart-legend { gap: 8px; }
+}
+
+@media (max-width: 720px) {
+  .pagination { flex-wrap: wrap; gap: 12px; }
+  .pagination-summary { flex-basis: 100%; }
+}
+@media (max-width: 720px) {
+  .explorer-header-top { flex-wrap: wrap; }
+  .explorer-header-top:has(.header-me) .explorer-logo-text { display: none; }
+  .header-me { max-width: 140px; overflow-wrap: anywhere; }
+  .header-me .badge { display: none; }
+}

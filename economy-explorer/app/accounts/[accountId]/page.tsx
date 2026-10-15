@@ -22,6 +22,7 @@ import { BackLink } from '@/components/BackLink';
 import { BalanceLine, InOutChart } from '@/components/charts/AreaTimeline';
 import { ActivityCalendar } from '@/components/charts/ActivityCalendar';
 import { getAccountTrajectory } from '@/lib/sql/ledger';
+import { getAccountFirmContext } from '@/lib/services/accountContext';
 import { listPlayerFirmMemberships } from '@/lib/sql/firm';
 import { memo } from '@/lib/cache';
 
@@ -94,6 +95,7 @@ export default async function AccountDetailPage({
   // from any account to the firms its owner is part of. Personal accounts
   // only; the owner_uuid is the natural person for BUSINESS/SYSTEM is null
   // or a system actor.
+  const linkedFirm = account.account_type === 'BUSINESS' && canSeeHistory ? await getAccountFirmContext(id) : null;
   const firmMemberships = account.owner_uuid && account.account_type === 'PERSONAL'
     ? await listPlayerFirmMemberships(account.owner_uuid)
     : [];
@@ -153,6 +155,7 @@ export default async function AccountDetailPage({
         {account.requires_authorization ? <span className="badge">Authorizer</span> : null}
       </div>
 
+      {linkedFirm && <p>Business account for <Link href={`/firms/${encodeURIComponent(linkedFirm.display_name)}`}>{linkedFirm.display_name}</Link></p>}
       {firmMemberships.length > 0 && (
         <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
           <span className="kpi-label" style={{ marginBottom: 0 }}>Member of</span>
@@ -174,7 +177,7 @@ export default async function AccountDetailPage({
         <div className="kpi">
           <div className="kpi-label">Balance</div>
           <div className="kpi-value">{fmtAmtFull(account.balance)}</div>
-          <div className="kpi-meta">{fmtAmt(account.balance)}</div>
+          <div className="kpi-meta">Current balance</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Owner</div>
@@ -191,7 +194,7 @@ export default async function AccountDetailPage({
           </div>
           <div className="kpi-meta">
             {account.owner_uuid ? (
-              <span className="mono" title={account.owner_uuid}>{account.owner_uuid}</span>
+              <details><summary>Owner UUID</summary><span className="mono">{account.owner_uuid}</span></details>
             ) : (
               <>{account.account_type.toLowerCase()} account</>
             )}

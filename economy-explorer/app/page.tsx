@@ -30,7 +30,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     </div>
     <div className="chart-card"><h2 className="chart-title">Transaction activity</h2><VolumeTimeline data={volume} /></div>
     <div className="charts-grid">
-      <div className="chart-card"><h2 className="chart-title">When the economy moves</h2><p className="chart-subtitle">Hour of day × weekday · UTC · last {days} days</p><Heatmap cells={heat} /></div>
+      <div className="chart-card"><h2 className="chart-title">When the economy moves</h2><p className="chart-subtitle">Hour of day × weekday · UTC · last {days} days · scroll for all hours</p><Heatmap cells={heat} /></div>
       <div className="card"><h2 className="card-title">Explore the economy</h2>
         <p><Link href="/economy/wealth">Wealth distribution →</Link><br />Balances, inequality and top accounts.</p>
         <p><Link href="/money-flow">Money flow →</Link><br />Where money comes from and where it goes.</p>
