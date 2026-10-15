@@ -290,12 +290,20 @@ public class MarketServiceImpl implements MarketService {
         } catch (RuntimeException e) {
             batch = Math.max(1, item.getAmount());
         }
+        return shop(l, item, owner, PriceUtil.getExactBuyPrice(priceLine),
+                PriceUtil.getExactSellPrice(priceLine), batch, currentStock, estimatedCapacity);
+    }
+
+    @Override
+    public ChestShopShopRecord shop(Location l, ItemStack item, Owner owner,
+                                    BigDecimal buyPrice, BigDecimal sellPrice, int batch,
+                                    Integer currentStock, Integer estimatedCapacity) {
         return new ChestShopShopRecord(
                 worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ(), owner.admin(),
                 owner.accountId(), owner.type(), owner.firmId(), owner.ownerUuid(),
                 item.getType().name(), itemKey(item), itemName(item), isCustom(item), itemData(item),
-                nonNegativeOrNull(PriceUtil.getExactBuyPrice(priceLine)),
-                nonNegativeOrNull(PriceUtil.getExactSellPrice(priceLine)),
+                nonNegativeOrNull(buyPrice),
+                nonNegativeOrNull(sellPrice),
                 batch, owner.admin() ? null : currentStock,
                 owner.admin() ? null : estimatedCapacity, worldUuid(l));
     }

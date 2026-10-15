@@ -52,9 +52,13 @@ public class ConfigPublishServiceImpl implements ConfigPublishService {
     Map<String, Published> snapshot() {
         Map<String, Published> out = new LinkedHashMap<>();
 
-        out.put(BALANCE_ENABLED, Published.bool(balanceTax.isEnabled()));
+        // One snapshot per config, so a concurrent reload can't mix old and new values.
+        BalanceTaxConfiguration.Snapshot balance = balanceTax.snapshot();
+        SourceIncomeTaxConfiguration.Snapshot income = incomeTax.snapshot();
+
+        out.put(BALANCE_ENABLED, Published.bool(balance.isEnabled()));
         JsonArray brackets = new JsonArray();
-        balanceTax.getBrackets().asMap().forEach((floor, rate) -> {
+        balance.getBrackets().asMap().forEach((floor, rate) -> {
             JsonObject b = new JsonObject();
             b.addProperty("floor", floor.toPlainString());
             b.addProperty("rate", rate.toPlainString());
@@ -62,10 +66,10 @@ public class ConfigPublishServiceImpl implements ConfigPublishService {
         });
         out.put(BALANCE_BRACKETS, Published.json(brackets.toString()));
 
-        out.put(INCOME_ENABLED, Published.bool(incomeTax.isEnabled()));
-        out.put(INCOME_DEFAULT_RATE, Published.decimal(incomeTax.getDefaultRate()));
+        out.put(INCOME_ENABLED, Published.bool(income.isEnabled()));
+        out.put(INCOME_DEFAULT_RATE, Published.decimal(income.getDefaultRate()));
         JsonObject pluginRates = new JsonObject();
-        new TreeMap<>(incomeTax.getPluginRates())
+        new TreeMap<>(income.getPluginRates())
                 .forEach((plugin, rate) -> pluginRates.addProperty(plugin, rate.toPlainString()));
         out.put(INCOME_PLUGIN_RATES, Published.json(pluginRates.toString()));
 

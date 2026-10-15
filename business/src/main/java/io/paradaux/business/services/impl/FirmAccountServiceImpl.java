@@ -25,9 +25,13 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Singleton
 public class FirmAccountServiceImpl implements FirmAccountService {
+
+    private static final Logger LOG = Logger.getLogger(FirmAccountServiceImpl.class.getName());
 
     private final TreasuryApi treasury;
     private final FirmAccountsMapper firmAccounts;
@@ -43,7 +47,10 @@ public class FirmAccountServiceImpl implements FirmAccountService {
      * interleave and leave a qualifying employee removed (or a removed one
      * retained) — i.e. wrong access to firm money (ADT-12). Holding one lock per
      * firmId for the duration of a reconciliation makes the read-diff-mutate
-     * atomic with respect to other reconciliations of the same firm.
+     * atomic with respect to other reconciliations of the same firm in this JVM.
+     * Treasury remains the access authority; this is neither a cross-plugin
+     * transaction nor cross-process serialisation. Scheduled repair converges
+     * partial writes against committed firm roles (ADT-91).
      */
     private final ConcurrentMap<Integer, ReentrantLock> firmSyncLocks = new ConcurrentHashMap<>();
 
@@ -277,6 +284,35 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     public void syncAllFirmAccounts(Integer firmId) {
         for (FirmAccount fa : firmAccounts.listAccountsByFirm(firmId)) {
             syncAccountMembers(firmId, fa.getAccountId());
+        }
+    }
+
+    @Override
+    public void reconcileLinkedAccounts() {
+        // The persisted links are the recovery worklist. Scan every pass instead
+        // of relying on an exception-time dirty flag: a crash can happen before
+        // that flag is written, and an enclosing Business transaction can roll
+        // it back after Treasury has already committed some changes.
+        // Do not wrap the sweep in a transaction: each retry needs fresh state.
+        for (FirmAccount link : firmAccounts.listActiveAccountLinks()) {
+            Integer firmId = link.getFirmId();
+            Integer accountId = link.getAccountId();
+            ReentrantLock lock = firmSyncLocks.computeIfAbsent(firmId, k -> new ReentrantLock());
+            lock.lock();
+            try {
+                Firm firm = firms.getFirmById(firmId);
+                // A disband/archive may have happened since the worklist read.
+                if (firm == null || Boolean.TRUE.equals(firm.getArchived())
+                        || !firmAccounts.isFirmAccount(firmId, accountId)) {
+                    continue;
+                }
+                reconcileAccountMembers(firmId, accountId);
+            } catch (RuntimeException e) {
+                LOG.log(Level.WARNING, "Failed to reconcile membership for firm " + firmId
+                        + ", account " + accountId + "; will retry on the next pass.", e);
+            } finally {
+                lock.unlock();
+            }
         }
     }
 

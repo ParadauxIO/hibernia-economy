@@ -52,6 +52,13 @@ public interface FirmAccountService {
     void syncAllFirmAccounts(Integer firmId);
 
     /**
+     * Repairs membership for all persisted live account links, including work
+     * interrupted by a process crash. Failures are logged per account and retried
+     * on the next pass; one broken account does not block the rest.
+     */
+    void reconcileLinkedAccounts();
+
+    /**
      * Hands every live Treasury account of the firm to a new proprietor:
      * reassigns each account's Treasury owner to {@code newProprietorUuid} and
      * re-syncs members/authorizers. Must be called <em>after</em> the firm's

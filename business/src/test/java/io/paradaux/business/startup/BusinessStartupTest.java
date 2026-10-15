@@ -22,6 +22,7 @@ import io.paradaux.business.commands.resolvers.FirmPlayerResolver;
 import io.paradaux.business.commands.resolvers.OnlineFirmNameResolver;
 import io.paradaux.business.guice.BusinessModule;
 import io.paradaux.business.guice.DatabaseModule;
+import io.paradaux.business.jobs.ReconcileAccountMembersJob;
 import io.paradaux.business.listeners.ChestShopSaleListener;
 import io.paradaux.business.listeners.FirmBalanceTaxListener;
 import io.paradaux.business.model.config.DatabaseConfiguration;
@@ -122,5 +123,6 @@ class BusinessStartupTest {
                 database);
 
         HiberniaStartupAssertion.assertRegisters(injector);
+        injector.getInstance(ReconcileAccountMembersJob.class);
     }
 }

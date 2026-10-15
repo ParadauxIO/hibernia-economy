@@ -14,7 +14,7 @@ import io.paradaux.hibernia.framework.i18n.Message;
  *       same singleton instances services hold are re-populated in place by
  *       re-running the framework {@code ConfigurationProcessor} over them;</li>
  *   <li>the manually-parsed config POJOs (salaries, balance tax, source-income
- *       tax) via their own {@code reload()};</li>
+ *       tax) by parsing candidates first and atomically publishing each immutable snapshot;</li>
  *   <li>the log level (re-applied via {@code LoggingConfigurer});</li>
  *   <li>the published tax rates in {@code economy_config}, via
  *       {@link ConfigPublishService} (PAR-80).</li>

@@ -18,41 +18,43 @@ import lombok.Getter;
 @Getter
 public class TaxCycleConfiguration {
 
+    // Framework reload writes these fields in place; publish each value to async readers.
+
     // ---- Daily cycle ----
 
     @ConfigurationValue(path = "tax.cycles.daily.enabled", defaultValue = "true")
-    private boolean dailyEnabled;
+    private volatile boolean dailyEnabled;
 
     /** Server-local hour (0–23) at which the daily cycle fires. */
     @ConfigurationValue(path = "tax.cycles.daily.hour", defaultValue = "3")
-    private int dailyHour;
+    private volatile int dailyHour;
 
     // ---- Weekly cycle ----
 
     @ConfigurationValue(path = "tax.cycles.weekly.enabled", defaultValue = "true")
-    private boolean weeklyEnabled;
+    private volatile boolean weeklyEnabled;
 
     /** Server-local hour (0–23) at which the weekly cycle fires. */
     @ConfigurationValue(path = "tax.cycles.weekly.hour", defaultValue = "3")
-    private int weeklyHour;
+    private volatile int weeklyHour;
 
     /**
      * Day of the week on which the weekly cycle fires (1 = Monday … 7 = Sunday,
      * following ISO-8601 convention).
      */
     @ConfigurationValue(path = "tax.cycles.weekly.day-of-week", defaultValue = "1")
-    private int weeklyDayOfWeek;
+    private volatile int weeklyDayOfWeek;
 
     // ---- Monthly cycle ----
 
     @ConfigurationValue(path = "tax.cycles.monthly.enabled", defaultValue = "true")
-    private boolean monthlyEnabled;
+    private volatile boolean monthlyEnabled;
 
     /** Server-local hour (0–23) at which the monthly cycle fires. */
     @ConfigurationValue(path = "tax.cycles.monthly.hour", defaultValue = "3")
-    private int monthlyHour;
+    private volatile int monthlyHour;
 
     /** Day of the month (1–28) on which the monthly cycle fires. */
     @ConfigurationValue(path = "tax.cycles.monthly.day-of-month", defaultValue = "1")
-    private int monthlyDayOfMonth;
+    private volatile int monthlyDayOfMonth;
 }

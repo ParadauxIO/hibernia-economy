@@ -8,9 +8,11 @@ import lombok.Getter;
 @Getter
 public class BytebinConfiguration {
 
+    // Framework reload writes these fields in place; publish each value to async readers.
+
     @ConfigurationValue(path = "bytebin.post-url", defaultValue = "https://pastes.paradaux.io/post")
-    private String postUrl;
+    private volatile String postUrl;
 
     @ConfigurationValue(path = "bytebin.base-url", defaultValue = "https://pastes.paradaux.io/")
-    private String baseUrl;
+    private volatile String baseUrl;
 }

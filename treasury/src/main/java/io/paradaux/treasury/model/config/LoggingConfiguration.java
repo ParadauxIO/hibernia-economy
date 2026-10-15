@@ -8,6 +8,8 @@ import lombok.Getter;
 @Getter
 public class LoggingConfiguration {
 
+    // Framework reload writes these fields in place; publish each value to async readers.
+
     @ConfigurationValue(path = "logging.level", defaultValue = "WARN")
-    private String level;
+    private volatile String level;
 }

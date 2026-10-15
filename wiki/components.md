@@ -51,6 +51,32 @@ sales, and per-firm tax — all money via `TreasuryApi`.
 - **Layering:** `commands/` → `services/`(+`impl/`) → `mappers/`.
 - **Depends on** `treasury-api` (compile/runtime) to move money, and registers its
   own API as a Bukkit service.
+- **PlaceholderAPI** is optional. The bundled `business` expansion resolves
+  `%business_firm_balance_<name>%` through `BusinessApi.firms()` and
+  `FirmApi.getTotalBalance`, without direct mapper access. It persists across PAPI
+  reloads and unregisters on disable. `:business:testWithoutPlaceholderApi` checks
+  startup wiring with the optional API removed from the runtime classpath.
+
+Firm-account membership is derived from the proprietor and current staff roles;
+**Treasury is the access authority**. Business reconciles through Treasury's API,
+whose individual mutations commit independently. The per-firm lock serialises
+reconciliation only within one Business JVM; it provides no cross-process lock or
+cross-plugin transaction.
+
+`ReconcileAccountMembersJob` repairs membership asynchronously at startup and
+every 1,200 ticks (about one minute). Each pass uses persisted live firm-account
+links as its recovery worklist and re-reads roles and Treasury membership. This
+full sweep deliberately replaces an exception-time `needs-resync` marker: it also
+covers crashes before a marker could be saved, and Business transaction rollbacks
+after Treasury has committed. A failed account is logged with its firm/account IDs
+and does not block other accounts; it remains eligible on subsequent passes and
+after restarts. Removed links and archived firms are skipped. Already-correct
+membership produces no writes. Sweep cost scales with linked accounts and staff;
+overlapping scheduled passes are skipped.
+
+Recovery is eventual: stale access can persist until a successful pass, longer
+during an outage. Immediate command-triggered sync still reports failures to the
+caller. No Treasury API or schema upgrade is required for this repair.
 
 ### `business/business-api/` — public Business API (library jar)
 
@@ -158,3 +184,20 @@ locally:
 ```bash
 git submodule update --init --recursive
 ```
+
+### Treasury reload concurrency
+
+The injected salary, balance-tax and source-income-tax configuration objects are
+stable holders of immutable `Snapshot` records. Parse with `prepareReload` before
+publishing; retain `snapshot()` once per operation when reading multiple fields.
+`ConfigReloadServiceImpl` validates YAML and prepares all three candidates before
+publishing any. Invalid manual settings leave all three previous snapshots intact.
+The salary interval remains pinned to the startup timer. `SalaryService.Payroll`
+carries the funding account alongside the payment plan across the async boundary.
+Tax destination caches include the account name so a reload cannot reuse an ID
+resolved for a different configured account.
+
+The annotation-driven framework components still use the existing in-place reload
+for Guice compatibility; their fields are volatile for visibility. They do not
+provide a multi-field snapshot or a transaction spanning messages, logging and all
+configuration components. The snapshot guarantee above is per manual configuration.

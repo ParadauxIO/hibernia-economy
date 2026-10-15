@@ -30,6 +30,21 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
     }
 
     @Test
+    void recoveryWorklistIncludesLiveLinksAndExcludesRemovedLinks() throws Exception {
+        int live = insertStubAccount("Live");
+        int removed = insertStubAccount("Removed");
+        firmAccounts.insertFirmAccount(firmId, live);
+        firmAccounts.insertFirmAccount(firmId, removed);
+        firmAccounts.removeFirmAccount(firmId, removed);
+
+        assertThat(firmAccounts.listActiveAccountLinks())
+                .singleElement().satisfies(link -> {
+                    assertThat(link.getFirmId()).isEqualTo(firmId);
+                    assertThat(link.getAccountId()).isEqualTo(live);
+                });
+    }
+
+    @Test
     void insertFirmAccount_persistsRow() throws Exception {
         int accountId = insertStubAccount("Acme Main");
         firmAccounts.insertFirmAccount(firmId, accountId);

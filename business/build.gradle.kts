@@ -12,7 +12,17 @@ plugins {
 // defaults, and dev-server staging come from io.paradaux.paper-server-conventions.
 description = "Business"
 
+repositories {
+    maven("https://repo.extendedclip.com/releases/") {
+        content { includeGroup("me.clip") }
+    }
+}
+
 dependencies {
+    // Optional server-provided API; never bundle it in the plugin jar.
+    compileOnly("me.clip:placeholderapi:2.12.3") { isTransitive = false }
+    testImplementation("me.clip:placeholderapi:2.12.3") { isTransitive = false }
+
     // Business API subproject (bundled into shadow JAR)
     implementation(project(":business:business-api"))
 
@@ -126,15 +136,25 @@ val testWithoutCarbon = tasks.register<Test>("testWithoutCarbon") {
     shouldRunAfter(tasks.test)
 }
 
+val testWithoutPlaceholderApi = tasks.register<Test>("testWithoutPlaceholderApi") {
+    description = "Runs startup and optional-hook tests without PlaceholderAPI."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath.filter { !it.name.startsWith("placeholderapi-") }
+    useJUnitPlatform()
+    include("**/startup/BusinessStartupTest.class", "**/integration/BusinessWithoutPlaceholderApiTest.class")
+    shouldRunAfter(tasks.test)
+}
+
 tasks {
     test {
-        // These assert Carbon is NOT loadable, so they only make sense in testWithoutCarbon.
-        useJUnitPlatform { excludeTags("carbon-absent") }
+        // Optional-API absence tests run only in their stripped-classpath tasks.
+        useJUnitPlatform { excludeTags("carbon-absent", "placeholderapi-absent") }
         finalizedBy(jacocoTestReport)
     }
 
     check {
-        dependsOn(jacocoTestCoverageVerification, testWithoutCarbon)
+        dependsOn(jacocoTestCoverageVerification, testWithoutCarbon, testWithoutPlaceholderApi)
     }
 
     // Bukkit / I/O glue that can't be exercised without a running server.

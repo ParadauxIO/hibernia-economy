@@ -67,12 +67,32 @@ public interface ChestShopMarketMapper {
                item_custom = VALUES(item_custom), item_data = VALUES(item_data),
                buy_price = VALUES(buy_price), sell_price = VALUES(sell_price), batch_qty = VALUES(batch_qty),
                current_stock = VALUES(current_stock), estimated_capacity = VALUES(estimated_capacity),
-               stock_at = CASE WHEN VALUES(current_stock) IS NULL THEN stock_at ELSE NOW() END,
+               stock_at = VALUES(stock_at),
+               last_seen = NOW(),
                visible = IF(active = 0, 1, visible),
                hologram = IF(active = 0, 1, hologram),
                active = 1
             """)
     void upsertShop(Map<String, Object> p);
+
+    // A backfill must never overwrite a newer live row or revive a tombstone.
+    // Do not use INSERT IGNORE: malformed data / FK errors must reach the importer.
+    @Insert("""
+            INSERT INTO chestshop_shop
+              (world, world_uuid, sign_x, sign_y, sign_z, is_admin_shop, shop_account_id, shop_account_type,
+               shop_firm_id, shop_owner_uuid_bin, material, item_key, item_name, item_custom, item_data,
+               buy_price, sell_price, batch_qty, current_stock, estimated_capacity, stock_at, last_seen, visible, hologram, active)
+            VALUES
+              (#{world}, #{worldUuid,jdbcType=BINARY}, #{signX}, #{signY}, #{signZ}, #{adminShop},
+               #{shopAccountId,jdbcType=INTEGER}, #{shopAccountType,jdbcType=VARCHAR}, #{shopFirmId,jdbcType=INTEGER},
+               #{shopOwnerUuid,jdbcType=BINARY}, #{material}, #{itemKey}, #{itemName}, #{itemCustom},
+               #{itemData,jdbcType=LONGVARCHAR}, #{buyPrice,jdbcType=DECIMAL}, #{sellPrice,jdbcType=DECIMAL},
+               #{batchQty}, #{currentStock,jdbcType=INTEGER}, #{estimatedCapacity,jdbcType=INTEGER},
+               CASE WHEN #{currentStock,jdbcType=INTEGER} IS NULL THEN NULL ELSE #{observedAt,jdbcType=TIMESTAMP} END,
+               COALESCE(#{observedAt,jdbcType=TIMESTAMP}, NOW()), #{visible}, #{hologram}, 1)
+            ON DUPLICATE KEY UPDATE shop_id = shop_id
+            """)
+    void importShop(Map<String, Object> p);
 
     @Update("""
             UPDATE chestshop_shop SET active = 0
@@ -85,7 +105,8 @@ public interface ChestShopMarketMapper {
             UPDATE chestshop_shop
                SET current_stock = #{stock,jdbcType=INTEGER},
                    estimated_capacity = #{capacity,jdbcType=INTEGER},
-                   stock_at = NOW()
+                   stock_at = CASE WHEN #{stock,jdbcType=INTEGER} IS NULL THEN NULL ELSE NOW() END,
+                   last_seen = NOW()
              WHERE world = #{world} AND sign_x = #{x} AND sign_y = #{y} AND sign_z = #{z}
             """)
     void updateShopStock(@Param("world") String world, @Param("x") int x, @Param("y") int y,
