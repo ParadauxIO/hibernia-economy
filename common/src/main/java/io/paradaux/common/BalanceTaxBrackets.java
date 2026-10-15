@@ -114,6 +114,11 @@ public final class BalanceTaxBrackets {
         return entry != null ? entry.getValue() : BigDecimal.ZERO;
     }
 
+    /** The brackets as balance floor to weekly rate, ascending. Unmodifiable. */
+    public NavigableMap<BigDecimal, BigDecimal> asMap() {
+        return brackets;
+    }
+
     /** Number of brackets in this snapshot. */
     public int size() {
         return brackets.size();

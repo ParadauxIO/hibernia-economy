@@ -31,6 +31,26 @@ class MarketApiImplTest {
 
     @SuppressWarnings("unchecked")
     @Test
+    void importShop_preservesFlagsAndObservationTime_andPropagatesWriteFailure() {
+        MarketApiImpl api = new MarketApiImpl(mapper);
+        var shop = new ChestShopShopRecord("world", 1, 2, 3, true, null, null, null, null,
+                "DIAMOND", "DIAMOND", "Diamond", false, null,
+                BigDecimal.ONE, null, 1, null, null, UUID.randomUUID());
+        var observed = java.time.Instant.parse("2025-01-01T00:00:00Z");
+        api.importShop(shop, false, true, observed);
+        ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.forClass(Map.class);
+        verify(mapper).importShop(cap.capture());
+        assertEquals(false, cap.getValue().get("visible"));
+        assertEquals(true, cap.getValue().get("hologram"));
+        assertEquals(java.sql.Timestamp.from(observed), cap.getValue().get("observedAt"));
+        assertEquals(shop.worldUuid(), cap.getValue().get("worldUuid"));
+        doThrow(new RuntimeException("write failed")).when(mapper).importShop(anyMap());
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> api.importShop(shop, false, true, null));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
     void recordSale_buildsParamMapAndInserts() {
         MarketApiImpl api = new MarketApiImpl(mapper);
         UUID customer = UUID.randomUUID();

@@ -79,7 +79,7 @@ jobs:
           BUSINESS_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/business_test
           BUSINESS_TEST_DB_USER: root
           BUSINESS_TEST_DB_PASS: business
-        run: ./gradlew --no-daemon :business:test :business:jacocoTestReport :business:jacocoTestCoverageVerification -Pci=true
+        run: ./gradlew --no-daemon :business:test :business:testWithoutPlaceholderApi :business:jacocoTestReport :business:jacocoTestCoverageVerification -Pci=true
 
       - name: Publish test results
         if: always()

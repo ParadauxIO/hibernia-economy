@@ -36,7 +36,9 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
     private final AccountMapper accountMapper;
 
     /** Lazily cached destination account ID. */
-    private volatile Integer destinationAccountId;
+    private Destination destinationAccountId;
+
+    private record Destination(String name, int id) {}
 
     @Inject
     public BalanceTaxServiceImpl(BalanceTaxConfiguration config,
@@ -50,6 +52,8 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
     @Override
     @Transactional
     public void collect(@NotNull UUID playerUuid, Long previousLoginEpoch, long loginEpochSecs) {
+        BalanceTaxConfiguration.Snapshot config = this.config.snapshot();
+        if (!config.isEnabled()) return;
         if (previousLoginEpoch == null) {
             // First ever login — nothing to prorate against.
             return;
@@ -99,7 +103,7 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
 
         // 7. Build and collect. Dedup key = sha256("balance-tax:{uuid}:{loginEpoch}").
         byte[] dedupKey = Idempotency.sha256("balance-tax:" + playerUuid + ":" + loginEpochSecs);
-        int destId = resolveDestinationAccountId();
+        int destId = resolveDestinationAccountId(config.getGovernmentAccount());
 
         TaxCollection collection = TaxCollection.toAccount(
                 accountId,
@@ -129,23 +133,17 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
 
     // ---- Helpers ----
 
-    private int resolveDestinationAccountId() {
-        if (destinationAccountId == null) {
-            synchronized (this) {
-                if (destinationAccountId == null) {
-                    String accountName = config.getGovernmentAccount();
-                    Account account = accountMapper.findGovernmentAccountByName(accountName);
-                    if (account != null) {
-                        destinationAccountId = account.getAccountId();
-                    } else {
-                        log.warn("Balance tax government account '{}' not found — routing to default tax account",
-                                accountName);
-                        destinationAccountId = taxApi.getDefaultTaxAccountId();
-                    }
-                }
+    private synchronized int resolveDestinationAccountId(String accountName) {
+        if (destinationAccountId == null || !destinationAccountId.name().equals(accountName)) {
+            Account account = accountMapper.findGovernmentAccountByName(accountName);
+            if (account != null) {
+                destinationAccountId = new Destination(accountName, account.getAccountId());
+            } else {
+                log.warn("Tax government account '{}' not found — routing to default tax account", accountName);
+                destinationAccountId = new Destination(accountName, taxApi.getDefaultTaxAccountId());
             }
         }
-        return destinationAccountId;
+        return destinationAccountId.id();
     }
 
     /** Formats an elapsed-seconds value as "Xd Yh" for ledger descriptions. */

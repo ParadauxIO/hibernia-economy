@@ -89,6 +89,8 @@ public class ChestShopModule extends AbstractModule {
         bind(InventoryService.class).to(InventoryServiceImpl.class).in(Singleton.class);
         bind(ItemCodeService.class).to(ItemCodeServiceImpl.class).in(Singleton.class);
         bind(ItemService.class).to(ItemServiceImpl.class).in(Singleton.class);
+        bind(io.paradaux.chestshop.services.LegacyShopImportService.class)
+                .to(io.paradaux.chestshop.services.impl.LegacyShopImportServiceImpl.class).in(Singleton.class);
         bind(MarketResyncService.class).to(MarketResyncServiceImpl.class).in(Singleton.class);
         bind(MaterialService.class).to(MaterialServiceImpl.class).in(Singleton.class);
         bind(PreviewService.class).to(PreviewServiceImpl.class).in(Singleton.class);

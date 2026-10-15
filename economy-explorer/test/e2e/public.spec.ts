@@ -95,6 +95,19 @@ test.describe('anonymous browsing', () => {
     await visit(page, '/');
     await expect(page.locator('.footer-meta')).toContainText('Minecraft Cities Network');
   });
+
+  test('the static tax guide shows the rates this server published', async ({ page }) => {
+    const errors = trackErrors(page);
+    await visit(page, '/docs/guides/tax');
+    const balance = page.locator('.doc-live[data-live="balance-tax"]');
+    await expect(balance.locator('tbody tr')).toHaveCount(2);
+    await expect(balance.locator('tbody tr').last()).toContainText('$100,000.00 and above');
+    await expect(balance.locator('tbody tr').last()).toContainText('1%');
+    const income = page.locator('.doc-live[data-live="income-tax"]');
+    await expect(income.locator('tbody')).toContainText('Jobs');
+    await expect(income.locator('tbody')).toContainText('5%');
+    expect(errors).toEqual([]);
+  });
 });
 
 test('healthz returns 200 without the DB', async ({ request }) => {
@@ -164,4 +177,21 @@ test('wealth keeps signed balances visible on mobile', async ({ page }) => {
     const box = await balance.boundingBox();
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   }
+});
+
+test('taxation aggregates are public, bounded and responsive', async ({ page }) => {
+  const errors = trackErrors(page);
+  await visit(page, '/economy/taxation?days=invalid');
+  await expect(page.getByRole('heading', { name: 'Taxation', exact: true })).toBeVisible();
+  await expect(page.locator('.window-tabs a.active')).toHaveText('30d');
+  await expect(page.getByRole('heading', { name: 'Revenue by type' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where it lands' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Rates in effect' })).toBeVisible();
+  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator('a[href^="/transactions/"], a[href^="/players/"]')).toHaveCount(0);
+  await page.getByRole('link', { name: '7d', exact: true }).click();
+  await expect(page.locator('.window-tabs a.active')).toHaveText('7d');
+  await expect(page.locator('.section-tabs a.active')).toHaveText('Taxation');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  expect(errors.filter(e => /#\d+/.test(e))).toEqual([]);
 });

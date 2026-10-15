@@ -6,11 +6,17 @@ import io.paradaux.hibernia.framework.configurator.ConfigurationLoader;
 import io.paradaux.hibernia.framework.configurator.ConfigurationProcessor;
 import io.paradaux.hibernia.framework.i18n.Message;
 import lombok.extern.slf4j.Slf4j;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.InvalidConfigurationException;
+
+import java.io.File;
+import java.io.IOException;
 import io.paradaux.treasury.Treasury;
 import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.model.config.LoggingConfiguration;
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
+import io.paradaux.treasury.services.ConfigPublishService;
 import io.paradaux.treasury.services.ConfigReloadService;
 import io.paradaux.treasury.utils.LoggingConfigurer;
 
@@ -30,6 +36,7 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
     private final BalanceTaxConfiguration balanceTaxConfiguration;
     private final SourceIncomeTaxConfiguration sourceIncomeTaxConfiguration;
     private final LoggingConfiguration loggingConfiguration;
+    private final ConfigPublishService configPublishService;
 
     @Inject
     public ConfigReloadServiceImpl(Treasury plugin,
@@ -38,7 +45,8 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
                                    SalaryConfiguration salaryConfiguration,
                                    BalanceTaxConfiguration balanceTaxConfiguration,
                                    SourceIncomeTaxConfiguration sourceIncomeTaxConfiguration,
-                                   LoggingConfiguration loggingConfiguration) {
+                                   LoggingConfiguration loggingConfiguration,
+                                   ConfigPublishService configPublishService) {
         this.plugin = plugin;
         this.message = message;
         this.configurationLoader = configurationLoader;
@@ -46,11 +54,26 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
         this.balanceTaxConfiguration = balanceTaxConfiguration;
         this.sourceIncomeTaxConfiguration = sourceIncomeTaxConfiguration;
         this.loggingConfiguration = loggingConfiguration;
+        this.configPublishService = configPublishService;
     }
 
     @Override
-    public void reloadAll() {
-        // 1) Re-read the files from disk.
+    public synchronized void reloadAll() {
+        // Bukkit reloadConfig logs malformed YAML and falls back to defaults.
+        // Load strictly first so an invalid file cannot replace a working config.
+        YamlConfiguration candidate = new YamlConfiguration();
+        try {
+            candidate.load(new File(plugin.getDataFolder(), "config.yml"));
+        } catch (IOException | InvalidConfigurationException e) {
+            throw new IllegalArgumentException("Cannot reload config.yml", e);
+        }
+        var defaults = plugin.getConfig().getDefaults();
+        if (defaults != null) candidate.setDefaults(defaults);
+        // Parse every manual config before publishing any of them. A parse failure
+        // leaves all three live snapshots intact.
+        var salary = salaryConfiguration.prepareReload(candidate);
+        var balanceTax = balanceTaxConfiguration.prepareReload(candidate);
+        var sourceIncomeTax = sourceIncomeTaxConfiguration.prepareReload(candidate);
         plugin.reloadConfig();
         message.reload();
 
@@ -69,12 +92,20 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
         configurationLoader.getComponents().values().forEach(processor::process);
 
         // 3) Refresh the manually-parsed config POJOs.
-        salaryConfiguration.reload();
-        balanceTaxConfiguration.reload();
-        sourceIncomeTaxConfiguration.reload();
+        salaryConfiguration.publish(salary);
+        balanceTaxConfiguration.publish(balanceTax);
+        sourceIncomeTaxConfiguration.publish(sourceIncomeTax);
 
         // 4) Re-apply startup side effects that are cheap and safe to redo.
         LoggingConfigurer.apply(loggingConfiguration.getLevel());
+
+        // 5) Republish the tax rates so the docs follow a reload, not just a restart.
+        //    Informational only: a failed write must not fail the reload.
+        try {
+            configPublishService.publish();
+        } catch (RuntimeException e) {
+            log.warn("Could not publish config to economy_config: {}", e.toString());
+        }
 
         log.info("Configuration reloaded (config.yml + messages.properties).");
     }

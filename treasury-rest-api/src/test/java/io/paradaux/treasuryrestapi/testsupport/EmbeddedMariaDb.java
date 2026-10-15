@@ -106,7 +106,7 @@ public final class EmbeddedMariaDb {
                     "ledger_txns", "ledger_postings", "chestshop_sale", "chestshop_shop",
                     "account_access", "firm_role", "firm_role_permission", "firm_employee",
                     "api_keys", "api_rate_limit_override",
-                    "webhook_delivery", "webhook_subscription", "webhook_cursor"}) {
+                    "webhook_delivery", "webhook_subscription", "webhook_cursor", "economy_config"}) {
                 st.execute("TRUNCATE TABLE " + t);
             }
             // Re-seed the single-row dispatcher watermark that ingest() reads/advances.
@@ -432,6 +432,15 @@ public final class EmbeddedMariaDb {
               last_dispatched_txn_id BIGINT UNSIGNED  NOT NULL DEFAULT 0,
               updated_at             TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
               PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """,
+            """
+            CREATE TABLE economy_config (
+              config_key   VARCHAR(128) NOT NULL PRIMARY KEY,
+              owner        VARCHAR(32)  NOT NULL,
+              value_type   ENUM('BOOLEAN','DECIMAL','JSON') NOT NULL,
+              config_value TEXT         NOT NULL,
+              updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
     };

@@ -47,6 +47,8 @@ public class SecurityConfig {
                         // Public, read-only ChestShop market data — no JWT (JwtAuthFilter
                         // skips this prefix; throttled by IP via anonymousPerMinute).
                         .requestMatchers("/api/v1/chestshop/**").permitAll()
+                        // Public published server config (tax rates) — same treatment.
+                        .requestMatchers("/api/v1/config/**").permitAll()
                         .requestMatchers("/api/v1/transfers/**", "/api/v1/auth/**",
                                 "/api/v1/accounts/**", "/api/v1/firms/**",
                                 "/api/v1/webhooks/**", "/api/v1/admin/**").authenticated()

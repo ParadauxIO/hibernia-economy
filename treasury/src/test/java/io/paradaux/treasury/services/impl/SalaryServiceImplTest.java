@@ -275,4 +275,26 @@ class SalaryServiceImplTest {
         verify(notifier, never()).notifySalaryPaid(org.mockito.ArgumentMatchers.eq(a), any());
         verify(notifier).notifySalaryPaid(org.mockito.ArgumentMatchers.eq(b), any());
     }
+
+    @Test
+    void preparedPayrollKeepsItsFundingAccountAfterReload() {
+        SalaryConfiguration config = cfg(true, AMOUNTS);
+        SalaryServiceImpl svc = service(config, true);
+        UUID uuid = UUID.randomUUID();
+        Player player = onlinePlayer(uuid, "senator");
+        doReturn(List.of(player)).when(server).getOnlinePlayers();
+        var payroll = svc.preparePayroll();
+        config.publish(new SalaryConfiguration.Snapshot(true, "NewGovernment", 900,
+                Map.of("senator", BigDecimal.ONE), true, "afk", "true"));
+        Account government = new Account();
+        government.setAccountId(7);
+        when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(government);
+        when(accountService.getOrCreatePersonalAccountId(uuid)).thenReturn(8);
+        when(ledgerService.transferChecked(any())).thenReturn(new LedgerService.TransferResult(1L, true));
+        assertThat(svc.payoutPayroll(payroll)).isEqualTo(1);
+        var request = ArgumentCaptor.forClass(TransferRequest.class);
+        verify(ledgerService).transferChecked(request.capture());
+        assertThat(request.getValue().amount()).isEqualByComparingTo("65");
+        verify(accountService, never()).getGovernmentAccountByName("NewGovernment");
+    }
 }

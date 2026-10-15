@@ -3,7 +3,7 @@ version: '${version}'
 main: io.paradaux.business.Business
 api-version: '1.21'
 depend: [ Treasury ]
-softdepend: [ CarbonChat, Realty ]
+softdepend: [ CarbonChat, Realty, PlaceholderAPI ]
 commands:
     business:
         description: Business commands

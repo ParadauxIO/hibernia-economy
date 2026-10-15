@@ -2298,6 +2298,11 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     vertical-align: middle;
 }
 
+/* ── Live blocks: server values filled into static docs (LiveDocBlocks) ─── */
+.doc-prose .doc-live { margin: 0 0 16px; }
+.doc-prose .doc-live table { margin-bottom: 6px; }
+.doc-prose .doc-live-status { margin: 0 0 8px; font-size: 13px; color: var(--fg-muted); }
+
 /* ── Mobile: sidebar collapses behind a toggle ─────────────────────────── */
 @media (max-width: 720px) {
     .docs-sidebar-toggle { display: block; }
@@ -2359,3 +2364,7 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
   .header-me { max-width: 140px; overflow-wrap: anywhere; }
   .header-me .badge { display: none; }
 }
+
+/* Two-column tax rates stay visible together on phones. */
+.data-table.tax-rates-table { min-width: 0; width: 100%; }
+.tax-rates-table td:first-child { overflow-wrap: anywhere; }

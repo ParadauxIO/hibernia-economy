@@ -22,6 +22,7 @@ the code.
   release flow.
 - **[Release runbook](release-runbook.md)** — the order of operations for a
   release that changes the schema: backup, stop, migrate, deploy, verify, rollback.
+- **[Shop registry backfill](shop-registry-backfill.md)** — importing legacy shops at cutover.
 - **[Conventions](conventions.md)** — the rules that keep the monorepo coherent.
 
 ## Quick links
