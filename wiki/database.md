@@ -151,3 +151,16 @@ pre-deploy backup**: pause economy-touching services, restore, fix the migration
 re-run. This is deliberate — half-applied schema migrations have too many failure
 modes to automate safely. The step-by-step version is in the
 [release runbook](release-runbook.md#rollback).
+
+## ChestShop remaining space
+
+V25 added `chestshop_shop.estimated_capacity`: remaining free room for the shop
+item in units, not total container capacity. ChestShop captures empty-slot space
+and matching partial-stack headroom alongside stock on create, trade and inventory
+refresh, respecting item and container stack limits. NULL means unknown or an
+admin/infinite shop; zero means full. `/find` already uses this column.
+
+The public REST shop DTO exposes it as `currentSpace` (including item-detail
+shop offers), and the explorer as `current_space`. Both use `stock_at` as the
+observation timestamp. PAR-17 reuses V25 and the existing MarketApi capture path;
+no duplicate `current_space` database column or new migration is needed.

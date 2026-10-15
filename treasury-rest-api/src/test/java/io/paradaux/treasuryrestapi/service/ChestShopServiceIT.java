@@ -68,6 +68,36 @@ class ChestShopServiceIT extends EmbeddedDbIT {
     }
 
     @Test
+    void shopResponses_includeRemainingSpace_preservingFullUnknownAndAdmin() {
+        for (int x = 1; x <= 4; x++) {
+            insertShop("world", x, 64, x, x == 4, x == 4 ? "SYSTEM" : "PERSONAL",
+                    null, x == 4 ? null : SELLER, "DIRT", "minecraft:dirt", "Dirt",
+                    "1.00", "0.50", 1, x == 4 ? null : 64, true);
+        }
+        exec("UPDATE chestshop_shop SET estimated_capacity = CASE sign_x "
+                + "WHEN 1 THEN 128 WHEN 2 THEN 0 ELSE NULL END", ps -> {});
+
+        var shops = service.listShops(null, null, null, false, false, null, 1, 50).items();
+        assertSpaceObservations(shops);
+        assertSpaceObservations(service.getItem("minecraft:dirt", 30).cheapestShops());
+    }
+
+    private void assertSpaceObservations(java.util.List<ChestShopShopResponse> shops) {
+        assertThat(shops).hasSize(4);
+        assertThat(shops).filteredOn(s -> s.x() == 1).singleElement()
+                .satisfies(s -> {
+                    assertThat(s.currentStock()).isEqualTo(64);
+                    assertThat(s.currentSpace()).isEqualTo(128);
+                });
+        assertThat(shops).filteredOn(s -> s.x() == 2).singleElement()
+                .satisfies(s -> assertThat(s.currentSpace()).isZero());
+        assertThat(shops).filteredOn(s -> s.x() == 3).singleElement()
+                .satisfies(s -> assertThat(s.currentSpace()).isNull());
+        assertThat(shops).filteredOn(ChestShopShopResponse::adminShop).singleElement()
+                .satisfies(s -> assertThat(s.currentSpace()).isNull());
+    }
+
+    @Test
     void listShops_filtersAndResolvesOwnerNames() {
         insertFirm(7, "Acme");
         insertPlayer(SELLER, "Steve");
