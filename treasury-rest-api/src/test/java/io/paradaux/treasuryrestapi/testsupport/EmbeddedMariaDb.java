@@ -202,7 +202,12 @@ public final class EmbeddedMariaDb {
               default_account_id INT UNSIGNED NULL,
               is_archived TINYINT(1) NOT NULL DEFAULT 0,
               created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              PRIMARY KEY (firm_id)
+              name_released TINYINT(1) NOT NULL DEFAULT 0,
+              reserved_display_name VARCHAR(255) COLLATE utf8mb4_unicode_ci
+                GENERATED ALWAYS AS (CASE WHEN is_archived = 1 AND name_released = 1 THEN NULL ELSE display_name END) STORED,
+              PRIMARY KEY (firm_id),
+              UNIQUE KEY uq_firm_reserved_display_name (reserved_display_name),
+              KEY idx_firm_display_name (display_name)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
             """

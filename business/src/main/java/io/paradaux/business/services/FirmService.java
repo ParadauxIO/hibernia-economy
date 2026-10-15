@@ -65,6 +65,9 @@ public interface FirmService {
     /** Force-disband a firm regardless of proprietorship (funds still returned to its proprietor). */
     DisbandResult adminDisbandFirm(String firmName);
 
+    /** Release a disbanded firm's name by immutable ID; command requires business.admin.releasename. */
+    Firm adminReleaseFirmName(int firmId);
+
     /** Rename a firm's display name, validated like creation (format + uniqueness). Returns the updated firm. */
     Firm renameFirm(String firmName, String newName);
 

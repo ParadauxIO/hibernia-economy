@@ -1029,4 +1029,46 @@ class FirmServiceImplTest {
         verify(firms).updateFirm(cap.capture());
         assertThat(cap.getValue().getDiscordUrl()).isEqualTo("https://discord.gg/abc");
     }
+    @Test
+    void adminReleaseFirmName_rejectsUnknownFirm() {
+        assertThatThrownBy(() -> svc.adminReleaseFirmName(42))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("not found");
+        verify(firms, never()).releaseFirmName(anyInt());
+    }
+
+    @Test
+    void adminReleaseFirmName_rejectsActiveFirm() {
+        Firm firm = new Firm();
+        firm.setArchived(false);
+        when(firms.getFirmById(42)).thenReturn(firm);
+        assertThatThrownBy(() -> svc.adminReleaseFirmName(42))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("Only disbanded");
+        verify(firms, never()).releaseFirmName(anyInt());
+    }
+
+    @Test
+    void adminReleaseFirmName_preservesArchivedFirmAndReleasesById() {
+        Firm firm = new Firm();
+        firm.setFirmId(42);
+        firm.setDisplayName("Acme");
+        firm.setArchived(true);
+        when(firms.getFirmById(42)).thenReturn(firm);
+        when(firms.releaseFirmName(42)).thenReturn(1);
+        assertThat(svc.adminReleaseFirmName(42)).isSameAs(firm);
+        assertThat(firm.getDisplayName()).isEqualTo("Acme");
+        verify(firms, never()).getFirmByName(any());
+        verify(firms, never()).updateFirm(any());
+        org.mockito.Mockito.verifyNoInteractions(treasury, accounts, roles, requests);
+    }
+
+    @Test
+    void adminReleaseFirmName_reportsAlreadyReleasedOrConcurrentChange() {
+        Firm firm = new Firm();
+        firm.setArchived(true);
+        when(firms.getFirmById(42)).thenReturn(firm);
+        when(firms.releaseFirmName(42)).thenReturn(0);
+        assertThatThrownBy(() -> svc.adminReleaseFirmName(42))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("already released");
+    }
+
 }

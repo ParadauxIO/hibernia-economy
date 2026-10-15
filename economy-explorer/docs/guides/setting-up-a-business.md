@@ -216,6 +216,18 @@ Selling or passing on the business? Ownership transfers in a confirmed handshake
 /business transfer complete Acme Steve     # Steve accepts and becomes owner
 ```
 
+## Reusing a disbanded firm's name
+
+Disbanding a firm keeps its name reserved. An administrator can explicitly release
+it with `/business admin releasename <firmId>`, using the disbanded firm's numeric
+ID from `/business info <firm>`. Only then can a new firm or rename reuse the name.
+Active firms cannot have their names released. Names remain case-insensitively unique
+among active firms and disbanded firms whose names have not been released.
+
+The old firm keeps its name and history; reuse does not transfer its accounts,
+staff, or ownership. Name lookups prefer the active firm. Use the old firm's
+numeric ID to refer to its history or resume an incomplete disband after reuse.
+
 ## What's next
 
 - Browse every money command in the **[Treasury reference](/docs/reference/treasury)**.

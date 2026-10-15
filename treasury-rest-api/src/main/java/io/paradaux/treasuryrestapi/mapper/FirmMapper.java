@@ -54,7 +54,8 @@ public interface FirmMapper {
 
     @Select("SELECT firm_id, display_name, proprietor_uuid_bin AS proprietorUuid, " +
             "       discord_url, hq_region, default_account_id, is_archived AS archived, created_at " +
-            "FROM firm WHERE display_name = #{displayName}")
+            "FROM firm WHERE display_name = #{displayName} " +
+            "ORDER BY is_archived ASC, name_released ASC, firm_id DESC LIMIT 1")
     Firm findFirmByDisplayName(@Param("displayName") String displayName);
 
     /**
@@ -153,10 +154,10 @@ public interface FirmMapper {
     int renameFirm(@Param("firmId") long firmId, @Param("displayName") String displayName);
 
     /**
-     * Counts firms (other than {@code firmId}) sharing the given display name,
+     * Counts firms whose names are still reserved (other than {@code firmId}) sharing the given display name,
      * case-insensitively — the uniqueness guard for rename. Matches the plugin's
-     * case-insensitive collision check and the {@code uq_firm_display_name} constraint.
+     * case-insensitive collision check and the {@code uq_firm_reserved_display_name} constraint.
      */
-    @Select("SELECT COUNT(*) FROM firm WHERE LOWER(display_name) = LOWER(#{displayName}) AND firm_id <> #{firmId}")
+    @Select("SELECT COUNT(*) FROM firm WHERE LOWER(display_name) = LOWER(#{displayName}) AND firm_id <> #{firmId} AND (is_archived = 0 OR name_released = 0)")
     int countOtherFirmsByDisplayName(@Param("firmId") long firmId, @Param("displayName") String displayName);
 }

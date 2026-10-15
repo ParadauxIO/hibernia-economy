@@ -14,6 +14,23 @@ API, the explorer — points at the same MariaDB and agrees on that schema.
 - Flyway runs with `mysql-connector-j` on its classpath (wire-compatible with
   MariaDB).
 
+## Firm names
+
+V33 adds `name_released` (default false) and a generated `reserved_display_name`
+with a unique index. Both active and archived firms reserve their names until an
+administrator runs `/business admin releasename <firmId>`. The atomic update only
+releases archived firms. The generated value becomes NULL only when a firm is both
+archived and explicitly released; active names are always protected by the index.
+Existing archived firms stay reserved when the migration runs.
+
+Archived rows retain their original `display_name`. Name lookups prefer the active
+firm, then an unreleased archived firm, then the most recently created released
+firm. Numeric IDs remain the unambiguous way to access older firms and resume a
+disband. Release changes no account links, balances or ownership.
+
+Deploy V33 together with the Business plugin, REST API and Explorer changes:
+older application versions assume names identify a single row even across archives.
+
 ## Why the database owns balances
 
 Balances live in a **materialized table maintained by database triggers**, not by

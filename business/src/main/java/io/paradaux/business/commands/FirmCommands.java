@@ -25,6 +25,7 @@ import io.paradaux.business.services.FirmTransactionService;
 import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.commands.resolvers.OnlineFirmName;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.List;
@@ -268,7 +269,7 @@ public class FirmCommands implements CommandHandler {
         String hq = f.getHqRegion() == null ? "N/A" : f.getHqRegion();
         String discord = f.getDiscordUrl() == null ? "N/A" : f.getDiscordUrl();
         String status = f.getArchived() ? "(Defunct)" : "";
-        message.send(sender, "business.firm.info", "firm", f.getDisplayName(), "status", status, "owner", proprietorName, "balance", balanceFmt, "hq", hq, "discord", discord);
+        message.send(sender, "business.firm.info", "id", f.getFirmId(), "firm", f.getDisplayName(), "status", status, "owner", proprietorName, "balance", balanceFmt, "hq", hq, "discord", discord);
     }
 
     @Route("attribute set hq <firm> <plot>")
@@ -344,6 +345,16 @@ public class FirmCommands implements CommandHandler {
         var onlineEmployees = staff.getOnlineEmployees(firm);
         FirmService.DisbandResult result = firms.adminDisbandFirm(firm);
         reportDisband(sender, f, result, onlineEmployees, "/firm admin disband " + f.getDisplayName());
+    }
+
+    @Route("admin releasename <firmId>")
+    @Permission("business.admin.releasename")
+    @Async
+    @Description("Release a disbanded firm's name for reuse (staff override, numeric firm ID)")
+    public void adminReleaseName(@Sender CommandSender sender, @Arg("firmId") int firmId) {
+        Firm firm = firms.adminReleaseFirmName(firmId);
+        message.send(sender, "business.firm.admin.releasename.success",
+                "firm", firm.getDisplayName(), "id", firmId);
     }
 
     @Route("admin rename <firm> <newname>")
