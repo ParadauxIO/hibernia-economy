@@ -11,7 +11,6 @@ import io.paradaux.treasuryrestapi.model.SubscriptionMatch;
 import io.paradaux.treasuryrestapi.model.TransactionRow;
 import io.paradaux.treasuryrestapi.util.DiscordWebhook;
 import io.paradaux.treasuryrestapi.util.HmacSha256;
-import io.paradaux.treasuryrestapi.util.SsrfValidator;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -60,6 +59,7 @@ public class WebhookDispatcherService {
     private final WebhookDeliveryMapper deliveryMapper;
     private final WebhookCursorMapper cursorMapper;
     private final WebhookRedisLock lock;
+    private final WebhookTargetPolicy targetPolicy;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
@@ -93,6 +93,7 @@ public class WebhookDispatcherService {
                                     WebhookDeliveryMapper deliveryMapper,
                                     WebhookCursorMapper cursorMapper,
                                     WebhookRedisLock lock,
+                                    WebhookTargetPolicy targetPolicy,
                                     ObjectMapper objectMapper,
                                     @Value("${treasury.webhook.connect-timeout-ms:5000}") long connectTimeoutMs) {
         this.ledgerMapper = ledgerMapper;
@@ -100,6 +101,7 @@ public class WebhookDispatcherService {
         this.deliveryMapper = deliveryMapper;
         this.cursorMapper = cursorMapper;
         this.lock = lock;
+        this.targetPolicy = targetPolicy;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -212,7 +214,7 @@ public class WebhookDispatcherService {
             return;
         }
         // Re-check at send time — DNS could have been re-pointed since registration.
-        if (uri.getHost() == null || !SsrfValidator.isPublicHost(uri.getHost())) {
+        if (!targetPolicy.isDeliverable(uri)) {
             onFailure(d, null, "url not public");
             return;
         }
