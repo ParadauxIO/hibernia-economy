@@ -19,6 +19,9 @@ import java.util.regex.Pattern;
  * {@code api_keys} row keeps only the key's metadata (id, jti, revoked…). So the
  * token itself is taken from the issue / reissue chat receipt, and everything
  * else from the row.
+ *
+ * <p>Commands are sent as the player themselves, without {@link Ops#run}, so the
+ * plugin.yml permission defaults are exercised the way real players hit them.
  */
 public final class ApiTokens {
 
@@ -27,18 +30,17 @@ public final class ApiTokens {
     /** A compact JWS as it appears in the issue / reissue receipt. */
     private static final Pattern JWT = Pattern.compile("eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+");
 
-    /** Issues a PERSONAL key for the connected player. Caller drives the player; this
-     *  utility issues the command from inside an Ops.run block. Returns the issued key. */
+    /** Issues a PERSONAL key for the connected player. Returns the issued key. */
     public static IssuedKey issuePersonal(String username, MockPlayer player) {
         UUID uuid = player.getUuid();
-        String token = commandToken(username, player, "/treasuryapi personal issue", "Personal API key");
+        String token = commandToken(player, "/treasuryapi personal issue", "Personal API key");
         return waitForLatestKey(uuid, "PERSONAL", TIMEOUT).withToken(token);
     }
 
     /** Issues a BUSINESS key bound to the named firm. Sender must be the proprietor. */
     public static IssuedKey issueBusiness(String username, MockPlayer player, String firmName) {
         UUID uuid = player.getUuid();
-        String token = commandToken(username, player, "/treasuryapi business issue " + firmName, "Business API key");
+        String token = commandToken(player, "/treasuryapi business issue " + firmName, "Business API key");
         return waitForLatestKey(uuid, "BUSINESS", TIMEOUT).withToken(token);
     }
 
@@ -49,7 +51,7 @@ public final class ApiTokens {
 
     /** Reissue a key by id; {@code scope} is {@code personal} or {@code business}. */
     public static IssuedKey reissue(String username, MockPlayer player, String scope, int keyId) {
-        String token = commandToken(username, player, "/treasuryapi " + scope + " reissue " + keyId, "reissued");
+        String token = commandToken(player, "/treasuryapi " + scope + " reissue " + keyId, "reissued");
         return waitForKeyById(keyId, TIMEOUT).withToken(token);
     }
 
@@ -58,34 +60,29 @@ public final class ApiTokens {
      * confirmation ({@code receiptMarker}) followed by the token, in the same chat
      * message or — if the server splits the lines — in the next one.
      */
-    private static String commandToken(String username, MockPlayer player, String command, String receiptMarker) {
-        String[] receipt = new String[1];
-        Ops.run(username, () -> {
-            player.drainMessages();
-            player.chatCommand(command);
-            receipt[0] = player.awaitMessageContaining(receiptMarker, TIMEOUT);
-            if (!JWT.matcher(receipt[0]).find()) {
-                String confirmation = receipt[0];
-                try {
-                    receipt[0] = player.awaitMessage(line -> JWT.matcher(line).find(), TIMEOUT);
-                } catch (AssertionError e) {
-                    throw new AssertionError("'" + command + "' confirmed but showed no token. Receipt: " + confirmation, e);
-                }
+    private static String commandToken(MockPlayer player, String command, String receiptMarker) {
+        player.drainMessages();
+        player.chatCommand(command);
+        String receipt = player.awaitMessageContaining(receiptMarker, TIMEOUT);
+        if (!JWT.matcher(receipt).find()) {
+            String confirmation = receipt;
+            try {
+                receipt = player.awaitMessage(line -> JWT.matcher(line).find(), TIMEOUT);
+            } catch (AssertionError e) {
+                throw new AssertionError("'" + command + "' confirmed but showed no token. Receipt: " + confirmation, e);
             }
-        });
-        Matcher m = JWT.matcher(receipt[0]);
+        }
+        Matcher m = JWT.matcher(receipt);
         if (!m.find()) {
-            throw new AssertionError("No token in the receipt for '" + command + "': " + receipt[0]);
+            throw new AssertionError("No token in the receipt for '" + command + "': " + receipt);
         }
         return m.group();
     }
 
     public static void revokePersonal(String username, MockPlayer player, int keyId) {
-        Ops.run(username, () -> {
-            player.drainMessages();
-            player.chatCommand("/treasuryapi personal revoke " + keyId);
-            player.awaitMessageContaining("revoked", TIMEOUT);
-        });
+        player.drainMessages();
+        player.chatCommand("/treasuryapi personal revoke " + keyId);
+        player.awaitMessageContaining("revoked", TIMEOUT);
     }
 
     public static IssuedKey waitForLatestKey(UUID ownerUuid, String type, Duration timeout) {
