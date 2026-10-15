@@ -95,3 +95,17 @@ Market items traded counts every distinct item traded in the selected window,
 not just the featured cards. Government fine totals cover all non-revoked fines
 in the selected window and your permitted accounts; the recent list is limited.
 The item catalogue is ordered by item key for predictable browsing.
+
+## Economy pages
+
+Overview combines activity and player participation for 7 or 30 days. Transaction
+and volume comparisons use the preceding period of equal length; there is no
+percentage when that period had no activity. The former Health bookmark redirects
+here. Wealth contains current distribution, inequality and account rankings.
+Money Flow shows received, sent and net received amounts for each account type.
+Only attributable transfers between different types are counted, including initial
+player funding. Daily chart buckets use UTC; the first and current day can be partial.
+
+Government opens with accounts you may view. Its Fines tab supports reason search,
+active/revoked filtering and pagination. Summary totals always cover the whole
+selected period for your permitted accounts, independent of the list filter.

@@ -2309,3 +2309,8 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     .doc-prose h2 { font-size: 19px; }
 }
 
+
+.chart-legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 12px 0 6px; font-size: 12px; }
+.flow-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.flow-summary dl { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.flow-summary dd { margin: 0; font-variant-numeric: tabular-nums; }

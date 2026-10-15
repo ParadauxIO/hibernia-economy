@@ -3,6 +3,8 @@ import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
+import { Toolbar, FilterSelect } from '@/components/Toolbar';
+import { Pagination } from '@/components/Pagination';
 import { getGovernmentDashboard } from '@/lib/services/government';
 import { getViewer, hasPermission } from '@/lib/auth';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -11,7 +13,7 @@ import { Player } from '@/components/Player';
 import { SectionTabs } from '@/components/SectionTabs';
 import { WindowTabs } from '@/components/WindowTabs';
 
-const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(7).max(30).default(30) });
+const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(7).max(30).default(30), view: z.enum(['accounts', 'fines']).catch('accounts'), page: z.coerce.number().int().min(1).catch(1), q: z.string().optional(), status: z.enum(['active', 'revoked']).optional().catch(undefined) });
 
 export const dynamic = 'force-dynamic';
 
@@ -29,15 +31,15 @@ export default async function GovernmentPage({
     return <PrivacyGate kind={viewer.anon ? 'login' : 'private'} title="Government access required" />;
   }
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
-  const { cats, fines, govAccounts, totals } = await getGovernmentDashboard(sp.days);
+  const { fines, govAccounts, totals, total } = await getGovernmentDashboard(sp.days, sp.view === 'fines' ? sp : undefined);
 
 
   return (
     <>
       <div className="page-heading">
         <h1>Government</h1>
-        <span className="sub">fines and gov accounts · last {sp.days} days</span>
-        <WindowTabs basePath="/government" days={sp.days} />
+        <span className="sub">government accounts and fines · last {sp.days} days</span>
+        <WindowTabs basePath="/government" days={sp.days} params={{ view: sp.view, q: sp.q, status: sp.status }} />
         <SectionTabs />
       </div>
 
@@ -61,39 +63,11 @@ export default async function GovernmentPage({
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">
-          Fine categories <span className="sub">grouped by first word of reason</span>
-        </div>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th className="amount">Issued</th>
-                <th className="amount">Total amount</th>
-                <th className="amount">Active</th>
-                <th className="amount">Active amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cats.length === 0 && (
-                <tr><td colSpan={5} className="empty">No fines in this window.</td></tr>
-              )}
-              {cats.map((c) => (
-                <tr key={c.category}>
-                  <td>{c.category}</td>
-                  <td className="amount mono">{fmtN(c.fine_count)}</td>
-                  <td className="amount neutral">{fmtAmtFull(c.total_amount)}</td>
-                  <td className="amount mono">{fmtN(c.active_fine_count)}</td>
-                  <td className="amount neutral">{fmtAmtFull(c.active_amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+      <nav className="window-tabs" aria-label="Government views">
+        <Link href={`/government?days=${sp.days}`} className={sp.view === 'accounts' ? 'active' : ''}>Accounts</Link>
+        <Link href={`/government?view=fines&days=${sp.days}`} className={sp.view === 'fines' ? 'active' : ''}>Fines</Link>
+      </nav>
+      {sp.view === 'accounts' ? <>
       <div className="card">
         <div className="card-title">
           Government accounts <span className="sub">non-archived</span>
@@ -135,9 +109,11 @@ export default async function GovernmentPage({
         </div>
       </div>
 
+      </> : <>
+      <Toolbar searchPlaceholder="Search fine reasons…" filters={<FilterSelect paramKey="status" ariaLabel="Fine status" options={[{value: '', label: 'All statuses'}, {value: 'active', label: 'Active'}, {value: 'revoked', label: 'Revoked'}]} />} />
       <div className="card">
         <div className="card-title">
-          Recent fines <span className="sub">latest {fines.length} in this window</span>
+          Recent fines <span className="sub">{fmtN(total)} matching this window</span>
         </div>
         <div className="table-wrap">
           <table className="data-table">
@@ -173,6 +149,8 @@ export default async function GovernmentPage({
           </table>
         </div>
       </div>
+      <Pagination page={sp.page} totalPages={Math.max(1, Math.ceil(total / 25))} totalItems={total} basePath="/government" searchParams={{ view: 'fines', days: String(sp.days), q: sp.q, status: sp.status }} />
+      </>}
     </>
   );
 }

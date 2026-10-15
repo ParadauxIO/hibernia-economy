@@ -38,6 +38,9 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
   }
   const series = data.map((d) => ({ date: d.date, count: d.txn_count, volume: parseFloat(d.total_volume) }));
   return (
+    <>
+    <div className="chart-legend"><span style={{ color: 'var(--c-1)' }}>● Volume · right axis</span><span style={{ color: 'var(--c-3)' }}>● Transactions · left axis</span></div>
+    <p className="chart-subtitle">Daily buckets in UTC. The first and current day may be partial.</p>
     <RC height={230}>
       <AreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
@@ -74,7 +77,7 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
         <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill="url(#gVol)" dot={false} isAnimationActive={false} />
         <Area yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill="url(#gCnt)" dot={false} isAnimationActive={false} />
       </AreaChart>
-    </RC>
+    </RC></>
   );
 }
 

@@ -17,10 +17,8 @@ test.describe('anonymous browsing', () => {
     await visit(page, '/');
     await expect(page.getByRole('heading', { name: 'Economy', level: 1 })).toBeVisible();
     await expect(page.getByText('Personal supply')).toBeVisible();
-    // money velocity was a regression (showed '—'); assert it computes a value
-    const velocity = page.locator('.insight', { hasText: 'Money velocity' }).locator('.value');
-    await expect(velocity).not.toHaveText('—');
-    // gini renders a number
+    await expect(page.getByText('Active players / 30d', { exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Wealth', exact: true }).click();
     const gini = page.locator('.insight', { hasText: 'Gini' }).locator('.value');
     await expect(gini).toHaveText(/^0\.\d+$/);
     await page.waitForTimeout(1500);
@@ -97,4 +95,10 @@ test.describe('anonymous browsing', () => {
 test('healthz returns 200 without the DB', async ({ request }) => {
   const res = await request.get('/healthz');
   expect(res.status()).toBe(200);
+});
+
+test('Health bookmarks preserve their window on the consolidated overview', async ({ page }) => {
+  await visit(page, '/economy/health?days=7');
+  await expect(page).toHaveURL(/\/?days=7$/);
+  await expect(page.getByText('Active players / 7d', { exact: true })).toBeVisible();
 });

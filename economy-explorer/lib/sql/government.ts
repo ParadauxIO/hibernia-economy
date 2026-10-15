@@ -26,7 +26,7 @@ export interface FineRow {
 }
 
 /** Mirrors LedgerExplorerMapper.getRecentFines (line 434-447). */
-export async function getRecentFines(days: number, limit: number, accountIds: readonly number[] | null = []): Promise<FineRow[]> {
+export async function getRecentFines(days: number, limit: number, accountIds: readonly number[] | null = [], options: { offset?: number; q?: string; status?: string } = {}): Promise<FineRow[]> {
   const r = await sql<{
     fineId: number;
     playerUuidBin: Buffer | null;
@@ -53,8 +53,10 @@ export async function getRecentFines(days: number, limit: number, accountIds: re
     LEFT JOIN accounts a ON a.account_id = gf.gov_account_id
     WHERE gf.issued_at >= NOW() - INTERVAL ${days} DAY
       AND ${accountIds === null ? sql`TRUE` : accountIds.length ? sql`gf.gov_account_id IN (${sql.join(accountIds)})` : sql`FALSE`}
-    ORDER BY gf.issued_at DESC
-    LIMIT ${limit}
+      AND ${options.q ? sql`gf.reason LIKE ${'%' + options.q + '%'}` : sql`TRUE`}
+      AND ${options.status === 'active' ? sql`gf.revoked = 0` : options.status === 'revoked' ? sql`gf.revoked = 1` : sql`TRUE`}
+    ORDER BY gf.issued_at DESC, gf.fine_id DESC
+    LIMIT ${limit} OFFSET ${options.offset ?? 0}
   `.execute(db);
 
   return r.rows.map((row) => ({
@@ -152,4 +154,14 @@ export async function getFineTotals(days: number, accountIds: readonly number[] 
       AND ${accountIds === null ? sql`TRUE` : accountIds.length ? sql`gov_account_id IN (${sql.join(accountIds)})` : sql`FALSE`}
   `.execute(db);
   return { activeCount: Number(r.rows[0]?.active_count ?? 0), activeAmount: r.rows[0]?.active_amount ?? '0.00' };
+}
+
+export async function countFines(days: number, accountIds: readonly number[] | null, options: { q?: string; status?: string }) {
+  const r = await sql<{ n: string | number }>`SELECT COUNT(*) AS n FROM government_fines gf
+    WHERE gf.issued_at >= NOW() - INTERVAL ${days} DAY
+      AND ${accountIds === null ? sql`TRUE` : accountIds.length ? sql`gf.gov_account_id IN (${sql.join(accountIds)})` : sql`FALSE`}
+      AND ${options.q ? sql`gf.reason LIKE ${'%' + options.q + '%'}` : sql`TRUE`}
+      AND ${options.status === 'active' ? sql`gf.revoked = 0` : options.status === 'revoked' ? sql`gf.revoked = 1` : sql`TRUE`}
+  `.execute(db);
+  return Number(r.rows[0]?.n ?? 0);
 }

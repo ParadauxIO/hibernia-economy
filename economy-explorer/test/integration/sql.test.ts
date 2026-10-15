@@ -586,3 +586,21 @@ d('explorer summary regressions', () => {
     } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-total'`.execute(db); }
   });
 });
+
+d('government fine browsing', () => {
+  it('filters and paginates within the permitted account set', async () => {
+    const { getRecentFines, countFines } = await import('@/lib/sql/government');
+    try {
+      for (let i = 0; i < 3; i++) await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked)
+        VALUES (${uuidToBin(BOB)}, 5, 1, 'audit-page', 1, ${uuidToBin(ALICE)}, ${i === 2 ? 1 : 0})`.execute(db);
+      expect(await countFines(30, [5], { q: 'audit-page', status: 'active' })).toBe(2);
+      expect(await countFines(30, [], { q: 'audit-page' })).toBe(0);
+      const first = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active' });
+      const second = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active', offset: 1 });
+      expect(first).toHaveLength(1);
+      expect(second).toHaveLength(1);
+      expect(first[0].fine_id).not.toBe(second[0].fine_id);
+      expect(second[0].revoked).toBe(0);
+    } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-page'`.execute(db); }
+  });
+});

@@ -37,7 +37,7 @@ export function SubNav({ items }: { items: SubNavItem[] }) {
 // Mirrors the SPA's ECONOMY_SUB / MARKET_SUB lists in ExplorerLayout.
 export const ECONOMY_SUB: SubNavItem[] = [
   { href: '/', label: 'Overview', match: (p) => p === '/' },
-  { href: '/economy/health', label: 'Health', match: (p) => p.startsWith('/economy/health') },
+  { href: '/economy/wealth', label: 'Wealth', match: (p) => p.startsWith('/economy/wealth') },
   { href: '/money-flow', label: 'Money Flow', match: (p) => p.startsWith('/money-flow') },
   { href: '/government', label: 'Government', match: (p) => p.startsWith('/government') },
 ];
@@ -61,7 +61,7 @@ const MARKET_SALES: SubNavItem = {
 export function pickSubNav(path: string, canInvestigate: boolean): SubNavItem[] | null {
   if (
     path === '/' ||
-    path.startsWith('/economy/health') ||
+    path.startsWith('/economy/') ||
     path.startsWith('/money-flow') ||
     path.startsWith('/government')
   ) {

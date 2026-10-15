@@ -96,7 +96,7 @@ export default async function MarketPage({
             <div className="chart-subtitle">sales volume + count · last {sp.days} days</div>
           </div>
           <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="chart-tag">$ + #</span>
+            
             <span className="toolbar-export">
               <CsvButton
                 filename={`market-volume-${sp.days}d.csv`}

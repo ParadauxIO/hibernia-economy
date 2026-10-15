@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { memo } from '@/lib/cache';
 import { fmtAmtFull, fmtN } from '@/lib/format';
-import { MoneyFlowDiagram } from '@/components/charts/MoneyFlowDiagram';
 import { SectionTabs } from '@/components/SectionTabs';
 import { WindowTabs } from '@/components/WindowTabs';
 import { InfoTip } from '@/components/InfoTip';
@@ -67,13 +66,17 @@ export default async function MoneyFlowPage({
         </div>
       </div>
 
-      <div className="card sankey-card">
-        <div className="card-title">
-          Flow diagram
-          <span className="sub">arrow width = flow magnitude · excludes initial player funding</span>
-        </div>
-        <MoneyFlowDiagram edges={edges} />
-      </div>
+      <section className="flow-summary" aria-label="Net movement by account type">
+        {['PERSONAL', 'BUSINESS', 'GOVERNMENT', 'SYSTEM'].map(type => {
+          const sent = edges.filter(e => e.from_type === type).reduce((n, e) => n + Number(e.amount), 0);
+          const received = edges.filter(e => e.to_type === type).reduce((n, e) => n + Number(e.amount), 0);
+          return <div className="card" key={type}><h2 className="card-title">{type}</h2><dl>
+            <dt>Received</dt><dd>{fmtAmtFull(received)}</dd><dt>Sent</dt><dd>{fmtAmtFull(sent)}</dd>
+            <dt>Net received</dt><dd>{fmtAmtFull(received - sent)}</dd>
+          </dl></div>;
+        })}
+      </section>
+      <p className="page-intro">Positive net means more received than sent. Includes initial player funding; only attributable two-posting transfers between different types are included.</p>
 
       <div className="card">
         <div className="card-title">
