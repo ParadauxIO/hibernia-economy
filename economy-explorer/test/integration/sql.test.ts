@@ -604,3 +604,24 @@ d('government fine browsing', () => {
     } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-page'`.execute(db); }
   });
 });
+
+d('shop offer comparisons', () => {
+  it('orders by unit price and selected direction, with consistent stock filtering', async () => {
+    const { listShops, countShops } = await import('@/lib/sql/market');
+    const args = { itemKey: 'audit-offer', material: null, firmId: null, ownerUuid: null, buyable: false, inStock: false, search: null, limit: 10, offset: 0 };
+    try {
+      await sql`INSERT INTO chestshop_shop (world, sign_x, sign_y, sign_z, material, item_key, item_name, buy_price, sell_price, batch_qty, current_stock)
+        VALUES ('audit', 1, 1, 1, 'STONE', 'audit-offer', 'Stone', 16, 8, 64, 64),
+        ('audit', 2, 1, 1, 'STONE', 'audit-offer', 'Stone', 2, 1, 1, 5),
+        ('audit', 3, 1, 1, 'STONE', 'audit-offer', 'Stone', NULL, 3, 1, 0)`.execute(db);
+      const buy = await listShops({ ...args, direction: 'buy' });
+      expect(buy.map(s => s.sign_x)).toEqual([1, 2]);
+      const sell = await listShops({ ...args, direction: 'sell' });
+      expect(sell.map(s => s.sign_x)).toEqual([3, 2, 1]);
+      expect(await countShops({ ...args, direction: 'sell' })).toBe(3);
+      await sql`UPDATE chestshop_shop SET current_stock = 63 WHERE world = 'audit' AND sign_x = 1`.execute(db);
+      expect((await listShops({ ...args, direction: 'buy', inStock: true })).map(s => s.sign_x)).toEqual([2]);
+      expect(await countShops({ ...args, direction: 'buy', inStock: true })).toBe(1);
+    } finally { await sql`DELETE FROM chestshop_shop WHERE world = 'audit'`.execute(db); }
+  });
+});

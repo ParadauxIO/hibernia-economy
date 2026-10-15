@@ -116,3 +116,18 @@ Market starts with a search across the full catalogue and popular items for 7 or
 30 days. Browse Items includes the complete alphabetical catalogue; Find Shops
 lists observed shops; Activity contains market-wide totals and charts. Item cards
 show historical daily average prices per item, not guaranteed shop offers.
+
+## Comparing shops
+
+Choose **I want to buy** to buy from shops at the lowest unit price, or **I want to
+sell** to sell your items to the highest bidder. Prices on signs are for a batch;
+the Explorer divides by that batch quantity for a fair per-item comparison. The
+optional 64-item view is an estimate, not a promise that the item stacks to 64.
+Check the sign batch, stock observation time and shop observation time before
+travelling. Copy location copies the world and coordinates; the map link opens
+the server map. Admin shops have unlimited stock. Unknown stock stays unknown.
+
+Item pages show observed offers before historical averages. The simple daily
+price chart is followed by an optional advanced candlestick view. Historical
+sellers do not necessarily still have an active shop. Private sales figures retain
+their existing permission requirements.

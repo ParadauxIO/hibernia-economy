@@ -1,6 +1,9 @@
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
+import Link from 'next/link';
+import { getShopOffers } from '@/lib/services/market';
+import { ShopOffers } from '@/components/market/ShopOffers';
 import { listItemSales, countItemSales, listItemSellers, countItemSellers, itemPriceByDay, listSamplesInRange } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
 import { bucketSamples, type CandleInterval } from '@/lib/derived';
@@ -23,6 +26,8 @@ const SP_SCHEMA = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   // Default to 1h: with only a few weeks of data, daily buckets give ~4 sparse
   // candles that read as broken; hourly is dense and readable.
+  direction: z.enum(['buy', 'sell']).catch('buy'),
+  advanced: z.enum(['true', 'false']).catch('false'),
   interval: z.enum(['1h', '4h', '1d']).default('1h'),
 });
 
@@ -52,15 +57,16 @@ export default async function ItemDetailPage({
   const candlesFrom = new Date(Date.now() - candleWindowDays * 24 * 60 * 60 * 1000);
   const candlesTo = new Date();
 
-  const [viewer, sales, totalSales, sellers, totalSellers, byDay, samples, theme] = await Promise.all([
+  const [viewer, sales, totalSales, sellers, totalSellers, byDay, samples, theme, [offers, offerCount]] = await Promise.all([
     getViewer(),
     listItemSales(itemKey, sp.limit, (sp.page - 1) * sp.limit),
     countItemSales(itemKey),
     listItemSellers(itemKey, 10, 0),
     countItemSellers(itemKey),
     itemPriceByDay(itemKey, 30),
-    listSamplesInRange({ itemKey, from: candlesFrom, to: candlesTo, maxRows: 5000 }),
+    sp.advanced === 'true' ? listSamplesInRange({ itemKey, from: candlesFrom, to: candlesTo, maxRows: 5000 }) : Promise.resolve([]),
     resolveTheme(),
+    getShopOffers({ itemKey, material: null, firmId: null, ownerUuid: null, buyable: false, direction: sp.direction, inStock: false, search: null, limit: 4, offset: 0 }),
   ]);
   const candles = bucketSamples(samples, sp.interval as CandleInterval);
   const mapBase = serverIdentity(theme).map;
@@ -70,9 +76,9 @@ export default async function ItemDetailPage({
   const showSaleFigures = hasPermission(viewer, 'market.figures.read');
 
   const totalPages = Math.max(1, Math.ceil(totalSales / sp.limit));
-  const headerName = sales[0]?.item_name ?? sellers[0]?.owner_name ?? itemKey;
-  const material = sales[0]?.material ?? null;
-  const icon = itemIconUrl(material, sales[0]?.item_custom);
+  const headerName = sales[0]?.item_name ?? offers[0]?.item_name ?? itemKey;
+  const material = sales[0]?.material ?? offers[0]?.material ?? null;
+  const icon = itemIconUrl(material, sales[0]?.item_custom ?? offers[0]?.item_custom);
   // Item keys carry ':' / '#' (e.g. nexo:ruby_sword#02) — unsafe in filenames.
   const fileKey = itemKey.replace(/[^a-z0-9]+/gi, '_');
 
@@ -102,13 +108,13 @@ export default async function ItemDetailPage({
 
   return (
     <>
-      <BackLink href="/chestshop" label="ChestShop" />
+      <BackLink href="/chestshop" label="Browse items" />
 
       <div className="page-heading item-heading">
         <ItemIcon icon={icon} name={headerName} size={44} />
         <div className="item-heading-text">
           <h1>{headerName}</h1>
-          <span className="mono" style={{ color: 'var(--fg-muted)', fontSize: 12 }}>{material ? material.toLowerCase() : itemKey}</span>
+          <details className="small muted"><summary>Item identifiers</summary><span className="mono">{itemKey} · {material ?? 'Unknown material'}</span></details>
         </div>
         {changePct != null && (
           <span className={`kpi-delta ${dir}`} style={{ alignSelf: 'center' }}>
@@ -118,6 +124,17 @@ export default async function ItemDetailPage({
         <SectionTabs />
       </div>
 
+      <section aria-label="Observed shop offers">
+        <div className="page-heading"><h2>Where to trade</h2><nav className="window-tabs" aria-label="Trade direction">
+          <Link href="?direction=buy" className={sp.direction === 'buy' ? 'active' : ''}>I want to buy</Link>
+          <Link href="?direction=sell" className={sp.direction === 'sell' ? 'active' : ''}>I want to sell</Link>
+        </nav></div>
+        <p className="page-intro">Observed offers, ordered by unit price. Stock and prices can change in-game.</p>
+        <ShopOffers shops={offers} direction={sp.direction} mapBase={mapBase} />
+        <p><Link href={`/chestshop/shops?item=${encodeURIComponent(itemKey)}&direction=${sp.direction}`}>Compare all {fmtN(offerCount)} offers →</Link></p>
+      </section>
+      <h2>Trading history</h2>
+      <p className="page-intro">Historical averages are not current shop quotes. Price movement compares the first and latest trading day; daily buckets use UTC and today may be partial.</p>
       <div className="kpi-grid">
         <div className="kpi">
           <div className="kpi-label">Sales (30d)</div>
@@ -138,6 +155,17 @@ export default async function ItemDetailPage({
         </div>
       </div>
 
+      {/* Daily price line — table dropped, candles + line cover the same window */}
+      {byDay.length > 0 && (
+        <div className="card">
+          <div className="card-title">
+            Daily price line <span className="sub">avg unit price · last 30 days</span>
+          </div>
+          <PriceLine data={byDay} />
+        </div>
+      )}
+      <p><Link href={`?direction=${sp.direction}&advanced=${sp.advanced === 'true' ? 'false' : 'true'}&interval=${sp.interval}`}>{sp.advanced === 'true' ? 'Hide' : 'Show'} advanced candlesticks</Link></p>
+      {sp.advanced === 'true' && <>
       {/* Candlestick (OHLC) */}
       <div className="card">
         <div className="card-title">
@@ -146,7 +174,7 @@ export default async function ItemDetailPage({
             {(['1h', '4h', '1d'] as const).map((iv) => (
               <a
                 key={iv}
-                href={`?interval=${iv}`}
+                href={`?direction=${sp.direction}&advanced=true&interval=${iv}`}
                 className={`btn ${sp.interval === iv ? 'btn-primary' : ''}`}
                 style={{ padding: '2px 9px', fontSize: 11 }}
               >
@@ -158,10 +186,11 @@ export default async function ItemDetailPage({
         <Candlestick candles={candles} />
       </div>
 
+      </>}
       {/* Top sellers */}
       <div className="card">
         <div className="card-title">
-          Sellers <span className="sub">distinct shops · sorted by sales</span>
+          Historical sellers <span className="sub">not current offers · sorted by sales</span>
           <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
             <CsvButton
               filename={`item-${fileKey}-sellers.csv`}
@@ -292,15 +321,6 @@ export default async function ItemDetailPage({
       </div>
       )}
 
-      {/* Daily price line — table dropped, candles + line cover the same window */}
-      {byDay.length > 0 && (
-        <div className="card">
-          <div className="card-title">
-            Daily price line <span className="sub">avg unit price · last 30 days</span>
-          </div>
-          <PriceLine data={byDay} />
-        </div>
-      )}
     </>
   );
 }

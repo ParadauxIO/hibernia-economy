@@ -618,6 +618,7 @@ export async function listShops(args: {
   firmId: number | null;
   ownerUuid: string | null;
   buyable: boolean;
+  direction?: 'buy' | 'sell';
   inStock: boolean;
   search: string | null;
   limit: number;
@@ -628,8 +629,9 @@ export async function listShops(args: {
   if (args.material) conds.push(sql`s.material = ${args.material}`);
   if (args.firmId !== null) conds.push(sql`s.shop_firm_id = ${args.firmId}`);
   if (args.ownerUuid) conds.push(sql`s.shop_owner_uuid_bin = ${uuidToBin(args.ownerUuid)}`);
-  if (args.buyable) conds.push(sql`s.buy_price IS NOT NULL`);
-  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock > 0)`);
+  if (args.direction === 'sell') conds.push(sql`s.sell_price IS NOT NULL`);
+  else if (args.buyable || args.direction === 'buy') conds.push(sql`s.buy_price IS NOT NULL`);
+  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock >= GREATEST(s.batch_qty, 1))`);
   if (args.search) {
     conds.push(sql`(s.item_name LIKE CONCAT('%', ${args.search}, '%') OR s.material LIKE CONCAT('%', ${args.search}, '%'))`);
   }
@@ -646,8 +648,10 @@ export async function listShops(args: {
     LEFT JOIN accounts a ON a.account_id = s.shop_account_id
     LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
     ${where}
-    ORDER BY (s.current_stock IS NOT NULL AND s.current_stock = 0), (s.buy_price IS NULL),
-      s.buy_price ASC, s.last_seen DESC
+    ORDER BY ${args.direction === 'sell'
+      ? sql`(s.sell_price / GREATEST(s.batch_qty, 1)) DESC`
+      : sql`(s.current_stock IS NOT NULL AND s.current_stock < GREATEST(s.batch_qty, 1) AND s.is_admin_shop = 0), (s.buy_price IS NULL), (s.buy_price / GREATEST(s.batch_qty, 1)) ASC`},
+      s.last_seen DESC, s.shop_id ASC
     LIMIT ${args.limit} OFFSET ${args.offset}
   `.execute(db);
   return r.rows.map(toShopRow);
@@ -659,6 +663,7 @@ export async function countShops(args: {
   firmId: number | null;
   ownerUuid: string | null;
   buyable: boolean;
+  direction?: 'buy' | 'sell';
   inStock: boolean;
   search: string | null;
 }): Promise<number> {
@@ -667,8 +672,9 @@ export async function countShops(args: {
   if (args.material) conds.push(sql`s.material = ${args.material}`);
   if (args.firmId !== null) conds.push(sql`s.shop_firm_id = ${args.firmId}`);
   if (args.ownerUuid) conds.push(sql`s.shop_owner_uuid_bin = ${uuidToBin(args.ownerUuid)}`);
-  if (args.buyable) conds.push(sql`s.buy_price IS NOT NULL`);
-  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock > 0)`);
+  if (args.direction === 'sell') conds.push(sql`s.sell_price IS NOT NULL`);
+  else if (args.buyable || args.direction === 'buy') conds.push(sql`s.buy_price IS NOT NULL`);
+  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock >= GREATEST(s.batch_qty, 1))`);
   if (args.search) {
     conds.push(sql`(s.item_name LIKE CONCAT('%', ${args.search}, '%') OR s.material LIKE CONCAT('%', ${args.search}, '%'))`);
   }

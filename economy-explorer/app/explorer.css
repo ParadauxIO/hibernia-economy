@@ -2319,3 +2319,9 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
 .market-search label { display: block; margin-bottom: 8px; }
 .search-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .search-row input { flex: 1 1 220px; }
+
+.offer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.offer-card { margin-bottom: 0; min-width: 0; overflow-wrap: anywhere; }
+.offer-price { font-size: 24px; font-weight: 600; }
+.offer-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; }
+.offer-card dd { margin: 0; text-align: right; }
