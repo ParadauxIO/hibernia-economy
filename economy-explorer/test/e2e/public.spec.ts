@@ -92,6 +92,19 @@ test.describe('anonymous browsing', () => {
     await visit(page, '/');
     await expect(page.locator('.footer-meta')).toContainText('Minecraft Cities Network');
   });
+
+  test('the static tax guide shows the rates this server published', async ({ page }) => {
+    const errors = trackErrors(page);
+    await visit(page, '/docs/guides/tax');
+    const balance = page.locator('.doc-live[data-live="balance-tax"]');
+    await expect(balance.locator('tbody tr')).toHaveCount(2);
+    await expect(balance.locator('tbody tr').last()).toContainText('$100,000.00 and above');
+    await expect(balance.locator('tbody tr').last()).toContainText('1%');
+    const income = page.locator('.doc-live[data-live="income-tax"]');
+    await expect(income.locator('tbody')).toContainText('Jobs');
+    await expect(income.locator('tbody')).toContainText('5%');
+    expect(errors).toEqual([]);
+  });
 });
 
 test('healthz returns 200 without the DB', async ({ request }) => {

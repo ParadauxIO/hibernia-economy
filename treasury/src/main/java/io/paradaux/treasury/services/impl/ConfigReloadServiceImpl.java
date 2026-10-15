@@ -11,6 +11,7 @@ import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.model.config.LoggingConfiguration;
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
+import io.paradaux.treasury.services.ConfigPublishService;
 import io.paradaux.treasury.services.ConfigReloadService;
 import io.paradaux.treasury.utils.LoggingConfigurer;
 
@@ -30,6 +31,7 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
     private final BalanceTaxConfiguration balanceTaxConfiguration;
     private final SourceIncomeTaxConfiguration sourceIncomeTaxConfiguration;
     private final LoggingConfiguration loggingConfiguration;
+    private final ConfigPublishService configPublishService;
 
     @Inject
     public ConfigReloadServiceImpl(Treasury plugin,
@@ -38,7 +40,8 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
                                    SalaryConfiguration salaryConfiguration,
                                    BalanceTaxConfiguration balanceTaxConfiguration,
                                    SourceIncomeTaxConfiguration sourceIncomeTaxConfiguration,
-                                   LoggingConfiguration loggingConfiguration) {
+                                   LoggingConfiguration loggingConfiguration,
+                                   ConfigPublishService configPublishService) {
         this.plugin = plugin;
         this.message = message;
         this.configurationLoader = configurationLoader;
@@ -46,6 +49,7 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
         this.balanceTaxConfiguration = balanceTaxConfiguration;
         this.sourceIncomeTaxConfiguration = sourceIncomeTaxConfiguration;
         this.loggingConfiguration = loggingConfiguration;
+        this.configPublishService = configPublishService;
     }
 
     @Override
@@ -75,6 +79,14 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
 
         // 4) Re-apply startup side effects that are cheap and safe to redo.
         LoggingConfigurer.apply(loggingConfiguration.getLevel());
+
+        // 5) Republish the tax rates so the docs follow a reload, not just a restart.
+        //    Informational only: a failed write must not fail the reload.
+        try {
+            configPublishService.publish();
+        } catch (RuntimeException e) {
+            log.warn("Could not publish config to economy_config: {}", e.toString());
+        }
 
         log.info("Configuration reloaded (config.yml + messages.properties).");
     }

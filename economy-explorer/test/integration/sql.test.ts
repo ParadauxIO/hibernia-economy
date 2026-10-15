@@ -22,6 +22,8 @@ import mysql from 'mysql2/promise';
 import { gini } from '@/lib/derived';
 import { audit } from '@/lib/audit';
 import { listAudit } from '@/lib/sql/audit';
+import { findConfigByPrefix } from '@/lib/sql/economyConfig';
+import { parseTaxRates } from '@/lib/taxRates';
 
 // Real queries against a real MariaDB (no mocking). Skipped unless RUN_INTEGRATION=1.
 const d = HAS_DB ? describe : describe.skip;
@@ -547,5 +549,22 @@ d('configurable authorization policy', () => {
     // @ts-expect-error Exercise untrusted server-action input.
     await expect(createRole({ ...custom, permissions: ['invented'] })).rejects.toThrow('Unknown permission');
     await expect(setDirectRoleMember('missing', BOB, true)).rejects.toThrow('Unknown role');
+  });
+});
+
+d('published config (economy_config)', () => {
+  it('reads the tax keys Treasury publishes, as UTC instants, and nothing else', async () => {
+    const rows = await findConfigByPrefix('tax.');
+    expect(rows.map((r) => r.config_key).sort()).toEqual([
+      'tax.balance.brackets', 'tax.balance.enabled',
+      'tax.source-income-tax.default-rate', 'tax.source-income-tax.enabled', 'tax.source-income-tax.plugin-rates',
+    ]);
+    const rates = parseTaxRates(rows);
+    expect(rates.balanceTax?.brackets).toEqual([
+      { band: '$0.00 up to $100,000.00', rate: '0%' },
+      { band: '$100,000.00 and above', rate: '1%' },
+    ]);
+    expect(rates.balanceTax?.updatedAt).toBe('2026-10-02T10:00:00.000Z');
+    expect(rates.incomeTax?.sources).toEqual([{ plugin: 'Jobs', rate: '10%' }]);
   });
 });

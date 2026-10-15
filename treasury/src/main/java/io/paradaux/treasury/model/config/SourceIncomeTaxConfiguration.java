@@ -142,4 +142,9 @@ public class SourceIncomeTaxConfiguration {
     public BigDecimal getEffectiveRate(String pluginName) {
         return pluginRates.getOrDefault(pluginName, defaultRate);
     }
+
+    /** The valid per-plugin overrides (unmodifiable); plugins not listed pay {@link #getDefaultRate()}. */
+    public Map<String, BigDecimal> getPluginRates() {
+        return pluginRates;
+    }
 }

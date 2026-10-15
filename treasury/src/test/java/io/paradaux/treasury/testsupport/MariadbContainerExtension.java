@@ -142,6 +142,7 @@ public final class MariadbContainerExtension {
             st.execute("TRUNCATE TABLE ledger_postings");
             st.execute("TRUNCATE TABLE ledger_txns");
             st.execute("TRUNCATE TABLE accounts");
+            st.execute("TRUNCATE TABLE economy_config");
             st.execute("SET FOREIGN_KEY_CHECKS = 1");
         }
     }

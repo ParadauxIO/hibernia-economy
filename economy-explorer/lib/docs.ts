@@ -12,6 +12,7 @@ import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import { visit } from 'unist-util-visit';
+import { rehypeLiveBlocks } from '@/lib/docsLive';
 
 // ── Player documentation: build-time Markdown → static HTML ──────────────────
 // Content lives in `docs/` at the repo root. Pages are statically generated
@@ -126,6 +127,7 @@ export async function getDocBySlug(slug: string[]): Promise<DocPage | null> {
     .use(remarkGfm)
     .use(remarkAlert) // GitHub-style > [!NOTE] / [!WARNING] callouts
     .use(remarkRehype)
+    .use(rehypeLiveBlocks) // ```live fences → placeholders filled on the client
     .use(rehypeSlug)
     .use(() => collectHeadings(headings))
     .use(rehypeAutolinkHeadings, { behavior: 'append', properties: { className: ['doc-anchor'], ariaHidden: true, tabIndex: -1 }, content: { type: 'text', value: '#' } })

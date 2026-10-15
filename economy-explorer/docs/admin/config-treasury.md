@@ -104,6 +104,12 @@ marginal):
 > 7)`. Emptying the bracket map doesn't disable it (it reverts to these defaults) — use
 > `enabled: false`.
 
+In effect on this server (what players see on [How tax works](/docs/guides/tax)):
+
+```live
+balance-tax
+```
+
 ## Income tax — `tax.source-income-tax`
 
 An optional tax on money **deposited** through Vault (income), charged to the recipient.
@@ -119,6 +125,27 @@ An optional tax on money **deposited** through Vault (income), charged to the re
 > When enabled with a non-zero `default-rate`, this taxes **every** Vault deposit from
 > **every** plugin. Scope it with `plugin-rates` and keep `default-rate: 0.0` unless you
 > mean it. A misspelled plugin name silently falls through to the default rate.
+
+In effect on this server:
+
+```live
+income-tax
+```
+
+## Published rates — `economy_config`
+
+Treasury writes the tax rates it is applying to the `economy_config` table on every
+start and every `/treasury reload`, and the tables on this page, on
+[How tax works](/docs/guides/tax) and at `GET /api/v1/config/tax` on the REST API
+read them from there. So **to change what players are told, change `config.yml` and
+reload** — there is no copy of the numbers in the docs to edit.
+
+- What is published is what Treasury actually uses: an entry it rejected (bad number,
+  rate outside 0–1) is left out, and an empty bracket map shows the defaults.
+- A disabled tax still shows its rates, marked as switched off.
+- If the write fails (for example the schema migration `V32` isn't applied yet),
+  Treasury logs a warning and carries on; the docs keep showing the last published
+  rates, or "not available" if there are none.
 
 ## Salaries — `salaries`
 

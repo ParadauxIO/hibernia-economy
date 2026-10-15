@@ -2298,6 +2298,11 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     vertical-align: middle;
 }
 
+/* ── Live blocks: server values filled into static docs (LiveDocBlocks) ─── */
+.doc-prose .doc-live { margin: 0 0 16px; }
+.doc-prose .doc-live table { margin-bottom: 6px; }
+.doc-prose .doc-live-status { margin: 0 0 8px; font-size: 13px; color: var(--fg-muted); }
+
 /* ── Mobile: sidebar collapses behind a toggle ─────────────────────────── */
 @media (max-width: 720px) {
     .docs-sidebar-toggle { display: block; }

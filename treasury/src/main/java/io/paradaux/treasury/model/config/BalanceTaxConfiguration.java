@@ -114,4 +114,9 @@ public class BalanceTaxConfiguration {
     public BigDecimal getWeeklyRate(BigDecimal balance) {
         return brackets.weeklyRate(balance);
     }
+
+    /** The live bracket snapshot (after fallback to the defaults), as published for the docs. */
+    public BalanceTaxBrackets getBrackets() {
+        return brackets;
+    }
 }

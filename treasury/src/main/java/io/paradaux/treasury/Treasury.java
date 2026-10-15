@@ -31,6 +31,7 @@ import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.config.LoggingConfiguration;
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
+import io.paradaux.treasury.services.ConfigPublishService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.SalaryService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
@@ -143,6 +144,14 @@ public class Treasury extends JavaPlugin {
                 govCfg.getTaxIncomeAccount(),
                 govCfg.getFinesAccount());
         injector.getInstance(LedgerService.class).bootstrapGovernmentAccounts();
+
+        // Publish the live tax rates for the explorer docs and REST API (PAR-80).
+        // Informational only, so a failure must not stop the economy loading.
+        try {
+            injector.getInstance(ConfigPublishService.class).publish();
+        } catch (RuntimeException e) {
+            log.warn("Could not publish config to economy_config (is economy-flyway V32 applied?): {}", e.toString());
+        }
 
         // 4) Register commands.
         injector.getInstance(CommandManager.class).registerAll();
