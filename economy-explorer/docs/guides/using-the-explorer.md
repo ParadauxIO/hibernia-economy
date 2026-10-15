@@ -16,7 +16,7 @@ sign in and link your Minecraft account.
 Plenty is public:
 
 - **Balances and leaderboards** — who holds what, the richest accounts.
-- **Firms** — companies, their accounts, and activity.
+- **Firms** — public company profiles and directory balances; internal accounts and activity require permission.
 - **Market** — ChestShop prices, top items, and sales volume.
 - **Money flow** and other economy-wide charts.
 - **Search** — the search box up top finds accounts, players, firms, and account IDs.
@@ -84,3 +84,60 @@ and **system** (follow your device) appearance. Your choice is remembered.
 - New to the economy itself? Start with **[Getting started](/docs/guides/getting-started)**.
 - Curious what counts as public vs. private:
   **[Accounts & money](/docs/concepts/accounts-and-money)**.
+
+## Understanding summary figures
+
+Open accounts means non-archived accounts, not players active recently. Personal
+supply is the current player-held balance; transaction activity measures transfers
+in the selected period. Balance summaries include negative net balances, while
+the positive-net-balance chart excludes types whose total is zero or negative.
+Market items traded counts every distinct item traded in the selected window,
+not just the featured cards. Government fine totals cover all non-revoked fines
+in the selected window and your permitted accounts; the fines list is paginated.
+The item catalogue is ordered by item key for predictable browsing.
+
+## Economy pages
+
+Overview combines activity and player participation for 7 or 30 days. Transaction
+and volume comparisons use the preceding period of equal length; there is no
+percentage when that period had no activity. The former Health bookmark redirects
+here. Wealth contains current distribution, inequality and account rankings.
+Money Flow shows received, sent and net received amounts for each account type.
+Only attributable transfers between different types are counted, including initial
+player funding. Daily chart buckets use UTC; the first and current day can be partial.
+
+Government opens with accounts you may view. Its Fines tab supports reason search,
+active/revoked filtering and pagination. Summary totals always cover the whole
+selected period for your permitted accounts, independent of the list filter.
+
+## Finding items
+
+Market starts with a search across the full catalogue and popular items for 7 or
+30 days. Browse Items includes the complete alphabetical catalogue; Find Shops
+lists observed shops; Activity contains market-wide totals and charts. Item cards
+show historical daily average prices per item, not guaranteed shop offers.
+
+## Comparing shops
+
+Choose **I want to buy** to buy from shops at the lowest unit price, or **I want to
+sell** to sell your items to the highest bidder. Prices on signs are for a batch;
+the Explorer divides by that batch quantity for a fair per-item comparison. The
+optional 64-item view is an estimate, not a promise that the item stacks to 64.
+Check the sign batch, stock observation time and shop observation time before
+travelling. Copy location copies the world and coordinates; the map link opens
+the server map. Admin shops have unlimited stock. Unknown stock stays unknown.
+
+Item pages show observed offers before historical averages. The simple daily
+price chart is followed by an optional advanced candlestick view. Historical
+sellers do not necessarily still have an active shop. Private sales figures retain
+their existing permission requirements.
+
+## Search and directories on a phone
+
+Use **Search** in the header to find accounts, firms and players. Escape closes
+search and returns focus to its button. Account and firm directories keep names
+and balances together on narrow screens; expand **Details** for other columns.
+Sort presets include Richest, Newest, Name A–Z and Largest employers (firms).
+The selected sort is shown above the table and stays in the URL with your filters.
+Account details show a single current balance; owner UUIDs are expandable.
+Authorised viewers can follow a business account back to its firm.

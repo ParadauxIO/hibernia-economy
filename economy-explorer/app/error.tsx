@@ -4,6 +4,7 @@
 // than throwing, so this only handles genuine unexpected errors. Layout-level
 // failures are caught by global-error.tsx.
 import { useEffect } from 'react';
+import Link from 'next/link';
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -13,8 +14,9 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
   return (
     <div className="explorer-error">
       <h1>Something went wrong</h1>
-      <p>{error.message || 'An unexpected error occurred while loading this page.'}</p>
+      <p>This page could not load. Please try again, or continue browsing another section.</p>
       <button type="button" className="btn btn-primary" onClick={() => reset()}>Try again</button>
+      <p><Link href="/">Economy overview</Link> · <Link href="/chestshop/shops">Find shops</Link></p>
     </div>
   );
 }

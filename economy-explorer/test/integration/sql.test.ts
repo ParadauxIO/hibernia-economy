@@ -568,3 +568,79 @@ d('published config (economy_config)', () => {
     expect(rates.incomeTax?.sources).toEqual([{ plugin: 'Jobs', rate: '10%' }]);
   });
 });
+
+d('explorer summary regressions', () => {
+  it('pages item keys before aggregating, and counts items beyond featured cards', async () => {
+    const { listItems, countItems, countDistinctItems } = await import('@/lib/sql/market');
+    const before = await countDistinctItems(7);
+    try {
+      for (let i = 0; i < 14; i++) {
+        await sql`INSERT INTO chestshop_sale (customer_uuid_bin, txn_id, direction, quantity, unit_price, total_price, tax_amount, item_key, material, item_name, occurred_at)
+          VALUES (${uuidToBin(ALICE)}, 1, 'BUY', 2, 3, 6, 0, ${`audit-item-${i.toString().padStart(2, '0')}`}, 'STONE', 'Audit stone', NOW())`.execute(db);
+      }
+      await sql`INSERT INTO chestshop_sale (customer_uuid_bin, txn_id, direction, quantity, unit_price, total_price, tax_amount, item_key, material, item_name, occurred_at)
+        VALUES (${uuidToBin(ALICE)}, 1, 'BUY', 1, 1, 1, 0, 'audit-item-old', 'STONE', 'Audit old stone', NOW() - INTERVAL 40 DAY)`.execute(db);
+      expect(await countDistinctItems(7)).toBe(before + 14);
+      expect(await countItems('Audit stone')).toBe(14);
+      expect(await listItems({ search: 'Audit stone', limit: 20, offset: 0 })).toHaveLength(14);
+      const page = await listItems({ search: 'audit-item-', limit: 3, offset: 2 });
+      expect(page.map(i => i.item_key)).toEqual(['audit-item-02', 'audit-item-03', 'audit-item-04']);
+      expect(page[0]).toMatchObject({ total_quantity: 2, total_volume: '6.00', trade_count: 1 });
+    } finally { await sql`DELETE FROM chestshop_sale WHERE item_key LIKE 'audit-item-%'`.execute(db); }
+  });
+
+  it('fine totals include more than the recent-list cap and respect scope', async () => {
+    const { getFineTotals, getRecentFines } = await import('@/lib/sql/government');
+    const before = await getFineTotals(30, [5]);
+    try {
+      for (let i = 0; i < 105; i++) {
+        await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin)
+          VALUES (${uuidToBin(BOB)}, 5, 2.50, 'audit-total', 1, ${uuidToBin(ALICE)})`.execute(db);
+      }
+      const total = await getFineTotals(30, [5]);
+      expect(total.activeCount).toBe(before.activeCount + 105);
+      expect(Number(total.activeAmount)).toBe(Number(before.activeAmount) + 262.5);
+      expect(await getRecentFines(30, 100, [5])).toHaveLength(100);
+      expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
+    } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-total'`.execute(db); }
+  });
+});
+
+d('government fine browsing', () => {
+  it('filters and paginates within the permitted account set', async () => {
+    const { getRecentFines, countFines } = await import('@/lib/sql/government');
+    try {
+      for (let i = 0; i < 3; i++) await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked)
+        VALUES (${uuidToBin(BOB)}, 5, 1, 'audit-page', 1, ${uuidToBin(ALICE)}, ${i === 2 ? 1 : 0})`.execute(db);
+      expect(await countFines(30, [5], { q: 'audit-page', status: 'active' })).toBe(2);
+      expect(await countFines(30, [], { q: 'audit-page' })).toBe(0);
+      const first = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active' });
+      const second = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active', offset: 1 });
+      expect(first).toHaveLength(1);
+      expect(second).toHaveLength(1);
+      expect(first[0].fine_id).not.toBe(second[0].fine_id);
+      expect(second[0].revoked).toBe(0);
+    } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-page'`.execute(db); }
+  });
+});
+
+d('shop offer comparisons', () => {
+  it('orders by unit price and selected direction, with consistent stock filtering', async () => {
+    const { listShops, countShops } = await import('@/lib/sql/market');
+    const args = { itemKey: 'audit-offer', material: null, firmId: null, ownerUuid: null, buyable: false, inStock: false, search: null, limit: 10, offset: 0 };
+    try {
+      await sql`INSERT INTO chestshop_shop (world, sign_x, sign_y, sign_z, material, item_key, item_name, buy_price, sell_price, batch_qty, current_stock)
+        VALUES ('audit', 1, 1, 1, 'STONE', 'audit-offer', 'Stone', 16, 8, 64, 64),
+        ('audit', 2, 1, 1, 'STONE', 'audit-offer', 'Stone', 2, 1, 1, 5),
+        ('audit', 3, 1, 1, 'STONE', 'audit-offer', 'Stone', NULL, 3, 1, 0)`.execute(db);
+      const buy = await listShops({ ...args, direction: 'buy' });
+      expect(buy.map(s => s.sign_x)).toEqual([1, 2]);
+      const sell = await listShops({ ...args, direction: 'sell' });
+      expect(sell.map(s => s.sign_x)).toEqual([3, 2, 1]);
+      expect(await countShops({ ...args, direction: 'sell' })).toBe(3);
+      await sql`UPDATE chestshop_shop SET current_stock = 63 WHERE world = 'audit' AND sign_x = 1`.execute(db);
+      expect((await listShops({ ...args, direction: 'buy', inStock: true })).map(s => s.sign_x)).toEqual([2]);
+      expect(await countShops({ ...args, direction: 'buy', inStock: true })).toBe(1);
+    } finally { await sql`DELETE FROM chestshop_shop WHERE world = 'audit'`.execute(db); }
+  });
+});

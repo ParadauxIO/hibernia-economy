@@ -40,6 +40,7 @@ export function Toolbar({ searchPlaceholder, filters, right }: ToolbarProps) {
     <div className="toolbar">
       <input
         type="search"
+        aria-label={searchPlaceholder ?? 'Search results'}
         className="toolbar-search"
         value={input}
         placeholder={searchPlaceholder ?? 'Search…'}
@@ -69,8 +70,10 @@ export function FilterSelect({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const value = params.get(paramKey) ?? '';
-  const [, startTransition] = useTransition();
+  const value = params.get(paramKey) ?? options[0]?.value ?? '';
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  const [pending, startTransition] = useTransition();
 
   function onChange(next: string) {
     const sp = new URLSearchParams(params);
@@ -83,7 +86,7 @@ export function FilterSelect({
   }
 
   return (
-    <select aria-label={ariaLabel} value={value} onChange={(e) => onChange(e.target.value)} className="filter-select">
+    <select disabled={!ready || pending} aria-busy={pending} aria-label={ariaLabel} value={value} onChange={(e) => onChange(e.target.value)} className="filter-select">
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}

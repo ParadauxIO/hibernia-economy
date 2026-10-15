@@ -1,10 +1,9 @@
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
-import { memo } from '@/lib/cache';
+import { getItemCatalogue } from '@/lib/services/market';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
-import { listItems, countItems } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { Toolbar } from '@/components/Toolbar';
 import { Pagination } from '@/components/Pagination';
@@ -17,7 +16,7 @@ import { itemIconUrl } from '@/lib/itemIcon';
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
-  q: z.string().trim().min(1).optional(),
+  q: z.string().trim().optional().transform(v => v || undefined),
 });
 
 export const dynamic = 'force-dynamic';
@@ -26,16 +25,6 @@ export async function generateMetadata() {
   return buildMetadata({ title: "ChestShop", description: "ChestShop market activity on {server} — shops, sales and items.", path: "/chestshop" });
 }
 
-// listItems/countItems both GROUP BY item_key over the whole chestshop_sale
-// table; uncached that's a multi-second full scan on every load. The default
-// (no-search) item list is tenant-global and slow-moving, so cache it for 60s
-// like the rest of the market views. Search queries vary per request and stay
-// uncached (and they're leading-wildcard anyway).
-const getDefaultItems = (limit: number, offset: number) =>
-  memo(`chestshop-items-default:${limit}:${offset}`, 60_000, () =>
-    Promise.all([listItems({ search: null, limit, offset }), countItems(null)]),
-  );
-
 export default async function ChestShopPage({
   searchParams,
 }: {
@@ -43,16 +32,14 @@ export default async function ChestShopPage({
 }) {
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
   const offset = (sp.page - 1) * sp.limit;
-  const [items, total] = sp.q
-    ? await Promise.all([listItems({ search: sp.q, limit: sp.limit, offset }), countItems(sp.q)])
-    : await getDefaultItems(sp.limit, offset);
+  const [items, total] = await getItemCatalogue(sp.q ?? null, sp.limit, offset);
   const totalPages = Math.max(1, Math.ceil(total / sp.limit));
 
   return (
     <>
       <div className="page-heading">
-        <h1>ChestShop items</h1>
-        <span className="sub">{fmtN(total)} distinct items</span>
+        <h1>Browse items</h1>
+        <span className="sub">{fmtN(total)} items · alphabetical by item key</span>
         <SectionTabs />
       </div>
 

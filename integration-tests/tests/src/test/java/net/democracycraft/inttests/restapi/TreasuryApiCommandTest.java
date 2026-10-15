@@ -27,6 +27,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>chat message containing a known fragment from the success/error i18n</li>
  *   <li>{@link ApiTokens} DB helpers ({@code api_keys} row inspection)</li>
  * </ul>
+ *
+ * <p>Every {@code /treasuryapi} command here runs as an ordinary player, with no
+ * op or LuckPerms grants, because that is how players use it. Wrapping them in
+ * {@link Ops#run} hid PAR-336: in 2.1.0 the root node was {@code default: op},
+ * so no non-op could issue a key, yet this suite passed. {@code Ops.run} is only
+ * used to seed firms via {@code /business create}.
  */
 class TreasuryApiCommandTest {
 
@@ -40,17 +46,13 @@ class TreasuryApiCommandTest {
 
     @Test
     void rootShowsPluginInfo() {
-        // treasuryapi.command defaults to `op` — wrap in Ops.run so the
-        // brigadier requires-predicate lets the literal through.
         String me = Usernames.fresh("Tri");
         try (MockPlayer p = MockPlayer.connectLocal(me)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi");
-                String r = p.awaitMessageContaining("TreasuryAPI", TIMEOUT);
-                assertThat(r).contains("API key management");
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi");
+            String r = p.awaitMessageContaining("TreasuryAPI", TIMEOUT);
+            assertThat(r).contains("API key management");
         }
     }
 
@@ -66,12 +68,10 @@ class TreasuryApiCommandTest {
             assertThat(key.revoked()).isFalse();
 
             // List shows at least one entry referencing the key id.
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi personal list");
-                p.awaitMessageContaining("Your Personal API Keys", TIMEOUT);
-                p.awaitMessageContaining("#" + key.keyId(), TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi personal list");
+            p.awaitMessageContaining("Your Personal API Keys", TIMEOUT);
+            p.awaitMessageContaining("#" + key.keyId(), TIMEOUT);
         }
     }
 
@@ -80,11 +80,9 @@ class TreasuryApiCommandTest {
         String me = Usernames.fresh("Tpl");
         try (MockPlayer p = MockPlayer.connectLocal(me)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi personal list");
-                p.awaitMessageContaining("have not issued any personal", TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi personal list");
+            p.awaitMessageContaining("have not issued any personal", TIMEOUT);
         }
     }
 
@@ -108,11 +106,9 @@ class TreasuryApiCommandTest {
         String me = Usernames.fresh("Trn");
         try (MockPlayer p = MockPlayer.connectLocal(me)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi personal reissue 99999999");
-                p.awaitMessageContaining("not found", TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi personal reissue 99999999");
+            p.awaitMessageContaining("not found", TIMEOUT);
         }
     }
 
@@ -126,11 +122,9 @@ class TreasuryApiCommandTest {
             Ledger.waitForPersonalBalance(b.getUuid(), TIMEOUT);
             IssuedKey alicesKey = ApiTokens.issuePersonal(alice, a);
 
-            Ops.run(bob, () -> {
-                b.drainMessages();
-                b.chatCommand("/treasuryapi personal reissue " + alicesKey.keyId());
-                b.awaitMessageContaining("do not own", TIMEOUT);
-            });
+            b.drainMessages();
+            b.chatCommand("/treasuryapi personal reissue " + alicesKey.keyId());
+            b.awaitMessageContaining("do not own", TIMEOUT);
         }
     }
 
@@ -154,11 +148,9 @@ class TreasuryApiCommandTest {
         String me = Usernames.fresh("Tvn");
         try (MockPlayer p = MockPlayer.connectLocal(me)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi personal revoke 99999999");
-                p.awaitMessageContaining("not found", TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi personal revoke 99999999");
+            p.awaitMessageContaining("not found", TIMEOUT);
         }
     }
 
@@ -172,11 +164,9 @@ class TreasuryApiCommandTest {
             Ledger.waitForPersonalBalance(b.getUuid(), TIMEOUT);
             IssuedKey alicesKey = ApiTokens.issuePersonal(alice, a);
 
-            Ops.run(bob, () -> {
-                b.drainMessages();
-                b.chatCommand("/treasuryapi personal revoke " + alicesKey.keyId());
-                b.awaitMessageContaining("do not own", TIMEOUT);
-            });
+            b.drainMessages();
+            b.chatCommand("/treasuryapi personal revoke " + alicesKey.keyId());
+            b.awaitMessageContaining("do not own", TIMEOUT);
 
             // Alice's key must remain un-revoked.
             IssuedKey reread = ApiTokens.waitForKeyById(alicesKey.keyId(), TIMEOUT);
@@ -188,6 +178,7 @@ class TreasuryApiCommandTest {
 
     @Test
     void businessIssueCreatesAndListsKey() {
+        // PAR-336: a proprietor without op issues a key for their own firm.
         String owner = Usernames.fresh("Tbi");
         String firm = freshFirmName("TbiF");
         try (MockPlayer p = MockPlayer.connectLocal(owner)) {
@@ -201,12 +192,10 @@ class TreasuryApiCommandTest {
             IssuedKey key = ApiTokens.issueBusiness(owner, p, firm);
             assertThat(key.firmId()).isNotNull();
 
-            Ops.run(owner, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi business list");
-                p.awaitMessageContaining("Your Business API Keys", TIMEOUT);
-                p.awaitMessageContaining("#" + key.keyId(), TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi business list");
+            p.awaitMessageContaining("Your Business API Keys", TIMEOUT);
+            p.awaitMessageContaining("#" + key.keyId(), TIMEOUT);
         }
     }
 
@@ -215,11 +204,9 @@ class TreasuryApiCommandTest {
         String me = Usernames.fresh("Tbu");
         try (MockPlayer p = MockPlayer.connectLocal(me)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi business issue NoSuchFirmEver");
-                p.awaitMessageContaining("Firm not found", TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi business issue NoSuchFirmEver");
+            p.awaitMessageContaining("Firm not found", TIMEOUT);
         }
     }
 
@@ -239,11 +226,9 @@ class TreasuryApiCommandTest {
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
             });
 
-            Ops.run(stranger, () -> {
-                s.drainMessages();
-                s.chatCommand("/treasuryapi business issue " + firm);
-                s.awaitMessageContaining("Only the proprietor", TIMEOUT);
-            });
+            s.drainMessages();
+            s.chatCommand("/treasuryapi business issue " + firm);
+            s.awaitMessageContaining("Only the proprietor", TIMEOUT);
         }
     }
 
@@ -252,11 +237,9 @@ class TreasuryApiCommandTest {
         String me = Usernames.fresh("Tbe");
         try (MockPlayer p = MockPlayer.connectLocal(me)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi business list");
-                p.awaitMessageContaining("have not issued any business", TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi business list");
+            p.awaitMessageContaining("have not issued any business", TIMEOUT);
         }
     }
 
@@ -265,11 +248,9 @@ class TreasuryApiCommandTest {
         String me = Usernames.fresh("Tba");
         try (MockPlayer p = MockPlayer.connectLocal(me)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ops.run(me, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi business list access");
-                p.awaitMessageContaining("No business API keys", TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi business list access");
+            p.awaitMessageContaining("No business API keys", TIMEOUT);
         }
     }
 
@@ -304,11 +285,9 @@ class TreasuryApiCommandTest {
             });
             IssuedKey key = ApiTokens.issueBusiness(owner, p, firm);
 
-            Ops.run(owner, () -> {
-                p.drainMessages();
-                p.chatCommand("/treasuryapi business revoke " + key.keyId());
-                p.awaitMessageContaining("revoked", TIMEOUT);
-            });
+            p.drainMessages();
+            p.chatCommand("/treasuryapi business revoke " + key.keyId());
+            p.awaitMessageContaining("revoked", TIMEOUT);
 
             IssuedKey reread = ApiTokens.waitForKeyById(key.keyId(), TIMEOUT);
             assertThat(reread.revoked()).isTrue();
@@ -332,13 +311,11 @@ class TreasuryApiCommandTest {
             });
             IssuedKey ownersKey = ApiTokens.issueBusiness(owner, o, firm);
 
-            Ops.run(stranger, () -> {
-                s.drainMessages();
-                s.chatCommand("/treasuryapi business reissue " + ownersKey.keyId());
-                // A business key belongs to the firm, not to whoever issued it: only a
-                // current proprietor may manage it.
-                s.awaitMessageContaining("not a proprietor", TIMEOUT);
-            });
+            s.drainMessages();
+            s.chatCommand("/treasuryapi business reissue " + ownersKey.keyId());
+            // A business key belongs to the firm, not to whoever issued it: only a
+            // current proprietor may manage it.
+            s.awaitMessageContaining("not a proprietor", TIMEOUT);
         }
     }
 }

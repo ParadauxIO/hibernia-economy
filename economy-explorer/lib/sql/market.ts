@@ -123,8 +123,8 @@ export async function sumVolume(): Promise<string> {
   const r = await sql<{ v: string }>`SELECT COALESCE(SUM(total_price),0.00) AS v FROM chestshop_sale`.execute(db);
   return r.rows[0]?.v ?? '0.00';
 }
-export async function countDistinctItems(): Promise<number> {
-  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale`.execute(db);
+export async function countDistinctItems(days?: number): Promise<number> {
+  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${days == null ? sql`` : sql`WHERE occurred_at >= NOW() - INTERVAL ${days} DAY`}`.execute(db);
   return Number(r.rows[0]?.c ?? 0);
 }
 
@@ -159,27 +159,42 @@ export async function topItems(days: number, limit: number): Promise<MarketItemR
   return r.rows.map(toMarketItemRow);
 }
 
+/** Search one representative metadata row per key, rather than every trade.
+ * idx_cs_item supplies distinct keys and the latest observation for each key.
+ * This bounds name/material matching to the catalogue size, not sale history. */
+function catalogueKeys(search: string | null) {
+  if (!search) return sql`SELECT DISTINCT item_key FROM chestshop_sale`;
+  return sql`
+    SELECT keys_by_item.item_key
+    FROM (SELECT DISTINCT item_key FROM chestshop_sale) keys_by_item
+    JOIN chestshop_sale sample ON sample.sale_id = (
+      SELECT recent.sale_id FROM chestshop_sale recent
+      WHERE recent.item_key = keys_by_item.item_key
+      ORDER BY recent.occurred_at DESC, recent.sale_id DESC LIMIT 1
+    )
+    WHERE sample.item_name LIKE ${'%' + search + '%'}
+       OR sample.material LIKE ${'%' + search + '%'}
+       OR keys_by_item.item_key LIKE ${'%' + search + '%'}
+  `;
+}
+
 export async function listItems(args: { search: string | null; limit: number; offset: number }): Promise<MarketItemRow[]> {
-  const where = args.search
-    ? sql`WHERE (item_name LIKE CONCAT('%', ${args.search}, '%') OR material LIKE CONCAT('%', ${args.search}, '%') OR item_key LIKE CONCAT('%', ${args.search}, '%'))`
-    : sql``;
   const r = await sql<RawMarketItem>`
-    SELECT item_key, MAX(material) AS material, MAX(item_name) AS item_name,
-           MAX(item_custom) AS item_custom, COUNT(*) AS trade_count,
-           COALESCE(SUM(quantity),0) AS total_quantity, COALESCE(SUM(total_price),0.00) AS total_volume
-    FROM chestshop_sale
-    ${where}
-    GROUP BY item_key ORDER BY trade_count DESC, item_name ASC
-    LIMIT ${args.limit} OFFSET ${args.offset}
+    SELECT cs.item_key, MAX(cs.material) AS material, MAX(cs.item_name) AS item_name,
+           MAX(cs.item_custom) AS item_custom, COUNT(*) AS trade_count,
+           COALESCE(SUM(cs.quantity),0) AS total_quantity,
+           COALESCE(SUM(cs.total_price),0.00) AS total_volume
+    FROM (
+      ${catalogueKeys(args.search)} ORDER BY item_key LIMIT ${args.limit} OFFSET ${args.offset}
+    ) page
+    JOIN chestshop_sale cs ON cs.item_key = page.item_key
+    GROUP BY cs.item_key ORDER BY cs.item_key
   `.execute(db);
   return r.rows.map(toMarketItemRow);
 }
 
 export async function countItems(search: string | null): Promise<number> {
-  const where = search
-    ? sql`WHERE (item_name LIKE CONCAT('%', ${search}, '%') OR material LIKE CONCAT('%', ${search}, '%') OR item_key LIKE CONCAT('%', ${search}, '%'))`
-    : sql``;
-  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${where}`.execute(db);
+  const r = await sql<{ c: string | number }>`SELECT COUNT(*) AS c FROM (${catalogueKeys(search)}) catalogue`.execute(db);
   return Number(r.rows[0]?.c ?? 0);
 }
 
@@ -603,6 +618,7 @@ export async function listShops(args: {
   firmId: number | null;
   ownerUuid: string | null;
   buyable: boolean;
+  direction?: 'buy' | 'sell';
   inStock: boolean;
   search: string | null;
   limit: number;
@@ -613,8 +629,9 @@ export async function listShops(args: {
   if (args.material) conds.push(sql`s.material = ${args.material}`);
   if (args.firmId !== null) conds.push(sql`s.shop_firm_id = ${args.firmId}`);
   if (args.ownerUuid) conds.push(sql`s.shop_owner_uuid_bin = ${uuidToBin(args.ownerUuid)}`);
-  if (args.buyable) conds.push(sql`s.buy_price IS NOT NULL`);
-  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock > 0)`);
+  if (args.direction === 'sell') conds.push(sql`s.sell_price IS NOT NULL`);
+  else if (args.buyable || args.direction === 'buy') conds.push(sql`s.buy_price IS NOT NULL`);
+  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock >= GREATEST(s.batch_qty, 1))`);
   if (args.search) {
     conds.push(sql`(s.item_name LIKE CONCAT('%', ${args.search}, '%') OR s.material LIKE CONCAT('%', ${args.search}, '%'))`);
   }
@@ -631,8 +648,10 @@ export async function listShops(args: {
     LEFT JOIN accounts a ON a.account_id = s.shop_account_id
     LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
     ${where}
-    ORDER BY (s.current_stock IS NOT NULL AND s.current_stock = 0), (s.buy_price IS NULL),
-      s.buy_price ASC, s.last_seen DESC
+    ORDER BY ${args.direction === 'sell'
+      ? sql`(s.sell_price / GREATEST(s.batch_qty, 1)) DESC`
+      : sql`(s.current_stock IS NOT NULL AND s.current_stock < GREATEST(s.batch_qty, 1) AND s.is_admin_shop = 0), (s.buy_price IS NULL), (s.buy_price / GREATEST(s.batch_qty, 1)) ASC`},
+      s.last_seen DESC, s.shop_id ASC
     LIMIT ${args.limit} OFFSET ${args.offset}
   `.execute(db);
   return r.rows.map(toShopRow);
@@ -644,6 +663,7 @@ export async function countShops(args: {
   firmId: number | null;
   ownerUuid: string | null;
   buyable: boolean;
+  direction?: 'buy' | 'sell';
   inStock: boolean;
   search: string | null;
 }): Promise<number> {
@@ -652,8 +672,9 @@ export async function countShops(args: {
   if (args.material) conds.push(sql`s.material = ${args.material}`);
   if (args.firmId !== null) conds.push(sql`s.shop_firm_id = ${args.firmId}`);
   if (args.ownerUuid) conds.push(sql`s.shop_owner_uuid_bin = ${uuidToBin(args.ownerUuid)}`);
-  if (args.buyable) conds.push(sql`s.buy_price IS NOT NULL`);
-  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock > 0)`);
+  if (args.direction === 'sell') conds.push(sql`s.sell_price IS NOT NULL`);
+  else if (args.buyable || args.direction === 'buy') conds.push(sql`s.buy_price IS NOT NULL`);
+  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock >= GREATEST(s.batch_qty, 1))`);
   if (args.search) {
     conds.push(sql`(s.item_name LIKE CONCAT('%', ${args.search}, '%') OR s.material LIKE CONCAT('%', ${args.search}, '%'))`);
   }

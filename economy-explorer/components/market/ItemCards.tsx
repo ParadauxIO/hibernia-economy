@@ -3,7 +3,6 @@
 // material, a price sparkline, current avg price with up/down movement, and
 // trade/volume stats. Client-side filter for instant search over the set.
 
-import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { MiniSpark } from '@/components/charts/MiniSpark';
@@ -24,39 +23,18 @@ export interface ItemCard {
 }
 
 export function ItemCards({ items, days }: { items: ItemCard[]; days: number }) {
-  const [q, setQ] = useState('');
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return items;
-    return items.filter(
-      (i) =>
-        (i.item_name ?? '').toLowerCase().includes(term) ||
-        (i.material ?? '').toLowerCase().includes(term) ||
-        i.item_key.toLowerCase().includes(term),
-    );
-  }, [items, q]);
-
   return (
     <div className="card">
       <div className="card-title">
         Top traded items
         <span className="sub">price trend · last {days} days</span>
-        <input
-          className="toolbar-search"
-          style={{ marginLeft: 'auto', maxWidth: 240, flex: '0 1 240px' }}
-          type="search"
-          placeholder="Filter items…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label="Filter items"
-        />
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="state-empty" style={{ padding: 24 }}>No items match &ldquo;{q}&rdquo;.</div>
+      {items.length === 0 ? (
+        <div className="state-empty" style={{ padding: 24 }}>No trades in this window. Browse the full catalogue or try another period.</div>
       ) : (
         <div className="item-card-grid">
-          {filtered.map((i) => {
+          {items.map((i) => {
             const dir =
               i.price_change_pct == null ? 'flat' : i.price_change_pct > 0.001 ? 'up' : i.price_change_pct < -0.001 ? 'down' : 'flat';
             const stroke = dir === 'up' ? 'var(--good)' : dir === 'down' ? 'var(--bad)' : 'var(--accent)';
@@ -72,7 +50,7 @@ export function ItemCards({ items, days }: { items: ItemCard[]; days: number }) 
                   <ItemIcon icon={i.icon} name={label} />
                   <div className="item-card-titles">
                     <span className="item-card-name">{label}</span>
-                    {i.material && <span className="item-card-mat mono">{i.material.toLowerCase()}</span>}
+
                   </div>
                 </div>
                 <div className="item-card-spark">
@@ -80,7 +58,7 @@ export function ItemCards({ items, days }: { items: ItemCard[]; days: number }) 
                 </div>
                 <div className="item-card-stats">
                   <div className="item-card-price">
-                    <span className="item-card-price-val">{i.current_price != null ? fmtAmtFull(i.current_price) : '—'}</span>
+                    <span className="item-card-price-val">{i.current_price != null ? fmtAmtFull(i.current_price) : '—'}</span><span className="muted small"> / item</span>
                     {i.price_change_pct != null && (
                       <span className={`kpi-delta ${dir}`}>
                         {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '→'} {fmtPct(Math.abs(i.price_change_pct))}
