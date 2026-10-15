@@ -114,7 +114,7 @@ public class FirmServiceImpl implements FirmService {
 
         // Validation checks, name uniqueness / ownership limit
         if (firms.getFirmsByNameCount(name) > 0) {
-            // Only active firms reserve a name; archived firms retain it for history.
+            // Archived firms reserve their names until an administrator explicitly releases them.
             throw new ExceedsLimitException(
                     "The name '" + name + "' is already taken");
         }
@@ -223,6 +223,21 @@ public class FirmServiceImpl implements FirmService {
         }
         requireNotFullyDisbanded(firm, firmName);
         return disbandInternal(firm);
+    }
+
+    @Override
+    public Firm adminReleaseFirmName(int firmId) {
+        Firm firm = getAnyFirmById(firmId);
+        if (firm == null) {
+            throw new BadCommandException("Firm not found: " + firmId);
+        }
+        if (!Boolean.TRUE.equals(firm.getArchived())) {
+            throw new BadCommandException("Only disbanded firms can have their names released.");
+        }
+        if (firms.releaseFirmName(firmId) == 0) {
+            throw new BadCommandException("Firm name is already released or the firm is no longer disbanded: " + firmId);
+        }
+        return firm;
     }
 
     @Override

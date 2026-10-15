@@ -55,6 +55,14 @@ public interface FirmMapper {
             """)
     int archiveFirm(@Param("firmId") int firmId);
 
+    /** Releases only an archived firm's reservation; active firms cannot be released. */
+    @Update("""
+            UPDATE firm
+            SET name_released = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE firm_id = #{firmId} AND is_archived = 1 AND name_released = 0
+            """)
+    int releaseFirmName(@Param("firmId") int firmId);
+
     @Select("""
             SELECT f.firm_id                     AS firmId,
                    f.display_name                AS displayName,
@@ -128,7 +136,7 @@ public interface FirmMapper {
             SELECT COUNT(1)
             FROM firm
             WHERE display_name = #{name}
-              AND is_archived = 0
+              AND (is_archived = 0 OR name_released = 0)
             """)
     int getFirmsByNameCount(@Param("name") String name);
 
@@ -172,7 +180,7 @@ public interface FirmMapper {
                      updated_at                      AS updatedAt
                 FROM firm
                WHERE display_name = #{name}
-               ORDER BY is_archived ASC, firm_id DESC
+               ORDER BY is_archived ASC, name_released ASC, firm_id DESC
                LIMIT 1
             """)
     Firm getFirmByName(@Param("name") String name);

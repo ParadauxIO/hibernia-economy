@@ -59,6 +59,7 @@ moderation — see [Permission nodes](#permission-nodes).
 | Command | What it does |
 |---|---|
 | `/business admin disband <firm>` | Force-disband a firm (no owner confirmation). |
+| `/business admin releasename <firmId>` | Release a disbanded firm's reserved name for reuse; preserves its history. Requires the numeric ID. |
 | `/business admin rename <firm> <newname>` | Rename a firm. |
 | `/business admin set hq <firm> <plot>` | Set any firm's HQ plot. |
 | `/business admin set discord <firm> <url>` | Set any firm's Discord invite. |
@@ -285,6 +286,7 @@ in-firm role.
 | `/business sales toggle` | `business.sales.toggle` | owner / `ADMIN` |
 | `/business chat` | `business.chat` | firm member |
 | `/business admin disband` | `business.admin.disband` | — (operator, bypasses firm roles) |
+| `/business admin releasename` | `business.admin.releasename` | — (operator; disbanded firms only) |
 | `/business admin rename` | `business.admin.rename` | — (operator, bypasses firm roles) |
 | `/business admin set hq` · `set discord` | `business.admin.attribute` | — (operator, bypasses firm roles) |
 | `/business admin set proprietor` | `business.admin.proprietor` | — (operator, bypasses firm roles) |

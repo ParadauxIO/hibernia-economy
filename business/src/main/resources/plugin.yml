@@ -16,6 +16,9 @@ permissions:
     business.admin.disband:
         description: Force-disband any firm (staff/DOC override).
         default: op
+    business.admin.releasename:
+        description: Release a disbanded firm's name for reuse.
+        default: op
     business.admin.rename:
         description: Rename any firm (staff/DOC override).
         default: op

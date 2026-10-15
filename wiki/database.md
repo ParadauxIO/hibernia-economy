@@ -16,11 +16,17 @@ API, the explorer — points at the same MariaDB and agrees on that schema.
 
 ## Firm names
 
-V32 reserves names only for active firms using the nullable generated
-`active_display_name` column and its unique index. Archived rows retain their
-original `display_name`; no backfill or history rewrite is needed. Name lookups
-prefer the active firm, then the most recently created archived firm. Numeric IDs
-remain the unambiguous way to access older firms and resume a disband.
+V32 adds `name_released` (default false) and a generated `reserved_display_name`
+with a unique index. Both active and archived firms reserve their names until an
+administrator runs `/business admin releasename <firmId>`. The atomic update only
+releases archived firms. The generated value becomes NULL only when a firm is both
+archived and explicitly released; active names are always protected by the index.
+Existing archived firms stay reserved when the migration runs.
+
+Archived rows retain their original `display_name`. Name lookups prefer the active
+firm, then an unreleased archived firm, then the most recently created released
+firm. Numeric IDs remain the unambiguous way to access older firms and resume a
+disband. Release changes no account links, balances or ownership.
 
 Deploy V32 together with the Business plugin, REST API and Explorer changes:
 older application versions assume names identify a single row even across archives.

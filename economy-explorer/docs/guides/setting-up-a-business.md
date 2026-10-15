@@ -218,11 +218,15 @@ Selling or passing on the business? Ownership transfers in a confirmed handshake
 
 ## Reusing a disbanded firm's name
 
-Disbanding a firm releases its name for a new firm or a rename. Active firm names
-remain unique, including differences in letter case. The disbanded firm keeps its
-name and history; reusing the name does not transfer its accounts, staff, or ownership.
-Name lookups prefer the active firm. Use the old firm's numeric ID to refer to its
-history or resume an incomplete disband after its name has been reused.
+Disbanding a firm keeps its name reserved. An administrator can explicitly release
+it with `/business admin releasename <firmId>`, using the disbanded firm's numeric
+ID from `/business info <firm>`. Only then can a new firm or rename reuse the name.
+Active firms cannot have their names released. Names remain case-insensitively unique
+among active firms and disbanded firms whose names have not been released.
+
+The old firm keeps its name and history; reuse does not transfer its accounts,
+staff, or ownership. Name lookups prefer the active firm. Use the old firm's
+numeric ID to refer to its history or resume an incomplete disband after reuse.
 
 ## What's next
 

@@ -74,7 +74,7 @@ export async function findFirmByDisplayName(displayName: string): Promise<FirmRo
     FROM firm
     LEFT JOIN economy_players pp ON pp.player_uuid_bin = firm.proprietor_uuid_bin
     WHERE firm.display_name = ${displayName}
-    ORDER BY firm.is_archived ASC, firm.firm_id DESC
+    ORDER BY firm.is_archived ASC, firm.name_released ASC, firm.firm_id DESC
     LIMIT 1
   `.execute(db);
   const row = r.rows[0];

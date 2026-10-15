@@ -629,10 +629,10 @@ d('shop offer comparisons', () => {
 
 d('reused firm names', () => {
   it('prefers the active firm and keeps archived history addressable', async () => {
-    await sql`INSERT INTO firm (firm_id, display_name, proprietor_uuid_bin, is_archived)
-      VALUES (901, 'ReusedName', ${uuidToBin(ALICE)}, 1),
-             (902, 'REUSEDNAME', ${uuidToBin(BOB)}, 1),
-             (903, 'ReusedName', ${uuidToBin(CAROL)}, 0)`.execute(db);
+    await sql`INSERT INTO firm (firm_id, display_name, proprietor_uuid_bin, is_archived, name_released)
+      VALUES (901, 'ReusedName', ${uuidToBin(ALICE)}, 1, 1),
+             (902, 'REUSEDNAME', ${uuidToBin(BOB)}, 1, 1),
+             (903, 'ReusedName', ${uuidToBin(CAROL)}, 0, 0)`.execute(db);
     try {
       expect((await findFirmByDisplayName('reusedname'))?.firm_id).toBe(903);
       await sql`UPDATE firm SET is_archived = 1 WHERE firm_id = 903`.execute(db);
