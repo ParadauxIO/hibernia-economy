@@ -48,6 +48,14 @@ class BusinessApiImplTest {
         api = new BusinessApiImpl(firmService, staffService, roleService, requestService, playerService, accountService, transactionService);
     }
 
+    @Test
+    void firms_shopAliasResolvesThroughAccountService() {
+        when(accountService.resolveShopAlias("acme")).thenReturn(46);
+        when(accountService.resolveShopAlias("unknown")).thenReturn(null);
+        assertThat(api.firms().resolveShopAlias("acme")).isEqualTo(46);
+        assertThat(api.firms().resolveShopAlias("unknown")).isNull();
+    }
+
     // ---- FirmApi delegate ----
 
     @Test

@@ -137,6 +137,8 @@ spend from it.
 
 | Command | What it does |
 |---|---|
+| `/business account alias <firm> <accountId> <alias>` | Set a unique, letters-only shop alias for an account (proprietor only). Use `B:@alias` when creating a shop. |
+| `/business account clearalias <firm> <accountId>` | Clear an account’s shop alias (proprietor only); signs using that alias stop working until updated. |
 | `/business account list <firm>` | List the firm's accounts with IDs and shop codes. |
 | `/business account create <firm> <name>` | Open a new account. |
 | `/business account setdefault <firm> <accountId>` | Choose which account the short money commands use. |

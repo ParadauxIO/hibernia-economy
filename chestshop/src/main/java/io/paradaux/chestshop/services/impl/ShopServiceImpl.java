@@ -432,8 +432,7 @@ public class ShopServiceImpl implements ShopService {
             return;
         }
         ctx.setOwnerAccount(account);
-        int accountId = SignService.getBusinessAccountId(account.getShortName());
-        ctx.setSignLine(SignService.NAME_LINE, SignService.businessAccountSignName(accountId));
+        ctx.setSignLine(SignService.NAME_LINE, account.getShortName());
     }
 
     private void failName(ShopCreation ctx) {

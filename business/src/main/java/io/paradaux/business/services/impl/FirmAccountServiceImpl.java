@@ -71,6 +71,61 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         this.firmService = firmService;
     }
 
+    @Override
+    public Integer resolveShopAlias(String alias) {
+        if (alias == null || !alias.matches("[A-Za-z]{1,12}")) return null;
+        Integer accountId = firmAccounts.resolveShopAlias(alias);
+        if (accountId == null) return null;
+        Account account = treasury.getAccountById(accountId);
+        return account == null || account.isArchived() ? null : accountId;
+    }
+
+    @Override
+    public String getShopAlias(int firmId, int accountId) {
+        return firmAccounts.getShopAlias(firmId, accountId);
+    }
+
+    @Transactional
+    @Override
+    public void setShopAlias(int firmId, int accountId, String alias, UUID actorId) {
+        if (alias != null && !alias.matches("[A-Za-z]{1,12}")) {
+            throw new BadCommandException("Shop aliases must be 1–12 alphabetic characters (A–Z) only.");
+        }
+        Firm firm = firms.getFirmById(firmId);
+        if (firm == null || Boolean.TRUE.equals(firm.getArchived())) {
+            throw new BadCommandException("Firm not found");
+        }
+        if (!firmService.isProprietor(firmId, actorId)) {
+            throw new NoPermissionException("Only the proprietor can manage shop aliases");
+        }
+        if (!firmAccounts.isFirmAccount(firmId, accountId)) {
+            throw new BadCommandException("This account does not belong to the firm");
+        }
+        Account account = treasury.getAccountById(accountId);
+        if (account == null || account.isArchived()) {
+            throw new BadCommandException("Account not found or archived");
+        }
+        try {
+            if (alias != null) {
+                // Never let an old sign resolve to another account after an alias is reused.
+                firmAccounts.reserveShopAlias(alias, accountId);
+                if (!Integer.valueOf(accountId).equals(firmAccounts.getShopAliasReservation(alias))) {
+                    throw new BadCommandException("That shop alias is already reserved by another account");
+                }
+            }
+            if (firmAccounts.setShopAlias(firmId, accountId, alias) == 0) {
+                throw new BadCommandException("Firm account is no longer active");
+            }
+        } catch (org.apache.ibatis.exceptions.PersistenceException e) {
+            for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+                if (cause instanceof java.sql.SQLException sql && sql.getErrorCode() == 1062) {
+                    throw new BadCommandException("That shop alias is already reserved by another account");
+                }
+            }
+            throw e;
+        }
+    }
+
     @Transactional
     @Override
     public Account createAccount(Integer firmId, String accountName, UUID actorId) {

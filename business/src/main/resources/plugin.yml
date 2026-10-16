@@ -159,6 +159,9 @@ permissions:
     business.transfer.reject:
         description: Reject a firm ownership transfer.
         default: true
+    business.account.alias:
+        description: Set or clear shop aliases (proprietor only).
+        default: true
     business.account.create:
         description: Create a Treasury account for your firm.
         default: true

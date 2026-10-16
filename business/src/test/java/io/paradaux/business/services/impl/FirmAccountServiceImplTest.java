@@ -487,4 +487,94 @@ class FirmAccountServiceImplTest {
         when(firmAccounts.getFirmIdByAccountId(99)).thenReturn(7);
         assertThat(svc.getFirmIdByAccountId(99)).isEqualTo(7);
     }
+
+    @Test
+    void shopAlias_setAndClearRequireLiveOwnedAccount() {
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
+        when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(firmAccounts.getShopAliasReservation("AcmeShop")).thenReturn(7);
+        when(firmAccounts.setShopAlias(1, 7, "AcmeShop")).thenReturn(1);
+        when(firmAccounts.setShopAlias(1, 7, null)).thenReturn(1);
+        svc.setShopAlias(1, 7, "AcmeShop", actor);
+        svc.setShopAlias(1, 7, null, actor);
+        verify(firmAccounts).setShopAlias(1, 7, "AcmeShop");
+        verify(firmAccounts).setShopAlias(1, 7, null);
+    }
+
+    @Test
+    void shopAlias_rejectsInvalidNames() {
+        for (String alias : List.of("", "123", "acme1", "ac1me", "acme-shop", "acme_shop", "1acme", "My Shop", "@acme", "abcdefghijklm", "<red>")) {
+            assertThatThrownBy(() -> svc.setShopAlias(1, 7, alias, actor))
+                    .isInstanceOf(BadCommandException.class);
+            assertThat(svc.resolveShopAlias(alias)).isNull();
+        }
+        assertThat(svc.resolveShopAlias(null)).isNull();
+        org.mockito.Mockito.verifyNoInteractions(firmAccounts, firms, treasury);
+    }
+
+    @Test
+    void shopAlias_rejectsNonOwnerAndForeignAccount() {
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
+                .isInstanceOf(NoPermissionException.class);
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
+                .isInstanceOf(BadCommandException.class);
+        verify(firmAccounts, never()).setShopAlias(anyInt(), anyInt(), any());
+    }
+
+    @Test
+    void shopAlias_missingOrArchivedFirmCannotManage() {
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
+                .isInstanceOf(BadCommandException.class);
+        Firm archived = firm(1);
+        archived.setArchived(true);
+        when(firms.getFirmById(1)).thenReturn(archived);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, null, actor))
+                .isInstanceOf(BadCommandException.class);
+    }
+
+    @Test
+    void shopAlias_resolvesOnlyLiveTreasuryAccounts() {
+        when(firmAccounts.resolveShopAlias("unknown")).thenReturn(null);
+        assertThat(svc.resolveShopAlias("unknown")).isNull();
+        when(firmAccounts.resolveShopAlias("Acme")).thenReturn(7);
+        assertThat(svc.resolveShopAlias("Acme")).isNull();
+        Account account = new Account();
+        when(treasury.getAccountById(7)).thenReturn(account);
+        assertThat(svc.resolveShopAlias("Acme")).isEqualTo(7);
+        account.setArchived(true);
+        assertThat(svc.resolveShopAlias("Acme")).isNull();
+    }
+
+    @Test
+    void shopAlias_reportsDuplicateButPropagatesOtherDatabaseFailures() {
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
+        when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(firmAccounts.getShopAliasReservation("acme")).thenReturn(7);
+        when(firmAccounts.setShopAlias(1, 7, "acme")).thenThrow(
+                new org.apache.ibatis.exceptions.PersistenceException(new java.sql.SQLException("duplicate", "23000", 1062)));
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("reserved");
+        org.mockito.Mockito.doThrow(new org.apache.ibatis.exceptions.PersistenceException("offline"))
+                .when(firmAccounts).setShopAlias(1, 7, "acme");
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
+                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
+    }
+    @Test
+    void shopAlias_cannotReassignPreviouslyUsedName() {
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
+        when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(firmAccounts.getShopAliasReservation("acme")).thenReturn(99);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("reserved");
+        verify(firmAccounts, never()).setShopAlias(anyInt(), anyInt(), any());
+    }
+
 }

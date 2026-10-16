@@ -52,6 +52,18 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
             int accountId = -1;
             io.paradaux.treasury.model.economy.Account treasuryAccount = null;
 
+            // Explicit alias namespace cannot collide with base-36 ids or legacy names.
+            if (token.startsWith("@")) {
+                if (businessApi == null || !token.substring(1).matches("[A-Za-z]{1,12}")) return null;
+                Integer resolved = businessApi.firms().resolveShopAlias(token.substring(1));
+                if (resolved == null) return null;
+                treasuryAccount = treasury.getAccountById(resolved);
+                if (treasuryAccount == null || treasuryAccount.isArchived()) return null;
+                return new Account(treasuryAccount.getDisplayName(),
+                        "B:" + token,
+                        BusinessAccountUtil.toBusinessUuid(resolved));
+            }
+
             // Native form: the suffix is a base-36 Treasury account id (e.g. B:1A).
             try {
                 accountId = Integer.parseInt(token, 36);

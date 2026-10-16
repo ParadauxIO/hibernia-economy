@@ -20,7 +20,7 @@ public interface BusinessAccountService {
     void bind(TreasuryApi treasury, @Nullable BusinessApi businessApi);
 
     /**
-     * Resolve a business-account sign name ({@code B:<base36 id>}, or a legacy
+     * Resolve a business-account sign name ({@code B:<base36 id>}, {@code B:@alias}, or a legacy
      * PlayerBusinesses firm name) to a ChestShop {@link Account}, or {@code null}.
      */
     Account resolveBusinessAccount(String name);

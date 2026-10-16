@@ -66,6 +66,11 @@ public class BusinessApiImpl implements BusinessApi {
                                    FirmTransactionService transactions) implements FirmApi {
 
         @Override
+        public Integer resolveShopAlias(String alias) {
+            return accounts.resolveShopAlias(alias);
+        }
+
+        @Override
         public Firm getFirm(String nameOrId) {
             // Reads include archived firms so API consumers can still display defunct firms.
             return service.getAnyFirmByNameOrId(nameOrId);

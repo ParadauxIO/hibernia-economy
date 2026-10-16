@@ -223,4 +223,39 @@ class BusinessAccountServiceImplTest {
 
         assertThat(service.canAccessBusinessAccount(player(UUID.randomUUID()), businessAccount(5))).isFalse();
     }
+
+    @Test
+    void resolve_aliasKeepsVisibleNameAndStableAccountIdentity() {
+        service.bind(treasury, business);
+        when(firms.resolveShopAlias("acme")).thenReturn(46);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "Acme"));
+        Account result = service.resolveBusinessAccount("b:@acme");
+        assertThat(result.getShortName()).isEqualTo("B:@acme");
+        assertThat(result.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+        when(firms.resolveShopAlias("missing")).thenReturn(null);
+        assertThat(service.resolveBusinessAccount("B:@missing")).isNull();
+        org.mockito.Mockito.verify(firms, org.mockito.Mockito.never()).getFirm(any());
+    }
+
+    @Test
+    void resolve_aliasRequiresBusinessAndLiveAccount() {
+        service.bind(treasury, null);
+        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        service.bind(treasury, business);
+        when(firms.resolveShopAlias("acme")).thenReturn(46);
+        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        var account = treasuryAccount(46, "Acme");
+        account.setArchived(true);
+        when(treasury.getAccountById(46)).thenReturn(account);
+        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+    }
+    @Test
+    void resolve_aliasRejectsDigitsAndPunctuationBeforeLookup() {
+        service.bind(treasury, business);
+        for (String alias : java.util.List.of("123", "acme1", "ac1me", "1acme", "acme-shop", "acme_shop", "")) {
+            assertThat(service.resolveBusinessAccount("B:@" + alias)).isNull();
+        }
+        org.mockito.Mockito.verifyNoInteractions(firms, treasury);
+    }
+
 }

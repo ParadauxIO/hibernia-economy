@@ -1018,4 +1018,13 @@ class EconomyServiceImplTest extends ServerTest {
         assertThat(charged).isEqualByComparingTo("0.25");
         verify(taxApi).collectRateTax(eq(7), any(), any(), anyString(), anyString(), eq(receiver), anyString(), any());
     }
+    @Test
+    void migrate_keepsAliasVisibleAfterTrade() {
+        Sign sign = placeSign("B:@Acme", "Y");
+        Transaction trade = mock(Transaction.class);
+        when(trade.getSign()).thenReturn(sign);
+        when(trade.getOwnerAccount()).thenReturn(businessOwner("B:@Acme"));
+        service.migrateLegacyBusinessSign(trade);
+        assertThat(SignService.getOwner((Sign) sign.getBlock().getState())).isEqualTo("B:@Acme");
+    }
 }
