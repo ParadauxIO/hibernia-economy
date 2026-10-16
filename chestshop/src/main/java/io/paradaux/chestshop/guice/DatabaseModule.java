@@ -3,6 +3,7 @@ package io.paradaux.chestshop.guice;
 import com.google.inject.AbstractModule;
 import io.paradaux.chestshop.mappers.AccountMapper;
 import io.paradaux.chestshop.mappers.ItemCodeMapper;
+import io.paradaux.chestshop.mappers.TradeRecoveryMapper;
 import io.paradaux.chestshop.mappers.typehandlers.DateLongTypeHandler;
 import io.paradaux.chestshop.mappers.typehandlers.UuidStringTypeHandler;
 import org.apache.ibatis.datasource.pooled.PooledDataSource;
@@ -45,6 +46,9 @@ public class DatabaseModule extends AbstractModule {
         PooledDataSource itemsPool = pool(itemsDatabase);
 
         AccountMapper accounts = mapper(usersPool, AccountMapper.class);
+        TradeRecoveryMapper recovery = mapper(usersPool, TradeRecoveryMapper.class);
+        recovery.createTable();
+        bind(TradeRecoveryMapper.class).toInstance(recovery);
         ItemCodeMapper items = mapper(itemsPool, ItemCodeMapper.class);
 
         // Schema lives on the mappers now: required tables/indexes, then best-effort top-ups

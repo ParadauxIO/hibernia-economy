@@ -224,3 +224,13 @@ seeded or started in that mode. CI runs both suites in **Economy Explorer · CI*
 4. For new plugins that shade, add `tasks.jar { enabled = false }` — with Shadow 9
    both `:jar` and `:shadowJar` target `build/libs/<name>.jar` and `:jar` would
    otherwise overwrite the fat jar.
+
+### ChestShop recovery audit
+
+`TradeRecoveryService` writes failed goods reversals through `TradeRecoveryMapper`
+to `users.db/trade_recovery` (ADT-135). Like the existing ChestShop SQLite tables,
+its additive schema is initialized by `DatabaseModule`; it is not part of the
+shared MariaDB/Flyway schema. Each attempt is append-only, keyed for correlation by
+the transaction's existing trade UUID. The serialized evidence is committed before
+returning from the reversal failure path, including for unlimited admin shops.
+A failed audit write is logged with its payload and does not escape cancellation.
