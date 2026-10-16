@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class TaxWebhookServiceImplTest {
 
@@ -146,8 +147,7 @@ class TaxWebhookServiceImplTest {
                 "http://127.0.0.1:1/never-listens"); // port 1 reliably refused
         TaxWebhookServiceImpl svc = new TaxWebhookServiceImpl(cfg);
 
-        // Should not throw
-        svc.sendCycleReport(scheduledReport());
+        assertThatCode(() -> svc.sendCycleReport(scheduledReport())).doesNotThrowAnyException();
     }
 
     // ---- Fixtures ----

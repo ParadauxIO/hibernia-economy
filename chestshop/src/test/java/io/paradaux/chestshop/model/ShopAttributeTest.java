@@ -1,6 +1,8 @@
 package io.paradaux.chestshop.model;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
@@ -36,11 +38,18 @@ class ShopAttributeTest {
         assertThat(ShopAttribute.DISTANCE.displayName()).isEqualTo("Distance");
     }
 
-    @Test
-    void everyAttributeExposesAComparator() {
-        for (ShopAttribute attr : ShopAttribute.values()) {
-            assertThat(attr.comparator()).isNotNull();
-        }
+    @ParameterizedTest
+    @EnumSource(ShopAttribute.class)
+    void everyAttribute_sortsTheSmallerValueFirstByDefault(ShopAttribute attr) {
+        // "low" is strictly smaller than "high" on every attribute (prices, unit prices, stock,
+        // capacity, batch quantity and distance).
+        FoundShop low = new FoundShop("k", "n", "STONE", false, null, "Steve",
+                BigDecimal.ONE, BigDecimal.ONE, 1, 1, 1, "world", 0, 0, 0, 1);
+        FoundShop high = new FoundShop("k", "n", "STONE", false, null, "Steve",
+                new BigDecimal("100"), new BigDecimal("100"), 2, 2, 2, "world", 0, 0, 0, 4);
+
+        assertThat(attr.comparator().compare(low, high)).isNegative();
+        assertThat(attr.comparator().compare(high, low)).isPositive();
     }
 
     @Test

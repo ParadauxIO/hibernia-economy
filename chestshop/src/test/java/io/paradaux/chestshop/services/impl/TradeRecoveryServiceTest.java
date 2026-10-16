@@ -74,6 +74,65 @@ class TradeRecoveryServiceTest extends ServerTest {
     }
 
     @Test
+    void evidenceRoundTripsEveryRecordedField() throws Exception {
+        TradeRecoveryMapper mapper = mock(TradeRecoveryMapper.class);
+        Transaction trade = trade();
+        when(trade.getTransactionType()).thenReturn(Transaction.TransactionType.SELL);
+        when(trade.isUnlimitedOwner()).thenReturn(true);
+        when(trade.getSettlementTxnId()).thenReturn(4242L);
+        Sign sign = mock(Sign.class);
+        var world = server.addSimpleWorld("market");
+        when(sign.getLocation()).thenReturn(new Location(world, 10, 64, -20));
+        when(trade.getSign()).thenReturn(sign);
+
+        new TradeRecoveryService(mapper).record(trade, new IllegalStateException("reverse failed"));
+
+        var evidenceText = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(mapper).insert(eq(trade.getTradeId().toString()), anyString(), evidenceText.capture());
+        var evidence = new YamlConfiguration();
+        evidence.loadFromString(evidenceText.getValue());
+        assertThat(evidence.getInt("version")).isEqualTo(1);
+        assertThat(evidence.getString("reason")).isEqualTo("GOODS_REVERSAL_FAILED_AFTER_SETTLEMENT_FAILURE");
+        assertThat(evidence.getString("player.uuid")).isEqualTo(trade.getClient().getUniqueId().toString());
+        assertThat(evidence.getString("player.name")).isEqualTo("Buyer");
+        assertThat(evidence.getString("owner.uuid")).isEqualTo(trade.getOwnerAccount().getUuid().toString());
+        assertThat(evidence.getString("owner.name")).isEqualTo("Owner");
+        assertThat(evidence.getString("direction")).isEqualTo("SELL");
+        assertThat(evidence.isBoolean("unlimited-owner")).isTrue();
+        assertThat(evidence.getBoolean("unlimited-owner")).isTrue();
+        assertThat(evidence.getString("price")).isEqualTo("12.50");
+        assertThat(evidence.getLong("settlement-txn-id")).isEqualTo(4242L);
+        assertThat(evidence.getString("sign.world-uuid")).isEqualTo(world.getUID().toString());
+        assertThat(evidence.getString("sign.world-name")).isEqualTo("market");
+        assertThat(evidence.isInt("sign.x")).isTrue();
+        assertThat(evidence.getInt("sign.x")).isEqualTo(10);
+        assertThat(evidence.isInt("sign.y")).isTrue();
+        assertThat(evidence.getInt("sign.y")).isEqualTo(64);
+        assertThat(evidence.getInt("sign.z")).isEqualTo(-20);
+        assertThat(evidence.getList("items")).isEqualTo(java.util.Arrays.asList(trade.getStock()));
+        assertThat(evidence.getString("exception")).isEqualTo("java.lang.IllegalStateException: reverse failed");
+    }
+
+    @Test
+    void evidenceOmitsSignAndExceptionWhenAbsent() throws Exception {
+        TradeRecoveryMapper mapper = mock(TradeRecoveryMapper.class);
+        Transaction trade = trade(); // no sign
+        when(trade.getSettlementTxnId()).thenReturn(null); // settlement never recorded
+
+        new TradeRecoveryService(mapper).record(trade, null);
+
+        var evidenceText = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(mapper).insert(eq(trade.getTradeId().toString()), anyString(), evidenceText.capture());
+        var evidence = new YamlConfiguration();
+        evidence.loadFromString(evidenceText.getValue());
+        assertThat(evidence.contains("sign")).isFalse();
+        assertThat(evidence.contains("exception")).isFalse();
+        assertThat(evidence.get("settlement-txn-id")).isNull();
+        assertThat(evidence.getBoolean("unlimited-owner", true)).isFalse();
+        assertThat(evidence.getString("direction")).isEqualTo("BUY");
+    }
+
+    @Test
     void recordsCoordinatesWithoutALoadedWorld() {
         TradeRecoveryMapper mapper = mock(TradeRecoveryMapper.class);
         Transaction trade = trade();

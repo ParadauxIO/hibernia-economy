@@ -147,6 +147,32 @@ class GovServiceIT extends IntegrationTestBase {
     }
 
     @Test
+    void issueFine_intoANonGovernmentAccount_isRefused_andMovesNothing() {
+        // The destination of a fine must be a GOVERNMENT account: otherwise a
+        // fine becomes a way to move a player's money into any other player's or
+        // firm's account, bypassing their authorization.
+        UUID debtor = UUID.randomUUID();
+        UUID beneficiary = UUID.randomUUID();
+        Account debtorAccount = ledgerService.resolveOrCreatePersonal(debtor);
+        Account personal = ledgerService.resolveOrCreatePersonal(beneficiary);
+        Account firm = accountService.createAccount(
+                io.paradaux.treasury.model.economy.AccountType.BUSINESS, UUID.randomUUID(), "Shell Co");
+        BigDecimal debtorBefore = accountService.getBalanceReadOnly(debtorAccount.getAccountId());
+        BigDecimal personalBefore = accountService.getBalanceReadOnly(personal.getAccountId());
+
+        assertThatThrownBy(() -> govService.issueFine(
+                debtor, personal.getAccountId(), new BigDecimal("10.00"), "x", UUID.randomUUID()))
+                .isInstanceOf(GovAccountNotFoundException.class);
+        assertThatThrownBy(() -> govService.issueFine(
+                debtorAccount.getAccountId(), firm.getAccountId(), new BigDecimal("10.00"), "x", UUID.randomUUID()))
+                .isInstanceOf(GovAccountNotFoundException.class);
+
+        assertThat(accountService.getBalanceReadOnly(debtorAccount.getAccountId())).isEqualByComparingTo(debtorBefore);
+        assertThat(accountService.getBalanceReadOnly(personal.getAccountId())).isEqualByComparingTo(personalBefore);
+        assertThat(accountService.getBalanceReadOnly(firm.getAccountId())).isEqualByComparingTo("0.00");
+    }
+
+    @Test
     void revokeFine_refundsFromTheFinesOwnAccount() {
         UUID player = UUID.randomUUID();
         UUID issuer = UUID.randomUUID();

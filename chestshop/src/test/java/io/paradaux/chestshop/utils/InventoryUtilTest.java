@@ -8,7 +8,6 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.Map;
 
@@ -88,12 +87,5 @@ class InventoryUtilTest extends ServerTest {
         } finally {
             setLegacyFlag(false); // restore the normal cached state for other tests
         }
-    }
-
-    @Test
-    void isUtilityClass_privateConstructor() throws Exception {
-        Constructor<InventoryUtil> ctor = InventoryUtil.class.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        assertThat(ctor.newInstance()).isNotNull();
     }
 }

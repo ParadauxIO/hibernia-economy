@@ -132,7 +132,7 @@ public class VaultEconomyAdapter implements Economy {
     @Override public boolean has(@NotNull OfflinePlayer player, @NotNull String worldName, double amount) { return has(player, amount); }
 
     private boolean has(@Nullable UUID uuid, double amount) {
-        if (uuid == null) return false;
+        if (uuid == null || !Double.isFinite(amount)) return false;
         BigDecimal need = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
         return BigDecimal.valueOf(getBalance(uuid)).compareTo(need) >= 0;
     }
@@ -146,7 +146,7 @@ public class VaultEconomyAdapter implements Economy {
 
     private @NotNull EconomyResponse withdraw(@Nullable UUID playerUuid, double amount, @Nullable String memo) {
         if (playerUuid == null) return failure(amount, 0D, "Unknown player");
-        if (amount < 0.01D) return failure(amount, getBalance(playerUuid), "Amount must be at least 0.01");
+        if (!isPayable(amount)) return failure(amount, balanceForResponse(playerUuid), "Amount must be at least 0.01");
         String pluginKey = resolveCallingPluginKey();
         try {
             BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
@@ -170,7 +170,7 @@ public class VaultEconomyAdapter implements Economy {
 
     private @NotNull EconomyResponse deposit(@Nullable UUID playerUuid, double amount, @Nullable String memo) {
         if (playerUuid == null) return failure(amount, 0D, "Unknown player");
-        if (amount < 0.01D) return failure(amount, getBalance(playerUuid), "Amount must be at least 0.01");
+        if (!isPayable(amount)) return failure(amount, balanceForResponse(playerUuid), "Amount must be at least 0.01");
         String pluginKey = resolveCallingPluginKey();
         BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
 
@@ -274,6 +274,16 @@ public class VaultEconomyAdapter implements Economy {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /**
+     * At least one cent, and a real number: Vault callers pass doubles, and NaN /
+     * Infinity used to slip past the {@code < 0.01} check (every comparison with
+     * NaN is false) into {@code BigDecimal.valueOf}, which threw straight out of
+     * depositPlayer instead of returning a FAILURE response.
+     */
+    private static boolean isPayable(double amount) {
+        return Double.isFinite(amount) && amount >= 0.01D;
     }
 
     private static EconomyResponse success(double amount, double balance, String msg) {

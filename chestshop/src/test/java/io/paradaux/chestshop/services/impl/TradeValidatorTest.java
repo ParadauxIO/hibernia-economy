@@ -157,15 +157,31 @@ class TradeValidatorTest {
     // ═══════════════════════════ clearNotificationCooldowns ═══════════════════════════
 
     @Test
-    void clearNotificationCooldowns_noOpWhenCooldownDisabled() {
-        when(config.getNotificationMessageCooldown()).thenReturn(0L);
-        validator.clearNotificationCooldowns(UUID.randomUUID()); // must not throw
-    }
+    void clearNotificationCooldowns_letsTheNextOwnerNotificationThroughImmediately() {
+        try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
+            World world = mock(World.class);
+            when(world.getName()).thenReturn("world");
+            UUID ownerId = UUID.randomUUID();
+            Account owner = new Account("Alice", "Alice", ownerId);
+            Player ownerPlayer = player("Alice", ownerId);
+            bk.when(() -> Bukkit.getPlayer(ownerId)).thenReturn(ownerPlayer);
+            when(accounts.isIgnoring(ownerId)).thenReturn(false);
+            when(config.getNotificationMessageCooldown()).thenReturn(60L); // 60s window
+            Player client = player("Notch", UUID.randomUUID());
+            when(config.isAllowFreeShops()).thenReturn(true);
+            when(config.isAllowPartialTransactions()).thenReturn(true);
+            doAnswer(inv -> { ((PendingTransaction) inv.getArgument(0)).setCancelled(TransactionOutcome.NOT_ENOUGH_SPACE_IN_CHEST); return null; })
+                    .when(partialFill).adjustBuy(any());
 
-    @Test
-    void clearNotificationCooldowns_removesRows_whenEnabled() {
-        when(config.getNotificationMessageCooldown()).thenReturn(5L);
-        validator.clearNotificationCooldowns(UUID.randomUUID());
+            validator.validate(pending(BUY, false, sign(location(world)), client, owner, mock(Inventory.class),
+                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5")));
+            validator.clearNotificationCooldowns(ownerId); // e.g. the owner rejoined
+            validator.validate(pending(BUY, false, sign(location(world)), client, owner, mock(Inventory.class),
+                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5")));
+
+            // Without the clear, the second notification would be swallowed by the 60s cooldown.
+            verify(ownerPlayer, org.mockito.Mockito.times(2)).sendMessage(any(net.kyori.adventure.text.Component.class));
+        }
     }
 
     // ═══════════════════════════ validate — individual validators ═══════════════════════════

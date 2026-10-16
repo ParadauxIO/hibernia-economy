@@ -263,7 +263,11 @@ public class PartialFillCalculatorImpl implements PartialFillCalculator {
             int amount = entry.getValue();
             int maxStackSize = inventoryService.getMaxStackSize(item);
             int free = 0;
-            for (ItemStack itemInInventory : inventory.getContents()) {
+            // Storage slots only, like countEmpty()/fits() and the addItem() that
+            // delivers the goods: a player's armour/off-hand stack is not room the
+            // delivery can use, and counting it sized (and priced) fills that then
+            // failed at transfer.
+            for (ItemStack itemInInventory : InventoryUtil.getStorageContents(inventory)) {
                 if (materialService.equals(item, itemInInventory) && itemInInventory != null) {
                     free += (maxStackSize - itemInInventory.getAmount()) % maxStackSize;
                 }

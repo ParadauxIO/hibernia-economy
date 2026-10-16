@@ -49,6 +49,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -59,8 +60,11 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -400,13 +404,27 @@ class InfoServiceImplTest extends ServerTest {
         return sign;
     }
 
+    /** The shop was rejected: the INVALID message went out and no shop-info summary was built. */
+    private void assertRejectedAsInvalid(Player p) {
+        verify(message).send(p, "chestshop.INVALID_SHOP_DETECTED");
+        verify(message, never()).component(eq("chestshop.shopinfo"), any(Map.class));
+    }
+
+    /** The replacement values the {@code chestshop.shopinfo} summary line was rendered with. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Map<String, Object> shopInfoValues() {
+        ArgumentCaptor<Map> captor = ArgumentCaptor.forClass(Map.class);
+        verify(message).component(eq("chestshop.shopinfo"), captor.capture());
+        return captor.getValue();
+    }
+
     @Test
     void showShopInfo_invalidSign() {
         Player p = mock(Player.class);
         Sign sign = shopSign("Owner", "1", "B 10", "Stone");
         when(signService.isValid(sign)).thenReturn(false);
         info.showShopInfo(p, sign);
-        // no exception; INVALID message sent and returns early
+        assertRejectedAsInvalid(p);
     }
 
     @Test
@@ -415,6 +433,7 @@ class InfoServiceImplTest extends ServerTest {
         Sign sign = shopSign("Owner", "abc", "B 10", "Stone");
         when(signService.isValid(sign)).thenReturn(true);
         info.showShopInfo(p, sign);
+        assertRejectedAsInvalid(p);
     }
 
     @Test
@@ -424,6 +443,7 @@ class InfoServiceImplTest extends ServerTest {
         when(signService.isValid(sign)).thenReturn(true);
         when(accounts.resolveAccount("Owner")).thenReturn(null);
         info.showShopInfo(p, sign);
+        assertRejectedAsInvalid(p);
     }
 
     @Test
@@ -434,6 +454,7 @@ class InfoServiceImplTest extends ServerTest {
         when(accounts.resolveAccount("Owner")).thenReturn(new Account("Owner", java.util.UUID.randomUUID()));
         when(items.parse(any())).thenReturn(null);
         info.showShopInfo(p, sign);
+        assertRejectedAsInvalid(p);
     }
 
     @Test
@@ -444,6 +465,7 @@ class InfoServiceImplTest extends ServerTest {
         when(accounts.resolveAccount("Owner")).thenReturn(new Account("Owner", java.util.UUID.randomUUID()));
         when(items.parse(any())).thenReturn(new ItemStack(Material.STONE));
         info.showShopInfo(p, sign);
+        assertRejectedAsInvalid(p);
     }
 
     @Test
@@ -459,9 +481,19 @@ class InfoServiceImplTest extends ServerTest {
         when(container.getInventory()).thenReturn(inv);
         when(shopBlockService.findConnectedContainer(sign)).thenReturn(container);
         when(inventoryService.getAmount(stone, inv)).thenReturn(42);
-        when(economy.format(any(BigDecimal.class))).thenReturn("$X");
+        when(economy.format(any(BigDecimal.class)))
+                .thenAnswer(call -> "$" + call.<BigDecimal>getArgument(0).stripTrailingZeros().toPlainString());
 
         info.showShopInfo(p, sign);
+
+        assertThat(shopInfoValues())
+                .containsEntry("item", "Name")
+                .containsEntry("stock", "42")
+                .containsEntry("owner", "Owner Display")
+                .containsEntry("prices", "B 10 : S 5")
+                .containsEntry("quantity", "5");
+        verify(message).send(p, "chestshop.shopinfo_buy", "prefix", "", "amount", "5", "price", "$10");
+        verify(message).send(p, "chestshop.shopinfo_sell", "prefix", "", "amount", "5", "price", "$5");
     }
 
     @Test
@@ -475,6 +507,12 @@ class InfoServiceImplTest extends ServerTest {
         when(economy.format(any(BigDecimal.class))).thenReturn("$X");
 
         info.showShopInfo(p, sign);
+
+        assertThat(shopInfoValues())
+                .containsEntry("stock", "∞")
+                .containsEntry("owner", "Owner");
+        verify(message).send(p, "chestshop.shopinfo_buy", "prefix", "", "amount", "5", "price", "$X");
+        verify(message, never()).send(eq(p), eq("chestshop.shopinfo_sell"), any(Object[].class));
     }
 
     @Test
@@ -488,5 +526,8 @@ class InfoServiceImplTest extends ServerTest {
         when(economy.format(any(BigDecimal.class))).thenReturn("$X");
 
         info.showShopInfo(p, sign);
+
+        verify(message).send(p, "chestshop.shopinfo_sell", "prefix", "", "amount", "5", "price", "$X");
+        verify(message, never()).send(eq(p), eq("chestshop.shopinfo_buy"), any(Object[].class));
     }
 }

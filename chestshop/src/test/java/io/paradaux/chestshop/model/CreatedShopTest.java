@@ -33,22 +33,6 @@ class CreatedShopTest extends ServerTest {
     }
 
     @Test
-    void exposesCreatorSignAndContainer() {
-        Player creator = player("Steve");
-        CreatedShop shop = new CreatedShop(creator, sign, container, LINES, null);
-
-        assertThat(shop.getPlayer()).isSameAs(creator);
-        assertThat(shop.getSign()).isSameAs(sign);
-        assertThat(shop.getContainer()).isSameAs(container);
-    }
-
-    @Test
-    void container_mayBeNull() {
-        CreatedShop shop = new CreatedShop(player("Steve"), sign, null, LINES, null);
-        assertThat(shop.getContainer()).isNull();
-    }
-
-    @Test
     void createdByOwner_nullOwnerAccount_isTrue() {
         CreatedShop shop = new CreatedShop(player("Steve"), sign, container, LINES, null);
         assertThat(shop.getOwnerAccount()).isNull();

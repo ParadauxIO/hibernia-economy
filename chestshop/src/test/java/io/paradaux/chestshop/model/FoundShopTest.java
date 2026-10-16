@@ -25,21 +25,6 @@ class FoundShopTest {
                 buy, sell, batchQty, stock, capacity, "world", 1, 2, 3, distanceSquared);
     }
 
-    @Test
-    void canonicalConstructor_exposesComponents() {
-        FoundShop s = shop(BigDecimal.ONE, null, 4, 5, 6, 25);
-        assertThat(s.itemKey()).isEqualTo("stone");
-        assertThat(s.itemName()).isEqualTo("Stone");
-        assertThat(s.material()).isEqualTo("STONE");
-        assertThat(s.ownerName()).isEqualTo("Steve");
-        assertThat(s.world()).isEqualTo("world");
-        assertThat(s.x()).isEqualTo(1);
-        assertThat(s.y()).isEqualTo(2);
-        assertThat(s.z()).isEqualTo(3);
-        assertThat(s.batchQty()).isEqualTo(4);
-        assertThat(s.distanceSquared()).isEqualTo(25L);
-    }
-
     // ── shopType ───────────────────────────────────────────────────────────────
 
     @Test

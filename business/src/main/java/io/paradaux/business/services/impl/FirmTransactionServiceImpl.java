@@ -12,6 +12,7 @@ import io.paradaux.business.model.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmTransactionService;
+import io.paradaux.common.AmountInput;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
@@ -89,9 +90,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
 
     @Override
     public long deposit(Integer firmId, UUID playerUuid, BigDecimal amount, String memo) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadCommandException(KEY_INVALID_AMOUNT);
-        }
+        requireValidAmount(amount);
 
         int businessAccountId = resolveAccountId(firmId);
         Account personal = treasury.resolveOrCreatePersonal(playerUuid);
@@ -151,9 +150,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
 
     @Override
     public long withdraw(Integer firmId, UUID playerUuid, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadCommandException(KEY_INVALID_AMOUNT);
-        }
+        requireValidAmount(amount);
 
         int businessAccountId = resolveAccountId(firmId);
         Account businessAccount = treasury.getAccountById(businessAccountId);
@@ -308,6 +305,19 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
         return survivor;
     }
 
+    /**
+     * Every firm money movement takes a player-typed amount. Beyond "positive",
+     * reject sub-cent amounts and anything the DECIMAL(19,2) ledger can't hold
+     * here, with the firm's own invalid-amount message — previously those reached
+     * Treasury and failed there with a raw IllegalArgumentException / SQL error
+     * (and a 1e999999999 amount first ran an unbounded balance query).
+     */
+    private static void requireValidAmount(BigDecimal amount) {
+        if (AmountInput.positive(amount).isEmpty()) {
+            throw new BadCommandException(KEY_INVALID_AMOUNT);
+        }
+    }
+
     private void validateAccountBelongsToFirm(Integer firmId, Integer accountId) {
         if (!firmAccounts.isFirmAccount(firmId, accountId)) {
             throw new BadCommandException(KEY_FOREIGN_ACCOUNT);
@@ -339,9 +349,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
     public long depositToAccount(Integer firmId, Integer accountId, UUID playerUuid, BigDecimal amount) {
         validateAccountBelongsToFirm(firmId, accountId);
 
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadCommandException(KEY_INVALID_AMOUNT);
-        }
+        requireValidAmount(amount);
 
         Account businessAccount = treasury.getAccountById(accountId);
         if (businessAccount != null && businessAccount.isArchived()) {
@@ -376,9 +384,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
     public long withdrawFromAccount(Integer firmId, Integer accountId, UUID playerUuid, BigDecimal amount) {
         validateAccountBelongsToFirm(firmId, accountId);
 
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadCommandException(KEY_INVALID_AMOUNT);
-        }
+        requireValidAmount(amount);
 
         Account businessAccount = treasury.getAccountById(accountId);
         Account personal = treasury.resolveOrCreatePersonal(playerUuid);
@@ -481,9 +487,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
      * must not be archived.
      */
     private long payIn(int destAccountId, UUID payerUuid, BigDecimal amount, String description) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadCommandException(KEY_INVALID_AMOUNT);
-        }
+        requireValidAmount(amount);
 
         Account dest = treasury.getAccountById(destAccountId);
         if (dest != null && dest.isArchived()) {
@@ -517,9 +521,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
      * by the command layer before reaching here.)
      */
     private long payOut(int sourceAccountId, int destAccountId, UUID actorUuid, BigDecimal amount, String description) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadCommandException(KEY_INVALID_AMOUNT);
-        }
+        requireValidAmount(amount);
 
         Account source = treasury.getAccountById(sourceAccountId);
 

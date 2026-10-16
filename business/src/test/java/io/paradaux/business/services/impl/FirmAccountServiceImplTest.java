@@ -24,8 +24,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -236,8 +239,46 @@ class FirmAccountServiceImplTest {
                 .isInstanceOf(BadCommandException.class);
     }
 
+    /**
+     * Treasury's member/authorizer tables for one account, driven through the
+     * stubbed add/remove calls — so the sync tests assert the reconciled END STATE
+     * (who can see / authorise on the account) and the number of writes, rather
+     * than a list of expected calls that can't notice an extra add or remove.
+     */
+    private final class AccountAccess {
+        final Set<UUID> members = new HashSet<>();
+        final Set<UUID> authorizers = new HashSet<>();
+        int writes;
+
+        AccountAccess(int accountId, Set<UUID> initialMembers, Set<UUID> initialAuthorizers) {
+            members.addAll(initialMembers);
+            authorizers.addAll(initialAuthorizers);
+            when(treasury.getMembers(accountId)).thenAnswer(i -> rows(accountId, members));
+            when(treasury.getAuthorizers(accountId)).thenAnswer(i -> rows(accountId, authorizers));
+            lenient().doAnswer(i -> write(members.add(i.getArgument(1))))
+                    .when(treasury).addMember(eq(accountId), any(), any());
+            lenient().doAnswer(i -> write(authorizers.add(i.getArgument(1))))
+                    .when(treasury).addAuthorizer(eq(accountId), any(), any());
+            lenient().doAnswer(i -> write(members.remove(i.<UUID>getArgument(1))))
+                    .when(treasury).removeMember(eq(accountId), any());
+            lenient().doAnswer(i -> write(authorizers.remove(i.<UUID>getArgument(1))))
+                    .when(treasury).removeAuthorizer(eq(accountId), any());
+        }
+
+        private Object write(boolean changed) {
+            // A write that changes nothing is a redundant Treasury round-trip.
+            assertThat(changed).as("redundant membership write").isTrue();
+            writes++;
+            return null;
+        }
+
+        private List<AccountMember> rows(int accountId, Set<UUID> uuids) {
+            return uuids.stream().map(u -> new AccountMember(accountId, u, owner, Instant.EPOCH)).toList();
+        }
+    }
+
     @Test
-    void syncAccountMembers_addsAdminAsMemberAndAuthorizer_addsFinancialAsMemberOnly() {
+    void syncAccountMembers_adminGetsMemberAndAuthorizer_financeMemberOnly_othersNothing() {
         UUID adminUuid = UUID.randomUUID();
         UUID financeUuid = UUID.randomUUID();
         UUID otherUuid = UUID.randomUUID();
@@ -255,41 +296,56 @@ class FirmAccountServiceImplTest {
                 new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
         when(roles.getFirmRolePermissions(1, "Default")).thenReturn(List.of(
                 new FirmRolePermission(1, "Default", RolePermission.DEFAULT)));
-        when(treasury.getMembers(99)).thenReturn(List.of());
-        when(treasury.getAuthorizers(99)).thenReturn(List.of());
+        AccountAccess access = new AccountAccess(99, Set.of(), Set.of());
 
         svc.syncAccountMembers(1, 99);
 
-        verify(treasury).addMember(99, owner, owner);
-        verify(treasury).addAuthorizer(99, owner, owner);
+        assertThat(access.members).containsExactlyInAnyOrder(owner, adminUuid, financeUuid);
+        assertThat(access.authorizers).containsExactlyInAnyOrder(owner, adminUuid);
+        // Every grant is attributed to the proprietor.
         verify(treasury).addMember(99, adminUuid, owner);
         verify(treasury).addAuthorizer(99, adminUuid, owner);
         verify(treasury).addMember(99, financeUuid, owner);
-        verify(treasury, never()).addAuthorizer(99, financeUuid, owner);
-        verify(treasury, never()).addMember(99, otherUuid, owner);
-        verify(treasury, never()).addAuthorizer(99, otherUuid, owner);
+        assertThat(access.writes).isEqualTo(5);
     }
 
     @Test
-    void syncAccountMembers_removesStaleMembersAndAuthorizers() {
+    void syncAccountMembers_removesStaleMembersAndAuthorizers_keepsTheOwner() {
         UUID stale = UUID.randomUUID();
 
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
         when(staff.listCurrentEmployeesByFirm(1)).thenReturn(List.of()); // no employees, only owner
-        when(treasury.getMembers(99)).thenReturn(List.of(
-                new AccountMember(99, owner, owner, Instant.EPOCH),
-                new AccountMember(99, stale, owner, Instant.EPOCH)));
-        when(treasury.getAuthorizers(99)).thenReturn(List.of(
-                new AccountMember(99, owner, owner, Instant.EPOCH),
-                new AccountMember(99, stale, owner, Instant.EPOCH)));
+        AccountAccess access = new AccountAccess(99, Set.of(owner, stale), Set.of(owner, stale));
 
         svc.syncAccountMembers(1, 99);
 
-        verify(treasury).removeMember(99, stale);
-        verify(treasury).removeAuthorizer(99, stale);
-        verify(treasury, never()).removeMember(99, owner);
-        verify(treasury, never()).removeAuthorizer(99, owner);
+        assertThat(access.members).containsExactly(owner);
+        assertThat(access.authorizers).containsExactly(owner);
+        assertThat(access.writes).isEqualTo(2);
+    }
+
+    @Test
+    void syncAccountMembers_isIdempotent_secondRunWritesNothing() {
+        UUID adminUuid = UUID.randomUUID();
+        UUID demoted = UUID.randomUUID(); // authorizer whose role is now finance-only
+
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
+        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(List.of(emp(adminUuid, "Admin"), emp(demoted, "Finance")));
+        when(roles.getFirmRolePermissions(1, "Admin")).thenReturn(List.of(
+                new FirmRolePermission(1, "Admin", RolePermission.ADMIN)));
+        when(roles.getFirmRolePermissions(1, "Finance")).thenReturn(List.of(
+                new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
+        AccountAccess access = new AccountAccess(99, Set.of(owner, demoted), Set.of(owner, demoted));
+
+        svc.syncAccountMembers(1, 99);
+        assertThat(access.members).containsExactlyInAnyOrder(owner, adminUuid, demoted);
+        assertThat(access.authorizers).containsExactlyInAnyOrder(owner, adminUuid);
+        int firstRunWrites = access.writes;
+
+        svc.syncAccountMembers(1, 99);
+        assertThat(access.writes).isEqualTo(firstRunWrites);
     }
 
     @Test

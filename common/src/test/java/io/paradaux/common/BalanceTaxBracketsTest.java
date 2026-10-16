@@ -115,6 +115,32 @@ class BalanceTaxBracketsTest {
         // no valid entry -> defaults
         assertEquals(BalanceTaxBrackets.DEFAULTS.size(), b.size());
         assertEquals(1, warnings.size());
+        // Reported as a missing rate, not as an unparseable one.
+        assertTrue(warnings.get(0).startsWith("Missing balance tax bracket rate"), warnings.get(0));
+    }
+
+    @Test
+    void rateBoundsAreInclusive_zeroAndOneHundredPercentAreValid() {
+        Map<String, String> raw = new LinkedHashMap<>();
+        raw.put("0", "0");
+        raw.put("1000", "1");
+        raw.put("2000", "1.00");
+        List<String> warnings = new ArrayList<>();
+        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, warnings::add);
+        assertEquals(3, b.size());
+        assertTrue(warnings.isEmpty(), warnings::toString);
+        assertEquals(BigDecimal.ONE, b.weeklyRate(new BigDecimal("1500")));
+    }
+
+    @Test
+    void justOutsideTheRateBoundsIsRejected() {
+        Map<String, String> raw = new LinkedHashMap<>();
+        raw.put("1000", "1.0001");
+        raw.put("2000", "-0.0001");
+        List<String> warnings = new ArrayList<>();
+        BalanceTaxBrackets.fromRawEntries(raw, warnings::add);
+        assertEquals(2, warnings.size());
+        assertTrue(warnings.stream().allMatch(w -> w.contains("out of range")), warnings::toString);
     }
 
     @Test

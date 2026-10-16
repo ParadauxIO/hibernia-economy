@@ -363,8 +363,14 @@ class ItemServiceImplTest extends ServerTest {
     }
 
     @Test
-    void reloadAliases_withoutResolver_justReloadsFile() {
-        newService().reloadAliases(); // must not throw with no resolver
+    void reloadAliases_withoutResolver_picksUpAnEditedAliasFile() {
+        ItemServiceImpl svc = newService();
+        assertThat(svc.parse("Gem")).isNull();
+
+        writeAliases("Diamond: Gem\n");
+        svc.reloadAliases();
+
+        assertThat(svc.parse("Gem").getType()).isEqualTo(Material.DIAMOND);
     }
 
     // ---- residual branches ------------------------------------------------------

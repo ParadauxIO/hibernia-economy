@@ -34,6 +34,7 @@ import java.util.UUID;
 import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
 import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -669,7 +670,8 @@ class EconomyServiceImplTest extends ServerTest {
         UUID target = UUID.randomUUID();
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(tAccount(21));
         when(treasury.transfer(any())).thenThrow(new RuntimeException("down"));
-        service.deposit(target, new BigDecimal("5"), world); // must not throw
+        assertThatCode(() -> service.deposit(target, new BigDecimal("5"), world)).doesNotThrowAnyException();
+        verify(treasury).transfer(any());
     }
 
     // ---- withdraw --------------------------------------------------------------
@@ -821,48 +823,61 @@ class EconomyServiceImplTest extends ServerTest {
 
     // ---- migrateLegacyBusinessSign ---------------------------------------------
 
+    private static String ownerLine(Sign sign) {
+        return SignService.getOwner((Sign) sign.getBlock().getState());
+    }
+
     @Test
     void migrate_returnsEarly_whenSignNull() {
         Transaction t = mock(Transaction.class);
         when(t.getSign()).thenReturn(null);
         when(t.getOwnerAccount()).thenReturn(businessOwner("B1"));
-        service.migrateLegacyBusinessSign(t); // no exception
+        assertThatCode(() -> service.migrateLegacyBusinessSign(t)).doesNotThrowAnyException();
     }
 
     @Test
-    void migrate_returnsEarly_whenOwnerNull() {
+    void migrate_leavesSignUntouched_whenOwnerNull() {
+        Sign sign = placeSign("X", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("X", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(null);
-        service.migrateLegacyBusinessSign(t);
+        assertThatCode(() -> service.migrateLegacyBusinessSign(t)).doesNotThrowAnyException();
+        assertThat(ownerLine(sign)).isEqualTo("X");
     }
 
     @Test
-    void migrate_returnsEarly_whenOwnerUuidNull() {
+    void migrate_leavesSignUntouched_whenOwnerUuidNull() {
         Account owner = new Account();
+        owner.setShortName("Firm");
         owner.setUuid(null);
+        Sign sign = placeSign("X", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("X", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(owner);
-        service.migrateLegacyBusinessSign(t);
+        assertThatCode(() -> service.migrateLegacyBusinessSign(t)).doesNotThrowAnyException();
+        assertThat(ownerLine(sign)).isEqualTo("X");
     }
 
     @Test
-    void migrate_returnsEarly_whenOwnerNotBusiness() {
+    void migrate_leavesSignUntouched_whenOwnerNotBusiness() {
         Account owner = new Account("Notch", "Notch", UUID.randomUUID()); // personal uuid
+        Sign sign = placeSign("X", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("X", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(owner);
         service.migrateLegacyBusinessSign(t);
+        assertThat(ownerLine(sign)).isEqualTo("X");
     }
 
     @Test
-    void migrate_returnsEarly_whenCanonicalNull() {
+    void migrate_leavesSignUntouched_whenCanonicalNull() {
         Account owner = businessOwner(null);
+        Sign sign = placeSign("OLD", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("OLD", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(owner);
         service.migrateLegacyBusinessSign(t);
+        assertThat(ownerLine(sign)).isEqualTo("OLD");
     }
 
     @Test

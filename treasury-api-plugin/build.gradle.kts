@@ -3,6 +3,7 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 plugins {
     id("com.gradleup.shadow")
     id("io.paradaux.paper-server-conventions")
+    id("io.paradaux.mutation-testing-conventions")
 }
 
 // group + version are set centrally by the root allprojects block (single
@@ -102,4 +103,24 @@ tasks {
         relocate("io.jsonwebtoken",   "$root.jjwt")
         relocate("com.fasterxml.jackson", "$root.jackson")
     }
+}
+
+// Mutation testing (`./gradlew :treasury-api-plugin:pitest`; not part of `check`).
+// Scoped to the API-key minting/rotation logic and the LuckPerms reconciliation
+// diff — the parts whose mistakes mint a usable key or revoke the wrong one. The
+// JWT signing-key derivation itself lives in :common (JwtKeys) and is mutated there.
+pitest {
+    targetClasses.set(listOf(
+        "io.paradaux.treasuryapi.services.impl.ApiKeyServiceImpl*",
+        "io.paradaux.treasuryapi.model.ReconciliationDiff*",
+        "io.paradaux.treasuryapi.utils.*",
+    ))
+    // Unit tests only: the mapper ITs keep a static DataSource that PIT's
+    // per-test launcher sessions close underneath them ("HikariDataSource has been
+    // closed"), and the targeted classes are unit-tested anyway.
+    excludedGroups.set(listOf("integration"))
+    // Ratchet a couple of points under the measured scores (2026-10: 88% mutation
+    // score — 70% before the key-row tests — and 95% line coverage).
+    mutationThreshold.set(85)
+    coverageThreshold.set(92)
 }

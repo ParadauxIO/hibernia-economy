@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -172,6 +173,8 @@ class FineWebhookServiceImplTest {
 
     @Test
     void unreachableHost_swallowsException() {
-        svc(true, "http://127.0.0.1:1/never-listens").sendFineIssued(playerFine());
+        // Port 1 reliably refuses; a webhook outage must never fail the fine itself.
+        assertThatCode(() -> svc(true, "http://127.0.0.1:1/never-listens").sendFineIssued(playerFine()))
+                .doesNotThrowAnyException();
     }
 }

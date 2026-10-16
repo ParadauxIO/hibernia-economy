@@ -174,6 +174,58 @@ class AccountServiceImplTest {
         assertThat(service.getAccountFromShortName("Notch")).isNull();
     }
 
+    // ═══════════════════ storeAccount ═══════════════════
+
+    @Test
+    void storeAccount_defaultsAMissingLastSeenToNow() {
+        // The admin-shop account is built without a lastSeen; users.db requires it NOT NULL.
+        Account account = new Account("AdminShop", "AdminShop", UUID.randomUUID());
+        long before = System.currentTimeMillis();
+
+        service.storeAccount(account);
+
+        org.mockito.Mockito.verify(mapper).save(account);
+        assertThat(account.getLastSeen().getTime()).isBetween(before, System.currentTimeMillis());
+    }
+
+    @Test
+    void storeAccount_keepsAnExistingLastSeen() {
+        Account account = new Account("Player", "Player", UUID.randomUUID());
+        java.util.Date seen = new java.util.Date(1_000_000L);
+        account.setLastSeen(seen);
+
+        service.storeAccount(account);
+
+        org.mockito.Mockito.verify(mapper).save(account);
+        assertThat(account.getLastSeen()).isEqualTo(seen);
+    }
+
+    // ═══════════════════ getNewShortenedName ═══════════════════
+
+    private static io.paradaux.chestshop.model.PlayerSnapshot snapshot(String name) {
+        return new io.paradaux.chestshop.model.PlayerSnapshot(UUID.randomUUID(), name);
+    }
+
+    @Test
+    void getNewShortenedName_returnsTheNameTruncatedTo15_whenFree() {
+        when(mapper.findByShortName(anyString())).thenReturn(null);
+
+        assertThat(service.getNewShortenedName(snapshot("Acrobot"))).isEqualTo("Acrobot");
+        assertThat(service.getNewShortenedName(snapshot("SixteenCharName1"))).isEqualTo("SixteenCharName");
+    }
+
+    @Test
+    void getNewShortenedName_appendsTheFirstFreeBase62Suffix_within15Chars() {
+        Account taken = new Account("taken", "taken", UUID.randomUUID());
+        when(mapper.findByShortName(anyString())).thenReturn(null);
+        when(mapper.findByShortName("Acrobot")).thenReturn(taken);
+        when(mapper.findByShortName("Acrobot:0")).thenReturn(taken);
+        when(mapper.findByShortName("SixteenCharName")).thenReturn(taken);
+
+        assertThat(service.getNewShortenedName(snapshot("Acrobot"))).isEqualTo("Acrobot:1");
+        assertThat(service.getNewShortenedName(snapshot("SixteenCharName1"))).isEqualTo("SixteenCharNa:0");
+    }
+
     // ═══════════════════ getOrCreateAccount ═══════════════════
 
     @Test

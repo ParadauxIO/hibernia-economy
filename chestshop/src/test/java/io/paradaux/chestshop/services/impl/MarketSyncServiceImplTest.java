@@ -43,6 +43,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Pure-Mockito coverage of {@link MarketSyncServiceImpl}. Every collaborator is a mock; the
@@ -225,7 +226,7 @@ class MarketSyncServiceImplTest {
         when(event.getTransactionType()).thenReturn(Transaction.TransactionType.BUY);
         when(signService.isAdminShop(any(Sign.class))).thenReturn(true);
 
-        sync.onTransaction(event); // must not throw
+        assertThatCode(() -> sync.onTransaction(event)).doesNotThrowAnyException();
     }
 
     // ─────────────────────────── onShopCreated ───────────────────────────
@@ -348,7 +349,7 @@ class MarketSyncServiceImplTest {
         when(event.getSign()).thenReturn(mock(Sign.class));
         when(event.getSignLines()).thenThrow(new RuntimeException("boom"));
 
-        sync.onShopCreated(event); // must not throw
+        assertThatCode(() -> sync.onShopCreated(event)).doesNotThrowAnyException();
     }
 
     // ─────────────────────────── onShopDestroyed ───────────────────────────
@@ -394,7 +395,7 @@ class MarketSyncServiceImplTest {
         // getSign() throwing forces the catch arc.
         when(event.getSign()).thenThrow(new RuntimeException("boom"));
 
-        sync.onShopDestroyed(event); // must not throw
+        assertThatCode(() -> sync.onShopDestroyed(event)).doesNotThrowAnyException();
     }
 
     // ─────────────────────────── onInventoryClose ───────────────────────────
@@ -515,7 +516,7 @@ class MarketSyncServiceImplTest {
         // findConnectedShopSigns throwing forces the catch arc.
         when(shopBlockService.findConnectedShopSigns(holder)).thenThrow(new RuntimeException("boom"));
 
-        sync.onInventoryClose(holder, mock(Inventory.class)); // must not throw
+        assertThatCode(() -> sync.onInventoryClose(holder, mock(Inventory.class))).doesNotThrowAnyException();
     }
 
     // ─────────────────────────── custom-item resolution ───────────────────────────
@@ -745,6 +746,6 @@ class MarketSyncServiceImplTest {
     @Test
     void onBlockReplaced_throwable_isSwallowed() {
         when(server.getWorld("world")).thenThrow(new RuntimeException("boom"));
-        sync.onBlockReplaced("world", 1, 2, 3); // must not throw
+        assertThatCode(() -> sync.onBlockReplaced("world", 1, 2, 3)).doesNotThrowAnyException();
     }
 }

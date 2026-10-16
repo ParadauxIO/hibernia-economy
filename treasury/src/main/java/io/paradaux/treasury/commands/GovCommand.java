@@ -17,7 +17,7 @@ import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.utils.GovDedupKeys;
-import io.paradaux.treasury.utils.Money;
+import io.paradaux.common.AmountInput;
 import io.paradaux.treasury.utils.TreasuryConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -695,8 +695,10 @@ public class GovCommand implements CommandHandler {
     private void doTransfer(CommandSender sender, String fromName, String toName, BigDecimal amount, String reason) {
         // Access is decided per-source-account by canTransferFrom (member /
         // authorizer / global node / admin) once the account is resolved below.
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }
@@ -768,8 +770,10 @@ public class GovCommand implements CommandHandler {
     private void doExternalPayout(CommandSender sender, String fromName, String toName, BigDecimal amount, String reason) {
         // Access is decided per-source-account by canTransferFrom (member /
         // authorizer / global node / admin) once the account is resolved below.
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }
