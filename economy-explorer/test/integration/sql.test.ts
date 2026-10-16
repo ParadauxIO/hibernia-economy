@@ -28,6 +28,27 @@ import { parseTaxRates } from '@/lib/taxRates';
 // Real queries against a real MariaDB (no mocking). Skipped unless RUN_INTEGRATION=1.
 const d = HAS_DB ? describe : describe.skip;
 
+/**
+ * Record a fine the way GovServiceImpl does: each fine points at its own debit
+ * txn (V29's UNIQUE(txn_id) — one fine per debit). The debit's postings are left
+ * out so the seed's balance assertions stay put; the fine queries only read the
+ * txn header. Returns the new fine_id.
+ */
+async function issueFine(fine: { reason: string; amount: number; payer?: string; govAccountId?: number; revoked?: boolean }): Promise<number> {
+  const txn = await sql`INSERT INTO ledger_txns (message, initiator_uuid_bin, plugin_system)
+    VALUES (${'Fine: ' + fine.reason}, ${uuidToBin(ALICE)}, 'treasury')`.execute(db);
+  const row = await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked)
+    VALUES (${uuidToBin(fine.payer ?? BOB)}, ${fine.govAccountId ?? 5}, ${fine.amount}, ${fine.reason}, ${txn.insertId}, ${uuidToBin(ALICE)}, ${fine.revoked ? 1 : 0})`.execute(db);
+  return Number(row.insertId);
+}
+
+/** Remove fines issued by issueFine, then their debit txns (fk_fines_txn is RESTRICT). */
+async function deleteFines(reason: string): Promise<void> {
+  const txns = await sql<{ txn_id: number }>`SELECT txn_id FROM government_fines WHERE reason = ${reason}`.execute(db);
+  await sql`DELETE FROM government_fines WHERE reason = ${reason}`.execute(db);
+  for (const { txn_id } of txns.rows) await sql`DELETE FROM ledger_txns WHERE txn_id = ${txn_id}`.execute(db);
+}
+
 beforeAll(async () => {
   if (HAS_DB) await resetDb();
 }, 60_000);
@@ -414,16 +435,14 @@ d('RBAC relationship snapshots', () => {
     const { getGovernmentAccounts, getRecentFines, getFineCategorySummary } = await import('@/lib/sql/government');
     expect((await getGovernmentAccounts({ playerUuid: SECRETARY })).map(a => a.account_id)).toEqual([5]);
     expect(await getGovernmentAccounts({ playerUuid: DAVE })).toEqual([]);
-    const c = await connect();
     try {
-      await c.query("INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin) VALUES (UNHEX(REPLACE(?, '-', '')), 5, 100, 'rbac-test', 1, UNHEX(REPLACE(?, '-', '')))", [BOB, ALICE]);
+      await issueFine({ reason: 'rbac-test', amount: 100 });
       expect(await getRecentFines(30, 100, [])).toEqual([]);
       expect(await getFineCategorySummary(30, [])).toEqual([]);
       expect((await getRecentFines(30, 100, [5])).some(f => f.reason === 'rbac-test')).toBe(true);
       expect((await getFineCategorySummary(30, [5])).find(f => f.category === 'rbac-test')?.total_amount).toBe('100.00');
     } finally {
-      await c.query("DELETE FROM government_fines WHERE reason = 'rbac-test'");
-      await c.end();
+      await deleteFines('rbac-test');
     }
   });
 });
@@ -593,16 +612,13 @@ d('explorer summary regressions', () => {
     const { getFineTotals, getRecentFines } = await import('@/lib/sql/government');
     const before = await getFineTotals(30, [5]);
     try {
-      for (let i = 0; i < 105; i++) {
-        await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin)
-          VALUES (${uuidToBin(BOB)}, 5, 2.50, 'audit-total', 1, ${uuidToBin(ALICE)})`.execute(db);
-      }
+      for (let i = 0; i < 105; i++) await issueFine({ reason: 'audit-total', amount: 2.5 });
       const total = await getFineTotals(30, [5]);
       expect(total.activeCount).toBe(before.activeCount + 105);
       expect(Number(total.activeAmount)).toBe(Number(before.activeAmount) + 262.5);
       expect(await getRecentFines(30, 100, [5])).toHaveLength(100);
       expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
-    } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-total'`.execute(db); }
+    } finally { await deleteFines('audit-total'); }
   });
 });
 
@@ -610,8 +626,7 @@ d('government fine browsing', () => {
   it('filters and paginates within the permitted account set', async () => {
     const { getRecentFines, countFines } = await import('@/lib/sql/government');
     try {
-      for (let i = 0; i < 3; i++) await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked)
-        VALUES (${uuidToBin(BOB)}, 5, 1, 'audit-page', 1, ${uuidToBin(ALICE)}, ${i === 2 ? 1 : 0})`.execute(db);
+      for (let i = 0; i < 3; i++) await issueFine({ reason: 'audit-page', amount: 1, revoked: i === 2 });
       expect(await countFines(30, [5], { q: 'audit-page', status: 'active' })).toBe(2);
       expect(await countFines(30, [], { q: 'audit-page' })).toBe(0);
       const first = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active' });
@@ -620,7 +635,7 @@ d('government fine browsing', () => {
       expect(second).toHaveLength(1);
       expect(first[0].fine_id).not.toBe(second[0].fine_id);
       expect(second[0].revoked).toBe(0);
-    } finally { await sql`DELETE FROM government_fines WHERE reason = 'audit-page'`.execute(db); }
+    } finally { await deleteFines('audit-page'); }
   });
 });
 
@@ -694,10 +709,15 @@ d('public taxation ledger aggregates', () => {
       await transfer(9209, 'ChestShop', 'ordinary sale', '99.00', 1);
       await transfer(9210, 'treasury', 'Personal balance tax (old)', '99.00', 31);
       await transfer(9211, 'treasury', 'Personal balance tax (not a government credit)', '99.00', 1, true);
+      // A second fine record sharing the one refund txn (revoke_txn_id isn't
+      // unique; V29 only made the debit unique). Its own debit txn has no postings
+      // to the office, so it contributes nothing — the refund must count once.
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        VALUES (9212, 'Fine: duplicate historic record', 'treasury', UNHEX(REPEAT('00', 16)), UTC_TIMESTAMP() - INTERVAL 10 DAY)`.execute(db);
       await sql`INSERT INTO government_fines
         (fine_id, player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked, revoke_txn_id)
         VALUES (9201, UNHEX(REPEAT('00',16)), 9201, 5, 'private reason', 9205, UNHEX(REPEAT('00',16)), 1, 9206),
-               (9202, UNHEX(REPEAT('00',16)), 9201, 5, 'duplicate historic record', 9205, UNHEX(REPEAT('00',16)), 1, 9206)`.execute(db);
+               (9202, UNHEX(REPEAT('00',16)), 9201, 5, 'duplicate historic record', 9212, UNHEX(REPEAT('00',16)), 1, 9206)`.execute(db);
       const rows = (await getTaxRevenue(7)).filter(row => row.account_id === 9201);
       const summary = summarizeTaxRevenue(rows, 7, new Date());
       expect(summary.totals).toEqual({ collected: '1.00', refunded: '5.00', net: '-4.00' });
@@ -708,8 +728,8 @@ d('public taxation ledger aggregates', () => {
       expect(Object.keys(rows[0]).sort()).toEqual(['account_id', 'collected', 'date', 'display_name', 'kind', 'refunded']);
     } finally {
       await sql`DELETE FROM government_fines WHERE fine_id BETWEEN 9201 AND 9202`.execute(db);
-      await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 9201 AND 9211`.execute(db);
-      await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 9201 AND 9211`.execute(db);
+      await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 9201 AND 9212`.execute(db);
+      await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 9201 AND 9212`.execute(db);
       await sql`DELETE FROM accounts WHERE account_id IN (9201, 9202)`.execute(db);
     }
   });

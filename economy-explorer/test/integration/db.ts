@@ -1,22 +1,33 @@
 import mysql from 'mysql2/promise';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Integration tests run only when RUN_INTEGRATION=1 and DB_* point at a
-// disposable MariaDB (a CI service container, or a local docker). They exercise
+// disposable MariaDB (a CI service container, or a local mariadbd). They exercise
 // the REAL lib/sql queries against a REAL database — no query mocking.
 //
-// The schema loaded here (./schema.sql) is a DELIBERATE LIGHT stand-in, not the
-// authoritative schema (that's economy-flyway/). See the header of schema.sql for
-// the full rationale: in-repo tests stay light; the full authoritative-schema +
-// trigger harness lives outside the monorepo in ../other (economy-explorer/testing/0005).
+// The schema is the AUTHORITATIVE one: every economy-flyway migration, applied in
+// version order — the same files Flyway runs in production, including the balance
+// triggers (trg_postings_*), stored functions, generated columns and views. No JVM
+// is needed: the migrations carry no client-side DELIMITER directives and MariaDB
+// parses stored-program bodies itself, so each file goes over as one
+// multi-statement query.
 export const HAS_DB = process.env.RUN_INTEGRATION === '1';
 
 // Resolved from the package root (vitest and Playwright both run there) rather than
 // import.meta.url, which Playwright's CommonJS transpile of this file can't use.
 const file = (p: string) => resolve(process.cwd(), 'test/integration', p);
+const MIGRATIONS = resolve(process.cwd(), '../economy-flyway/src/main/resources/db/migration');
 
-/** Drop everything, recreate the schema, and load the deterministic seed. */
+/** The `V<n>__*.sql` migrations in Flyway's numeric (not lexical) version order. */
+export function migrationFiles(dir: string = MIGRATIONS): string[] {
+  const version = (f: string) => Number(/^V(\d+)__/.exec(f)?.[1]);
+  const files = readdirSync(dir).filter((f) => /^V\d+__.+\.sql$/.test(f));
+  if (files.length === 0) throw new Error(`no Flyway migrations found in ${dir}`);
+  return files.sort((a, b) => version(a) - version(b)).map((f) => resolve(dir, f));
+}
+
+/** Drop everything, apply the Flyway migrations, and load the deterministic seed. */
 export async function resetDb(): Promise<void> {
   const conn = await mysql.createConnection({
     host: process.env.DB_HOST,
@@ -25,25 +36,35 @@ export async function resetDb(): Promise<void> {
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     multipleStatements: true,
+    // mysql2 asks for IGNORE_SPACE by default; Flyway's JDBC driver doesn't, and
+    // the triggers/functions record the sql_mode they were created under.
+    flags: ['-IGNORE_SPACE'],
   });
   try {
     await conn.query('SET FOREIGN_KEY_CHECKS=0');
-    // Drop views first — DROP TABLE can't remove them (ADT-13 added the
-    // account_read_access_* views), and they'd otherwise show up in SHOW TABLES.
+    // Drop views first — DROP TABLE can't remove them (V22 added the
+    // account_read_access_* views).
     const [views] = await conn.query<mysql.RowDataPacket[]>(
       'SELECT table_name AS n FROM information_schema.views WHERE table_schema = DATABASE()');
-    for (const v of views) {
-      await conn.query('DROP VIEW IF EXISTS `' + (v as Record<string, string>).n + '`');
-    }
-    const [tables] = await conn.query<mysql.RowDataPacket[]>('SHOW TABLES');
-    const col = tables.length ? Object.keys(tables[0])[0] : null;
-    for (const row of tables) {
-      if (col) await conn.query('DROP TABLE IF EXISTS `' + (row as Record<string, string>)[col] + '`');
+    for (const v of views) await conn.query('DROP VIEW IF EXISTS `' + String(v.n) + '`');
+    const [tables] = await conn.query<mysql.RowDataPacket[]>(
+      "SELECT table_name AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'");
+    for (const t of tables) await conn.query('DROP TABLE IF EXISTS `' + String(t.n) + '`');
+    // V1's uuid helper functions; the triggers went with their tables.
+    const [routines] = await conn.query<mysql.RowDataPacket[]>(
+      'SELECT routine_name AS n, routine_type AS t FROM information_schema.routines WHERE routine_schema = DATABASE()');
+    for (const r of routines) {
+      await conn.query(`DROP ${r.t === 'PROCEDURE' ? 'PROCEDURE' : 'FUNCTION'} IF EXISTS \`${String(r.n)}\``);
     }
     await conn.query('SET FOREIGN_KEY_CHECKS=1');
-    await conn.query(readFileSync(file('./schema.sql'), 'utf8'));
+    for (const migration of migrationFiles()) {
+      try {
+        await conn.query(readFileSync(migration, 'utf8'));
+      } catch (e) {
+        throw new Error(`applying ${migration}: ${(e as Error).message}`, { cause: e });
+      }
+    }
     await conn.query(readFileSync(file('./seed.sql'), 'utf8'));
-    await conn.query(readFileSync(resolve(process.cwd(), '../economy-flyway/src/main/resources/db/migration/V31__configurable_explorer_roles.sql'), 'utf8'));
   } finally {
     await conn.end();
   }

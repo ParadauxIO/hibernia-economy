@@ -200,8 +200,9 @@ npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
 
 The SQL integration suite and the Playwright end-to-end suite both need a
-**disposable** MariaDB — every table in it is dropped and reseeded from
-`test/integration/schema.sql` + `seed.sql`:
+**disposable** MariaDB — every table in it is dropped, rebuilt by applying the
+real `economy-flyway` migrations in version order (from Node; no JVM needed), and
+reseeded from `test/integration/seed.sql`:
 
 ```bash
 export DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=economy_test DB_USERNAME=... DB_PASSWORD=...
