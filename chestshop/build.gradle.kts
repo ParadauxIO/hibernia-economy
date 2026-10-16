@@ -104,7 +104,7 @@ dependencies {
     // chain otherwise resolves worldedit 8.0.0-SNAPSHOT, which needs Java 25).
     compileOnly("com.sk89q.worldedit:worldedit-core:7.3.9") { isTransitive = false }
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.9") { isTransitive = false }
-    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.13.1") { isTransitive = false }
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.16.1") { isTransitive = false }
     // WorldGuard soft-depend: pull only its own API jars, non-transitively, so
     // none of its server-provided transitives (bukkit/gson/fastutil/guava) fight
     // paper-api. They carry the classes we touch (WorldGuard, StateFlag, Flags,
@@ -161,7 +161,7 @@ dependencies {
     testImplementation(libs.assertj.core)
     // MockBukkit — a real in-memory server so Bukkit-coupled services are exercised for
     // real (ItemStacks, inventories, signs) rather than mock-verified.
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.110.0")
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.116.3")
 
     // Shared startup + message-key test-kit (the startup + messages.properties audit).
     // Brings JUnit, Guice, the framework and MockBukkit transitively (declared `api`
@@ -172,7 +172,7 @@ dependencies {
     // DatabaseModule note above), so it's absent from the plugin's own deps. The startup
     // test builds the real SQLite-backed DatabaseModule (it runs schema DDL at wiring
     // time), so the driver must be on the test runtime classpath.
-    testRuntimeOnly("org.xerial:sqlite-jdbc:3.46.1.3")
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.53.4.0")
     // The in-repo Treasury/Business API classes are on the test *compile* classpath already
     // (testCompileOnly extendsFrom compileOnly, above); add them to the test *runtime* so the
     // market/account services (which mock TreasuryApi/MarketApi/ShopQueryApi/BusinessApi and
@@ -360,8 +360,8 @@ tasks.shadowJar { finalizedBy(copyPlugin) }
 // Exercise each optional editing API on its own runtime: FAWE replaces WorldEdit.
 val faweTestLibraries = configurations.create("faweTestLibraries")
 dependencies {
-    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.13.1") { isTransitive = false }
-    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Libs-Core:2.13.1") { isTransitive = false }
+    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.16.1") { isTransitive = false }
+    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Libs-Core:2.16.1") { isTransitive = false }
 }
 tasks.test { exclude("**/FaweShopCleanupTest*") }
 val faweTest = tasks.register<Test>("faweTest") {
