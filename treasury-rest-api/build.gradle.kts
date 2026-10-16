@@ -126,7 +126,9 @@ tasks.jacocoTestCoverageVerification {
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.72".toBigDecimal()
+                // Measured 82.5% line coverage (1514/1834) after the route-table,
+                // filter and real-schema tests; floor sits ~2.5 points below.
+                minimum = "0.80".toBigDecimal()
             }
         }
     }
