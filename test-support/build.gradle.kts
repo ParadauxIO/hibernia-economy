@@ -68,6 +68,9 @@ dependencies {
     compileOnly(libs.flyway.core)
     // FixedSeedInCi (jqwik lifecycle hook); consumers with property tests declare jqwik.
     compileOnly(libs.jqwik)
+    // contract.TreasuryApiContract — the implementing module supplies both at test scope.
+    compileOnly(project(":treasury:treasury-api"))
+    compileOnly(libs.assertj.core)
 }
 
 // Stage ops/money-invariants.sql into the jar so LedgerInvariants runs the exact
