@@ -27,6 +27,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // The retry is there to capture a trace, not to turn a flake green: a test
+  // that only passes on retry still fails the CI run.
+  failOnFlakyTests: !!process.env.CI,
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   globalSetup: managed ? './test/e2e/global-setup.ts' : undefined,
