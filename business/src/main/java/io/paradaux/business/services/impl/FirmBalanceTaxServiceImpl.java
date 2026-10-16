@@ -111,10 +111,60 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
     }
 
     /**
-     * Builds the per-account tax collections for a single firm. Tax amounts
-     * are settled at the currency precision (2dp) and the rounding remainder
-     * is folded into the largest-balance account so the per-account sum
-     * matches the total tax exactly.
+     * Splits {@code totalTax} across the accounts in proportion to their balances,
+     * in whole cents, by the largest-remainder (Hamilton) method: every account gets
+     * the floor of its exact quota {@code totalTax · balance / totalBalance}, and the
+     * cents left over go one each to the accounts with the largest fractional
+     * remainders (ties: larger balance first, then account order).
+     *
+     * <p>So Σ shares == totalTax exactly, every share is its quota rounded down or up
+     * by less than a cent, and no share is negative. The previous scheme — round
+     * each share HALF_UP, then fold the whole drift into the largest account — broke
+     * all three: with ten equal 5.00 accounts at 0.1% (total 0.05) every share rounded
+     * up to 0.01, the −0.05 drift drove the largest account to −0.04, that share was
+     * skipped as non-positive, and the firm was charged 0.09 for a 0.05 tax. Found by
+     * {@code FirmBalanceTaxAllocationProperties}.
+     */
+    static Map<Integer, BigDecimal> allocateLargestRemainder(BigDecimal totalTax,
+                                                             Map<Integer, BigDecimal> balances,
+                                                             BigDecimal totalBalance) {
+        BigDecimal totalCents = totalTax.movePointRight(2);
+        record Quota(Integer accountId, BigDecimal balance, BigDecimal floorCents, BigDecimal remainder, int order) {}
+
+        List<Quota> quotas = new ArrayList<>();
+        BigDecimal allocatedCents = BigDecimal.ZERO;
+        int order = 0;
+        for (Map.Entry<Integer, BigDecimal> entry : balances.entrySet()) {
+            // Exact rational quota totalCents·b/B, kept as integer part + remainder over B
+            // so remainders compare exactly (no intermediate rounding at all).
+            BigDecimal numerator = totalCents.multiply(entry.getValue());
+            BigDecimal floor = numerator.divideToIntegralValue(totalBalance);
+            BigDecimal remainder = numerator.subtract(floor.multiply(totalBalance));
+            quotas.add(new Quota(entry.getKey(), entry.getValue(), floor, remainder, order++));
+            allocatedCents = allocatedCents.add(floor);
+        }
+
+        int leftover = totalCents.subtract(allocatedCents).intValueExact(); // 0 <= leftover < accounts
+        List<Quota> byRemainder = new ArrayList<>(quotas);
+        byRemainder.sort(java.util.Comparator.comparing(Quota::remainder).reversed()
+                .thenComparing(Quota::balance, java.util.Comparator.reverseOrder())
+                .thenComparingInt(Quota::order));
+        java.util.Set<Integer> bumped = new java.util.HashSet<>();
+        for (int i = 0; i < leftover; i++) bumped.add(byRemainder.get(i).accountId());
+
+        Map<Integer, BigDecimal> shares = new LinkedHashMap<>();
+        for (Quota q : quotas) {
+            BigDecimal cents = bumped.contains(q.accountId()) ? q.floorCents().add(BigDecimal.ONE) : q.floorCents();
+            shares.put(q.accountId(), cents.movePointLeft(2).setScale(2, RoundingMode.UNNECESSARY));
+        }
+        return shares;
+    }
+
+    /**
+     * Builds the per-account tax collections for a single firm: the firm's tax is
+     * computed once on its total positive balance (2dp HALF_UP, the same rounding
+     * {@link #estimateWeeklyTax} shows) and apportioned with
+     * {@link #allocateLargestRemainder}, so the per-account charges sum to it exactly.
      */
     private List<TaxCollection> buildFirmCollections(Firm firm, Integer destinationAccountId, TaxCycleEvent event) {
         if (firmPropertyService.getBoolean(firm.getFirmId(), EXEMPT_KEY).orElse(false)) return List.of();
@@ -143,27 +193,7 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
         if (totalTax.compareTo(BigDecimal.ZERO) <= 0) return List.of();
 
         List<TaxCollection> collections = new ArrayList<>();
-        BigDecimal allocated = BigDecimal.ZERO;
-        Integer largestAccountId = null;
-        BigDecimal largestBalance = BigDecimal.ZERO;
-        Map<Integer, BigDecimal> perAccountTax = new LinkedHashMap<>();
-
-        for (Map.Entry<Integer, BigDecimal> entry : accountBalances.entrySet()) {
-            BigDecimal proportion = entry.getValue().divide(totalBalance, 10, RoundingMode.HALF_UP);
-            BigDecimal accountTax = totalTax.multiply(proportion).setScale(2, RoundingMode.HALF_UP);
-            perAccountTax.put(entry.getKey(), accountTax);
-            allocated = allocated.add(accountTax);
-            if (entry.getValue().compareTo(largestBalance) > 0) {
-                largestBalance = entry.getValue();
-                largestAccountId = entry.getKey();
-            }
-        }
-
-        // Adjust the largest-balance account so the sum matches totalTax exactly.
-        BigDecimal drift = totalTax.subtract(allocated);
-        if (drift.signum() != 0 && largestAccountId != null) {
-            perAccountTax.merge(largestAccountId, drift, BigDecimal::add);
-        }
+        Map<Integer, BigDecimal> perAccountTax = allocateLargestRemainder(totalTax, accountBalances, totalBalance);
 
         for (Map.Entry<Integer, BigDecimal> entry : perAccountTax.entrySet()) {
             BigDecimal accountTax = entry.getValue();
