@@ -18,6 +18,7 @@ import org.apache.ibatis.exceptions.PersistenceException;
 import org.mybatis.guice.transactional.Transactional;
 
 import java.sql.SQLIntegrityConstraintViolationException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -31,14 +32,26 @@ public class FirmRequestServiceImpl implements FirmRequestService {
     private final FirmService firms;
     private final FirmStaffService staff;
     private final FirmAccountService accounts;
+    private final Clock clock;
 
     @Inject
     public FirmRequestServiceImpl(FirmRequestMapper requests, FirmService firms, FirmStaffService staff,
                                   FirmAccountService accounts) {
+        // System default zone, not UTC: expires_at is a wall-clock DATETIME that the
+        // mapper compares against the database's NOW(), so it must stay in the JVM's
+        // local time exactly as before this seam existed. (That coupling — correct only
+        // while the server JVM and the DB session share a time zone — is pre-existing.)
+        this(requests, firms, staff, accounts, Clock.systemDefaultZone());
+    }
+
+    /** Test seam: pins "now" so offer/transfer expiry times are deterministic. */
+    FirmRequestServiceImpl(FirmRequestMapper requests, FirmService firms, FirmStaffService staff,
+                           FirmAccountService accounts, Clock clock) {
         this.requests = requests;
         this.firms = firms;
         this.staff = staff;
         this.accounts = accounts;
+        this.clock = clock;
     }
 
     @Override
@@ -59,7 +72,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
     }
 
     private void offerEmployment(Firm firm, UUID targetId, UUID actorId) {
-        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OFFER_EXPIRATION_MINUTES);
+        LocalDateTime expiresAt = LocalDateTime.now(clock).plusMinutes(OFFER_EXPIRATION_MINUTES);
 
         if (firm == null) {
             throw new NotFoundException("Firm not found.");
@@ -255,7 +268,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
 
         String code = random32();
         try {
-            requests.createTransferRequest(firm.getFirmId(), newProprietorId.toString(), code ,LocalDateTime.now().plusMinutes(OFFER_EXPIRATION_MINUTES));
+            requests.createTransferRequest(firm.getFirmId(), newProprietorId.toString(), code, LocalDateTime.now(clock).plusMinutes(OFFER_EXPIRATION_MINUTES));
         } catch (PersistenceException ex) {
             if (ex.getCause() instanceof SQLIntegrityConstraintViolationException) {
                 throw new BadCommandException("You already have a pending transfer request. Cancel the previous or wait for it to be approved.");

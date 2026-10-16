@@ -32,12 +32,30 @@ class FirmRequestMapperIT extends IntegrationTestBase {
         firmId = f.getFirmId();
     }
 
+    /**
+     * "Now" as the database sees it. Every expiry predicate in the mapper compares
+     * {@code expires_at} with the server's {@code NOW()}, so fixtures must be built on
+     * the same clock: a JVM {@code LocalDateTime.now()} is only comparable when the JVM
+     * and the DB session share a time zone, and these tests failed whenever they didn't
+     * (e.g. a UTC CI database with a non-UTC developer JVM, or vice versa).
+     */
+    private LocalDateTime dbNow() {
+        try (var conn = dataSource.getConnection();
+             var st = conn.createStatement();
+             var rs = st.executeQuery("SELECT NOW()")) {
+            rs.next();
+            return rs.getObject(1, LocalDateTime.class);
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     // ---------- invites ----------
 
     @Test
     void createInvite_andHasPending() {
         int rows = requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(rows).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
     }
@@ -45,10 +63,10 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void createInvite_secondPendingIsRejected() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThatThrownBy(() ->
                 requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                        LocalDateTime.now().plusMinutes(5)))
+                        dbNow().plusMinutes(5)))
                 .isInstanceOf(PersistenceException.class);
     }
 
@@ -60,25 +78,25 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void expireStaleInvite_freesTheUniqueSlotForAReoffer() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().minusMinutes(1));
+                dbNow().minusMinutes(1));
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
         // The bug: the guard says "no pending offer" but the insert collides.
         assertThatThrownBy(() ->
                 requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                        LocalDateTime.now().plusMinutes(5)))
+                        dbNow().plusMinutes(5)))
                 .isInstanceOf(PersistenceException.class);
 
         assertThat(requests.expireStaleInvite(firmId, invited.toString())).isEqualTo(1);
 
         assertThat(requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5))).isEqualTo(1);
+                dbNow().plusMinutes(5))).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
     }
 
     @Test
     void expireStaleInvite_leavesALiveInviteAlone() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(requests.expireStaleInvite(firmId, invited.toString())).isZero();
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
     }
@@ -86,7 +104,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void acceptInvite_flipsStatus() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(requests.acceptInvite(firmId, invited.toString())).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
         assertThat(requests.getInviter(firmId, invited.toString())).isEqualToIgnoringCase(inviter.toString());
@@ -95,7 +113,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void rejectInvite_flipsStatus() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(requests.rejectInvite(firmId, invited.toString())).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
     }
@@ -103,7 +121,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void rescindInvite_flipsStatus() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(requests.rescindInvite(firmId, invited.toString())).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
     }
@@ -111,7 +129,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void expireStaleInvites_marksPastInvitesExpired() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().minusMinutes(1));
+                dbNow().minusMinutes(1));
         // hasPendingJobOffer ignores expired ones
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
 
@@ -122,7 +140,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void lockPendingInviter_returnsInviter() {
         requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(requests.lockPendingInviter(firmId, invited.toString()))
                 .isEqualToIgnoringCase(inviter.toString());
     }
@@ -132,7 +150,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void createAndConfirmTransfer() {
         int rows = requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(rows).isEqualTo(1);
         assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-1")).isEqualTo(1);
     }
@@ -140,14 +158,14 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void rejectTransfer_setsCancelled() {
         requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(requests.rejectTransfer(firmId, invited.toString())).isEqualTo(1);
     }
 
     @Test
     void acceptTransfer_requiresConfirmedState() {
         requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         // PENDING -> ACCEPTED should NOT update (only CONFIRMED -> ACCEPTED).
         assertThat(requests.acceptTransfer(firmId, invited.toString())).isZero();
         requests.confirmTransfer(firmId, invited.toString(), "tok-1");
@@ -162,23 +180,23 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void expireStaleTransfer_freesTheUniqueSlotForANewTransfer() {
         requests.createTransferRequest(firmId, invited.toString(), "tok-lapsed",
-                LocalDateTime.now().minusMinutes(1));
+                dbNow().minusMinutes(1));
         assertThat(requests.rejectTransfer(firmId, invited.toString())).isZero();
         assertThatThrownBy(() ->
                 requests.createTransferRequest(firmId, invited.toString(), "tok-new",
-                        LocalDateTime.now().plusMinutes(5)))
+                        dbNow().plusMinutes(5)))
                 .isInstanceOf(PersistenceException.class);
 
         assertThat(requests.expireStaleTransfer(firmId)).isEqualTo(1);
 
         assertThat(requests.createTransferRequest(firmId, invited.toString(), "tok-new",
-                LocalDateTime.now().plusMinutes(5))).isEqualTo(1);
+                dbNow().plusMinutes(5))).isEqualTo(1);
     }
 
     @Test
     void expireStaleTransfer_leavesALiveTransferAlone() {
         requests.createTransferRequest(firmId, invited.toString(), "tok-live",
-                LocalDateTime.now().plusMinutes(5));
+                dbNow().plusMinutes(5));
         assertThat(requests.expireStaleTransfer(firmId)).isZero();
         assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-live")).isEqualTo(1);
     }
@@ -186,7 +204,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
     @Test
     void expireStaleTransfers_marksOverdue() {
         requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                LocalDateTime.now().minusMinutes(1));
+                dbNow().minusMinutes(1));
         assertThat(requests.expireStaleTransfers()).isEqualTo(1);
     }
 
@@ -240,7 +258,7 @@ class FirmRequestMapperIT extends IntegrationTestBase {
         }
         // An overdue in-flight transfer alongside it IS expired.
         requests.createTransferRequest(firmId, invited.toString(), "tok-overdue",
-                LocalDateTime.now().minusMinutes(1));
+                dbNow().minusMinutes(1));
 
         assertThat(requests.expireStaleTransfers()).isEqualTo(1);
 

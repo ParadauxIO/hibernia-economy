@@ -196,8 +196,18 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     @Test
     void transfer_negativeCreditLimit_meansUnlimitedOverdraft() {
         // credit_limit = -1 is the sentinel for system faucet/sink accounts (Vault bridge,
-        // primitive government). They can go arbitrarily negative.
-        Account faucet = createOverdraftAccount(0, new BigDecimal("-1"));
+        // primitive government). They can go arbitrarily negative. Typed GOVERNMENT like
+        // the real faucets: ops/money-invariants.sql (run after every IT) only accepts a
+        // negative balance on GOVERNMENT/SYSTEM accounts, whereas OverdraftPolicy honours
+        // the sentinel on any type — a PERSONAL "faucet" would be flagged as illegal.
+        Account faucet = new Account();
+        faucet.setAccountType(AccountType.GOVERNMENT);
+        faucet.setOwnerUuid(UUID.randomUUID());
+        faucet.setDisplayName("test-faucet");
+        faucet.setAllowOverdraft(true);
+        faucet.setCreditLimit(new BigDecimal("-1"));
+        accountMapper.insertAccount(faucet);
+        accountMapper.seedBalance(faucet.getAccountId());
         Account b = createPersonalAccount(0);
 
         ledgerService.transfer(new TransferRequest(
@@ -572,24 +582,43 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     // ---------- concurrency: deadlock-safe lock ordering ----------
 
     @Test
-    void concurrentSwappedTransfers_neverDeadlock_andConserveMoney() throws Exception {
+    void concurrentSwappedTransfers_neverDeadlock_andLoseNoUpdate() throws Exception {
         // Transfers lock both balance rows FOR UPDATE in ascending account-id order,
-        // so A→B and B→A can't form a lock cycle. Hammer both directions at once and
-        // assert zero transient failures + money conserved (ADT-50).
+        // so A→B and B→A can't form a lock cycle (ADT-50). Hammer both directions at
+        // once and assert zero transient failures and the EXACT final balances.
+        //
+        // The traffic is deliberately asymmetric — 12 workers move 3.00 A→B five times,
+        // 12 workers move 7.00 B→A five times — so the expected end state (A +240.00,
+        // B −240.00) is unique: a single lost update in either direction shifts a
+        // balance by 3.00 or 7.00 and fails the assertion. With equal amounts each way,
+        // lost updates in opposite directions cancel and "money conserved" holds even
+        // when the ledger is wrong.
         Account a = createPersonalAccount(10_000);
         Account b = createPersonalAccount(10_000);
 
-        int perDirection = 40;
+        int workers = 24;
+        int transfersPerWorker = 5;
+        BigDecimal aToB = new BigDecimal("3.00");
+        BigDecimal bToA = new BigDecimal("7.00");
+        // All workers park here before their first transfer so they genuinely overlap.
+        java.util.concurrent.CyclicBarrier startGate = new java.util.concurrent.CyclicBarrier(workers);
         java.util.List<java.util.concurrent.Callable<Void>> tasks = new java.util.ArrayList<>();
-        for (int i = 0; i < perDirection; i++) {
-            tasks.add(() -> { transferOne(a, b); return null; });
-            tasks.add(() -> { transferOne(b, a); return null; });
+        for (int w = 0; w < workers; w++) {
+            boolean forward = w % 2 == 0;
+            tasks.add(() -> {
+                startGate.await(30, TimeUnit.SECONDS);
+                for (int i = 0; i < transfersPerWorker; i++) {
+                    if (forward) transferOne(a, b, aToB);
+                    else transferOne(b, a, bToA);
+                }
+                return null;
+            });
         }
 
-        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(6);
+        ExecutorService pool = Executors.newFixedThreadPool(workers);
         java.util.List<Throwable> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
         try {
-            for (java.util.concurrent.Future<Void> f : pool.invokeAll(tasks)) {
+            for (Future<Void> f : pool.invokeAll(tasks, 120, TimeUnit.SECONDS)) {
                 try {
                     f.get();
                 } catch (java.util.concurrent.ExecutionException e) {
@@ -601,16 +630,16 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         }
 
         assertThat(errors).as("no transient deadlock/failure under swapped-direction load").isEmpty();
-        // Equal traffic each way nets to zero; money is conserved regardless.
-        assertThat(balanceOf(a)).isEqualByComparingTo("10000.00");
-        assertThat(balanceOf(b)).isEqualByComparingTo("10000.00");
-        assertThat(balanceOf(a).add(balanceOf(b))).isEqualByComparingTo("20000.00");
+        int perDirection = workers / 2 * transfersPerWorker; // 60 transfers each way
+        BigDecimal net = bToA.subtract(aToB).multiply(BigDecimal.valueOf(perDirection)); // 240.00
+        assertThat(balanceOf(a)).isEqualByComparingTo(new BigDecimal("10000.00").add(net));
+        assertThat(balanceOf(b)).isEqualByComparingTo(new BigDecimal("10000.00").subtract(net));
     }
 
-    private void transferOne(Account from, Account to) {
+    private void transferOne(Account from, Account to, BigDecimal amount) {
         ledgerService.transfer(new TransferRequest(
                 from.getAccountId(), to.getAccountId(),
-                new BigDecimal("1.00"), "concurrency test",
+                amount, "concurrency test",
                 TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
                 TreasuryConstants.TREASURY_PLUGIN_NAME, null));
     }

@@ -75,6 +75,8 @@ dependencies {
     testImplementation(libs.mariadb4j)
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.mysql)
+    // Shared MariaDB IT harness (TestDatabaseExtension + ledger invariant oracle).
+    testImplementation(project(":test-support"))
 }
 
 // Stage the economy-flyway migrations onto the test classpath (under db/migration)

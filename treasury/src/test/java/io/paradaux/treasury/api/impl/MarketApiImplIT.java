@@ -47,9 +47,9 @@ class MarketApiImplIT extends IntegrationTestBase {
             st.execute("TRUNCATE TABLE chestshop_sale");
             st.execute("TRUNCATE TABLE chestshop_shop");
         }
-        // This IT inserts synthetic txn/account/firm ids, so drop the V20 FK
-        // enforcement the Flyway harness applied to these analytics tables.
-        dropChestShopMarketForeignKeys();
+        // The records below reference txn 42, shop accounts 100/200 and firm 7;
+        // seed those parents so the V20 market FKs stay enforced.
+        seedMarketReferences(new long[] {42L}, new int[] {100, 200}, new int[] {7});
     }
 
     // ── recordSale ──────────────────────────────────────────────────────────────

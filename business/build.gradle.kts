@@ -74,6 +74,9 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
 
+    // Property-based tests (jqwik runs as a second JUnit Platform engine).
+    testImplementation(libs.jqwik)
+
     // Shared startup + message-key test-kit. Brings JUnit, Guice, the framework and
     // MockBukkit transitively (declared `api` there) so the startup test can boot an
     // in-memory server and drive the real injector without re-declaring them.
@@ -89,6 +92,13 @@ dependencies {
 
     // Treasury API + Paper API are compileOnly in production; tests need them too.
     testImplementation(project(":treasury:treasury-api"))
+    // The REAL Treasury implementation (unshaded "thin" jar + its TestServicesModule
+    // fixtures) for the handful of ITs that run business services against it instead
+    // of a Mockito TreasuryApi. No cycle: treasury depends on nothing in business.
+    testImplementation(testFixtures(project(":treasury")))
+    // Treasury's MembershipServiceImpl has an optional LuckPerms setter that Guice must
+    // be able to load even when unbound (see treasury/build.gradle.kts).
+    testImplementation(libs.luckperms.api)
     testImplementation(libs.paper.api)
 
     // Embedded MariaDB for mapper integration tests; same approach Treasury uses.

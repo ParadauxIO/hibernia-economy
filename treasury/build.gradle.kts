@@ -5,6 +5,11 @@ plugins {
     id("com.gradleup.shadow")
     id("maven-publish")
     id("io.paradaux.paper-server-conventions")
+    // TestServicesModule/TestConfigs (the real-service Guice wiring the ITs use) live in
+    // src/testFixtures so business can run its ITs against the REAL TreasuryApi.
+    // treasury itself is never published (only treasury-api is), so the fixtures
+    // variant never reaches a repository.
+    `java-test-fixtures`
 }
 
 // group + version are set centrally by the root allprojects block (single
@@ -67,6 +72,9 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
 
+    // Property-based tests (jqwik runs as a second JUnit Platform engine).
+    testImplementation(libs.jqwik)
+
     // Embedded MariaDB for integration tests — no Docker required.
     // MariaDB4j unpacks a real MariaDB binary into a temp dir and runs it on a
     // dynamic port.
@@ -104,6 +112,11 @@ dependencies {
     // schema.sql snapshot to drift. flyway-mysql handles the MySQL/MariaDB URL.
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.mysql)
+
+    // Test fixtures: compile against the same API/Guice the services use.
+    testFixturesImplementation(project(":treasury:treasury-api"))
+    testFixturesImplementation(libs.guice)
+    testFixturesImplementation(libs.hibernia.framework)
 }
 
 // Stage the economy-flyway migrations onto the test classpath (under db/migration)
@@ -112,6 +125,16 @@ tasks.named<Copy>("processTestResources") {
     from(project(":economy-flyway").file("src/main/resources/db/migration")) {
         into("db/migration")
     }
+}
+
+// The paper-server conventions disable :jar so it can't overwrite the shaded plugin
+// jar. Re-enable it under a "thin" classifier (no clash with the shadow jar) so a
+// testFixtures(project(":treasury")) dependency resolves to the plain, unrelocated
+// classes — business's ITs run against the real TreasuryApi through it. Only the
+// shadow jar is staged or shipped.
+tasks.named<Jar>("jar") {
+    enabled = true
+    archiveClassifier.set("thin")
 }
 
 tasks {

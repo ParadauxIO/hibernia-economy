@@ -19,7 +19,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -207,71 +208,68 @@ class LedgerServiceBreadthIT extends IntegrationTestBase {
         assertThat(txn.getPluginSystem()).isEqualTo("ShopPlugin");
     }
 
-    // ---------- Concurrency smoke test ----------
+    // ---------- Concurrency: exact outcome under contention ----------
 
     @Test
-    void transfer_concurrentDebitsAgainstSameSource_neverOverdrawWithoutOverdraft() throws Exception {
-        // Source has 1 000 with no overdraft. Fire 20 concurrent transfers of 100
-        // each. The SAFETY property is "no overdraft, money is conserved" —
-        // *not* an exact success count. Under sufficient lock contention some
-        // transactions may surface transient errors (deadlock, row-version);
-        // the suite should still validate that no money is lost, no balance
-        // ever drops below 0, and the source-debit total exactly equals the
-        // sink-credit total.
+    void transfer_concurrentDebitsAgainstSameSource_exactlyFloorBalanceOverAmountSucceed() throws Exception {
+        // Source holds 1 000.00 with no overdraft; 24 threads each try to move 70.00 at
+        // the same instant. transferInternal locks the source balance row FOR UPDATE
+        // before the floor check, so the debits serialise and the outcome is fully
+        // determined: exactly floor(1000 / 70) = 14 succeed, the other 10 are rejected
+        // as insufficient funds, and NOTHING else happens — no deadlock, no lock-wait
+        // timeout, no "transient" error. (An earlier version tolerated any number of
+        // unexplained failures and only required one success, so it could not tell a
+        // working lock from a broken one; with a 4-connection pool it also barely ran
+        // concurrently. The shared harness's pool is wider than this fan-out.)
         Account source = createPersonalAccount(1_000);
         Account sink = createPersonalAccount(0);
+        BigDecimal amount = new BigDecimal("70.00");
 
-        int threads = 20;
+        int threads = 24;
+        int expectedSuccesses = 14;
         ExecutorService pool = Executors.newFixedThreadPool(threads);
-        CountDownLatch start = new CountDownLatch(1);
+        // Every worker parks on the barrier first, so all 24 are runnable before any of
+        // them issues SQL — a latch counted down by the submitting thread can open
+        // before half the pool has even started.
+        CyclicBarrier startGate = new CyclicBarrier(threads);
         AtomicInteger successes = new AtomicInteger();
-        AtomicInteger expected  = new AtomicInteger(); // insufficient-funds rejections
-        AtomicInteger transient_ = new AtomicInteger(); // anything else (lock conflicts etc.)
+        AtomicInteger insufficient = new AtomicInteger();
+        List<Throwable> unexpected = new CopyOnWriteArrayList<>();
         List<Future<?>> futures = new ArrayList<>();
 
-        for (int i = 0; i < threads; i++) {
-            futures.add(pool.submit(() -> {
-                try {
-                    start.await();
-                    ledgerService.transfer(new TransferRequest(
-                            source.getAccountId(), sink.getAccountId(), new BigDecimal("100.00"),
-                            "race", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                            "test", null));
-                    successes.incrementAndGet();
-                } catch (IllegalStateException e) {
-                    if (String.valueOf(e.getMessage()).contains("Insufficient funds")) {
-                        expected.incrementAndGet();
-                    } else {
-                        transient_.incrementAndGet();
+        try {
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    try {
+                        startGate.await(30, TimeUnit.SECONDS);
+                        ledgerService.transfer(new TransferRequest(
+                                source.getAccountId(), sink.getAccountId(), amount,
+                                "race", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
+                                "test", null));
+                        successes.incrementAndGet();
+                    } catch (IllegalStateException e) {
+                        if ("Insufficient funds".equals(e.getMessage())) {
+                            insufficient.incrementAndGet();
+                        } else {
+                            unexpected.add(e);
+                        }
+                    } catch (Exception e) {
+                        unexpected.add(e);
                     }
-                } catch (RuntimeException e) {
-                    // mybatis wraps SQL errors in PersistenceException — count as transient
-                    transient_.incrementAndGet();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }));
+                    return null;
+                }));
+            }
+            for (Future<?> f : futures) f.get(60, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
         }
-        start.countDown();
-        for (Future<?> f : futures) f.get(60, TimeUnit.SECONDS);
-        pool.shutdown();
 
-        assertThat(successes.get() + expected.get() + transient_.get()).isEqualTo(threads);
-        // At least one must succeed for the test to be meaningful.
-        assertThat(successes.get()).isGreaterThan(0);
-        // SAFETY: never overdraw the source.
-        assertThat(successes.get()).isLessThanOrEqualTo(10);
+        assertThat(unexpected).as("only insufficient-funds rejections are acceptable").isEmpty();
+        assertThat(successes.get()).isEqualTo(expectedSuccesses);
+        assertThat(insufficient.get()).isEqualTo(threads - expectedSuccesses);
 
-        BigDecimal finalSource = accountService.getBalanceReadOnly(source.getAccountId());
-        BigDecimal finalSink   = accountService.getBalanceReadOnly(sink.getAccountId());
-
-        // SAFETY: no negative balance.
-        assertThat(finalSource).isGreaterThanOrEqualTo(BigDecimal.ZERO);
-        // CONSERVATION: every cent debited from source landed in sink.
-        BigDecimal expectedMoved = new BigDecimal(successes.get() * 100).setScale(2, java.math.RoundingMode.HALF_EVEN);
-        assertThat(finalSink).isEqualByComparingTo(expectedMoved);
-        BigDecimal sourceDebited = new BigDecimal("1000.00").subtract(finalSource);
-        assertThat(sourceDebited).isEqualByComparingTo(expectedMoved);
+        assertThat(accountService.getBalanceReadOnly(source.getAccountId())).isEqualByComparingTo("20.00");
+        assertThat(accountService.getBalanceReadOnly(sink.getAccountId())).isEqualByComparingTo("980.00");
     }
 
     // ---------- Helpers ----------

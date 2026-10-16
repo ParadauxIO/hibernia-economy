@@ -37,8 +37,6 @@ class ShopQueryApiImplIT extends IntegrationTestBase {
             st.execute("TRUNCATE TABLE chestshop_shop");
             st.execute("TRUNCATE TABLE chestshop_preview_preference");
         }
-        // Insert synthetic account ids without seeding accounts/firm rows.
-        dropChestShopMarketForeignKeys();
     }
 
     // ── searchShops ───────────────────────────────────────────────────────────
