@@ -13,11 +13,13 @@ migration base ref).
 
 | Job | What it runs | When |
 |---|---|---|
-| `JVM` | `./gradlew build --parallel --continue -Pci=true` — every project's `check` plus `assemble` — against one **MariaDB 10.11** service with a database per suite. Publishes JUnit results as a check. | always |
-| `Coverage comment` | Comments Treasury's and Business's JaCoCo coverage on the PR. Advisory: the 95 % gates are `jacocoTestCoverageVerification` in their builds and already ran in `JVM`. | PRs |
-| `Explorer` | `explorer-check.yml`: typecheck, lint, vitest with coverage thresholds (MariaDB 10.11), then the Playwright e2e suite. | always; e2e only if the PR touches `economy-explorer/**` |
+| `JVM` | `./gradlew build --parallel --continue -Pci=true` — every project's `check` plus `assemble`, including Error Prone/NullAway, Spotless, ArchUnit and the coverage ratchets — against one **MariaDB 10.11** service with a database per suite. Full-history checkout so Spotless can ratchet against `origin/develop`. Publishes JUnit results as a check. | always |
+| `Coverage comment` | Comments Treasury's and Business's JaCoCo coverage on the PR. Advisory: the line + branch ratchets are `jacocoTestCoverageVerification` in their builds and already ran in `JVM`. | PRs |
+| `Mutation testing` | PIT (`:common`, `:treasury`, `:business`, `:treasury-api-plugin`, `:chestshop` `pitest`), each module failing under its `mutationThreshold`. History is cached per commit, so PR and push runs only re-analyse changed code; the nightly run starts cold. Reports are uploaded as `pitest-reports`. | as `Integration`; nightly always cold |
+| `REST API contract` | `oasdiff breaking` between the base branch's and this PR's `treasury-rest-api/openapi/openapi.json`; fails on breaking changes unless the PR has the `api-breaking-change` label. | PRs |
+| `Explorer` | `explorer-check.yml`: typecheck, lint, vitest with coverage thresholds (MariaDB 10.11), then the Playwright e2e suite including the axe accessibility scan. Flaky tests (pass only on retry) fail the run. | always; e2e only if the PR touches `economy-explorer/**` or the migrations |
 | `Migrations` | The migration guard, the upgrade test, money invariants and the kysely schema-drift check (below). | always |
-| `Integration (live server)` | `ops/integration/run.sh`: a real Paper server with this commit's plugins, the REST API and a migrated MariaDB, driven by the suite in `integration-tests/` (~15 min). | always, except PRs that touch none of the plugins, REST API, `common`, migrations, build files or the suite |
+| `Integration (live server)` | `ops/integration/run.sh`: a real Paper server with this commit's plugins, the REST API and a migrated MariaDB, driven by the suite in `integration-tests/` (~6 min). | always, except PRs that touch none of the plugins, REST API, `common`, migrations, build files or the suite |
 | `ci-gate` | Fails if any job above failed or was cancelled; skipped jobs are fine. | always |
 
 **`ci-gate` is the one required status check** for branch protection. Required
