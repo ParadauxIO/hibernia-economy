@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth';
 import Keycloak from 'next-auth/providers/keycloak';
+import { withoutUndefined } from '@/lib/util/withoutUndefined';
 
 /**
  * Auth.js v5 + Keycloak.
@@ -22,8 +23,7 @@ import Keycloak from 'next-auth/providers/keycloak';
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [
     Keycloak({
-      issuer: process.env.AUTH_KEYCLOAK_ISSUER,
-      clientId: process.env.AUTH_KEYCLOAK_ID,
+      ...withoutUndefined({ issuer: process.env.AUTH_KEYCLOAK_ISSUER, clientId: process.env.AUTH_KEYCLOAK_ID }),
       clientSecret: process.env.AUTH_KEYCLOAK_SECRET ?? '',
       client: { token_endpoint_auth_method: 'none' },
     }),

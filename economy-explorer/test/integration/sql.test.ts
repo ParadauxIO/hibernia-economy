@@ -7,7 +7,7 @@ import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { permissionsFor } from '../role-fixtures';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { HAS_DB, resetDb, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
+import { HAS_DB, resetDb, testDbOptions, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
 import { accountLabel, looksLikeUuid } from '@/lib/format';
 import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount } from '@/lib/sql/ledger';
 import { getPersonalBalances, getBalanceDistribution } from '@/lib/sql/stats';
@@ -183,7 +183,7 @@ d('money flow counts only clean cross-type transfers', () => {
     const edges = await getMoneyFlow(30);
     expect(edges).toHaveLength(1); // txn2 is same-type, txn3 is 3-leg
     expect(edges[0]).toMatchObject({ from_type: 'PERSONAL', to_type: 'BUSINESS', txn_count: 1 });
-    expect(edges[0].amount).toBe('500.00');
+    expect(edges[0]?.amount).toBe('500.00');
   });
 });
 
@@ -241,13 +241,7 @@ d('firm market drilldown honours the ?days window', () => {
   beforeAll(async () => {
     // One Acme (firm 1) sale 40 days old, alongside the two seeded "now" sales,
     // and a 40-day-old sale that is TaxFree Co's (firm 2) only one.
-    const conn = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT ?? 3306),
-      user: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-    });
+    const conn = await mysql.createConnection(testDbOptions());
     try {
       await conn.query(
         `INSERT INTO chestshop_sale (txn_id, occurred_at, direction, customer_uuid_bin, shop_account_id, shop_account_type, shop_firm_id, shop_owner_uuid_bin, is_admin_shop, material, item_key, item_name, item_custom, quantity, unit_price, total_price)
@@ -380,8 +374,7 @@ d('player KPI rollups sum money in SQL, exact to the cent (behaviour/0001)', () 
 // Regression coverage for the shared WEB relationship view and scoped government SQL.
 d('RBAC relationship snapshots', () => {
   async function connect() {
-    return mysql.createConnection({ host: process.env.DB_HOST, port: Number(process.env.DB_PORT ?? 3306),
-      user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, database: process.env.DB_NAME });
+    return mysql.createConnection(testDbOptions());
   }
   it('LP groups grant account reads and My data, expire, and respect removal', async () => {
     const c = await connect();
@@ -633,8 +626,8 @@ d('government fine browsing', () => {
       const second = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active', offset: 1 });
       expect(first).toHaveLength(1);
       expect(second).toHaveLength(1);
-      expect(first[0].fine_id).not.toBe(second[0].fine_id);
-      expect(second[0].revoked).toBe(0);
+      expect(first[0]?.fine_id).not.toBe(second[0]?.fine_id);
+      expect(second[0]?.revoked).toBe(0);
     } finally { await deleteFines('audit-page'); }
   });
 });
@@ -676,7 +669,7 @@ d('reused firm names', () => {
       expect((await findFirmByDisplayName('reusedname'))?.firm_id).toBe(903);
       const history = await sql<{ display_name: string }>`
         SELECT display_name FROM firm WHERE firm_id = 901`.execute(db);
-      expect(history.rows[0].display_name).toBe('ReusedName');
+      expect(history.rows[0]?.display_name).toBe('ReusedName');
     } finally {
       await sql`DELETE FROM firm WHERE firm_id IN (901, 902, 903)`.execute(db);
     }
@@ -722,10 +715,10 @@ d('public taxation ledger aggregates', () => {
       const summary = summarizeTaxRevenue(rows, 7, new Date());
       expect(summary.totals).toEqual({ collected: '1.00', refunded: '5.00', net: '-4.00' });
       expect(summary.byType.map(row => row.net)).toEqual(['0.10', '0.20', '0.30', '0.40', '-5.00']);
-      expect(summary.accounts[0].name).toBe('Archived tax office');
+      expect(summary.accounts[0]?.name).toBe('Archived tax office');
       expect(summarizeTaxRevenue((await getTaxRevenue(30)).filter(row => row.account_id === 9201), 30, new Date()).totals)
         .toEqual({ collected: '6.00', refunded: '5.00', net: '1.00' });
-      expect(Object.keys(rows[0]).sort()).toEqual(['account_id', 'collected', 'date', 'display_name', 'kind', 'refunded']);
+      expect(Object.keys(rows[0] ?? {}).sort()).toEqual(['account_id', 'collected', 'date', 'display_name', 'kind', 'refunded']);
     } finally {
       await sql`DELETE FROM government_fines WHERE fine_id BETWEEN 9201 AND 9202`.execute(db);
       await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 9201 AND 9212`.execute(db);

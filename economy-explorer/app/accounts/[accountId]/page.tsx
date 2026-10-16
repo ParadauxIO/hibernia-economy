@@ -134,9 +134,9 @@ export default async function AccountDetailPage({
         // Walk back from current balance: today's EOD ≈ current; subtract each day's net for prior days.
         let running = currentBalance;
         const eodByDate = new Map<string, number>();
-        for (let i = trajectory.length - 1; i >= 0; i--) {
-          eodByDate.set(trajectory[i].date, running);
-          running -= parseFloat(trajectory[i].net);
+        for (const day of [...trajectory].reverse()) {
+          eodByDate.set(day.date, running);
+          running -= parseFloat(day.net);
         }
         return trajectory.map((r) => ({ date: r.date, balance: eodByDate.get(r.date) ?? 0 }));
       })()

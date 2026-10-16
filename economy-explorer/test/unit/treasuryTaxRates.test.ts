@@ -11,9 +11,9 @@ describe('published Treasury tax configuration', () => {
     vi.stubGlobal('fetch', fetch);
     const rates = await fetchTreasuryTaxRates();
     expect(fetch).toHaveBeenCalledWith('http://treasury:8080/api/v1/config/tax', expect.objectContaining({ cache: 'no-store', redirect: 'error' }));
-    expect(fetch.mock.calls[0][1].headers).toBeUndefined();
+    expect(fetch.mock.calls[0]?.[1].headers).toBeUndefined();
     expect(rates.balanceTax?.enabled).toBe(false);
-    expect(rates.balanceTax?.brackets[0].floor).toBe('0');
+    expect(rates.balanceTax?.brackets[0]?.floor).toBe('0');
     expect(rates.sourceIncomeTax).toEqual(sourceIncomeTax);
   });
   it.each(['unconfigured', '404', 'timeout', 'malformed'])('degrades to unavailable for %s', async failure => {
