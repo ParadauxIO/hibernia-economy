@@ -1,8 +1,23 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.market.ShopResult;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -21,22 +36,6 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.List;
-import java.util.UUID;
-import java.util.function.Consumer;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Floating item-preview lifecycle. ItemStack YAML round-trips run on a real MockBukkit server;
@@ -67,9 +66,12 @@ class PreviewServiceImplTest {
         when(plugin.getServer()).thenReturn(server);
         lenient().when(server.getWorld("world")).thenReturn(world);
         lenient().when(server.getWorld("nope")).thenReturn(null);
-        lenient().when(display.getTransformation()).thenReturn(
-                new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(1, 1, 1), new Quaternionf()));
-        lenient().when(world.spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class)))
+        lenient()
+                .when(display.getTransformation())
+                .thenReturn(new Transformation(
+                        new Vector3f(), new Quaternionf(), new Vector3f(1, 1, 1), new Quaternionf()));
+        lenient()
+                .when(world.spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class)))
                 .thenAnswer(inv -> {
                     Consumer<ItemDisplay> c = inv.getArgument(2);
                     c.accept(display);
@@ -81,10 +83,12 @@ class PreviewServiceImplTest {
         lenient().when(marketService.shopQuery()).thenReturn(shopQuery);
         BukkitScheduler scheduler = mock(BukkitScheduler.class);
         lenient().when(server.getScheduler()).thenReturn(scheduler);
-        lenient().when(scheduler.runTaskAsynchronously(eq(plugin), any(Runnable.class))).thenAnswer(inv -> {
-            asyncTasks.add(inv.getArgument(1));
-            return mock(BukkitTask.class);
-        });
+        lenient()
+                .when(scheduler.runTaskAsynchronously(eq(plugin), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    asyncTasks.add(inv.getArgument(1));
+                    return mock(BukkitTask.class);
+                });
         lenient().when(scheduler.runTask(eq(plugin), any(Runnable.class))).thenAnswer(inv -> {
             mainTasks.add(inv.getArgument(1));
             return mock(BukkitTask.class);
@@ -119,7 +123,7 @@ class PreviewServiceImplTest {
     void render_replacesExistingDisplayAtSamePosition() {
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
         preview.render("world", 16, 64, 32, new ItemStack(Material.STONE)); // destroy old, spawn new
-        verify(display, times(1)).remove();            // the first display was destroyed
+        verify(display, times(1)).remove(); // the first display was destroyed
         verify(world, times(2)).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
     }
 
@@ -289,7 +293,7 @@ class PreviewServiceImplTest {
         preview.loadChunk("world", 1, 2);
         completeLookup();
 
-        verifySpawns(2);                   // the existing one + the missing one
+        verifySpawns(2); // the existing one + the missing one
         verify(display, never()).remove(); // no flicker: the tracked display wasn't replaced
     }
 
@@ -313,7 +317,8 @@ class PreviewServiceImplTest {
     @Test
     void loadChunk_registryFailure_isSwallowed_andLaterLookupsStillRun() {
         ShopResult shop = shopAt(16, 64, 32, true);
-        when(shopQuery.shopsInChunk("world", 1, 2)).thenThrow(new RuntimeException("db down"))
+        when(shopQuery.shopsInChunk("world", 1, 2))
+                .thenThrow(new RuntimeException("db down"))
                 .thenReturn(List.of(shop));
         preview.loadChunk("world", 1, 2);
         completeLookup();
@@ -359,7 +364,7 @@ class PreviewServiceImplTest {
         when(b.getX()).thenReturn(3);
         when(b.getZ()).thenReturn(3);
         when(server.getWorlds()).thenReturn(List.of(world));
-        when(world.getLoadedChunks()).thenReturn(new Chunk[]{a, b});
+        when(world.getLoadedChunks()).thenReturn(new Chunk[] {a, b});
         when(world.isChunkLoaded(3, 3)).thenReturn(true);
         registry("world", 1, 2, shopAt(16, 64, 32, true));
         registry("world", 3, 3, shopAt(48, 64, 48, true));
@@ -388,7 +393,7 @@ class PreviewServiceImplTest {
         completeLookup();
 
         verify(display).remove(); // the stale display went
-        verifySpawns(2);          // and the current item was rendered in its place
+        verifySpawns(2); // and the current item was rendered in its place
     }
 
     @Test

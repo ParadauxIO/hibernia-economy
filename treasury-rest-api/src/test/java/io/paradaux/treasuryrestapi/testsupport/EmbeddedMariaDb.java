@@ -2,7 +2,6 @@ package io.paradaux.treasuryrestapi.testsupport;
 
 import ch.vorburger.mariadb4j.DB;
 import ch.vorburger.mariadb4j.DBConfigurationBuilder;
-
 import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -89,9 +88,20 @@ public final class EmbeddedMariaDb {
         return (v != null && !v.isBlank()) ? v : def;
     }
 
-    public static String jdbcUrl() { ensureStarted(); return jdbcUrl; }
-    public static String username() { ensureStarted(); return username; }
-    public static String password() { ensureStarted(); return password; }
+    public static String jdbcUrl() {
+        ensureStarted();
+        return jdbcUrl;
+    }
+
+    public static String username() {
+        ensureStarted();
+        return username;
+    }
+
+    public static String password() {
+        ensureStarted();
+        return password;
+    }
 
     public static Connection connect() throws Exception {
         ensureStarted();
@@ -100,14 +110,30 @@ public final class EmbeddedMariaDb {
 
     /** Truncate the tables between tests for isolation. */
     public static void truncateAll() {
-        try (Connection c = connect(); Statement st = c.createStatement()) {
+        try (Connection c = connect();
+                Statement st = c.createStatement()) {
             st.execute("SET FOREIGN_KEY_CHECKS = 0");
-            for (String t : new String[]{
-                    "accounts", "firm", "firm_accounts", "economy_players", "account_balances_mat",
-                    "ledger_txns", "ledger_postings", "chestshop_sale", "chestshop_shop",
-                    "account_access", "firm_role", "firm_role_permission", "firm_employee",
-                    "api_keys", "api_rate_limit_override",
-                    "webhook_delivery", "webhook_subscription", "webhook_cursor", "economy_config"}) {
+            for (String t : new String[] {
+                "accounts",
+                "firm",
+                "firm_accounts",
+                "economy_players",
+                "account_balances_mat",
+                "ledger_txns",
+                "ledger_postings",
+                "chestshop_sale",
+                "chestshop_shop",
+                "account_access",
+                "firm_role",
+                "firm_role_permission",
+                "firm_employee",
+                "api_keys",
+                "api_rate_limit_override",
+                "webhook_delivery",
+                "webhook_subscription",
+                "webhook_cursor",
+                "economy_config"
+            }) {
                 st.execute("TRUNCATE TABLE " + t);
             }
             // Re-seed the single-row dispatcher watermark that ingest() reads/advances.
@@ -128,7 +154,8 @@ public final class EmbeddedMariaDb {
     }
 
     private static void applySchema() throws Exception {
-        try (Connection c = connect(); Statement st = c.createStatement()) {
+        try (Connection c = connect();
+                Statement st = c.createStatement()) {
             for (String ddl : DDL) {
                 try {
                     st.execute(ddl);
@@ -142,8 +169,8 @@ public final class EmbeddedMariaDb {
     }
 
     private static final String[] DDL = {
-            // Minimal stand-ins for the shared economy tables the API reads/writes.
-            """
+        // Minimal stand-ins for the shared economy tables the API reads/writes.
+        """
             CREATE TABLE accounts (
               account_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
               account_type ENUM('PERSONAL','BUSINESS','GOVERNMENT','SYSTEM') NOT NULL,
@@ -157,7 +184,7 @@ public final class EmbeddedMariaDb {
               KEY idx_acct_owner (owner_uuid_bin)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE account_balances_mat (
               account_id INT UNSIGNED NOT NULL,
               balance DECIMAL(19,2) NOT NULL DEFAULT 0.00,
@@ -165,10 +192,10 @@ public final class EmbeddedMariaDb {
               PRIMARY KEY (account_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // Ledger tables for the write side (transfers). No balance-maintenance
-            // trigger here (JDBC can't run DELIMITER blocks) — transfers don't read a
-            // balance back after posting, and overdraft checks read the seeded balance.
-            """
+        // Ledger tables for the write side (transfers). No balance-maintenance
+        // trigger here (JDBC can't run DELIMITER blocks) — transfers don't read a
+        // balance back after posting, and overdraft checks read the seeded balance.
+        """
             CREATE TABLE ledger_txns (
               txn_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
               trade_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -182,7 +209,7 @@ public final class EmbeddedMariaDb {
               UNIQUE KEY uq_ledger_dedup (client_dedup_key)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE ledger_postings (
               posting_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
               txn_id BIGINT UNSIGNED NOT NULL,
@@ -193,7 +220,7 @@ public final class EmbeddedMariaDb {
               KEY idx_postings_account (account_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE firm (
               firm_id INT NOT NULL AUTO_INCREMENT,
               display_name VARCHAR(255) NOT NULL,
@@ -211,7 +238,7 @@ public final class EmbeddedMariaDb {
               KEY idx_firm_display_name (display_name)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE firm_accounts (
               firm_id INT NOT NULL,
               account_id INT UNSIGNED NOT NULL,
@@ -220,8 +247,8 @@ public final class EmbeddedMariaDb {
               PRIMARY KEY (firm_id, account_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // Unified player directory (PAR-35) — name resolution reads this now.
-            """
+        // Unified player directory (PAR-35) — name resolution reads this now.
+        """
             CREATE TABLE economy_players (
               player_uuid_bin BINARY(16) NOT NULL,
               current_name VARCHAR(32) NOT NULL,
@@ -233,9 +260,9 @@ public final class EmbeddedMariaDb {
               UNIQUE KEY uq_economy_players_name (name_lower)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // ChestShop analytics tables read by the market endpoints — mirrors
-            // economy-schema V6__chestshop_sales.sql (the production definition).
-            """
+        // ChestShop analytics tables read by the market endpoints — mirrors
+        // economy-schema V6__chestshop_sales.sql (the production definition).
+        """
             CREATE TABLE chestshop_sale (
               sale_id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
               txn_id            BIGINT UNSIGNED NULL,
@@ -265,7 +292,7 @@ public final class EmbeddedMariaDb {
               KEY idx_cs_firm      (shop_firm_id, occurred_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE chestshop_shop (
               shop_id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
               world            VARCHAR(64)  NOT NULL,
@@ -296,9 +323,9 @@ public final class EmbeddedMariaDb {
               KEY idx_shop_firm   (shop_firm_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // Consolidated per-account access (PAR-249) — backs MembershipMapper.isMember,
-            // which gates non-owner transaction-history reads.
-            """
+        // Consolidated per-account access (PAR-249) — backs MembershipMapper.isMember,
+        // which gates non-owner transaction-history reads.
+        """
             CREATE TABLE account_access (
               account_id        INT UNSIGNED NOT NULL,
               subject_uuid_bin  BINARY(16)   NOT NULL,
@@ -310,25 +337,25 @@ public final class EmbeddedMariaDb {
               KEY idx_access_active (account_id, removed_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // ADT-13 single-source read-access view (mirrors V22). isMember reads this
-            // rather than account_access directly. Only the API view is needed here;
-            // the explorer's more-permissive web view lives in its own test schema.
-            """
+        // ADT-13 single-source read-access view (mirrors V22). isMember reads this
+        // rather than account_access directly. Only the API view is needed here;
+        // the explorer's more-permissive web view lives in its own test schema.
+        """
             CREATE VIEW account_read_access_api AS
             SELECT account_id, subject_uuid_bin
               FROM account_access
              WHERE level IN ('MEMBER','AUTHORIZER')
                AND removed_at IS NULL
             """,
-            // account_balances view (mirrors V1) — AccountService.getBalance reads it.
-            """
+        // account_balances view (mirrors V1) — AccountService.getBalance reads it.
+        """
             CREATE OR REPLACE VIEW account_balances AS
             SELECT a.account_id, COALESCE(abm.balance, 0.00) AS balance
               FROM accounts a
               LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
             """,
-            // Firm roster tables (mirror V1) — FirmService.listEmployees/listRoles read them.
-            """
+        // Firm roster tables (mirror V1) — FirmService.listEmployees/listRoles read them.
+        """
             CREATE TABLE firm_role (
               role_id            INT         NOT NULL AUTO_INCREMENT,
               firm_id            INT         NOT NULL,
@@ -341,7 +368,7 @@ public final class EmbeddedMariaDb {
               KEY idx_role_active (firm_id, deleted_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE firm_role_permission (
               role_id    INT NOT NULL,
               permission ENUM('ADMIN','FINANCIAL','CHESTSHOP','DEFAULT') NOT NULL,
@@ -349,7 +376,7 @@ public final class EmbeddedMariaDb {
               PRIMARY KEY (role_id, permission)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE firm_employee (
               firm_id         INT        NOT NULL,
               player_uuid_bin BINARY(16) NOT NULL,
@@ -359,9 +386,9 @@ public final class EmbeddedMariaDb {
               PRIMARY KEY (firm_id, player_uuid_bin, joined_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // api_keys (mirrors V1 + V15 SERVICE scope + V23 nullable token). AuthService
-            // rotation and AdminApiKeyService revoke/rotate exercise this table.
-            """
+        // api_keys (mirrors V1 + V15 SERVICE scope + V23 nullable token). AuthService
+        // rotation and AdminApiKeyService revoke/rotate exercise this table.
+        """
             CREATE TABLE api_keys (
               key_id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
               key_type       ENUM('PERSONAL','BUSINESS','GOVERNMENT','SERVICE') NOT NULL DEFAULT 'PERSONAL',
@@ -377,8 +404,8 @@ public final class EmbeddedMariaDb {
               UNIQUE KEY uq_api_key_jwt_id (jwt_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // Per-issuer rate-limit overrides (mirrors V5).
-            """
+        // Per-issuer rate-limit overrides (mirrors V5).
+        """
             CREATE TABLE api_rate_limit_override (
               owner_uuid_bin BINARY(16)   NOT NULL,
               multiplier     DECIMAL(6,2) NOT NULL DEFAULT 1.00,
@@ -388,9 +415,9 @@ public final class EmbeddedMariaDb {
               PRIMARY KEY (owner_uuid_bin)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            // Webhook tables (mirror V13; api_key_id nullable per V14). FKs omitted to
-            // match this standin schema's style and keep truncateAll() order-free.
-            """
+        // Webhook tables (mirror V13; api_key_id nullable per V14). FKs omitted to
+        // match this standin schema's style and keep truncateAll() order-free.
+        """
             CREATE TABLE webhook_subscription (
               subscription_id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
               api_key_id           INT UNSIGNED    NULL,
@@ -410,7 +437,7 @@ public final class EmbeddedMariaDb {
               KEY idx_websub_active_firm (active, firm_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE webhook_delivery (
               delivery_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
               subscription_id BIGINT UNSIGNED NOT NULL,
@@ -428,7 +455,7 @@ public final class EmbeddedMariaDb {
               KEY idx_delivery_due (status, next_attempt_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE webhook_cursor (
               id                     TINYINT UNSIGNED NOT NULL DEFAULT 1,
               last_dispatched_txn_id BIGINT UNSIGNED  NOT NULL DEFAULT 0,
@@ -436,7 +463,7 @@ public final class EmbeddedMariaDb {
               PRIMARY KEY (id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """,
-            """
+        """
             CREATE TABLE economy_config (
               config_key   VARCHAR(128) NOT NULL PRIMARY KEY,
               owner        VARCHAR(32)  NOT NULL,

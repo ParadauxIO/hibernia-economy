@@ -1,24 +1,31 @@
 package io.paradaux.chestshop.services.impl;
-import io.paradaux.chestshop.utils.Colours;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.services.ShopBlockService;
-import io.paradaux.chestshop.services.ItemService;
-import io.paradaux.chestshop.model.ItemInfoLines;
-import io.paradaux.chestshop.services.InventoryService;
-import io.paradaux.chestshop.services.EconomyService;
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.InfoService;
-import io.paradaux.chestshop.utils.MessageUtil;
+import static io.paradaux.chestshop.utils.NumberUtil.toRoman;
+import static io.paradaux.chestshop.utils.NumberUtil.toTime;
+import static io.paradaux.chestshop.utils.StringUtil.capitalizeFirstLetter;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.chestshop.ChestShop;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.chestshop.model.Account;
+import io.paradaux.chestshop.model.ItemInfoLines;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.EconomyService;
+import io.paradaux.chestshop.services.InfoService;
+import io.paradaux.chestshop.services.InventoryService;
+import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.utils.Colours;
+import io.paradaux.chestshop.utils.MessageUtil;
 import io.paradaux.chestshop.utils.PriceUtil;
 import io.paradaux.chestshop.utils.StringUtil;
+import io.paradaux.hibernia.framework.i18n.Message;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Color;
 import org.bukkit.NamespacedKey;
@@ -43,15 +50,6 @@ import org.bukkit.inventory.meta.Repairable;
 import org.bukkit.inventory.meta.TropicalFishBucketMeta;
 import org.bukkit.map.MapView;
 import org.bukkit.potion.PotionEffect;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import static io.paradaux.chestshop.utils.NumberUtil.toRoman;
-import static io.paradaux.chestshop.utils.NumberUtil.toTime;
-import static io.paradaux.chestshop.utils.StringUtil.capitalizeFirstLetter;
 
 /**
  * Owns the read-only {@code /shopinfo} and {@code /iteminfo} output. Replaces the old
@@ -81,9 +79,14 @@ public class InfoServiceImpl implements InfoService {
     private final InventoryService inventoryService;
 
     @Inject
-    public InfoServiceImpl(AccountService accounts, EconomyService economy, ItemService items, Message message,
-                       SignService signService, ShopBlockService shopBlockService,
-                       InventoryService inventoryService) {
+    public InfoServiceImpl(
+            AccountService accounts,
+            EconomyService economy,
+            ItemService items,
+            Message message,
+            SignService signService,
+            ShopBlockService shopBlockService,
+            InventoryService inventoryService) {
         this.accounts = accounts;
         this.economy = economy;
         this.items = items;
@@ -138,8 +141,7 @@ public class InfoServiceImpl implements InfoService {
                 "stock", stock,
                 "owner", ownerName,
                 "prices", pricesLine,
-                "quantity", String.valueOf(amount)
-        );
+                "quantity", String.valueOf(amount));
         sender.sendMessage(message.component("chestshop.shopinfo", MessageUtil.values(false, replacementMap)));
 
         BigDecimal buyPrice = PriceUtil.getExactBuyPrice(pricesLine);
@@ -151,16 +153,26 @@ public class InfoServiceImpl implements InfoService {
         }
 
         if (buyPrice.compareTo(PriceUtil.NO_PRICE) != 0) {
-            message.send(sender, "chestshop.shopinfo_buy", "prefix", "",
-                    "amount", String.valueOf(amount),
-                    "price", economy.format(buyPrice)
-            );
+            message.send(
+                    sender,
+                    "chestshop.shopinfo_buy",
+                    "prefix",
+                    "",
+                    "amount",
+                    String.valueOf(amount),
+                    "price",
+                    economy.format(buyPrice));
         }
         if (sellPrice.compareTo(PriceUtil.NO_PRICE) != 0) {
-            message.send(sender, "chestshop.shopinfo_sell", "prefix", "",
-                    "amount", String.valueOf(amount),
-                    "price", economy.format(sellPrice)
-            );
+            message.send(
+                    sender,
+                    "chestshop.shopinfo_sell",
+                    "prefix",
+                    "",
+                    "amount",
+                    String.valueOf(amount),
+                    "price",
+                    economy.format(sellPrice));
         }
     }
 
@@ -210,7 +222,8 @@ public class InfoServiceImpl implements InfoService {
         if (lines.getItem().hasItemMeta()) {
             ItemMeta meta = lines.getItem().getItemMeta();
             if (meta instanceof Repairable && ((Repairable) meta).getRepairCost() > 0) {
-                lines.addMessage("chestshop.iteminfo_repaircost", "cost", String.valueOf(((Repairable) meta).getRepairCost()));
+                lines.addMessage(
+                        "chestshop.iteminfo_repaircost", "cost", String.valueOf(((Repairable) meta).getRepairCost()));
             }
         }
     }
@@ -219,15 +232,23 @@ public class InfoServiceImpl implements InfoService {
         ItemStack item = lines.getItem();
         List<String> enchantLines = new ArrayList<>();
 
-        for (Map.Entry<Enchantment, Integer> enchantment : item.getEnchantments().entrySet()) {
-            enchantLines.add(Colours.AQUA + capitalizeFirstLetter(enchantment.getKey().getName(), '_') + ' ' + toRoman(enchantment.getValue()));
+        for (Map.Entry<Enchantment, Integer> enchantment :
+                item.getEnchantments().entrySet()) {
+            enchantLines.add(Colours.AQUA
+                    + capitalizeFirstLetter(enchantment.getKey().getName(), '_')
+                    + ' '
+                    + toRoman(enchantment.getValue()));
         }
 
         if (item.hasItemMeta()) {
             ItemMeta meta = item.getItemMeta();
             if (meta instanceof EnchantmentStorageMeta) {
-                for (Map.Entry<Enchantment, Integer> enchantment : ((EnchantmentStorageMeta) meta).getStoredEnchants().entrySet()) {
-                    enchantLines.add(Colours.YELLOW + capitalizeFirstLetter(enchantment.getKey().getName(), '_') + ' ' + toRoman(enchantment.getValue()));
+                for (Map.Entry<Enchantment, Integer> enchantment :
+                        ((EnchantmentStorageMeta) meta).getStoredEnchants().entrySet()) {
+                    enchantLines.add(Colours.YELLOW
+                            + capitalizeFirstLetter(enchantment.getKey().getName(), '_')
+                            + ' '
+                            + toRoman(enchantment.getValue()));
                 }
             }
         }
@@ -240,12 +261,16 @@ public class InfoServiceImpl implements InfoService {
             ItemMeta meta = lines.getItem().getItemMeta();
             if (meta instanceof LeatherArmorMeta) {
                 Color color = ((LeatherArmorMeta) meta).getColor();
-                lines.addMessage("chestshop.iteminfo_leather_color",
-                        "colorred", String.valueOf(color.getRed()),
-                        "colorgreen", String.valueOf(color.getGreen()),
-                        "colorblue", String.valueOf(color.getBlue()),
-                        "colorhex", Integer.toHexString(color.asRGB())
-                );
+                lines.addMessage(
+                        "chestshop.iteminfo_leather_color",
+                        "colorred",
+                        String.valueOf(color.getRed()),
+                        "colorgreen",
+                        String.valueOf(color.getGreen()),
+                        "colorblue",
+                        String.valueOf(color.getBlue()),
+                        "colorhex",
+                        Integer.toHexString(color.asRGB()));
             }
         }
     }
@@ -253,7 +278,8 @@ public class InfoServiceImpl implements InfoService {
     private void addRecipes(ItemInfoLines lines) {
         if (lines.getItem().hasItemMeta()) {
             ItemMeta meta = lines.getItem().getItemMeta();
-            if (meta instanceof KnowledgeBookMeta && !((KnowledgeBookMeta) meta).getRecipes().isEmpty()) {
+            if (meta instanceof KnowledgeBookMeta
+                    && !((KnowledgeBookMeta) meta).getRecipes().isEmpty()) {
                 lines.addMessage("chestshop.iteminfo_recipes");
                 for (NamespacedKey recipe : ((KnowledgeBookMeta) meta).getRecipes()) {
                     lines.getSender().sendMessage(Colours.GRAY + recipe.toString());
@@ -266,11 +292,18 @@ public class InfoServiceImpl implements InfoService {
         if (lines.getItem().hasItemMeta()) {
             ItemMeta meta = lines.getItem().getItemMeta();
             if (meta instanceof TropicalFishBucketMeta && ((TropicalFishBucketMeta) meta).hasVariant()) {
-                lines.addMessage("chestshop.iteminfo_tropical_fish",
-                        "pattern", capitalizeFirstLetter(((TropicalFishBucketMeta) meta).getPattern().name()),
-                        "patterncolor", capitalizeFirstLetter(((TropicalFishBucketMeta) meta).getPatternColor().name()),
-                        "bodycolor", capitalizeFirstLetter(((TropicalFishBucketMeta) meta).getBodyColor().name())
-                );
+                lines.addMessage(
+                        "chestshop.iteminfo_tropical_fish",
+                        "pattern",
+                        capitalizeFirstLetter(
+                                ((TropicalFishBucketMeta) meta).getPattern().name()),
+                        "patterncolor",
+                        capitalizeFirstLetter(((TropicalFishBucketMeta) meta)
+                                .getPatternColor()
+                                .name()),
+                        "bodycolor",
+                        capitalizeFirstLetter(
+                                ((TropicalFishBucketMeta) meta).getBodyColor().name()));
             }
         }
     }
@@ -281,17 +314,26 @@ public class InfoServiceImpl implements InfoService {
             if (meta instanceof MapMeta) {
                 if (((MapMeta) meta).getMapView() != null) {
                     MapView mapView = ((MapMeta) meta).getMapView();
-                    lines.addMessage("chestshop.iteminfo_map_view",
-                            "id", String.valueOf(mapView.getId()),
-                            "x", String.valueOf(mapView.getCenterX()),
-                            "z", String.valueOf(mapView.getCenterZ()),
-                            "world", mapView.getWorld() != null ? mapView.getWorld().getName() : "unknown",
-                            "scale", capitalizeFirstLetter(mapView.getScale().name(), '_'),
-                            "locked", "false"
-                    );
+                    lines.addMessage(
+                            "chestshop.iteminfo_map_view",
+                            "id",
+                            String.valueOf(mapView.getId()),
+                            "x",
+                            String.valueOf(mapView.getCenterX()),
+                            "z",
+                            String.valueOf(mapView.getCenterZ()),
+                            "world",
+                            mapView.getWorld() != null ? mapView.getWorld().getName() : "unknown",
+                            "scale",
+                            capitalizeFirstLetter(mapView.getScale().name(), '_'),
+                            "locked",
+                            "false");
                 }
                 if (((MapMeta) meta).hasLocationName()) {
-                    lines.addMessage("chestshop.iteminfo_map_location", "location", String.valueOf(((MapMeta) meta).getLocationName()));
+                    lines.addMessage(
+                            "chestshop.iteminfo_map_location",
+                            "location",
+                            String.valueOf(((MapMeta) meta).getLocationName()));
                 }
             }
         }
@@ -313,7 +355,9 @@ public class InfoServiceImpl implements InfoService {
         StringBuilder message = new StringBuilder();
         message.append(Colours.GRAY);
         message.append(capitalizeFirstLetter(item.getType().name(), '_')).append(" of ");
-        message.append(capitalizeFirstLetter(potionMeta.getBasePotionData().getType().name(), '_')).append(' ');
+        message.append(capitalizeFirstLetter(
+                        potionMeta.getBasePotionData().getType().name(), '_'))
+                .append(' ');
         if (potionMeta.getBasePotionData().isUpgraded()) {
             message.append("II");
         } else if (potionMeta.getBasePotionData().isExtended()) {
@@ -321,7 +365,8 @@ public class InfoServiceImpl implements InfoService {
         }
 
         for (PotionEffect effect : potionMeta.getCustomEffects()) {
-            message.append("\n" + Colours.DARK_GRAY + capitalizeFirstLetter(effect.getType().getName(), '_') + ' ' + toTime(effect.getDuration() / 20));
+            message.append("\n" + Colours.DARK_GRAY
+                    + capitalizeFirstLetter(effect.getType().getName(), '_') + ' ' + toTime(effect.getDuration() / 20));
         }
         lines.addRawMessage("iteminfo_potion", message.toString());
     }
@@ -333,15 +378,19 @@ public class InfoServiceImpl implements InfoService {
         ItemMeta meta = lines.getItem().getItemMeta();
         if (meta instanceof BookMeta) {
             BookMeta book = (BookMeta) meta;
-            lines.addMessage("chestshop.iteminfo_book",
-                    "title", book.getTitle(),
-                    "author", book.getAuthor(),
-                    "pages", String.valueOf(book.getPageCount())
-            );
+            lines.addMessage(
+                    "chestshop.iteminfo_book",
+                    "title",
+                    book.getTitle(),
+                    "author",
+                    book.getAuthor(),
+                    "pages",
+                    String.valueOf(book.getPageCount()));
             if (book.hasGeneration()) {
-                lines.addMessage("chestshop.iteminfo_book_generation",
-                        "generation", StringUtil.capitalizeFirstLetter(book.getGeneration().name(), '_')
-                );
+                lines.addMessage(
+                        "chestshop.iteminfo_book_generation",
+                        "generation",
+                        StringUtil.capitalizeFirstLetter(book.getGeneration().name(), '_'));
             }
         }
     }
@@ -366,9 +415,12 @@ public class InfoServiceImpl implements InfoService {
                     sendItemName(lines.getSender(), chargedProjectile, "chestshop.iteminfo_crossbow_projectile");
                     ItemInfoLines projectile = collectItemInfo(lines.getSender(), chargedProjectile);
                     for (Map.Entry<String, Component> entry : projectile.getMessages()) {
-                        lines.addRawMessage("crossbow_projectile_" + chargedProjectile.hashCode() + "_" + entry.getKey(), entry.getValue());
+                        lines.addRawMessage(
+                                "crossbow_projectile_" + chargedProjectile.hashCode() + "_" + entry.getKey(),
+                                entry.getValue());
                     }
-                    lines.addRawMessage("crossbow_projectile_" + chargedProjectile.hashCode() + "_divider", Colours.GRAY + "---");
+                    lines.addRawMessage(
+                            "crossbow_projectile_" + chargedProjectile.hashCode() + "_divider", Colours.GRAY + "---");
                 }
             }
         }
@@ -378,7 +430,11 @@ public class InfoServiceImpl implements InfoService {
         if (lines.getItem().hasItemMeta()) {
             ItemMeta meta = lines.getItem().getItemMeta();
             if (meta instanceof AxolotlBucketMeta) {
-                lines.addMessage("chestshop.iteminfo_axolotl_variant", "variant", capitalizeFirstLetter(((AxolotlBucketMeta) meta).getVariant().name(), '_'));
+                lines.addMessage(
+                        "chestshop.iteminfo_axolotl_variant",
+                        "variant",
+                        capitalizeFirstLetter(
+                                ((AxolotlBucketMeta) meta).getVariant().name(), '_'));
             }
         }
     }
@@ -387,7 +443,10 @@ public class InfoServiceImpl implements InfoService {
         if (lines.getItem().hasItemMeta()) {
             ItemMeta meta = lines.getItem().getItemMeta();
             if (meta instanceof BundleMeta) {
-                lines.addMessage("chestshop.iteminfo_bundle_items", "itemcount", String.valueOf(((BundleMeta) meta).getItems().size()));
+                lines.addMessage(
+                        "chestshop.iteminfo_bundle_items",
+                        "itemcount",
+                        String.valueOf(((BundleMeta) meta).getItems().size()));
             }
         }
     }
@@ -396,9 +455,24 @@ public class InfoServiceImpl implements InfoService {
         if (lines.getItem().hasItemMeta()) {
             ItemMeta meta = lines.getItem().getItemMeta();
             if (meta instanceof ArmorMeta && ((ArmorMeta) meta).hasTrim()) {
-                lines.addMessage("chestshop.iteminfo_armor_trim",
-                        "pattern", capitalizeFirstLetter(((ArmorMeta) meta).getTrim().getPattern().getKey().getKey(), '_'),
-                        "material", capitalizeFirstLetter(((ArmorMeta) meta).getTrim().getMaterial().getKey().getKey(), '_'));
+                lines.addMessage(
+                        "chestshop.iteminfo_armor_trim",
+                        "pattern",
+                        capitalizeFirstLetter(
+                                ((ArmorMeta) meta)
+                                        .getTrim()
+                                        .getPattern()
+                                        .getKey()
+                                        .getKey(),
+                                '_'),
+                        "material",
+                        capitalizeFirstLetter(
+                                ((ArmorMeta) meta)
+                                        .getTrim()
+                                        .getMaterial()
+                                        .getKey()
+                                        .getKey(),
+                                '_'));
             }
         }
     }
@@ -409,17 +483,26 @@ public class InfoServiceImpl implements InfoService {
             if (meta instanceof MapMeta) {
                 if (((MapMeta) meta).getMapView() != null) {
                     MapView mapView = ((MapMeta) meta).getMapView();
-                    lines.addMessage("chestshop.iteminfo_map_view",
-                            "id", String.valueOf(mapView.getId()),
-                            "x", String.valueOf(mapView.getCenterX()),
-                            "z", String.valueOf(mapView.getCenterZ()),
-                            "world", mapView.getWorld() != null ? mapView.getWorld().getName() : "unknown",
-                            "scale", capitalizeFirstLetter(mapView.getScale().name(), '_'),
-                            "locked", String.valueOf(mapView.isLocked())
-                    );
+                    lines.addMessage(
+                            "chestshop.iteminfo_map_view",
+                            "id",
+                            String.valueOf(mapView.getId()),
+                            "x",
+                            String.valueOf(mapView.getCenterX()),
+                            "z",
+                            String.valueOf(mapView.getCenterZ()),
+                            "world",
+                            mapView.getWorld() != null ? mapView.getWorld().getName() : "unknown",
+                            "scale",
+                            capitalizeFirstLetter(mapView.getScale().name(), '_'),
+                            "locked",
+                            String.valueOf(mapView.isLocked()));
                 }
                 if (((MapMeta) meta).hasLocationName()) {
-                    lines.addMessage("chestshop.iteminfo_map_location", "location", String.valueOf(((MapMeta) meta).getLocationName()));
+                    lines.addMessage(
+                            "chestshop.iteminfo_map_location",
+                            "location",
+                            String.valueOf(((MapMeta) meta).getLocationName()));
                 }
             }
         }
@@ -442,15 +525,21 @@ public class InfoServiceImpl implements InfoService {
         if (potionMeta.getBasePotionType() != null) {
             message.append(Colours.GRAY);
             message.append(capitalizeFirstLetter(item.getType().name(), '_')).append(" of ");
-            message.append(capitalizeFirstLetter(potionMeta.getBasePotionType().getKey().getKey(), '_')).append(' ');
+            message.append(capitalizeFirstLetter(
+                            potionMeta.getBasePotionType().getKey().getKey(), '_'))
+                    .append(' ');
         }
 
         for (PotionEffect effect : potionMeta.getCustomEffects()) {
             if (message.length() > 0) {
                 message.append('\n');
             }
-            message.append(Colours.DARK_GRAY + capitalizeFirstLetter(effect.getType().getKey().getKey(), '_')
-                    + ' ' + (effect.getAmplifier() + 1) + ' ' + toTime(effect.getDuration() / 20));
+            message.append(Colours.DARK_GRAY
+                    + capitalizeFirstLetter(effect.getType().getKey().getKey(), '_')
+                    + ' '
+                    + (effect.getAmplifier() + 1)
+                    + ' '
+                    + toTime(effect.getDuration() / 20));
         }
         if (message.length() > 0) {
             lines.addRawMessage("iteminfo_potion", message.toString());

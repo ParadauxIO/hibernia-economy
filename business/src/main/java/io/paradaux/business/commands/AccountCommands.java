@@ -2,29 +2,28 @@ package io.paradaux.business.commands;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.commander.annotations.*;
-import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.OnlineFirmName;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmPlayer;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmNotificationService;
+import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmTransactionService;
-import io.paradaux.business.commands.resolvers.FirmName;
-import io.paradaux.business.commands.resolvers.OnlineFirmName;
+import io.paradaux.hibernia.framework.commander.annotations.*;
+import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
+import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
 import io.paradaux.treasury.model.economy.TransactionEntry;
-import org.bukkit.entity.Player;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
+import org.bukkit.entity.Player;
 
 @Singleton
 @Command({"db", "democracybusiness", "business", "firm", "company"})
@@ -42,9 +41,15 @@ public class AccountCommands implements CommandHandler {
     private final FirmPlayerService firmPlayers;
 
     @Inject
-    public AccountCommands(FirmAccountService accounts, FirmService firms, FirmStaffService staff,
-                           FirmTransactionService audit, TreasuryApi treasury, Message message,
-                           FirmNotificationService notifications, FirmPlayerService firmPlayers) {
+    public AccountCommands(
+            FirmAccountService accounts,
+            FirmService firms,
+            FirmStaffService staff,
+            FirmTransactionService audit,
+            TreasuryApi treasury,
+            Message message,
+            FirmNotificationService notifications,
+            FirmPlayerService firmPlayers) {
         this.accounts = accounts;
         this.firms = firms;
         this.staff = staff;
@@ -62,7 +67,8 @@ public class AccountCommands implements CommandHandler {
      * Falls back to the raw UUID if the player isn't in the cache.
      */
     private String resolveName(java.util.UUID uuid) {
-        return firmPlayers.findByUuid(uuid)
+        return firmPlayers
+                .findByUuid(uuid)
                 .map(FirmPlayer::getCurrentName)
                 .filter(n -> n != null && !n.isBlank())
                 .orElse(uuid.toString());
@@ -81,18 +87,26 @@ public class AccountCommands implements CommandHandler {
         }
 
         Account account = accounts.createAccount(firm.getFirmId(), accountName, sender.getUniqueId());
-        message.send(sender, "business.account.create.success",
-                "firm", firm.getDisplayName(),
-                "account", account.getDisplayName(),
-                "accountId", account.getAccountId());
+        message.send(
+                sender,
+                "business.account.create.success",
+                "firm",
+                firm.getDisplayName(),
+                "account",
+                account.getDisplayName(),
+                "accountId",
+                account.getAccountId());
     }
 
     @Route("account alias <firm> <accountId> <alias>")
     @Permission("business.account.alias")
     @Async
     @Description("Set a short shop alias for a firm account")
-    public void setShopAlias(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                             @Arg("accountId") Integer accountId, @Arg("alias") String alias) {
+    public void setShopAlias(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("alias") String alias) {
         updateShopAlias(sender, firmRef, accountId, alias);
     }
 
@@ -100,8 +114,8 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.alias")
     @Async
     @Description("Clear a firm account's shop alias")
-    public void clearShopAlias(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                               @Arg("accountId") Integer accountId) {
+    public void clearShopAlias(
+            @Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
         updateShopAlias(sender, firmRef, accountId, null);
     }
 
@@ -138,16 +152,27 @@ public class AccountCommands implements CommandHandler {
             return;
         }
 
-        message.send(sender, "business.account.list.header", "firm", firm.getDisplayName(), "count", accountList.size());
+        message.send(
+                sender, "business.account.list.header", "firm", firm.getDisplayName(), "count", accountList.size());
         for (Account account : accountList) {
-            String defaultMarker = (firm.getDefaultAccountId() != null && firm.getDefaultAccountId().equals(account.getAccountId())) ? " [DEFAULT]" : "";
+            String defaultMarker = (firm.getDefaultAccountId() != null
+                            && firm.getDefaultAccountId().equals(account.getAccountId()))
+                    ? " [DEFAULT]"
+                    : "";
             String shopId = "B:" + Integer.toString(account.getAccountId(), 36).toUpperCase(Locale.ROOT);
-            message.send(sender, "business.account.list.entry",
-                    "accountId", account.getAccountId(),
-                    "name", account.getDisplayName(),
-                    "archived", account.isArchived() ? " [ARCHIVED]" : "",
-                    "default", defaultMarker,
-                    "shopId", shopId);
+            message.send(
+                    sender,
+                    "business.account.list.entry",
+                    "accountId",
+                    account.getAccountId(),
+                    "name",
+                    account.getDisplayName(),
+                    "archived",
+                    account.isArchived() ? " [ARCHIVED]" : "",
+                    "default",
+                    defaultMarker,
+                    "shopId",
+                    shopId);
             String alias = accounts.getShopAlias(firm.getFirmId(), account.getAccountId());
             if (alias != null) {
                 message.send(sender, "business.account.alias.entry", "alias", alias);
@@ -159,7 +184,8 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.setdefault")
     @Async
     @Description("Set the default Treasury account for a firm")
-    public void setDefaultAccount(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
+    public void setDefaultAccount(
+            @Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -168,16 +194,16 @@ public class AccountCommands implements CommandHandler {
         }
 
         accounts.setDefaultAccount(firm.getFirmId(), accountId, sender.getUniqueId());
-        message.send(sender, "business.account.setdefault.success",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId);
+        message.send(
+                sender, "business.account.setdefault.success", "firm", firm.getDisplayName(), "accountId", accountId);
     }
 
     @Route("account archive <firm> <accountId>")
     @Permission("business.account.archive")
     @Async
     @Description("Archive a Treasury account for a firm")
-    public void archiveAccount(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
+    public void archiveAccount(
+            @Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -186,9 +212,7 @@ public class AccountCommands implements CommandHandler {
         }
 
         accounts.archiveAccount(firm.getFirmId(), accountId, sender.getUniqueId());
-        message.send(sender, "business.account.archive.success",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId);
+        message.send(sender, "business.account.archive.success", "firm", firm.getDisplayName(), "accountId", accountId);
     }
 
     @Route("account sync <firm> <accountId>")
@@ -204,16 +228,18 @@ public class AccountCommands implements CommandHandler {
         }
 
         accounts.syncAccountMembers(firm.getFirmId(), accountId);
-        message.send(sender, "business.account.sync.success",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId);
+        message.send(sender, "business.account.sync.success", "firm", firm.getDisplayName(), "accountId", accountId);
     }
 
     @Route("account addmember <firm> <accountId> <player>")
     @Permission("business.account.addmember")
     @Async
     @Description("Manually add a member to a firm's Treasury account")
-    public void addMember(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId, @Arg("player") FirmPlayer player) {
+    public void addMember(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("player") FirmPlayer player) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -222,17 +248,26 @@ public class AccountCommands implements CommandHandler {
         }
 
         accounts.addMemberToAccount(firm.getFirmId(), accountId, player.getUniqueId(), sender.getUniqueId());
-        message.send(sender, "business.account.addmember.success",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId,
-                "player", player.getCurrentName());
+        message.send(
+                sender,
+                "business.account.addmember.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "player",
+                player.getCurrentName());
     }
 
     @Route("account removemember <firm> <accountId> <player>")
     @Permission("business.account.removemember")
     @Async
     @Description("Manually remove a member from a firm's Treasury account")
-    public void removeMember(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId, @Arg("player") FirmPlayer player) {
+    public void removeMember(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("player") FirmPlayer player) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -241,17 +276,26 @@ public class AccountCommands implements CommandHandler {
         }
 
         accounts.removeMemberFromAccount(firm.getFirmId(), accountId, player.getUniqueId(), sender.getUniqueId());
-        message.send(sender, "business.account.removemember.success",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId,
-                "player", player.getCurrentName());
+        message.send(
+                sender,
+                "business.account.removemember.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "player",
+                player.getCurrentName());
     }
 
     @Route("account addauthorizer <firm> <accountId> <player>")
     @Permission("business.account.addauthorizer")
     @Async
     @Description("Manually add an authorizer to a firm's Treasury account")
-    public void addAuthorizer(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId, @Arg("player") FirmPlayer player) {
+    public void addAuthorizer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("player") FirmPlayer player) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -260,17 +304,26 @@ public class AccountCommands implements CommandHandler {
         }
 
         accounts.addAuthorizerToAccount(firm.getFirmId(), accountId, player.getUniqueId(), sender.getUniqueId());
-        message.send(sender, "business.account.addauthorizer.success",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId,
-                "player", player.getCurrentName());
+        message.send(
+                sender,
+                "business.account.addauthorizer.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "player",
+                player.getCurrentName());
     }
 
     @Route("account removeauthorizer <firm> <accountId> <player>")
     @Permission("business.account.removeauthorizer")
     @Async
     @Description("Manually remove an authorizer from a firm's Treasury account")
-    public void removeAuthorizer(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId, @Arg("player") FirmPlayer player) {
+    public void removeAuthorizer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("player") FirmPlayer player) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -279,10 +332,15 @@ public class AccountCommands implements CommandHandler {
         }
 
         accounts.removeAuthorizerFromAccount(firm.getFirmId(), accountId, player.getUniqueId(), sender.getUniqueId());
-        message.send(sender, "business.account.removeauthorizer.success",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId,
-                "player", player.getCurrentName());
+        message.send(
+                sender,
+                "business.account.removeauthorizer.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "player",
+                player.getCurrentName());
     }
 
     @Route("account members <firm> <accountId>")
@@ -300,22 +358,25 @@ public class AccountCommands implements CommandHandler {
         List<AccountMember> members = accounts.getAccountMembers(firm.getFirmId(), accountId);
 
         if (members.isEmpty()) {
-            message.send(sender, "business.account.members.empty",
-                    "firm", firm.getDisplayName(),
-                    "accountId", accountId);
+            message.send(
+                    sender, "business.account.members.empty", "firm", firm.getDisplayName(), "accountId", accountId);
             return;
         }
 
-        message.send(sender, "business.account.members.header",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId,
-                "count", members.size());
+        message.send(
+                sender,
+                "business.account.members.header",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "count",
+                members.size());
 
         for (AccountMember member : members) {
             String playerName = resolveName(member.getMemberUuid());
-            message.send(sender, "business.account.members.entry",
-                    "player", playerName,
-                    "uuid", member.getMemberUuid());
+            message.send(
+                    sender, "business.account.members.entry", "player", playerName, "uuid", member.getMemberUuid());
         }
     }
 
@@ -323,7 +384,8 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.authorizers")
     @Async
     @Description("List all authorizers of a firm's Treasury account")
-    public void listAuthorizers(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
+    public void listAuthorizers(
+            @Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -334,22 +396,35 @@ public class AccountCommands implements CommandHandler {
         List<AccountMember> authorizers = accounts.getAccountAuthorizers(firm.getFirmId(), accountId);
 
         if (authorizers.isEmpty()) {
-            message.send(sender, "business.account.authorizers.empty",
-                    "firm", firm.getDisplayName(),
-                    "accountId", accountId);
+            message.send(
+                    sender,
+                    "business.account.authorizers.empty",
+                    "firm",
+                    firm.getDisplayName(),
+                    "accountId",
+                    accountId);
             return;
         }
 
-        message.send(sender, "business.account.authorizers.header",
-                "firm", firm.getDisplayName(),
-                "accountId", accountId,
-                "count", authorizers.size());
+        message.send(
+                sender,
+                "business.account.authorizers.header",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "count",
+                authorizers.size());
 
         for (AccountMember authorizer : authorizers) {
             String playerName = resolveName(authorizer.getMemberUuid());
-            message.send(sender, "business.account.authorizers.entry",
-                    "player", playerName,
-                    "uuid", authorizer.getMemberUuid());
+            message.send(
+                    sender,
+                    "business.account.authorizers.entry",
+                    "player",
+                    playerName,
+                    "uuid",
+                    authorizer.getMemberUuid());
         }
     }
 
@@ -359,7 +434,8 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.finance")
     @Async
     @Description("Show the balance of a specific firm account")
-    public void accountBalance(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
+    public void accountBalance(
+            @Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -373,8 +449,15 @@ public class AccountCommands implements CommandHandler {
         }
 
         String balance = audit.getFormattedAccountBalance(firm.getFirmId(), accountId);
-        message.send(sender, "business.account.balance",
-                "firm", firm.getDisplayName(), "accountId", accountId, "balance", balance);
+        message.send(
+                sender,
+                "business.account.balance",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "balance",
+                balance);
     }
 
     // ---- ACCOUNT DEPOSIT --------------------------------------------------------
@@ -383,8 +466,11 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.finance")
     @Async
     @Description("Deposit from your personal account into a specific firm account")
-    public void accountDeposit(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                               @Arg("accountId") Integer accountId, @Arg("amount") BigDecimal amount) {
+    public void accountDeposit(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("amount") BigDecimal amount) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -401,8 +487,15 @@ public class AccountCommands implements CommandHandler {
         // to the player's locale via each exception's key (plugin-architecture/0002).
         audit.depositToAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.account.deposit.success",
-                "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
+        message.send(
+                sender,
+                "business.account.deposit.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "amount",
+                formatted);
     }
 
     // ---- ACCOUNT WITHDRAW -------------------------------------------------------
@@ -411,8 +504,11 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.finance")
     @Async
     @Description("Withdraw from a specific firm account into your personal account")
-    public void accountWithdraw(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                                @Arg("accountId") Integer accountId, @Arg("amount") BigDecimal amount) {
+    public void accountWithdraw(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("amount") BigDecimal amount) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -427,8 +523,15 @@ public class AccountCommands implements CommandHandler {
 
         audit.withdrawFromAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.account.withdraw.success",
-                "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
+        message.send(
+                sender,
+                "business.account.withdraw.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "amount",
+                formatted);
     }
 
     // ---- ACCOUNT PAY: PLAYER -> BUSINESS ----------------------------------------
@@ -437,8 +540,11 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.pay")
     @Async
     @Description("Pay money from your personal account into a specific firm account")
-    public void accountPayInto(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                               @Arg("accountId") Integer accountId, @Arg("amount") BigDecimal amount) {
+    public void accountPayInto(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("amount") BigDecimal amount) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -448,8 +554,15 @@ public class AccountCommands implements CommandHandler {
 
         audit.payIntoAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.account.pay.into.success",
-                "firm", firm.getDisplayName(), "accountId", accountId, "amount", formatted);
+        message.send(
+                sender,
+                "business.account.pay.into.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "amount",
+                formatted);
     }
 
     // ---- ACCOUNT PAY: BUSINESS -> PLAYER ----------------------------------------
@@ -458,9 +571,12 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.finance")
     @Async
     @Description("Pay money from a specific firm account to a player")
-    public void accountPayPlayer(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                                 @Arg("accountId") Integer accountId, @Arg("player") FirmPlayer target,
-                                 @Arg("amount") BigDecimal amount) {
+    public void accountPayPlayer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("player") FirmPlayer target,
+            @Arg("amount") BigDecimal amount) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -475,9 +591,17 @@ public class AccountCommands implements CommandHandler {
 
         audit.payPlayerFromAccount(firm.getFirmId(), accountId, target.getUniqueId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.account.pay.player.success",
-                "firm", firm.getDisplayName(), "accountId", accountId,
-                "player", target.getCurrentName(), "amount", formatted);
+        message.send(
+                sender,
+                "business.account.pay.player.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "player",
+                target.getCurrentName(),
+                "amount",
+                formatted);
     }
 
     // ---- ACCOUNT PAY: BUSINESS -> BUSINESS --------------------------------------
@@ -486,9 +610,12 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.finance")
     @Async
     @Description("Pay money from a specific firm account to another business")
-    public void accountPayBusiness(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                                   @Arg("accountId") Integer accountId, @Arg("target") OnlineFirmName targetRef,
-                                   @Arg("amount") BigDecimal amount) {
+    public void accountPayBusiness(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("target") OnlineFirmName targetRef,
+            @Arg("amount") BigDecimal amount) {
         String firmName = firmRef.value();
         String targetFirm = targetRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
@@ -515,11 +642,27 @@ public class AccountCommands implements CommandHandler {
 
         audit.payFirmFromAccount(firm.getFirmId(), accountId, targetF.getFirmId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.account.pay.business.success",
-                "firm", firm.getDisplayName(), "accountId", accountId,
-                "target", targetF.getDisplayName(), "amount", formatted);
-        notifications.notifyFirmExcept(targetF.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                "firm", targetF.getDisplayName(), "amount", formatted, "sender", firm.getDisplayName());
+        message.send(
+                sender,
+                "business.account.pay.business.success",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "target",
+                targetF.getDisplayName(),
+                "amount",
+                formatted);
+        notifications.notifyFirmExcept(
+                targetF.getFirmId(),
+                sender.getUniqueId(),
+                "business.notify.transfer.incoming",
+                "firm",
+                targetF.getDisplayName(),
+                "amount",
+                formatted,
+                "sender",
+                firm.getDisplayName());
     }
 
     // ---- ACCOUNT TRANSACTIONS ---------------------------------------------------
@@ -528,8 +671,8 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.finance")
     @Async
     @Description("Show transaction history for a specific firm account (page 1)")
-    public void accountTransactions(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                                    @Arg("accountId") Integer accountId) {
+    public void accountTransactions(
+            @Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
         accountTransactions(sender, firmRef, accountId, 1);
     }
 
@@ -537,8 +680,11 @@ public class AccountCommands implements CommandHandler {
     @Permission("business.account.finance")
     @Async
     @Description("Show transaction history for a specific firm account")
-    public void accountTransactions(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                                    @Arg("accountId") Integer accountId, @Arg("page") Integer page) {
+    public void accountTransactions(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("accountId") Integer accountId,
+            @Arg("page") Integer page) {
         String firmName = firmRef.value();
         Firm firm = firms.getFirmByNameOrId(firmName);
         if (firm == null) {
@@ -554,22 +700,40 @@ public class AccountCommands implements CommandHandler {
         Page<TransactionEntry> txPage = audit.getAccountTransactions(firm.getFirmId(), accountId, page, TX_PAGE_SIZE);
 
         if (txPage.items().isEmpty()) {
-            message.send(sender, "business.account.transactions.empty",
-                    "firm", firm.getDisplayName(), "accountId", accountId);
+            message.send(
+                    sender,
+                    "business.account.transactions.empty",
+                    "firm",
+                    firm.getDisplayName(),
+                    "accountId",
+                    accountId);
             return;
         }
 
-        message.send(sender, "business.account.transactions.header",
-                "firm", firm.getDisplayName(), "accountId", accountId,
-                "page", txPage.pageNumber(), "totalPages", txPage.totalPages());
+        message.send(
+                sender,
+                "business.account.transactions.header",
+                "firm",
+                firm.getDisplayName(),
+                "accountId",
+                accountId,
+                "page",
+                txPage.pageNumber(),
+                "totalPages",
+                txPage.totalPages());
 
-        CommandSupport.renderTransactionLines(message, treasury, sender, txPage,
-                "business.account.transactions.line");
+        CommandSupport.renderTransactionLines(message, treasury, sender, txPage, "business.account.transactions.line");
 
         if (txPage.hasMore()) {
-            message.send(sender, "business.account.transactions.next-page",
-                    "firm", firm.getDisplayName(), "accountId", accountId,
-                    "nextPage", txPage.pageNumber() + 1);
+            message.send(
+                    sender,
+                    "business.account.transactions.next-page",
+                    "firm",
+                    firm.getDisplayName(),
+                    "accountId",
+                    accountId,
+                    "nextPage",
+                    txPage.pageNumber() + 1);
         }
     }
 

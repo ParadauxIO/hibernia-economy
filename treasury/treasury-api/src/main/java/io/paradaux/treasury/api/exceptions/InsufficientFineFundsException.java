@@ -1,7 +1,6 @@
 package io.paradaux.treasury.api.exceptions;
 
 import java.util.UUID;
-
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -29,8 +28,12 @@ public class InsufficientFineFundsException extends TreasuryException {
     }
 
     /** The fined player, or {@code null} if the debtor was an account (firm fine). */
-    public @Nullable UUID getPlayerUuid() { return playerUuid; }
+    public @Nullable UUID getPlayerUuid() {
+        return playerUuid;
+    }
 
     /** The debited account, or {@code null} if the debtor was a player. */
-    public @Nullable Integer getDebtorAccountId() { return debtorAccountId; }
+    public @Nullable Integer getDebtorAccountId() {
+        return debtorAccountId;
+    }
 }

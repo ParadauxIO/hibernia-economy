@@ -2,7 +2,6 @@ package io.paradaux.common;
 
 import java.nio.ByteBuffer;
 import java.util.UUID;
-
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -29,8 +28,7 @@ public final class UuidBin {
         // BufferUnderflowException (too short) or silently dropped trailing bytes
         // (too long), yielding a wrong-but-plausible UUID. Fail loudly instead.
         if (bytes.length != 16) {
-            throw new IllegalArgumentException(
-                    "UUID BINARY value must be exactly 16 bytes, got " + bytes.length);
+            throw new IllegalArgumentException("UUID BINARY value must be exactly 16 bytes, got " + bytes.length);
         }
         ByteBuffer bb = ByteBuffer.wrap(bytes);
         return new UUID(bb.getLong(), bb.getLong());

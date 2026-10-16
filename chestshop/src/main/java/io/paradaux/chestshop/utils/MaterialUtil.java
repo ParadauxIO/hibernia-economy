@@ -1,9 +1,7 @@
 package io.paradaux.chestshop.utils;
 
-import org.bukkit.Material;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.Damageable;
-import org.bukkit.inventory.meta.ItemMeta;
+import static io.paradaux.chestshop.utils.StringUtil.getMinecraftCharWidth;
+import static io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,9 +9,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static io.paradaux.chestshop.utils.StringUtil.getMinecraftCharWidth;
-import static io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth;
+import org.bukkit.Material;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.inventory.meta.ItemMeta;
 
 /**
  * Pure, stateless item/material string helpers: empty/custom-data detection, sign-name
@@ -27,8 +26,7 @@ import static io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth;
  */
 public final class MaterialUtil {
 
-    private MaterialUtil() {
-    }
+    private MaterialUtil() {}
 
     public static final Pattern DURABILITY = Pattern.compile(":\\d+");
     public static final Pattern METADATA = Pattern.compile("#[0-9a-zA-Z]+");
@@ -41,8 +39,7 @@ public final class MaterialUtil {
             "Spawn", "Spaw",
             "Pottery", "Pot",
             "Heartbreak", "Heartbr",
-            "Sherd", "Sher"
-    );
+            "Sherd", "Sher");
 
     private static final Map<String, String> UNIDIRECTIONAL_ABBREVIATIONS = StringUtil.map(
             "Chestplate", "Chestplt",
@@ -53,8 +50,7 @@ public final class MaterialUtil {
             "Wayfinder", "Wayfndr",
             "Wayfndr", "Wf",
             "Heartbr", "Hrtbr",
-            "Hrtbr", "Hrtb"
-    );
+            "Hrtbr", "Hrtb");
 
     /**
      * Checks if the itemStack is empty or null
@@ -247,7 +243,9 @@ public final class MaterialUtil {
 
     private static class EnumParser<E extends Enum<E>> {
         private E parse(String name, E[] values) {
-            String formatted = name.replaceAll("(?<!^)(?>\\s?)([A-Z1-9])", "_$1").toUpperCase(Locale.ROOT).replace(' ', '_');
+            String formatted = name.replaceAll("(?<!^)(?>\\s?)([A-Z1-9])", "_$1")
+                    .toUpperCase(Locale.ROOT)
+                    .replace(' ', '_');
             try {
                 return Enum.valueOf(values[0].getDeclaringClass(), formatted);
             } catch (IllegalArgumentException exception) {

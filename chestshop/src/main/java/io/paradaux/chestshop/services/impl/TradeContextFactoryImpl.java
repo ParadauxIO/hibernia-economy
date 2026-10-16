@@ -1,5 +1,10 @@
 package io.paradaux.chestshop.services.impl;
 
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+import static org.bukkit.event.block.Action.LEFT_CLICK_BLOCK;
+import static org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK;
+
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.Account;
@@ -15,21 +20,15 @@ import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.TradeContextFactory;
 import io.paradaux.chestshop.utils.PriceUtil;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.math.RoundingMode;
-
-import static org.bukkit.event.block.Action.LEFT_CLICK_BLOCK;
-import static org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
 
 /**
  * Builds the {@link PendingTransaction} for a shop interaction: resolve the owner account, price the
@@ -50,9 +49,15 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
     private final InventoryService inventoryService;
 
     @Inject
-    TradeContextFactoryImpl(EconomyService economy, AccountService accounts, Message message, ItemService items,
-                        ChestShopConfiguration config, SignService signService, ShopBlockService shopBlockService,
-                        InventoryService inventoryService) {
+    TradeContextFactoryImpl(
+            EconomyService economy,
+            AccountService accounts,
+            Message message,
+            ItemService items,
+            ChestShopConfiguration config,
+            SignService signService,
+            ShopBlockService shopBlockService,
+            InventoryService inventoryService) {
         this.economy = economy;
         this.accounts = accounts;
         this.message = message;
@@ -98,7 +103,8 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
         int amount = -1;
         try {
             amount = SignService.getQuantity(sign);
-        } catch (NumberFormatException ignored) {} // There is no quantity number on the sign
+        } catch (NumberFormatException ignored) {
+        } // There is no quantity number on the sign
 
         if (amount < 1 || amount > config.getMaxShopAmount()) {
             message.send(player, "chestshop.INVALID_SHOP_PRICE");
@@ -106,23 +112,37 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
         }
 
         BigDecimal pricePerItem = price.divide(BigDecimal.valueOf(amount), MathContext.DECIMAL128);
-        if (config.isShiftSellsInStacks() && player.isSneaking() && price.compareTo(PriceUtil.NO_PRICE) != 0 && isAllowedForShift(action == buy)) {
-            int newAmount = adminShop ? inventoryService.getMaxStackSize(item) : getStackAmount(item, ownerInventory, player, action);
+        if (config.isShiftSellsInStacks()
+                && player.isSneaking()
+                && price.compareTo(PriceUtil.NO_PRICE) != 0
+                && isAllowedForShift(action == buy)) {
+            int newAmount = adminShop
+                    ? inventoryService.getMaxStackSize(item)
+                    : getStackAmount(item, ownerInventory, player, action);
             if (newAmount > 0) {
-                price = pricePerItem.multiply(BigDecimal.valueOf(newAmount)).setScale(config.getPricePrecision(), RoundingMode.HALF_UP);
+                price = pricePerItem
+                        .multiply(BigDecimal.valueOf(newAmount))
+                        .setScale(config.getPricePrecision(), RoundingMode.HALF_UP);
                 amount = newAmount;
             }
-        } else if (config.isShiftSellsEverything() && player.isSneaking() && price.compareTo(PriceUtil.NO_PRICE) != 0 && isAllowedForShift(action == buy)) {
+        } else if (config.isShiftSellsEverything()
+                && player.isSneaking()
+                && price.compareTo(PriceUtil.NO_PRICE) != 0
+                && isAllowedForShift(action == buy)) {
             if (action != buy) {
                 int newAmount = inventoryService.getAmount(item, player.getInventory());
                 if (newAmount > 0) {
-                    price = pricePerItem.multiply(BigDecimal.valueOf(newAmount)).setScale(config.getPricePrecision(), RoundingMode.HALF_UP);
+                    price = pricePerItem
+                            .multiply(BigDecimal.valueOf(newAmount))
+                            .setScale(config.getPricePrecision(), RoundingMode.HALF_UP);
                     amount = newAmount;
                 }
             } else if (!adminShop && ownerInventory != null) {
                 int newAmount = inventoryService.getAmount(item, ownerInventory);
                 if (newAmount > 0) {
-                    price = pricePerItem.multiply(BigDecimal.valueOf(newAmount)).setScale(config.getPricePrecision(), RoundingMode.HALF_UP);
+                    price = pricePerItem
+                            .multiply(BigDecimal.valueOf(newAmount))
+                            .setScale(config.getPricePrecision(), RoundingMode.HALF_UP);
                     amount = newAmount;
                 }
             }
@@ -139,7 +159,16 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
         boolean unlimitedOwner = adminShop && (ownerInventory == null || config.isForceUnlimitedAdminShop());
 
         TransactionType transactionType = (action == buy ? BUY : SELL);
-        return new PendingTransaction(ownerInventory, player.getInventory(), stackedItems, price, player, account, sign, transactionType, unlimitedOwner);
+        return new PendingTransaction(
+                ownerInventory,
+                player.getInventory(),
+                stackedItems,
+                price,
+                player,
+                account,
+                sign,
+                transactionType,
+                unlimitedOwner);
     }
 
     private boolean isAllowedForShift(boolean buyTransaction) {

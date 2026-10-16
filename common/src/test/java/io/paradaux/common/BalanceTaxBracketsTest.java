@@ -1,6 +1,9 @@
 package io.paradaux.common;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -10,11 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class BalanceTaxBracketsTest {
 
@@ -30,7 +29,7 @@ class BalanceTaxBracketsTest {
 
     @Test
     void nullEntriesFallBackToDefaults() {
-        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(null, w -> { });
+        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(null, w -> {});
         assertEquals(BalanceTaxBrackets.DEFAULTS.size(), b.size());
     }
 
@@ -39,7 +38,7 @@ class BalanceTaxBracketsTest {
         Map<String, String> raw = new LinkedHashMap<>();
         raw.put("0", "0");
         raw.put("1000", "0.05");
-        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, w -> { });
+        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, w -> {});
         assertEquals(2, b.size());
         assertEquals(BigDecimal.ZERO, b.weeklyRate(new BigDecimal("500")));
         assertEquals(new BigDecimal("0.05"), b.weeklyRate(new BigDecimal("1000")));
@@ -50,7 +49,7 @@ class BalanceTaxBracketsTest {
     void belowLowestFloorIsZeroRate() {
         Map<String, String> raw = new LinkedHashMap<>();
         raw.put("1000", "0.05");
-        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, w -> { });
+        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, w -> {});
         assertEquals(BigDecimal.ZERO, b.weeklyRate(new BigDecimal("999")));
     }
 
@@ -58,8 +57,8 @@ class BalanceTaxBracketsTest {
     void skipsOutOfRangeRateWithWarning() {
         Map<String, String> raw = new LinkedHashMap<>();
         raw.put("0", "0");
-        raw.put("1000", "1.5");   // > 1
-        raw.put("2000", "-0.1");  // < 0
+        raw.put("1000", "1.5"); // > 1
+        raw.put("2000", "-0.1"); // < 0
         List<String> warnings = new ArrayList<>();
         BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, warnings::add);
         assertEquals(1, b.size()); // only the 0 -> 0 bracket survives
@@ -83,10 +82,10 @@ class BalanceTaxBracketsTest {
     void unparseableRateIsNamedAsRateNotKey_andSkipped() {
         Map<String, String> raw = new LinkedHashMap<>();
         raw.put("0", "0");
-        raw.put("1000", "notarate");   // key parses, value does not
+        raw.put("1000", "notarate"); // key parses, value does not
         List<String> warnings = new ArrayList<>();
         BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, warnings::add);
-        assertEquals(1, b.size());     // only 0 -> 0 survives; 1000 skipped, not coerced to 0
+        assertEquals(1, b.size()); // only 0 -> 0 survives; 1000 skipped, not coerced to 0
         assertEquals(1, warnings.size());
         String w = warnings.get(0);
         assertTrue(w.contains("rate"), "warning must name the rate field: " + w);
@@ -120,15 +119,14 @@ class BalanceTaxBracketsTest {
 
     @Test
     void nullOnWarnConsumerIsRejected() {
-        assertThrows(NullPointerException.class,
-                () -> BalanceTaxBrackets.fromRawEntries(Map.of("bad", "x"), null));
+        assertThrows(NullPointerException.class, () -> BalanceTaxBrackets.fromRawEntries(Map.of("bad", "x"), null));
     }
 
     @Test
     void allInvalidFallsBackToDefaults() {
         Map<String, String> raw = new LinkedHashMap<>();
         raw.put("bad", "0.05");
-        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, w -> { });
+        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, w -> {});
         assertEquals(BalanceTaxBrackets.DEFAULTS.size(), b.size());
     }
 

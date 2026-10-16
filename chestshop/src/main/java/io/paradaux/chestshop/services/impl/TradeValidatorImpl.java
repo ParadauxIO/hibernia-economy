@@ -1,5 +1,20 @@
 package io.paradaux.chestshop.services.impl;
 
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.CLIENT_DOES_NOT_HAVE_ENOUGH_MONEY;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.CLIENT_DOES_NOT_HAVE_PERMISSION;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.CREATIVE_MODE_PROTECTION;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.INVALID_CLIENT_NAME;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.INVALID_SHOP;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_SPACE_IN_CHEST;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_SPACE_IN_INVENTORY;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_STOCK_IN_CHEST;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_STOCK_IN_INVENTORY;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.SHOP_DOES_NOT_BUY_THIS_ITEM;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.SHOP_DOES_NOT_HAVE_ENOUGH_MONEY;
+import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.SHOP_DOES_NOT_SELL_THIS_ITEM;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.utils.PriceUtil.NO_PRICE;
+
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Table;
@@ -22,33 +37,17 @@ import io.paradaux.chestshop.utils.MessageUtil;
 import io.paradaux.chestshop.utils.Permissions;
 import io.paradaux.chestshop.utils.PriceUtil;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.UUID;
+import java.util.function.LongSupplier;
+import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-
-import java.math.BigDecimal;
-import java.util.Locale;
-import java.util.UUID;
-import java.util.function.LongSupplier;
-import java.util.regex.Pattern;
-
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.CLIENT_DOES_NOT_HAVE_ENOUGH_MONEY;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.CLIENT_DOES_NOT_HAVE_PERMISSION;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.CREATIVE_MODE_PROTECTION;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.INVALID_CLIENT_NAME;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.INVALID_SHOP;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_SPACE_IN_CHEST;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_SPACE_IN_INVENTORY;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_STOCK_IN_CHEST;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_STOCK_IN_INVENTORY;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.SHOP_DOES_NOT_BUY_THIS_ITEM;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.SHOP_DOES_NOT_HAVE_ENOUGH_MONEY;
-import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.SHOP_DOES_NOT_SELL_THIS_ITEM;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.utils.PriceUtil.NO_PRICE;
 
 /**
  * Runs a shop interaction through the ordered pre-trade validation steps, mutating the
@@ -84,18 +83,47 @@ public class TradeValidatorImpl implements TradeValidator {
     private final LongSupplier clock;
 
     @Inject
-    TradeValidatorImpl(EconomyService economy, AccountService accounts, SignBreakService signBreak, Message message,
-                   ItemService items, ChestShopConfiguration config, SignService signService, InventoryService inventoryService,
-                   AdminBypassService adminBypass, RestrictedSignService restrictedSign, PartialFillCalculator partialFill) {
-        this(economy, accounts, signBreak, message, items, config, signService, inventoryService,
-                adminBypass, restrictedSign, partialFill, System::currentTimeMillis);
+    TradeValidatorImpl(
+            EconomyService economy,
+            AccountService accounts,
+            SignBreakService signBreak,
+            Message message,
+            ItemService items,
+            ChestShopConfiguration config,
+            SignService signService,
+            InventoryService inventoryService,
+            AdminBypassService adminBypass,
+            RestrictedSignService restrictedSign,
+            PartialFillCalculator partialFill) {
+        this(
+                economy,
+                accounts,
+                signBreak,
+                message,
+                items,
+                config,
+                signService,
+                inventoryService,
+                adminBypass,
+                restrictedSign,
+                partialFill,
+                System::currentTimeMillis);
     }
 
     /** Test seam: same as the injected constructor but with a supplied {@code clock}. */
-    TradeValidatorImpl(EconomyService economy, AccountService accounts, SignBreakService signBreak, Message message,
-                   ItemService items, ChestShopConfiguration config, SignService signService, InventoryService inventoryService,
-                   AdminBypassService adminBypass, RestrictedSignService restrictedSign, PartialFillCalculator partialFill,
-                   LongSupplier clock) {
+    TradeValidatorImpl(
+            EconomyService economy,
+            AccountService accounts,
+            SignBreakService signBreak,
+            Message message,
+            ItemService items,
+            ChestShopConfiguration config,
+            SignService signService,
+            InventoryService inventoryService,
+            AdminBypassService adminBypass,
+            RestrictedSignService restrictedSign,
+            PartialFillCalculator partialFill,
+            LongSupplier clock) {
         this.economy = economy;
         this.accounts = accounts;
         this.signBreak = signBreak;
@@ -225,7 +253,8 @@ public class TradeValidatorImpl implements TradeValidator {
             return;
         }
         if (ctx.getExactPrice().compareTo(NO_PRICE) == 0) {
-            ctx.setCancelled(ctx.getTransactionType() == BUY ? SHOP_DOES_NOT_SELL_THIS_ITEM : SHOP_DOES_NOT_BUY_THIS_ITEM);
+            ctx.setCancelled(
+                    ctx.getTransactionType() == BUY ? SHOP_DOES_NOT_SELL_THIS_ITEM : SHOP_DOES_NOT_BUY_THIS_ITEM);
         }
     }
 
@@ -282,7 +311,9 @@ public class TradeValidatorImpl implements TradeValidator {
         boolean buy = ctx.getTransactionType() == BUY;
 
         String itemLine = SignService.getItem(ctx.getSign());
-        if (itemLine.contains("#") && Permissions.hasPermissionSetFalse(client, (buy ? Permissions.BUY_ID : Permissions.SELL_ID) + itemLine)) {
+        if (itemLine.contains("#")
+                && Permissions.hasPermissionSetFalse(
+                        client, (buy ? Permissions.BUY_ID : Permissions.SELL_ID) + itemLine)) {
             ctx.setCancelled(CLIENT_DOES_NOT_HAVE_PERMISSION);
             return;
         }
@@ -290,9 +321,11 @@ public class TradeValidatorImpl implements TradeValidator {
         for (ItemStack stock : ctx.getStock()) {
             String matID = stock.getType().toString().toLowerCase(Locale.ROOT);
             boolean hasPerm = buy
-                    ? (adminBypass.has(client, Permissions.BUY) && !Permissions.hasPermissionSetFalse(client, Permissions.BUY_ID + matID))
+                    ? (adminBypass.has(client, Permissions.BUY)
+                                    && !Permissions.hasPermissionSetFalse(client, Permissions.BUY_ID + matID))
                             || adminBypass.has(client, Permissions.BUY_ID + matID)
-                    : (adminBypass.has(client, Permissions.SELL) && !Permissions.hasPermissionSetFalse(client, Permissions.SELL_ID + matID))
+                    : (adminBypass.has(client, Permissions.SELL)
+                                    && !Permissions.hasPermissionSetFalse(client, Permissions.SELL_ID + matID))
                             || adminBypass.has(client, Permissions.SELL_ID + matID);
             if (!hasPerm) {
                 ctx.setCancelled(CLIENT_DOES_NOT_HAVE_PERMISSION);
@@ -331,8 +364,11 @@ public class TradeValidatorImpl implements TradeValidator {
             case CLIENT_DOES_NOT_HAVE_ENOUGH_MONEY -> messageKey = "chestshop.NOT_ENOUGH_MONEY";
             case SHOP_DOES_NOT_HAVE_ENOUGH_MONEY -> messageKey = "chestshop.NOT_ENOUGH_MONEY_SHOP";
             case NOT_ENOUGH_SPACE_IN_CHEST -> {
-                // SHOW_MESSAGE_FULL_SHOP gates the notice; /cstoggle may only hide it when CSTOGGLE_TOGGLES_FULL_SHOP is on.
-                if (config.isShowMessageFullShop() && (!config.isCstoggleTogglesFullShop() || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid()))) {
+                // SHOW_MESSAGE_FULL_SHOP gates the notice; /cstoggle may only hide it when CSTOGGLE_TOGGLES_FULL_SHOP
+                // is on.
+                if (config.isShowMessageFullShop()
+                        && (!config.isCstoggleTogglesFullShop()
+                                || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid()))) {
                     sendShopLocationMessage(ctx, "chestshop.NOT_ENOUGH_SPACE_IN_YOUR_SHOP", "seller");
                 }
                 messageKey = "chestshop.NOT_ENOUGH_SPACE_IN_CHEST";
@@ -340,8 +376,11 @@ public class TradeValidatorImpl implements TradeValidator {
             case NOT_ENOUGH_SPACE_IN_INVENTORY -> messageKey = "chestshop.NOT_ENOUGH_SPACE_IN_INVENTORY";
             case NOT_ENOUGH_STOCK_IN_INVENTORY -> messageKey = "chestshop.NOT_ENOUGH_ITEMS_TO_SELL";
             case NOT_ENOUGH_STOCK_IN_CHEST -> {
-                // SHOW_MESSAGE_OUT_OF_STOCK gates the notice; /cstoggle may only hide it when CSTOGGLE_TOGGLES_OUT_OF_STOCK is on.
-                if (config.isShowMessageOutOfStock() && (!config.isCstoggleTogglesOutOfStock() || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid()))) {
+                // SHOW_MESSAGE_OUT_OF_STOCK gates the notice; /cstoggle may only hide it when
+                // CSTOGGLE_TOGGLES_OUT_OF_STOCK is on.
+                if (config.isShowMessageOutOfStock()
+                        && (!config.isCstoggleTogglesOutOfStock()
+                                || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid()))) {
                     sendShopLocationMessage(ctx, "chestshop.NOT_ENOUGH_STOCK_IN_YOUR_SHOP", "buyer");
                 }
                 messageKey = "chestshop.NOT_ENOUGH_STOCK";
@@ -355,7 +394,7 @@ public class TradeValidatorImpl implements TradeValidator {
             case INVALID_SHOP -> messageKey = "chestshop.INVALID_SHOP_DETECTED";
             case INVALID_CLIENT_NAME -> messageKey = "chestshop.INVALID_CLIENT_NAME";
             case CREATIVE_MODE_PROTECTION -> messageKey = "chestshop.TRADE_DENIED_CREATIVE_MODE";
-            default -> { }
+            default -> {}
         }
 
         if (messageKey != null) {
@@ -365,14 +404,24 @@ public class TradeValidatorImpl implements TradeValidator {
 
     private void sendShopLocationMessage(PendingTransaction ctx, String key, String actorPlaceholder) {
         Location loc = ctx.getSign().getLocation();
-        sendMessageToOwner(ctx.getOwnerAccount(), key, new String[]{
-                "price", economy.format(ctx.getExactPrice()),
-                actorPlaceholder, ctx.getClient().getName(),
-                "world", io.paradaux.chestshop.utils.LocationUtil.worldName(loc), // ADT-140: world may be unloaded
-                "x", String.valueOf(loc.getBlockX()),
-                "y", String.valueOf(loc.getBlockY()),
-                "z", String.valueOf(loc.getBlockZ())
-        }, ctx.getStock());
+        sendMessageToOwner(
+                ctx.getOwnerAccount(),
+                key,
+                new String[] {
+                    "price",
+                    economy.format(ctx.getExactPrice()),
+                    actorPlaceholder,
+                    ctx.getClient().getName(),
+                    "world",
+                    io.paradaux.chestshop.utils.LocationUtil.worldName(loc), // ADT-140: world may be unloaded
+                    "x",
+                    String.valueOf(loc.getBlockX()),
+                    "y",
+                    String.valueOf(loc.getBlockY()),
+                    "z",
+                    String.valueOf(loc.getBlockZ())
+                },
+                ctx.getStock());
     }
 
     private void sendMessageToOwner(Account ownerAccount, String key, String[] replacements, ItemStack... stock) {
@@ -392,6 +441,7 @@ public class TradeValidatorImpl implements TradeValidator {
         }
 
         String itemList = items.getItemList(stock);
-        player.sendMessage(message.component(key, MessageUtil.values(true, ImmutableMap.of("material", itemList, "item", itemList), replacements)));
+        player.sendMessage(message.component(
+                key, MessageUtil.values(true, ImmutableMap.of("material", itemList, "item", itemList), replacements)));
     }
 }

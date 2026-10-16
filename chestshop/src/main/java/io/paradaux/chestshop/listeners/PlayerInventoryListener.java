@@ -1,14 +1,19 @@
 package io.paradaux.chestshop.listeners;
 
-import io.paradaux.chestshop.utils.InventoryUtil;
-import io.paradaux.chestshop.services.AdminBypassService;
-import io.paradaux.chestshop.services.ShopBlockService;
+import static io.paradaux.chestshop.utils.InventoryUtil.getHolder;
+import static io.paradaux.chestshop.utils.InventoryUtil.getLeftSide;
+import static io.paradaux.chestshop.utils.InventoryUtil.getRightSide;
+
 import com.google.inject.Inject;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.utils.Permissions;
-import io.paradaux.chestshop.services.ProtectionService;
+import io.paradaux.chestshop.services.AdminBypassService;
 import io.paradaux.chestshop.services.InfoService;
+import io.paradaux.chestshop.services.ProtectionService;
+import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.utils.Permissions;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.util.ArrayList;
+import java.util.List;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.DoubleChest;
@@ -18,13 +23,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.InventoryHolder;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static io.paradaux.chestshop.utils.InventoryUtil.getHolder;
-import static io.paradaux.chestshop.utils.InventoryUtil.getLeftSide;
-import static io.paradaux.chestshop.utils.InventoryUtil.getRightSide;
 
 /**
  * @author Acrobot
@@ -40,8 +38,13 @@ public class PlayerInventoryListener implements Listener {
     private final AdminBypassService adminBypass;
 
     @Inject
-    public PlayerInventoryListener(InfoService info, Message message, ProtectionService protection,
-                           ChestShopConfiguration config, ShopBlockService shopBlockService, AdminBypassService adminBypass) {
+    public PlayerInventoryListener(
+            InfoService info,
+            Message message,
+            ProtectionService protection,
+            ChestShopConfiguration config,
+            ShopBlockService shopBlockService,
+            AdminBypassService adminBypass) {
         this.adminBypass = adminBypass;
         this.info = info;
         this.message = message;

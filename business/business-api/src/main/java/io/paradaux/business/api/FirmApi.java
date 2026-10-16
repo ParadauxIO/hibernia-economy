@@ -1,11 +1,10 @@
 package io.paradaux.business.api;
 
 import io.paradaux.business.model.Firm;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Firm lookup and modification operations.
@@ -24,14 +23,14 @@ public interface FirmApi {
         return null;
     }
 
-
     /**
      * Looks up a firm by its display name or numeric ID.
      *
      * @param nameOrId the firm name or ID string
      * @return the firm, or {@code null} if not found
      */
-    @Nullable Firm getFirm(String nameOrId);
+    @Nullable
+    Firm getFirm(String nameOrId);
 
     /**
      * Typed lookup by numeric firm id — prefer this over {@link #getFirm(String)}
@@ -135,7 +134,8 @@ public interface FirmApi {
      * @param accountId the Treasury account ID (as returned by {@code Account.getAccountId()})
      * @return the owning firm, or {@code null} if the account is not a firm account
      */
-    @Nullable Firm getFirmByAccountId(int accountId);
+    @Nullable
+    Firm getFirmByAccountId(int accountId);
 
     /**
      * Returns a firm's total balance, summed across all of its treasury accounts.

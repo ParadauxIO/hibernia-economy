@@ -2,9 +2,8 @@ package io.paradaux.common;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.jetbrains.annotations.Nullable;
-
 import javax.sql.DataSource;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Single HikariCP-backed MariaDB {@link DataSource} factory shared by every plugin
@@ -39,13 +38,17 @@ public final class DataSourceProvider implements AutoCloseable {
      */
     static String buildJdbcUrl(String host, int port, String db, boolean statementCaching) {
         StringBuilder url = new StringBuilder()
-                .append("jdbc:mariadb://").append(host).append(':').append(port)
-                .append('/').append(db)
+                .append("jdbc:mariadb://")
+                .append(host)
+                .append(':')
+                .append(port)
+                .append('/')
+                .append(db)
                 .append("?useUnicode=true&characterEncoding=utf8");
         if (statementCaching) {
             url.append("&useServerPrepStmts=true&cachePrepStmts=true")
-               .append("&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048")
-               .append("&rewriteBatchedStatements=true");
+                    .append("&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048")
+                    .append("&rewriteBatchedStatements=true");
         }
         return url.toString();
     }
@@ -63,8 +66,8 @@ public final class DataSourceProvider implements AutoCloseable {
 
         // Only override Hikari's own defaults when the caller supplied a value.
         if (b.connectionTimeoutMs >= 0) cfg.setConnectionTimeout(b.connectionTimeoutMs);
-        if (b.maxLifetimeMs >= 0)       cfg.setMaxLifetime(b.maxLifetimeMs);
-        if (b.keepaliveMs >= 0)         cfg.setKeepaliveTime(b.keepaliveMs);
+        if (b.maxLifetimeMs >= 0) cfg.setMaxLifetime(b.maxLifetimeMs);
+        if (b.keepaliveMs >= 0) cfg.setKeepaliveTime(b.keepaliveMs);
         // With autoCommit=false a connection that escapes its transaction without a
         // commit/rollback (e.g. blocking I/O inside @Transactional) is pinned out of
         // the pool with an open transaction. A positive threshold warn-logs any
@@ -75,9 +78,13 @@ public final class DataSourceProvider implements AutoCloseable {
         this.ds = new HikariDataSource(cfg);
     }
 
-    public DataSource get() { return ds; }
+    public DataSource get() {
+        return ds;
+    }
 
-    public void close() { ds.close(); }
+    public void close() {
+        ds.close();
+    }
 
     public static Builder builder(String host, int port, String db, String user, String pass) {
         return new Builder(host, port, db, user, pass);
@@ -95,10 +102,10 @@ public final class DataSourceProvider implements AutoCloseable {
         private int minimumIdle = 2;
         private boolean statementCaching = false;
         private @Nullable String transactionIsolation = null; // driver default
-        private long connectionTimeoutMs = -1;       // Hikari default (30s)
-        private long maxLifetimeMs = -1;             // Hikari default (30m)
-        private long keepaliveMs = -1;               // Hikari default (off)
-        private long leakDetectionThresholdMs = 0;   // off
+        private long connectionTimeoutMs = -1; // Hikari default (30s)
+        private long maxLifetimeMs = -1; // Hikari default (30m)
+        private long keepaliveMs = -1; // Hikari default (off)
+        private long leakDetectionThresholdMs = 0; // off
 
         private Builder(String host, int port, String db, String user, String pass) {
             this.host = host;
@@ -108,18 +115,53 @@ public final class DataSourceProvider implements AutoCloseable {
             this.pass = pass;
         }
 
-        public Builder poolName(String v) { this.poolName = v; return this; }
-        public Builder maximumPoolSize(int v) { this.maximumPoolSize = v; return this; }
-        public Builder minimumIdle(int v) { this.minimumIdle = v; return this; }
-        /** Append driver-side prepared-statement caching + batch-rewrite URL params. */
-        public Builder statementCaching(boolean v) { this.statementCaching = v; return this; }
-        /** e.g. {@code "TRANSACTION_READ_COMMITTED"}; null leaves the driver default. */
-        public Builder transactionIsolation(@Nullable String v) { this.transactionIsolation = v; return this; }
-        public Builder connectionTimeoutMs(long v) { this.connectionTimeoutMs = v; return this; }
-        public Builder maxLifetimeMs(long v) { this.maxLifetimeMs = v; return this; }
-        public Builder keepaliveMs(long v) { this.keepaliveMs = v; return this; }
-        public Builder leakDetectionThresholdMs(long v) { this.leakDetectionThresholdMs = v; return this; }
+        public Builder poolName(String v) {
+            this.poolName = v;
+            return this;
+        }
 
-        public DataSourceProvider build() { return new DataSourceProvider(this); }
+        public Builder maximumPoolSize(int v) {
+            this.maximumPoolSize = v;
+            return this;
+        }
+
+        public Builder minimumIdle(int v) {
+            this.minimumIdle = v;
+            return this;
+        }
+        /** Append driver-side prepared-statement caching + batch-rewrite URL params. */
+        public Builder statementCaching(boolean v) {
+            this.statementCaching = v;
+            return this;
+        }
+        /** e.g. {@code "TRANSACTION_READ_COMMITTED"}; null leaves the driver default. */
+        public Builder transactionIsolation(@Nullable String v) {
+            this.transactionIsolation = v;
+            return this;
+        }
+
+        public Builder connectionTimeoutMs(long v) {
+            this.connectionTimeoutMs = v;
+            return this;
+        }
+
+        public Builder maxLifetimeMs(long v) {
+            this.maxLifetimeMs = v;
+            return this;
+        }
+
+        public Builder keepaliveMs(long v) {
+            this.keepaliveMs = v;
+            return this;
+        }
+
+        public Builder leakDetectionThresholdMs(long v) {
+            this.leakDetectionThresholdMs = v;
+            return this;
+        }
+
+        public DataSourceProvider build() {
+            return new DataSourceProvider(this);
+        }
     }
 }

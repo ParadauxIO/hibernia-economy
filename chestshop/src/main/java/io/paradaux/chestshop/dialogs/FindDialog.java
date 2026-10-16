@@ -1,11 +1,11 @@
 package io.paradaux.chestshop.dialogs;
 
-import io.paradaux.chestshop.services.ShopFinderService;
-import io.paradaux.chestshop.model.FoundShop;
-import io.paradaux.chestshop.model.SortDirection;
-import io.paradaux.chestshop.model.ShopType;
-import io.paradaux.chestshop.model.ShopAttribute;
 import com.google.inject.Inject;
+import io.paradaux.chestshop.model.FoundShop;
+import io.paradaux.chestshop.model.ShopAttribute;
+import io.paradaux.chestshop.model.ShopType;
+import io.paradaux.chestshop.model.SortDirection;
+import io.paradaux.chestshop.services.ShopFinderService;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.hibernia.framework.usher.ButtonSpec;
 import io.paradaux.hibernia.framework.usher.DialogContext;
@@ -19,14 +19,13 @@ import io.paradaux.hibernia.framework.usher.annotations.Model;
 import io.paradaux.hibernia.framework.usher.annotations.Screen;
 import io.paradaux.hibernia.framework.usher.input.DialogInputSpec;
 import io.paradaux.hibernia.framework.usher.spi.DialogHandler;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
-
-import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * The {@code /find} shop-search dialog flow — the first Usher consumer in
@@ -53,8 +52,7 @@ public final class FindDialog implements DialogHandler {
 
     @Screen
     public DialogView main(@Model FindState state) {
-        DialogView.Builder b = DialogView.multiAction(
-                        Text.key("find.title", "item", state.itemDisplayName()))
+        DialogView.Builder b = DialogView.multiAction(Text.key("find.title", "item", state.itemDisplayName()))
                 .canCloseWithEscape(true);
         if (state.itemStack() != null) {
             b.bodyItem(state.itemStack());
@@ -120,16 +118,26 @@ public final class FindDialog implements DialogHandler {
     @Screen("filters")
     public DialogView filters(@Model FindState state) {
         return DialogView.multiAction(Text.key("find.filters.title"))
-                .toggle("type_buy", "find.filter.buy", "find.opt.on", "find.opt.off",
+                .toggle(
+                        "type_buy",
+                        "find.filter.buy",
+                        "find.opt.on",
+                        "find.opt.off",
                         state.shopTypes().contains(ShopType.BUY))
-                .toggle("type_sell", "find.filter.sell", "find.opt.on", "find.opt.off",
+                .toggle(
+                        "type_sell",
+                        "find.filter.sell",
+                        "find.opt.on",
+                        "find.opt.off",
                         state.shopTypes().contains(ShopType.SELL))
-                .toggle("type_both", "find.filter.both", "find.opt.on", "find.opt.off",
+                .toggle(
+                        "type_both",
+                        "find.filter.both",
+                        "find.opt.on",
+                        "find.opt.off",
                         state.shopTypes().contains(ShopType.BOTH))
-                .toggle("show_empty", "find.filter.show-empty", "find.opt.on", "find.opt.off",
-                        !state.hideEmpty())
-                .toggle("show_full", "find.filter.show-full", "find.opt.on", "find.opt.off",
-                        !state.hideFull())
+                .toggle("show_empty", "find.filter.show-empty", "find.opt.on", "find.opt.off", !state.hideEmpty())
+                .toggle("show_full", "find.filter.show-full", "find.opt.on", "find.opt.off", !state.hideFull())
                 .button(Text.key("find.button.save"), "applyFilters")
                 .exit(ButtonSpec.back(Text.key("find.button.back")))
                 .columns(1)
@@ -137,9 +145,14 @@ public final class FindDialog implements DialogHandler {
     }
 
     @Action("applyFilters")
-    public void applyFilters(@Input("type_buy") boolean buy, @Input("type_sell") boolean sell,
-                             @Input("type_both") boolean both, @Input("show_empty") boolean showEmpty,
-                             @Input("show_full") boolean showFull, @Model FindState state, DialogFlow flow) {
+    public void applyFilters(
+            @Input("type_buy") boolean buy,
+            @Input("type_sell") boolean sell,
+            @Input("type_both") boolean both,
+            @Input("show_empty") boolean showEmpty,
+            @Input("show_full") boolean showFull,
+            @Model FindState state,
+            DialogFlow flow) {
         List<ShopType> types = new ArrayList<>();
         if (buy) types.add(ShopType.BUY);
         if (sell) types.add(ShopType.SELL);
@@ -157,13 +170,18 @@ public final class FindDialog implements DialogHandler {
         DialogView.Builder b = DialogView.multiAction(Text.key("find.sort.title"));
         for (ShopAttribute attribute : ShopAttribute.values()) {
             FindState.SortMeta meta = state.sortMeta(attribute);
-            b.option("dir_" + attribute.name(),
+            b.option(
+                    "dir_" + attribute.name(),
                     Text.of(Component.text(attribute.displayName())),
                     directionOptions(meta));
             int weight = meta != null ? meta.weight() : 0;
-            b.number("pri_" + attribute.name(),
+            b.number(
+                    "pri_" + attribute.name(),
                     Text.key("find.sort.priority", "attr", attribute.displayName()),
-                    0, 100, 1f, (float) weight);
+                    0,
+                    100,
+                    1f,
+                    (float) weight);
         }
         return b.button(Text.key("find.button.save"), "applySort")
                 .exit(ButtonSpec.back(Text.key("find.button.back")))
@@ -203,11 +221,16 @@ public final class FindDialog implements DialogHandler {
         List<FoundShop> shops = state.pageShops();
         String queriedKey = state.fuzzy() ? state.itemKey() : null;
 
-        DialogView.Builder b = DialogView.multiAction(Text.key("find.results.title",
-                        "item", state.itemDisplayName(),
-                        "page", state.page() + 1,
-                        "pages", state.pageCount(),
-                        "count", state.results().size()))
+        DialogView.Builder b = DialogView.multiAction(Text.key(
+                        "find.results.title",
+                        "item",
+                        state.itemDisplayName(),
+                        "page",
+                        state.page() + 1,
+                        "pages",
+                        state.pageCount(),
+                        "count",
+                        state.results().size()))
                 .canCloseWithEscape(true);
 
         for (int i = 0; i < shops.size(); i++) {
@@ -219,9 +242,7 @@ public final class FindDialog implements DialogHandler {
         if (state.page() < state.pageCount() - 1) {
             b.button(Text.key("find.button.next"), "nextPage");
         }
-        return b.exit("find.button.close")
-                .columns(1)
-                .build();
+        return b.exit("find.button.close").columns(1).build();
     }
 
     @Action("prevPage")
@@ -238,13 +259,40 @@ public final class FindDialog implements DialogHandler {
 
     // One @Action per page slot — dialog buttons map to named actions, so a fixed
     // slot set is how a results list offers per-row selection.
-    @Action("select0") public void select0(@Model FindState s, DialogFlow f) { select(s, f, 0); }
-    @Action("select1") public void select1(@Model FindState s, DialogFlow f) { select(s, f, 1); }
-    @Action("select2") public void select2(@Model FindState s, DialogFlow f) { select(s, f, 2); }
-    @Action("select3") public void select3(@Model FindState s, DialogFlow f) { select(s, f, 3); }
-    @Action("select4") public void select4(@Model FindState s, DialogFlow f) { select(s, f, 4); }
-    @Action("select5") public void select5(@Model FindState s, DialogFlow f) { select(s, f, 5); }
-    @Action("select6") public void select6(@Model FindState s, DialogFlow f) { select(s, f, 6); }
+    @Action("select0")
+    public void select0(@Model FindState s, DialogFlow f) {
+        select(s, f, 0);
+    }
+
+    @Action("select1")
+    public void select1(@Model FindState s, DialogFlow f) {
+        select(s, f, 1);
+    }
+
+    @Action("select2")
+    public void select2(@Model FindState s, DialogFlow f) {
+        select(s, f, 2);
+    }
+
+    @Action("select3")
+    public void select3(@Model FindState s, DialogFlow f) {
+        select(s, f, 3);
+    }
+
+    @Action("select4")
+    public void select4(@Model FindState s, DialogFlow f) {
+        select(s, f, 4);
+    }
+
+    @Action("select5")
+    public void select5(@Model FindState s, DialogFlow f) {
+        select(s, f, 5);
+    }
+
+    @Action("select6")
+    public void select6(@Model FindState s, DialogFlow f) {
+        select(s, f, 6);
+    }
 
     private void select(FindState state, DialogFlow flow, int slot) {
         List<FoundShop> shops = state.pageShops();
@@ -253,10 +301,19 @@ public final class FindDialog implements DialogHandler {
         }
         FoundShop shop = shops.get(slot);
         Player player = flow.player();
-        message.send(player, "find.selected",
-                "owner", shop.ownerName() != null ? shop.ownerName() : "Admin Shop",
-                "world", shop.world(),
-                "x", shop.x(), "y", shop.y(), "z", shop.z());
+        message.send(
+                player,
+                "find.selected",
+                "owner",
+                shop.ownerName() != null ? shop.ownerName() : "Admin Shop",
+                "world",
+                shop.world(),
+                "x",
+                shop.x(),
+                "y",
+                shop.y(),
+                "z",
+                shop.z());
         flow.close();
     }
 
@@ -310,13 +367,15 @@ public final class FindDialog implements DialogHandler {
     }
 
     private static Component buyPart(FoundShop shop) {
-        return Component.text("Buy " + MONEY.format(shop.buyPriceValue())
-                + " (" + MONEY.format(shop.unitBuyPrice()) + "/ea)", NamedTextColor.GREEN);
+        return Component.text(
+                "Buy " + MONEY.format(shop.buyPriceValue()) + " (" + MONEY.format(shop.unitBuyPrice()) + "/ea)",
+                NamedTextColor.GREEN);
     }
 
     private static Component sellPart(FoundShop shop) {
-        return Component.text("Sell " + MONEY.format(shop.sellPriceValue())
-                + " (" + MONEY.format(shop.unitSellPrice()) + "/ea)", NamedTextColor.GOLD);
+        return Component.text(
+                "Sell " + MONEY.format(shop.sellPriceValue()) + " (" + MONEY.format(shop.unitSellPrice()) + "/ea)",
+                NamedTextColor.GOLD);
     }
 
     private static String stockText(FoundShop shop) {

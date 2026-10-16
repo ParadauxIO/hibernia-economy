@@ -1,12 +1,11 @@
 package io.paradaux.treasury.model.economy;
 
+import java.time.Instant;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.jetbrains.annotations.Nullable;
-
-import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @AllArgsConstructor

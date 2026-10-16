@@ -1,34 +1,39 @@
 package io.paradaux.chestshop.services.impl;
-import io.paradaux.chestshop.utils.Colours;
-import io.paradaux.chestshop.utils.SignText;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.utils.BlockUtil;
-import io.paradaux.chestshop.services.ShopBlockService;
-import io.paradaux.chestshop.services.ProtectionService;
-import io.paradaux.chestshop.services.ItemService;
-import io.paradaux.chestshop.services.EconomyService;
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.AdminBypassService;
-import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.ShopService;
+import static io.paradaux.chestshop.services.SignService.AUTOFILL_CODE;
+import static io.paradaux.chestshop.utils.Permissions.NOFEE;
+
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.utils.Permissions;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.chestshop.model.Account;
-import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.model.CreatedShop;
 import io.paradaux.chestshop.model.DestroyedShop;
+import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.model.ShopCreation.CreationOutcome;
-import io.paradaux.chestshop.services.StockCounterService;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.AdminBypassService;
+import io.paradaux.chestshop.services.EconomyService;
+import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketSyncService;
+import io.paradaux.chestshop.services.ProtectionService;
+import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.services.ShopService;
+import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.services.StockCounterService;
+import io.paradaux.chestshop.utils.BlockUtil;
+import io.paradaux.chestshop.utils.Colours;
 import io.paradaux.chestshop.utils.LocationUtil;
 import io.paradaux.chestshop.utils.MaterialUtil;
+import io.paradaux.chestshop.utils.Permissions;
 import io.paradaux.chestshop.utils.PriceUtil;
+import io.paradaux.chestshop.utils.SignText;
 import io.paradaux.chestshop.utils.StringUtil;
+import io.paradaux.hibernia.framework.i18n.Message;
+import java.math.BigDecimal;
+import java.util.Locale;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -40,12 +45,6 @@ import org.bukkit.block.Sign;
 import org.bukkit.block.data.type.WallSign;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-
-import java.math.BigDecimal;
-import java.util.Locale;
-
-import static io.paradaux.chestshop.utils.Permissions.NOFEE;
-import static io.paradaux.chestshop.services.SignService.AUTOFILL_CODE;
 
 /**
  * Owns the whole shop lifecycle: creation validation ({@link #create}), the post-creation
@@ -78,8 +77,18 @@ public class ShopServiceImpl implements ShopService {
     private final AdminBypassService adminBypass;
 
     @Inject
-    public ShopServiceImpl(AccountService accounts, EconomyService economy, ItemService items, ProtectionService protection, StockCounterService stockCounter, Message message, MarketSyncService market,
-                       ChestShopConfiguration config, SignService signService, ShopBlockService shopBlockService, AdminBypassService adminBypass) {
+    public ShopServiceImpl(
+            AccountService accounts,
+            EconomyService economy,
+            ItemService items,
+            ProtectionService protection,
+            StockCounterService stockCounter,
+            Message message,
+            MarketSyncService market,
+            ChestShopConfiguration config,
+            SignService signService,
+            ShopBlockService shopBlockService,
+            AdminBypassService adminBypass) {
         this.adminBypass = adminBypass;
         this.accounts = accounts;
         this.economy = economy;
@@ -181,7 +190,7 @@ public class ShopServiceImpl implements ShopService {
         String[] parts = line.split(":");
         if (parts.length > 1 && (isInvalidPricePart(parts[0]) ^ isInvalidPricePart(parts[1]))) {
             line = line.replace(':', ' ');
-            parts = new String[]{line};
+            parts = new String[] {line};
         }
         if (parts[0].split(" ").length > 2
                 || line.indexOf('B') != line.lastIndexOf('B')
@@ -215,7 +224,7 @@ public class ShopServiceImpl implements ShopService {
     }
 
     private static boolean isInvalidPricePart(String part) {
-        for (char character : new char[]{'B', 'S'}) {
+        for (char character : new char[] {'B', 'S'}) {
             if (part.contains(Character.toString(character))) {
                 return !PriceUtil.hasPrice(part, character);
             }
@@ -228,7 +237,8 @@ public class ShopServiceImpl implements ShopService {
         int amount = -1;
         try {
             amount = SignService.getQuantity(ctx.getSignLines());
-        } catch (NumberFormatException ignored) {} // not a quantity on the line
+        } catch (NumberFormatException ignored) {
+        } // not a quantity on the line
         if (amount < 1 || amount > config.getMaxShopAmount()) {
             ctx.setOutcome(CreationOutcome.INVALID_QUANTITY);
         }
@@ -237,7 +247,8 @@ public class ShopServiceImpl implements ShopService {
     /** Require a backing chest (non-admin) the creator may access. */
     private void checkChest(ShopCreation ctx) {
         String nameLine = SignService.getOwner(ctx.getSignLines());
-        Container connectedContainer = shopBlockService.findConnectedContainer(ctx.getSign().getBlock());
+        Container connectedContainer =
+                shopBlockService.findConnectedContainer(ctx.getSign().getBlock());
 
         if (connectedContainer == null) {
             if (!signService.isAdminShop(nameLine)) {
@@ -290,7 +301,8 @@ public class ShopServiceImpl implements ShopService {
             ctx.setOutcome(CreationOutcome.NO_PERMISSION_FOR_TERRAIN);
             return;
         }
-        Container connectedContainer = shopBlockService.findConnectedContainer(ctx.getSign().getBlock());
+        Container connectedContainer =
+                shopBlockService.findConnectedContainer(ctx.getSign().getBlock());
         Location containerLocation = connectedContainer != null ? connectedContainer.getLocation() : null;
         if (!protection.canBuild(player, containerLocation, ctx.getSign().getLocation())) {
             ctx.setOutcome(CreationOutcome.NO_PERMISSION_FOR_TERRAIN);
@@ -300,7 +312,8 @@ public class ShopServiceImpl implements ShopService {
     /** Optionally reject a shop whose sell price exceeds its buy price. */
     private void checkPriceRatio(ShopCreation ctx) {
         String priceLine = SignService.getPrice(ctx.getSignLines());
-        if (PriceUtil.hasBuyPrice(priceLine) && PriceUtil.hasSellPrice(priceLine)
+        if (PriceUtil.hasBuyPrice(priceLine)
+                && PriceUtil.hasSellPrice(priceLine)
                 && PriceUtil.getExactSellPrice(priceLine).compareTo(PriceUtil.getExactBuyPrice(priceLine)) > 0) {
             ctx.setOutcome(CreationOutcome.SELL_PRICE_HIGHER_THAN_BUY_PRICE);
         }
@@ -311,7 +324,10 @@ public class ShopServiceImpl implements ShopService {
         Player player = ctx.getPlayer();
 
         if (ctx.getOwnerAccount() != null
-                && !accounts.canUseName(player, Permissions.OTHER_NAME_CREATE, ctx.getOwnerAccount().getShortName())) {
+                && !accounts.canUseName(
+                        player,
+                        Permissions.OTHER_NAME_CREATE,
+                        ctx.getOwnerAccount().getShortName())) {
             ctx.setSignLine(SignService.NAME_LINE, "");
             ctx.setOutcome(CreationOutcome.NO_PERMISSION);
             return;
@@ -323,7 +339,8 @@ public class ShopServiceImpl implements ShopService {
 
         if (item == null) {
             if ((PriceUtil.hasBuyPrice(priceLine) && !adminBypass.has(player, Permissions.SHOP_CREATION_BUY))
-                    || (PriceUtil.hasSellPrice(priceLine) && !adminBypass.has(player, Permissions.SHOP_CREATION_SELL))) {
+                    || (PriceUtil.hasSellPrice(priceLine)
+                            && !adminBypass.has(player, Permissions.SHOP_CREATION_SELL))) {
                 ctx.setOutcome(CreationOutcome.NO_PERMISSION);
             }
             return;
@@ -331,17 +348,20 @@ public class ShopServiceImpl implements ShopService {
 
         String matID = item.getType().toString().toLowerCase(Locale.ROOT);
         String[] parts = itemLine.split("#", 2);
-        if (parts.length == 2 && Permissions.hasPermissionSetFalse(player, Permissions.SHOP_CREATION_ID + matID + "#" + parts[1])) {
+        if (parts.length == 2
+                && Permissions.hasPermissionSetFalse(player, Permissions.SHOP_CREATION_ID + matID + "#" + parts[1])) {
             ctx.setOutcome(CreationOutcome.NO_PERMISSION);
             return;
         }
 
         if (PriceUtil.hasBuyPrice(priceLine)) {
-            if (!canCreateForItem(player, Permissions.SHOP_CREATION_BUY_ID + matID, matID, Permissions.SHOP_CREATION_BUY)) {
+            if (!canCreateForItem(
+                    player, Permissions.SHOP_CREATION_BUY_ID + matID, matID, Permissions.SHOP_CREATION_BUY)) {
                 ctx.setOutcome(CreationOutcome.NO_PERMISSION);
             }
         } else if (PriceUtil.hasSellPrice(priceLine)) {
-            if (!canCreateForItem(player, Permissions.SHOP_CREATION_SELL_ID + matID, matID, Permissions.SHOP_CREATION_SELL)) {
+            if (!canCreateForItem(
+                    player, Permissions.SHOP_CREATION_SELL_ID + matID, matID, Permissions.SHOP_CREATION_SELL)) {
                 ctx.setOutcome(CreationOutcome.NO_PERMISSION);
             }
         }
@@ -385,14 +405,16 @@ public class ShopServiceImpl implements ShopService {
                         try {
                             account = otherPlayer != null
                                     ? accounts.getOrCreateAccount(otherPlayer)
-                                    : accounts.getOrCreateAccount(ChestShop.getBukkitServer().getOfflinePlayer(name));
+                                    : accounts.getOrCreateAccount(
+                                            ChestShop.getBukkitServer().getOfflinePlayer(name));
                         } catch (IllegalArgumentException e) {
                             ctx.getPlayer().sendMessage(e.getMessage());
                         }
                     }
                 }
             } catch (Exception e) {
-                log.error("Error while trying to check account for name " + name + " with player " + player.getName(), e);
+                log.error(
+                        "Error while trying to check account for name " + name + " with player " + player.getName(), e);
             }
         }
         ctx.setOwnerAccount(account);
@@ -466,16 +488,16 @@ public class ShopServiceImpl implements ShopService {
 
     @Override
     public void onCreated(CreatedShop event) {
-        stickSignToChest(event);   // was @NORMAL SignSticker
+        stickSignToChest(event); // was @NORMAL SignSticker
         sendCreatedMessage(event); // was @MONITOR MessageSender
-        logCreation(event);        // was @MONITOR ShopCreationLogger
+        logCreation(event); // was @MONITOR ShopCreationLogger
         market.onShopCreated(event); // genuine market-DB sync — stays
     }
 
     @Override
     public void onDestroyed(DestroyedShop event) {
         refundOnRemoval(event.getDestroyer(), event.getSign());
-        logRemoval(event);                     // was @MONITOR ShopRemovalLogger
+        logRemoval(event); // was @MONITOR ShopRemovalLogger
         market.onShopDestroyed(event); // genuine market-DB sync — stays
     }
 
@@ -537,8 +559,12 @@ public class ShopServiceImpl implements ShopService {
             String shopOwner = SignService.getOwner(event.getSignLines());
             String typeOfShop = signService.isAdminShop(shopOwner)
                     ? "an Admin Shop"
-                    : "a shop" + (event.createdByOwner() ? "" : " for " + event.getOwnerAccount().getName());
-            String item = SignService.getQuantity(event.getSignLines()) + ' ' + SignService.getItem(event.getSignLines());
+                    : "a shop"
+                            + (event.createdByOwner()
+                                    ? ""
+                                    : " for " + event.getOwnerAccount().getName());
+            String item =
+                    SignService.getQuantity(event.getSignLines()) + ' ' + SignService.getItem(event.getSignLines());
             String prices = SignService.getPrice(event.getSignLines());
             String location = LocationUtil.locationToString(event.getSign().getLocation());
             log.info(String.format(CREATION_LOG, creator, typeOfShop, item, prices, location));
@@ -552,16 +578,18 @@ public class ShopServiceImpl implements ShopService {
         }
         ChestShop.runInAsyncThread(() -> {
             String shopOwner = SignService.getOwner(event.getSign());
-            String typeOfShop = signService.isAdminShop(shopOwner)
-                    ? "An Admin Shop"
-                    : "A shop belonging to " + shopOwner;
+            String typeOfShop =
+                    signService.isAdminShop(shopOwner) ? "An Admin Shop" : "A shop belonging to " + shopOwner;
             String item = SignService.getQuantity(event.getSign()) + ' ' + SignService.getItem(event.getSign());
             String prices = SignService.getPrice(event.getSign());
             String location = LocationUtil.locationToString(event.getSign().getLocation());
-            log.info(String.format(REMOVAL_LOG,
+            log.info(String.format(
+                    REMOVAL_LOG,
                     typeOfShop,
                     event.getDestroyer() != null ? event.getDestroyer().getName() : "???",
-                    item, prices, location));
+                    item,
+                    prices,
+                    location));
         });
     }
 

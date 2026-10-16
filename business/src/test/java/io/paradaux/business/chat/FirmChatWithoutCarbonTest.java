@@ -1,20 +1,19 @@
 package io.paradaux.business.chat;
 
-import io.paradaux.business.Business;
-import io.paradaux.business.services.FirmService;
-import io.paradaux.business.services.FirmStaffService;
-import org.bukkit.entity.Player;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-
-import java.util.UUID;
-import java.util.logging.Logger;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.business.Business;
+import io.paradaux.business.services.FirmService;
+import io.paradaux.business.services.FirmStaffService;
+import java.util.UUID;
+import java.util.logging.Logger;
+import org.bukkit.entity.Player;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 /**
  * CarbonChat is only a softdepend, so {@link FirmChatServiceImpl} must load, be
@@ -37,10 +36,12 @@ class FirmChatWithoutCarbonTest {
         // A Carbon type in any declared member — including the synthetic method javac
         // emits for a lambda body — makes these throw NoClassDefFoundError.
         assertThatCode(() -> {
-            assertThat(FirmChatServiceImpl.class.getDeclaredFields()).isNotNull();
-            assertThat(FirmChatServiceImpl.class.getDeclaredMethods()).isNotNull();
-            assertThat(FirmChatServiceImpl.class.getDeclaredConstructors()).isNotNull();
-        }).doesNotThrowAnyException();
+                    assertThat(FirmChatServiceImpl.class.getDeclaredFields()).isNotNull();
+                    assertThat(FirmChatServiceImpl.class.getDeclaredMethods()).isNotNull();
+                    assertThat(FirmChatServiceImpl.class.getDeclaredConstructors())
+                            .isNotNull();
+                })
+                .doesNotThrowAnyException();
     }
 
     @Test
