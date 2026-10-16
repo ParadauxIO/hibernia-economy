@@ -525,6 +525,25 @@ d('configurable authorization policy', () => {
     await expect(setGroupCapabilities(99, [])).rejects.toThrow('do not hold');
     await expect(deleteGroup(99)).rejects.toThrow('do not hold');
   });
+  it('refuses group mutations from a session whose admin grant was revoked, leaving the group untouched', async () => {
+    // The session still claims admin (as a cached JWT would); the live grant is gone.
+    await sql`DELETE FROM explorer_role WHERE player_uuid_bin = ${uuidToBin(ALICE)}`.execute(db);
+    const snapshot = async () => (await sql<{ name: string; luckperms_node: string | null; capability: string | null; members: number }>`
+      SELECT g.name, g.luckperms_node, c.capability,
+             (SELECT COUNT(*) FROM explorer_group_member m WHERE m.group_id = g.group_id) AS members
+        FROM explorer_group g LEFT JOIN explorer_group_capability c ON c.group_id = g.group_id
+       WHERE g.group_id = 1`.execute(db)).rows;
+    const before = await snapshot();
+    expect(before).toEqual([{ name: 'Players', luckperms_node: 'doc', capability: 'player', members: 2 }]);
+    for (const mutation of [
+      () => setGroupCapabilities(1, ['admin']),
+      () => setLuckpermsNode(1, 'group.everyone'),
+      () => addManualMember(1, DAVE, ALICE),
+      () => removeManualMember(1, BOB),
+      () => deleteGroup(1),
+    ]) await expect(mutation()).rejects.toThrow('Forbidden');
+    expect(await snapshot()).toEqual(before);
+  });
   it('changing the LP source clears synced grants while manual and direct grants remain independent', async () => {
     await createRole(custom);
     await sql`INSERT INTO explorer_group (group_id, name, luckperms_node) VALUES (99, 'Auditors', 'group.old')`.execute(db);
