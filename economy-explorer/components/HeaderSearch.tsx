@@ -96,7 +96,7 @@ export function HeaderSearch() {
   return (
     <div ref={wrapRef} className={`header-search-wrap ${mobileOpen ? 'mobile-search-open' : ''}`}>
       <button ref={toggleRef} type="button" className="btn mobile-search-toggle" aria-expanded={mobileOpen} aria-controls="global-search-form" onClick={() => setMobileOpen(v => !v)}>{mobileOpen ? 'Close search' : 'Search'}</button>
-      <form id="global-search-form" onSubmit={onSubmit} className="header-search" role="search">
+      <form id="global-search-form" onSubmit={onSubmit} className="header-search" role="search" aria-label="Site">
         <input
           type="search"
           ref={ref}

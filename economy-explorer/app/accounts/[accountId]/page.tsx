@@ -26,6 +26,7 @@ import { getAccountTrajectory } from '@/lib/sql/ledger';
 import { getAccountFirmContext } from '@/lib/services/accountContext';
 import { listPlayerFirmMemberships } from '@/lib/sql/firm';
 import { memo } from '@/lib/cache';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -259,7 +260,7 @@ export default async function AccountDetailPage({
           <div className="card-title">
             Top counterparties <span className="sub">accounts this one transacts with most</span>
           </div>
-          <div className="table-wrap"><table className="data-table">
+          <TableWrap label="Top counterparties"><table className="data-table">
             <thead>
               <tr>
                 <th>Counterparty</th>
@@ -292,7 +293,7 @@ export default async function AccountDetailPage({
                 </tr>
               ))}
             </tbody>
-          </table></div>
+          </table></TableWrap>
         </div>
       )}
 
@@ -315,7 +316,7 @@ export default async function AccountDetailPage({
 
       {canSeeHistory && (
         <>
-          <div className="table-wrap"><table className="data-table">
+          <TableWrap label="Recent activity"><table className="data-table">
             <thead>
               <tr>
                 <th>Txn</th>
@@ -357,7 +358,7 @@ export default async function AccountDetailPage({
                 );
               })}
             </tbody>
-          </table></div>
+          </table></TableWrap>
 
           {totalTxns > sp.limit && (
             <Pagination

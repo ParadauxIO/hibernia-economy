@@ -62,6 +62,7 @@
     --accent-2:    #6ed8ec;
     --accent-soft: rgba(91, 141, 239, 0.10);
     --accent-line: rgba(91, 141, 239, 0.24);
+    --accent-fill: #366bd6; /* filled accent behind white text: 4.97:1 */
     --brand-bg:    #1a2745;
     --brand-bg-2:  #1f2f55;
     --brand-fg:    #e2eaff;
@@ -83,6 +84,7 @@
     --accent-2:    #e1a06b;
     --accent-soft: rgba(217, 102, 102, 0.10);
     --accent-line: rgba(217, 102, 102, 0.26);
+    --accent-fill: #b84444; /* 5.3:1 with white */
     --brand-bg:    #3b1d1e;
     --brand-bg-2:  #4a2426;
     --brand-fg:    #ffe6e2;
@@ -125,6 +127,7 @@
     --accent-2:    #2a8aa1;
     --accent-soft: rgba(58, 109, 204, 0.07);
     --accent-line: rgba(58, 109, 204, 0.22);
+    --accent-fill: var(--accent); /* already 4.97:1 with white */
     --brand-bg:    #e6eeff;
     --brand-bg-2:  #d7e2fb;
     --brand-fg:    #1f3a6b;
@@ -145,6 +148,7 @@
     --accent-2:    #b97142;
     --accent-soft: rgba(179, 77, 77, 0.07);
     --accent-line: rgba(179, 77, 77, 0.22);
+    --accent-fill: var(--accent); /* 5.2:1 with white */
     --brand-bg:    #fde5e2;
     --brand-bg-2:  #f8d4cf;
     --brand-fg:    #5b2526;

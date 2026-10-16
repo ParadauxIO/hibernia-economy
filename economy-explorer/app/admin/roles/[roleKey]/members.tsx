@@ -1,6 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { setDirectRoleMemberAction } from '@/lib/actions/roles';
+import { TableWrap } from '@/components/TableWrap';
 export function RoleMembers({ roleKey, members, canAssign }: { roleKey: string; members: { uuid: string; name: string | null }[]; canAssign: boolean }) {
   const [identifier, setIdentifier] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,12 +20,12 @@ export function RoleMembers({ roleKey, members, canAssign }: { roleKey: string; 
       <label>Player name or UUID <input className="input" value={identifier} onChange={event => setIdentifier(event.target.value)} required /></label>
       <button className="btn" disabled={pending || !identifier.trim()}>Assign role</button>
     </form>}
-    <div className="table-wrap"><table className="data-table"><thead><tr><th>Player</th><th>Assignment</th></tr></thead><tbody>
+    <TableWrap label="Role members"><table className="data-table"><thead><tr><th>Player</th><th>Assignment</th></tr></thead><tbody>
       {!members.length && <tr><td colSpan={2}>No direct assignments.</td></tr>}
       {members.map(member => <tr key={member.uuid}><td>{member.name ?? member.uuid}</td><td>
         {canAssign ? <button className="btn" disabled={pending} onClick={() => change(member.uuid, false)}>Remove direct assignment</button> : 'Direct'}
       </td></tr>)}
-    </tbody></table></div>
+    </tbody></table></TableWrap>
     {error && <p role="alert" className="state-error">{error}</p>}
   </>;
 }

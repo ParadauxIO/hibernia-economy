@@ -29,10 +29,10 @@ export function Pagination({ page, totalPages, totalItems, basePath, searchParam
     <div className="pagination">
       <span className="pagination-summary">{totalItems.toLocaleString()} total · page {page} of {totalPages}</span>
       <div className="pagination-controls">
-        {page > 1 ? <Link href={href(1)}>« First</Link> : <span className="disabled">« First</span>}
-        {page > 1 ? <Link href={href(prev)}>‹ Prev</Link> : <span className="disabled">‹ Prev</span>}
-        {page < totalPages ? <Link href={href(next)}>Next ›</Link> : <span className="disabled">Next ›</span>}
-        {page < totalPages ? <Link href={href(totalPages)}>Last »</Link> : <span className="disabled">Last »</span>}
+        {page > 1 ? <Link href={href(1)}>« First</Link> : <span className="disabled" aria-disabled="true">« First</span>}
+        {page > 1 ? <Link href={href(prev)}>‹ Prev</Link> : <span className="disabled" aria-disabled="true">‹ Prev</span>}
+        {page < totalPages ? <Link href={href(next)}>Next ›</Link> : <span className="disabled" aria-disabled="true">Next ›</span>}
+        {page < totalPages ? <Link href={href(totalPages)}>Last »</Link> : <span className="disabled" aria-disabled="true">Last »</span>}
       </div>
     </div>
   );

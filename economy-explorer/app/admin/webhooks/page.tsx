@@ -15,6 +15,7 @@ import { Toolbar, FilterSelect } from '@/components/Toolbar';
 import { Pagination } from '@/components/Pagination';
 import { CreateAdminWebhookForm } from './create-admin-webhook-form';
 import { AdminWebhookRowActions } from './admin-webhook-row-actions';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,7 +96,7 @@ export default async function AdminWebhooksPage({
             </>
           }
         />
-        <div className="table-wrap">
+        <TableWrap label="Webhooks">
           <table className="data-table">
             <thead>
               <tr>
@@ -142,7 +143,7 @@ export default async function AdminWebhooksPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
         <Pagination
           page={sp.page}
           totalPages={totalPages}

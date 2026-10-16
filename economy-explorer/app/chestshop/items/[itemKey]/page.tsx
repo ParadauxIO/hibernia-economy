@@ -21,6 +21,7 @@ import { resolveTheme } from '@/lib/theme';
 import { serverIdentity, blueMapUrl } from '@/lib/serverIdentity';
 import { getViewer } from '@/lib/auth/viewer';
 import { hasPermission } from '@/lib/auth/access';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -212,7 +213,7 @@ export default async function ItemDetailPage({
             <JsonButton filename={`item-${fileKey}-sellers.json`} data={sellersExport} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Historical sellers">
           <table className="data-table">
             <thead>
               <tr>
@@ -241,7 +242,7 @@ export default async function ItemDetailPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {/* Sales feed — individual transactions (money + quantity per sale) are
@@ -270,7 +271,7 @@ export default async function ItemDetailPage({
             <JsonButton filename={`item-${fileKey}-sales-page-${sp.page}.json`} data={sales} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Recent sales">
           <table className="data-table">
             <thead>
               <tr>
@@ -312,7 +313,7 @@ export default async function ItemDetailPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
 
         <Pagination
           page={sp.page}
