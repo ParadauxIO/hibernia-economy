@@ -66,6 +66,7 @@ jobs:
           filters: |
             explorer:
               - 'economy-explorer/**'
+              - 'economy-flyway/**'   # the explorer test DB is built from the migrations
               - '.github/workflows/ci.yml'
               - '.github/workflows/explorer-check.yml'
             live:

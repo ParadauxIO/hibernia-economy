@@ -3,8 +3,8 @@ name: Economy Explorer · Check
 # The explorer half of CI, as a reusable workflow: ci.yml runs it on every PR
 # and push (e2e only when the explorer changed, or always off-PR), and
 # economy-explorer-docker.yml runs it before pushing an image. Both suites run
-# against a real MariaDB — no query mocking — seeded from the explorer's own
-# test/integration/schema.sql + seed.sql.
+# against a real MariaDB — no query mocking — whose schema is built by applying
+# the economy-flyway migrations in order (test/integration/db.ts), then seed.sql.
 
 on:
   workflow_call:
