@@ -65,7 +65,14 @@ flyway {
     user = resolve("FLYWAY_USER", "flywayUser", "root")
     password = resolve("FLYWAY_PASSWORD", "flywayPassword", "")
     schemas = arrayOf(resolve("FLYWAY_SCHEMA", "flywaySchema", "economy"))
-    locations = arrayOf("filesystem:src/main/resources/db/migration")
+    // -PflywayLocations=filesystem:/abs/dir points Flyway at another copy of the
+    // migrations. CI's upgrade test uses it to migrate a scratch DB with the base
+    // branch's migrations first, then this checkout's. A test hook, not deploy
+    // config, so there is no FLYWAY_* env counterpart wired here.
+    locations = arrayOf(
+        (project.findProperty("flywayLocations") as String?)
+            ?: "filesystem:src/main/resources/db/migration"
+    )
 
     // We expect a green-field database. Pass -Pbaseline=true on the first run
     // against a pre-existing DB so Flyway records a baseline at version 0
