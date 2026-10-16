@@ -1,13 +1,14 @@
 package io.paradaux.treasury.mappers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.paradaux.hibernia.testsupport.db.LedgerInvariants;
 import io.paradaux.hibernia.testsupport.db.SkipLedgerInvariants;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -16,9 +17,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 
 /**
  * Direct coverage of the three {@code ledger_postings} triggers that maintain
@@ -165,8 +164,10 @@ class LedgerTriggersIT extends IntegrationTestBase {
 
         exec("DELETE FROM ledger_txns WHERE txn_id = " + t);
 
-        assertThat(count("SELECT COUNT(*) FROM ledger_postings WHERE txn_id = " + t)).isZero();
-        assertThat(mat(alice)).as("mat row still carries the cascaded-away credit")
+        assertThat(count("SELECT COUNT(*) FROM ledger_postings WHERE txn_id = " + t))
+                .isZero();
+        assertThat(mat(alice))
+                .as("mat row still carries the cascaded-away credit")
                 .isEqualByComparingTo("9.99");
         LedgerInvariants.Result result = LedgerInvariants.check(dataSource);
         assertThat(result.ok()).isFalse();
@@ -234,15 +235,16 @@ class LedgerTriggersIT extends IntegrationTestBase {
     // ---- helpers ----
 
     private static TransferRequest request(int from, int to, BigDecimal amount) {
-        return new TransferRequest(from, to, amount, "overflow probe",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null);
+        return new TransferRequest(
+                from, to, amount, "overflow probe", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null);
     }
 
     /** Asserts mat.balance == Σ postings for every account (missing mat row counts as 0). */
     private void assertMatMatchesPostings() throws SQLException {
         Map<Integer, BigDecimal[]> rows = new LinkedHashMap<>();
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery("""
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery("""
                      SELECT a.account_id, COALESCE(m.balance, 0) AS mat,
                             (SELECT COALESCE(SUM(p.amount), 0) FROM ledger_postings p
                               WHERE p.account_id = a.account_id) AS posted
@@ -253,14 +255,15 @@ class LedgerTriggersIT extends IntegrationTestBase {
             }
         }
         assertThat(rows).isNotEmpty();
-        rows.forEach((id, r) -> assertThat(r[0]).as("account %d: mat vs Σ postings", id).isEqualByComparingTo(r[1]));
+        rows.forEach((id, r) ->
+                assertThat(r[0]).as("account %d: mat vs Σ postings", id).isEqualByComparingTo(r[1]));
     }
 
     private int account(String type) throws SQLException {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO accounts (account_type, owner_uuid_bin) VALUES (?, UNHEX(REPLACE(UUID(), '-', '')))",
-                     Statement.RETURN_GENERATED_KEYS)) {
+                PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO accounts (account_type, owner_uuid_bin) VALUES (?, UNHEX(REPLACE(UUID(), '-', '')))",
+                        Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, type);
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
@@ -272,9 +275,9 @@ class LedgerTriggersIT extends IntegrationTestBase {
 
     private long txn() throws SQLException {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO ledger_txns (message, initiator_uuid_bin) VALUES ('trigger IT', UNHEX(REPLACE(UUID(), '-', '')))",
-                     Statement.RETURN_GENERATED_KEYS)) {
+                PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO ledger_txns (message, initiator_uuid_bin) VALUES ('trigger IT', UNHEX(REPLACE(UUID(), '-', '')))",
+                        Statement.RETURN_GENERATED_KEYS)) {
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 rs.next();
@@ -285,9 +288,9 @@ class LedgerTriggersIT extends IntegrationTestBase {
 
     private long posting(long txnId, int accountId, String amount) throws SQLException {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES (?, ?, ?)",
-                     Statement.RETURN_GENERATED_KEYS)) {
+                PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES (?, ?, ?)",
+                        Statement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, txnId);
             ps.setInt(2, accountId);
             ps.setBigDecimal(3, new BigDecimal(amount));
@@ -321,15 +324,17 @@ class LedgerTriggersIT extends IntegrationTestBase {
     }
 
     private String scalar(String sql) throws SQLException {
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery(sql)) {
             assertThat(rs.next()).as("row for: %s", sql).isTrue();
             return rs.getString(1);
         }
     }
 
     private void exec(String sql) throws SQLException {
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
             st.execute(sql);
         }
     }

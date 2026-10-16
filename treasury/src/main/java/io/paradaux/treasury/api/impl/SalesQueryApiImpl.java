@@ -6,12 +6,11 @@ import io.paradaux.treasury.api.market.SaleRow;
 import io.paradaux.treasury.api.market.SalesQuery;
 import io.paradaux.treasury.api.market.SalesSummary;
 import io.paradaux.treasury.mappers.ChestShopSalesReadMapper;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.mybatis.guice.transactional.Transactional;
 
 /**
  * Reads the ChestShop sales tracker for the in-game sales commands (PAR-176).
@@ -59,8 +58,8 @@ public class SalesQueryApiImpl implements SalesQueryApi {
         SalesSummary summary = mapper.summarizeTotals(query, since);
         if (summary == null) {
             // COUNT(*) always returns a row, so this is defensive only.
-            summary = new SalesSummary(0, 0, BigDecimal.ZERO, BigDecimal.ZERO,
-                    0, BigDecimal.ZERO, 0, BigDecimal.ZERO, null, null);
+            summary = new SalesSummary(
+                    0, 0, BigDecimal.ZERO, BigDecimal.ZERO, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO, null, null);
         }
         summary.setTopItems(mapper.topItems(query, since, topN));
         summary.setTopCustomers(mapper.topCustomers(query, since, topN));
@@ -81,8 +80,7 @@ public class SalesQueryApiImpl implements SalesQueryApi {
                 + (query.getOwnerUuid() != null ? 1 : 0)
                 + (query.getAccountId() != null ? 1 : 0);
         if (scopes == 0) {
-            throw new IllegalArgumentException(
-                    "SalesQuery requires an owner scope (firmId, ownerUuid or accountId)");
+            throw new IllegalArgumentException("SalesQuery requires an owner scope (firmId, ownerUuid or accountId)");
         }
         if (scopes > 1) {
             throw new IllegalArgumentException(

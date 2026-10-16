@@ -10,32 +10,31 @@ import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
-
-import java.math.BigDecimal;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.BalanceTaxService;
 import io.paradaux.treasury.services.BytebinService;
-import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.DataExportService;
+import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
-import io.paradaux.treasury.services.BalanceTaxService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
-import io.paradaux.treasury.services.impl.AccountServiceImpl;
-import io.paradaux.treasury.services.impl.BalanceTaxServiceImpl;
-import io.paradaux.treasury.services.impl.TaxCycleRegistryImpl;
-import io.paradaux.treasury.services.impl.DataExportServiceImpl;
-import io.paradaux.treasury.services.impl.GovServiceImpl;
-import io.paradaux.treasury.services.impl.PlayerDirectoryServiceImpl;
-import io.paradaux.treasury.services.impl.LedgerServiceImpl;
-import io.paradaux.treasury.services.impl.MembershipServiceImpl;
 import io.paradaux.treasury.services.cache.AccountRedirectCache;
 import io.paradaux.treasury.services.cache.PersonalAccountCache;
 import io.paradaux.treasury.services.cache.PluginSystemAccountCache;
+import io.paradaux.treasury.services.impl.AccountServiceImpl;
+import io.paradaux.treasury.services.impl.BalanceTaxServiceImpl;
+import io.paradaux.treasury.services.impl.DataExportServiceImpl;
+import io.paradaux.treasury.services.impl.GovServiceImpl;
+import io.paradaux.treasury.services.impl.LedgerServiceImpl;
+import io.paradaux.treasury.services.impl.MembershipServiceImpl;
+import io.paradaux.treasury.services.impl.PlayerDirectoryServiceImpl;
+import io.paradaux.treasury.services.impl.TaxCycleRegistryImpl;
+import java.math.BigDecimal;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 
 /**
  * Wires the production service implementations against test configurations.
@@ -65,8 +64,11 @@ public class TestServicesModule extends AbstractModule {
         // No-op notifier: the service layer under test has no Bukkit server to
         // deliver player chat to. Notification content is covered by EconomyNotifierImplTest.
         bind(EconomyNotifier.class).toInstance(new EconomyNotifier() {
-            @Override public void notifyTaxCollected(int payerAccountId, String taxType, BigDecimal amount) { }
-            @Override public void notifySalaryPaid(java.util.UUID playerUuid, BigDecimal amount) { }
+            @Override
+            public void notifyTaxCollected(int payerAccountId, String taxType, BigDecimal amount) {}
+
+            @Override
+            public void notifySalaryPaid(java.util.UUID playerUuid, BigDecimal amount) {}
         });
 
         bind(TaxCycleRegistry.class).to(TaxCycleRegistryImpl.class).in(Singleton.class);
@@ -77,35 +79,39 @@ public class TestServicesModule extends AbstractModule {
         bind(BytebinService.class).toInstance((content, contentType) -> "test://upload/" + contentType);
     }
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     EconomyConfiguration economyConfig() {
         return TestConfigs.economy();
     }
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     GovernmentConfiguration governmentConfig() {
         return TestConfigs.government();
     }
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     TaxCycleConfiguration taxCycleConfig() {
         return TestConfigs.taxCyclesAllDisabled();
     }
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     BalanceTaxConfiguration balanceTaxConfig() {
         NavigableMap<BigDecimal, BigDecimal> brackets = new TreeMap<>();
-        brackets.put(new BigDecimal("0.00"),       BigDecimal.ZERO);
-        brackets.put(new BigDecimal("100000.00"),  new BigDecimal("0.01"));
-        brackets.put(new BigDecimal("200000.00"),  new BigDecimal("0.012"));
-        brackets.put(new BigDecimal("500000.00"),  new BigDecimal("0.018"));
+        brackets.put(new BigDecimal("0.00"), BigDecimal.ZERO);
+        brackets.put(new BigDecimal("100000.00"), new BigDecimal("0.01"));
+        brackets.put(new BigDecimal("200000.00"), new BigDecimal("0.012"));
+        brackets.put(new BigDecimal("500000.00"), new BigDecimal("0.018"));
         return BalanceTaxConfiguration.forTesting(true, "DCGovernment", brackets);
     }
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     SourceIncomeTaxConfiguration sourceIncomeTaxConfig() {
         // Disabled by default — tests that need it on should override this binding.
-        return SourceIncomeTaxConfiguration.forTesting(
-                false, BigDecimal.ZERO, "DCGovernment", Map.of());
+        return SourceIncomeTaxConfiguration.forTesting(false, BigDecimal.ZERO, "DCGovernment", Map.of());
     }
 }

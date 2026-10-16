@@ -2,6 +2,10 @@ package io.paradaux.business.testsupport;
 
 import io.paradaux.hibernia.testsupport.db.TestDatabase;
 import io.paradaux.hibernia.testsupport.db.TestDatabaseExtension;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.util.UUID;
+import javax.sql.DataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
@@ -12,11 +16,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
-
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.util.UUID;
 
 /**
  * Base class for integration tests that hit a real MariaDB — embedded MariaDB4j
@@ -73,8 +72,8 @@ public abstract class IntegrationTestBase {
         if (existing != null) return existing;
         synchronized (IntegrationTestBase.class) {
             if (sharedFactory == null) {
-                Configuration cfg = new Configuration(new Environment(
-                        "test", new JdbcTransactionFactory(), dataSource));
+                Configuration cfg =
+                        new Configuration(new Environment("test", new JdbcTransactionFactory(), dataSource));
                 cfg.setMapUnderscoreToCamelCase(true);
                 sharedFactory = new SqlSessionFactoryBuilder().build(cfg);
             }
@@ -91,10 +90,10 @@ public abstract class IntegrationTestBase {
      */
     protected int insertStubAccount(String displayName) throws Exception {
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                     "INSERT INTO accounts (account_type, owner_uuid_bin, display_name) "
-                             + "VALUES ('BUSINESS', uuid_to_bin(?), ?)",
-                     java.sql.Statement.RETURN_GENERATED_KEYS)) {
+                PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO accounts (account_type, owner_uuid_bin, display_name) "
+                                + "VALUES ('BUSINESS', uuid_to_bin(?), ?)",
+                        java.sql.Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, UUID.randomUUID().toString());
             ps.setString(2, displayName);
             ps.executeUpdate();
@@ -115,8 +114,8 @@ public abstract class IntegrationTestBase {
     /** Inserts a player row with a caller-supplied UUID into the directory cache. */
     protected void insertPlayer(UUID id, String name) throws Exception {
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(
-                     "INSERT INTO economy_players (player_uuid_bin, current_name) VALUES (uuid_to_bin(?), ?)")) {
+                PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO economy_players (player_uuid_bin, current_name) VALUES (uuid_to_bin(?), ?)")) {
             ps.setString(1, id.toString());
             ps.setString(2, name);
             ps.executeUpdate();

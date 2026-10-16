@@ -1,5 +1,13 @@
 package io.paradaux.business.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.Business;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.config.BalanceTaxConfiguration;
@@ -12,14 +20,6 @@ import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.event.TaxCycleEvent;
 import io.paradaux.treasury.model.tax.TaxCollection;
-import net.jqwik.api.Arbitraries;
-import net.jqwik.api.Arbitrary;
-import net.jqwik.api.Example;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Provide;
-import net.jqwik.api.lifecycle.AddLifecycleHook;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -30,14 +30,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.Example;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Provide;
+import net.jqwik.api.lifecycle.AddLifecycleHook;
 
 /**
  * Conservation properties of the corporate balance-tax split
@@ -65,12 +64,13 @@ class FirmBalanceTaxAllocationProperties {
         Map<Integer, BigDecimal> byAccount = byAccountId(balances);
         List<TaxCollection> charged = runCycle(byAccount, rate);
 
-        BigDecimal positiveTotal = byAccount.values().stream()
-                .filter(b -> b.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal positiveTotal =
+                byAccount.values().stream().filter(b -> b.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal totalTax = positiveTotal.multiply(rate).setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal sum = charged.stream().map(TaxCollection::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(sum).as("Σ shares vs firm total tax %s on %s", totalTax, byAccount)
+        assertThat(sum)
+                .as("Σ shares vs firm total tax %s on %s", totalTax, byAccount)
                 .isEqualByComparingTo(totalTax.signum() > 0 ? totalTax : BigDecimal.ZERO);
 
         for (TaxCollection c : charged) {
@@ -97,8 +97,8 @@ class FirmBalanceTaxAllocationProperties {
         when(m.transactions.getAggregateBalance(FIRM_ID)).thenReturn(total);
         BigDecimal estimate = m.service().estimateWeeklyTax(FIRM_ID).estimatedTax();
 
-        BigDecimal collected = runCycle(byAccount, rate).stream()
-                .map(TaxCollection::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal collected =
+                runCycle(byAccount, rate).stream().map(TaxCollection::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(collected).isEqualByComparingTo(estimate.signum() > 0 ? estimate : BigDecimal.ZERO);
     }
 
@@ -180,9 +180,9 @@ class FirmBalanceTaxAllocationProperties {
     @Provide
     Arbitrary<List<BigDecimal>> balances() {
         Arbitrary<BigDecimal> balance = Arbitraries.frequencyOf(
-                net.jqwik.api.Tuple.of(6, cents(1, 100_000_00L)),          // up to 100k
-                net.jqwik.api.Tuple.of(2, cents(1, 100L)),                 // tiny: 0.01 – 1.00
-                net.jqwik.api.Tuple.of(1, cents(1, 10_000_000_000_00L)),   // up to 10bn
+                net.jqwik.api.Tuple.of(6, cents(1, 100_000_00L)), // up to 100k
+                net.jqwik.api.Tuple.of(2, cents(1, 100L)), // tiny: 0.01 – 1.00
+                net.jqwik.api.Tuple.of(1, cents(1, 10_000_000_000_00L)), // up to 10bn
                 net.jqwik.api.Tuple.of(1, Arbitraries.of(BigDecimal.ZERO.setScale(2), new BigDecimal("-50.00"))));
         return balance.list().ofMinSize(1).ofMaxSize(15);
     }
@@ -196,7 +196,8 @@ class FirmBalanceTaxAllocationProperties {
     @Provide
     Arbitrary<BigDecimal> rates() {
         return Arbitraries.frequencyOf(
-                net.jqwik.api.Tuple.of(9, Arbitraries.integers().between(1, 1000).map(bp -> BigDecimal.valueOf(bp, 4))),
+                net.jqwik.api.Tuple.of(
+                        9, Arbitraries.integers().between(1, 1000).map(bp -> BigDecimal.valueOf(bp, 4))),
                 net.jqwik.api.Tuple.of(1, Arbitraries.of(new BigDecimal("0.001"), new BigDecimal("0.0125"))));
     }
 

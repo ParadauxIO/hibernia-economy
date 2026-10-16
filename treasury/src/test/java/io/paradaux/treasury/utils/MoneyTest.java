@@ -1,12 +1,11 @@
 package io.paradaux.treasury.utils;
 
-import org.junit.jupiter.api.Test;
-
-import java.math.BigDecimal;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.math.BigDecimal;
+import org.junit.jupiter.api.Test;
 
 class MoneyTest {
 
@@ -26,9 +25,12 @@ class MoneyTest {
 
     @Test
     void requirePositive_acceptsPositiveAmounts_fromMinimumToLedgerMaximum() {
-        assertThatCode(() -> Money.requirePositive(new BigDecimal("0.01"), "should pass")).doesNotThrowAnyException();
-        assertThatCode(() -> Money.requirePositive(new BigDecimal("1.00"), "should pass")).doesNotThrowAnyException();
-        assertThatCode(() -> Money.requirePositive(Money.MAXIMUM_AMOUNT, "should pass")).doesNotThrowAnyException();
+        assertThatCode(() -> Money.requirePositive(new BigDecimal("0.01"), "should pass"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> Money.requirePositive(new BigDecimal("1.00"), "should pass"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> Money.requirePositive(Money.MAXIMUM_AMOUNT, "should pass"))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -89,7 +91,8 @@ class MoneyTest {
     void requireValidAmount_acceptsTrailingZerosBeyondTwoDecimals() {
         // stripTrailingZeros gives scale ≤ 2 here, so this should pass.
         assertThatCode(() -> Money.requireValidAmount(new BigDecimal("1.10"))).doesNotThrowAnyException();
-        assertThatCode(() -> Money.requireValidAmount(new BigDecimal("100.000"))).doesNotThrowAnyException();
+        assertThatCode(() -> Money.requireValidAmount(new BigDecimal("100.000")))
+                .doesNotThrowAnyException();
         assertThatCode(() -> Money.requireValidScale(new BigDecimal("0.000"))).doesNotThrowAnyException();
     }
 }

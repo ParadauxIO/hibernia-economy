@@ -1,6 +1,12 @@
 package io.paradaux.chestshop.model;
 
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.chestshop.support.ServerTest;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.bukkit.Material;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
@@ -8,13 +14,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The {@link Transaction} carrier: copy-construction from a {@link PendingTransaction}, the
@@ -42,8 +41,8 @@ class TransactionTest extends ServerTest {
         Inventory clientInv = chest(9);
         ItemStack[] stock = {item(Material.DIAMOND, 4)};
         BigDecimal price = new BigDecimal("10");
-        PendingTransaction pending = new PendingTransaction(
-                ownerInv, clientInv, stock, price, client, owner, sign, BUY, true);
+        PendingTransaction pending =
+                new PendingTransaction(ownerInv, clientInv, stock, price, client, owner, sign, BUY, true);
 
         Transaction txn = new Transaction(pending, sign);
 

@@ -1,7 +1,13 @@
 package io.paradaux.business.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.mappers.FirmPlayerMapper;
 import io.paradaux.business.model.FirmPlayer;
+import java.util.List;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.AfterEach;
@@ -16,17 +22,11 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FirmPlayerServiceImplTest {
 
-    @Mock FirmPlayerMapper mapper;
+    @Mock
+    FirmPlayerMapper mapper;
 
     private FirmPlayerServiceImpl svc;
     private MockedStatic<Bukkit> bukkit;
@@ -82,14 +82,14 @@ class FirmPlayerServiceImplTest {
 
     @ParameterizedTest
     @CsvSource({
-            // requested limit -> limit passed to the mapper (1..100 kept, else default 20)
-            "-1, 20",
-            "0, 20",
-            "1, 1",
-            "50, 50",
-            "100, 100",
-            "101, 20",
-            "200, 20",
+        // requested limit -> limit passed to the mapper (1..100 kept, else default 20)
+        "-1, 20",
+        "0, 20",
+        "1, 1",
+        "50, 50",
+        "100, 100",
+        "101, 20",
+        "200, 20",
     })
     void searchByPrefix_passesTheClampedLimitAndTrimmedPrefixToTheMapper(int requested, int expected) {
         List<FirmPlayer> rows = List.of(new FirmPlayer());

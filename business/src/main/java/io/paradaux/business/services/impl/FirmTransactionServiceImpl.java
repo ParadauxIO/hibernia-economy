@@ -2,27 +2,25 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.ConflictException;
-import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
-import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.FirmAccount;
+import io.paradaux.business.model.FirmBalanceEntry;
 import io.paradaux.business.model.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmTransactionService;
 import io.paradaux.common.AmountInput;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
+import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
 import io.paradaux.treasury.model.economy.TransactionEntry;
 import io.paradaux.treasury.model.economy.TransferRequest;
-
-import io.paradaux.business.model.FirmAccount;
-import io.paradaux.business.model.FirmBalanceEntry;
-
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -53,9 +51,11 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
     private final FirmPlayerService players;
 
     @Inject
-    public FirmTransactionServiceImpl(FirmService firms, TreasuryApi treasury,
-                                      io.paradaux.business.mappers.FirmAccountsMapper firmAccounts,
-                                      FirmPlayerService players) {
+    public FirmTransactionServiceImpl(
+            FirmService firms,
+            TreasuryApi treasury,
+            io.paradaux.business.mappers.FirmAccountsMapper firmAccounts,
+            FirmPlayerService players) {
         this.firms = firms;
         this.treasury = treasury;
         this.firmAccounts = firmAccounts;
@@ -111,8 +111,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
                 playerUuid,
                 null,
                 "BusinessPlugin",
-                null
-        );
+                null);
 
         return treasury.transfer(req);
     }
@@ -168,8 +167,8 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
         UUID authorizer = null;
         if (businessAccount.isRequiresAuthorization()) {
             List<AccountMember> authorizers = treasury.getAuthorizers(businessAccountId);
-            boolean isAuth = authorizers.stream()
-                    .anyMatch(a -> a.getMemberUuid().equals(playerUuid));
+            boolean isAuth =
+                    authorizers.stream().anyMatch(a -> a.getMemberUuid().equals(playerUuid));
             if (!isAuth) {
                 throw new NoPermissionException(KEY_NOT_AUTHORIZER);
             }
@@ -184,8 +183,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
                 playerUuid,
                 authorizer,
                 "BusinessPlugin",
-                null
-        );
+                null);
 
         return treasury.transfer(req);
     }
@@ -237,11 +235,11 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
         // somehow has no live account), ranked highest-balance first with the name
         // as a stable tiebreak.
         List<FirmBalanceEntry> ranked = activeFirms.stream()
-                .map(f -> new FirmBalanceEntry(f.getFirmId(), f.getDisplayName(),
-                        totals.getOrDefault(f.getFirmId(), BigDecimal.ZERO)))
-                .sorted(Comparator.comparing(FirmBalanceEntry::balance).reversed()
-                        .thenComparing(FirmBalanceEntry::displayName,
-                                Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(f -> new FirmBalanceEntry(
+                        f.getFirmId(), f.getDisplayName(), totals.getOrDefault(f.getFirmId(), BigDecimal.ZERO)))
+                .sorted(Comparator.comparing(FirmBalanceEntry::balance)
+                        .reversed()
+                        .thenComparing(FirmBalanceEntry::displayName, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
 
         int totalCount = ranked.size();
@@ -374,8 +372,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
                 playerUuid,
                 null,
                 "BusinessPlugin",
-                null
-        );
+                null);
 
         return treasury.transfer(req);
     }
@@ -400,8 +397,8 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
         UUID authorizer = null;
         if (businessAccount.isRequiresAuthorization()) {
             List<AccountMember> authorizers = treasury.getAuthorizers(accountId);
-            boolean isAuth = authorizers.stream()
-                    .anyMatch(a -> a.getMemberUuid().equals(playerUuid));
+            boolean isAuth =
+                    authorizers.stream().anyMatch(a -> a.getMemberUuid().equals(playerUuid));
             if (!isAuth) {
                 throw new NoPermissionException(KEY_NOT_AUTHORIZER);
             }
@@ -416,8 +413,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
                 playerUuid,
                 authorizer,
                 "BusinessPlugin",
-                null
-        );
+                null);
 
         return treasury.transfer(req);
     }
@@ -427,14 +423,20 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
     @Override
     public long payIntoFirm(Integer firmId, UUID payerUuid, BigDecimal amount) {
         int destAccountId = resolveAccountId(firmId);
-        return payIn(destAccountId, payerUuid, amount,
+        return payIn(
+                destAccountId,
+                payerUuid,
+                amount,
                 "Business payment: " + playerName(payerUuid) + " -> " + firmName(firmId));
     }
 
     @Override
     public long payIntoAccount(Integer firmId, Integer accountId, UUID payerUuid, BigDecimal amount) {
         validateAccountBelongsToFirm(firmId, accountId);
-        return payIn(accountId, payerUuid, amount,
+        return payIn(
+                accountId,
+                payerUuid,
+                amount,
                 "Business payment: " + playerName(payerUuid) + " -> " + firmName(firmId) + " #" + accountId);
     }
 
@@ -442,15 +444,24 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
     public long payPlayer(Integer firmId, UUID targetPlayerUuid, UUID actorUuid, BigDecimal amount) {
         int sourceAccountId = resolveAccountId(firmId);
         Account target = treasury.resolveOrCreatePersonal(targetPlayerUuid);
-        return payOut(sourceAccountId, target.getAccountId(), actorUuid, amount,
+        return payOut(
+                sourceAccountId,
+                target.getAccountId(),
+                actorUuid,
+                amount,
                 "Business payment: " + firmName(firmId) + " -> " + playerName(targetPlayerUuid));
     }
 
     @Override
-    public long payPlayerFromAccount(Integer firmId, Integer accountId, UUID targetPlayerUuid, UUID actorUuid, BigDecimal amount) {
+    public long payPlayerFromAccount(
+            Integer firmId, Integer accountId, UUID targetPlayerUuid, UUID actorUuid, BigDecimal amount) {
         validateAccountBelongsToFirm(firmId, accountId);
         Account target = treasury.resolveOrCreatePersonal(targetPlayerUuid);
-        return payOut(accountId, target.getAccountId(), actorUuid, amount,
+        return payOut(
+                accountId,
+                target.getAccountId(),
+                actorUuid,
+                amount,
                 "Business payment: " + firmName(firmId) + " #" + accountId + " -> " + playerName(targetPlayerUuid));
     }
 
@@ -471,14 +482,20 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
     }
 
     @Override
-    public long payFirmFromAccount(Integer sourceFirmId, Integer sourceAccountId, Integer targetFirmId, UUID actorUuid, BigDecimal amount) {
+    public long payFirmFromAccount(
+            Integer sourceFirmId, Integer sourceAccountId, Integer targetFirmId, UUID actorUuid, BigDecimal amount) {
         validateAccountBelongsToFirm(sourceFirmId, sourceAccountId);
         int destAccountId = resolveAccountId(targetFirmId);
         if (sourceAccountId == destAccountId) {
             throw new BadCommandException(KEY_SAME_FIRM);
         }
-        return payOut(sourceAccountId, destAccountId, actorUuid, amount,
-                "Business payment: " + firmName(sourceFirmId) + " #" + sourceAccountId + " -> " + firmName(targetFirmId));
+        return payOut(
+                sourceAccountId,
+                destAccountId,
+                actorUuid,
+                amount,
+                "Business payment: " + firmName(sourceFirmId) + " #" + sourceAccountId + " -> "
+                        + firmName(targetFirmId));
     }
 
     /**
@@ -500,15 +517,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
         }
 
         TransferRequest req = new TransferRequest(
-                personal.getAccountId(),
-                destAccountId,
-                amount,
-                description,
-                payerUuid,
-                null,
-                "BusinessPlugin",
-                null
-        );
+                personal.getAccountId(), destAccountId, amount, description, payerUuid, null, "BusinessPlugin", null);
 
         return treasury.transfer(req);
     }
@@ -536,8 +545,8 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
         UUID authorizer = null;
         if (source.isRequiresAuthorization()) {
             List<AccountMember> authorizers = treasury.getAuthorizers(sourceAccountId);
-            boolean isAuth = authorizers.stream()
-                    .anyMatch(a -> a.getMemberUuid().equals(actorUuid));
+            boolean isAuth =
+                    authorizers.stream().anyMatch(a -> a.getMemberUuid().equals(actorUuid));
             if (!isAuth) {
                 throw new NoPermissionException(KEY_NOT_AUTHORIZER);
             }
@@ -545,15 +554,7 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
         }
 
         TransferRequest req = new TransferRequest(
-                sourceAccountId,
-                destAccountId,
-                amount,
-                description,
-                actorUuid,
-                authorizer,
-                "BusinessPlugin",
-                null
-        );
+                sourceAccountId, destAccountId, amount, description, actorUuid, authorizer, "BusinessPlugin", null);
 
         return treasury.transfer(req);
     }

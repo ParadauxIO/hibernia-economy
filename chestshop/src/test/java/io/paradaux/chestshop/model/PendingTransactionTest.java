@@ -1,7 +1,12 @@
 package io.paradaux.chestshop.model;
 
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome;
 import io.paradaux.chestshop.support.ServerTest;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.bukkit.Material;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
@@ -9,12 +14,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The {@link PendingTransaction} carrier on a live MockBukkit server: the constructor's
@@ -25,8 +24,8 @@ class PendingTransactionTest extends ServerTest {
     private final Sign sign = Mockito.mock(Sign.class);
     private final Account owner = new Account("Owner", UUID.randomUUID());
 
-    private PendingTransaction pending(Player client, Inventory clientInv, boolean unlimited,
-                                       ItemStack[] stock, BigDecimal price) {
+    private PendingTransaction pending(
+            Player client, Inventory clientInv, boolean unlimited, ItemStack[] stock, BigDecimal price) {
         return new PendingTransaction(chest(27), clientInv, stock, price, client, owner, sign, BUY, unlimited);
     }
 
@@ -34,8 +33,8 @@ class PendingTransactionTest extends ServerTest {
     void constructor_withExplicitClientInventory_keepsIt() {
         Player client = player("Steve");
         Inventory clientInv = chest(9);
-        PendingTransaction pt = pending(client, clientInv, false,
-                new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
+        PendingTransaction pt =
+                pending(client, clientInv, false, new ItemStack[] {item(Material.DIAMOND, 4)}, new BigDecimal("10"));
 
         assertThat(pt.getClientInventory()).isSameAs(clientInv);
     }
@@ -43,16 +42,16 @@ class PendingTransactionTest extends ServerTest {
     @Test
     void constructor_withNullClientInventory_fallsBackToPlayerInventory() {
         Player client = player("Alex");
-        PendingTransaction pt = pending(client, null, false,
-                new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
+        PendingTransaction pt =
+                pending(client, null, false, new ItemStack[] {item(Material.DIAMOND, 4)}, new BigDecimal("10"));
 
         assertThat(pt.getClientInventory()).isSameAs(client.getInventory());
     }
 
     @Test
     void newTransaction_isNotCancelled_andSuccessful() {
-        PendingTransaction pt = pending(player("Steve"), chest(9), false,
-                new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
+        PendingTransaction pt = pending(
+                player("Steve"), chest(9), false, new ItemStack[] {item(Material.DIAMOND, 4)}, new BigDecimal("10"));
 
         assertThat(pt.isCancelled()).isFalse();
         assertThat(pt.getTransactionOutcome()).isEqualTo(TransactionOutcome.TRANSACTION_SUCCESSFUL);
@@ -60,8 +59,8 @@ class PendingTransactionTest extends ServerTest {
 
     @Test
     void cancelled_isDerivedFromTheOutcome() {
-        PendingTransaction pt = pending(player("Steve"), chest(9), false,
-                new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
+        PendingTransaction pt = pending(
+                player("Steve"), chest(9), false, new ItemStack[] {item(Material.DIAMOND, 4)}, new BigDecimal("10"));
 
         pt.setCancelled(TransactionOutcome.SHOP_IS_RESTRICTED);
         assertThat(pt.isCancelled()).isTrue();

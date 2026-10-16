@@ -1,24 +1,23 @@
 package io.paradaux.business.services.impl;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import org.junit.jupiter.api.Test;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.Test;
 
 /**
  * Offer and transfer expiry are computed from the injected {@link Clock}, not the
@@ -36,8 +35,8 @@ class FirmRequestServiceClockTest {
     private final FirmRequestMapper requests = mock(FirmRequestMapper.class);
     private final FirmService firms = mock(FirmService.class);
     private final FirmStaffService staff = mock(FirmStaffService.class);
-    private final FirmRequestServiceImpl svc = new FirmRequestServiceImpl(
-            requests, firms, staff, mock(FirmAccountService.class), CLOCK);
+    private final FirmRequestServiceImpl svc =
+            new FirmRequestServiceImpl(requests, firms, staff, mock(FirmAccountService.class), CLOCK);
 
     private final UUID actor = UUID.randomUUID();
     private final UUID target = UUID.randomUUID();
@@ -46,7 +45,8 @@ class FirmRequestServiceClockTest {
     void offerEmployment_expiresFiveMinutesAfterTheClock() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(UUID.randomUUID()));
         when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
-        when(requests.createInvite(1, target.toString(), actor.toString(), NOW.plusMinutes(5))).thenReturn(1);
+        when(requests.createInvite(1, target.toString(), actor.toString(), NOW.plusMinutes(5)))
+                .thenReturn(1);
 
         svc.offerEmployment("Acme", target, actor);
 

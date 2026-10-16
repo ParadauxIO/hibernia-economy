@@ -1,7 +1,6 @@
 package io.paradaux.treasury.utils;
 
 import io.paradaux.treasury.model.tax.TaxCycleType;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -34,8 +33,8 @@ public final class TaxCycleSchedule {
 
     private final TaxCycleType cycleType;
     private final int fireHour;
-    private final int fireDayOfWeek;   // ISO 1 = Monday … 7 = Sunday (weekly only)
-    private final int fireDayOfMonth;  // 1–31, clamped to the month's length (monthly only)
+    private final int fireDayOfWeek; // ISO 1 = Monday … 7 = Sunday (weekly only)
+    private final int fireDayOfMonth; // 1–31, clamped to the month's length (monthly only)
 
     private TaxCycleSchedule(TaxCycleType cycleType, int fireHour, int fireDayOfWeek, int fireDayOfMonth) {
         this.cycleType = Objects.requireNonNull(cycleType, "cycleType");

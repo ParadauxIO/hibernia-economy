@@ -5,16 +5,15 @@ import com.google.inject.Injector;
 import io.paradaux.hibernia.testsupport.db.TestDatabase;
 import io.paradaux.hibernia.testsupport.db.TestDatabaseExtension;
 import io.paradaux.treasury.guice.DatabaseModule;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.extension.RegisterExtension;
-
-import javax.sql.DataSource;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.UUID;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
  * Base class for integration tests that hit a real MariaDB — embedded MariaDB4j
@@ -44,10 +43,7 @@ public abstract class IntegrationTestBase {
     @BeforeEach
     void setUpIntegration() {
         this.dataSource = DB.dataSource();
-        this.injector = Guice.createInjector(
-                new DatabaseModule(dataSource),
-                new TestServicesModule()
-        );
+        this.injector = Guice.createInjector(new DatabaseModule(dataSource), new TestServicesModule());
     }
 
     /**
@@ -72,8 +68,8 @@ public abstract class IntegrationTestBase {
                     ps.executeUpdate();
                 }
             }
-            try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name) "
+            try (PreparedStatement ps =
+                    c.prepareStatement("INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name) "
                             + "VALUES (?, 'BUSINESS', ?, ?)")) {
                 for (int id : accountIds) {
                     ps.setInt(1, id);

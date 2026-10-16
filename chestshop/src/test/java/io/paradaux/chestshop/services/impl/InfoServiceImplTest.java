@@ -479,7 +479,8 @@ class InfoServiceImplTest extends ServerTest {
         when(shopBlockService.findConnectedContainer(sign)).thenReturn(container);
         when(inventoryService.getAmount(stone, inv)).thenReturn(42);
         when(economy.format(any(BigDecimal.class)))
-                .thenAnswer(call -> "$" + call.<BigDecimal>getArgument(0).stripTrailingZeros().toPlainString());
+                .thenAnswer(call -> "$"
+                        + call.<BigDecimal>getArgument(0).stripTrailingZeros().toPlainString());
 
         info.showShopInfo(p, sign);
 
@@ -506,9 +507,7 @@ class InfoServiceImplTest extends ServerTest {
 
         info.showShopInfo(p, sign);
 
-        assertThat(shopInfoValues())
-                .containsEntry("stock", "∞")
-                .containsEntry("owner", "Owner");
+        assertThat(shopInfoValues()).containsEntry("stock", "∞").containsEntry("owner", "Owner");
         verify(message).send(p, "chestshop.shopinfo_buy", "prefix", "", "amount", "5", "price", "$X");
         verify(message, never()).send(eq(p), eq("chestshop.shopinfo_sell"), any(Object[].class));
     }

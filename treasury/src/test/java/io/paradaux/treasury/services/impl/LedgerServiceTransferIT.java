@@ -1,5 +1,8 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.LedgerMapper;
 import io.paradaux.treasury.model.economy.Account;
@@ -14,9 +17,6 @@ import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
 import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -26,9 +26,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class LedgerServiceTransferIT extends IntegrationTestBase {
 
@@ -40,11 +39,11 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     @BeforeEach
     void setUp() {
-        ledgerService     = injector.getInstance(LedgerService.class);
-        accountService    = injector.getInstance(AccountService.class);
+        ledgerService = injector.getInstance(LedgerService.class);
+        accountService = injector.getInstance(AccountService.class);
         membershipService = injector.getInstance(MembershipService.class);
-        accountMapper     = injector.getInstance(AccountMapper.class);
-        ledgerMapper      = injector.getInstance(LedgerMapper.class);
+        accountMapper = injector.getInstance(AccountMapper.class);
+        ledgerMapper = injector.getInstance(LedgerMapper.class);
 
         ledgerService.bootstrapGovernmentAccounts();
     }
@@ -52,26 +51,39 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     // ---------- transfer: amount validation ----------
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {
-            "0", "0.00",
-            "-100.00",                 // would run the transfer BACKWARDS (b -> a), skipping b's authorization
-            "0.001", "100.005",        // sub-cent
-            "100000000000000000.00",   // beyond DECIMAL(19,2)
-    })
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "0",
+                "0.00",
+                "-100.00", // would run the transfer BACKWARDS (b -> a), skipping b's authorization
+                "0.001",
+                "100.005", // sub-cent
+                "100000000000000000.00", // beyond DECIMAL(19,2)
+            })
     void transfer_rejectsInvalidAmounts_andMovesNothing(String amount) {
         Account a = createPersonalAccount(1_000);
         Account b = createPersonalAccount(1_000);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                        a.getAccountId(), b.getAccountId(), new BigDecimal(amount), "bad amount",
-                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                        TreasuryConstants.TREASURY_PLUGIN_NAME, null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal(amount),
+                        "bad amount",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        TreasuryConstants.TREASURY_PLUGIN_NAME,
+                        null)))
                 .isInstanceOf(IllegalArgumentException.class);
         // Same rule on the authorization-bypassing admin path.
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> ledgerService.adminTransfer(new TransferRequest(
-                        a.getAccountId(), b.getAccountId(), new BigDecimal(amount), "bad amount",
-                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                        TreasuryConstants.TREASURY_PLUGIN_NAME, null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal(amount),
+                        "bad amount",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        TreasuryConstants.TREASURY_PLUGIN_NAME,
+                        null)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThat(balanceOf(a)).isEqualByComparingTo("1000.00");
@@ -86,11 +98,23 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account b = createPersonalAccount(0);
 
         ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("0.01"), "one cent",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("0.01"),
+                "one cent",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
         ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("10.500"), "trailing zero",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("10.500"),
+                "trailing zero",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
 
         assertThat(balanceOf(a)).isEqualByComparingTo("989.49");
         assertThat(balanceOf(b)).isEqualByComparingTo("10.51");
@@ -102,13 +126,25 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account b = createPersonalAccount(0);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                        a.getAccountId(), b.getAccountId(), new BigDecimal("100.01"), "overdraw",
-                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal("100.01"),
+                        "overdraw",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        TreasuryConstants.TREASURY_PLUGIN_NAME,
+                        null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Insufficient funds");
         ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"), "all of it",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("100.00"),
+                "all of it",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
 
         assertThat(balanceOf(a)).isEqualByComparingTo("0.00");
         assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
@@ -123,10 +159,12 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         long take = ledgerService.adminTake(player, new BigDecimal("2.00"), "take", UUID.randomUUID());
 
         assertThat(give).isNotEqualTo(take);
-        assertThat(ledgerMapper.findPostingsByTxnId(give)).extracting(LedgerPosting::amount)
+        assertThat(ledgerMapper.findPostingsByTxnId(give))
+                .extracting(LedgerPosting::amount)
                 .usingElementComparator(BigDecimal::compareTo)
                 .containsExactlyInAnyOrder(new BigDecimal("5.00"), new BigDecimal("-5.00"));
-        assertThat(ledgerMapper.findPostingsByTxnId(take)).extracting(LedgerPosting::amount)
+        assertThat(ledgerMapper.findPostingsByTxnId(take))
+                .extracting(LedgerPosting::amount)
                 .usingElementComparator(BigDecimal::compareTo)
                 .containsExactlyInAnyOrder(new BigDecimal("2.00"), new BigDecimal("-2.00"));
     }
@@ -135,11 +173,11 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     @org.junit.jupiter.params.provider.ValueSource(strings = {"0", "-1.00", "0.001"})
     void adminGiveAndTake_rejectInvalidAmounts_beforeCreatingAnything(String amount) {
         UUID player = UUID.randomUUID();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                        ledgerService.adminGive(player, new BigDecimal(amount), "give", UUID.randomUUID()))
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> ledgerService.adminGive(player, new BigDecimal(amount), "give", UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                        ledgerService.adminTake(player, new BigDecimal(amount), "take", UUID.randomUUID()))
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> ledgerService.adminTake(player, new BigDecimal(amount), "take", UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class);
         // The guard runs before resolve-or-create: no account was opened for the player.
         assertThat(accountService.hasPersonalAccount(player)).isFalse();
@@ -153,19 +191,21 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account b = createPersonalAccount(0);
 
         long txnId = ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(),
-                new BigDecimal("250.00"), "test transfer",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("250.00"),
+                "test transfer",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
 
         assertThat(balanceOf(a)).isEqualByComparingTo("750.00");
         assertThat(balanceOf(b)).isEqualByComparingTo("250.00");
 
         List<LedgerPosting> postings = ledgerMapper.findPostingsByTxnId(txnId);
         assertThat(postings).hasSize(2);
-        BigDecimal sum = postings.stream()
-                .map(LedgerPosting::amount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum = postings.stream().map(LedgerPosting::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(sum).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
@@ -176,12 +216,24 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         byte[] key = Idempotency.sha256("test:dedup-key");
 
         long firstTxn = ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"),
-                "first", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", key));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("100.00"),
+                "first",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                "test",
+                key));
 
         long secondTxn = ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"),
-                "replay", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", key));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("100.00"),
+                "replay",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                "test",
+                key));
 
         assertThat(secondTxn).isEqualTo(firstTxn);
         assertThat(balanceOf(a)).isEqualByComparingTo("400.00");
@@ -209,8 +261,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
                 tasks.add(() -> {
                     start.await(); // line everyone up so the inserts genuinely race
                     return ledgerService.transfer(new TransferRequest(
-                            a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"),
-                            "concurrent", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", key));
+                            a.getAccountId(),
+                            b.getAccountId(),
+                            new BigDecimal("100.00"),
+                            "concurrent",
+                            TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                            null,
+                            "test",
+                            key));
                 });
             }
             List<Future<Long>> futures = new java.util.ArrayList<>();
@@ -232,9 +290,11 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         LedgerTxn winner = ledgerMapper.findByDedupKey(key);
         assertThat(winner).isNotNull();
         assertThat(winner.getTxnId()).isEqualTo(firstTxnId[0]);
-        assertThat(countRows("SELECT COUNT(*) FROM ledger_txns WHERE client_dedup_key = ?", key)).isEqualTo(1);
+        assertThat(countRows("SELECT COUNT(*) FROM ledger_txns WHERE client_dedup_key = ?", key))
+                .isEqualTo(1);
         // ...and that one txn is a balanced two-leg posting, not N partial ones.
-        assertThat(countRows("SELECT COUNT(*) FROM ledger_postings WHERE txn_id = ?", winner.getTxnId())).isEqualTo(2);
+        assertThat(countRows("SELECT COUNT(*) FROM ledger_postings WHERE txn_id = ?", winner.getTxnId()))
+                .isEqualTo(2);
     }
 
     @Test
@@ -242,8 +302,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account a = createPersonalAccount(100);
 
         assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), 9999, new BigDecimal("10.00"), "missing dest",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null)))
+                        a.getAccountId(),
+                        9999,
+                        new BigDecimal("10.00"),
+                        "missing dest",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        "test",
+                        null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Account not found");
     }
@@ -254,8 +320,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account b = createPersonalAccount(0);
 
         assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"), "overdraw",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal("100.00"),
+                        "overdraw",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        "test",
+                        null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Insufficient funds");
 
@@ -269,8 +341,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account b = createPersonalAccount(0);
 
         ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("120.00"), "overdraft",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("120.00"),
+                "overdraft",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                "test",
+                null));
 
         // 50 - 120 = -70, within credit limit of 100
         assertThat(balanceOf(a)).isEqualByComparingTo("-70.00");
@@ -284,8 +362,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
         // 50 - 200 = -150, exceeds the -100 credit limit
         assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("200.00"), "too far",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal("200.00"),
+                        "too far",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        "test",
+                        null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Insufficient funds");
 
@@ -312,9 +396,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account b = createPersonalAccount(0);
 
         ledgerService.transfer(new TransferRequest(
-                faucet.getAccountId(), b.getAccountId(), new BigDecimal("1000000.00"),
+                faucet.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("1000000.00"),
                 "minted from faucet",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null));
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                "test",
+                null));
 
         assertThat(balanceOf(faucet)).isEqualByComparingTo("-1000000.00");
         assertThat(balanceOf(b)).isEqualByComparingTo("1000000.00");
@@ -340,9 +429,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         Account b = createPersonalAccount(0);
 
         assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("10.00"), "no auth",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null /* no authorizer */,
-                "test", null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal("10.00"),
+                        "no auth",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null /* no authorizer */,
+                        "test",
+                        null)))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("Authorizer required");
     }
@@ -354,14 +448,26 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
         // transfer() refuses without an authorizer...
         assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("10.00"), "blocked",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal("10.00"),
+                        "blocked",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        "test",
+                        null)))
                 .isInstanceOf(SecurityException.class);
 
         // ...adminTransfer() forces it through (the permission is the authority).
         long txnId = ledgerService.adminTransfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("10.00"), "admin override",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("10.00"),
+                "admin override",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                "test",
+                null));
 
         assertThat(txnId).isPositive();
         assertThat(balanceOf(a)).isEqualByComparingTo("990.00");
@@ -370,12 +476,18 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     @Test
     void adminTransfer_stillEnforcesInsufficientFunds() {
-        Account a = createPersonalAccount(5);   // no overdraft
+        Account a = createPersonalAccount(5); // no overdraft
         Account b = createPersonalAccount(0);
 
         assertThatThrownBy(() -> ledgerService.adminTransfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("10.00"), "too much",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, "test", null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal("10.00"),
+                        "too much",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        null,
+                        "test",
+                        null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Insufficient funds");
     }
@@ -391,9 +503,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         membershipService.addAuthorizer(a.getAccountId(), authorizer, TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
 
         ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"), "ok",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, authorizer,
-                "test", null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("100.00"),
+                "ok",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                authorizer,
+                "test",
+                null));
 
         assertThat(balanceOf(a)).isEqualByComparingTo("900.00");
         assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
@@ -406,9 +523,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         UUID notAuthorized = UUID.randomUUID();
 
         assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("10.00"), "rogue",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, notAuthorized,
-                "test", null)))
+                        a.getAccountId(),
+                        b.getAccountId(),
+                        new BigDecimal("10.00"),
+                        "rogue",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        notAuthorized,
+                        "test",
+                        null)))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("not permitted");
     }
@@ -420,8 +542,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         UUID initiator = UUID.randomUUID();
 
         long txnId = ledgerService.transfer(new TransferRequest(
-                a.getAccountId(), b.getAccountId(), new BigDecimal("10.00"), "memo here",
-                initiator, null, "MyPlugin", null));
+                a.getAccountId(),
+                b.getAccountId(),
+                new BigDecimal("10.00"),
+                "memo here",
+                initiator,
+                null,
+                "MyPlugin",
+                null));
 
         LedgerTxn txn = ledgerMapper.findTxnById(txnId);
         assertThat(txn).isNotNull();
@@ -523,8 +651,11 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
             assertThat(gov).as(name).isNotNull();
             assertThat(gov.getAccountType()).isEqualTo(AccountType.GOVERNMENT);
             // Exactly one row per name: re-running bootstrap must not insert duplicates.
-            assertThat(countRows("SELECT COUNT(*) FROM accounts WHERE account_type = 'GOVERNMENT' AND display_name = ?", name))
-                    .as(name).isEqualTo(1);
+            assertThat(countRows(
+                            "SELECT COUNT(*) FROM accounts WHERE account_type = 'GOVERNMENT' AND display_name = ?",
+                            name))
+                    .as(name)
+                    .isEqualTo(1);
         }
     }
 
@@ -549,8 +680,8 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         UUID initiator = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
-        long txnId = ledgerService.vaultDeposit("MyPlugin", player, new BigDecimal("250.00"),
-                "deposit memo", initiator, null, "deposit-key-1");
+        long txnId = ledgerService.vaultDeposit(
+                "MyPlugin", player, new BigDecimal("250.00"), "deposit memo", initiator, null, "deposit-key-1");
 
         assertThat(txnId).isPositive();
         assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("10250.00");
@@ -562,8 +693,8 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         UUID initiator = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
-        long txnId = ledgerService.vaultWithdraw("MyPlugin", player, new BigDecimal("1500.00"),
-                "withdraw memo", initiator, null, null);
+        long txnId = ledgerService.vaultWithdraw(
+                "MyPlugin", player, new BigDecimal("1500.00"), "withdraw memo", initiator, null, null);
 
         assertThat(txnId).isPositive();
         assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("8500.00");
@@ -575,10 +706,10 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         UUID initiator = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
-        long first  = ledgerService.vaultDeposit("MyPlugin", player, new BigDecimal("50.00"),
-                "first", initiator, null, "dedup-key-A");
-        long second = ledgerService.vaultDeposit("MyPlugin", player, new BigDecimal("50.00"),
-                "replay", initiator, null, "dedup-key-A");
+        long first = ledgerService.vaultDeposit(
+                "MyPlugin", player, new BigDecimal("50.00"), "first", initiator, null, "dedup-key-A");
+        long second = ledgerService.vaultDeposit(
+                "MyPlugin", player, new BigDecimal("50.00"), "replay", initiator, null, "dedup-key-A");
 
         assertThat(second).isEqualTo(first);
         assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("10050.00");
@@ -658,7 +789,7 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         // then trigger getOrCreateGovernmentAccount via bootstrap (which is idempotent).
         Account starting = accountService.getGovernmentAccountByName("starting-balances");
         try (var conn = dataSource.getConnection();
-             var st = conn.prepareStatement("DELETE FROM account_balances_mat WHERE account_id = ?")) {
+                var st = conn.prepareStatement("DELETE FROM account_balances_mat WHERE account_id = ?")) {
             st.setInt(1, starting.getAccountId());
             st.executeUpdate();
         }
@@ -678,9 +809,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         UUID rogue = UUID.randomUUID();
 
         assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
-                src.getAccountId(), dest.getAccountId(), new BigDecimal("10.00"),
-                "rogue inbound", TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, rogue,
-                "test", null)))
+                        src.getAccountId(),
+                        dest.getAccountId(),
+                        new BigDecimal("10.00"),
+                        "rogue inbound",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                        rogue,
+                        "test",
+                        null)))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("not permitted");
     }
@@ -735,7 +871,9 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
             pool.shutdownNow();
         }
 
-        assertThat(errors).as("no transient deadlock/failure under swapped-direction load").isEmpty();
+        assertThat(errors)
+                .as("no transient deadlock/failure under swapped-direction load")
+                .isEmpty();
         int perDirection = workers / 2 * transfersPerWorker; // 60 transfers each way
         BigDecimal net = bToA.subtract(aToB).multiply(BigDecimal.valueOf(perDirection)); // 240.00
         assertThat(balanceOf(a)).isEqualByComparingTo(new BigDecimal("10000.00").add(net));
@@ -744,10 +882,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private void transferOne(Account from, Account to, BigDecimal amount) {
         ledgerService.transfer(new TransferRequest(
-                from.getAccountId(), to.getAccountId(),
-                amount, "concurrency test",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                from.getAccountId(),
+                to.getAccountId(),
+                amount,
+                "concurrency test",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
     }
 
     // ---------- sweepAll (firm-disband drain) ----------
@@ -755,17 +897,21 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     @Test
     void sweepAll_movesTheEntireLiveBalance_conservingValue() {
         Account firmAcc = createPersonalAccount(0);
-        Account payout  = createPersonalAccount(0);
-        Account funder  = createPersonalAccount(1_000);
+        Account payout = createPersonalAccount(0);
+        Account funder = createPersonalAccount(1_000);
         // Fund the firm account with a plain ledger transfer (NOT adminGive — adminGive
         // resolves the owner via resolveOrCreatePersonal, which also seeds the 10_000
         // starting balance and would mask the swept amount). This keeps the firm balance
         // an exact, trigger-maintained 737.50.
         ledgerService.transfer(new TransferRequest(
-                funder.getAccountId(), firmAcc.getAccountId(),
-                new BigDecimal("737.50"), "seed",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                funder.getAccountId(),
+                firmAcc.getAccountId(),
+                new BigDecimal("737.50"),
+                "seed",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
         BigDecimal before = balanceOf(firmAcc).add(balanceOf(payout));
 
         java.util.OptionalLong txn = ledgerService.sweepAll(
@@ -781,7 +927,7 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     @Test
     void sweepAll_zeroBalance_isNoOp() {
         Account firmAcc = createPersonalAccount(0);
-        Account payout  = createPersonalAccount(0);
+        Account payout = createPersonalAccount(0);
 
         java.util.OptionalLong txn = ledgerService.sweepAll(
                 firmAcc.getAccountId(), payout.getAccountId(), "Firm disbanded", UUID.randomUUID(), "BusinessPlugin");
@@ -796,14 +942,18 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         // amount is read under the sweep's FOR UPDATE lock (not a pre-credit snapshot),
         // the whole post-credit balance is swept and nothing is stranded.
         Account firmAcc = createPersonalAccount(0);
-        Account payout  = createPersonalAccount(0);
-        Account funder  = createPersonalAccount(1_000);
+        Account payout = createPersonalAccount(0);
+        Account funder = createPersonalAccount(1_000);
 
         ledgerService.transfer(new TransferRequest(
-                funder.getAccountId(), firmAcc.getAccountId(),
-                new BigDecimal("400.00"), "late credit",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                funder.getAccountId(),
+                firmAcc.getAccountId(),
+                new BigDecimal("400.00"),
+                "late credit",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
 
         java.util.OptionalLong txn = ledgerService.sweepAll(
                 firmAcc.getAccountId(), payout.getAccountId(), "Firm disbanded", UUID.randomUUID(), "BusinessPlugin");
@@ -817,7 +967,7 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private long countRows(String sql, Object param) {
         try (java.sql.Connection c = dataSource.getConnection();
-             java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
+                java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setObject(1, param);
             try (java.sql.ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -898,8 +1048,13 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     private void seedBalance(Account target, BigDecimal amount) {
         Account gov = accountService.getGovernmentAccountByName("starting-balances");
         ledgerService.transfer(new TransferRequest(
-                gov.getAccountId(), target.getAccountId(), amount, "test seed",
-                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
-                TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                gov.getAccountId(),
+                target.getAccountId(),
+                amount,
+                "test seed",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
     }
 }

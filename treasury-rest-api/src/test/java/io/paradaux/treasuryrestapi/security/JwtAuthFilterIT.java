@@ -1,19 +1,18 @@
 package io.paradaux.treasuryrestapi.security;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
 import io.paradaux.treasuryrestapi.testsupport.TestTokens;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.ResultActions;
-
-import javax.crypto.SecretKey;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * {@link JwtAuthFilter}'s Authorization-header parsing, over real HTTP (MockMvc
@@ -27,7 +26,8 @@ class JwtAuthFilterIT extends EmbeddedDbIT {
     /** Any authenticated, non-scoped endpoint: answers 200 with the caller's key. */
     private static final String ME = "/api/v1/auth/me";
 
-    @Autowired private SecretKey signingKey;
+    @Autowired
+    private SecretKey signingKey;
 
     private TestTokens tokens;
 

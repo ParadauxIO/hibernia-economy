@@ -1,10 +1,9 @@
 package io.paradaux.chestshop.model;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /** The {@link Account} name/uuid constructor's short-name derivation (the rest is Lombok). */
 class AccountTest {

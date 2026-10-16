@@ -1,7 +1,20 @@
 package io.paradaux.treasuryrestapi.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
+
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
 import io.paradaux.treasuryrestapi.testsupport.TestTokens;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,20 +29,6 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfoHandlerMapping;
-
-import javax.crypto.SecretKey;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
 /**
  * Route-table security test: every endpoint the running app exposes must be either on
@@ -69,10 +68,21 @@ class RouteSecurityIT extends EmbeddedDbIT {
     /** {@code body} is a minimal valid JSON body so scope checks aren't pre-empted by a 400. */
     record Rule(Access access, String reason, String body) {}
 
-    private static Rule pub(String reason) { return new Rule(Access.PUBLIC, reason, null); }
-    private static Rule auth() { return new Rule(Access.AUTHENTICATED, null, null); }
-    private static Rule business(String body) { return new Rule(Access.BUSINESS, null, body); }
-    private static Rule service() { return new Rule(Access.SERVICE, null, null); }
+    private static Rule pub(String reason) {
+        return new Rule(Access.PUBLIC, reason, null);
+    }
+
+    private static Rule auth() {
+        return new Rule(Access.AUTHENTICATED, null, null);
+    }
+
+    private static Rule business(String body) {
+        return new Rule(Access.BUSINESS, null, body);
+    }
+
+    private static Rule service() {
+        return new Rule(Access.SERVICE, null, null);
+    }
 
     /**
      * The reviewed route table, keyed {@code "METHOD /pattern"} ({@code ANY} = mapping
@@ -81,16 +91,26 @@ class RouteSecurityIT extends EmbeddedDbIT {
      */
     private static final Map<String, Rule> ROUTES = Map.ofEntries(
             // ── public ──────────────────────────────────────────────────────────────
-            Map.entry("GET /api/v1/chestshop/shops", pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry("GET /api/v1/chestshop/items", pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry("GET /api/v1/chestshop/items/{itemKey}", pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry("GET /api/v1/chestshop/stats", pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry("GET /api/v1/config/tax", pub("Published tax rates every player can already see in-game (PAR-80)")),
+            Map.entry(
+                    "GET /api/v1/chestshop/shops",
+                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
+            Map.entry(
+                    "GET /api/v1/chestshop/items",
+                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
+            Map.entry(
+                    "GET /api/v1/chestshop/items/{itemKey}",
+                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
+            Map.entry(
+                    "GET /api/v1/chestshop/stats",
+                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
+            Map.entry(
+                    "GET /api/v1/config/tax", pub("Published tax rates every player can already see in-game (PAR-80)")),
             Map.entry("GET /v3/api-docs", pub("The public OpenAPI contract (admin controllers are @Hidden)")),
             Map.entry("GET /v3/api-docs/swagger-config", pub("Swagger UI bootstrap config for the public docs")),
             Map.entry("GET /swagger-ui.html", pub("Redirect into the public Swagger UI")),
             Map.entry("GET /actuator", pub("Actuator discovery page (lists only the exposed health/info)")),
-            Map.entry("GET /actuator/health", pub("Kubernetes liveness/readiness probes; details only when_authorized")),
+            Map.entry(
+                    "GET /actuator/health", pub("Kubernetes liveness/readiness probes; details only when_authorized")),
             Map.entry("GET /actuator/health/**", pub("Kubernetes liveness/readiness probe groups")),
 
             // ── any valid key ───────────────────────────────────────────────────────
@@ -123,7 +143,8 @@ class RouteSecurityIT extends EmbeddedDbIT {
             Map.entry("GET /api/v1/firms/me/accounts", business(null)),
             Map.entry("GET /api/v1/firms/me/employees", business(null)),
             Map.entry("GET /api/v1/firms/me/roles", business(null)),
-            Map.entry("PATCH /api/v1/firms/me/accounts/{accountId}/display-name", business("{\"displayName\":\"Till\"}")),
+            Map.entry(
+                    "PATCH /api/v1/firms/me/accounts/{accountId}/display-name", business("{\"displayName\":\"Till\"}")),
 
             // ── SERVICE keys only ───────────────────────────────────────────────────
             Map.entry("PATCH /api/v1/admin/accounts/{id}/display-name", service()),
@@ -146,8 +167,11 @@ class RouteSecurityIT extends EmbeddedDbIT {
 
     private static final Set<String> KEY_TYPES = Set.of("PERSONAL", "BUSINESS", "GOVERNMENT", "SERVICE");
 
-    @Autowired private ApplicationContext context;
-    @Autowired private SecretKey signingKey;
+    @Autowired
+    private ApplicationContext context;
+
+    @Autowired
+    private SecretKey signingKey;
 
     private TestTokens tokens;
 
@@ -175,7 +199,9 @@ class RouteSecurityIT extends EmbeddedDbIT {
                         + "reason, and allowlist it in SecurityConfig + JwtAuthFilter), AUTHENTICATED, "
                         + "BUSINESS or SERVICE")
                 .isEmpty();
-        assertThat(stale).as("RouteSecurityIT.ROUTES entries that no longer match any endpoint").isEmpty();
+        assertThat(stale)
+                .as("RouteSecurityIT.ROUTES entries that no longer match any endpoint")
+                .isEmpty();
         // Sanity: discovery actually found the API (guards against an empty enumeration).
         assertThat(live).contains("POST /api/v1/transfers", "POST /api/v1/admin/transfers");
     }
@@ -202,9 +228,11 @@ class RouteSecurityIT extends EmbeddedDbIT {
         for (Route r : protectedRoutes()) {
             for (var bad : badTokens.entrySet()) {
                 String header = bad.getValue().isEmpty() ? null : bad.getValue();
-                MockHttpServletResponse res = send(r, header, ROUTES.get(r.key()).body());
+                MockHttpServletResponse res =
+                        send(r, header, ROUTES.get(r.key()).body());
                 if (res.getStatus() != 401) {
-                    failures.add(r + " with " + bad.getKey() + " -> " + res.getStatus() + " " + res.getContentAsString());
+                    failures.add(
+                            r + " with " + bad.getKey() + " -> " + res.getStatus() + " " + res.getContentAsString());
                 }
             }
         }
@@ -222,7 +250,8 @@ class RouteSecurityIT extends EmbeddedDbIT {
                 if (keyType.equals(allowed)) continue;
                 MockHttpServletResponse res = send(r, bearer(keyType), rule.body());
                 if (res.getStatus() != 403 || !res.getContentAsString().contains("\"FORBIDDEN\"")) {
-                    failures.add(r + " with a " + keyType + " key -> " + res.getStatus() + " " + res.getContentAsString());
+                    failures.add(
+                            r + " with a " + keyType + " key -> " + res.getStatus() + " " + res.getContentAsString());
                 }
             }
         }
@@ -238,7 +267,9 @@ class RouteSecurityIT extends EmbeddedDbIT {
         List<String> failures = new ArrayList<>();
         for (Route r : protectedRoutes()) {
             Rule rule = ROUTES.get(r.key());
-            String keyType = rule.access() == Access.AUTHENTICATED ? "PERSONAL" : rule.access().name();
+            String keyType = rule.access() == Access.AUTHENTICATED
+                    ? "PERSONAL"
+                    : rule.access().name();
             // Some of these succeed and mutate keys (POST /auth/rotate supersedes the jti,
             // admin revoke/rotate), so start each request from freshly seeded keys.
             exec("DELETE FROM api_keys", ps -> {});
@@ -271,9 +302,10 @@ class RouteSecurityIT extends EmbeddedDbIT {
 
     private List<Route> discoverRoutes() {
         List<Route> routes = new ArrayList<>();
-        for (RequestMappingInfoHandlerMapping mapping
-                : context.getBeansOfType(RequestMappingInfoHandlerMapping.class).values()) {
-            for (Map.Entry<RequestMappingInfo, HandlerMethod> e : mapping.getHandlerMethods().entrySet()) {
+        for (RequestMappingInfoHandlerMapping mapping :
+                context.getBeansOfType(RequestMappingInfoHandlerMapping.class).values()) {
+            for (Map.Entry<RequestMappingInfo, HandlerMethod> e :
+                    mapping.getHandlerMethods().entrySet()) {
                 RequestMappingInfo info = e.getKey();
                 Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
                 for (String pattern : info.getPatternValues()) {
@@ -321,13 +353,14 @@ class RouteSecurityIT extends EmbeddedDbIT {
     // ── requests ────────────────────────────────────────────────────────────────
 
     private String bearer(String keyType) {
-        return "Bearer " + switch (keyType) {
-            case "PERSONAL" -> tokens.personal();
-            case "BUSINESS" -> tokens.business();
-            case "GOVERNMENT" -> tokens.government();
-            case "SERVICE" -> tokens.service();
-            default -> throw new IllegalArgumentException(keyType);
-        };
+        return "Bearer "
+                + switch (keyType) {
+                    case "PERSONAL" -> tokens.personal();
+                    case "BUSINESS" -> tokens.business();
+                    case "GOVERNMENT" -> tokens.government();
+                    case "SERVICE" -> tokens.service();
+                    default -> throw new IllegalArgumentException(keyType);
+                };
     }
 
     private MockHttpServletResponse send(Route r, String authorization, String body) throws Exception {

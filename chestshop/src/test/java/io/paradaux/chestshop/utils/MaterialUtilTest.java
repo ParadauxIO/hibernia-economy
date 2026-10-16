@@ -1,9 +1,14 @@
 package io.paradaux.chestshop.utils;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.MaterialService;
 import io.paradaux.chestshop.services.impl.MaterialServiceImpl;
 import io.paradaux.chestshop.support.ServerTest;
+import java.util.LinkedHashSet;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
@@ -13,12 +18,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-
-import java.util.LinkedHashSet;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 
 /**
  * {@link MaterialUtil}: sign-width name shortening (round-tripped through
@@ -74,10 +73,10 @@ class MaterialUtilTest extends ServerTest {
 
     @ParameterizedTest
     @CsvSource({
-            "DiamonPicka,  DIAMOND_PICKAXE",
-            "Diamon Picka, DIAMOND_PICKAXE",
-            "ExpBottle,    EXPERIENCE_BOTTLE",
-            "Exp Bottle,   EXPERIENCE_BOTTLE",
+        "DiamonPicka,  DIAMOND_PICKAXE",
+        "Diamon Picka, DIAMOND_PICKAXE",
+        "ExpBottle,    EXPERIENCE_BOTTLE",
+        "Exp Bottle,   EXPERIENCE_BOTTLE",
     })
     void getMaterial_resolvesAbbreviationsWithAndWithoutSpaces(String materialName, Material expected) {
         assertThat(materialService.getMaterial(materialName)).isEqualTo(expected);

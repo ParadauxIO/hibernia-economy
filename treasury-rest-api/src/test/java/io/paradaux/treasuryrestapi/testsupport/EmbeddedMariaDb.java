@@ -2,8 +2,6 @@ package io.paradaux.treasuryrestapi.testsupport;
 
 import ch.vorburger.mariadb4j.DB;
 import ch.vorburger.mariadb4j.DBConfigurationBuilder;
-import org.flywaydb.core.Flyway;
-
 import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -12,6 +10,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.flywaydb.core.Flyway;
 
 /**
  * One MariaDB for the whole JVM, used by the DB-backed integration tests, with the
@@ -96,9 +95,20 @@ public final class EmbeddedMariaDb {
         return (v != null && !v.isBlank()) ? v : def;
     }
 
-    public static String jdbcUrl() { ensureStarted(); return jdbcUrl; }
-    public static String username() { ensureStarted(); return username; }
-    public static String password() { ensureStarted(); return password; }
+    public static String jdbcUrl() {
+        ensureStarted();
+        return jdbcUrl;
+    }
+
+    public static String username() {
+        ensureStarted();
+        return username;
+    }
+
+    public static String password() {
+        ensureStarted();
+        return password;
+    }
 
     public static Connection connect() throws Exception {
         ensureStarted();
@@ -113,7 +123,8 @@ public final class EmbeddedMariaDb {
      * row seed it explicitly.
      */
     public static void truncateAll() {
-        try (Connection c = connect(); Statement st = c.createStatement()) {
+        try (Connection c = connect();
+                Statement st = c.createStatement()) {
             st.execute("SET FOREIGN_KEY_CHECKS = 0");
             for (String t : dataTables) {
                 st.execute("TRUNCATE TABLE `" + t + "`");
@@ -147,11 +158,10 @@ public final class EmbeddedMariaDb {
     private static List<String> listDataTables(String url) throws Exception {
         List<String> tables = new ArrayList<>();
         try (Connection c = DriverManager.getConnection(url, username, password);
-             Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
-                     "SELECT table_name FROM information_schema.tables "
-                             + "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' "
-                             + "AND table_name <> '" + HISTORY_TABLE + "' ORDER BY table_name")) {
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery("SELECT table_name FROM information_schema.tables "
+                        + "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' "
+                        + "AND table_name <> '" + HISTORY_TABLE + "' ORDER BY table_name")) {
             while (rs.next()) tables.add(rs.getString(1));
         }
         if (tables.isEmpty()) {

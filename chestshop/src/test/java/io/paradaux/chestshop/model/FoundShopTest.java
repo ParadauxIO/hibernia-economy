@@ -1,10 +1,9 @@
 package io.paradaux.chestshop.model;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /**
  * Pure-data tests for the {@link FoundShop} record: the canonical constructor / accessors and
@@ -19,10 +18,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class FoundShopTest {
 
-    private static FoundShop shop(BigDecimal buy, BigDecimal sell, int batchQty,
-                                  Integer stock, Integer capacity, long distanceSquared) {
-        return new FoundShop("stone", "Stone", "STONE", false, null, "Steve",
-                buy, sell, batchQty, stock, capacity, "world", 1, 2, 3, distanceSquared);
+    private static FoundShop shop(
+            BigDecimal buy, BigDecimal sell, int batchQty, Integer stock, Integer capacity, long distanceSquared) {
+        return new FoundShop(
+                "stone",
+                "Stone",
+                "STONE",
+                false,
+                null,
+                "Steve",
+                buy,
+                sell,
+                batchQty,
+                stock,
+                capacity,
+                "world",
+                1,
+                2,
+                3,
+                distanceSquared);
     }
 
     // ── shopType ───────────────────────────────────────────────────────────────
@@ -84,7 +98,8 @@ class FoundShopTest {
 
     @Test
     void distanceBlocks_unknownReturnsMinusOne_elseFloorSqrt() {
-        assertThat(shop(BigDecimal.ONE, null, 1, 1, 1, Long.MAX_VALUE).distanceBlocks()).isEqualTo(-1);
+        assertThat(shop(BigDecimal.ONE, null, 1, 1, 1, Long.MAX_VALUE).distanceBlocks())
+                .isEqualTo(-1);
         assertThat(shop(BigDecimal.ONE, null, 1, 1, 1, 50).distanceBlocks()).isEqualTo(7); // floor(sqrt(50))
     }
 
@@ -102,6 +117,7 @@ class FoundShopTest {
 
     @Test
     void isSimilarTo_differentKey_isTrue() {
-        assertThat(shop(BigDecimal.ONE, null, 1, 1, 1, 0).isSimilarTo("diamond")).isTrue();
+        assertThat(shop(BigDecimal.ONE, null, 1, 1, 1, 0).isSimilarTo("diamond"))
+                .isTrue();
     }
 }

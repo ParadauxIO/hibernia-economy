@@ -29,7 +29,15 @@ public record TestDatabase(String databaseName, String envPrefix) {
         return new TestDatabase(databaseName, envPrefix);
     }
 
-    public String urlEnv()  { return envPrefix + "_TEST_JDBC_URL"; }
-    public String userEnv() { return envPrefix + "_TEST_DB_USER"; }
-    public String passEnv() { return envPrefix + "_TEST_DB_PASS"; }
+    public String urlEnv() {
+        return envPrefix + "_TEST_JDBC_URL";
+    }
+
+    public String userEnv() {
+        return envPrefix + "_TEST_DB_USER";
+    }
+
+    public String passEnv() {
+        return envPrefix + "_TEST_DB_PASS";
+    }
 }

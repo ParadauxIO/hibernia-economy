@@ -16,8 +16,6 @@ import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.tax.TaxCollection;
 import io.paradaux.treasury.model.tax.TaxResult;
 import io.paradaux.treasury.utils.Idempotency;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -26,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
+import org.jetbrains.annotations.Nullable;
 
 @Singleton
 public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
@@ -44,13 +43,14 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
     private final Logger logger;
 
     @Inject
-    public FirmBalanceTaxServiceImpl(BalanceTaxConfiguration config,
-                                     FirmService firmService,
-                                     FirmPropertyService firmPropertyService,
-                                     FirmAccountService firmAccountService,
-                                     FirmTransactionService firmTransactionService,
-                                     TreasuryApi treasuryApi,
-                                     Business plugin) {
+    public FirmBalanceTaxServiceImpl(
+            BalanceTaxConfiguration config,
+            FirmService firmService,
+            FirmPropertyService firmPropertyService,
+            FirmAccountService firmAccountService,
+            FirmTransactionService firmTransactionService,
+            TreasuryApi treasuryApi,
+            Business plugin) {
         this.config = config;
         this.firmService = firmService;
         this.firmPropertyService = firmPropertyService;
@@ -84,7 +84,7 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
                 // One firm's failure (Treasury blip, missing account row, etc.)
                 // shouldn't kill the entire weekly cycle.
                 logger.warning("Skipping firm " + firm.getFirmId() + " (\"" + firm.getDisplayName()
-                    + "\") in balance tax cycle: " + e.getMessage());
+                        + "\") in balance tax cycle: " + e.getMessage());
             }
         }
 
@@ -125,9 +125,8 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
      * skipped as non-positive, and the firm was charged 0.09 for a 0.05 tax. Found by
      * {@code FirmBalanceTaxAllocationProperties}.
      */
-    static Map<Integer, BigDecimal> allocateLargestRemainder(BigDecimal totalTax,
-                                                             Map<Integer, BigDecimal> balances,
-                                                             BigDecimal totalBalance) {
+    static Map<Integer, BigDecimal> allocateLargestRemainder(
+            BigDecimal totalTax, Map<Integer, BigDecimal> balances, BigDecimal totalBalance) {
         BigDecimal totalCents = totalTax.movePointRight(2);
         record Quota(Integer accountId, BigDecimal balance, BigDecimal floorCents, BigDecimal remainder, int order) {}
 
@@ -146,7 +145,8 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
 
         int leftover = totalCents.subtract(allocatedCents).intValueExact(); // 0 <= leftover < accounts
         List<Quota> byRemainder = new ArrayList<>(quotas);
-        byRemainder.sort(java.util.Comparator.comparing(Quota::remainder).reversed()
+        byRemainder.sort(java.util.Comparator.comparing(Quota::remainder)
+                .reversed()
                 .thenComparing(Quota::balance, java.util.Comparator.reverseOrder())
                 .thenComparingInt(Quota::order));
         java.util.Set<Integer> bumped = new java.util.HashSet<>();
@@ -199,16 +199,27 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
             BigDecimal accountTax = entry.getValue();
             if (accountTax.compareTo(BigDecimal.ZERO) <= 0) continue;
 
-            byte[] dedupKey = Idempotency.sha256(
-                "business:balance_tax:" + firm.getFirmId() + ":" + entry.getKey()
-                    + ":" + event.getPeriodStart().toEpochMilli()
-            );
+            byte[] dedupKey = Idempotency.sha256("business:balance_tax:" + firm.getFirmId() + ":" + entry.getKey() + ":"
+                    + event.getPeriodStart().toEpochMilli());
 
             TaxCollection collection = destinationAccountId != null
-                ? TaxCollection.toAccount(entry.getKey(), destinationAccountId, accountTax, TAX_TYPE,
-                    "Weekly Corporate Balance Tax", SYSTEM_UUID, PLUGIN_SYSTEM, dedupKey)
-                : TaxCollection.toDefaultAccount(entry.getKey(), accountTax, TAX_TYPE,
-                    "Weekly Corporate Balance Tax", SYSTEM_UUID, PLUGIN_SYSTEM, dedupKey);
+                    ? TaxCollection.toAccount(
+                            entry.getKey(),
+                            destinationAccountId,
+                            accountTax,
+                            TAX_TYPE,
+                            "Weekly Corporate Balance Tax",
+                            SYSTEM_UUID,
+                            PLUGIN_SYSTEM,
+                            dedupKey)
+                    : TaxCollection.toDefaultAccount(
+                            entry.getKey(),
+                            accountTax,
+                            TAX_TYPE,
+                            "Weekly Corporate Balance Tax",
+                            SYSTEM_UUID,
+                            PLUGIN_SYSTEM,
+                            dedupKey);
 
             collections.add(collection);
         }
@@ -219,7 +230,7 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
         Account account = treasuryApi.getGovernmentAccountByName(accountName);
         if (account == null) {
             logger.warning("Configured corporate tax destination '" + accountName
-                + "' not found in Treasury — falling back to Treasury's default tax account");
+                    + "' not found in Treasury — falling back to Treasury's default tax account");
             return null;
         }
         return account.getAccountId();

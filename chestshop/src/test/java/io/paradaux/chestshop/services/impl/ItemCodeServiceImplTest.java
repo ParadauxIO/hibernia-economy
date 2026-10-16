@@ -1,11 +1,27 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.mappers.ItemCodeMapper;
 import io.paradaux.chestshop.model.Item;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
 import io.paradaux.chestshop.utils.encoding.Base62;
+import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
@@ -13,24 +29,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Real item-code serialisation on MockBukkit: {@link ItemCodeServiceImpl} over a real
@@ -47,10 +45,14 @@ class ItemCodeServiceImplTest extends ServerTest {
         final Map<Integer, String> rows = new HashMap<>();
         int seq = 0;
 
-        @Override public void createTable() {}
-        @Override public void createCodeIndex() {}
+        @Override
+        public void createTable() {}
 
-        @Override public Integer findIdByBlob(String blob) {
+        @Override
+        public void createCodeIndex() {}
+
+        @Override
+        public Integer findIdByBlob(String blob) {
             for (Map.Entry<Integer, String> e : rows.entrySet()) {
                 if (e.getValue().equals(blob)) {
                     return e.getKey();
@@ -59,25 +61,30 @@ class ItemCodeServiceImplTest extends ServerTest {
             return null;
         }
 
-        @Override public void insert(Item item) {
+        @Override
+        public void insert(Item item) {
             int id = ++seq;
             rows.put(id, item.getBase64ItemCode());
             item.setId(id);
         }
 
-        @Override public String findBlobById(int id) {
+        @Override
+        public String findBlobById(int id) {
             return rows.get(id);
         }
 
-        @Override public void updateBlob(int id, String blob) {
+        @Override
+        public void updateBlob(int id, String blob) {
             rows.put(id, blob);
         }
 
-        @Override public List<Integer> findAllIds() {
+        @Override
+        public List<Integer> findAllIds() {
             return new ArrayList<>(rows.keySet());
         }
 
-        @Override public long count() {
+        @Override
+        public long count() {
             return rows.size();
         }
     }
@@ -122,15 +129,16 @@ class ItemCodeServiceImplTest extends ServerTest {
         String pristineCode = service.getItemCode(new ItemStack(Material.DIAMOND_SWORD));
 
         assertThat(damagedCode).isNotEqualTo(pristineCode);
-        assertThat(((Damageable) service.getFromCode(damagedCode).getItemMeta()).getDamage()).isEqualTo(25);
+        assertThat(((Damageable) service.getFromCode(damagedCode).getItemMeta()).getDamage())
+                .isEqualTo(25);
     }
 
     @Test
     void getItemCode_returnsNull_whenMapperThrows() {
         ItemCodeMapper boom = mock(ItemCodeMapper.class);
         when(boom.findIdByBlob(anyString())).thenThrow(new RuntimeException("db down"));
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(boom,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(boom, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
         assertThat(svc.getItemCode(item(Material.DIAMOND, 1))).isNull();
     }
 
@@ -279,8 +287,8 @@ class ItemCodeServiceImplTest extends ServerTest {
         String before = mapper.rows.get(1);
 
         org.bukkit.configuration.file.YamlConfiguration cfg = new org.bukkit.configuration.file.YamlConfiguration();
-        cfg.set("blob-encoding", 1);       // skip the blob migration
-        cfg.set("metadata-version", -5);   // below the current (-1) so the re-serialiser runs
+        cfg.set("blob-encoding", 1); // skip the blob migration
+        cfg.set("metadata-version", -5); // below the current (-1) so the re-serialiser runs
         cfg.save(new File(dataFolder, "version"));
 
         service.migrateIfNeeded();
@@ -366,8 +374,8 @@ class ItemCodeServiceImplTest extends ServerTest {
     void migrateBlobEncoding_returnsFalse_whenStoreScanThrows() {
         ItemCodeMapper boom = mock(ItemCodeMapper.class);
         when(boom.findAllIds()).thenThrow(new RuntimeException("db down"));
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(boom,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(boom, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
         svc.migrateIfNeeded(); // outer catch -> returns false; blob-encoding not recorded, no throw
         File versionFile = new File(dataFolder, "version");
         org.bukkit.configuration.file.YamlConfiguration cfg =
@@ -380,8 +388,8 @@ class ItemCodeServiceImplTest extends ServerTest {
         writeVersion(1, -5); // skip blob migration; trigger metadata re-serialisation
         ItemCodeMapper boom = mock(ItemCodeMapper.class);
         when(boom.findAllIds()).thenThrow(new RuntimeException("db down"));
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(boom,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(boom, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
         assertThatCode(svc::migrateIfNeeded).doesNotThrowAnyException();
         // The re-serialisation failed, so the metadata version is not advanced (retried next boot).
         assertThat(readVersion().getInt("metadata-version")).isEqualTo(-5);
@@ -424,7 +432,8 @@ class ItemCodeServiceImplTest extends ServerTest {
     void migrateIfNeeded_skipsBlobMigration_whenAlreadyAtPlainEncoding() {
         // Pre-write a version file at the plain blob-encoding + current metadata version.
         int metaVersion = new ItemStack(Material.STONE).serialize().containsKey("v")
-                ? (int) new ItemStack(Material.STONE).serialize().get("v") : -1;
+                ? (int) new ItemStack(Material.STONE).serialize().get("v")
+                : -1;
         org.bukkit.configuration.file.YamlConfiguration cfg = new org.bukkit.configuration.file.YamlConfiguration();
         cfg.set("blob-encoding", 1);
         cfg.set("metadata-version", metaVersion);
@@ -435,8 +444,8 @@ class ItemCodeServiceImplTest extends ServerTest {
         }
 
         ItemCodeMapper spy = mock(ItemCodeMapper.class);
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(spy,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(spy, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
         svc.migrateIfNeeded();
         // Already migrated + up to date: no blob scan, no re-serialise.
         verify(spy, never()).findAllIds();
@@ -459,9 +468,9 @@ class ItemCodeServiceImplTest extends ServerTest {
         // a known older version (0) is upgraded and the new version recorded.
         writeVersion(1, 0); // blob migration done; metadata-version 0 (>-1) and below the mocked 5
         mapper.rows.put(1, ItemCodeServiceImpl.encodeBlob("not: [valid: yaml")); // no "\nv: 5\n"
-        mapper.rows.put(2, ItemCodeServiceImpl.encodeBlob("x\nv: 5\n"));          // already at v5
-        try (org.mockito.MockedConstruction<ItemStack> mc = org.mockito.Mockito.mockConstruction(
-                ItemStack.class, (m, ctx) -> {
+        mapper.rows.put(2, ItemCodeServiceImpl.encodeBlob("x\nv: 5\n")); // already at v5
+        try (org.mockito.MockedConstruction<ItemStack> mc =
+                org.mockito.Mockito.mockConstruction(ItemStack.class, (m, ctx) -> {
                     when(m.serialize()).thenReturn(java.util.Map.of("v", 5));
                     when(m.getItemMeta()).thenReturn(null);
                 })) {
@@ -552,8 +561,8 @@ class ItemCodeServiceImplTest extends ServerTest {
         // ALLOWED arm of 345/346), returning the YAML which then decodes to the item. Re-use the
         // real ItemStack YAML the service produced so the round-trip yields a valid item.
         service.getItemCode(item(Material.STONE, 1)); // stores a plain-Base64 blob at id 1
-        String realYaml = new String(java.util.Base64.getDecoder().decode(mapper.rows.get(1)),
-                java.nio.charset.StandardCharsets.UTF_8);
+        String realYaml = new String(
+                java.util.Base64.getDecoder().decode(mapper.rows.get(1)), java.nio.charset.StandardCharsets.UTF_8);
 
         java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
         try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {

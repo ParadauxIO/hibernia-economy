@@ -219,7 +219,7 @@ tasks.jacocoTestReport {
         html.required.set(true)
     }
     classDirectories.setFrom(
-        files(classDirectories.files.map { fileTree(it) { exclude(jacocoExcludes) } })
+        files(classDirectories.files.map { fileTree(it) { exclude(jacocoExcludes) } }),
     )
 }
 
@@ -233,7 +233,7 @@ tasks.jacocoTestReport {
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
     classDirectories.setFrom(
-        files(classDirectories.files.map { fileTree(it) { exclude(jacocoExcludes) } })
+        files(classDirectories.files.map { fileTree(it) { exclude(jacocoExcludes) } }),
     )
     violationRules {
         rule {
@@ -261,19 +261,21 @@ tasks.named("check") { dependsOn(tasks.jacocoTestCoverageVerification) }
 // is a mis-priced or double-settled trade. Sign/inventory/UI plumbing stays under
 // the jacoco ratchet only.
 pitest {
-    targetClasses.set(listOf(
-        "io.paradaux.chestshop.utils.PriceUtil*",
-        "io.paradaux.chestshop.utils.QuantityUtil*",
-        "io.paradaux.chestshop.utils.NumberUtil*",
-        "io.paradaux.chestshop.services.impl.PartialFillCalculatorImpl*",
-        "io.paradaux.chestshop.services.impl.TradeValidatorImpl*",
-        "io.paradaux.chestshop.services.impl.TradeSettlementImpl*",
-        "io.paradaux.chestshop.services.impl.TradeContextFactoryImpl*",
-        "io.paradaux.chestshop.services.impl.TradeRecoveryService*",
-        "io.paradaux.chestshop.services.impl.EconomyServiceImpl*",
-        "io.paradaux.chestshop.services.impl.GoodsTransferImpl*",
-        "io.paradaux.chestshop.services.impl.TransactionServiceImpl*",
-    ))
+    targetClasses.set(
+        listOf(
+            "io.paradaux.chestshop.utils.PriceUtil*",
+            "io.paradaux.chestshop.utils.QuantityUtil*",
+            "io.paradaux.chestshop.utils.NumberUtil*",
+            "io.paradaux.chestshop.services.impl.PartialFillCalculatorImpl*",
+            "io.paradaux.chestshop.services.impl.TradeValidatorImpl*",
+            "io.paradaux.chestshop.services.impl.TradeSettlementImpl*",
+            "io.paradaux.chestshop.services.impl.TradeContextFactoryImpl*",
+            "io.paradaux.chestshop.services.impl.TradeRecoveryService*",
+            "io.paradaux.chestshop.services.impl.EconomyServiceImpl*",
+            "io.paradaux.chestshop.services.impl.GoodsTransferImpl*",
+            "io.paradaux.chestshop.services.impl.TransactionServiceImpl*",
+        ),
+    )
     // Ratchet a couple of points under the measured scores (2026-10: 88.7%
     // mutation score, 99% line coverage of the mutated classes; 80.4% before the
     // partial-fill tests). Raise as survivors are killed.

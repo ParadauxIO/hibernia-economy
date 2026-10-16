@@ -193,17 +193,37 @@ class TradeValidatorTest {
             Player client = player("Notch", UUID.randomUUID());
             when(config.isAllowFreeShops()).thenReturn(true);
             when(config.isAllowPartialTransactions()).thenReturn(true);
-            doAnswer(inv -> { ((PendingTransaction) inv.getArgument(0)).setCancelled(TransactionOutcome.NOT_ENOUGH_SPACE_IN_CHEST); return null; })
-                    .when(partialFill).adjustBuy(any());
+            doAnswer(inv -> {
+                        ((PendingTransaction) inv.getArgument(0))
+                                .setCancelled(TransactionOutcome.NOT_ENOUGH_SPACE_IN_CHEST);
+                        return null;
+                    })
+                    .when(partialFill)
+                    .adjustBuy(any());
 
-            validator.validate(pending(BUY, false, sign(location(world)), client, owner, mock(Inventory.class),
-                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5")));
+            validator.validate(pending(
+                    BUY,
+                    false,
+                    sign(location(world)),
+                    client,
+                    owner,
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5")));
             validator.clearNotificationCooldowns(ownerId); // e.g. the owner rejoined
-            validator.validate(pending(BUY, false, sign(location(world)), client, owner, mock(Inventory.class),
-                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5")));
+            validator.validate(pending(
+                    BUY,
+                    false,
+                    sign(location(world)),
+                    client,
+                    owner,
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5")));
 
             // Without the clear, the second notification would be swallowed by the 60s cooldown.
-            verify(ownerPlayer, org.mockito.Mockito.times(2)).sendMessage(any(net.kyori.adventure.text.Component.class));
+            verify(ownerPlayer, org.mockito.Mockito.times(2))
+                    .sendMessage(any(net.kyori.adventure.text.Component.class));
         }
     }
 

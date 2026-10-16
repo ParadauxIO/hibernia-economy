@@ -1,9 +1,9 @@
 package io.paradaux.hibernia.testsupport.db;
 
-import javax.sql.DataSource;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.sql.DataSource;
 
 /**
  * JVM-wide registry of migrated test databases, one per {@link TestDatabase}.
@@ -23,13 +23,16 @@ public final class TestDatabases {
     private static final Map<TestDatabase, DatabaseHandle> HANDLES = new ConcurrentHashMap<>();
 
     static {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> HANDLES.values().forEach(h -> {
-            try {
-                h.close();
-            } catch (Exception ignored) {
-                // JVM is exiting; nothing useful to do with a close failure.
-            }
-        }), "test-databases-shutdown"));
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(
+                        () -> HANDLES.values().forEach(h -> {
+                            try {
+                                h.close();
+                            } catch (Exception ignored) {
+                                // JVM is exiting; nothing useful to do with a close failure.
+                            }
+                        }),
+                        "test-databases-shutdown"));
     }
 
     private TestDatabases() {}

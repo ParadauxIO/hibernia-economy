@@ -1,12 +1,21 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.*;
+
 import com.google.inject.Guice;
-import io.paradaux.chestshop.guice.DatabaseModule;
 import io.paradaux.chestshop.guice.ChestShopDatabases;
+import io.paradaux.chestshop.guice.DatabaseModule;
 import io.paradaux.chestshop.mappers.TradeRecoveryMapper;
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.Transaction;
 import io.paradaux.chestshop.support.ServerTest;
+import java.math.BigDecimal;
+import java.nio.file.Path;
+import java.sql.DriverManager;
+import java.time.Instant;
+import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Sign;
@@ -15,18 +24,9 @@ import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.math.BigDecimal;
-import java.nio.file.Path;
-import java.sql.DriverManager;
-import java.time.Instant;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.Mockito.*;
-
 class TradeRecoveryServiceTest extends ServerTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     private Transaction trade() {
         Transaction trade = mock(Transaction.class);
@@ -39,14 +39,15 @@ class TradeRecoveryServiceTest extends ServerTest {
         var meta = stock.getItemMeta();
         meta.setDisplayName("Recovery gem");
         stock.setItemMeta(meta);
-        when(trade.getStock()).thenReturn(new ItemStack[]{stock});
+        when(trade.getStock()).thenReturn(new ItemStack[] {stock});
         return trade;
     }
 
     @Test
     void evidenceSurvivesClosingAndReopeningDatabase() throws Exception {
         var users = directory.resolve("users.db").toFile();
-        var injector = Guice.createInjector(new DatabaseModule(users, directory.resolve("items.db").toFile()));
+        var injector = Guice.createInjector(
+                new DatabaseModule(users, directory.resolve("items.db").toFile()));
         Transaction trade = trade();
         Sign sign = mock(Sign.class);
         var world = server.addSimpleWorld("shops");
@@ -56,17 +57,20 @@ class TradeRecoveryServiceTest extends ServerTest {
         injector.getInstance(ChestShopDatabases.class).close();
 
         try (var connection = DriverManager.getConnection("jdbc:sqlite:" + users);
-             var statement = connection.createStatement();
-             var rows = statement.executeQuery("SELECT * FROM trade_recovery")) {
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery("SELECT * FROM trade_recovery")) {
             assertThat(rows.next()).isTrue();
             assertThat(rows.getString("trade_id")).isEqualTo(trade.getTradeId().toString());
             assertThat(Instant.parse(rows.getString("recorded_at"))).isBeforeOrEqualTo(Instant.now());
             var evidence = new YamlConfiguration();
             evidence.loadFromString(rows.getString("evidence"));
-            assertThat(evidence.getString("player.uuid")).isEqualTo(trade.getClient().getUniqueId().toString());
-            assertThat(evidence.getString("owner.uuid")).isEqualTo(trade.getOwnerAccount().getUuid().toString());
+            assertThat(evidence.getString("player.uuid"))
+                    .isEqualTo(trade.getClient().getUniqueId().toString());
+            assertThat(evidence.getString("owner.uuid"))
+                    .isEqualTo(trade.getOwnerAccount().getUuid().toString());
             assertThat(evidence.getString("price")).isEqualTo("12.50");
-            assertThat(evidence.getString("sign.world-uuid")).isEqualTo(world.getUID().toString());
+            assertThat(evidence.getString("sign.world-uuid"))
+                    .isEqualTo(world.getUID().toString());
             assertThat(evidence.getInt("sign.z")).isEqualTo(-20);
             assertThat(evidence.getList("items")).isEqualTo(java.util.Arrays.asList(trade.getStock()));
             assertThat(rows.next()).isFalse();
@@ -93,16 +97,19 @@ class TradeRecoveryServiceTest extends ServerTest {
         evidence.loadFromString(evidenceText.getValue());
         assertThat(evidence.getInt("version")).isEqualTo(1);
         assertThat(evidence.getString("reason")).isEqualTo("GOODS_REVERSAL_FAILED_AFTER_SETTLEMENT_FAILURE");
-        assertThat(evidence.getString("player.uuid")).isEqualTo(trade.getClient().getUniqueId().toString());
+        assertThat(evidence.getString("player.uuid"))
+                .isEqualTo(trade.getClient().getUniqueId().toString());
         assertThat(evidence.getString("player.name")).isEqualTo("Buyer");
-        assertThat(evidence.getString("owner.uuid")).isEqualTo(trade.getOwnerAccount().getUuid().toString());
+        assertThat(evidence.getString("owner.uuid"))
+                .isEqualTo(trade.getOwnerAccount().getUuid().toString());
         assertThat(evidence.getString("owner.name")).isEqualTo("Owner");
         assertThat(evidence.getString("direction")).isEqualTo("SELL");
         assertThat(evidence.isBoolean("unlimited-owner")).isTrue();
         assertThat(evidence.getBoolean("unlimited-owner")).isTrue();
         assertThat(evidence.getString("price")).isEqualTo("12.50");
         assertThat(evidence.getLong("settlement-txn-id")).isEqualTo(4242L);
-        assertThat(evidence.getString("sign.world-uuid")).isEqualTo(world.getUID().toString());
+        assertThat(evidence.getString("sign.world-uuid"))
+                .isEqualTo(world.getUID().toString());
         assertThat(evidence.getString("sign.world-name")).isEqualTo("market");
         assertThat(evidence.isInt("sign.x")).isTrue();
         assertThat(evidence.getInt("sign.x")).isEqualTo(10);
@@ -149,7 +156,8 @@ class TradeRecoveryServiceTest extends ServerTest {
         Transaction trade = trade();
         when(trade.isUnlimitedOwner()).thenReturn(true);
         doThrow(new IllegalStateException("disk full")).when(mapper).insert(anyString(), anyString(), anyString());
-        assertThatCode(() -> new TradeRecoveryService(mapper).record(trade, new IllegalStateException("reverse failed")))
+        assertThatCode(() ->
+                        new TradeRecoveryService(mapper).record(trade, new IllegalStateException("reverse failed")))
                 .doesNotThrowAnyException();
         verify(mapper).insert(eq(trade.getTradeId().toString()), anyString(), contains("reverse failed"));
     }

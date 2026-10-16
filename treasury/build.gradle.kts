@@ -173,9 +173,11 @@ tasks {
         dependsOn(jacocoTestReport)
         // Same in-scope set as the report (coverageExcludes, defined once above).
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(coverageExcludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
         // A ratchet, not a target: a few points under the measured coverage so a
         // change that drops tests fails, without pushing anyone to write tests
@@ -207,9 +209,11 @@ tasks {
             html.required.set(true)
         }
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(coverageExcludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
     }
 
@@ -233,18 +237,22 @@ jacoco {
 // public API impls (Treasury/Tax/Market), the Vault adapter's money paths and the
 // Money/dedup utilities — never the command/listener/Guice glue.
 pitest {
-    targetClasses.set(listOf(
-        "io.paradaux.treasury.services.impl.*",
-        "io.paradaux.treasury.services.cache.*",
-        "io.paradaux.treasury.api.impl.*",
-        "io.paradaux.treasury.adapters.VaultEconomyAdapter*",
-        "io.paradaux.treasury.utils.*",
-    ))
-    excludedClasses.set(listOf(
-        // Bukkit/log4j glue (also outside the jacoco gate).
-        "io.paradaux.treasury.utils.CallingPluginDetector*",
-        "io.paradaux.treasury.utils.LoggingConfigurer*",
-    ))
+    targetClasses.set(
+        listOf(
+            "io.paradaux.treasury.services.impl.*",
+            "io.paradaux.treasury.services.cache.*",
+            "io.paradaux.treasury.api.impl.*",
+            "io.paradaux.treasury.adapters.VaultEconomyAdapter*",
+            "io.paradaux.treasury.utils.*",
+        ),
+    )
+    excludedClasses.set(
+        listOf(
+            // Bukkit/log4j glue (also outside the jacoco gate).
+            "io.paradaux.treasury.utils.CallingPluginDetector*",
+            "io.paradaux.treasury.utils.LoggingConfigurer*",
+        ),
+    )
     // DB ITs run under PIT and share one schema: one minion at a time (see the
     // convention plugin's header).
     threads.set(1)

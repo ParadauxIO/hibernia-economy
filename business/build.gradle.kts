@@ -192,18 +192,22 @@ tasks {
             html.required.set(true)
         }
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(coverageExcludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
     }
 
     jacocoTestCoverageVerification {
         dependsOn(jacocoTestReport)
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(coverageExcludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
         // A ratchet, not a target: a few points under the measured coverage so a
         // change that drops tests fails, without pushing anyone to write tests
@@ -233,11 +237,11 @@ tasks {
         val root = "io.paradaux.business.libs"
 
         relocate("com.google.inject", "$root.guice")
-        relocate("org.aopalliance",   "$root.org.aopalliance")
-        relocate("org.mybatis",       "$root.mybatis")
+        relocate("org.aopalliance", "$root.org.aopalliance")
+        relocate("org.mybatis", "$root.mybatis")
         relocate("com.zaxxer.hikari", "$root.hikari")
-        relocate("org.mariadb",       "$root.mariadb")
-        relocate("org.reflections",   "$root.reflections")
+        relocate("org.mariadb", "$root.mariadb")
+        relocate("org.reflections", "$root.reflections")
     }
 }
 
@@ -250,11 +254,13 @@ jacoco {
 // roles/staff/requests), the public BusinessApi and the validators — never the
 // command/listener/Guice glue.
 pitest {
-    targetClasses.set(listOf(
-        "io.paradaux.business.services.impl.*",
-        "io.paradaux.business.api.impl.*",
-        "io.paradaux.business.utils.*",
-    ))
+    targetClasses.set(
+        listOf(
+            "io.paradaux.business.services.impl.*",
+            "io.paradaux.business.api.impl.*",
+            "io.paradaux.business.utils.*",
+        ),
+    )
     // Same exclusion as `test` for the absent-API tags (they only pass on the
     // stripped classpaths of testWithoutCarbon / testWithoutPlaceholderApi).
     // DB ITs are left out for now: PIT runs each test in its own launcher

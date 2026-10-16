@@ -3,6 +3,8 @@ package io.paradaux.treasuryapi.testsupport;
 import io.paradaux.hibernia.testsupport.db.TestDatabase;
 import io.paradaux.hibernia.testsupport.db.TestDatabaseExtension;
 import io.paradaux.treasuryapi.mappers.typehandlers.UuidBinaryTypeHandler;
+import java.util.UUID;
+import javax.sql.DataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
@@ -13,9 +15,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.RegisterExtension;
-
-import javax.sql.DataSource;
-import java.util.UUID;
 
 /**
  * Base class for treasury-api-plugin mapper integration tests that hit a real
@@ -73,8 +72,8 @@ public abstract class IntegrationTestBase {
         if (existing != null) return existing;
         synchronized (IntegrationTestBase.class) {
             if (sharedFactory == null) {
-                Configuration cfg = new Configuration(new Environment(
-                        "test", new JdbcTransactionFactory(), dataSource));
+                Configuration cfg =
+                        new Configuration(new Environment("test", new JdbcTransactionFactory(), dataSource));
                 cfg.setMapUnderscoreToCamelCase(true);
                 // Same handler the production DatabaseModule registers — UUID
                 // columns are BINARY(16) and only round-trip with it present.

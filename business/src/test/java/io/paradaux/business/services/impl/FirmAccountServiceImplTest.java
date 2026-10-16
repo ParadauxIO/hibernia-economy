@@ -1,35 +1,5 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
-import io.paradaux.business.mappers.FirmAccountsMapper;
-import io.paradaux.business.mappers.FirmMapper;
-import io.paradaux.business.mappers.FirmRoleMapper;
-import io.paradaux.business.mappers.FirmStaffMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmAccount;
-import io.paradaux.business.model.FirmEmployee;
-import io.paradaux.business.model.FirmRolePermission;
-import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.services.FirmService;
-import io.paradaux.treasury.api.TreasuryApi;
-import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.economy.AccountMember;
-import io.paradaux.treasury.model.economy.AccountType;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.time.Instant;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,15 +10,55 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.mappers.FirmAccountsMapper;
+import io.paradaux.business.mappers.FirmMapper;
+import io.paradaux.business.mappers.FirmRoleMapper;
+import io.paradaux.business.mappers.FirmStaffMapper;
+import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.FirmAccount;
+import io.paradaux.business.model.FirmEmployee;
+import io.paradaux.business.model.FirmRolePermission;
+import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.services.FirmService;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.treasury.api.TreasuryApi;
+import io.paradaux.treasury.model.economy.Account;
+import io.paradaux.treasury.model.economy.AccountMember;
+import io.paradaux.treasury.model.economy.AccountType;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class FirmAccountServiceImplTest {
 
-    @Mock TreasuryApi treasury;
-    @Mock FirmAccountsMapper firmAccounts;
-    @Mock FirmMapper firms;
-    @Mock FirmStaffMapper staff;
-    @Mock FirmRoleMapper roles;
-    @Mock FirmService firmService;
+    @Mock
+    TreasuryApi treasury;
+
+    @Mock
+    FirmAccountsMapper firmAccounts;
+
+    @Mock
+    FirmMapper firms;
+
+    @Mock
+    FirmStaffMapper staff;
+
+    @Mock
+    FirmRoleMapper roles;
+
+    @Mock
+    FirmService firmService;
 
     private FirmAccountServiceImpl svc;
 
@@ -73,8 +83,7 @@ class FirmAccountServiceImplTest {
     @Test
     void createAccount_unknownFirm_throws() {
         when(firms.getFirmById(1)).thenReturn(null);
-        assertThatThrownBy(() -> svc.createAccount(1, "Sub", actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.createAccount(1, "Sub", actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -89,8 +98,7 @@ class FirmAccountServiceImplTest {
     void createAccount_requiresProprietor() {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(false);
-        assertThatThrownBy(() -> svc.createAccount(1, "Sub", actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.createAccount(1, "Sub", actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -100,7 +108,8 @@ class FirmAccountServiceImplTest {
 
         Account acc = new Account();
         acc.setAccountId(99);
-        when(treasury.createAccount(eq(AccountType.BUSINESS), eq(actor), eq("Sub"))).thenReturn(acc);
+        when(treasury.createAccount(eq(AccountType.BUSINESS), eq(actor), eq("Sub")))
+                .thenReturn(acc);
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true); // for syncAccountMembers below
 
         // staff list empty so sync is just owner
@@ -120,11 +129,12 @@ class FirmAccountServiceImplTest {
 
     @Test
     void listAccounts_resolvesEachAccount() {
-        when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of(
-                new FirmAccount(1, 10, null),
-                new FirmAccount(1, 11, null)));
-        Account a1 = new Account(); a1.setAccountId(10);
-        Account a2 = new Account(); a2.setAccountId(11);
+        when(firmAccounts.listAccountsByFirm(1))
+                .thenReturn(List.of(new FirmAccount(1, 10, null), new FirmAccount(1, 11, null)));
+        Account a1 = new Account();
+        a1.setAccountId(10);
+        Account a2 = new Account();
+        a2.setAccountId(11);
         // One batch read instead of one getAccountById per account (ADT-36).
         when(treasury.getAccountsByIds(List.of(10, 11))).thenReturn(Map.of(10, a1, 11, a2));
 
@@ -136,16 +146,14 @@ class FirmAccountServiceImplTest {
     @Test
     void setDefaultAccount_unknownFirm_throws() {
         when(firms.getFirmById(1)).thenReturn(null);
-        assertThatThrownBy(() -> svc.setDefaultAccount(1, 10, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.setDefaultAccount(1, 10, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
     void setDefaultAccount_requiresProprietor() {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(false);
-        assertThatThrownBy(() -> svc.setDefaultAccount(1, 10, actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.setDefaultAccount(1, 10, actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -153,8 +161,7 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(false);
-        assertThatThrownBy(() -> svc.setDefaultAccount(1, 10, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.setDefaultAccount(1, 10, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -180,8 +187,7 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(f);
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
-        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -201,16 +207,14 @@ class FirmAccountServiceImplTest {
     @Test
     void archiveAccount_unknownFirm_throws() {
         when(firms.getFirmById(1)).thenReturn(null);
-        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
     void archiveAccount_notProprietor_throws() {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(false);
-        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -218,8 +222,7 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(false);
-        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.archiveAccount(1, 10, actor)).isInstanceOf(BadCommandException.class);
     }
 
     // ---------- syncAccountMembers ----------
@@ -227,16 +230,14 @@ class FirmAccountServiceImplTest {
     @Test
     void syncAccountMembers_unknownFirm_throws() {
         when(firms.getFirmById(1)).thenReturn(null);
-        assertThatThrownBy(() -> svc.syncAccountMembers(1, 99))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.syncAccountMembers(1, 99)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
     void syncAccountMembers_unknownAccount_throws() {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
-        assertThatThrownBy(() -> svc.syncAccountMembers(1, 99))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.syncAccountMembers(1, 99)).isInstanceOf(BadCommandException.class);
     }
 
     /**
@@ -255,14 +256,22 @@ class FirmAccountServiceImplTest {
             authorizers.addAll(initialAuthorizers);
             when(treasury.getMembers(accountId)).thenAnswer(i -> rows(accountId, members));
             when(treasury.getAuthorizers(accountId)).thenAnswer(i -> rows(accountId, authorizers));
-            lenient().doAnswer(i -> write(members.add(i.getArgument(1))))
-                    .when(treasury).addMember(eq(accountId), any(), any());
-            lenient().doAnswer(i -> write(authorizers.add(i.getArgument(1))))
-                    .when(treasury).addAuthorizer(eq(accountId), any(), any());
-            lenient().doAnswer(i -> write(members.remove(i.<UUID>getArgument(1))))
-                    .when(treasury).removeMember(eq(accountId), any());
-            lenient().doAnswer(i -> write(authorizers.remove(i.<UUID>getArgument(1))))
-                    .when(treasury).removeAuthorizer(eq(accountId), any());
+            lenient()
+                    .doAnswer(i -> write(members.add(i.getArgument(1))))
+                    .when(treasury)
+                    .addMember(eq(accountId), any(), any());
+            lenient()
+                    .doAnswer(i -> write(authorizers.add(i.getArgument(1))))
+                    .when(treasury)
+                    .addAuthorizer(eq(accountId), any(), any());
+            lenient()
+                    .doAnswer(i -> write(members.remove(i.<UUID>getArgument(1))))
+                    .when(treasury)
+                    .removeMember(eq(accountId), any());
+            lenient()
+                    .doAnswer(i -> write(authorizers.remove(i.<UUID>getArgument(1))))
+                    .when(treasury)
+                    .removeAuthorizer(eq(accountId), any());
         }
 
         private Object write(boolean changed) {
@@ -273,7 +282,9 @@ class FirmAccountServiceImplTest {
         }
 
         private List<AccountMember> rows(int accountId, Set<UUID> uuids) {
-            return uuids.stream().map(u -> new AccountMember(accountId, u, owner, Instant.EPOCH)).toList();
+            return uuids.stream()
+                    .map(u -> new AccountMember(accountId, u, owner, Instant.EPOCH))
+                    .toList();
         }
     }
 
@@ -285,17 +296,14 @@ class FirmAccountServiceImplTest {
 
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
-        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(List.of(
-                emp(adminUuid, "Admin"),
-                emp(financeUuid, "Finance"),
-                emp(otherUuid, "Default")
-        ));
-        when(roles.getFirmRolePermissions(1, "Admin")).thenReturn(List.of(
-                new FirmRolePermission(1, "Admin", RolePermission.ADMIN)));
-        when(roles.getFirmRolePermissions(1, "Finance")).thenReturn(List.of(
-                new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
-        when(roles.getFirmRolePermissions(1, "Default")).thenReturn(List.of(
-                new FirmRolePermission(1, "Default", RolePermission.DEFAULT)));
+        when(staff.listCurrentEmployeesByFirm(1))
+                .thenReturn(List.of(emp(adminUuid, "Admin"), emp(financeUuid, "Finance"), emp(otherUuid, "Default")));
+        when(roles.getFirmRolePermissions(1, "Admin"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Admin", RolePermission.ADMIN)));
+        when(roles.getFirmRolePermissions(1, "Finance"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
+        when(roles.getFirmRolePermissions(1, "Default"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Default", RolePermission.DEFAULT)));
         AccountAccess access = new AccountAccess(99, Set.of(), Set.of());
 
         svc.syncAccountMembers(1, 99);
@@ -333,10 +341,10 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true);
         when(staff.listCurrentEmployeesByFirm(1)).thenReturn(List.of(emp(adminUuid, "Admin"), emp(demoted, "Finance")));
-        when(roles.getFirmRolePermissions(1, "Admin")).thenReturn(List.of(
-                new FirmRolePermission(1, "Admin", RolePermission.ADMIN)));
-        when(roles.getFirmRolePermissions(1, "Finance")).thenReturn(List.of(
-                new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
+        when(roles.getFirmRolePermissions(1, "Admin"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Admin", RolePermission.ADMIN)));
+        when(roles.getFirmRolePermissions(1, "Finance"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
         AccountAccess access = new AccountAccess(99, Set.of(owner, demoted), Set.of(owner, demoted));
 
         svc.syncAccountMembers(1, 99);
@@ -357,9 +365,8 @@ class FirmAccountServiceImplTest {
         Firm f = firm(1);
         f.setProprietorUuid(newProprietor.toString());
         when(firms.getFirmById(1)).thenReturn(f);
-        when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of(
-                new FirmAccount(1, 10, null),
-                new FirmAccount(1, 11, null)));
+        when(firmAccounts.listAccountsByFirm(1))
+                .thenReturn(List.of(new FirmAccount(1, 10, null), new FirmAccount(1, 11, null)));
         when(firmAccounts.isFirmAccount(eq(1), anyInt())).thenReturn(true);
         when(staff.listCurrentEmployeesByFirm(1)).thenReturn(List.of());
         when(treasury.getMembers(anyInt())).thenReturn(List.of());
@@ -385,9 +392,8 @@ class FirmAccountServiceImplTest {
 
     @Test
     void syncAllFirmAccounts_callsSyncForEach() {
-        when(firmAccounts.listAccountsByFirm(1)).thenReturn(List.of(
-                new FirmAccount(1, 10, null),
-                new FirmAccount(1, 11, null)));
+        when(firmAccounts.listAccountsByFirm(1))
+                .thenReturn(List.of(new FirmAccount(1, 10, null), new FirmAccount(1, 11, null)));
         // syncAccountMembers will require firm + isFirmAccount
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
@@ -463,7 +469,8 @@ class FirmAccountServiceImplTest {
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
         org.mockito.Mockito.doThrow(new IllegalStateException("UUID must be a member before being made an authorizer"))
-                .when(treasury).addAuthorizer(10, auth, actor);
+                .when(treasury)
+                .addAuthorizer(10, auth, actor);
 
         assertThatThrownBy(() -> svc.addAuthorizerToAccount(1, 10, auth, actor))
                 .isInstanceOf(BadCommandException.class);
@@ -511,8 +518,7 @@ class FirmAccountServiceImplTest {
     @Test
     void getAccountMembers_validatesAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
-        assertThatThrownBy(() -> svc.getAccountMembers(1, 99))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.getAccountMembers(1, 99)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -526,8 +532,7 @@ class FirmAccountServiceImplTest {
     @Test
     void getAccountAuthorizers_validatesAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
-        assertThatThrownBy(() -> svc.getAccountAuthorizers(1, 99))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.getAccountAuthorizers(1, 99)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -561,9 +566,19 @@ class FirmAccountServiceImplTest {
 
     @Test
     void shopAlias_rejectsInvalidNames() {
-        for (String alias : List.of("", "123", "acme1", "ac1me", "acme-shop", "acme_shop", "1acme", "My Shop", "@acme", "abcdefghijklm", "<red>")) {
-            assertThatThrownBy(() -> svc.setShopAlias(1, 7, alias, actor))
-                    .isInstanceOf(BadCommandException.class);
+        for (String alias : List.of(
+                "",
+                "123",
+                "acme1",
+                "ac1me",
+                "acme-shop",
+                "acme_shop",
+                "1acme",
+                "My Shop",
+                "@acme",
+                "abcdefghijklm",
+                "<red>")) {
+            assertThatThrownBy(() -> svc.setShopAlias(1, 7, alias, actor)).isInstanceOf(BadCommandException.class);
             assertThat(svc.resolveShopAlias(alias)).isNull();
         }
         assertThat(svc.resolveShopAlias(null)).isNull();
@@ -573,23 +588,19 @@ class FirmAccountServiceImplTest {
     @Test
     void shopAlias_rejectsNonOwnerAndForeignAccount() {
         when(firms.getFirmById(1)).thenReturn(firm(1));
-        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor)).isInstanceOf(NoPermissionException.class);
         when(firmService.isProprietor(1, actor)).thenReturn(true);
-        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor)).isInstanceOf(BadCommandException.class);
         verify(firmAccounts, never()).setShopAlias(anyInt(), anyInt(), any());
     }
 
     @Test
     void shopAlias_missingOrArchivedFirmCannotManage() {
-        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor)).isInstanceOf(BadCommandException.class);
         Firm archived = firm(1);
         archived.setArchived(true);
         when(firms.getFirmById(1)).thenReturn(archived);
-        assertThatThrownBy(() -> svc.setShopAlias(1, 7, null, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, null, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -612,15 +623,19 @@ class FirmAccountServiceImplTest {
         when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
         when(treasury.getAccountById(7)).thenReturn(new Account());
         when(firmAccounts.getShopAliasReservation("acme")).thenReturn(7);
-        when(firmAccounts.setShopAlias(1, 7, "acme")).thenThrow(
-                new org.apache.ibatis.exceptions.PersistenceException(new java.sql.SQLException("duplicate", "23000", 1062)));
+        when(firmAccounts.setShopAlias(1, 7, "acme"))
+                .thenThrow(new org.apache.ibatis.exceptions.PersistenceException(
+                        new java.sql.SQLException("duplicate", "23000", 1062)));
         assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
-                .isInstanceOf(BadCommandException.class).hasMessageContaining("reserved");
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("reserved");
         org.mockito.Mockito.doThrow(new org.apache.ibatis.exceptions.PersistenceException("offline"))
-                .when(firmAccounts).setShopAlias(1, 7, "acme");
+                .when(firmAccounts)
+                .setShopAlias(1, 7, "acme");
         assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
                 .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
     }
+
     @Test
     void shopAlias_cannotReassignPreviouslyUsedName() {
         when(firms.getFirmById(1)).thenReturn(firm(1));
@@ -629,8 +644,8 @@ class FirmAccountServiceImplTest {
         when(treasury.getAccountById(7)).thenReturn(new Account());
         when(firmAccounts.getShopAliasReservation("acme")).thenReturn(99);
         assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
-                .isInstanceOf(BadCommandException.class).hasMessageContaining("reserved");
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("reserved");
         verify(firmAccounts, never()).setShopAlias(anyInt(), anyInt(), any());
     }
-
 }

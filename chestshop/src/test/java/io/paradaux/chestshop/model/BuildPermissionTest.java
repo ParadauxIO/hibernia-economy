@@ -1,11 +1,11 @@
 package io.paradaux.chestshop.model;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 /**
  * The {@link BuildPermission} decision: allowed by default, and the allow/disallow toggles

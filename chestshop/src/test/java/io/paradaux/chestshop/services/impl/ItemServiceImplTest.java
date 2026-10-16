@@ -1,17 +1,19 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.mappers.ItemCodeMapper;
 import io.paradaux.chestshop.model.Item;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.CustomItemResolver;
 import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
-import org.bukkit.Material;
-import org.bukkit.inventory.ItemStack;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,14 +22,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.bukkit.Material;
+import org.bukkit.inventory.ItemStack;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Real end-to-end item-string resolution on MockBukkit: {@link ItemServiceImpl} over the real
@@ -47,19 +46,47 @@ class ItemServiceImplTest extends ServerTest {
     private static final class FakeMapper implements ItemCodeMapper {
         final Map<Integer, String> rows = new HashMap<>();
         int seq = 0;
-        @Override public void createTable() {}
-        @Override public void createCodeIndex() {}
-        @Override public Integer findIdByBlob(String blob) {
+
+        @Override
+        public void createTable() {}
+
+        @Override
+        public void createCodeIndex() {}
+
+        @Override
+        public Integer findIdByBlob(String blob) {
             for (Map.Entry<Integer, String> e : rows.entrySet()) {
                 if (e.getValue().equals(blob)) return e.getKey();
             }
             return null;
         }
-        @Override public void insert(Item item) { int id = ++seq; rows.put(id, item.getBase64ItemCode()); item.setId(id); }
-        @Override public String findBlobById(int id) { return rows.get(id); }
-        @Override public void updateBlob(int id, String blob) { rows.put(id, blob); }
-        @Override public List<Integer> findAllIds() { return new ArrayList<>(rows.keySet()); }
-        @Override public long count() { return rows.size(); }
+
+        @Override
+        public void insert(Item item) {
+            int id = ++seq;
+            rows.put(id, item.getBase64ItemCode());
+            item.setId(id);
+        }
+
+        @Override
+        public String findBlobById(int id) {
+            return rows.get(id);
+        }
+
+        @Override
+        public void updateBlob(int id, String blob) {
+            rows.put(id, blob);
+        }
+
+        @Override
+        public List<Integer> findAllIds() {
+            return new ArrayList<>(rows.keySet());
+        }
+
+        @Override
+        public long count() {
+            return rows.size();
+        }
     }
 
     private File dataFolder;
@@ -72,7 +99,8 @@ class ItemServiceImplTest extends ServerTest {
     }
 
     private ItemServiceImpl newService() {
-        ItemCodeServiceImpl codes = new ItemCodeServiceImpl(new FakeMapper(), new MaterialServiceImpl(config), dataFolder);
+        ItemCodeServiceImpl codes =
+                new ItemCodeServiceImpl(new FakeMapper(), new MaterialServiceImpl(config), dataFolder);
         MaterialServiceImpl material = new MaterialServiceImpl(config);
         InventoryServiceImpl inventory = new InventoryServiceImpl(config, material);
         return new ItemServiceImpl(codes, material, inventory, dataFolder);
@@ -230,7 +258,7 @@ class ItemServiceImplTest extends ServerTest {
 
     @Test
     void getItemList_joinsCountsAndNames() {
-        String list = newService().getItemList(new ItemStack[]{item(Material.DIAMOND, 3), item(Material.DIRT, 2)});
+        String list = newService().getItemList(new ItemStack[] {item(Material.DIAMOND, 3), item(Material.DIRT, 2)});
         assertThat(list).contains("3 Diamond").contains("2 Dirt");
     }
 
@@ -251,7 +279,7 @@ class ItemServiceImplTest extends ServerTest {
         // A wide material name shortened by a small amount still resolves back to the same item.
         ItemServiceImpl svc = newService();
         ItemStack sword = item(Material.NETHERITE_SWORD, 1);
-        String full = svc.getName(sword, 0);       // "Netherite_Sword#1"
+        String full = svc.getName(sword, 0); // "Netherite_Sword#1"
         int width = io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth(full);
         String shortened = svc.getName(sword, width - 4); // minor shortening, still reversible
         assertThat(shortened).contains("#1");
@@ -401,7 +429,8 @@ class ItemServiceImplTest extends ServerTest {
         // -> the default-file save throws IOException, which loadAliases logs and swallows (195/196).
         File blocker = new File(dataFolder, "blocker");
         Files.writeString(blocker.toPath(), "x", StandardCharsets.UTF_8);
-        ItemCodeServiceImpl codes = new ItemCodeServiceImpl(new FakeMapper(), new MaterialServiceImpl(config), dataFolder);
+        ItemCodeServiceImpl codes =
+                new ItemCodeServiceImpl(new FakeMapper(), new MaterialServiceImpl(config), dataFolder);
         MaterialServiceImpl material = new MaterialServiceImpl(config);
         InventoryServiceImpl inventory = new InventoryServiceImpl(config, material);
         ItemServiceImpl svc = new ItemServiceImpl(codes, material, inventory, blocker);

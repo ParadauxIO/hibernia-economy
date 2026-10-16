@@ -1,10 +1,9 @@
 package io.paradaux.chestshop.utils;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class BusinessAccountUtilTest {
 
@@ -17,7 +16,8 @@ class BusinessAccountUtilTest {
 
     @Test
     void isBusinessUuid_trueForAnEncodedBusinessUuid() {
-        assertThat(BusinessAccountUtil.isBusinessUuid(BusinessAccountUtil.toBusinessUuid(7))).isTrue();
+        assertThat(BusinessAccountUtil.isBusinessUuid(BusinessAccountUtil.toBusinessUuid(7)))
+                .isTrue();
     }
 
     @Test

@@ -1,19 +1,18 @@
 package io.paradaux.treasury.api.impl;
 
-import io.paradaux.treasury.api.market.SalesQuery;
-import io.paradaux.treasury.mappers.ChestShopSalesReadMapper;
-import org.junit.jupiter.api.Test;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+
+import io.paradaux.treasury.api.market.SalesQuery;
+import io.paradaux.treasury.mappers.ChestShopSalesReadMapper;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import org.junit.jupiter.api.Test;
 
 /** The windowDays lower bound is derived from the injected {@link Clock}. */
 class SalesQueryApiImplClockTest {

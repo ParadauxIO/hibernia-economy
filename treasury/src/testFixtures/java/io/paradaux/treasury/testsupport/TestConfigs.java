@@ -2,11 +2,10 @@ package io.paradaux.treasury.testsupport;
 
 import io.paradaux.treasury.model.config.BytebinConfiguration;
 import io.paradaux.treasury.model.config.DiscordWebhookConfiguration;
-import io.paradaux.treasury.model.config.FineWebhookConfiguration;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
+import io.paradaux.treasury.model.config.FineWebhookConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 
@@ -97,7 +96,9 @@ public final class TestConfigs {
             f.set(target, value);
         } catch (Exception e) {
             throw new RuntimeException(
-                    "Failed to set field " + fieldName + " on " + target.getClass().getSimpleName(), e);
+                    "Failed to set field " + fieldName + " on "
+                            + target.getClass().getSimpleName(),
+                    e);
         }
     }
 }

@@ -1,5 +1,9 @@
 package io.paradaux.chestshop.services.impl;
 
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.PendingTransaction;
 import io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome;
@@ -8,23 +12,18 @@ import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.PartialFillCalculator;
 import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
-import org.bukkit.Material;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Partial-fill maths against real behaviour: a live MockBukkit server, real {@link ItemStack}s and
@@ -96,9 +95,15 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
         return trade(SELL, stock, price, ownerInv, clientInv, ownerInv == null);
     }
 
-    private PendingTransaction trade(TransactionType type, ItemStack[] stock, String price,
-                                     Inventory ownerInv, Inventory clientInv, boolean unlimited) {
-        return new PendingTransaction(ownerInv, clientInv, stock, money(price), client, ownerAccount, null, type, unlimited);
+    private PendingTransaction trade(
+            TransactionType type,
+            ItemStack[] stock,
+            String price,
+            Inventory ownerInv,
+            Inventory clientInv,
+            boolean unlimited) {
+        return new PendingTransaction(
+                ownerInv, clientInv, stock, money(price), client, ownerAccount, null, type, unlimited);
     }
 
     private void wallet(UUID who, String amount) {
@@ -123,8 +128,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void buy_oneCentShort_dropsToOneFewerItemAtTheExactScaledPrice() {
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 10)), "10.00",
-                chestWith(27, item(Material.STONE, 10)), slots(9));
+        PendingTransaction ctx =
+                buy(stacks(item(Material.STONE, 10)), "10.00", chestWith(27, item(Material.STONE, 10)), slots(9));
         wallet(client.getUniqueId(), "9.99"); // 1.00/item → affords 9
 
         calc.adjustBuy(ctx);
@@ -136,8 +141,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void buy_affordsExactlyOneItem_fillsOne() {
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 10)), "100.00",
-                chestWith(27, item(Material.STONE, 10)), slots(9));
+        PendingTransaction ctx =
+                buy(stacks(item(Material.STONE, 10)), "100.00", chestWith(27, item(Material.STONE, 10)), slots(9));
         wallet(client.getUniqueId(), "10.00"); // 10.00/item → exactly one
 
         calc.adjustBuy(ctx);
@@ -163,8 +168,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     @Test
     void buy_partialFill_roundsARepeatingPerItemPriceToPricePrecision() {
         // 10.00 / 3 = 3.333…/item; 7.00 affords 2 → 6.666… → 6.67 at 2dp.
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 3)), "10.00",
-                chestWith(27, item(Material.STONE, 3)), slots(9));
+        PendingTransaction ctx =
+                buy(stacks(item(Material.STONE, 3)), "10.00", chestWith(27, item(Material.STONE, 3)), slots(9));
         wallet(client.getUniqueId(), "7.00");
 
         calc.adjustBuy(ctx);
@@ -176,8 +181,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     @Test
     void buy_partialFill_roundsAnExactHalfCentUp() {
         // 0.05 / 2 = 0.025/item; 0.04 affords 1 → 0.025 → 0.03 (HALF_UP, not banker's 0.02).
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 2)), "0.05",
-                chestWith(27, item(Material.STONE, 2)), slots(9));
+        PendingTransaction ctx =
+                buy(stacks(item(Material.STONE, 2)), "0.05", chestWith(27, item(Material.STONE, 2)), slots(9));
         wallet(client.getUniqueId(), "0.04");
 
         calc.adjustBuy(ctx);
@@ -191,8 +196,10 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     @Test
     void buy_affordableCountSpanningStacks_keepsFullStackAndTrimsTheNext() {
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 64), item(Material.STONE, 64), item(Material.STONE, 64)), "192.00",
-                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 64), item(Material.STONE, 64)), slots(9));
+                stacks(item(Material.STONE, 64), item(Material.STONE, 64), item(Material.STONE, 64)),
+                "192.00",
+                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 64), item(Material.STONE, 64)),
+                slots(9));
         wallet(client.getUniqueId(), "100.00");
 
         calc.adjustBuy(ctx);
@@ -205,8 +212,10 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_affordableCount_mergesPartialStacksIntoOne() {
         // 30 + 30 (+10 unaffordable): the two partial stacks merge into a single 60.
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 30), item(Material.STONE, 30), item(Material.STONE, 10)), "70.00",
-                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 6)), slots(9));
+                stacks(item(Material.STONE, 30), item(Material.STONE, 30), item(Material.STONE, 10)),
+                "70.00",
+                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 6)),
+                slots(9));
         wallet(client.getUniqueId(), "60.00");
 
         calc.adjustBuy(ctx);
@@ -219,8 +228,10 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_affordableCount_overflowingAMergeStartsANewStack() {
         // 40 + 40 merge → 80 > 64: tops the first up to 64 and carries 16 into a new stack.
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 40), item(Material.STONE, 40), item(Material.STONE, 40)), "120.00",
-                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 56)), slots(9));
+                stacks(item(Material.STONE, 40), item(Material.STONE, 40), item(Material.STONE, 40)),
+                "120.00",
+                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 56)),
+                slots(9));
         wallet(client.getUniqueId(), "80.00");
 
         calc.adjustBuy(ctx);
@@ -234,9 +245,14 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
         // 64 | 10 | 20 (| 5 unaffordable): the 20 must merge into the partial 10, not bounce off
         // the full 64 into a third stack.
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 64), item(Material.STONE, 10), item(Material.STONE, 20), item(Material.STONE, 5)),
+                stacks(
+                        item(Material.STONE, 64),
+                        item(Material.STONE, 10),
+                        item(Material.STONE, 20),
+                        item(Material.STONE, 5)),
                 "99.00",
-                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 35)), slots(9));
+                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 35)),
+                slots(9));
         wallet(client.getUniqueId(), "94.00");
 
         calc.adjustBuy(ctx);
@@ -247,8 +263,11 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void buy_affordableCount_neverMergesDifferentMaterials() {
-        PendingTransaction ctx = buy(stacks(item(Material.DIRT, 10), item(Material.STONE, 10)), "20.00",
-                chestWith(27, item(Material.DIRT, 10), item(Material.STONE, 10)), slots(9));
+        PendingTransaction ctx = buy(
+                stacks(item(Material.DIRT, 10), item(Material.STONE, 10)),
+                "20.00",
+                chestWith(27, item(Material.DIRT, 10), item(Material.STONE, 10)),
+                slots(9));
         wallet(client.getUniqueId(), "15.00");
 
         calc.adjustBuy(ctx);
@@ -261,8 +280,13 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_affordableCount_respectsMaxStackSize16() {
         assertThat(new ItemStack(Material.ENDER_PEARL).getMaxStackSize()).isEqualTo(16);
         PendingTransaction ctx = buy(
-                stacks(item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 16)), "48.00",
-                chestWith(27, item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 16)),
+                stacks(item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 16)),
+                "48.00",
+                chestWith(
+                        27,
+                        item(Material.ENDER_PEARL, 16),
+                        item(Material.ENDER_PEARL, 16),
+                        item(Material.ENDER_PEARL, 16)),
                 slots(9));
         wallet(client.getUniqueId(), "20.00");
 
@@ -276,8 +300,16 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_affordableCount_respectsMaxStackSize1() {
         assertThat(new ItemStack(Material.DIAMOND_SWORD).getMaxStackSize()).isEqualTo(1);
         PendingTransaction ctx = buy(
-                stacks(item(Material.DIAMOND_SWORD, 1), item(Material.DIAMOND_SWORD, 1), item(Material.DIAMOND_SWORD, 1)), "30.00",
-                chestWith(27, item(Material.DIAMOND_SWORD, 1), item(Material.DIAMOND_SWORD, 1), item(Material.DIAMOND_SWORD, 1)),
+                stacks(
+                        item(Material.DIAMOND_SWORD, 1),
+                        item(Material.DIAMOND_SWORD, 1),
+                        item(Material.DIAMOND_SWORD, 1)),
+                "30.00",
+                chestWith(
+                        27,
+                        item(Material.DIAMOND_SWORD, 1),
+                        item(Material.DIAMOND_SWORD, 1),
+                        item(Material.DIAMOND_SWORD, 1)),
                 slots(9));
         wallet(client.getUniqueId(), "20.00");
 
@@ -291,8 +323,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void buy_chestPartlyStocked_scalesStockAndPriceToWhatTheChestHolds() {
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 10)), "10.00",
-                chestWith(27, item(Material.STONE, 4)), slots(9));
+        PendingTransaction ctx =
+                buy(stacks(item(Material.STONE, 10)), "10.00", chestWith(27, item(Material.STONE, 4)), slots(9));
         wallet(client.getUniqueId(), "1000.00");
 
         calc.adjustBuy(ctx);
@@ -304,8 +336,11 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void buy_chestStockAcrossStacks_isRestackedToTheHeldCount() {
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 64), item(Material.STONE, 64)), "128.00",
-                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 6)), slots(9));
+        PendingTransaction ctx = buy(
+                stacks(item(Material.STONE, 64), item(Material.STONE, 64)),
+                "128.00",
+                chestWith(27, item(Material.STONE, 64), item(Material.STONE, 6)),
+                slots(9));
         wallet(client.getUniqueId(), "1000.00");
 
         calc.adjustBuy(ctx);
@@ -339,8 +374,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     @Test
     void buy_onlyPartialStackRoom_fillsExactlyTheFreeSpaceInIt() {
         // A 40-stack has 24 free and there are no empty slots: 30 requested → 24.
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 30)), "30.00", null,
-                slots(0, item(Material.STONE, 40)));
+        PendingTransaction ctx =
+                buy(stacks(item(Material.STONE, 30)), "30.00", null, slots(0, item(Material.STONE, 40)));
 
         calc.adjustBuy(ctx);
 
@@ -351,8 +386,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void buy_partialStacksOfAnotherMaterial_offerNoRoom() {
-        PendingTransaction ctx = buy(stacks(item(Material.STONE, 10)), "10.00", null,
-                slots(0, item(Material.DIRT, 40)));
+        PendingTransaction ctx =
+                buy(stacks(item(Material.STONE, 10)), "10.00", null, slots(0, item(Material.DIRT, 40)));
 
         calc.adjustBuy(ctx);
 
@@ -363,8 +398,14 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_partialStackPlusEmptySlots_capsAtTheirCombinedCapacity() {
         // 24 free in the 40-stack + 2 empty slots × 64 = 152 of the 200 requested.
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 64), item(Material.STONE, 64), item(Material.STONE, 64), item(Material.STONE, 8)),
-                "200.00", null, slots(2, item(Material.STONE, 40)));
+                stacks(
+                        item(Material.STONE, 64),
+                        item(Material.STONE, 64),
+                        item(Material.STONE, 64),
+                        item(Material.STONE, 8)),
+                "200.00",
+                null,
+                slots(2, item(Material.STONE, 40)));
 
         calc.adjustBuy(ctx);
 
@@ -376,9 +417,16 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_itemTypeNeedingExactlyTheEmptySlotsLeft_isNotInflatedToFillThem() {
         // STONE 100 needs exactly the 2 empty slots → stays 100 (not 128); DIRT then has no room.
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 64), item(Material.STONE, 36),
-                        item(Material.DIRT, 64), item(Material.DIRT, 64), item(Material.DIRT, 64), item(Material.DIRT, 8)),
-                "300.00", null, slots(2));
+                stacks(
+                        item(Material.STONE, 64),
+                        item(Material.STONE, 36),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 8)),
+                "300.00",
+                null,
+                slots(2));
 
         calc.adjustBuy(ctx);
 
@@ -390,9 +438,16 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_mixedTypes_shareTheEmptySlotsInOrder() {
         // 3 empty slots: STONE 100 takes 2, DIRT gets the 1 left → 64 of its 200.
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 64), item(Material.STONE, 36),
-                        item(Material.DIRT, 64), item(Material.DIRT, 64), item(Material.DIRT, 64), item(Material.DIRT, 8)),
-                "300.00", null, slots(3));
+                stacks(
+                        item(Material.STONE, 64),
+                        item(Material.STONE, 36),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 8)),
+                "300.00",
+                null,
+                slots(3));
 
         calc.adjustBuy(ctx);
 
@@ -404,9 +459,15 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     void buy_mixedTypes_partialStackRoomReducesTheEmptySlotsConsumed() {
         // STONE 50: 24 into the partial stack, 26 into ONE empty slot → DIRT keeps the other slot.
         PendingTransaction ctx = buy(
-                stacks(item(Material.STONE, 50),
-                        item(Material.DIRT, 64), item(Material.DIRT, 64), item(Material.DIRT, 64), item(Material.DIRT, 8)),
-                "250.00", null, slots(2, item(Material.STONE, 40)));
+                stacks(
+                        item(Material.STONE, 50),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 64),
+                        item(Material.DIRT, 8)),
+                "250.00",
+                null,
+                slots(2, item(Material.STONE, 40)));
 
         calc.adjustBuy(ctx);
 
@@ -419,7 +480,9 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
         // DIRT has no room (forcing the resize); STONE 10 fits in 24 free and must stay 10.
         PendingTransaction ctx = buy(
                 stacks(item(Material.STONE, 10), item(Material.DIRT, 64), item(Material.DIRT, 36)),
-                "110.00", null, slots(0, item(Material.STONE, 40)));
+                "110.00",
+                null,
+                slots(0, item(Material.STONE, 40)));
 
         calc.adjustBuy(ctx);
 
@@ -432,7 +495,9 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
         // Ender pearls stack to 16: 6 free in the 10-stack + 1 empty slot × 16 = 22 of 40.
         PendingTransaction ctx = buy(
                 stacks(item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 16), item(Material.ENDER_PEARL, 8)),
-                "40.00", null, slots(1, item(Material.ENDER_PEARL, 10)));
+                "40.00",
+                null,
+                slots(1, item(Material.ENDER_PEARL, 10)));
 
         calc.adjustBuy(ctx);
 
@@ -476,8 +541,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void sell_shopAffordsExactlyOneItem_fillsOne() {
-        PendingTransaction ctx = sell(stacks(item(Material.STONE, 10)), "100.00", chest(27),
-                chestWith(27, item(Material.STONE, 10)));
+        PendingTransaction ctx =
+                sell(stacks(item(Material.STONE, 10)), "100.00", chest(27), chestWith(27, item(Material.STONE, 10)));
         wallet(ownerAccount.getUuid(), "10.00");
 
         calc.adjustSell(ctx);
@@ -489,8 +554,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void sell_shopOneCentShortOfASingleItem_cancels() {
-        PendingTransaction ctx = sell(stacks(item(Material.STONE, 10)), "100.00", chest(27),
-                chestWith(27, item(Material.STONE, 10)));
+        PendingTransaction ctx =
+                sell(stacks(item(Material.STONE, 10)), "100.00", chest(27), chestWith(27, item(Material.STONE, 10)));
         wallet(ownerAccount.getUuid(), "9.99");
 
         calc.adjustSell(ctx);
@@ -515,8 +580,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void sell_clientHoldsFewerThanOffered_scalesToWhatTheyHold() {
-        PendingTransaction ctx = sell(stacks(item(Material.STONE, 10)), "10.00", chest(27),
-                chestWith(27, item(Material.STONE, 4)));
+        PendingTransaction ctx =
+                sell(stacks(item(Material.STONE, 10)), "10.00", chest(27), chestWith(27, item(Material.STONE, 4)));
         wallet(ownerAccount.getUuid(), "1000.00");
 
         calc.adjustSell(ctx);
@@ -537,8 +602,11 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void sell_chestHasOnlyPartialStackRoom_scalesStockAndPrice() {
-        PendingTransaction ctx = sell(stacks(item(Material.STONE, 30)), "30.00",
-                slots(0, item(Material.STONE, 40)), chestWith(27, item(Material.STONE, 30)));
+        PendingTransaction ctx = sell(
+                stacks(item(Material.STONE, 30)),
+                "30.00",
+                slots(0, item(Material.STONE, 40)),
+                chestWith(27, item(Material.STONE, 30)));
         wallet(ownerAccount.getUuid(), "1000.00");
 
         calc.adjustSell(ctx);
@@ -550,8 +618,8 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
 
     @Test
     void sell_freeShop_chestFull_cancels() {
-        PendingTransaction ctx = sell(stacks(item(Material.STONE, 10)), "0.00", slots(0),
-                chestWith(27, item(Material.STONE, 10)));
+        PendingTransaction ctx =
+                sell(stacks(item(Material.STONE, 10)), "0.00", slots(0), chestWith(27, item(Material.STONE, 10)));
 
         calc.adjustSell(ctx);
 
@@ -567,15 +635,59 @@ class PartialFillCalculatorInventoryTest extends ServerTest {
     private static final class FakeEconomy implements io.paradaux.chestshop.services.EconomyService {
         final Map<UUID, BigDecimal> balances = new HashMap<>();
         boolean ownerEconomicallyActive = true;
-        @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
-        @Override public String format(BigDecimal amount) { return amount.toPlainString(); }
-        @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
-        @Override public boolean deposit(UUID target, BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean withdraw(UUID target, BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean hasFunds(UUID account, BigDecimal amount) { return getBalance(account).compareTo(amount) >= 0; }
-        @Override public BigDecimal getBalance(UUID account) { return balances.getOrDefault(account, BigDecimal.ZERO); }
-        @Override public boolean hasAccount(UUID account) { return true; }
-        @Override public boolean settle(BigDecimal amount, Player initiator, UUID partner, io.paradaux.chestshop.model.Transaction txn) { return true; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { /* unused */ }
+
+        @Override
+        public void bind(
+                io.paradaux.treasury.api.TreasuryApi treasury,
+                int systemAccountId,
+                io.paradaux.treasury.api.TaxApi taxApi) {
+            /* unused headless */
+        }
+
+        @Override
+        public String format(BigDecimal amount) {
+            return amount.toPlainString();
+        }
+
+        @Override
+        public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) {
+            return ownerEconomicallyActive;
+        }
+
+        @Override
+        public boolean deposit(UUID target, BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean withdraw(UUID target, BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean hasFunds(UUID account, BigDecimal amount) {
+            return getBalance(account).compareTo(amount) >= 0;
+        }
+
+        @Override
+        public BigDecimal getBalance(UUID account) {
+            return balances.getOrDefault(account, BigDecimal.ZERO);
+        }
+
+        @Override
+        public boolean hasAccount(UUID account) {
+            return true;
+        }
+
+        @Override
+        public boolean settle(
+                BigDecimal amount, Player initiator, UUID partner, io.paradaux.chestshop.model.Transaction txn) {
+            return true;
+        }
+
+        @Override
+        public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) {
+            /* unused */
+        }
     }
 }

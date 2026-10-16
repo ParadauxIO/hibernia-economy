@@ -1,12 +1,22 @@
 package io.paradaux.treasury.utils;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+
+import io.paradaux.hibernia.testsupport.properties.FixedSeedInCi;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.MembershipMapper;
 import io.paradaux.treasury.services.cache.AccountRedirectCache;
 import io.paradaux.treasury.services.cache.PersonalAccountCache;
 import io.paradaux.treasury.services.impl.AccountServiceImpl;
 import io.paradaux.treasury.testsupport.TestConfigs;
-import io.paradaux.hibernia.testsupport.properties.FixedSeedInCi;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.ParseException;
+import java.util.Locale;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
 import net.jqwik.api.Example;
@@ -16,17 +26,6 @@ import net.jqwik.api.Provide;
 import net.jqwik.api.constraints.BigRange;
 import net.jqwik.api.constraints.Scale;
 import net.jqwik.api.lifecycle.AddLifecycleHook;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.text.ParseException;
-import java.util.Locale;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 
 /**
  * Properties of {@link Money}: the 2-dp, HALF_EVEN currency normalisation every
@@ -60,7 +59,8 @@ class MoneyProperties {
     void normalize_isSignSymmetric(@ForAll("anyAmount") BigDecimal v) {
         // HALF_EVEN is symmetric about zero, so a debit and the matching credit of the
         // same raw amount always normalise to exact negatives: postings can't drift.
-        assertThat(Money.normalize(v.negate())).isEqualByComparingTo(Money.normalize(v).negate());
+        assertThat(Money.normalize(v.negate()))
+                .isEqualByComparingTo(Money.normalize(v).negate());
     }
 
     @Property
@@ -79,10 +79,13 @@ class MoneyProperties {
     }
 
     @Property
-    void normalize_ofSumIsWithinACentOfSumOfNormals(@ForAll("anyAmount") BigDecimal a, @ForAll("anyAmount") BigDecimal b) {
+    void normalize_ofSumIsWithinACentOfSumOfNormals(
+            @ForAll("anyAmount") BigDecimal a, @ForAll("anyAmount") BigDecimal b) {
         // Rounding is not additive — callers must normalise once, then post the same
         // normalised value on both legs (which LedgerServiceImpl does).
-        BigDecimal diff = Money.normalize(a.add(b)).subtract(Money.normalize(a).add(Money.normalize(b))).abs();
+        BigDecimal diff = Money.normalize(a.add(b))
+                .subtract(Money.normalize(a).add(Money.normalize(b)))
+                .abs();
         assertThat(diff).isLessThanOrEqualTo(new BigDecimal("0.01"));
     }
 
@@ -94,7 +97,8 @@ class MoneyProperties {
             Money.requirePositive(v, "amount > 0");
         } else {
             assertThatThrownBy(() -> Money.requireValidAmount(v)).isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> Money.requirePositive(v, "amount > 0")).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> Money.requirePositive(v, "amount > 0"))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -115,14 +119,15 @@ class MoneyProperties {
     }
 
     @Property
-    void formatAmount_thenParse_roundTripsToTheNormalisedValue(@ForAll("anyAmount") BigDecimal v) throws ParseException {
+    void formatAmount_thenParse_roundTripsToTheNormalisedValue(@ForAll("anyAmount") BigDecimal v)
+            throws ParseException {
         String formatted = accountService().formatAmount(v);
 
         // Parse with the same configured pattern ("$#,##0.00") in BigDecimal mode, the way
         // a consumer of the displayed amount would; it must recover the 2-dp value exactly
         // — no float detour, no grouping or sign mangling, even at 17 integer digits.
-        DecimalFormat parser = new DecimalFormat(TestConfigs.economy().getEconomyFormat(),
-                DecimalFormatSymbols.getInstance(Locale.getDefault()));
+        DecimalFormat parser = new DecimalFormat(
+                TestConfigs.economy().getEconomyFormat(), DecimalFormatSymbols.getInstance(Locale.getDefault()));
         parser.setParseBigDecimal(true);
         BigDecimal parsed = (BigDecimal) parser.parse(formatted);
         assertThat(parsed).isEqualByComparingTo(Money.normalize(v));
@@ -146,16 +151,22 @@ class MoneyProperties {
         Arbitrary<BigDecimal> random = Arbitraries.integers().between(0, 6).flatMap(scale -> {
             // |unscaled| / 10^scale <= COLUMN_MAX, so every value fits the column.
             BigInteger bound = COLUMN_MAX.movePointRight(scale).toBigInteger();
-            return Arbitraries.bigIntegers().between(bound.negate(), bound)
+            return Arbitraries.bigIntegers()
+                    .between(bound.negate(), bound)
                     .map(unscaled -> new BigDecimal(unscaled, scale));
         });
         Arbitrary<BigDecimal> edges = Arbitraries.of(
-                BigDecimal.ZERO, new BigDecimal("0.005"), new BigDecimal("-0.005"), new BigDecimal("0.015"),
-                new BigDecimal("0.01"), new BigDecimal("-0.01"), new BigDecimal("0.0049999"),
-                COLUMN_MAX, COLUMN_MAX.negate(), new BigDecimal("12345.675"));
-        return Arbitraries.frequencyOf(
-                net.jqwik.api.Tuple.of(9, random),
-                net.jqwik.api.Tuple.of(1, edges));
+                BigDecimal.ZERO,
+                new BigDecimal("0.005"),
+                new BigDecimal("-0.005"),
+                new BigDecimal("0.015"),
+                new BigDecimal("0.01"),
+                new BigDecimal("-0.01"),
+                new BigDecimal("0.0049999"),
+                COLUMN_MAX,
+                COLUMN_MAX.negate(),
+                new BigDecimal("12345.675"));
+        return Arbitraries.frequencyOf(net.jqwik.api.Tuple.of(9, random), net.jqwik.api.Tuple.of(1, edges));
     }
 
     @Provide
@@ -164,7 +175,11 @@ class MoneyProperties {
     }
 
     private static AccountServiceImpl accountService() {
-        return new AccountServiceImpl(mock(AccountMapper.class), mock(MembershipMapper.class),
-                mock(AccountRedirectCache.class), mock(PersonalAccountCache.class), TestConfigs.economy());
+        return new AccountServiceImpl(
+                mock(AccountMapper.class),
+                mock(MembershipMapper.class),
+                mock(AccountRedirectCache.class),
+                mock(PersonalAccountCache.class),
+                TestConfigs.economy());
     }
 }

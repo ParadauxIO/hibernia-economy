@@ -1,5 +1,7 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import io.paradaux.hibernia.testsupport.db.LedgerInvariants;
@@ -17,6 +19,15 @@ import io.paradaux.treasury.testsupport.IntegrationTestBase;
 import io.paradaux.treasury.testsupport.TestServicesModule;
 import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.TreasuryConstants;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import javax.sql.DataSource;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
 import net.jqwik.api.Combinators;
@@ -26,18 +37,6 @@ import net.jqwik.api.Provide;
 import net.jqwik.api.Tag;
 import net.jqwik.api.lifecycle.AddLifecycleHook;
 import net.jqwik.api.lifecycle.BeforeTry;
-
-import javax.sql.DataSource;
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Stateful property over the real ledger on the real database: random sequences of
@@ -126,8 +125,15 @@ class LedgerActionSequenceProperties {
                     return true;
                 }
                 case Transfer t -> {
-                    ledger.transfer(new TransferRequest(model.id(t.from()), model.id(t.to()), t.amount(),
-                            "prop transfer", ADMIN, null, "prop", key(t.dedupSlot())));
+                    ledger.transfer(new TransferRequest(
+                            model.id(t.from()),
+                            model.id(t.to()),
+                            t.amount(),
+                            "prop transfer",
+                            ADMIN,
+                            null,
+                            "prop",
+                            key(t.dedupSlot())));
                     return true;
                 }
                 case Credit c -> {
@@ -149,8 +155,15 @@ class LedgerActionSequenceProperties {
                     return true;
                 }
                 case Tax tax -> {
-                    TaxResult r = taxApi.collectTax(TaxCollection.toAccount(model.id(tax.from()), model.taxIncome(),
-                            tax.amount(), "prop", "prop tax", ADMIN, "prop", key(tax.dedupSlot())));
+                    TaxResult r = taxApi.collectTax(TaxCollection.toAccount(
+                            model.id(tax.from()),
+                            model.taxIncome(),
+                            tax.amount(),
+                            "prop",
+                            "prop tax",
+                            ADMIN,
+                            "prop",
+                            key(tax.dedupSlot())));
                     return r instanceof TaxResult.Collected;
                 }
             }
@@ -198,7 +211,9 @@ class LedgerActionSequenceProperties {
             if (index < 0) return UNKNOWN_ACCOUNT;
             int size = faucets.size() + personals.size();
             int i = index % size;
-            return i < faucets.size() ? faucets.get(i) : personals.get(i - faucets.size()).id();
+            return i < faucets.size()
+                    ? faucets.get(i)
+                    : personals.get(i - faucets.size()).id();
         }
 
         Personal personal(int index) {
@@ -233,15 +248,20 @@ class LedgerActionSequenceProperties {
                 case Open o -> true;
                 case Transfer t -> transferAllowed(id(t.from()), id(t.to()), t.amount(), t.dedupSlot());
                 case Credit c -> personal(c.player()) != null && validAmount(c.amount());
-                case Debit d -> personal(d.player()) != null && validAmount(d.amount())
-                        && balance(personal(d.player()).id()).compareTo(d.amount()) >= 0;
+                case Debit d ->
+                    personal(d.player()) != null
+                            && validAmount(d.amount())
+                            && balance(personal(d.player()).id()).compareTo(d.amount()) >= 0;
                 // sweepAll: same-account and unknown-source are rejected; an empty (or
                 // faucet-negative) source is a successful no-op before the destination
                 // is ever touched; otherwise the postings need a real destination.
-                case Sweep s -> id(s.from()) != id(s.to()) && id(s.from()) != UNKNOWN_ACCOUNT
-                        && (balance(id(s.from())).signum() <= 0 || id(s.to()) != UNKNOWN_ACCOUNT);
-                case Tax tax -> tax.amount().compareTo(new BigDecimal("0.01")) >= 0
-                        && transferAllowed(id(tax.from()), taxIncome(), tax.amount(), tax.dedupSlot());
+                case Sweep s ->
+                    id(s.from()) != id(s.to())
+                            && id(s.from()) != UNKNOWN_ACCOUNT
+                            && (balance(id(s.from())).signum() <= 0 || id(s.to()) != UNKNOWN_ACCOUNT);
+                case Tax tax ->
+                    tax.amount().compareTo(new BigDecimal("0.01")) >= 0
+                            && transferAllowed(id(tax.from()), taxIncome(), tax.amount(), tax.dedupSlot());
             };
         }
 
@@ -276,11 +296,17 @@ class LedgerActionSequenceProperties {
     // ---- actions + generators ----
 
     sealed interface Action permits Open, Transfer, Credit, Debit, Sweep, Tax {}
+
     record Open() implements Action {}
+
     record Transfer(int from, int to, BigDecimal amount, int dedupSlot) implements Action {}
+
     record Credit(int player, BigDecimal amount) implements Action {}
+
     record Debit(int player, BigDecimal amount) implements Action {}
+
     record Sweep(int from, int to) implements Action {}
+
     record Tax(int from, BigDecimal amount, int dedupSlot) implements Action {}
 
     @Provide
@@ -296,21 +322,32 @@ class LedgerActionSequenceProperties {
 
         Arbitrary<Action> action = Arbitraries.frequencyOf(
                 net.jqwik.api.Tuple.of(3, Arbitraries.just(new Open())),
-                net.jqwik.api.Tuple.of(8, Combinators.combine(account, account, amount, dedup).as(Transfer::new)),
+                net.jqwik.api.Tuple.of(
+                        8, Combinators.combine(account, account, amount, dedup).as(Transfer::new)),
                 net.jqwik.api.Tuple.of(3, Combinators.combine(player, amount).as(Credit::new)),
                 net.jqwik.api.Tuple.of(3, Combinators.combine(player, amount).as(Debit::new)),
                 net.jqwik.api.Tuple.of(2, Combinators.combine(account, account).as(Sweep::new)),
-                net.jqwik.api.Tuple.of(3, Combinators.combine(account, amount.filter(a -> a.signum() > 0), dedup)
-                        .as(Tax::new)));
+                net.jqwik.api.Tuple.of(
+                        3,
+                        Combinators.combine(account, amount.filter(a -> a.signum() > 0), dedup)
+                                .as(Tax::new)));
         return action.list().ofMinSize(1).ofMaxSize(25);
     }
 
     /** Mostly valid cent amounts up to well past a starting balance, plus invalid ones. */
     private static Arbitrary<BigDecimal> amounts() {
         return Arbitraries.frequencyOf(
-                net.jqwik.api.Tuple.of(12, Arbitraries.longs().between(1, 2_500_000L).map(c -> BigDecimal.valueOf(c, 2))),
-                net.jqwik.api.Tuple.of(1, Arbitraries.of(
-                        BigDecimal.ZERO, new BigDecimal("-5.00"), new BigDecimal("0.001"), new BigDecimal("0.004"),
-                        new BigDecimal("1.005"), new BigDecimal("10000.00"), new BigDecimal("10000.01"))));
+                net.jqwik.api.Tuple.of(
+                        12, Arbitraries.longs().between(1, 2_500_000L).map(c -> BigDecimal.valueOf(c, 2))),
+                net.jqwik.api.Tuple.of(
+                        1,
+                        Arbitraries.of(
+                                BigDecimal.ZERO,
+                                new BigDecimal("-5.00"),
+                                new BigDecimal("0.001"),
+                                new BigDecimal("0.004"),
+                                new BigDecimal("1.005"),
+                                new BigDecimal("10000.00"),
+                                new BigDecimal("10000.01"))));
     }
 }

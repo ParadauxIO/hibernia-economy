@@ -1,16 +1,15 @@
 package io.paradaux.treasuryrestapi.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+
 import io.paradaux.treasuryrestapi.exception.ApiException;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * {@link AdminScope} is the service-level SERVICE-key gate behind every admin endpoint

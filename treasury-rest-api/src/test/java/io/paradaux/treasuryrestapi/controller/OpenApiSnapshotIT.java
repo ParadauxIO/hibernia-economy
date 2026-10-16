@@ -1,10 +1,11 @@
 package io.paradaux.treasuryrestapi.controller;
 
-import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
-import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,11 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Contract snapshot of the published OpenAPI document. springdoc builds the spec at
@@ -84,7 +83,8 @@ class OpenApiSnapshotIT extends EmbeddedDbIT {
     @Test
     void adminSurfaceIsNotDocumented() throws Exception {
         @SuppressWarnings("unchecked")
-        Map<String, Object> paths = (Map<String, Object>) JSON.readValue(fetchSpec(), Map.class).get("paths");
+        Map<String, Object> paths =
+                (Map<String, Object>) JSON.readValue(fetchSpec(), Map.class).get("paths");
 
         assertThat(paths.keySet()).noneMatch(p -> p.startsWith("/api/v1/admin"));
         assertThat(paths).containsKeys("/api/v1/transfers", "/api/v1/auth/me", "/api/v1/chestshop/shops");
@@ -93,7 +93,9 @@ class OpenApiSnapshotIT extends EmbeddedDbIT {
     private String fetchSpec() throws Exception {
         return mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
     }
 
     private static boolean updateRequested() {
@@ -105,8 +107,9 @@ class OpenApiSnapshotIT extends EmbeddedDbIT {
         @SuppressWarnings("unchecked")
         Map<String, Object> spec = JSON.readValue(json, Map.class);
         spec.remove("servers");
-        return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(sortKeys(spec))
-                .replace("\r\n", "\n") + "\n";
+        return JSON.writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(sortKeys(spec))
+                        .replace("\r\n", "\n") + "\n";
     }
 
     private static Object sortKeys(Object node) {

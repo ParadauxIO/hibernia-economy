@@ -1,5 +1,8 @@
 package io.paradaux.treasury.api.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.SaleRow;
 import io.paradaux.treasury.api.market.SalesQuery;
@@ -7,17 +10,13 @@ import io.paradaux.treasury.api.market.SalesSummary;
 import io.paradaux.treasury.api.market.TopCustomer;
 import io.paradaux.treasury.api.market.TopItem;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Integration test for the ChestShop sales read API ({@link SalesQueryApiImpl} →
@@ -54,9 +53,29 @@ class SalesQueryApiImplIT extends IntegrationTestBase {
         market.recordSale(firmSale("BUY", ALICE, "DIAMOND", "Diamond", 3, "5.0000", "15.00", "0.15"));
         market.recordSale(firmSale("SELL", BOB, "IRON_INGOT", "Iron Ingot", 64, "1.0000", "64.00", "0.00"));
         // A different firm — must never leak into FIRM's results.
-        market.recordSale(new ChestShopSaleRecord(null, "BUY", ALICE, 800, "BUSINESS", OTHER_FIRM, null,
-                false, "DIAMOND", "DIAMOND", "Diamond", false, null,
-                1, new BigDecimal("5.0000"), new BigDecimal("5.00"), BigDecimal.ZERO, "world", 9, 9, 9, 0));
+        market.recordSale(new ChestShopSaleRecord(
+                null,
+                "BUY",
+                ALICE,
+                800,
+                "BUSINESS",
+                OTHER_FIRM,
+                null,
+                false,
+                "DIAMOND",
+                "DIAMOND",
+                "Diamond",
+                false,
+                null,
+                1,
+                new BigDecimal("5.0000"),
+                new BigDecimal("5.00"),
+                BigDecimal.ZERO,
+                "world",
+                9,
+                9,
+                9,
+                0));
         // An OLD FIRM sale (100 days ago) — outside a 30-day window.
         exec("INSERT INTO chestshop_sale (occurred_at, direction, customer_uuid_bin, shop_account_type, "
                 + "shop_firm_id, material, item_key, item_name, quantity, unit_price, total_price, tax_amount) VALUES ("
@@ -79,22 +98,29 @@ class SalesQueryApiImplIT extends IntegrationTestBase {
 
     @Test
     void listSales_paginates() {
-        assertThat(sales.listSales(firmQuery().windowDays(30).limit(2).offset(0).build())).hasSize(2);
-        assertThat(sales.listSales(firmQuery().windowDays(30).limit(2).offset(2).build())).hasSize(1);
+        assertThat(sales.listSales(firmQuery().windowDays(30).limit(2).offset(0).build()))
+                .hasSize(2);
+        assertThat(sales.listSales(firmQuery().windowDays(30).limit(2).offset(2).build()))
+                .hasSize(1);
     }
 
     @Test
     void listSales_filtersByDirectionItemAndCustomer() {
-        assertThat(sales.listSales(firmQuery().windowDays(30).direction("BUY").build())).hasSize(2);
-        assertThat(sales.listSales(firmQuery().windowDays(30).itemKey("IRON_INGOT").build())).hasSize(1);
-        assertThat(sales.listSales(firmQuery().windowDays(30).customerUuid(BOB).build())).hasSize(1);
+        assertThat(sales.listSales(firmQuery().windowDays(30).direction("BUY").build()))
+                .hasSize(2);
+        assertThat(sales.listSales(
+                        firmQuery().windowDays(30).itemKey("IRON_INGOT").build()))
+                .hasSize(1);
+        assertThat(sales.listSales(firmQuery().windowDays(30).customerUuid(BOB).build()))
+                .hasSize(1);
     }
 
     @Test
     void countSales_respectsScopeAndWindow() {
-        assertThat(sales.countSales(firmQuery().build())).isEqualTo(4);            // incl. the old sale
+        assertThat(sales.countSales(firmQuery().build())).isEqualTo(4); // incl. the old sale
         assertThat(sales.countSales(firmQuery().windowDays(30).build())).isEqualTo(3); // old excluded
-        assertThat(sales.countSales(firmQuery().windowDays(30).direction("SELL").build())).isEqualTo(1);
+        assertThat(sales.countSales(firmQuery().windowDays(30).direction("SELL").build()))
+                .isEqualTo(1);
     }
 
     @Test
@@ -102,7 +128,7 @@ class SalesQueryApiImplIT extends IntegrationTestBase {
         SalesSummary s = sales.summarize(firmQuery().windowDays(30).build(), 5);
 
         assertThat(s.getSaleCount()).isEqualTo(3);
-        assertThat(s.getTotalUnits()).isEqualTo(69);                 // 2 + 3 + 64
+        assertThat(s.getTotalUnits()).isEqualTo(69); // 2 + 3 + 64
         assertThat(s.getTotalVolume()).isEqualByComparingTo("89.00"); // 10 + 15 + 64
         assertThat(s.getTotalTax()).isEqualByComparingTo("0.25");
         assertThat(s.getBuyCount()).isEqualTo(2);
@@ -133,7 +159,11 @@ class SalesQueryApiImplIT extends IntegrationTestBase {
     void multiScopeQuery_isRejected() {
         // Exactly one owner scope: setting two (here firmId + ownerUuid) is a caller
         // bug that would AND to an empty result, so it's refused up front (ADT-90).
-        SalesQuery twoScopes = SalesQuery.builder().firmId(FIRM).ownerUuid(UUID.randomUUID()).windowDays(30).build();
+        SalesQuery twoScopes = SalesQuery.builder()
+                .firmId(FIRM)
+                .ownerUuid(UUID.randomUUID())
+                .windowDays(30)
+                .build();
         assertThatThrownBy(() -> sales.listSales(twoScopes)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> sales.countSales(twoScopes)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> sales.summarize(twoScopes, 5)).isInstanceOf(IllegalArgumentException.class);
@@ -145,11 +175,31 @@ class SalesQueryApiImplIT extends IntegrationTestBase {
         return SalesQuery.builder().firmId(FIRM);
     }
 
-    private static ChestShopSaleRecord firmSale(String dir, UUID customer, String key, String name,
-                                                int qty, String unit, String total, String tax) {
-        return new ChestShopSaleRecord(null, dir, customer, 700, "BUSINESS", FIRM, null, false,
-                key, key, name, false, null,
-                qty, new BigDecimal(unit), new BigDecimal(total), new BigDecimal(tax), "world", 1, 1, 1, 0);
+    private static ChestShopSaleRecord firmSale(
+            String dir, UUID customer, String key, String name, int qty, String unit, String total, String tax) {
+        return new ChestShopSaleRecord(
+                null,
+                dir,
+                customer,
+                700,
+                "BUSINESS",
+                FIRM,
+                null,
+                false,
+                key,
+                key,
+                name,
+                false,
+                null,
+                qty,
+                new BigDecimal(unit),
+                new BigDecimal(total),
+                new BigDecimal(tax),
+                "world",
+                1,
+                1,
+                1,
+                0);
     }
 
     private static String hex(UUID u) {
@@ -157,12 +207,13 @@ class SalesQueryApiImplIT extends IntegrationTestBase {
     }
 
     private void firmPlayer(UUID uuid, String name) throws Exception {
-        exec("INSERT INTO economy_players (player_uuid_bin, current_name) VALUES (UNHEX('"
-                + hex(uuid) + "'), '" + name + "')");
+        exec("INSERT INTO economy_players (player_uuid_bin, current_name) VALUES (UNHEX('" + hex(uuid) + "'), '" + name
+                + "')");
     }
 
     private void exec(String sql) throws Exception {
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
             st.execute(sql);
         }
     }

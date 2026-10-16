@@ -1,8 +1,16 @@
 package io.paradaux.chestshop.services;
 
+import static io.paradaux.chestshop.services.SignService.ITEM_LINE;
+import static io.paradaux.chestshop.services.SignService.PRICE_LINE;
+import static io.paradaux.chestshop.services.SignService.QUANTITY_LINE;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
+import java.util.regex.Pattern;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -14,15 +22,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import java.util.regex.Pattern;
-
-import static io.paradaux.chestshop.services.SignService.ITEM_LINE;
-import static io.paradaux.chestshop.services.SignService.PRICE_LINE;
-import static io.paradaux.chestshop.services.SignService.QUANTITY_LINE;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * {@link SignService}: the per-line shop-sign patterns, the business/admin owner tokens, the
@@ -92,16 +91,27 @@ class SignServiceTest extends ServerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"B 1 : S", "B : S 2", "B S 2", "B 1 2", "10KB", "1 B:S -1M", "S 1MK", "B -1K : S10K", "B1Z"})
+    @ValueSource(
+            strings = {"B 1 : S", "B : S 2", "B S 2", "B 1 2", "10KB", "1 B:S -1M", "S 1MK", "B -1K : S10K", "B1Z"})
     void priceLine_rejects(String line) {
         assertThat(matchesLinePattern(PRICE_LINE, line)).isFalse();
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "Stone", "Diamond_Sword", "Diamond-Sword", "Diamond Sword", "Diamond Sword:203",
-            "Diamond#123", "Diamond#az3", "Diamond#BE2", "Stone Sword:123#123", "Diamond#223:123", "?"
-    })
+    @ValueSource(
+            strings = {
+                "Stone",
+                "Diamond_Sword",
+                "Diamond-Sword",
+                "Diamond Sword",
+                "Diamond Sword:203",
+                "Diamond#123",
+                "Diamond#az3",
+                "Diamond#BE2",
+                "Stone Sword:123#123",
+                "Diamond#223:123",
+                "?"
+            })
     void itemLine_accepts(String line) {
         assertThat(matchesLinePattern(ITEM_LINE, line)).isTrue();
     }
@@ -123,7 +133,8 @@ class SignServiceTest extends ServerTest {
         assertThat(SignService.isBusinessAccount("B:@")).isTrue();
         assertThat(SignService.isBusinessAccount("PlayerName")).isFalse();
         assertThat(SignService.isBusinessAccount("B:")).isFalse();
-        assertThat(SignService.isBusinessAccount(new String[]{"B:Z9", "", "", ""})).isTrue();
+        assertThat(SignService.isBusinessAccount(new String[] {"B:Z9", "", "", ""}))
+                .isTrue();
     }
 
     @Test
@@ -140,31 +151,33 @@ class SignServiceTest extends ServerTest {
         assertThat(signs.isAdminShop("Admin Shop")).isTrue();
         assertThat(signs.isAdminShop("adminshop")).isTrue();
         assertThat(signs.isAdminShop("SomePlayer")).isFalse();
-        assertThat(signs.isAdminShop(new String[]{"Admin Shop", "", "", ""})).isTrue();
+        assertThat(signs.isAdminShop(new String[] {"Admin Shop", "", "", ""})).isTrue();
     }
 
     // ---- isValid ----------------------------------------------------------------
 
     @Test
     void isValid_trueForWellFormedPlayerShop() {
-        assertThat(signs.isValid(new String[]{"Notch", "64", "B 5", "Diamond"})).isTrue();
+        assertThat(signs.isValid(new String[] {"Notch", "64", "B 5", "Diamond"}))
+                .isTrue();
     }
 
     @Test
     void isValid_trueForSellOnlyShop() {
-        assertThat(signs.isValid(new String[]{"Notch", "64", "S 5", "Diamond"})).isTrue();
+        assertThat(signs.isValid(new String[] {"Notch", "64", "S 5", "Diamond"}))
+                .isTrue();
     }
 
     @Test
     void isValid_falseWhenNoBuyOrSellFlag() {
         // Structurally valid lines but the price carries neither B nor S.
-        assertThat(signs.isValid(new String[]{"Notch", "64", "5", "Diamond"})).isFalse();
+        assertThat(signs.isValid(new String[] {"Notch", "64", "5", "Diamond"})).isFalse();
     }
 
     @Test
     void isValid_falseWhenOwnerEmpty() {
         // validateSign tolerates a blank owner (auto-fill), but a finished shop needs one.
-        assertThat(signs.isValid(new String[]{"", "64", "B 5", "Diamond"})).isFalse();
+        assertThat(signs.isValid(new String[] {"", "64", "B 5", "Diamond"})).isFalse();
     }
 
     @Test
@@ -188,40 +201,48 @@ class SignServiceTest extends ServerTest {
     @Test
     void validateSign_adminOwnerSkipsNameValidation() {
         // "Admin Shop" contains a space, which the player-name regexp would reject.
-        assertThat(signs.validateSign(new String[]{"Admin Shop", "64", "B 5", "Diamond"})).isTrue();
+        assertThat(signs.validateSign(new String[] {"Admin Shop", "64", "B 5", "Diamond"}))
+                .isTrue();
     }
 
     @Test
     void validateSign_businessOwnerSkipsNameValidation() {
         // An alias token neither matches the player-name regexp nor the "name:id" suffix form.
-        assertThat(signs.validateSign(new String[]{"B:@ACME", "64", "B 5", "Diamond"})).isTrue();
+        assertThat(signs.validateSign(new String[] {"B:@ACME", "64", "B 5", "Diamond"}))
+                .isTrue();
     }
 
     @Test
     void validateSign_emptyOwnerSkipsNameValidation() {
-        assertThat(signs.validateSign(new String[]{"", "64", "B 5", "Diamond"})).isTrue();
+        assertThat(signs.validateSign(new String[] {"", "64", "B 5", "Diamond"}))
+                .isTrue();
     }
 
     @Test
     void validateSign_nameWithDisambiguationIdValidatesPrefix() {
-        assertThat(signs.validateSign(new String[]{"Notch:ab12", "64", "B 5", "Diamond"})).isTrue();
-        assertThat(signs.validateSign(new String[]{"bad@name:ab12", "64", "B 5", "Diamond"})).isFalse();
+        assertThat(signs.validateSign(new String[] {"Notch:ab12", "64", "B 5", "Diamond"}))
+                .isTrue();
+        assertThat(signs.validateSign(new String[] {"bad@name:ab12", "64", "B 5", "Diamond"}))
+                .isFalse();
     }
 
     @Test
     void validateSign_falseForInvalidOwnerName() {
         // '@' isn't allowed by ^\.?\w+$.
-        assertThat(signs.validateSign(new String[]{"bad@name", "64", "B 5", "Diamond"})).isFalse();
+        assertThat(signs.validateSign(new String[] {"bad@name", "64", "B 5", "Diamond"}))
+                .isFalse();
     }
 
     @Test
     void validateSign_falseForInvalidQuantityLine() {
-        assertThat(signs.validateSign(new String[]{"Notch", "notanumber", "B 5", "Diamond"})).isFalse();
+        assertThat(signs.validateSign(new String[] {"Notch", "notanumber", "B 5", "Diamond"}))
+                .isFalse();
     }
 
     @Test
     void validateSign_falseForMoreThanOneColonInPriceLine() {
-        assertThat(signs.validateSign(new String[]{"Notch", "64", "B 1 : S 2 : B 3", "Diamond"})).isFalse();
+        assertThat(signs.validateSign(new String[] {"Notch", "64", "B 1 : S 2 : B 3", "Diamond"}))
+                .isFalse();
     }
 
     @Test
@@ -285,7 +306,8 @@ class SignServiceTest extends ServerTest {
         assertThat(SignService.getItem(sign)).isEqualTo("Diamond");
         assertThat(signs.isValid(sign)).isTrue();
         assertThat(signs.isAdminShop(sign)).isFalse();
-        assertThat(signs.isAdminShop(placeSign("Admin Shop", "64", "B 5", "Diamond"))).isTrue();
+        assertThat(signs.isAdminShop(placeSign("Admin Shop", "64", "B 5", "Diamond")))
+                .isTrue();
     }
 
     @Test
@@ -300,8 +322,8 @@ class SignServiceTest extends ServerTest {
 
     @Test
     void lineAccessors_emptyForTruncatedLineArrays() {
-        assertThat(SignService.getQuantityLine(new String[]{"Notch"})).isEmpty();
-        assertThat(SignService.getPrice(new String[]{"Notch", "64"})).isEmpty();
-        assertThat(SignService.getItem(new String[]{"Notch", "64", "B 5"})).isEmpty();
+        assertThat(SignService.getQuantityLine(new String[] {"Notch"})).isEmpty();
+        assertThat(SignService.getPrice(new String[] {"Notch", "64"})).isEmpty();
+        assertThat(SignService.getItem(new String[] {"Notch", "64", "B 5"})).isEmpty();
     }
 }

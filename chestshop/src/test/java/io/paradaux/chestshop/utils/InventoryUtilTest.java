@@ -1,19 +1,18 @@
 package io.paradaux.chestshop.utils;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.support.ServerTest;
+import java.lang.reflect.Field;
+import java.util.Map;
 import org.bukkit.Material;
 import org.bukkit.block.DoubleChest;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Field;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class InventoryUtilTest extends ServerTest {
 
@@ -26,7 +25,8 @@ class InventoryUtilTest extends ServerTest {
     @Test
     void isEmpty_trueForEmpty_falseWhenAStackIsPresent() {
         assertThat(InventoryUtil.isEmpty(chest(9))).isTrue();
-        assertThat(InventoryUtil.isEmpty(chestWith(9, item(Material.DIAMOND, 1)))).isFalse();
+        assertThat(InventoryUtil.isEmpty(chestWith(9, item(Material.DIAMOND, 1))))
+                .isFalse();
     }
 
     @Test

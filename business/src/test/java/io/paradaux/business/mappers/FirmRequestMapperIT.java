@@ -1,16 +1,15 @@
 package io.paradaux.business.mappers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.testsupport.IntegrationTestBase;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import org.apache.ibatis.exceptions.PersistenceException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FirmRequestMapperIT extends IntegrationTestBase {
 
@@ -41,8 +40,8 @@ class FirmRequestMapperIT extends IntegrationTestBase {
      */
     private LocalDateTime dbNow() {
         try (var conn = dataSource.getConnection();
-             var st = conn.createStatement();
-             var rs = st.executeQuery("SELECT NOW()")) {
+                var st = conn.createStatement();
+                var rs = st.executeQuery("SELECT NOW()")) {
             rs.next();
             return rs.getObject(1, LocalDateTime.class);
         } catch (java.sql.SQLException e) {
@@ -54,19 +53,16 @@ class FirmRequestMapperIT extends IntegrationTestBase {
 
     @Test
     void createInvite_andHasPending() {
-        int rows = requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5));
+        int rows = requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5));
         assertThat(rows).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
     }
 
     @Test
     void createInvite_secondPendingIsRejected() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5));
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5));
         assertThatThrownBy(() ->
-                requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                        dbNow().plusMinutes(5)))
+                        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5)))
                 .isInstanceOf(PersistenceException.class);
     }
 
@@ -77,34 +73,30 @@ class FirmRequestMapperIT extends IntegrationTestBase {
      */
     @Test
     void expireStaleInvite_freesTheUniqueSlotForAReoffer() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().minusMinutes(1));
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().minusMinutes(1));
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
         // The bug: the guard says "no pending offer" but the insert collides.
         assertThatThrownBy(() ->
-                requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                        dbNow().plusMinutes(5)))
+                        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5)))
                 .isInstanceOf(PersistenceException.class);
 
         assertThat(requests.expireStaleInvite(firmId, invited.toString())).isEqualTo(1);
 
-        assertThat(requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5))).isEqualTo(1);
+        assertThat(requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5)))
+                .isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
     }
 
     @Test
     void expireStaleInvite_leavesALiveInviteAlone() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5));
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5));
         assertThat(requests.expireStaleInvite(firmId, invited.toString())).isZero();
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isTrue();
     }
 
     @Test
     void acceptInvite_flipsStatus() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5));
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5));
         assertThat(requests.acceptInvite(firmId, invited.toString())).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
         assertThat(requests.getInviter(firmId, invited.toString())).isEqualToIgnoringCase(inviter.toString());
@@ -112,24 +104,21 @@ class FirmRequestMapperIT extends IntegrationTestBase {
 
     @Test
     void rejectInvite_flipsStatus() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5));
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5));
         assertThat(requests.rejectInvite(firmId, invited.toString())).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
     }
 
     @Test
     void rescindInvite_flipsStatus() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5));
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5));
         assertThat(requests.rescindInvite(firmId, invited.toString())).isEqualTo(1);
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
     }
 
     @Test
     void expireStaleInvites_marksPastInvitesExpired() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().minusMinutes(1));
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().minusMinutes(1));
         // hasPendingJobOffer ignores expired ones
         assertThat(requests.hasPendingJobOffer(firmId, invited.toString())).isFalse();
 
@@ -139,33 +128,29 @@ class FirmRequestMapperIT extends IntegrationTestBase {
 
     @Test
     void lockPendingInviter_returnsInviter() {
-        requests.createInvite(firmId, invited.toString(), inviter.toString(),
-                dbNow().plusMinutes(5));
-        assertThat(requests.lockPendingInviter(firmId, invited.toString()))
-                .isEqualToIgnoringCase(inviter.toString());
+        requests.createInvite(firmId, invited.toString(), inviter.toString(), dbNow().plusMinutes(5));
+        assertThat(requests.lockPendingInviter(firmId, invited.toString())).isEqualToIgnoringCase(inviter.toString());
     }
 
     // ---------- transfer requests ----------
 
     @Test
     void createAndConfirmTransfer() {
-        int rows = requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                dbNow().plusMinutes(5));
+        int rows = requests.createTransferRequest(firmId, invited.toString(), "tok-1", dbNow().plusMinutes(5));
         assertThat(rows).isEqualTo(1);
-        assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-1")).isEqualTo(1);
+        assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-1"))
+                .isEqualTo(1);
     }
 
     @Test
     void rejectTransfer_setsCancelled() {
-        requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                dbNow().plusMinutes(5));
+        requests.createTransferRequest(firmId, invited.toString(), "tok-1", dbNow().plusMinutes(5));
         assertThat(requests.rejectTransfer(firmId, invited.toString())).isEqualTo(1);
     }
 
     @Test
     void acceptTransfer_requiresConfirmedState() {
-        requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                dbNow().plusMinutes(5));
+        requests.createTransferRequest(firmId, invited.toString(), "tok-1", dbNow().plusMinutes(5));
         // PENDING -> ACCEPTED should NOT update (only CONFIRMED -> ACCEPTED).
         assertThat(requests.acceptTransfer(firmId, invited.toString())).isZero();
         requests.confirmTransfer(firmId, invited.toString(), "tok-1");
@@ -179,32 +164,29 @@ class FirmRequestMapperIT extends IntegrationTestBase {
      */
     @Test
     void expireStaleTransfer_freesTheUniqueSlotForANewTransfer() {
-        requests.createTransferRequest(firmId, invited.toString(), "tok-lapsed",
-                dbNow().minusMinutes(1));
+        requests.createTransferRequest(firmId, invited.toString(), "tok-lapsed", dbNow().minusMinutes(1));
         assertThat(requests.rejectTransfer(firmId, invited.toString())).isZero();
         assertThatThrownBy(() ->
-                requests.createTransferRequest(firmId, invited.toString(), "tok-new",
-                        dbNow().plusMinutes(5)))
+                        requests.createTransferRequest(firmId, invited.toString(), "tok-new", dbNow().plusMinutes(5)))
                 .isInstanceOf(PersistenceException.class);
 
         assertThat(requests.expireStaleTransfer(firmId)).isEqualTo(1);
 
-        assertThat(requests.createTransferRequest(firmId, invited.toString(), "tok-new",
-                dbNow().plusMinutes(5))).isEqualTo(1);
+        assertThat(requests.createTransferRequest(firmId, invited.toString(), "tok-new", dbNow().plusMinutes(5)))
+                .isEqualTo(1);
     }
 
     @Test
     void expireStaleTransfer_leavesALiveTransferAlone() {
-        requests.createTransferRequest(firmId, invited.toString(), "tok-live",
-                dbNow().plusMinutes(5));
+        requests.createTransferRequest(firmId, invited.toString(), "tok-live", dbNow().plusMinutes(5));
         assertThat(requests.expireStaleTransfer(firmId)).isZero();
-        assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-live")).isEqualTo(1);
+        assertThat(requests.confirmTransfer(firmId, invited.toString(), "tok-live"))
+                .isEqualTo(1);
     }
 
     @Test
     void expireStaleTransfers_marksOverdue() {
-        requests.createTransferRequest(firmId, invited.toString(), "tok-1",
-                dbNow().minusMinutes(1));
+        requests.createTransferRequest(firmId, invited.toString(), "tok-1", dbNow().minusMinutes(1));
         assertThat(requests.expireStaleTransfers()).isEqualTo(1);
     }
 
@@ -216,14 +198,14 @@ class FirmRequestMapperIT extends IntegrationTestBase {
         UUID to = UUID.randomUUID();
         UUID actor = UUID.randomUUID();
 
-        assertThat(requests.recordAdminOverride(firmId, from.toString(), to.toString(),
-                actor.toString(), "override-tok-1")).isEqualTo(1);
+        assertThat(requests.recordAdminOverride(
+                        firmId, from.toString(), to.toString(), actor.toString(), "override-tok-1"))
+                .isEqualTo(1);
 
         try (var conn = dataSource.getConnection();
-             var ps = conn.prepareStatement(
-                     "SELECT status, bin_to_uuid(from_uuid_bin), bin_to_uuid(to_uuid_bin), " +
-                     "bin_to_uuid(actor_uuid_bin) FROM firm_transfer_requests " +
-                     "WHERE firm_id = ? AND status = 'ADMIN_OVERRIDE'")) {
+                var ps = conn.prepareStatement("SELECT status, bin_to_uuid(from_uuid_bin), bin_to_uuid(to_uuid_bin), "
+                        + "bin_to_uuid(actor_uuid_bin) FROM firm_transfer_requests "
+                        + "WHERE firm_id = ? AND status = 'ADMIN_OVERRIDE'")) {
             ps.setInt(1, firmId);
             try (var rs = ps.executeQuery()) {
                 assertThat(rs.next()).isTrue();
@@ -236,8 +218,9 @@ class FirmRequestMapperIT extends IntegrationTestBase {
 
         // A terminal ADMIN_OVERRIDE has active_only = NULL, so a second override on
         // the same firm must not collide with uq_one_active_transfer.
-        assertThat(requests.recordAdminOverride(firmId, from.toString(), to.toString(),
-                actor.toString(), "override-tok-2")).isEqualTo(1);
+        assertThat(requests.recordAdminOverride(
+                        firmId, from.toString(), to.toString(), actor.toString(), "override-tok-2"))
+                .isEqualTo(1);
     }
 
     /**
@@ -247,24 +230,27 @@ class FirmRequestMapperIT extends IntegrationTestBase {
      */
     @Test
     void expireStaleTransfers_leavesAdminOverrideAuditRowsIntact() throws Exception {
-        requests.recordAdminOverride(firmId, inviter.toString(), UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(), "override-tok-3");
+        requests.recordAdminOverride(
+                firmId,
+                inviter.toString(),
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                "override-tok-3");
         // Backdate it so the row is unambiguously past its expiry.
         try (var conn = dataSource.getConnection();
-             var ps = conn.prepareStatement(
-                     "UPDATE firm_transfer_requests SET expires_at = NOW() - INTERVAL 1 HOUR WHERE firm_id = ?")) {
+                var ps = conn.prepareStatement(
+                        "UPDATE firm_transfer_requests SET expires_at = NOW() - INTERVAL 1 HOUR WHERE firm_id = ?")) {
             ps.setInt(1, firmId);
             assertThat(ps.executeUpdate()).isEqualTo(1);
         }
         // An overdue in-flight transfer alongside it IS expired.
-        requests.createTransferRequest(firmId, invited.toString(), "tok-overdue",
-                dbNow().minusMinutes(1));
+        requests.createTransferRequest(firmId, invited.toString(), "tok-overdue", dbNow().minusMinutes(1));
 
         assertThat(requests.expireStaleTransfers()).isEqualTo(1);
 
         try (var conn = dataSource.getConnection();
-             var ps = conn.prepareStatement(
-                     "SELECT token, status FROM firm_transfer_requests WHERE firm_id = ? ORDER BY token")) {
+                var ps = conn.prepareStatement(
+                        "SELECT token, status FROM firm_transfer_requests WHERE firm_id = ? ORDER BY token")) {
             ps.setInt(1, firmId);
             try (var rs = ps.executeQuery()) {
                 assertThat(rs.next()).isTrue();

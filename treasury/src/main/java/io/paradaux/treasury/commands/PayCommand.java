@@ -1,6 +1,7 @@
 package io.paradaux.treasury.commands;
 
 import com.google.inject.Inject;
+import io.paradaux.common.AmountInput;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
@@ -9,15 +10,13 @@ import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
-import io.paradaux.common.AmountInput;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
-
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 
 @Command({"pay"})
 @Permission("treasury.pay")
@@ -29,8 +28,11 @@ public class PayCommand implements CommandHandler {
     private final Message message;
 
     @Inject
-    public PayCommand(AccountService accountService, LedgerService ledgerService,
-                      PlayerDirectoryService playerDirectory, Message message) {
+    public PayCommand(
+            AccountService accountService,
+            LedgerService ledgerService,
+            PlayerDirectoryService playerDirectory,
+            Message message) {
         this.accountService = accountService;
         this.ledgerService = ledgerService;
         this.playerDirectory = playerDirectory;
@@ -52,19 +54,18 @@ public class PayCommand implements CommandHandler {
     @Route("<target> <amount>")
     @Async
     @Description("Pay another player or government account")
-    public void pay(@Sender Player sender,
-                    @Arg("target") PayTarget target,
-                    @Arg("amount") BigDecimal amount) {
+    public void pay(@Sender Player sender, @Arg("target") PayTarget target, @Arg("amount") BigDecimal amount) {
         doPay(sender, target.name(), amount, null);
     }
 
     @Route("<target> <amount> <memo>")
     @Async
     @Description("Pay another player or government account with a memo")
-    public void payMemo(@Sender Player sender,
-                        @Arg("target") PayTarget target,
-                        @Arg("amount") BigDecimal amount,
-                        @GreedyArg("memo") String memo) {
+    public void payMemo(
+            @Sender Player sender,
+            @Arg("target") PayTarget target,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
         doPay(sender, target.name(), amount, memo);
     }
 
@@ -129,20 +130,30 @@ public class PayCommand implements CommandHandler {
         }
 
         int senderAccountId = accountService.getOrCreatePersonalAccountId(sender.getUniqueId());
-        String memoLine = "Payment from " + sender.getName() + " to " + targetName
-                + (memo != null ? ": " + memo : "");
+        String memoLine = "Payment from " + sender.getName() + " to " + targetName + (memo != null ? ": " + memo : "");
 
-        boolean paid = PersonalAccountPayment.pay(sender, senderAccountId,
-                () -> accountService.getOrCreatePersonalAccountId(targetUuid), targetName,
-                normalized, memoLine, TreasuryConstants.PAY_PLUGIN_SYSTEM,
-                accountService, ledgerService, message);
+        boolean paid = PersonalAccountPayment.pay(
+                sender,
+                senderAccountId,
+                () -> accountService.getOrCreatePersonalAccountId(targetUuid),
+                targetName,
+                normalized,
+                memoLine,
+                TreasuryConstants.PAY_PLUGIN_SYSTEM,
+                accountService,
+                ledgerService,
+                message);
         if (!paid) return;
 
         Player onlineTarget = Bukkit.getPlayer(targetUuid);
         if (onlineTarget != null) {
-            message.send(onlineTarget, "treasury.pay.received",
-                    "amount", accountService.formatAmount(normalized),
-                    "sender", sender.getName());
+            message.send(
+                    onlineTarget,
+                    "treasury.pay.received",
+                    "amount",
+                    accountService.formatAmount(normalized),
+                    "sender",
+                    sender.getName());
         }
     }
 
@@ -151,8 +162,16 @@ public class PayCommand implements CommandHandler {
         String memoLine = "Payment from " + sender.getName() + " to " + govAccount.getDisplayName()
                 + (memo != null ? ": " + memo : "");
 
-        PersonalAccountPayment.pay(sender, senderAccountId, govAccount::getAccountId,
-                govAccount.getDisplayName(), normalized, memoLine, TreasuryConstants.PAY_PLUGIN_SYSTEM,
-                accountService, ledgerService, message);
+        PersonalAccountPayment.pay(
+                sender,
+                senderAccountId,
+                govAccount::getAccountId,
+                govAccount.getDisplayName(),
+                normalized,
+                memoLine,
+                TreasuryConstants.PAY_PLUGIN_SYSTEM,
+                accountService,
+                ledgerService,
+                message);
     }
 }

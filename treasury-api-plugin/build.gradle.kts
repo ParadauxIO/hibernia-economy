@@ -95,12 +95,12 @@ tasks {
         val root = "io.paradaux.treasuryapi.libs"
 
         relocate("com.google.inject", "$root.guice")
-        relocate("org.aopalliance",   "$root.org.aopalliance")
-        relocate("org.mybatis",       "$root.mybatis")
+        relocate("org.aopalliance", "$root.org.aopalliance")
+        relocate("org.mybatis", "$root.mybatis")
         relocate("com.zaxxer.hikari", "$root.hikari")
-        relocate("org.mariadb",       "$root.mariadb")
-        relocate("org.reflections",   "$root.reflections")
-        relocate("io.jsonwebtoken",   "$root.jjwt")
+        relocate("org.mariadb", "$root.mariadb")
+        relocate("org.reflections", "$root.reflections")
+        relocate("io.jsonwebtoken", "$root.jjwt")
         relocate("com.fasterxml.jackson", "$root.jackson")
     }
 }
@@ -110,11 +110,13 @@ tasks {
 // diff — the parts whose mistakes mint a usable key or revoke the wrong one. The
 // JWT signing-key derivation itself lives in :common (JwtKeys) and is mutated there.
 pitest {
-    targetClasses.set(listOf(
-        "io.paradaux.treasuryapi.services.impl.ApiKeyServiceImpl*",
-        "io.paradaux.treasuryapi.model.ReconciliationDiff*",
-        "io.paradaux.treasuryapi.utils.*",
-    ))
+    targetClasses.set(
+        listOf(
+            "io.paradaux.treasuryapi.services.impl.ApiKeyServiceImpl*",
+            "io.paradaux.treasuryapi.model.ReconciliationDiff*",
+            "io.paradaux.treasuryapi.utils.*",
+        ),
+    )
     // Unit tests only: the mapper ITs keep a static DataSource that PIT's
     // per-test launcher sessions close underneath them ("HikariDataSource has been
     // closed"), and the targeted classes are unit-tested anyway.

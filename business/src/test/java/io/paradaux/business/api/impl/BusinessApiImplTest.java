@@ -1,5 +1,14 @@
 package io.paradaux.business.api.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmEmployee;
 import io.paradaux.business.model.FirmPlayer;
@@ -13,6 +22,9 @@ import io.paradaux.business.services.FirmRoleService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.FirmTransactionService;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,29 +33,29 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class BusinessApiImplTest {
 
-    @Mock FirmService firmService;
-    @Mock FirmStaffService staffService;
-    @Mock FirmRoleService roleService;
-    @Mock FirmRequestService requestService;
-    @Mock FirmPlayerService playerService;
-    @Mock FirmAccountService accountService;
-    @Mock FirmTransactionService transactionService;
+    @Mock
+    FirmService firmService;
+
+    @Mock
+    FirmStaffService staffService;
+
+    @Mock
+    FirmRoleService roleService;
+
+    @Mock
+    FirmRequestService requestService;
+
+    @Mock
+    FirmPlayerService playerService;
+
+    @Mock
+    FirmAccountService accountService;
+
+    @Mock
+    FirmTransactionService transactionService;
 
     private BusinessApiImpl api;
     private final UUID actor = UUID.randomUUID();
@@ -51,7 +63,14 @@ class BusinessApiImplTest {
 
     @BeforeEach
     void setUp() {
-        api = new BusinessApiImpl(firmService, staffService, roleService, requestService, playerService, accountService, transactionService);
+        api = new BusinessApiImpl(
+                firmService,
+                staffService,
+                roleService,
+                requestService,
+                playerService,
+                accountService,
+                transactionService);
     }
 
     @Test
@@ -132,8 +151,7 @@ class BusinessApiImplTest {
     @Test
     void firms_setHq_requiresAdmin() {
         when(staffService.hasPermission(7, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> api.firms().setHq(7, "plot", actor))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> api.firms().setHq(7, "plot", actor)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -146,8 +164,7 @@ class BusinessApiImplTest {
     @Test
     void firms_setDiscord_requiresAdmin() {
         when(staffService.hasPermission(7, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> api.firms().setDiscord(7, "url", actor))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> api.firms().setDiscord(7, "url", actor)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -242,14 +259,16 @@ class BusinessApiImplTest {
     @Test
     void staff_hasPermissionForAccount_unknown_returnsFalse() {
         when(accountService.getFirmIdByAccountId(99)).thenReturn(null);
-        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN)).isFalse();
+        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN))
+                .isFalse();
     }
 
     @Test
     void staff_hasPermissionForAccount_resolvesAndChecks() {
         when(accountService.getFirmIdByAccountId(99)).thenReturn(7);
         when(staffService.hasPermission(7, target, RolePermission.ADMIN)).thenReturn(true);
-        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN)).isTrue();
+        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN))
+                .isTrue();
     }
 
     // ---- RoleApi delegate ----
@@ -262,8 +281,8 @@ class BusinessApiImplTest {
 
     @Test
     void roles_getRolePermissions_delegates() {
-        when(roleService.getFirmRolePermissions(7, "Lead")).thenReturn(List.of(
-                new FirmRolePermission(7, "Lead", RolePermission.ADMIN)));
+        when(roleService.getFirmRolePermissions(7, "Lead"))
+                .thenReturn(List.of(new FirmRolePermission(7, "Lead", RolePermission.ADMIN)));
         assertThat(api.roles().getRolePermissions(7, "Lead")).hasSize(1);
     }
 

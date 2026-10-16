@@ -70,13 +70,15 @@ tasks.test {
             val total = result.endTime - result.startTime
             val file = timingsFile.get().asFile
             file.parentFile.mkdirs()
-            file.writeText(buildString {
-                appendLine("# ${classes.size} classes, ${tests.size} tests, wall ${fmt(total).trim()}")
-                appendLine("## classes (slowest first)")
-                classes.forEach { appendLine("${fmt(it.value)}  ${it.key}") }
-                appendLine("## tests (slowest first)")
-                tests.forEach { appendLine("${fmt(it.value)}  ${it.key}") }
-            })
+            file.writeText(
+                buildString {
+                    appendLine("# ${classes.size} classes, ${tests.size} tests, wall ${fmt(total).trim()}")
+                    appendLine("## classes (slowest first)")
+                    classes.forEach { appendLine("${fmt(it.value)}  ${it.key}") }
+                    appendLine("## tests (slowest first)")
+                    tests.forEach { appendLine("${fmt(it.value)}  ${it.key}") }
+                },
+            )
             println("\nSlowest test classes (${classes.size} classes, wall ${fmt(total).trim()}):")
             classes.take(10).forEach { println("${fmt(it.value)}  ${it.key}") }
             println("Slowest tests:")

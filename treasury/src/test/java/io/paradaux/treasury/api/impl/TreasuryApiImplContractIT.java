@@ -34,7 +34,9 @@ class TreasuryApiImplContractIT extends TreasuryApiContract {
         Injector injector = Guice.createInjector(new DatabaseModule(DB.dataSource()), new TestServicesModule());
         injector.getInstance(LedgerService.class).bootstrapGovernmentAccounts();
         api = injector.getInstance(TreasuryApiImpl.class);
-        faucet = injector.getInstance(AccountService.class).getGovernmentAccountByName("starting-balances").getAccountId();
+        faucet = injector.getInstance(AccountService.class)
+                .getGovernmentAccountByName("starting-balances")
+                .getAccountId();
     }
 
     @Override

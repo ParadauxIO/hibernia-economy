@@ -1,27 +1,5 @@
 package io.paradaux.treasury.adapters;
 
-import io.paradaux.treasury.api.TaxApi;
-import io.paradaux.treasury.model.tax.TaxResult;
-import io.paradaux.treasury.services.AccountService;
-import io.paradaux.treasury.services.LedgerService;
-import io.paradaux.treasury.testsupport.TestConfigs;
-import io.paradaux.treasury.utils.TreasuryConstants;
-import net.milkbowl.vault.economy.EconomyResponse;
-import org.bukkit.OfflinePlayer;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -34,6 +12,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.treasury.api.TaxApi;
+import io.paradaux.treasury.model.tax.TaxResult;
+import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.LedgerService;
+import io.paradaux.treasury.testsupport.TestConfigs;
+import io.paradaux.treasury.utils.TreasuryConstants;
+import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.UUID;
+import net.milkbowl.vault.economy.EconomyResponse;
+import org.bukkit.OfflinePlayer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 /**
  * Vault carries no idempotency token, so the adapter's reported outcome is the only
  * thing standing between a caller and a retry. A movement that committed must be
@@ -42,10 +41,17 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class VaultEconomyAdapterTest {
 
-    @Mock AccountService accountService;
-    @Mock LedgerService ledgerService;
-    @Mock TaxApi taxApi;
-    @Mock OfflinePlayer player;
+    @Mock
+    AccountService accountService;
+
+    @Mock
+    LedgerService ledgerService;
+
+    @Mock
+    TaxApi taxApi;
+
+    @Mock
+    OfflinePlayer player;
 
     private final UUID uuid = UUID.randomUUID();
     private VaultEconomyAdapter adapter;
@@ -106,13 +112,13 @@ class VaultEconomyAdapterTest {
     // ---- amount guard: the one-cent floor, non-finite doubles, rounding ----
 
     @ParameterizedTest
-    @ValueSource(doubles = {0.0D, -1.0D, 0.0099D, 0.005D, Double.NaN,
-            Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY})
+    @ValueSource(
+            doubles = {0.0D, -1.0D, 0.0099D, 0.005D, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY})
     void depositAndWithdraw_rejectUnpayableAmounts_withAFailureResponse_neverAnException(double amount) {
         EconomyResponse deposit = adapter.depositPlayer(player, amount);
         EconomyResponse withdraw = adapter.withdrawPlayer(player, amount);
 
-        for (EconomyResponse r : new EconomyResponse[]{deposit, withdraw}) {
+        for (EconomyResponse r : new EconomyResponse[] {deposit, withdraw}) {
             assertThat(r.type).isEqualTo(EconomyResponse.ResponseType.FAILURE);
             assertThat(r.errorMessage).isEqualTo("Amount must be at least 0.01");
         }
@@ -129,11 +135,11 @@ class VaultEconomyAdapterTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0.015, 0.02",   // half-even: up to the even cent
-            "0.025, 0.02",   // half-even: down to the even cent
-            "10.005, 10.00",
-            "19.999, 20.00",
-            "1234.5, 1234.50",
+        "0.015, 0.02", // half-even: up to the even cent
+        "0.025, 0.02", // half-even: down to the even cent
+        "10.005, 10.00",
+        "19.999, 20.00",
+        "1234.5, 1234.50",
     })
     void deposit_postsTheAmountRoundedHalfEvenToCents(double amount, String posted) {
         adapter.depositPlayer(player, amount);
@@ -147,8 +153,15 @@ class VaultEconomyAdapterTest {
         adapter.depositPlayer(player, 5.0D);
         ArgumentCaptor<String> plugin = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> memo = ArgumentCaptor.forClass(String.class);
-        verify(ledgerService).vaultDeposit(plugin.capture(), eq(uuid), eq(new BigDecimal("5.00")), memo.capture(),
-                eq(TreasuryConstants.VIRTUAL_TREASURY_INITIATOR), isNull(), isNull());
+        verify(ledgerService)
+                .vaultDeposit(
+                        plugin.capture(),
+                        eq(uuid),
+                        eq(new BigDecimal("5.00")),
+                        memo.capture(),
+                        eq(TreasuryConstants.VIRTUAL_TREASURY_INITIATOR),
+                        isNull(),
+                        isNull());
         assertThat(memo.getValue()).isEqualTo("Vault deposit (" + plugin.getValue() + ")");
     }
 
@@ -216,12 +229,12 @@ class VaultEconomyAdapterTest {
 
     @ParameterizedTest
     @CsvSource({
-            "10.00, true",
-            "9.99, true",
-            "10.01, false",
-            "10.004, true",   // rounds to 10.00 — what a withdrawal would actually take
-            "10.006, false",  // rounds to 10.01
-            "-5, true",
+        "10.00, true",
+        "9.99, true",
+        "10.01, false",
+        "10.004, true", // rounds to 10.00 — what a withdrawal would actually take
+        "10.006, false", // rounds to 10.01
+        "-5, true",
     })
     void has_comparesAgainstTheBalanceAtCentPrecision(double amount, boolean expected) {
         when(accountService.findRedirectedAccount(uuid)).thenReturn(Optional.empty());
@@ -274,12 +287,12 @@ class VaultEconomyAdapterTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0, 0.00",
-            "1234.5, '1,234.50'",
-            "0.015, 0.02",
-            "0.025, 0.02",
-            "1000000, '1,000,000.00'",
-            "-12.5, -12.50",
+        "0, 0.00",
+        "1234.5, '1,234.50'",
+        "0.015, 0.02",
+        "0.025, 0.02",
+        "1000000, '1,000,000.00'",
+        "-12.5, -12.50",
     })
     void format_twoDecimalsHalfEvenWithGrouping(double amount, String expected) {
         assertThat(adapter.format(amount)).isEqualTo(expected);

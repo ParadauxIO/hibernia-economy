@@ -1,20 +1,19 @@
 package io.paradaux.treasury.utils;
 
-import io.paradaux.treasury.model.tax.TaxCycleType;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.paradaux.treasury.model.tax.TaxCycleType;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The tax-cycle calendar maths: when players are taxed next. Every case pins a
@@ -38,8 +37,7 @@ class TaxCycleScheduleTest {
 
         @Test
         void beforeFireHour_firesLaterToday() {
-            assertThat(schedule.nextFireAfter(at("2026-01-10T01:30", UTC)))
-                    .isEqualTo(at("2026-01-10T03:00", UTC));
+            assertThat(schedule.nextFireAfter(at("2026-01-10T01:30", UTC))).isEqualTo(at("2026-01-10T03:00", UTC));
         }
 
         @Test
@@ -50,14 +48,12 @@ class TaxCycleScheduleTest {
 
         @Test
         void exactlyAtFireTime_schedulesTomorrow_neverTheSameInstantAgain() {
-            assertThat(schedule.nextFireAfter(at("2026-01-10T03:00", UTC)))
-                    .isEqualTo(at("2026-01-11T03:00", UTC));
+            assertThat(schedule.nextFireAfter(at("2026-01-10T03:00", UTC))).isEqualTo(at("2026-01-11T03:00", UTC));
         }
 
         @Test
         void afterFireHour_firesTomorrow() {
-            assertThat(schedule.nextFireAfter(at("2026-01-10T03:00:01", UTC)))
-                    .isEqualTo(at("2026-01-11T03:00", UTC));
+            assertThat(schedule.nextFireAfter(at("2026-01-10T03:00:01", UTC))).isEqualTo(at("2026-01-11T03:00", UTC));
         }
 
         @Test
@@ -70,8 +66,7 @@ class TaxCycleScheduleTest {
 
         @Test
         void yearRollover() {
-            assertThat(schedule.nextFireAfter(at("2026-12-31T04:00", UTC)))
-                    .isEqualTo(at("2027-01-01T03:00", UTC));
+            assertThat(schedule.nextFireAfter(at("2026-12-31T04:00", UTC))).isEqualTo(at("2027-01-01T03:00", UTC));
         }
 
         @Test
@@ -108,7 +103,8 @@ class TaxCycleScheduleTest {
             TaxCycleSchedule oneAm = TaxCycleSchedule.daily(1);
             ZonedDateTime first = oneAm.nextFireAfter(at("2026-10-24T12:00", DUBLIN));
             assertThat(first.toInstant()).isEqualTo(Instant.parse("2026-10-25T00:00:00Z"));
-            assertThat(oneAm.nextFireAfter(first).toLocalDate()).isEqualTo(first.toLocalDate().plusDays(1));
+            assertThat(oneAm.nextFireAfter(first).toLocalDate())
+                    .isEqualTo(first.toLocalDate().plusDays(1));
         }
 
         @Test
@@ -117,7 +113,8 @@ class TaxCycleScheduleTest {
             Instant instant = Instant.parse("2026-01-10T12:00:00Z");
             assertThat(schedule.nextFireAfter(instant.atZone(UTC)).toInstant())
                     .isEqualTo(Instant.parse("2026-01-11T03:00:00Z"));
-            assertThat(schedule.nextFireAfter(instant.atZone(ZoneId.of("Asia/Tokyo"))).toInstant())
+            assertThat(schedule.nextFireAfter(instant.atZone(ZoneId.of("Asia/Tokyo")))
+                            .toInstant())
                     .isEqualTo(Instant.parse("2026-01-10T18:00:00Z")); // 03:00 JST on the 11th
         }
     }
@@ -136,16 +133,13 @@ class TaxCycleScheduleTest {
 
         @Test
         void onTheFireDayBeforeTheHour_firesToday() {
-            assertThat(mondays.nextFireAfter(at("2026-01-12T02:00", UTC)))
-                    .isEqualTo(at("2026-01-12T03:00", UTC));
+            assertThat(mondays.nextFireAfter(at("2026-01-12T02:00", UTC))).isEqualTo(at("2026-01-12T03:00", UTC));
         }
 
         @Test
         void onTheFireDayAtOrAfterTheHour_firesNextWeek() {
-            assertThat(mondays.nextFireAfter(at("2026-01-12T03:00", UTC)))
-                    .isEqualTo(at("2026-01-19T03:00", UTC));
-            assertThat(mondays.nextFireAfter(at("2026-01-12T23:00", UTC)))
-                    .isEqualTo(at("2026-01-19T03:00", UTC));
+            assertThat(mondays.nextFireAfter(at("2026-01-12T03:00", UTC))).isEqualTo(at("2026-01-19T03:00", UTC));
+            assertThat(mondays.nextFireAfter(at("2026-01-12T23:00", UTC))).isEqualTo(at("2026-01-19T03:00", UTC));
         }
 
         @Test
@@ -162,14 +156,14 @@ class TaxCycleScheduleTest {
 
         @ParameterizedTest
         @CsvSource({
-                // dayOfWeek, expected date — from Wednesday 2026-01-14 12:00
-                "1, 2026-01-19",
-                "2, 2026-01-20",
-                "3, 2026-01-21",
-                "4, 2026-01-15",
-                "5, 2026-01-16",
-                "6, 2026-01-17",
-                "7, 2026-01-18",
+            // dayOfWeek, expected date — from Wednesday 2026-01-14 12:00
+            "1, 2026-01-19",
+            "2, 2026-01-20",
+            "3, 2026-01-21",
+            "4, 2026-01-15",
+            "5, 2026-01-16",
+            "6, 2026-01-17",
+            "7, 2026-01-18",
         })
         void everyIsoDayOfWeek(int dayOfWeek, String expectedDate) {
             assertThat(TaxCycleSchedule.weekly(3, dayOfWeek).nextFireAfter(at("2026-01-14T12:00", UTC)))
@@ -310,13 +304,15 @@ class TaxCycleScheduleTest {
                     .isEqualTo(72_000L);
             assertThat(TaxCycleSchedule.delayTicks(now, now.plusHours(1).plusNanos(1_000_000)))
                     .isEqualTo(72_001L);
-            assertThat(TaxCycleSchedule.delayTicks(now, now.plusNanos(1_050_000_000L))).isEqualTo(21L);
+            assertThat(TaxCycleSchedule.delayTicks(now, now.plusNanos(1_050_000_000L)))
+                    .isEqualTo(21L);
         }
 
         @Test
         void neverLessThanOneSecond() {
             assertThat(TaxCycleSchedule.delayTicks(now, now)).isEqualTo(20L);
-            assertThat(TaxCycleSchedule.delayTicks(now, now.plusNanos(999_000_000L))).isEqualTo(20L);
+            assertThat(TaxCycleSchedule.delayTicks(now, now.plusNanos(999_000_000L)))
+                    .isEqualTo(20L);
             assertThat(TaxCycleSchedule.delayTicks(now, now.plusSeconds(1))).isEqualTo(20L);
             assertThat(TaxCycleSchedule.delayTicks(now, now.minusSeconds(30))).isEqualTo(20L);
         }

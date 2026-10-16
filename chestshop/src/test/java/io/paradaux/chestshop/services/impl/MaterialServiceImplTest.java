@@ -1,22 +1,21 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
+import java.util.List;
+import java.util.Map;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Real-item coverage for {@link MaterialServiceImpl} on MockBukkit: the config-backed
@@ -51,7 +50,8 @@ class MaterialServiceImplTest extends ServerTest {
     @Test
     void equals_trueForIdenticalPlainItems() {
         MaterialServiceImpl m = material(TestConfigs.defaults());
-        assertThat(m.equals(item(Material.DIAMOND, 1), item(Material.DIAMOND, 5))).isTrue();
+        assertThat(m.equals(item(Material.DIAMOND, 1), item(Material.DIAMOND, 5)))
+                .isTrue();
     }
 
     @Test
@@ -83,8 +83,8 @@ class MaterialServiceImplTest extends ServerTest {
     @Test
     void equals_trueWhenSerializedMetaDiffersOnlyByExcludedAttribute() {
         // Exclude the display-name attribute: two named items differing only by name are equal.
-        ChestShopConfiguration config = TestConfigs.with(TestConfigs.defaults(),
-                "excludedItemAttributesRaw", List.of("display-name"));
+        ChestShopConfiguration config =
+                TestConfigs.with(TestConfigs.defaults(), "excludedItemAttributesRaw", List.of("display-name"));
         MaterialServiceImpl m = material(config);
 
         ItemStack a = named(Material.DIAMOND, "Alpha");
@@ -115,7 +115,8 @@ class MaterialServiceImplTest extends ServerTest {
     void equals_trueForTwoUnnamedMetaItemsThatSerializeIdentically() {
         MaterialServiceImpl m = material(TestConfigs.defaults());
         // Same display name -> isSimilar true short-circuit.
-        assertThat(m.equals(named(Material.DIAMOND, "Same"), named(Material.DIAMOND, "Same"))).isTrue();
+        assertThat(m.equals(named(Material.DIAMOND, "Same"), named(Material.DIAMOND, "Same")))
+                .isTrue();
     }
 
     // ---- equals: fall-backs behind a failed isSimilar (mock outer items) -------------

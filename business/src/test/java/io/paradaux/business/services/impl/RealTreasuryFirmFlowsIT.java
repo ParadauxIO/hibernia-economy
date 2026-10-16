@@ -1,5 +1,13 @@
 package io.paradaux.business.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -24,32 +32,23 @@ import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.api.impl.TreasuryApiImpl;
 import io.paradaux.treasury.event.TaxCycleEvent;
-import io.paradaux.treasury.model.tax.TaxCycleType;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
 import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.tax.TaxCycleType;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.testsupport.TestServicesModule;
-import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mybatis.guice.MyBatisModule;
-
-import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import javax.sql.DataSource;
+import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mybatis.guice.MyBatisModule;
 
 /**
  * Business money flows run against the REAL Treasury — {@link TreasuryApiImpl} with
@@ -81,28 +80,32 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
         ledger.bootstrapGovernmentAccounts();
         treasury = treasuryInjector.getInstance(TreasuryApiImpl.class);
 
-        Injector business = Guice.createInjector(new MyBatisModule() {
-            @Override protected void initialize() {
-                environmentId("real-treasury-test");
-                bindTransactionFactoryType(JdbcTransactionFactory.class);
-                addMapperClass(FirmMapper.class);
-                addMapperClass(FirmAccountsMapper.class);
-                addMapperClass(FirmRoleMapper.class);
-                addMapperClass(FirmRequestMapper.class);
-            }
-        }, new AbstractModule() {
-            @Override protected void configure() {
-                bind(DataSource.class).toInstance(dataSource);
-                bind(TreasuryApi.class).toInstance(treasury);
-                bind(io.paradaux.business.services.FirmService.class).to(FirmServiceImpl.class);
-                bind(FirmConfiguration.class).toInstance(firmConfig);
-                bind(FirmStaffService.class).toInstance(mock(FirmStaffService.class));
-                bind(FirmAccountService.class).toInstance(mock(FirmAccountService.class));
-                bind(FirmAreaShopService.class).toInstance(mock(FirmAreaShopService.class));
-                bind(FirmChatService.class).toInstance(mock(FirmChatService.class));
-                bind(FirmPlayerService.class).toInstance(mock(FirmPlayerService.class));
-            }
-        });
+        Injector business = Guice.createInjector(
+                new MyBatisModule() {
+                    @Override
+                    protected void initialize() {
+                        environmentId("real-treasury-test");
+                        bindTransactionFactoryType(JdbcTransactionFactory.class);
+                        addMapperClass(FirmMapper.class);
+                        addMapperClass(FirmAccountsMapper.class);
+                        addMapperClass(FirmRoleMapper.class);
+                        addMapperClass(FirmRequestMapper.class);
+                    }
+                },
+                new AbstractModule() {
+                    @Override
+                    protected void configure() {
+                        bind(DataSource.class).toInstance(dataSource);
+                        bind(TreasuryApi.class).toInstance(treasury);
+                        bind(io.paradaux.business.services.FirmService.class).to(FirmServiceImpl.class);
+                        bind(FirmConfiguration.class).toInstance(firmConfig);
+                        bind(FirmStaffService.class).toInstance(mock(FirmStaffService.class));
+                        bind(FirmAccountService.class).toInstance(mock(FirmAccountService.class));
+                        bind(FirmAreaShopService.class).toInstance(mock(FirmAreaShopService.class));
+                        bind(FirmChatService.class).toInstance(mock(FirmChatService.class));
+                        bind(FirmPlayerService.class).toInstance(mock(FirmPlayerService.class));
+                    }
+                });
         firms = business.getInstance(FirmServiceImpl.class);
         transactions = business.getInstance(FirmTransactionServiceImpl.class);
     }
@@ -120,8 +123,10 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
         assertThat(treasury.getBalanceByAccountId(account.getAccountId())).isEqualByComparingTo("0");
         assertThat(treasury.canAccessAccount(owner, account.getAccountId())).isTrue();
         assertThat(treasury.getAuthorizers(account.getAccountId()))
-                .extracting(AccountMember::getMemberUuid).contains(owner);
-        assertThat(mapper(FirmAccountsMapper.class).isFirmAccount(firm.getFirmId(), account.getAccountId())).isTrue();
+                .extracting(AccountMember::getMemberUuid)
+                .contains(owner);
+        assertThat(mapper(FirmAccountsMapper.class).isFirmAccount(firm.getFirmId(), account.getAccountId()))
+                .isTrue();
     }
 
     @Test
@@ -159,7 +164,8 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
 
         assertThat(treasury.getBalanceByAccountId(payer.getDefaultAccountId())).isEqualByComparingTo("179.50");
         assertThat(treasury.getBalanceByAccountId(payee.getDefaultAccountId())).isEqualByComparingTo("120.50");
-        assertThatThrownBy(() -> transactions.payFirm(payer.getFirmId(), payee.getFirmId(), alice, new BigDecimal("179.51")))
+        assertThatThrownBy(() ->
+                        transactions.payFirm(payer.getFirmId(), payee.getFirmId(), alice, new BigDecimal("179.51")))
                 .isInstanceOf(ExceedsLimitException.class);
         assertThat(treasury.getBalanceByAccountId(payer.getDefaultAccountId())).isEqualByComparingTo("179.50");
     }
@@ -169,7 +175,8 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
         UUID owner = UUID.randomUUID();
         Firm firm = firms.createFirm("Taxed", owner);
         int main = firm.getDefaultAccountId();
-        int second = treasury.createAccount(AccountType.BUSINESS, owner, "Taxed Reserve").getAccountId();
+        int second = treasury.createAccount(AccountType.BUSINESS, owner, "Taxed Reserve")
+                .getAccountId();
         mapper(FirmAccountsMapper.class).insertFirmAccount(firm.getFirmId(), second);
         transactions.deposit(firm.getFirmId(), owner, new BigDecimal("50.00"));
         int personal = treasury.resolveOrCreatePersonal(owner).getAccountId();
@@ -181,22 +188,24 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
         // 151.00 total at 3.33% → 5.0283 → 5.03, split 50/101 by largest remainder:
         // quotas 166.56c / 336.44c → floors 166 + 336 = 502, the spare cent goes to .56.
         FirmBalanceTaxServiceImpl tax = balanceTax(firm, List.of(main, second), new BigDecimal("0.0333"));
-        TaxCycleEvent cycle = new TaxCycleEvent(TaxCycleType.WEEKLY, Instant.parse("2026-10-12T00:00:00Z"),
-                treasury.getTaxApi());
+        TaxCycleEvent cycle =
+                new TaxCycleEvent(TaxCycleType.WEEKLY, Instant.parse("2026-10-12T00:00:00Z"), treasury.getTaxApi());
 
         BalanceTaxCycleResult first = tax.runWeeklyCycle(cycle);
 
         assertThat(first).isEqualTo(new BalanceTaxCycleResult(2, 0, 0));
         assertThat(treasury.getBalanceByAccountId(main)).isEqualByComparingTo("48.33");
         assertThat(treasury.getBalanceByAccountId(second)).isEqualByComparingTo("97.64");
-        assertThat(treasury.getBalanceByAccountId(government).subtract(govBefore)).isEqualByComparingTo("5.03");
+        assertThat(treasury.getBalanceByAccountId(government).subtract(govBefore))
+                .isEqualByComparingTo("5.03");
 
         // Same period again (a retried/duplicated cycle): Treasury's dedup keys make it a
         // no-op — reported as collected, but no money moves a second time.
         tax.runWeeklyCycle(cycle);
         assertThat(treasury.getBalanceByAccountId(main)).isEqualByComparingTo("48.33");
         assertThat(treasury.getBalanceByAccountId(second)).isEqualByComparingTo("97.64");
-        assertThat(treasury.getBalanceByAccountId(government).subtract(govBefore)).isEqualByComparingTo("5.03");
+        assertThat(treasury.getBalanceByAccountId(government).subtract(govBefore))
+                .isEqualByComparingTo("5.03");
     }
 
     private FirmBalanceTaxServiceImpl balanceTax(Firm firm, List<Integer> accountIds, BigDecimal rate) {

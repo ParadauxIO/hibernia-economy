@@ -1,5 +1,11 @@
 package io.paradaux.treasury.services;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
@@ -7,24 +13,16 @@ import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.tax.TaxCollection;
 import io.paradaux.treasury.model.tax.TaxResult;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import java.math.BigDecimal;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link BalanceTaxService} branches that are awkward to trigger
@@ -35,15 +33,18 @@ import org.mockito.ArgumentCaptor;
 @ExtendWith(MockitoExtension.class)
 class BalanceTaxServiceMockedApiTest {
 
-    @Mock TaxApi taxApi;
-    @Mock AccountMapper accountMapper;
+    @Mock
+    TaxApi taxApi;
+
+    @Mock
+    AccountMapper accountMapper;
 
     private BalanceTaxService svc;
 
     private static BalanceTaxConfiguration enabledConfig() {
         NavigableMap<BigDecimal, BigDecimal> brackets = new TreeMap<>();
-        brackets.put(new BigDecimal("0.00"),       BigDecimal.ZERO);
-        brackets.put(new BigDecimal("100000.00"),  new BigDecimal("0.01"));
+        brackets.put(new BigDecimal("0.00"), BigDecimal.ZERO);
+        brackets.put(new BigDecimal("100000.00"), new BigDecimal("0.01"));
         return BalanceTaxConfiguration.forTesting(true, "DCGovernment", brackets);
     }
 
@@ -102,8 +103,7 @@ class BalanceTaxServiceMockedApiTest {
         dest.setAccountId(99);
         when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
 
-        when(taxApi.collectTax(any(TaxCollection.class)))
-                .thenReturn(new TaxResult.Skipped("dedup"));
+        when(taxApi.collectTax(any(TaxCollection.class))).thenReturn(new TaxResult.Skipped("dedup"));
 
         svc.collect(player, lastLogin, now);
 
@@ -124,8 +124,7 @@ class BalanceTaxServiceMockedApiTest {
         dest.setAccountId(99);
         when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
 
-        when(taxApi.collectTax(any(TaxCollection.class)))
-                .thenReturn(new TaxResult.Failed("boom"));
+        when(taxApi.collectTax(any(TaxCollection.class))).thenReturn(new TaxResult.Failed("boom"));
 
         svc.collect(player, lastLogin, now);
 
@@ -258,8 +257,7 @@ class BalanceTaxServiceMockedApiTest {
             svc.collect(player, lastLogin, now);
         }
 
-        verify(accountMapper, org.mockito.Mockito.times(1))
-                .findGovernmentAccountByName("DCGovernment");
+        verify(accountMapper, org.mockito.Mockito.times(1)).findGovernmentAccountByName("DCGovernment");
     }
 
     @Test
@@ -270,8 +268,9 @@ class BalanceTaxServiceMockedApiTest {
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
         AccountBalance balance = new AccountBalance();
         balance.setBalance(new BigDecimal("100000"));
-        var replacement = BalanceTaxConfiguration.forTesting(true, "NewGovernment",
-                new TreeMap<>(java.util.Map.of(BigDecimal.ZERO, new BigDecimal("0.02")))).snapshot();
+        var replacement = BalanceTaxConfiguration.forTesting(
+                        true, "NewGovernment", new TreeMap<>(java.util.Map.of(BigDecimal.ZERO, new BigDecimal("0.02"))))
+                .snapshot();
         when(accountMapper.readBalance(42)).thenAnswer(invocation -> {
             config.publish(replacement);
             return balance;
@@ -303,9 +302,10 @@ class BalanceTaxServiceMockedApiTest {
         Account dest = new Account();
         dest.setAccountId(99);
         // lenient: the destination is cached after the first collection.
-        org.mockito.Mockito.lenient().when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
-        when(taxApi.collectTax(any(TaxCollection.class)))
-                .thenReturn(new TaxResult.Collected(1L, BigDecimal.ONE, 99));
+        org.mockito.Mockito.lenient()
+                .when(accountMapper.findGovernmentAccountByName("DCGovernment"))
+                .thenReturn(dest);
+        when(taxApi.collectTax(any(TaxCollection.class))).thenReturn(new TaxResult.Collected(1L, BigDecimal.ONE, 99));
 
         svc.collect(player, previous, now);
 
@@ -328,8 +328,8 @@ class BalanceTaxServiceMockedApiTest {
         assertThat(c.taxType()).isEqualTo("personal-balance-tax");
         assertThat(c.description()).isEqualTo("Personal balance tax (3d 12h @ 1%/wk)");
         // One collection per (player, login): a replayed login event can't tax twice.
-        assertThat(c.dedupKey()).isEqualTo(io.paradaux.treasury.utils.Idempotency.sha256(
-                "balance-tax:" + player + ":" + now));
+        assertThat(c.dedupKey())
+                .isEqualTo(io.paradaux.treasury.utils.Idempotency.sha256("balance-tax:" + player + ":" + now));
     }
 
     @Test
@@ -374,8 +374,12 @@ class BalanceTaxServiceMockedApiTest {
     @Test
     void disabled_readsNothing_andCollectsNothing() {
         BalanceTaxService disabled = new io.paradaux.treasury.services.impl.BalanceTaxServiceImpl(
-                BalanceTaxConfiguration.forTesting(false, "DCGovernment", new TreeMap<>(java.util.Map.of(
-                        BigDecimal.ZERO, new BigDecimal("0.05")))), taxApi, accountMapper);
+                BalanceTaxConfiguration.forTesting(
+                        false,
+                        "DCGovernment",
+                        new TreeMap<>(java.util.Map.of(BigDecimal.ZERO, new BigDecimal("0.05")))),
+                taxApi,
+                accountMapper);
 
         disabled.collect(UUID.randomUUID(), 1_000L, 1_000_000L);
 

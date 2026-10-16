@@ -1,20 +1,19 @@
 package io.paradaux.treasuryrestapi.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
+
 import io.paradaux.treasuryrestapi.dto.FirmDisbandResponse;
 import io.paradaux.treasuryrestapi.mapper.FirmMapper;
 import io.paradaux.treasuryrestapi.model.FirmAccountSummary;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doReturn;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * Regression for treasury-rest-api/behaviour/0002: disband must sweep the
@@ -60,13 +59,14 @@ class AdminFirmDisbandSweepIT extends EmbeddedDbIT {
         // listFirmAccounts reports the stale, pre-credit balance (500), but the locked
         // account_balances_mat row above holds the true post-credit balance (750).
         doReturn(List.of(FirmAccountSummary.builder()
-                .accountId(2)
-                .displayName("Acme Main")
-                .accountType("BUSINESS")
-                .archived(false)
-                .balance(new BigDecimal("500.00")) // STALE
-                .build()))
-                .when(firmMapper).listFirmAccounts(10);
+                        .accountId(2)
+                        .displayName("Acme Main")
+                        .accountType("BUSINESS")
+                        .archived(false)
+                        .balance(new BigDecimal("500.00")) // STALE
+                        .build()))
+                .when(firmMapper)
+                .listFirmAccounts(10);
 
         FirmDisbandResponse resp = adminFirmService.disband(serviceToken(), 10);
 
@@ -77,7 +77,7 @@ class AdminFirmDisbandSweepIT extends EmbeddedDbIT {
         assertThat(resp.accounts()).hasSize(1);
         assertThat(resp.accounts().get(0).sweptAmount()).isEqualTo("750.00");
         assertThat(sumPostings(2)).isEqualByComparingTo("-750.00"); // firm account fully drained
-        assertThat(sumPostings(1)).isEqualByComparingTo("750.00");  // proprietor received all of it
+        assertThat(sumPostings(1)).isEqualByComparingTo("750.00"); // proprietor received all of it
         // The harness runs the real trg_postings_* triggers, so the materialised balance
         // must agree with the ledger too: exactly zero left on the archived account.
         assertThat(matBalance(2)).isEqualByComparingTo("0.00");

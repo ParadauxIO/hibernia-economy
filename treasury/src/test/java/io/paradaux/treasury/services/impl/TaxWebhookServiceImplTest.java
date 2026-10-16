@@ -1,14 +1,13 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
 import com.sun.net.httpserver.HttpServer;
 import io.paradaux.treasury.model.config.DiscordWebhookConfiguration;
 import io.paradaux.treasury.model.tax.TaxCycleReport;
 import io.paradaux.treasury.model.tax.TaxCycleType;
 import io.paradaux.treasury.testsupport.TestConfigs;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
@@ -18,9 +17,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class TaxWebhookServiceImplTest {
 
@@ -77,7 +76,7 @@ class TaxWebhookServiceImplTest {
 
         assertThat(callCount).hasValue(1);
         String body = lastPayload.get();
-        assertThat(body).contains("\"color\":5763719");      // green for scheduled
+        assertThat(body).contains("\"color\":5763719"); // green for scheduled
         assertThat(body).contains("WEEKLY Tax Cycle Complete");
         assertThat(body).contains("Total Collected");
         assertThat(body).contains("$300.00");
@@ -96,7 +95,7 @@ class TaxWebhookServiceImplTest {
         svc.sendCycleReport(manualReport("rian"));
 
         String body = lastPayload.get();
-        assertThat(body).contains("\"color\":15105570");     // 0xE67E22 — orange for manual
+        assertThat(body).contains("\"color\":15105570"); // 0xE67E22 — orange for manual
         assertThat(body).contains("[MANUAL]");
         assertThat(body).contains("rian");
     }
@@ -118,8 +117,16 @@ class TaxWebhookServiceImplTest {
         TaxWebhookServiceImpl svc = new TaxWebhookServiceImpl(cfg);
 
         TaxCycleReport empty = new TaxCycleReport(
-                TaxCycleType.MONTHLY, Instant.parse("2026-03-01T03:00:00Z"),
-                false, null, BigDecimal.ZERO, Map.of(), Map.of(), 0, 0, 0);
+                TaxCycleType.MONTHLY,
+                Instant.parse("2026-03-01T03:00:00Z"),
+                false,
+                null,
+                BigDecimal.ZERO,
+                Map.of(),
+                Map.of(),
+                0,
+                0,
+                0);
         svc.sendCycleReport(empty);
 
         // Both breakdown fields should render as "—" (the placeholder)
@@ -143,8 +150,8 @@ class TaxWebhookServiceImplTest {
     @Test
     void sendCycleReport_unreachableHost_swallowsException() {
         // No server listening — HttpClient throws IOException, the service must swallow it.
-        DiscordWebhookConfiguration cfg = TestConfigs.discordWebhook(true,
-                "http://127.0.0.1:1/never-listens"); // port 1 reliably refused
+        DiscordWebhookConfiguration cfg =
+                TestConfigs.discordWebhook(true, "http://127.0.0.1:1/never-listens"); // port 1 reliably refused
         TaxWebhookServiceImpl svc = new TaxWebhookServiceImpl(cfg);
 
         assertThatCode(() -> svc.sendCycleReport(scheduledReport())).doesNotThrowAnyException();
@@ -162,21 +169,31 @@ class TaxWebhookServiceImplTest {
         byAccount.put("GovernmentFines", new BigDecimal("50.00"));
         Map<String, BigDecimal> byType = new LinkedHashMap<>();
         byType.put("balance-tax", new BigDecimal("250.00"));
-        byType.put("fine-tax",    new BigDecimal("50.00"));
+        byType.put("fine-tax", new BigDecimal("50.00"));
         return new TaxCycleReport(
-                TaxCycleType.WEEKLY, Instant.parse("2026-02-01T03:00:00Z"),
-                false, null,
-                new BigDecimal("300.00"), byAccount, byType,
-                3, 1, 0);
+                TaxCycleType.WEEKLY,
+                Instant.parse("2026-02-01T03:00:00Z"),
+                false,
+                null,
+                new BigDecimal("300.00"),
+                byAccount,
+                byType,
+                3,
+                1,
+                0);
     }
 
     private TaxCycleReport manualReport(String triggeredBy) {
         return new TaxCycleReport(
-                TaxCycleType.DAILY, Instant.parse("2026-02-02T12:00:00Z"),
-                true, triggeredBy,
+                TaxCycleType.DAILY,
+                Instant.parse("2026-02-02T12:00:00Z"),
+                true,
+                triggeredBy,
                 new BigDecimal("10.00"),
                 Map.of("DCGovernment", new BigDecimal("10.00")),
-                Map.of("manual-tax",   new BigDecimal("10.00")),
-                1, 0, 0);
+                Map.of("manual-tax", new BigDecimal("10.00")),
+                1,
+                0,
+                0);
     }
 }

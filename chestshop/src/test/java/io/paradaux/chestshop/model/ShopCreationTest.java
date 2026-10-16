@@ -1,15 +1,14 @@
 package io.paradaux.chestshop.model;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.chestshop.model.ShopCreation.CreationOutcome;
 import io.paradaux.chestshop.support.ServerTest;
+import java.util.EnumSet;
+import java.util.Set;
 import org.bukkit.block.Sign;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import java.util.EnumSet;
-import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Covers the {@link ShopCreation} carrier: defensive cloning of sign lines, the cancel/outcome

@@ -1,15 +1,14 @@
 package io.paradaux.treasury.commands;
 
 import com.google.inject.Inject;
+import io.paradaux.common.AmountInput;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
-import io.paradaux.common.AmountInput;
-import org.bukkit.entity.Player;
-
 import java.math.BigDecimal;
+import org.bukkit.entity.Player;
 
 /**
  * Explicitly-typed payment from the sender's own personal account into a chosen
@@ -33,8 +32,11 @@ public class PayAccountCommand implements CommandHandler {
     private final AccountResolver accountResolver;
 
     @Inject
-    public PayAccountCommand(AccountService accountService, LedgerService ledgerService,
-                             Message message, AccountResolver accountResolver) {
+    public PayAccountCommand(
+            AccountService accountService,
+            LedgerService ledgerService,
+            Message message,
+            AccountResolver accountResolver) {
         this.accountService = accountService;
         this.ledgerService = ledgerService;
         this.message = message;
@@ -50,21 +52,23 @@ public class PayAccountCommand implements CommandHandler {
     @Route("<type> <account> <amount>")
     @Async
     @Description("Pay an explicitly-typed account from your own account")
-    public void payAccount(@Sender Player sender,
-                           @Arg("type") String type,
-                           @Arg("account") String account,
-                           @Arg("amount") BigDecimal amount) {
+    public void payAccount(
+            @Sender Player sender,
+            @Arg("type") String type,
+            @Arg("account") String account,
+            @Arg("amount") BigDecimal amount) {
         doPay(sender, type, account, amount, null);
     }
 
     @Route("<type> <account> <amount> <memo>")
     @Async
     @Description("Pay an explicitly-typed account from your own account with a memo")
-    public void payAccountMemo(@Sender Player sender,
-                               @Arg("type") String type,
-                               @Arg("account") String account,
-                               @Arg("amount") BigDecimal amount,
-                               @GreedyArg("memo") String memo) {
+    public void payAccountMemo(
+            @Sender Player sender,
+            @Arg("type") String type,
+            @Arg("account") String account,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
         doPay(sender, type, account, amount, memo);
     }
 
@@ -90,8 +94,16 @@ public class PayAccountCommand implements CommandHandler {
                 ? "Payment from " + sender.getName() + " to " + target.label() + ": " + memo
                 : "Payment from " + sender.getName() + " to " + target.label();
 
-        PersonalAccountPayment.pay(sender, senderAccountId, target::accountId, target.label(),
-                normalized, memoLine, null,
-                accountService, ledgerService, message);
+        PersonalAccountPayment.pay(
+                sender,
+                senderAccountId,
+                target::accountId,
+                target.label(),
+                normalized,
+                memoLine,
+                null,
+                accountService,
+                ledgerService,
+                message);
     }
 }

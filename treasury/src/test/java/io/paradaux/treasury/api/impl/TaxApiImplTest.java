@@ -1,5 +1,15 @@
 package io.paradaux.treasury.api.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
@@ -12,7 +22,11 @@ import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
 import io.paradaux.treasury.testsupport.TestConfigs;
-import org.junit.jupiter.api.BeforeEach;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,22 +34,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 /**
  * The tax engine's money decisions in isolation: the one-cent floor (inclusive),
@@ -48,17 +46,25 @@ class TaxApiImplTest {
     private static final UUID SYSTEM = UUID.randomUUID();
     private static final int DEFAULT_TAX_ACCOUNT = 77;
 
-    @Mock LedgerService ledger;
-    @Mock AccountMapper accounts;
-    @Mock TaxCycleRegistry registry;
-    @Mock EconomyNotifier notifier;
+    @Mock
+    LedgerService ledger;
+
+    @Mock
+    AccountMapper accounts;
+
+    @Mock
+    TaxCycleRegistry registry;
+
+    @Mock
+    EconomyNotifier notifier;
 
     private TaxApiImpl api(SourceIncomeTaxConfiguration sit, TaxCycleConfiguration cycles) {
         return new TaxApiImpl(ledger, accounts, TestConfigs.government(), cycles, sit, registry, notifier);
     }
 
     private TaxApiImpl api() {
-        return api(SourceIncomeTaxConfiguration.forTesting(false, BigDecimal.ZERO, "DCGovernment", Map.of()),
+        return api(
+                SourceIncomeTaxConfiguration.forTesting(false, BigDecimal.ZERO, "DCGovernment", Map.of()),
                 TestConfigs.taxCyclesAllDisabled());
     }
 
@@ -81,8 +87,8 @@ class TaxApiImplTest {
         when(ledger.transfer(any())).thenReturn(900L);
         TaxApiImpl api = api();
 
-        TaxResult result = api.collectTax(TaxCollection.toAccount(
-                5, 6, new BigDecimal("0.01"), "income", "desc", SYSTEM, "plugin", null));
+        TaxResult result = api.collectTax(
+                TaxCollection.toAccount(5, 6, new BigDecimal("0.01"), "income", "desc", SYSTEM, "plugin", null));
 
         assertThat(result).isEqualTo(new TaxResult.Collected(900L, new BigDecimal("0.01"), 6));
         TransferRequest req = capturedTransfer();
@@ -100,8 +106,8 @@ class TaxApiImplTest {
 
     @Test
     void collectTax_belowOneCent_isSkippedAndCounted_withoutTouchingTheLedger() {
-        TaxResult result = api().collectTax(TaxCollection.toAccount(
-                5, 6, new BigDecimal("0.009"), "income", "desc", SYSTEM, null, null));
+        TaxResult result = api().collectTax(
+                        TaxCollection.toAccount(5, 6, new BigDecimal("0.009"), "income", "desc", SYSTEM, null, null));
 
         assertThat(result).isInstanceOf(TaxResult.Skipped.class);
         assertThat(((TaxResult.Skipped) result).reason()).contains("0.009").contains("below the $0.01 minimum");
@@ -116,8 +122,8 @@ class TaxApiImplTest {
         TaxApiImpl api = api();
 
         api.collectTax(TaxCollection.toDefaultAccount(5, new BigDecimal("1.00"), "t", "d", SYSTEM, null, null));
-        TaxResult second = api.collectTax(
-                TaxCollection.toDefaultAccount(5, new BigDecimal("2.00"), "t", "d", SYSTEM, null, null));
+        TaxResult second =
+                api.collectTax(TaxCollection.toDefaultAccount(5, new BigDecimal("2.00"), "t", "d", SYSTEM, null, null));
 
         assertThat(((TaxResult.Collected) second).destinationAccountId()).isEqualTo(DEFAULT_TAX_ACCOUNT);
         assertThat(api.getDefaultTaxAccountId()).isEqualTo(DEFAULT_TAX_ACCOUNT);
@@ -128,9 +134,11 @@ class TaxApiImplTest {
     void defaultTaxAccount_missing_isCreatedOnDemand() {
         when(accounts.findGovernmentAccountByName("DCGovernment")).thenReturn(null);
         org.mockito.Mockito.doAnswer(inv -> {
-            ((Account) inv.getArgument(0)).setAccountId(91);
-            return null;
-        }).when(accounts).insertAccount(any());
+                    ((Account) inv.getArgument(0)).setAccountId(91);
+                    return null;
+                })
+                .when(accounts)
+                .insertAccount(any());
 
         assertThat(api().getDefaultTaxAccountId()).isEqualTo(91);
         verify(accounts).seedBalance(91);
@@ -155,20 +163,20 @@ class TaxApiImplTest {
 
     @ParameterizedTest
     @CsvSource({
-            // base, rate, expected tax ("skip" = below one cent)
-            "0.50, 0.02, 0.01",     // exactly one cent: collected
-            "0.25, 0.02, skip",     // 0.005 -> half-even 0.00
-            "0.75, 0.02, 0.02",     // 0.015 -> half-even 0.02
-            "1.25, 0.02, 0.02",     // 0.025 -> half-even 0.02 (not 0.03)
-            "100.00, 0.05, 5.00",
+        // base, rate, expected tax ("skip" = below one cent)
+        "0.50, 0.02, 0.01", // exactly one cent: collected
+        "0.25, 0.02, skip", // 0.005 -> half-even 0.00
+        "0.75, 0.02, 0.02", // 0.015 -> half-even 0.02
+        "1.25, 0.02, 0.02", // 0.025 -> half-even 0.02 (not 0.03)
+        "100.00, 0.05, 5.00",
     })
     void collectRateTax_roundsHalfEven_andAppliesTheOneCentFloorInclusively(String base, String rate, String expected) {
         TaxApiImpl api = api();
         boolean skipped = expected.equals("skip");
         if (!skipped) when(ledger.transfer(any())).thenReturn(1L);
 
-        TaxResult result = api.collectRateTax(5, 6, new BigDecimal(base), new BigDecimal(rate),
-                "sales", "d", SYSTEM, null, null);
+        TaxResult result =
+                api.collectRateTax(5, 6, new BigDecimal(base), new BigDecimal(rate), "sales", "d", SYSTEM, null, null);
 
         if (skipped) {
             assertThat(result).isInstanceOf(TaxResult.Skipped.class);
@@ -181,8 +189,8 @@ class TaxApiImplTest {
 
     @Test
     void collectRateTax_toDefaultAccount_appliesTheSameFloor() {
-        TaxResult result = api().collectRateTax(5, new BigDecimal("0.24"), new BigDecimal("0.02"),
-                "sales", "d", SYSTEM, null, null);
+        TaxResult result = api().collectRateTax(
+                        5, new BigDecimal("0.24"), new BigDecimal("0.02"), "sales", "d", SYSTEM, null, null);
         assertThat(result).isInstanceOf(TaxResult.Skipped.class);
         verifyNoInteractions(ledger);
     }
@@ -191,16 +199,20 @@ class TaxApiImplTest {
 
     @Test
     void sourceIncomeTax_disabled_isSkipped() {
-        TaxResult r = api(SourceIncomeTaxConfiguration.forTesting(false, new BigDecimal("0.10"), "Gov", Map.of()),
-                TestConfigs.taxCyclesAllDisabled()).applySourceIncomeTax(UUID.randomUUID(), new BigDecimal("100"), "Jobs");
+        TaxResult r = api(
+                        SourceIncomeTaxConfiguration.forTesting(false, new BigDecimal("0.10"), "Gov", Map.of()),
+                        TestConfigs.taxCyclesAllDisabled())
+                .applySourceIncomeTax(UUID.randomUUID(), new BigDecimal("100"), "Jobs");
         assertThat(r).isEqualTo(new TaxResult.Skipped("Source income tax is disabled"));
         verifyNoInteractions(ledger, accounts);
     }
 
     @Test
     void sourceIncomeTax_zeroEffectiveRateForThePlugin_isSkipped() {
-        TaxResult r = api(SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.10"), "Gov",
-                Map.of("Jobs", BigDecimal.ZERO)), TestConfigs.taxCyclesAllDisabled())
+        TaxResult r = api(
+                        SourceIncomeTaxConfiguration.forTesting(
+                                true, new BigDecimal("0.10"), "Gov", Map.of("Jobs", BigDecimal.ZERO)),
+                        TestConfigs.taxCyclesAllDisabled())
                 .applySourceIncomeTax(UUID.randomUUID(), new BigDecimal("100"), "Jobs");
         assertThat(r).isInstanceOf(TaxResult.Skipped.class);
         verifyNoInteractions(ledger, accounts);
@@ -212,8 +224,10 @@ class TaxApiImplTest {
         when(accounts.findPersonalAccountId(player)).thenReturn(12);
         when(accounts.findGovernmentAccountByName("IncomeTax")).thenReturn(account(55));
         when(ledger.transfer(any())).thenReturn(1L);
-        TaxApiImpl api = api(SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.10"), "IncomeTax",
-                Map.of("Realty", new BigDecimal("0.0001"))), TestConfigs.taxCyclesAllDisabled());
+        TaxApiImpl api = api(
+                SourceIncomeTaxConfiguration.forTesting(
+                        true, new BigDecimal("0.10"), "IncomeTax", Map.of("Realty", new BigDecimal("0.0001"))),
+                TestConfigs.taxCyclesAllDisabled());
 
         TaxResult r = api.applySourceIncomeTax(player, new BigDecimal("100.00"), "Jobs");
 
@@ -230,13 +244,14 @@ class TaxApiImplTest {
         when(accounts.findPersonalAccountId(player)).thenReturn(12);
         when(accounts.findGovernmentAccountByName("IncomeTax")).thenReturn(account(55));
         when(ledger.transfer(any())).thenReturn(1L);
-        TaxApiImpl api = api(SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.01"), "IncomeTax",
-                Map.of()), TestConfigs.taxCyclesAllDisabled());
+        TaxApiImpl api = api(
+                SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.01"), "IncomeTax", Map.of()),
+                TestConfigs.taxCyclesAllDisabled());
 
         assertThat(api.applySourceIncomeTax(player, new BigDecimal("0.49"), "Jobs"))
-                .isInstanceOf(TaxResult.Skipped.class);           // 0.0049 -> 0.00
+                .isInstanceOf(TaxResult.Skipped.class); // 0.0049 -> 0.00
         assertThat(api.applySourceIncomeTax(player, new BigDecimal("1.00"), "Jobs"))
-                .isInstanceOf(TaxResult.Collected.class);         // exactly 0.01
+                .isInstanceOf(TaxResult.Collected.class); // exactly 0.01
         verify(ledger, times(1)).transfer(any());
     }
 
@@ -244,8 +259,10 @@ class TaxApiImplTest {
     void sourceIncomeTax_playerWithoutAccount_isSkipped() {
         UUID player = UUID.randomUUID();
         when(accounts.findPersonalAccountId(player)).thenReturn(null);
-        TaxResult r = api(SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.10"), "Gov", Map.of()),
-                TestConfigs.taxCyclesAllDisabled()).applySourceIncomeTax(player, new BigDecimal("100"), "Jobs");
+        TaxResult r = api(
+                        SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.10"), "Gov", Map.of()),
+                        TestConfigs.taxCyclesAllDisabled())
+                .applySourceIncomeTax(player, new BigDecimal("100"), "Jobs");
         assertThat(r).isInstanceOf(TaxResult.Skipped.class);
         verifyNoInteractions(ledger);
     }
@@ -258,8 +275,10 @@ class TaxApiImplTest {
         when(accounts.findGovernmentAccountByName("DCGovernment")).thenReturn(account(DEFAULT_TAX_ACCOUNT));
         when(ledger.transfer(any())).thenReturn(1L);
 
-        TaxResult r = api(SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.10"), "Nope", Map.of()),
-                TestConfigs.taxCyclesAllDisabled()).applySourceIncomeTax(player, new BigDecimal("10"), "Jobs");
+        TaxResult r = api(
+                        SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.10"), "Nope", Map.of()),
+                        TestConfigs.taxCyclesAllDisabled())
+                .applySourceIncomeTax(player, new BigDecimal("10"), "Jobs");
 
         assertThat(((TaxResult.Collected) r).destinationAccountId()).isEqualTo(DEFAULT_TAX_ACCOUNT);
     }

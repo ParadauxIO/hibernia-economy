@@ -1,15 +1,14 @@
 package io.paradaux.chestshop.model;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.chestshop.support.ServerTest;
+import java.util.UUID;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Covers the {@link CreatedShop} carrier: sign-line cloning/accessors, the nullable container
