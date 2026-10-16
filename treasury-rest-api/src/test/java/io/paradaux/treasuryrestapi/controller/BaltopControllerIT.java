@@ -5,6 +5,7 @@ import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.crypto.SecretKey;
@@ -15,6 +16,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Exercises the real authentication filter, request binding, service and SQL. */
@@ -26,18 +28,42 @@ class BaltopControllerIT extends EmbeddedDbIT {
     private SecretKey signingKey;
 
     private String bearerToken() {
-        UUID owner = UUID.randomUUID();
+        return bearerToken(1, UUID.randomUUID(), "PERSONAL");
+    }
+
+    private String bearerToken(int keyId, UUID owner, String keyType) {
         String jwtId = UUID.randomUUID().toString();
-        insertApiKey(1, "PERSONAL", owner, jwtId, false, LocalDateTime.now().plusHours(1));
+        insertApiKey(keyId, keyType, owner, jwtId, false, LocalDateTime.now().plusHours(1));
         return "Bearer " + Jwts.builder()
-                .header().keyId("1").and()
+                .header().keyId(Integer.toString(keyId)).and()
                 .subject(owner.toString())
                 .id(jwtId)
-                .claim("type", "PERSONAL")
-                .claim("acc", 1L)
+                .claim("type", keyType)
+                .claim("BUSINESS".equals(keyType) ? "firm" : "acc", 1L)
                 .expiration(Date.from(Instant.now().plusSeconds(3600)))
                 .signWith(signingKey, Jwts.SIG.HS256)
                 .compact();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PERSONAL", "BUSINESS"})
+    void rateLimit_isTenPerMinuteAndSharedAcrossIssuerKeys(String keyType) throws Exception {
+        UUID issuer = UUID.randomUUID();
+        String token = bearerToken(1, issuer, keyType);
+        String otherKey = bearerToken(2, issuer, "BUSINESS".equals(keyType) ? "PERSONAL" : "BUSINESS");
+        for (int i = 0; i < 10; i++) {
+            mvc.perform(get(PATH).header("Authorization", token))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("X-RateLimit-Limit", "10"));
+        }
+
+        // Switching key (and key type) must not grant the same issuer a fresh budget.
+        mvc.perform(get(PATH).header("Authorization", otherKey))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("X-RateLimit-Limit", "10"))
+                .andExpect(header().string("X-RateLimit-Remaining", "0"))
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.error").value("RATE_LIMIT_EXCEEDED"));
     }
 
     @Test

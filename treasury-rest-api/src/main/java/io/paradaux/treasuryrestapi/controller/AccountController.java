@@ -79,7 +79,7 @@ public class AccountController {
      * Any authenticated caller may query it.
      */
     @GetMapping("/baltop")
-    @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
+    @RateLimit(personalPerMinute = 10, businessPerMinute = 10)
     public ResponseEntity<BaltopResponse> getBaltop(
             @AuthenticationPrincipal VerifiedToken verified,
             @RequestParam(defaultValue = "1") int page,
