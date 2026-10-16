@@ -14,6 +14,12 @@
 //     server via <PREFIX>_TEST_JDBC_URL in CI, economy-flyway schema, per-test reset
 //     derived from information_schema, ops/money-invariants.sql checked after
 //     every test).
+//   * properties.FixedSeedInCi — jqwik hook pinning the seed when CI=true.
+//   * contract.TreasuryApiContract — executable spec of the TreasuryApi behaviour
+//     consumers rely on; treasury runs it against the real implementation.
+//
+// The DB / jqwik / treasury-api pieces are compileOnly: only the modules that use
+// them (and already declare them at test scope) pay for them.
 //
 // It depends only on the hibernia-framework artifact, Guice, JUnit 5, MockBukkit
 // and the Paper API — never on any plugin. Those four are exposed as `api` so a
