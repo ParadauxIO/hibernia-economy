@@ -278,6 +278,7 @@ export interface FirmAccounts {
   addedAt: Generated<Date>;
   firmId: number;
   removedAt: Generated<Date | null>;
+  shopAlias: Generated<string | null>;
 }
 
 export interface FirmCreationLock {
@@ -333,6 +334,11 @@ export interface FirmRolePermission {
   deletedAt: Generated<Date | null>;
   permission: "ADMIN" | "CHESTSHOP" | "DEFAULT" | "FINANCIAL";
   roleId: number;
+}
+
+export interface FirmShopAliasReservations {
+  accountId: number;
+  alias: string;
 }
 
 export interface FirmTransferRequests {
@@ -485,6 +491,7 @@ export interface DB {
   firmProperties: FirmProperties;
   firmRole: FirmRole;
   firmRolePermission: FirmRolePermission;
+  firmShopAliasReservations: FirmShopAliasReservations;
   firmTransferRequests: FirmTransferRequests;
   flywaySchemaHistory: FlywaySchemaHistory;
   governmentFines: GovernmentFines;
