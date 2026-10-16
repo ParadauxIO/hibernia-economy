@@ -39,6 +39,9 @@ subprojects apply by id (no version):
   `-PuseMavenLocal`-gated `mavenLocal`), `plugin.yml`/`messages` resource
   expansion, the base test setup, the shaded-jar defaults (`archiveClassifier=""`,
   `mergeServiceFiles`, `:jar` disabled), and the `copyPlugin` dev-server staging.
+- **`io.paradaux.static-analysis-conventions`** — applied by `jvm-conventions`
+  (so by every JVM project) and by the root project: Error Prone, NullAway and
+  Spotless. See [Static analysis](#static-analysis).
 
 Each project still owns what genuinely differs: its **shadow relocations**, its
 **dependencies**, and (treasury/business) its **jacoco coverage gate**. ChestShop
@@ -147,6 +150,81 @@ Things worth knowing if you touch it:
 > "ready for connections" within its 30 s window. It's environmental, not a code
 > issue. Use `-PskipIT` for fast iteration, or point the tests at a real MariaDB
 > the way CI does.
+
+## Static analysis
+
+Every JVM project runs **Error Prone** (+ **NullAway**) inside `javac` and a
+ratcheted **Spotless** check in `check`. Config lives in
+`build-logic/src/main/kotlin/io.paradaux.static-analysis-conventions.gradle.kts`.
+
+### Formatting (Spotless)
+
+```bash
+./gradlew spotlessApply        # format everything you've changed
+./gradlew spotlessCheck        # what CI runs (part of ./gradlew check)
+```
+
+- Java: **palantir-java-format**. Build scripts: **ktlint** (`intellij_idea`
+  style). `*.md`/`*.yml`/`*.sql`: no trailing whitespace, newline at EOF.
+- **Ratcheted from `origin/develop`**: only files that differ from it are checked
+  or formatted, so the tree is converted one touched file at a time instead of
+  in one reformat that would conflict with every open branch. Touch a file, and
+  the *whole* file must be formatted — run `spotlessApply` before committing.
+- The ref must exist locally (`git fetch origin develop`; in CI, check out with
+  `fetch-depth: 0`). If it's missing, Spotless is skipped with a warning — and
+  `check` fails when `CI=true`, so a shallow CI checkout can't pass silently.
+  Ratchet from something else with `-PspotlessRatchetFrom=<ref>`.
+
+### Error Prone
+
+Findings at ERROR fail compilation (main **and** test sources). On top of Error
+Prone's defaults these are promoted to ERROR: `BigDecimalEquals`,
+`BigDecimalLiteralDouble`, `MissingCasesInEnumSwitch`, `StringCaseLocaleUsage`,
+`DefaultCharset`, `FutureReturnValueIgnored`, `CatchAndPrintStackTrace`,
+`OperatorPrecedence`, `UnusedVariable`, `UnusedMethod`. Everything else is a
+warning. Fix the finding; the message links the check's docs and usually a fix.
+
+If the check is genuinely wrong at that spot, suppress it on the **narrowest**
+element with a one-line reason — never file- or module-wide:
+
+```java
+// Identity is the point: a cause chain that loops back on itself.
+@SuppressWarnings("ReferenceEquality")
+private static Throwable root(Throwable t) { ... }
+```
+
+To promote another check, or to understand why one is left as a warning, see
+the comments next to `promotedChecks` in the convention plugin.
+
+### NullAway
+
+NullAway is an ERROR, main sources only, and **scoped per project** to code that
+has been annotated:
+
+| Project | Null-checked packages |
+|---|---|
+| `:common` | `io.paradaux.common` |
+| `:test-support` | `io.paradaux.hibernia.testsupport` |
+| `:treasury:treasury-api` | `io.paradaux.treasury` |
+| `:business:business-api` | `io.paradaux.business` |
+
+Everything else (the plugins, `treasury-rest-api`, all tests) is unchecked.
+Inside the scope, an unannotated type means *non-null*; mark anything that can be
+null with `org.jetbrains.annotations.Nullable` (the annotation the published APIs
+already use). Lombok `@Data`/`@NoArgsConstructor` beans are treated as
+externally initialised (MyBatis/Jackson fill them), but a nullable column still
+needs `@Nullable` on its field. To widen the scope, add the project to
+`nullAwayScope` in the convention plugin and fix what it reports.
+
+### Layering (ArchUnit)
+
+Each plugin module and `treasury-rest-api` has an `ArchitectureTest` (plain
+JUnit, runs with `test`) enforcing the
+[architectural layering](conventions.md#architectural-layering) on the compiled
+main classes: entrypoints (commands, listeners, tasks/jobs, dialogs, controllers)
+never depend on mappers, mappers never depend on services or entrypoints, and
+services never depend on entrypoints. Known, documented exceptions are spelled out
+in each test's javadoc rather than frozen silently.
 
 ## Live integration tests
 
