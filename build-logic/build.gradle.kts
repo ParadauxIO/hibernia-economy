@@ -22,4 +22,10 @@ dependencies {
     // catalog (gradle/libs.versions.toml, shadow = "…"), the same entry the root
     // build applies via `alias(libs.plugins.shadow)`, so the two never drift.
     implementation(libs.shadow.lib)
+
+    // The static-analysis convention applies Error Prone (+ NullAway) and Spotless
+    // by id, so their Gradle plugins must be on this build's classpath. Versions
+    // come from the catalog, like shadow above.
+    implementation(libs.errorprone.gradle.plugin)
+    implementation(libs.spotless.gradle.plugin)
 }
