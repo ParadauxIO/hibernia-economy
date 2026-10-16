@@ -196,8 +196,18 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     @Test
     void transfer_negativeCreditLimit_meansUnlimitedOverdraft() {
         // credit_limit = -1 is the sentinel for system faucet/sink accounts (Vault bridge,
-        // primitive government). They can go arbitrarily negative.
-        Account faucet = createOverdraftAccount(0, new BigDecimal("-1"));
+        // primitive government). They can go arbitrarily negative. Typed GOVERNMENT like
+        // the real faucets: ops/money-invariants.sql (run after every IT) only accepts a
+        // negative balance on GOVERNMENT/SYSTEM accounts, whereas OverdraftPolicy honours
+        // the sentinel on any type — a PERSONAL "faucet" would be flagged as illegal.
+        Account faucet = new Account();
+        faucet.setAccountType(AccountType.GOVERNMENT);
+        faucet.setOwnerUuid(UUID.randomUUID());
+        faucet.setDisplayName("test-faucet");
+        faucet.setAllowOverdraft(true);
+        faucet.setCreditLimit(new BigDecimal("-1"));
+        accountMapper.insertAccount(faucet);
+        accountMapper.seedBalance(faucet.getAccountId());
         Account b = createPersonalAccount(0);
 
         ledgerService.transfer(new TransferRequest(

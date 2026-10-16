@@ -9,6 +9,11 @@
 //     server and assert CommandManager/ListenerManager registerAll() (route
 //     conflicts / missing bindings surface here).
 //   * MessageKeyAudit — bidirectional messages.properties ↔ source key audit.
+//   * db.TestDatabaseExtension — the one MariaDB integration-test harness for
+//     treasury, business and treasury-api-plugin (MariaDB4j locally / an external
+//     server via <PREFIX>_TEST_JDBC_URL in CI, economy-flyway schema, per-test reset
+//     derived from information_schema, ops/money-invariants.sql checked after
+//     every test).
 //
 // It depends only on the hibernia-framework artifact, Guice, JUnit 5, MockBukkit
 // and the Paper API — never on any plugin. Those four are exposed as `api` so a
@@ -53,4 +58,21 @@ dependencies {
     // test. `api` so a consumer's startup test can MockBukkit.mock() without adding
     // the coordinate itself (matches chestshop's existing coordinate/version).
     api("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.110.0")
+
+    // Shared MariaDB integration-test harness (io.paradaux.hibernia.testsupport.db).
+    // compileOnly, not api: chestshop consumes this kit for its startup test only and
+    // shouldn't inherit a database stack. The DB-backed consumers (treasury, business,
+    // treasury-api-plugin) already declare these at test scope.
+    compileOnly(libs.mariadb4j)
+    compileOnly(libs.hikaricp)
+    compileOnly(libs.flyway.core)
+}
+
+// Stage ops/money-invariants.sql into the jar so LedgerInvariants runs the exact
+// check operators run against production — one source of truth, no copy to drift
+// (same approach as the economy-flyway migrations staged onto each module's tests).
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.file("ops/money-invariants.sql")) {
+        into("io/paradaux/hibernia/testsupport/db")
+    }
 }
