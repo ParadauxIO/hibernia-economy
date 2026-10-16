@@ -287,6 +287,10 @@ pitest {
     // partial-fill tests). Raise as survivors are killed.
     mutationThreshold.set(86)
     coverageThreshold.set(97)
+    // FaweShopCleanupTest only runs in faweTest, on FAWE's own WorldEdit API (the
+    // plain test classpath has stock WorldEdit, so it fails there); none of the
+    // mutated classes depend on it.
+    excludedTestClasses.set(listOf("io.paradaux.chestshop.listeners.FaweShopCleanupTest"))
 }
 
 // =====================================================================
