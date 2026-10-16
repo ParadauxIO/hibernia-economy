@@ -12,8 +12,28 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
-    include: ['test/**/*.test.ts'],
+    // Two projects share the root plugins/aliases (`extends: true`): pure-logic and
+    // DB tests stay on node; React component tests get a DOM. Coverage is configured
+    // once here, so a `--coverage` run merges both projects into one report.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['test/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'components',
+          environment: 'jsdom',
+          include: ['test/components/**/*.test.tsx'],
+          setupFiles: ['test/components/setup.ts'],
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html', 'lcov'],
