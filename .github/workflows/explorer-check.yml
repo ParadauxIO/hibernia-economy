@@ -1,0 +1,121 @@
+name: Economy Explorer · Check
+
+# The explorer half of CI, as a reusable workflow: ci.yml runs it on every PR
+# and push (e2e only when the explorer changed, or always off-PR), and
+# economy-explorer-docker.yml runs it before pushing an image. Both suites run
+# against a real MariaDB — no query mocking — seeded from the explorer's own
+# test/integration/schema.sql + seed.sql.
+
+on:
+  workflow_call:
+    inputs:
+      e2e:
+        description: Run the Playwright end-to-end suite too.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: economy-explorer
+
+jobs:
+  # ── Typecheck, lint, unit + SQL integration tests with coverage thresholds ──
+  test:
+    name: typecheck · lint · vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mariadb:
+        # Production's major (10.11), like every other suite in CI.
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: testpw
+          MARIADB_DATABASE: economy_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_NAME: economy_test
+      DB_USERNAME: root
+      DB_PASSWORD: testpw
+      RUN_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: economy-explorer/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      # Thresholds live in vitest.config.mts.
+      - name: Unit + integration tests with coverage
+        run: npm run coverage
+      - name: Upload coverage
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: economy-explorer-coverage
+          path: economy-explorer/coverage/
+          if-no-files-found: ignore
+
+  # ── Browser end-to-end tests (Playwright, real MariaDB, real production build) ──
+  # playwright.config.ts seeds the service DB, builds and starts the app with the
+  # role shim for smoke tests and signed Auth.js sessions for real DB-grant tests,
+  # on a desktop and a phone viewport. Under CI a test that only passes on retry
+  # fails the run (failOnFlakyTests).
+  e2e:
+    name: playwright
+    if: inputs.e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: testpw
+          MARIADB_DATABASE: economy_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_NAME: economy_test
+      DB_USERNAME: root
+      DB_PASSWORD: testpw
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: economy-explorer/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: npm run test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: economy-explorer-playwright
+          path: |
+            economy-explorer/playwright-report/
+            economy-explorer/test-results/
+          if-no-files-found: ignore
