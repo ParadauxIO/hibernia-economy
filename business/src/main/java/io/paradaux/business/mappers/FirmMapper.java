@@ -8,6 +8,18 @@ import java.util.List;
 @Mapper
 public interface FirmMapper {
 
+    /**
+     * Serializes creation for one proprietor until the surrounding transaction
+     * commits or rolls back. The upsert also covers players with no firms yet;
+     * locking existing firm rows alone would leave that case unprotected.
+     */
+    @Insert("""
+            INSERT INTO firm_creation_lock (proprietor_uuid_bin)
+            VALUES (uuid_to_bin(#{playerUuid}))
+            ON DUPLICATE KEY UPDATE proprietor_uuid_bin = VALUES(proprietor_uuid_bin)
+            """)
+    void lockCreationForOwner(@Param("playerUuid") String playerUuid);
+
     @Insert("""
             INSERT INTO firm (display_name, proprietor_uuid_bin)
             VALUES (#{displayName}, uuid_to_bin(#{proprietorUuid}))
