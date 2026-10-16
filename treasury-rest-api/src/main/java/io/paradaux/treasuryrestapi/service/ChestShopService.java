@@ -238,7 +238,7 @@ public class ChestShopService {
                 r.isAdminShop(), r.getShopAccountType(), r.getShopFirmId(),
                 r.getShopOwnerUuid() != null ? r.getShopOwnerUuid().toString() : null,
                 r.getOwnerName(), r.getMaterial(), r.getItemKey(), r.getItemName(), r.isItemCustom(),
-                money(r.getBuyPrice()), money(r.getSellPrice()), r.getBatchQty(), r.getCurrentStock(),
+                money(r.getBuyPrice()), money(r.getSellPrice()), r.getBatchQty(), r.getCurrentStock(), r.getCurrentSpace(),
                 utc(r.getStockAt()), utc(r.getLastSeen()));
     }
 

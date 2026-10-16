@@ -51,8 +51,8 @@ public class TradeSettlementImpl implements TradeSettlement {
                 event.getOwnerAccount().getUuid(), event)) {
             // The goods already moved but the money didn't settle — put the goods
             // back and cancel, keeping the trade atomic.
-            goodsTransfer.reverse(event);
             event.setCancelled(true);
+            goodsTransfer.reverse(event);
         }
     }
 

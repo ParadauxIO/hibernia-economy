@@ -50,7 +50,7 @@ public interface ChestShopMapper {
                    s.shop_owner_uuid_bin AS shopOwnerUuid,
                    COALESCE(f.display_name, fp.current_name) AS ownerName,
                    s.material, s.item_key, s.item_name, s.item_custom,
-                   s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.stock_at, s.last_seen
+                   s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.estimated_capacity AS currentSpace, s.stock_at, s.last_seen
             FROM chestshop_shop s
             LEFT JOIN firm f ON f.firm_id = s.shop_firm_id
             LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin

@@ -280,6 +280,10 @@ export interface FirmAccounts {
   removedAt: Generated<Date | null>;
 }
 
+export interface FirmCreationLock {
+  proprietorUuidBin: Buffer;
+}
+
 export interface FirmEmployee {
   addedByUuidBin: Generated<Buffer | null>;
   firmId: number;
@@ -474,6 +478,7 @@ export interface DB {
   explorerRolePermission: ExplorerRolePermission;
   firm: Firm;
   firmAccounts: FirmAccounts;
+  firmCreationLock: FirmCreationLock;
   firmEmployee: FirmEmployee;
   firmFinancialAccessWeb: FirmFinancialAccessWeb;
   firmInvites: FirmInvites;

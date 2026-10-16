@@ -283,6 +283,7 @@ public final class EmbeddedMariaDb {
               sell_price       DECIMAL(19,2) NULL,
               batch_qty        INT          NOT NULL,
               current_stock    INT          NULL,
+              estimated_capacity INT        NULL,
               active           TINYINT(1)   NOT NULL DEFAULT 1,
               created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
               stock_at         TIMESTAMP    NULL,

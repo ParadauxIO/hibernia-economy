@@ -46,6 +46,14 @@ types go here, never in the plugin root.**
 Firms/companies: creation, staff with custom roles and permissions, firm accounts,
 sales, and per-firm tax — all money via `TreasuryApi`.
 
+Firm creation takes a per-proprietor row lock in `firm_creation_lock` before any
+validation queries and holds it through transaction commit/rollback. Concurrent
+creates for the same owner (including across servers) therefore re-check the
+ownership limit and cooldown after the previous create finishes. Different owners
+can create concurrently; firm-name uniqueness remains enforced by the existing
+unique index. Lock rows are retained after disband and must not be pruned while
+writers are active. Deploy Flyway V34 before the updated Business plugin.
+
 - **Stack:** same shape as Treasury (Paper · Guice · MyBatis · HikariCP ·
   `hibernia-framework`). Libs relocated under `io.paradaux.business.libs.*`.
 - **Layering:** `commands/` → `services/`(+`impl/`) → `mappers/`.
