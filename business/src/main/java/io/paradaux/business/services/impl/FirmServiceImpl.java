@@ -96,10 +96,18 @@ public class FirmServiceImpl implements FirmService {
      * permissions, firm_accounts, default_account_id update) are atomic. The
      * Treasury account creation is external IPC that can't join the JDBC
      * transaction, so if a later DB write fails and the transaction rolls back,
-     * the just-created Treasury account would be orphaned. To avoid that
-     * divergence the DB writes that follow account creation are guarded: on any
-     * failure the orphaned account is archived (compensation) before the
+     * the just-created Treasury account would be orphaned. Runtime exceptions
+     * inside the guarded block trigger a best-effort archive before the
      * exception propagates and the transaction unwinds (ADT-11).
+     *
+     * <p>This is not crash-safe (ADT-92): from Treasury's account commit until
+     * the Business transaction commits, a JVM/process crash can leave an active
+     * BUSINESS account without a firm or firm_accounts link. A commit failure
+     * in the transaction interceptor, after this method returns, also bypasses
+     * compensation. Linked-account membership reconciliation cannot discover
+     * these orphans; operator investigation and cleanup are required. Role and
+     * permission writes run before Treasury creation to reduce this window,
+     * but remain uncommitted until the entire Business transaction completes.
      */
     @Transactional
     @Override
@@ -139,13 +147,23 @@ public class FirmServiceImpl implements FirmService {
         // Put it into the DB to get an ID
         firms.createFirm(firm);
 
+        // Finish writes that do not need the account ID before external IPC.
+        // Failure here rolls back locally without creating a Treasury orphan.
+        // Add the default roles
+        for (FirmRole role : FirmRoleDefaults.getDefaultRoles(firm.getFirmId())) {
+            roles.insertRole(role);
+        }
+
+        // Add the default permissions for every role
+        for (FirmRolePermission permission : FirmRoleDefaults.getDefaultPermissions(firm.getFirmId())) {
+            roles.addRolePermission(permission);
+        }
+
         // Create a treasury account via the TreasuryApi
         Account account = treasury.createAccount(AccountType.BUSINESS, actorId, name + " Corporate Account");
 
-        // Everything past this point either completes or compensates: if any DB
-        // write fails, the transaction rolls back the firm rows, so the Treasury
-        // account just created would dangle unlinked. Archive it on failure so
-        // there's no orphaned account left behind (ADT-11).
+        // Best-effort compensation for exceptions inside this block only.
+        // Process death and interceptor commit failures bypass it (see ADT-92 above).
         try {
             // Auto-add the owner as a member + authorizer on the treasury account
             treasury.addMember(account.getAccountId(), actorId, actorId);
@@ -156,16 +174,6 @@ public class FirmServiceImpl implements FirmService {
 
             // Set it as the firm's default treasury account.
             firm.setDefaultAccountId(account.getAccountId());
-
-            // Add the default roles
-            for (FirmRole role : FirmRoleDefaults.getDefaultRoles(firm.getFirmId())) {
-                roles.insertRole(role);
-            }
-
-            // Add the default permissions for every role
-            for (FirmRolePermission permission : FirmRoleDefaults.getDefaultPermissions(firm.getFirmId())) {
-                roles.addRolePermission(permission);
-            }
 
             // Update the firm with the updated default account.
             firms.updateFirm(firm);

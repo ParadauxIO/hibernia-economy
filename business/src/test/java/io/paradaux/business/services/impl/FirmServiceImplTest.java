@@ -175,6 +175,28 @@ class FirmServiceImplTest {
     }
 
     @Test
+    void createFirm_roleFailureDoesNotCreateTreasuryAccount() {
+        RuntimeException failure = new RuntimeException("role insert failed");
+        org.mockito.Mockito.doThrow(failure).when(roles).insertRole(any());
+
+        assertThatThrownBy(() -> svc.createFirm("Acme", UUID.randomUUID())).isSameAs(failure);
+
+        org.mockito.Mockito.verifyNoInteractions(treasury, accounts);
+        verify(firms, never()).updateFirm(any());
+    }
+
+    @Test
+    void createFirm_permissionFailureDoesNotCreateTreasuryAccount() {
+        RuntimeException failure = new RuntimeException("permission insert failed");
+        org.mockito.Mockito.doThrow(failure).when(roles).addRolePermission(any());
+
+        assertThatThrownBy(() -> svc.createFirm("Acme", UUID.randomUUID())).isSameAs(failure);
+
+        org.mockito.Mockito.verifyNoInteractions(treasury, accounts);
+        verify(firms, never()).updateFirm(any());
+    }
+
+    @Test
     void createFirm_archivesOrphanedTreasuryAccountWhenDbWriteFails() {
         UUID actor = UUID.randomUUID();
         when(firms.getFirmsByNameCount("Acme")).thenReturn(0);
