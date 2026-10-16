@@ -49,6 +49,102 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         ledgerService.bootstrapGovernmentAccounts();
     }
 
+    // ---------- transfer: amount validation ----------
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "0", "0.00",
+            "-100.00",                 // would run the transfer BACKWARDS (b -> a), skipping b's authorization
+            "0.001", "100.005",        // sub-cent
+            "100000000000000000.00",   // beyond DECIMAL(19,2)
+    })
+    void transfer_rejectsInvalidAmounts_andMovesNothing(String amount) {
+        Account a = createPersonalAccount(1_000);
+        Account b = createPersonalAccount(1_000);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
+                        a.getAccountId(), b.getAccountId(), new BigDecimal(amount), "bad amount",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
+                        TreasuryConstants.TREASURY_PLUGIN_NAME, null)))
+                .isInstanceOf(IllegalArgumentException.class);
+        // Same rule on the authorization-bypassing admin path.
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ledgerService.adminTransfer(new TransferRequest(
+                        a.getAccountId(), b.getAccountId(), new BigDecimal(amount), "bad amount",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null,
+                        TreasuryConstants.TREASURY_PLUGIN_NAME, null)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(balanceOf(a)).isEqualByComparingTo("1000.00");
+        assertThat(balanceOf(b)).isEqualByComparingTo("1000.00");
+        assertThat(countRows("SELECT COUNT(*) FROM ledger_postings WHERE account_id = ?", a.getAccountId()))
+                .isEqualTo(countRows("SELECT COUNT(*) FROM ledger_postings WHERE account_id = ?", b.getAccountId()));
+    }
+
+    @Test
+    void transfer_exactlyOneCent_andTheLedgerMaximumScale_areAccepted() {
+        Account a = createPersonalAccount(1_000);
+        Account b = createPersonalAccount(0);
+
+        ledgerService.transfer(new TransferRequest(
+                a.getAccountId(), b.getAccountId(), new BigDecimal("0.01"), "one cent",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+        ledgerService.transfer(new TransferRequest(
+                a.getAccountId(), b.getAccountId(), new BigDecimal("10.500"), "trailing zero",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+
+        assertThat(balanceOf(a)).isEqualByComparingTo("989.49");
+        assertThat(balanceOf(b)).isEqualByComparingTo("10.51");
+    }
+
+    @Test
+    void transfer_exactlyTheWholeBalance_isAllowed_oneCentMoreIsNot() {
+        Account a = createPersonalAccount(100);
+        Account b = createPersonalAccount(0);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ledgerService.transfer(new TransferRequest(
+                        a.getAccountId(), b.getAccountId(), new BigDecimal("100.01"), "overdraw",
+                        TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Insufficient funds");
+        ledgerService.transfer(new TransferRequest(
+                a.getAccountId(), b.getAccountId(), new BigDecimal("100.00"), "all of it",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+
+        assertThat(balanceOf(a)).isEqualByComparingTo("0.00");
+        assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void adminGiveAndTake_returnTheTxnTheyWrote() {
+        UUID player = UUID.randomUUID();
+        ledgerService.resolveOrCreatePersonal(player);
+
+        long give = ledgerService.adminGive(player, new BigDecimal("5.00"), "give", UUID.randomUUID());
+        long take = ledgerService.adminTake(player, new BigDecimal("2.00"), "take", UUID.randomUUID());
+
+        assertThat(give).isNotEqualTo(take);
+        assertThat(ledgerMapper.findPostingsByTxnId(give)).extracting(LedgerPosting::amount)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactlyInAnyOrder(new BigDecimal("5.00"), new BigDecimal("-5.00"));
+        assertThat(ledgerMapper.findPostingsByTxnId(take)).extracting(LedgerPosting::amount)
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactlyInAnyOrder(new BigDecimal("2.00"), new BigDecimal("-2.00"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"0", "-1.00", "0.001"})
+    void adminGiveAndTake_rejectInvalidAmounts_beforeCreatingAnything(String amount) {
+        UUID player = UUID.randomUUID();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        ledgerService.adminGive(player, new BigDecimal(amount), "give", UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        ledgerService.adminTake(player, new BigDecimal(amount), "take", UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class);
+        // The guard runs before resolve-or-create: no account was opened for the player.
+        assertThat(accountService.hasPersonalAccount(player)).isFalse();
+    }
+
     // ---------- transfer ----------
 
     @Test
@@ -104,6 +200,7 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         byte[] key = Idempotency.sha256("test:concurrent-dedup");
 
         int threads = 8;
+        Long[] firstTxnId = {null};
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         try {
@@ -120,11 +217,10 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
             for (Callable<Long> t : tasks) futures.add(pool.submit(t));
             start.countDown();
 
-            Long firstTxn = null;
             for (Future<Long> f : futures) {
                 Long txn = f.get(30, TimeUnit.SECONDS); // throws if any thread propagated an exception
-                if (firstTxn == null) firstTxn = txn;
-                assertThat(txn).isEqualTo(firstTxn);
+                if (firstTxnId[0] == null) firstTxnId[0] = txn;
+                assertThat(txn).isEqualTo(firstTxnId[0]);
             }
         } finally {
             pool.shutdownNow();
@@ -133,7 +229,12 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         // Money moved exactly once despite N concurrent attempts.
         assertThat(balanceOf(a)).isEqualByComparingTo("900.00");
         assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
-        assertThat(ledgerMapper.findByDedupKey(key)).isNotNull();
+        LedgerTxn winner = ledgerMapper.findByDedupKey(key);
+        assertThat(winner).isNotNull();
+        assertThat(winner.getTxnId()).isEqualTo(firstTxnId[0]);
+        assertThat(countRows("SELECT COUNT(*) FROM ledger_txns WHERE client_dedup_key = ?", key)).isEqualTo(1);
+        // ...and that one txn is a balanced two-leg posting, not N partial ones.
+        assertThat(countRows("SELECT COUNT(*) FROM ledger_postings WHERE txn_id = ?", winner.getTxnId())).isEqualTo(2);
     }
 
     @Test
@@ -407,9 +508,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         ledgerService.bootstrapGovernmentAccounts();
         ledgerService.bootstrapGovernmentAccounts();
 
-        assertThat(accountService.getGovernmentAccountByName("starting-balances")).isNotNull();
-        assertThat(accountService.getGovernmentAccountByName("DCGovernment")).isNotNull();
-        assertThat(accountService.getGovernmentAccountByName("GovernmentFines")).isNotNull();
+        for (String name : List.of("starting-balances", "DCGovernment", "GovernmentFines")) {
+            Account gov = accountService.getGovernmentAccountByName(name);
+            assertThat(gov).as(name).isNotNull();
+            assertThat(gov.getAccountType()).isEqualTo(AccountType.GOVERNMENT);
+            // Exactly one row per name: re-running bootstrap must not insert duplicates.
+            assertThat(countRows("SELECT COUNT(*) FROM accounts WHERE account_type = 'GOVERNMENT' AND display_name = ?", name))
+                    .as(name).isEqualTo(1);
+        }
     }
 
     @Test
@@ -679,6 +785,19 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     }
 
     // ---------- helpers ----------
+
+    private long countRows(String sql, Object param) {
+        try (java.sql.Connection c = dataSource.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setObject(1, param);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     private BigDecimal balanceOf(Account a) {
         AccountBalance b = accountMapper.readBalance(a.getAccountId());

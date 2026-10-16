@@ -142,6 +142,52 @@ class SalaryServiceImplTest {
     }
 
     @Test
+    void plan_withAContextManager_paysActivePlayers_andSkipsOnlyTheAfkOnes() {
+        // Both players are salaried; only the AFK context distinguishes them. A
+        // player whose context set is unavailable (null) counts as active.
+        UUID active = UUID.randomUUID();
+        UUID afk = UUID.randomUUID();
+        UUID unknownContext = UUID.randomUUID();
+        Player pActive = onlinePlayer(active, "senator");
+        Player pAfk = org.mockito.Mockito.mock(Player.class);
+        Player pUnknown = onlinePlayer(unknownContext, "president");
+        online(pActive, pAfk, pUnknown);
+        ContextManager cm = org.mockito.Mockito.mock(ContextManager.class);
+        ImmutableContextSet activeCtx = org.mockito.Mockito.mock(ImmutableContextSet.class);
+        ImmutableContextSet afkCtx = org.mockito.Mockito.mock(ImmutableContextSet.class);
+        when(luckPerms.getContextManager()).thenReturn(cm);
+        when(cm.getContext(pActive)).thenReturn(activeCtx);
+        when(cm.getContext(pAfk)).thenReturn(afkCtx);
+        when(cm.getContext(pUnknown)).thenReturn(null);
+        when(activeCtx.contains("afk", "true")).thenReturn(false);
+        when(afkCtx.contains("afk", "true")).thenReturn(true);
+
+        List<SalaryPayment> plan = service(cfg(true, AMOUNTS), true).planPayroll();
+
+        assertThat(plan).extracting(SalaryPayment::player).containsExactlyInAnyOrder(active, unknownContext);
+    }
+
+    @Test
+    void plan_usesTheConfiguredAfkContext_andPaysAfkPlayersWhenSkippingIsOff() {
+        SalaryConfiguration config = cfg(true, AMOUNTS);
+        UUID u = UUID.randomUUID();
+        Player p = onlinePlayer(u, "senator");
+        online(p);
+        ContextManager cm = org.mockito.Mockito.mock(ContextManager.class);
+        ImmutableContextSet ctx = org.mockito.Mockito.mock(ImmutableContextSet.class);
+        when(luckPerms.getContextManager()).thenReturn(cm);
+        when(cm.getContext(p)).thenReturn(ctx);
+        when(ctx.contains("away", "yes")).thenReturn(true);
+        SalaryServiceImpl svc = service(config, true);
+
+        config.publish(new SalaryConfiguration.Snapshot(true, "DCGovernment", 900, AMOUNTS, true, "away", "yes"));
+        assertThat(svc.planPayroll()).isEmpty();
+
+        config.publish(new SalaryConfiguration.Snapshot(true, "DCGovernment", 900, AMOUNTS, false, "away", "yes"));
+        assertThat(svc.planPayroll()).extracting(SalaryPayment::player).containsExactly(u);
+    }
+
+    @Test
     void plan_skipsWhenLuckPermsUserUnknown() {
         UUID u = UUID.randomUUID();
         Player p = org.mockito.Mockito.mock(Player.class);

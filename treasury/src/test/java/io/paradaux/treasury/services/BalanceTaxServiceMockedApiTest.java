@@ -292,4 +292,93 @@ class BalanceTaxServiceMockedApiTest {
         assertThat(captured.getAllValues().get(1).destinationAccountId()).isEqualTo(8);
         assertThat(captured.getAllValues().get(1).amount()).isEqualByComparingTo("2000");
     }
+
+    // ---- the taxed amount itself: proration, rounding, the one-cent floor ----
+
+    private TaxCollection collectedFor(UUID player, String balance, long previous, long now) {
+        when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
+        AccountBalance ab = new AccountBalance();
+        ab.setBalance(new BigDecimal(balance));
+        when(accountMapper.readBalance(42)).thenReturn(ab);
+        Account dest = new Account();
+        dest.setAccountId(99);
+        // lenient: the destination is cached after the first collection.
+        org.mockito.Mockito.lenient().when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
+        when(taxApi.collectTax(any(TaxCollection.class)))
+                .thenReturn(new TaxResult.Collected(1L, BigDecimal.ONE, 99));
+
+        svc.collect(player, previous, now);
+
+        ArgumentCaptor<TaxCollection> captor = ArgumentCaptor.forClass(TaxCollection.class);
+        verify(taxApi).collectTax(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void halfAWeek_atOnePercentPerWeek_chargesExactlyHalfAPercent_fromThePlayersAccount() {
+        UUID player = UUID.randomUUID();
+        long now = 1_700_000_000L;
+        long previous = now - 7L * 24 * 3600 / 2; // 3d 12h
+
+        TaxCollection c = collectedFor(player, "100000.00", previous, now);
+
+        assertThat(c.amount()).isEqualTo(new BigDecimal("500.00"));
+        assertThat(c.sourceAccountId()).isEqualTo(42);
+        assertThat(c.destinationAccountId()).isEqualTo(99);
+        assertThat(c.taxType()).isEqualTo("personal-balance-tax");
+        assertThat(c.description()).isEqualTo("Personal balance tax (3d 12h @ 1%/wk)");
+        // One collection per (player, login): a replayed login event can't tax twice.
+        assertThat(c.dedupKey()).isEqualTo(io.paradaux.treasury.utils.Idempotency.sha256(
+                "balance-tax:" + player + ":" + now));
+    }
+
+    @Test
+    void sixSeconds_roundsHalfEvenUpToExactlyOneCent_andIsCollected() {
+        // 100000 * 1% * 6/604800 = 0.00992 -> 0.01: exactly the minimum, which is
+        // collected (the floor is "below one cent", not "one cent or less").
+        UUID player = UUID.randomUUID();
+        long now = 1_700_000_000L;
+
+        TaxCollection c = collectedFor(player, "100000.00", now - 6, now);
+
+        assertThat(c.amount()).isEqualTo(new BigDecimal("0.01"));
+        assertThat(c.description()).isEqualTo("Personal balance tax (0h 0m @ 1%/wk)");
+    }
+
+    @Test
+    void oneSecondElapsed_isTaxed_zeroSecondsIsNot() {
+        UUID player = UUID.randomUUID();
+        long now = 1_700_000_000L;
+
+        svc.collect(player, now, now); // same-second reconnect
+        verify(taxApi, never()).collectTax(any());
+
+        // 1_000_000 * 1% / 604800 = 0.01653... -> 0.02
+        TaxCollection c = collectedFor(player, "1000000.00", now - 1, now);
+        assertThat(c.amount()).isEqualTo(new BigDecimal("0.02"));
+    }
+
+    @Test
+    void subDayPeriod_isDescribedInHoursAndMinutes_multiDayInDaysAndHours() {
+        UUID player = UUID.randomUUID();
+        long now = 1_700_000_000L;
+
+        TaxCollection hours = collectedFor(player, "100000.00", now - (5 * 3600 + 30 * 60), now);
+        assertThat(hours.description()).startsWith("Personal balance tax (5h 30m @");
+
+        org.mockito.Mockito.clearInvocations(taxApi);
+        TaxCollection days = collectedFor(player, "100000.00", now - (2 * 86400 + 3 * 3600 + 59 * 60), now);
+        assertThat(days.description()).startsWith("Personal balance tax (2d 3h @");
+    }
+
+    @Test
+    void disabled_readsNothing_andCollectsNothing() {
+        BalanceTaxService disabled = new io.paradaux.treasury.services.impl.BalanceTaxServiceImpl(
+                BalanceTaxConfiguration.forTesting(false, "DCGovernment", new TreeMap<>(java.util.Map.of(
+                        BigDecimal.ZERO, new BigDecimal("0.05")))), taxApi, accountMapper);
+
+        disabled.collect(UUID.randomUUID(), 1_000L, 1_000_000L);
+
+        org.mockito.Mockito.verifyNoInteractions(taxApi, accountMapper);
+    }
 }

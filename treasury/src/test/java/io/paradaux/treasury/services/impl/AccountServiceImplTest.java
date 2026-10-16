@@ -223,6 +223,35 @@ class AccountServiceImplTest {
     }
 
     @Test
+    void isAccountMember_noMembershipRow_isFalse() {
+        UUID u = UUID.randomUUID();
+        when(membershipMapper.isMember(1, u)).thenReturn(0);
+        assertThat(svc.isAccountMember(u, 1)).isFalse();
+    }
+
+    @Test
+    void canAccessAccount_stranger_isDenied() {
+        // Not the owner, not an authorizer, not a member: no access. This gate fronts
+        // business withdrawals/deposits, so a false positive hands out a firm's money.
+        UUID stranger = UUID.randomUUID();
+        Account a = new Account();
+        a.setOwnerUuid(UUID.randomUUID());
+        when(accountMapper.findById(1)).thenReturn(a);
+        when(membershipMapper.isAuthorizer(1, stranger)).thenReturn(0);
+        when(membershipMapper.isMember(1, stranger)).thenReturn(0);
+        assertThat(svc.canAccessAccount(stranger, 1)).isFalse();
+    }
+
+    @Test
+    void canAccessAccount_plainMember_isAllowed() {
+        UUID member = UUID.randomUUID();
+        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(membershipMapper.isAuthorizer(1, member)).thenReturn(0);
+        when(membershipMapper.isMember(1, member)).thenReturn(1);
+        assertThat(svc.canAccessAccount(member, 1)).isTrue();
+    }
+
+    @Test
     void isOwnerForAccountId_unknownAccountReturnsFalse() {
         when(accountMapper.findById(1)).thenReturn(null);
         assertThat(svc.isOwnerForAccountId(UUID.randomUUID(), 1)).isFalse();
