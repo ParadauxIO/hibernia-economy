@@ -21,11 +21,13 @@ import org.junit.jupiter.api.Test;
 import org.mybatis.guice.MyBatisModule;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -136,8 +138,11 @@ class FirmCreationIT extends IntegrationTestBase {
             });
             assertThat(secondStarted.await(10, TimeUnit.SECONDS)).isTrue();
             if (firstOwner.equals(secondOwner)) {
-                assertThatThrownBy(() -> second.get(300, TimeUnit.MILLISECONDS))
-                        .isInstanceOf(TimeoutException.class);
+                // Prove the second create is parked on the first one's row lock, rather than
+                // inferring it from "not finished within 300ms" — which also passes when the
+                // second thread simply hasn't reached the lock yet, i.e. when there is no lock.
+                awaitSecondCreateBlockedOnLock(secondOwner);
+                assertThat(second.isDone()).as("second create must still be blocked").isFalse();
             } else {
                 assertThat(second.get(10, TimeUnit.SECONDS).getFirmId()).isPositive();
             }
@@ -161,5 +166,31 @@ class FirmCreationIT extends IntegrationTestBase {
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    /**
+     * Waits until the server shows the second create's {@code firm_creation_lock} upsert
+     * for {@code owner} still executing after 200ms — the server's own evidence that it
+     * is parked behind the first transaction's row lock (a single-row upsert otherwise
+     * finishes in well under a millisecond). Uses {@code information_schema.PROCESSLIST}
+     * ({@code TIME_MS} is MariaDB-specific, present on 10.11 and 11.x); InnoDB's
+     * {@code INNODB_TRX} was tried first but doesn't list a not-yet-started implicit
+     * (autocommit=0) transaction that is blocked on its very first statement.
+     */
+    private void awaitSecondCreateBlockedOnLock(UUID owner) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        String sql = "SELECT COUNT(*) FROM information_schema.PROCESSLIST "
+                + "WHERE COMMAND = 'Query' AND INFO LIKE ? AND INFO LIKE ? AND TIME_MS >= 200";
+        while (System.nanoTime() < deadline) {
+            try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+                ps.setString(1, "%INSERT INTO firm_creation_lock%");
+                ps.setString(2, "%" + owner + "%");
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next() && rs.getInt(1) > 0) return;
+                }
+            }
+            Thread.sleep(20);
+        }
+        throw new AssertionError("second createFirm never blocked on the firm_creation_lock row lock");
     }
 }
