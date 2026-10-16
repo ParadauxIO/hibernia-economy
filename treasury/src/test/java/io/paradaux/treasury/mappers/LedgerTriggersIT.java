@@ -220,10 +220,12 @@ class LedgerTriggersIT extends IntegrationTestBase {
         // 1.00 more would put both balances past ±99,999,999,999,999,999.99.
         assertThatThrownBy(() -> ledger.transfer(request(faucet, whale, new BigDecimal("1.00"))))
                 .hasStackTraceContaining("Out of range");
-        // A single amount that doesn't fit the posting column at all.
+        // A single amount that doesn't fit the posting column at all never reaches the
+        // DB: Money.requireValidAmount rejects it against the same DECIMAL(19,2) bound.
         int fresh = account("PERSONAL");
         assertThatThrownBy(() -> ledger.transfer(request(faucet, fresh, new BigDecimal("100000000000000000.00"))))
-                .hasStackTraceContaining("Out of range");
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cannot exceed");
 
         // Rolled back as a unit: no orphan txn header, no half-written posting pair.
         assertThat(count("SELECT COUNT(*) FROM ledger_txns")).isEqualTo(txnsBefore);

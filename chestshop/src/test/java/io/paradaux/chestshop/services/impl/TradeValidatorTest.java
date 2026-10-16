@@ -190,6 +190,7 @@ class TradeValidatorTest {
             bk.when(() -> Bukkit.getPlayer(ownerId)).thenReturn(ownerPlayer);
             when(accounts.isIgnoring(ownerId)).thenReturn(false);
             when(config.getNotificationMessageCooldown()).thenReturn(60L); // 60s window
+            when(config.isShowMessageFullShop()).thenReturn(true); // SHOW_MESSAGE_FULL_SHOP default
             Player client = player("Notch", UUID.randomUUID());
             when(config.isAllowFreeShops()).thenReturn(true);
             when(config.isAllowPartialTransactions()).thenReturn(true);
