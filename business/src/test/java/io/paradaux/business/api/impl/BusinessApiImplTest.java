@@ -16,6 +16,8 @@ import io.paradaux.business.services.FirmTransactionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,7 +26,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -97,17 +103,20 @@ class BusinessApiImplTest {
     }
 
     @Test
-    void firms_disbandFirm_requiresProprietor() {
+    void firms_disbandFirm_requiresProprietor_andNeverStartsTheDrain() {
         when(firmService.isProprietor(7, actor)).thenReturn(false);
         assertThatThrownBy(() -> api.firms().disbandFirm(7, actor))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Only the proprietor");
+        verify(firmService, never()).disbandFirm(anyInt(), any());
     }
 
-    @Test
-    void firms_disbandFirm_succeedsForProprietor() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true}) // fresh disband, or a resumed partial one
+    void firms_disbandFirm_completeDrain_returnsNormally(boolean resumed) {
         when(firmService.isProprietor(7, actor)).thenReturn(true);
-        when(firmService.disbandFirm(7, actor)).thenReturn(new FirmService.DisbandResult(false, List.of()));
-        api.firms().disbandFirm(7, actor);
+        when(firmService.disbandFirm(7, actor)).thenReturn(new FirmService.DisbandResult(resumed, List.of()));
+        assertThatCode(() -> api.firms().disbandFirm(7, actor)).doesNotThrowAnyException();
         verify(firmService).disbandFirm(7, actor);
     }
 

@@ -73,8 +73,9 @@ class TreasuryAPIModuleSoftDependTest {
     // ---- LuckPerms absent entirely: net.luckperms.* cannot be loaded ----
 
     @Test
-    void injectorBuilds_whenLuckPermsClassesAreAbsent() throws Exception {
-        invokeWithoutLuckPerms("createInjector");
+    void injectorBuilds_whenLuckPermsClassesAreAbsent() {
+        // A LinkageError (missing net.luckperms class) is rethrown unwrapped.
+        assertDoesNotThrow(() -> invokeWithoutLuckPerms("createInjector"));
     }
 
     @Test
