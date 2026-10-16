@@ -11,7 +11,7 @@ file — four sections: `database`, `firm`, `sales`, and `tax`.
 
 > [!CAUTION]
 > **`/business reload` re-reads `config.yml` at runtime** — the firm ownership limit, the
-> creation cooldown, and the balance-tax brackets all refresh without a restart. The
+> creation cooldown, name blocklist, and the balance-tax brackets all refresh without a restart. The
 > exception is the **database connection** (and the listeners / scheduled jobs wired up at
 > startup): those are fixed when the plugin loads, so changing the `database` block needs a
 > **server restart**.
@@ -48,6 +48,32 @@ Notes:
 - Counts only firms you're the **proprietor** of, not firms you're employed at.
 - Enforced **only at creation** — a player can end up over the limit by receiving a firm
   transfer, but can't `create` a new one while at or over it.
+
+## Firm name filtering — `firm.name-filter`
+
+Set `firm.name-filter.blocked-terms` to your server's prohibited words or phrases,
+then run `/business reload`. The default is `[]` (no word filtering).
+
+```yaml
+firm:
+  name-filter:
+    blocked-terms:
+      - "blockedword"
+      - "blocked phrase"
+```
+
+Business rejects matching names before creating a firm or renaming one, including
+administrator renames. Matching ignores case, spaces, underscores, hyphens and
+periods: `Blocked.Word Trading` matches `blockedword`. Terms match anywhere inside
+the name, so choose short terms carefully to avoid rejecting innocent names.
+Entries are literal text, not regular expressions; empty or separator-only entries
+are ignored. This is a configurable word filter, not a complete profanity dictionary
+or a leetspeak detector.
+
+Existing names remain unchanged. This setting applies to the Business plugin;
+the separate REST/Explorer rename service does not read the plugin's configuration.
+No ChatSentry installation is required. ChatSentry's documented API currently has
+no arbitrary-text checking method, so Business uses this local filter instead.
 
 ## Firm sales export & notifications — `sales`
 

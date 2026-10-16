@@ -543,7 +543,7 @@ public class FirmServiceImpl implements FirmService {
         return firm;
     }
 
-    /** Format + length checks shared by {@link #createFirm} and {@link #renameFirm}. */
+    /** Format, length and moderation checks shared by create and rename. */
     private void validateFirmName(String name) {
         if (name == null || name.length() > FIRM_NAME_LENGTH_LIMIT) {
             throw new BadCommandException("This firm name is too long");
@@ -553,6 +553,9 @@ public class FirmServiceImpl implements FirmService {
         }
         if (!NameValidator.isValidFirmName(name)) {
             throw new BadCommandException("Firm name must be 2–32 characters of letters, digits, space, underscore, hyphen, or period.");
+        }
+        if (NameValidator.containsBlockedTerm(name, firmConfig.getBlockedNameTerms())) {
+            throw new BadCommandException("This firm name contains a blocked word or phrase. Please choose another name.");
         }
     }
 
