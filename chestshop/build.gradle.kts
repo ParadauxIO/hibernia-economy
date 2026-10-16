@@ -143,8 +143,8 @@ dependencies {
     // removed: MineDown's internals implemented a now-sealed Adventure interface and
     // broke at runtime. Messaging now uses the framework i18n + messages.properties).
     // ChestShop compiles against the serializers it uses directly; Paper supplies them.
-    compileOnly("net.kyori:adventure-text-serializer-gson:4.21.0")
-    compileOnly("net.kyori:adventure-text-serializer-legacy:4.21.0")
+    compileOnly("net.kyori:adventure-text-serializer-gson:5.2.0")
+    compileOnly("net.kyori:adventure-text-serializer-legacy:5.2.0")
 
     // --- tests
     // Server API on the test runtime (tests mock/instantiate org.bukkit.* types).
