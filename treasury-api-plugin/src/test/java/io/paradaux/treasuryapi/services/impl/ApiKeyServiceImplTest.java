@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -388,6 +389,102 @@ class ApiKeyServiceImplTest {
         // never the employee-access query.
         verify(mapper).findByOwnerAndType(owner, KeyType.PERSONAL);
         verifyNoMoreInteractions(mapper);
+    }
+
+    // ---- the persisted key row must describe the minted token exactly ----
+    // The REST API checks a presented token against its api_keys row (type, scope,
+    // owner, jti, expiry). A row that drifts from the token either rejects a valid
+    // key or — worse — never expires / grants the wrong scope.
+
+    @Test
+    void issuePersonalKey_persistsARowMatchingTheToken_expiringIn180Days() {
+        UUID owner = UUID.randomUUID();
+        ApiKey[] inserted = new ApiKey[1];
+        ApiKeyMapper mapper = mock(ApiKeyMapper.class);
+        org.mockito.Mockito.doAnswer(inv -> {
+            ApiKey k = inv.getArgument(0);
+            k.setKeyId(42);
+            inserted[0] = copyOf(k);
+            return null;
+        }).when(mapper).insert(org.mockito.ArgumentMatchers.any());
+
+        ApiKey key = service(mapper).issuePersonalKey(7, owner);
+        Claims claims = Jwts.parser().verifyWith(deriveKey(SECRET)).build()
+                .parseSignedClaims(key.getToken()).getPayload();
+
+        ApiKey row = inserted[0];
+        assertEquals(KeyType.PERSONAL, row.getKeyType());
+        assertEquals(7, row.getAccountId());
+        assertNull(row.getFirmId());
+        assertEquals(owner, row.getOwnerUuid());
+        assertEquals(claims.getId(), row.getJwtId());
+        assertNull(row.getToken(), "the token is never persisted (ADT-6)");
+        assertEquals(claims.getIssuedAt().toInstant(), row.getIssuedAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+        assertEquals(claims.getExpiration().toInstant(), row.getExpiresAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+        assertEquals(java.time.Duration.ofDays(180), java.time.Duration.between(row.getIssuedAt(), row.getExpiresAt()));
+    }
+
+    @Test
+    void issueBusinessKey_persistsTheFirmScope_notAnAccount() {
+        ApiKey[] inserted = new ApiKey[1];
+        ApiKeyMapper mapper = mock(ApiKeyMapper.class);
+        org.mockito.Mockito.doAnswer(inv -> {
+            inserted[0] = copyOf(inv.getArgument(0));
+            return null;
+        }).when(mapper).insert(org.mockito.ArgumentMatchers.any());
+
+        service(mapper).issueBusinessKey(3, UUID.randomUUID());
+
+        assertEquals(KeyType.BUSINESS, inserted[0].getKeyType());
+        assertEquals(3, inserted[0].getFirmId());
+        assertNull(inserted[0].getAccountId());
+    }
+
+    @Test
+    void reissueKey_movesIssuedAndExpiryForward_inTokenRowAndResult() {
+        UUID owner = UUID.randomUUID();
+        ApiKey personal = personalKey(1, owner);
+        Instant oldIssued = Instant.parse("2020-01-01T00:00:00Z");
+        personal.setIssuedAt(oldIssued);
+        personal.setExpiresAt(oldIssued.plus(java.time.Duration.ofDays(180)));
+        ApiKeyMapper mapper = trackingMapper(personal);
+
+        ApiKey reissued = service(mapper).reissueKey(1, owner);
+
+        org.mockito.ArgumentCaptor<Instant> issued = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        org.mockito.ArgumentCaptor<Instant> expires = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        verify(mapper).reissue(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.eq(owner),
+                org.mockito.ArgumentMatchers.eq(reissued.getJwtId()), issued.capture(), expires.capture());
+        assertEquals(issued.getValue(), reissued.getIssuedAt());
+        assertEquals(expires.getValue(), reissued.getExpiresAt());
+        assertEquals(java.time.Duration.ofDays(180), java.time.Duration.between(issued.getValue(), expires.getValue()));
+        assertTrue(issued.getValue().isAfter(oldIssued));
+        Claims claims = Jwts.parser().verifyWith(deriveKey(SECRET)).build()
+                .parseSignedClaims(reissued.getToken()).getPayload();
+        assertEquals(expires.getValue().truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
+                claims.getExpiration().toInstant());
+    }
+
+    @Test
+    void revokeKey_unknownKey_isNotFound_andRevokesNothing() {
+        ApiKeyMapper mapper = mock(ApiKeyMapper.class);
+        when(mapper.findById(5)).thenReturn(null);
+        assertThrows(NotFoundException.class, () -> service(mapper).revokeKey(5, UUID.randomUUID()));
+        verify(mapper, never()).revoke(anyInt());
+    }
+
+    private static ApiKey copyOf(ApiKey k) {
+        ApiKey c = new ApiKey();
+        c.setKeyId(k.getKeyId());
+        c.setKeyType(k.getKeyType());
+        c.setAccountId(k.getAccountId());
+        c.setFirmId(k.getFirmId());
+        c.setOwnerUuid(k.getOwnerUuid());
+        c.setJwtId(k.getJwtId());
+        c.setToken(k.getToken());
+        c.setIssuedAt(k.getIssuedAt());
+        c.setExpiresAt(k.getExpiresAt());
+        return c;
     }
 
     @Test
