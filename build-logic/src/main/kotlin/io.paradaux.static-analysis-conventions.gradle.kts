@@ -15,6 +15,8 @@ import net.ltgt.gradle.errorprone.errorprone
 //   * Spotless      palantir-java-format for Java, ktlint for *.gradle.kts,
 //                   whitespace hygiene for md/yml/sql. Ratcheted against
 //                   origin/develop so only files a branch touches are enforced.
+//   * ArchUnit      on every test classpath, for the per-module ArchitectureTest
+//                   layering rules.
 //
 // Suppressing a finding: @SuppressWarnings("CheckName") on the narrowest element,
 // with a one-line comment saying why the check is wrong there. See
