@@ -150,7 +150,11 @@ the Explorer divides by that batch quantity for a fair per-item comparison. The
 optional 64-item view is an estimate, not a promise that the item stacks to 64.
 Check the sign batch, stock observation time and shop observation time before
 travelling. Copy location copies the world and coordinates; the map link opens
-the server map. Admin shops have unlimited stock. Unknown stock stays unknown.
+the server map. Offers show both observed stock and space available: the number
+of additional items of that type the container can accept. Zero space means the
+container is full for that item. Admin shops show unlimited stock and space;
+unknown observations stay unknown. Stock and space share the observation time
+and may have changed since the last check.
 
 Item pages show observed offers before historical averages. The simple daily
 price chart is followed by an optional advanced candlestick view. Historical

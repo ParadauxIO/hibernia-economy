@@ -106,3 +106,28 @@ These are fork behaviours with no config key — worth knowing they exist:
   [Custom items](#custom-items-nexo)); no separate bridge plugin required.
 - **Market analytics** — every trade is recorded to Treasury's market API, which is what
   feeds this Explorer's Market pages. On whenever the API is present.
+
+## Failed trade recovery evidence
+
+If settlement fails and ChestShop cannot return the goods (including an inventory
+exception), the trade is cancelled and a warning identifies its `tradeId`.
+ChestShop commits a recovery row to `plugins/ChestShop/users.db`, in
+`trade_recovery`, independently of normal sale logging. Keep this database in
+server backups; these rows are retained until an operator archives them.
+
+To inspect outstanding evidence with SQLite:
+
+```sql
+SELECT id, trade_id, recorded_at, evidence FROM trade_recovery ORDER BY id;
+```
+
+`recorded_at` is UTC. The versioned YAML evidence contains the player and owner
+UUIDs/names, buy/sell direction, unlimited-shop flag, exact price, sign world and
+coordinates when available, and Bukkit item snapshots with amounts and metadata.
+A known settlement transaction ID and reversal exception are included when
+available. Rows are evidence of failed attempts, not proof of a specific loss or
+an instruction to refund. Compare the inventories and Treasury ledger before
+manually reconciling; ChestShop does not automatically retry or compensate.
+
+If SQLite cannot save the record, an error includes the trade ID and serialized
+evidence in the server log. Preserve that log for manual investigation.

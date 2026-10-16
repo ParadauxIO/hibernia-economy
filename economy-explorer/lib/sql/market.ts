@@ -108,6 +108,7 @@ export interface MarketShopRow {
   sell_price: string | null;
   batch_qty: number;
   current_stock: number | null;
+  current_space: number | null;
   stock_at: Date | null;
   last_seen: Date | null;
   active: number;
@@ -642,7 +643,7 @@ export async function listShops(args: {
       s.shop_account_type, s.shop_firm_id, s.shop_owner_uuid_bin,
       COALESCE(f.display_name, fp.current_name, a.display_name) AS owner_name,
       s.material, s.item_key, s.item_name, s.item_custom,
-      s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.stock_at, s.last_seen, s.active
+      s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.estimated_capacity AS current_space, s.stock_at, s.last_seen, s.active
     FROM chestshop_shop s
     LEFT JOIN firm f ON f.firm_id = s.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = s.shop_account_id
@@ -801,6 +802,7 @@ interface RawShop {
   sell_price: string | null;
   batch_qty: number;
   current_stock: number | null;
+  current_space: number | null;
   stock_at: Date | null;
   last_seen: Date | null;
   active: number;
@@ -825,6 +827,7 @@ function toShopRow(r: RawShop): MarketShopRow {
     sell_price: r.sell_price,
     batch_qty: r.batch_qty,
     current_stock: r.current_stock,
+    current_space: r.current_space,
     stock_at: r.stock_at,
     last_seen: r.last_seen,
     active: r.active,

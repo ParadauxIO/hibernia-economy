@@ -633,10 +633,13 @@ d('shop offer comparisons', () => {
         VALUES ('audit', 1, 1, 1, 'STONE', 'audit-offer', 'Stone', 16, 8, 64, 64),
         ('audit', 2, 1, 1, 'STONE', 'audit-offer', 'Stone', 2, 1, 1, 5),
         ('audit', 3, 1, 1, 'STONE', 'audit-offer', 'Stone', NULL, 3, 1, 0)`.execute(db);
+      await sql`UPDATE chestshop_shop SET estimated_capacity = CASE sign_x WHEN 1 THEN 128 WHEN 2 THEN 0 ELSE NULL END WHERE world = 'audit'`.execute(db);
       const buy = await listShops({ ...args, direction: 'buy' });
+      expect(buy.map(s => s.current_space)).toEqual([128, 0]);
       expect(buy.map(s => s.sign_x)).toEqual([1, 2]);
       const sell = await listShops({ ...args, direction: 'sell' });
       expect(sell.map(s => s.sign_x)).toEqual([3, 2, 1]);
+      expect(sell.map(s => s.current_space)).toEqual([null, 0, 128]);
       expect(await countShops({ ...args, direction: 'sell' })).toBe(3);
       await sql`UPDATE chestshop_shop SET current_stock = 63 WHERE world = 'audit' AND sign_x = 1`.execute(db);
       expect((await listShops({ ...args, direction: 'buy', inStock: true })).map(s => s.sign_x)).toEqual([2]);

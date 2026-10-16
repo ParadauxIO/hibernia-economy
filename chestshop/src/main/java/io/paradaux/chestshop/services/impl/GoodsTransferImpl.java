@@ -7,7 +7,6 @@ import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.GoodsTransfer;
 import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.utils.InventoryUtil;
-import lombok.extern.slf4j.Slf4j;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.DoubleChest;
 import org.bukkit.entity.Player;
@@ -23,16 +22,17 @@ import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
  * TransactionServiceImpl (PAR-317).
  */
 @Singleton
-@Slf4j
 public class GoodsTransferImpl implements GoodsTransfer {
 
     private final InventoryService inventoryService;
     private final ChestShopConfiguration config;
+    private final TradeRecoveryService recovery;
 
     @Inject
-    GoodsTransferImpl(InventoryService inventoryService, ChestShopConfiguration config) {
+    GoodsTransferImpl(InventoryService inventoryService, ChestShopConfiguration config, TradeRecoveryService recovery) {
         this.inventoryService = inventoryService;
         this.config = config;
+        this.recovery = recovery;
     }
 
     /**
@@ -90,17 +90,18 @@ public class GoodsTransferImpl implements GoodsTransfer {
     /** Reverse a completed goods move after a failed money leg, keeping the trade atomic. */
     @Override
     public void reverse(Transaction event) {
-        boolean buy = event.getTransactionType() == BUY;
-        boolean reversed = event.isUnlimitedOwner()
-                ? moveUnlimited(event.getClientInventory(), event.getStock(), !buy)
-                : (buy
-                        ? transfer(event.getClientInventory(), event.getOwnerInventory(), event.getStock())
-                        : transfer(event.getOwnerInventory(), event.getClientInventory(), event.getStock()));
-
-        if (!reversed) {
-            log.error("Failed to reverse the goods of a ChestShop transaction at "
-                    + (event.getSign() != null ? event.getSign().getLocation() : "<unknown location>")
-                    + " after the money leg failed. The trade may be in an inconsistent state.");
+        try {
+            boolean buy = event.getTransactionType() == BUY;
+            boolean reversed = event.isUnlimitedOwner()
+                    ? moveUnlimited(event.getClientInventory(), event.getStock(), !buy)
+                    : (buy
+                            ? transfer(event.getClientInventory(), event.getOwnerInventory(), event.getStock())
+                            : transfer(event.getOwnerInventory(), event.getClientInventory(), event.getStock()));
+            if (!reversed) {
+                recovery.record(event, null);
+            }
+        } catch (RuntimeException failure) {
+            recovery.record(event, failure);
         }
     }
 

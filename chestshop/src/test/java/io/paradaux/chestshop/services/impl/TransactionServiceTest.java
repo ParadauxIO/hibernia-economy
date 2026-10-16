@@ -43,7 +43,7 @@ class TransactionServiceTest {
         // away here — the transfer overloads under test are stubbed directly.
         inventoryService = mock(InventoryService.class);
         ChestShopConfiguration config = mock(ChestShopConfiguration.class);
-        service = new GoodsTransferImpl(inventoryService, config);
+        service = new GoodsTransferImpl(inventoryService, config, org.mockito.Mockito.mock(TradeRecoveryService.class));
     }
 
     @Test
