@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -136,7 +137,7 @@ public class TaxCommand implements CommandHandler {
     public void trigger(@Sender CommandSender sender, @Arg("cycle") String cycleArg) {
         TaxCycleType cycleType;
         try {
-            cycleType = TaxCycleType.valueOf(cycleArg.toUpperCase());
+            cycleType = TaxCycleType.valueOf(cycleArg.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             message.send(sender, "treasury.tax.unknown-cycle", "cycle", cycleArg);
             return;
@@ -146,7 +147,7 @@ public class TaxCommand implements CommandHandler {
         String triggeredBy = sender.getName();
 
         message.send(sender, "treasury.tax.trigger.firing",
-                "cycle", cycleType.name().toLowerCase(),
+                "cycle", cycleType.name().toLowerCase(Locale.ROOT),
                 "start", periodStart);
         message.send(sender, "treasury.tax.trigger.dedup-note");
 

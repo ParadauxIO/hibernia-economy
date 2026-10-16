@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -103,7 +104,7 @@ class BalanceTaxBracketsTest {
         BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(raw, warnings::add);
         assertEquals(1, b.size());
         assertEquals(1, warnings.size());
-        assertTrue(warnings.get(0).toLowerCase().contains("missing"));
+        assertTrue(warnings.get(0).toLowerCase(Locale.ROOT).contains("missing"));
     }
 
     @Test

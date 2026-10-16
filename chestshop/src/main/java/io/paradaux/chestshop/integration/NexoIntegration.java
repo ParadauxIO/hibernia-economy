@@ -99,19 +99,15 @@ public class NexoIntegration implements Integration, CustomItemResolver {
         private static final String ITEMSADDER_ID_KEY = "id";
         private static final Pattern HEX_TAG = Pattern.compile("(?i)^(?:#|0x|hex[-_])?([0-9a-f]{6})$");
 
-        private static final Map<Integer, String> DYE_TAG_BY_RGB;
         private static final Map<String, Color> COLOR_BY_TAG;
 
         static {
-            Map<Integer, String> byRgb = new ConcurrentHashMap<>();
             Map<String, Color> byTag = new ConcurrentHashMap<>();
             for (DyeColor dyeColor : DyeColor.values()) {
                 Color color = dyeColor.getColor();
                 String tag = dyeColor.name().toLowerCase(Locale.ROOT);
-                byRgb.put(color.asRGB(), tag);
                 byTag.put(tag, color);
             }
-            DYE_TAG_BY_RGB = Collections.unmodifiableMap(byRgb);
             COLOR_BY_TAG = Collections.unmodifiableMap(byTag);
         }
 

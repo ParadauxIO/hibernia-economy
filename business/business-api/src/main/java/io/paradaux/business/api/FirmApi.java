@@ -1,6 +1,7 @@
 package io.paradaux.business.api;
 
 import io.paradaux.business.model.Firm;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -19,7 +20,7 @@ public interface FirmApi {
      * Returns null for an unknown or inactive alias. Aliases are 1–12 ASCII letters, case-insensitive; existing API
      * implementations without alias support return null.
      */
-    default Integer resolveShopAlias(String alias) {
+    default @Nullable Integer resolveShopAlias(String alias) {
         return null;
     }
 
@@ -30,7 +31,7 @@ public interface FirmApi {
      * @param nameOrId the firm name or ID string
      * @return the firm, or {@code null} if not found
      */
-    Firm getFirm(String nameOrId);
+    @Nullable Firm getFirm(String nameOrId);
 
     /**
      * Typed lookup by numeric firm id — prefer this over {@link #getFirm(String)}
@@ -41,7 +42,7 @@ public interface FirmApi {
      * @param firmId the firm id
      * @return the firm, or {@code null} if not found
      */
-    default Firm getFirmById(int firmId) {
+    default @Nullable Firm getFirmById(int firmId) {
         return getFirm(Integer.toString(firmId));
     }
 
@@ -52,7 +53,7 @@ public interface FirmApi {
      * @param name the firm display name
      * @return the firm, or {@code null} if not found
      */
-    default Firm getFirmByName(String name) {
+    default @Nullable Firm getFirmByName(String name) {
         return getFirm(name);
     }
 
@@ -134,7 +135,7 @@ public interface FirmApi {
      * @param accountId the Treasury account ID (as returned by {@code Account.getAccountId()})
      * @return the owning firm, or {@code null} if the account is not a firm account
      */
-    Firm getFirmByAccountId(int accountId);
+    @Nullable Firm getFirmByAccountId(int accountId);
 
     /**
      * Returns a firm's total balance, summed across all of its treasury accounts.

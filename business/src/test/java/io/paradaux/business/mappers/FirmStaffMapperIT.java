@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -81,7 +82,7 @@ class FirmStaffMapperIT extends IntegrationTestBase {
 
         List<FirmEmployee> emps = staff.listCurrentEmployeesByFirm(firmId);
         assertThat(emps).extracting(FirmEmployee::getPlayerUuid)
-                .extracting(s -> s.toLowerCase())
+                .extracting(s -> s.toLowerCase(Locale.ROOT))
                 .containsExactly(employee.toString());
     }
 }

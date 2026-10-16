@@ -14,6 +14,7 @@ import io.paradaux.treasury.api.TreasuryApi;
 import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
+import java.util.Locale;
 
 @Singleton
 @Command({"db", "democracybusiness", "business", "firm", "company"})
@@ -96,7 +97,7 @@ public class TaxCommands implements CommandHandler {
 
     private static Boolean parseBoolean(String token) {
         if (token == null) return null;
-        String t = token.trim().toLowerCase();
+        String t = token.trim().toLowerCase(Locale.ROOT);
         return switch (t) {
             case "true", "t", "yes", "y", "1", "on", "enable", "enabled" -> Boolean.TRUE;
             case "false", "f", "no", "n", "0", "off", "disable", "disabled" -> Boolean.FALSE;

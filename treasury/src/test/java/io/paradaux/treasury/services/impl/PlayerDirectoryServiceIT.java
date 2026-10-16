@@ -9,6 +9,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,7 +127,7 @@ class PlayerDirectoryServiceIT extends IntegrationTestBase {
 
     /** Hex of a UUID as MariaDB's HEX(BINARY(16)) renders it — the placeholder name. */
     private static String hex(UUID uuid) {
-        return uuid.toString().replace("-", "").toUpperCase();
+        return uuid.toString().replace("-", "").toUpperCase(Locale.ROOT);
     }
 
     private String[] rowOf(UUID uuid) throws Exception {
@@ -180,7 +181,7 @@ class PlayerDirectoryServiceIT extends IntegrationTestBase {
 
         assertThat(rowOf(oldOwner)[0]).isEqualTo(hex(oldOwner));
         assertThat(directory.resolveUuidByName(hex(oldOwner))).isEmpty();
-        assertThat(directory.resolveUuidByName(hex(oldOwner).toLowerCase())).isEmpty();
+        assertThat(directory.resolveUuidByName(hex(oldOwner).toLowerCase(Locale.ROOT))).isEmpty();
         assertThat(directory.resolveNameByUuid(oldOwner)).isEmpty();
     }
 }

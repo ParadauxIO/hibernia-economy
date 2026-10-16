@@ -2,7 +2,6 @@ package io.paradaux.chestshop.services.impl;
 
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.ItemInfoLines;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.EconomyService;
 import io.paradaux.chestshop.services.InventoryService;
@@ -10,7 +9,6 @@ import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.support.ServerTest;
-import io.paradaux.chestshop.support.TestConfigs;
 import io.paradaux.hibernia.framework.i18n.Message;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Color;
@@ -77,7 +75,6 @@ class InfoServiceImplTest extends ServerTest {
     private SignService signService;
     private ShopBlockService shopBlockService;
     private InventoryService inventoryService;
-    private ChestShopConfiguration config;
     private InfoServiceImpl info;
     private CommandSender sender;
 
@@ -90,11 +87,10 @@ class InfoServiceImplTest extends ServerTest {
         signService = mock(SignService.class);
         shopBlockService = mock(ShopBlockService.class);
         inventoryService = mock(InventoryService.class);
-        config = TestConfigs.defaults();
         sender = mock(CommandSender.class);
         lenient().when(message.component(anyString(), any(Map.class))).thenReturn(Component.text("x"));
         lenient().when(items.getName(any())).thenReturn("Name");
-        info = new InfoServiceImpl(accounts, economy, items, message, config, signService,
+        info = new InfoServiceImpl(accounts, economy, items, message, signService,
                 shopBlockService, inventoryService);
     }
 

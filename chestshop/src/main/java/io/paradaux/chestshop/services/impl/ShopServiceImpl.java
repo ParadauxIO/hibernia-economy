@@ -322,8 +322,8 @@ public class ShopServiceImpl implements ShopService {
         ItemStack item = items.parse(itemLine);
 
         if (item == null) {
-            if (PriceUtil.hasBuyPrice(priceLine) && !adminBypass.has(player, Permissions.SHOP_CREATION_BUY)
-                    || PriceUtil.hasSellPrice(priceLine) && !adminBypass.has(player, Permissions.SHOP_CREATION_SELL)) {
+            if ((PriceUtil.hasBuyPrice(priceLine) && !adminBypass.has(player, Permissions.SHOP_CREATION_BUY))
+                    || (PriceUtil.hasSellPrice(priceLine) && !adminBypass.has(player, Permissions.SHOP_CREATION_SELL))) {
                 ctx.setOutcome(CreationOutcome.NO_PERMISSION);
             }
             return;
@@ -351,7 +351,7 @@ public class ShopServiceImpl implements ShopService {
     private boolean canCreateForItem(Player player, String perItemSideNode, String matID, String sideNode) {
         return adminBypass.has(player, perItemSideNode)
                 || adminBypass.has(player, Permissions.SHOP_CREATION)
-                || adminBypass.has(player, Permissions.SHOP_CREATION_ID + matID) && adminBypass.has(player, sideNode);
+                || (adminBypass.has(player, Permissions.SHOP_CREATION_ID + matID) && adminBypass.has(player, sideNode));
     }
 
     /** Charge the creation fee (the former {@code ignoreCancelled=true} CreationFeeGetter step). */

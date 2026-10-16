@@ -23,9 +23,9 @@ class BusinessWithoutPlaceholderApiTest {
     void pluginAndHookCanBeReflectedOverWithoutTheOptionalApi() {
         assertThatCode(() -> {
             for (Class<?> type : new Class<?>[]{Business.class, BusinessPlaceholderHook.class}) {
-                type.getDeclaredFields();
-                type.getDeclaredMethods();
-                type.getDeclaredConstructors();
+                assertThat(type.getDeclaredFields()).isNotNull();
+                assertThat(type.getDeclaredMethods()).isNotNull();
+                assertThat(type.getDeclaredConstructors()).isNotNull();
             }
         }).doesNotThrowAnyException();
     }

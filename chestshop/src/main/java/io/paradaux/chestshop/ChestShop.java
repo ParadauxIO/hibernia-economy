@@ -261,6 +261,9 @@ public class ChestShop extends JavaPlugin {
     }
 
     public static void runInAsyncThread(Runnable runnable) {
-        executorService.submit(runnable);
+        // execute, not submit: submit parks a task's exception in a Future nobody reads, so a
+        // failed async write (e.g. storeUsername) vanished silently. execute lets it reach the
+        // worker's uncaught-exception handler and the server log.
+        executorService.execute(runnable);
     }
 }

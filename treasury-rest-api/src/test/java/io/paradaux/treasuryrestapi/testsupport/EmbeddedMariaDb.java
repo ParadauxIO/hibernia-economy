@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -134,7 +135,7 @@ public final class EmbeddedMariaDb {
                 } catch (java.sql.SQLException e) {
                     // Tolerate a pre-seeded DB (e.g. a CI MariaDB service reused
                     // across forked test JVMs); truncateAll() handles isolation.
-                    if (!e.getMessage().toLowerCase().contains("already exists")) throw e;
+                    if (!e.getMessage().toLowerCase(Locale.ROOT).contains("already exists")) throw e;
                 }
             }
         }

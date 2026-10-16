@@ -24,6 +24,7 @@ import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 
 @Singleton
 @Command({"db", "democracybusiness", "business", "firm", "company"})
@@ -140,7 +141,7 @@ public class AccountCommands implements CommandHandler {
         message.send(sender, "business.account.list.header", "firm", firm.getDisplayName(), "count", accountList.size());
         for (Account account : accountList) {
             String defaultMarker = (firm.getDefaultAccountId() != null && firm.getDefaultAccountId().equals(account.getAccountId())) ? " [DEFAULT]" : "";
-            String shopId = "B:" + Integer.toString(account.getAccountId(), 36).toUpperCase();
+            String shopId = "B:" + Integer.toString(account.getAccountId(), 36).toUpperCase(Locale.ROOT);
             message.send(sender, "business.account.list.entry",
                     "accountId", account.getAccountId(),
                     "name", account.getDisplayName(),

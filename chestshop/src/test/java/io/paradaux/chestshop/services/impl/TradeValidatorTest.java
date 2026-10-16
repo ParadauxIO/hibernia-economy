@@ -561,6 +561,7 @@ class TradeValidatorTest {
             Player ownerPlayer = player("Alice", ownerId);
             bk.when(() -> Bukkit.getPlayer(ownerId)).thenReturn(ownerPlayer);
             when(accounts.isIgnoring(ownerId)).thenReturn(false); // owner wants the message
+            when(config.isShowMessageFullShop()).thenReturn(true); // SHOW_MESSAGE_FULL_SHOP default
             Player client = player("Notch", UUID.randomUUID());
             Sign s = sign(location(world));
             when(config.isAllowFreeShops()).thenReturn(true);
@@ -584,6 +585,7 @@ class TradeValidatorTest {
             Account owner = new Account("Alice", "Alice", ownerId);
             bk.when(() -> Bukkit.getPlayer(ownerId)).thenReturn(null); // owner offline → sendMessageToOwner returns early
             when(accounts.isIgnoring(ownerId)).thenReturn(false);
+            when(config.isShowMessageOutOfStock()).thenReturn(true); // SHOW_MESSAGE_OUT_OF_STOCK default
             Player client = player("Notch", UUID.randomUUID());
             Sign s = sign(location(null)); // world unloaded → "?" placeholder
             when(config.isAllowFreeShops()).thenReturn(true);
@@ -609,6 +611,7 @@ class TradeValidatorTest {
             Player ownerPlayer = player("Alice", ownerId);
             bk.when(() -> Bukkit.getPlayer(ownerId)).thenReturn(ownerPlayer);
             when(accounts.isIgnoring(ownerId)).thenReturn(false);
+            when(config.isShowMessageFullShop()).thenReturn(true); // SHOW_MESSAGE_FULL_SHOP default
             when(config.getNotificationMessageCooldown()).thenReturn(60L); // 60s window
             Player client = player("Notch", UUID.randomUUID());
             when(config.isAllowFreeShops()).thenReturn(true);
@@ -755,6 +758,32 @@ class TradeValidatorTest {
     }
 
     @Test
+    void sendError_notEnoughSpaceInChest_silentWhenConfigFlagOffEvenIfOwnerNotIgnoring() {
+        // Regression: `show && !toggles || !ignoring` parsed as `(show && !toggles) || !ignoring`,
+        // so SHOW_MESSAGE_FULL_SHOP=false still notified every owner who hadn't /cstoggle'd.
+        try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
+            World world = mock(World.class);
+            when(world.getName()).thenReturn("world");
+            UUID ownerId = UUID.randomUUID();
+            Account owner = new Account("Alice", "Alice", ownerId);
+            Player ownerPlayer = player("Alice", ownerId);
+            bk.when(() -> Bukkit.getPlayer(ownerId)).thenReturn(ownerPlayer);
+            when(accounts.isIgnoring(ownerId)).thenReturn(false);
+            when(config.isShowMessageFullShop()).thenReturn(false);
+            Player client = player("Notch", UUID.randomUUID());
+            when(config.isAllowFreeShops()).thenReturn(true);
+            when(config.isAllowPartialTransactions()).thenReturn(true);
+            doAnswer(inv -> { ((PendingTransaction) inv.getArgument(0)).setCancelled(TransactionOutcome.NOT_ENOUGH_SPACE_IN_CHEST); return null; })
+                    .when(partialFill).adjustBuy(any());
+            PendingTransaction ctx = pending(BUY, false, sign(location(world)), client, owner, mock(Inventory.class),
+                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5"));
+            validator.validate(ctx);
+            verify(ownerPlayer, org.mockito.Mockito.never()).sendMessage(any(net.kyori.adventure.text.Component.class));
+            verify(message).send(client, "chestshop.NOT_ENOUGH_SPACE_IN_CHEST");
+        }
+    }
+
+    @Test
     void sendError_notEnoughStockInChest_notifiesWhenConfigFlagOn() {
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             World world = mock(World.class);
@@ -882,6 +911,7 @@ class TradeValidatorTest {
             Player ownerPlayer = player("Alice", ownerId);
             bk.when(() -> Bukkit.getPlayer(ownerId)).thenReturn(ownerPlayer);
             when(accounts.isIgnoring(ownerId)).thenReturn(false);
+            when(config.isShowMessageFullShop()).thenReturn(true); // SHOW_MESSAGE_FULL_SHOP default
             when(config.getNotificationMessageCooldown()).thenReturn(1L); // 1-second window
             Player client = player("Notch", UUID.randomUUID());
             when(config.isAllowFreeShops()).thenReturn(true);
@@ -954,8 +984,6 @@ class TradeValidatorTest {
         java.util.function.Function<java.util.UUID, java.math.BigDecimal> balance = u -> java.math.BigDecimal.ZERO;
         boolean hasAccount = true;
         boolean settleResult = true;
-        int settleCalls = 0;
-        int migrateCalls = 0;
         @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
         @Override public String format(java.math.BigDecimal amount) { return amount.toPlainString(); }
         @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
@@ -964,7 +992,7 @@ class TradeValidatorTest {
         @Override public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) { return hasFunds.test(account, amount); }
         @Override public java.math.BigDecimal getBalance(java.util.UUID account) { return balance.apply(account); }
         @Override public boolean hasAccount(java.util.UUID account) { return hasAccount; }
-        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { settleCalls++; return settleResult; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { migrateCalls++; }
+        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { return settleResult; }
+        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { }
     }
 }

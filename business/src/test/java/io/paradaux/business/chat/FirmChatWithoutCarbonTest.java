@@ -37,9 +37,9 @@ class FirmChatWithoutCarbonTest {
         // A Carbon type in any declared member — including the synthetic method javac
         // emits for a lambda body — makes these throw NoClassDefFoundError.
         assertThatCode(() -> {
-            FirmChatServiceImpl.class.getDeclaredFields();
-            FirmChatServiceImpl.class.getDeclaredMethods();
-            FirmChatServiceImpl.class.getDeclaredConstructors();
+            assertThat(FirmChatServiceImpl.class.getDeclaredFields()).isNotNull();
+            assertThat(FirmChatServiceImpl.class.getDeclaredMethods()).isNotNull();
+            assertThat(FirmChatServiceImpl.class.getDeclaredConstructors()).isNotNull();
         }).doesNotThrowAnyException();
     }
 

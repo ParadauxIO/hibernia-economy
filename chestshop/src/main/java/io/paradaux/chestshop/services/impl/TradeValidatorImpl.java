@@ -224,7 +224,7 @@ public class TradeValidatorImpl implements TradeValidator {
         if (ctx.isCancelled()) {
             return;
         }
-        if (ctx.getExactPrice().equals(NO_PRICE)) {
+        if (ctx.getExactPrice().compareTo(NO_PRICE) == 0) {
             ctx.setCancelled(ctx.getTransactionType() == BUY ? SHOP_DOES_NOT_SELL_THIS_ITEM : SHOP_DOES_NOT_BUY_THIS_ITEM);
         }
     }
@@ -290,9 +290,9 @@ public class TradeValidatorImpl implements TradeValidator {
         for (ItemStack stock : ctx.getStock()) {
             String matID = stock.getType().toString().toLowerCase(Locale.ROOT);
             boolean hasPerm = buy
-                    ? adminBypass.has(client, Permissions.BUY) && !Permissions.hasPermissionSetFalse(client, Permissions.BUY_ID + matID)
+                    ? (adminBypass.has(client, Permissions.BUY) && !Permissions.hasPermissionSetFalse(client, Permissions.BUY_ID + matID))
                             || adminBypass.has(client, Permissions.BUY_ID + matID)
-                    : adminBypass.has(client, Permissions.SELL) && !Permissions.hasPermissionSetFalse(client, Permissions.SELL_ID + matID)
+                    : (adminBypass.has(client, Permissions.SELL) && !Permissions.hasPermissionSetFalse(client, Permissions.SELL_ID + matID))
                             || adminBypass.has(client, Permissions.SELL_ID + matID);
             if (!hasPerm) {
                 ctx.setCancelled(CLIENT_DOES_NOT_HAVE_PERMISSION);
@@ -331,7 +331,8 @@ public class TradeValidatorImpl implements TradeValidator {
             case CLIENT_DOES_NOT_HAVE_ENOUGH_MONEY -> messageKey = "chestshop.NOT_ENOUGH_MONEY";
             case SHOP_DOES_NOT_HAVE_ENOUGH_MONEY -> messageKey = "chestshop.NOT_ENOUGH_MONEY_SHOP";
             case NOT_ENOUGH_SPACE_IN_CHEST -> {
-                if (config.isShowMessageFullShop() && !config.isCstoggleTogglesFullShop() || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid())) {
+                // SHOW_MESSAGE_FULL_SHOP gates the notice; /cstoggle may only hide it when CSTOGGLE_TOGGLES_FULL_SHOP is on.
+                if (config.isShowMessageFullShop() && (!config.isCstoggleTogglesFullShop() || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid()))) {
                     sendShopLocationMessage(ctx, "chestshop.NOT_ENOUGH_SPACE_IN_YOUR_SHOP", "seller");
                 }
                 messageKey = "chestshop.NOT_ENOUGH_SPACE_IN_CHEST";
@@ -339,7 +340,8 @@ public class TradeValidatorImpl implements TradeValidator {
             case NOT_ENOUGH_SPACE_IN_INVENTORY -> messageKey = "chestshop.NOT_ENOUGH_SPACE_IN_INVENTORY";
             case NOT_ENOUGH_STOCK_IN_INVENTORY -> messageKey = "chestshop.NOT_ENOUGH_ITEMS_TO_SELL";
             case NOT_ENOUGH_STOCK_IN_CHEST -> {
-                if (config.isShowMessageOutOfStock() && !config.isCstoggleTogglesOutOfStock() || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid())) {
+                // SHOW_MESSAGE_OUT_OF_STOCK gates the notice; /cstoggle may only hide it when CSTOGGLE_TOGGLES_OUT_OF_STOCK is on.
+                if (config.isShowMessageOutOfStock() && (!config.isCstoggleTogglesOutOfStock() || !accounts.isIgnoring(ctx.getOwnerAccount().getUuid()))) {
                     sendShopLocationMessage(ctx, "chestshop.NOT_ENOUGH_STOCK_IN_YOUR_SHOP", "buyer");
                 }
                 messageKey = "chestshop.NOT_ENOUGH_STOCK";

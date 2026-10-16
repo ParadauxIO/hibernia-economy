@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -152,7 +153,7 @@ class BusinessAccountServiceImplTest {
     }
 
     private static Account businessAccount(int accountId) {
-        return new Account("Firm", "B:" + Integer.toString(accountId, 36).toUpperCase(),
+        return new Account("Firm", "B:" + Integer.toString(accountId, 36).toUpperCase(Locale.ROOT),
                 BusinessAccountUtil.toBusinessUuid(accountId));
     }
 

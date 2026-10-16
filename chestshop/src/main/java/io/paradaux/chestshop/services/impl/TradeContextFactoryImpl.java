@@ -106,13 +106,13 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
         }
 
         BigDecimal pricePerItem = price.divide(BigDecimal.valueOf(amount), MathContext.DECIMAL128);
-        if (config.isShiftSellsInStacks() && player.isSneaking() && !price.equals(PriceUtil.NO_PRICE) && isAllowedForShift(action == buy)) {
+        if (config.isShiftSellsInStacks() && player.isSneaking() && price.compareTo(PriceUtil.NO_PRICE) != 0 && isAllowedForShift(action == buy)) {
             int newAmount = adminShop ? inventoryService.getMaxStackSize(item) : getStackAmount(item, ownerInventory, player, action);
             if (newAmount > 0) {
                 price = pricePerItem.multiply(BigDecimal.valueOf(newAmount)).setScale(config.getPricePrecision(), RoundingMode.HALF_UP);
                 amount = newAmount;
             }
-        } else if (config.isShiftSellsEverything() && player.isSneaking() && !price.equals(PriceUtil.NO_PRICE) && isAllowedForShift(action == buy)) {
+        } else if (config.isShiftSellsEverything() && player.isSneaking() && price.compareTo(PriceUtil.NO_PRICE) != 0 && isAllowedForShift(action == buy)) {
             if (action != buy) {
                 int newAmount = inventoryService.getAmount(item, player.getInventory());
                 if (newAmount > 0) {

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.util.Formatter;
+import java.util.IllegalFormatConversionException;
 import java.util.IllegalFormatException;
 import java.util.List;
 
@@ -74,12 +74,7 @@ class StockCounterServiceImplTest {
 
     // A genuine IllegalFormatException instance for the narrow catch arcs.
     private static IllegalFormatException illegalFormat() {
-        try {
-            new Formatter().format("%d", "not-a-number"); // throws IllegalFormatConversionException
-            throw new AssertionError("expected an IllegalFormatException");
-        } catch (IllegalFormatException e) {
-            return e;
-        }
+        return new IllegalFormatConversionException('d', String.class);
     }
 
     private ShopCreation shopCreation(String[] lines, Sign sign) {

@@ -40,11 +40,6 @@ public final class FindDialog implements DialogHandler {
 
     private static final DecimalFormat MONEY = new DecimalFormat("$#,##0.00");
 
-    private static final List<DialogInputSpec.OptionSpec> DIR_OPTIONS = List.of(
-            new DialogInputSpec.OptionSpec("off", Text.key("find.sort.off"), true),
-            new DialogInputSpec.OptionSpec("asc", Text.key("find.sort.asc"), false),
-            new DialogInputSpec.OptionSpec("desc", Text.key("find.sort.desc"), false));
-
     private final ShopFinderService finder;
     private final Message message;
 

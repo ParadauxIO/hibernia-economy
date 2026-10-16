@@ -192,7 +192,7 @@ class TransferGuardsIT extends EmbeddedDbIT {
         seedBalance(1, "0.00");
         seedBalance(2, "0.00");
 
-        TransferResponse r = transferService.transfer(
+        transferService.transfer(
                 new VerifiedToken(1L, INITIATOR, "GOVERNMENT", 1L, null),
                 new TransferRequest(null, 2L, "5000.00", "mint"), null);
         assertThat(sumPostings(1)).isEqualByComparingTo("-5000.00");

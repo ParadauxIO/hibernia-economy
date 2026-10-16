@@ -146,7 +146,6 @@ class PostTradeReactionsTest {
         return new Transaction(pending, s);
     }
 
-    private Account owner() { return new Account("Alice", "Alice", UUID.randomUUID()); }
 
     /** A BUY transaction whose owner chest is {@code ownerInv}, for deleteEmptyShop scenarios. */
     private Transaction deletableBuy(Sign s, Inventory ownerInv, Account owner) {
@@ -526,8 +525,6 @@ class PostTradeReactionsTest {
         java.util.function.Function<java.util.UUID, java.math.BigDecimal> balance = u -> java.math.BigDecimal.ZERO;
         boolean hasAccount = true;
         boolean settleResult = true;
-        int settleCalls = 0;
-        int migrateCalls = 0;
         @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
         @Override public String format(java.math.BigDecimal amount) { return amount.toPlainString(); }
         @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
@@ -536,7 +533,7 @@ class PostTradeReactionsTest {
         @Override public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) { return hasFunds.test(account, amount); }
         @Override public java.math.BigDecimal getBalance(java.util.UUID account) { return balance.apply(account); }
         @Override public boolean hasAccount(java.util.UUID account) { return hasAccount; }
-        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { settleCalls++; return settleResult; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { migrateCalls++; }
+        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { return settleResult; }
+        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { }
     }
 }

@@ -15,7 +15,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.utils.PriceUtil;
@@ -77,20 +76,18 @@ public class InfoServiceImpl implements InfoService {
     private final EconomyService economy;
     private final ItemService items;
     private final Message message;
-    private final ChestShopConfiguration config;
     private final SignService signService;
     private final ShopBlockService shopBlockService;
     private final InventoryService inventoryService;
 
     @Inject
     public InfoServiceImpl(AccountService accounts, EconomyService economy, ItemService items, Message message,
-                       ChestShopConfiguration config, SignService signService, ShopBlockService shopBlockService,
+                       SignService signService, ShopBlockService shopBlockService,
                        InventoryService inventoryService) {
         this.accounts = accounts;
         this.economy = economy;
         this.items = items;
         this.message = message;
-        this.config = config;
         this.signService = signService;
         this.shopBlockService = shopBlockService;
         this.inventoryService = inventoryService;
@@ -153,13 +150,13 @@ public class InfoServiceImpl implements InfoService {
             sender.sendMessage(entry.getValue());
         }
 
-        if (!buyPrice.equals(PriceUtil.NO_PRICE)) {
+        if (buyPrice.compareTo(PriceUtil.NO_PRICE) != 0) {
             message.send(sender, "chestshop.shopinfo_buy", "prefix", "",
                     "amount", String.valueOf(amount),
                     "price", economy.format(buyPrice)
             );
         }
-        if (!sellPrice.equals(PriceUtil.NO_PRICE)) {
+        if (sellPrice.compareTo(PriceUtil.NO_PRICE) != 0) {
             message.send(sender, "chestshop.shopinfo_sell", "prefix", "",
                     "amount", String.valueOf(amount),
                     "price", economy.format(sellPrice)

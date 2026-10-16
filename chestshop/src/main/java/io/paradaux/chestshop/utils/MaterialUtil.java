@@ -249,7 +249,7 @@ public final class MaterialUtil {
         private E parse(String name, E[] values) {
             String formatted = name.replaceAll("(?<!^)(?>\\s?)([A-Z1-9])", "_$1").toUpperCase(Locale.ROOT).replace(' ', '_');
             try {
-                return E.valueOf(values[0].getDeclaringClass(), formatted);
+                return Enum.valueOf(values[0].getDeclaringClass(), formatted);
             } catch (IllegalArgumentException exception) {
                 List<E> possibleEnums = new ArrayList<>();
                 String[] typeParts = formatted.split("_");

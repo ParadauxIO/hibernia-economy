@@ -21,7 +21,6 @@ import org.joml.Vector3f;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
-import org.mockbukkit.mockbukkit.ServerMock;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -46,7 +45,6 @@ import static org.mockito.Mockito.when;
  */
 class PreviewServiceImplTest {
 
-    private ServerMock bukkit;
     private JavaPlugin plugin;
     private Server server;
     private World world;
@@ -61,7 +59,7 @@ class PreviewServiceImplTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        bukkit = MockBukkit.mock(); // real Bukkit statics for ItemStack construction / YAML
+        MockBukkit.mock(); // real Bukkit statics for ItemStack construction / YAML
         plugin = mock(JavaPlugin.class);
         server = mock(Server.class);
         world = mock(World.class);

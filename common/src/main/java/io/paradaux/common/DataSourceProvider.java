@@ -2,6 +2,7 @@ package io.paradaux.common;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.jetbrains.annotations.Nullable;
 
 import javax.sql.DataSource;
 
@@ -93,7 +94,7 @@ public final class DataSourceProvider implements AutoCloseable {
         private int maximumPoolSize = 10;
         private int minimumIdle = 2;
         private boolean statementCaching = false;
-        private String transactionIsolation = null; // driver default
+        private @Nullable String transactionIsolation = null; // driver default
         private long connectionTimeoutMs = -1;       // Hikari default (30s)
         private long maxLifetimeMs = -1;             // Hikari default (30m)
         private long keepaliveMs = -1;               // Hikari default (off)
@@ -113,7 +114,7 @@ public final class DataSourceProvider implements AutoCloseable {
         /** Append driver-side prepared-statement caching + batch-rewrite URL params. */
         public Builder statementCaching(boolean v) { this.statementCaching = v; return this; }
         /** e.g. {@code "TRANSACTION_READ_COMMITTED"}; null leaves the driver default. */
-        public Builder transactionIsolation(String v) { this.transactionIsolation = v; return this; }
+        public Builder transactionIsolation(@Nullable String v) { this.transactionIsolation = v; return this; }
         public Builder connectionTimeoutMs(long v) { this.connectionTimeoutMs = v; return this; }
         public Builder maxLifetimeMs(long v) { this.maxLifetimeMs = v; return this; }
         public Builder keepaliveMs(long v) { this.keepaliveMs = v; return this; }

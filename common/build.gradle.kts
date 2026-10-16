@@ -23,6 +23,9 @@ dependencies {
     // (ADT-184).
     compileOnly(libs.hikaricp)
     testImplementation(libs.hikaricp)
+    // @Nullable for NullAway (common is null-checked; see static-analysis-conventions).
+    // Class-retention annotations only, so compileOnly like the published *-api jars.
+    compileOnly(libs.jetbrains.annotations)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

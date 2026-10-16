@@ -15,6 +15,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -437,7 +438,7 @@ class MarketApiImplIT extends IntegrationTestBase {
                     // MariaDB maps TINYINT(1) -> Boolean; normalise to 0/1 so the
                     // flag-column assertions can read them as Numbers.
                     if (v instanceof Boolean b) v = b ? 1 : 0;
-                    row.put(rs.getMetaData().getColumnLabel(i).toLowerCase(), v);
+                    row.put(rs.getMetaData().getColumnLabel(i).toLowerCase(Locale.ROOT), v);
                 }
                 out.add(row);
             }
