@@ -77,6 +77,25 @@ class GoodsTransferTest extends ServerTest {
     }
 
     @Test
+    void transfer_rollsBackAPartialMove_whenOnlySomeOfTheStockFits() {
+        Inventory source = chestWith(9, item(Material.DIAMOND, 64), item(Material.DIAMOND, 64));
+        // One free slot: the first stack lands, the second cannot.
+        Inventory target = server.createInventory(null, 9);
+        for (int i = 0; i < 8; i++) {
+            target.setItem(i, item(Material.STONE, 64));
+        }
+
+        boolean ok = transfer.transfer(source, target,
+                new ItemStack[]{item(Material.DIAMOND, 64), item(Material.DIAMOND, 64)});
+
+        assertThat(ok).isFalse();
+        // The stack that did move is taken back out of the target and returned to the source.
+        assertThat(count(source, Material.DIAMOND)).isEqualTo(128);
+        assertThat(count(target, Material.DIAMOND)).isZero();
+        assertThat(count(target, Material.STONE)).isEqualTo(8 * 64);
+    }
+
+    @Test
     void moveUnlimited_add_spawnsStockIntoClient() {
         Inventory client = chest(27);
         boolean ok = transfer.moveUnlimited(client, new ItemStack[]{item(Material.DIAMOND, 10)}, true);

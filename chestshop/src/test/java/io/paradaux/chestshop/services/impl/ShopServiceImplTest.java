@@ -342,17 +342,6 @@ class ShopServiceImplTest extends ServerTest {
         assertThat(ctx.getOutcome()).isEqualTo(CreationOutcome.NO_PERMISSION_FOR_TERRAIN);
     }
 
-    @Test
-    void create_terrain_handlesNullContainerLocation() {
-        // No container at terrain time -> containerLocation null branch; still builds.
-        when(shopBlockService.findConnectedContainer(any(Block.class))).thenReturn(null, container);
-        // First call (checkChest) returns null -> NO_CHEST; use admin shop to bypass that.
-        // Simpler: keep container for checkChest, null only affects terrain via a spy is hard;
-        // instead assert canBuild is consulted with a null chest location is covered elsewhere.
-        ShopCreation ctx = create(VALID);
-        assertThat(ctx).isNotNull();
-    }
-
     // ---- checkPriceRatio --------------------------------------------------------
 
     @Test

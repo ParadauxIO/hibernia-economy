@@ -5,13 +5,18 @@ import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Real-item coverage for {@link MaterialServiceImpl} on MockBukkit: the config-backed
@@ -72,6 +77,7 @@ class MaterialServiceImplTest extends ServerTest {
     void equals_oneNull() {
         MaterialServiceImpl m = material(TestConfigs.defaults());
         assertThat(m.equals(item(Material.DIAMOND, 1), null)).isFalse();
+        assertThat(m.equals(null, item(Material.DIAMOND, 1))).isFalse();
     }
 
     @Test
@@ -102,6 +108,7 @@ class MaterialServiceImplTest extends ServerTest {
         ItemStack plain = item(Material.DIAMOND, 1);
         ItemStack named = named(Material.DIAMOND, "Named");
         assertThat(m.equals(plain, named)).isFalse();
+        assertThat(m.equals(named, plain)).isFalse();
     }
 
     @Test
@@ -109,6 +116,54 @@ class MaterialServiceImplTest extends ServerTest {
         MaterialServiceImpl m = material(TestConfigs.defaults());
         // Same display name -> isSimilar true short-circuit.
         assertThat(m.equals(named(Material.DIAMOND, "Same"), named(Material.DIAMOND, "Same"))).isTrue();
+    }
+
+    // ---- equals: fall-backs behind a failed isSimilar (mock outer items) -------------
+
+    /**
+     * A mock outer stack, so {@code isSimilar} can be forced false and the post-isSimilar
+     * fall-backs (meta-class guard, no-meta shortcut, YAML normalisation) are reached.
+     */
+    private static ItemStack stack(Material type, ItemMeta meta, ItemStack cloneResult) {
+        ItemStack s = mock(ItemStack.class);
+        lenient().when(s.getType()).thenReturn(type);
+        lenient().when(s.getAmount()).thenReturn(1);
+        lenient().when(s.hasItemMeta()).thenReturn(meta != null);
+        lenient().when(s.getItemMeta()).thenReturn(meta);
+        lenient().when(s.clone()).thenReturn(cloneResult);
+        return s;
+    }
+
+    @Test
+    void equals_trueWhenNeitherHasMeta_evenIfIsSimilarDisagrees() {
+        ItemStack a = stack(Material.STONE, null, null);
+        ItemStack b = stack(Material.STONE, null, null);
+        when(a.isSimilar(b)).thenReturn(false);
+        assertThat(material(TestConfigs.defaults()).equals(a, b)).isTrue();
+    }
+
+    @Test
+    void equals_falseWhenMetaClassesDiffer() {
+        ItemStack a = stack(Material.STONE, mock(ItemMeta.class), null);
+        ItemStack b = stack(Material.STONE, mock(BookMeta.class), null);
+        when(a.isSimilar(b)).thenReturn(false);
+        assertThat(material(TestConfigs.defaults()).equals(a, b)).isFalse();
+    }
+
+    @Test
+    void equals_trueViaYamlNormalisation_whenDumpedItemMatchesTheOtherClone() {
+        // isSimilar says no and the serialized metas differ, but each item's clone
+        // round-trips through YAML to the same item — the SPIGOT-3206/4672 workaround.
+        ItemMeta ma = mock(ItemMeta.class);
+        ItemMeta mb = mock(ItemMeta.class);
+        when(ma.serialize()).thenReturn(Map.of("display-name", "A"));
+        when(mb.serialize()).thenReturn(Map.of("display-name", "B"));
+
+        ItemStack a = stack(Material.DIAMOND, ma, new ItemStack(Material.DIAMOND));
+        ItemStack b = stack(Material.DIAMOND, mb, new ItemStack(Material.DIAMOND));
+        when(a.isSimilar(b)).thenReturn(false);
+
+        assertThat(material(TestConfigs.defaults()).equals(a, b)).isTrue();
     }
 
     private ItemStack damaged(Material type, int damage) {

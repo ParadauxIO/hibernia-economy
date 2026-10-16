@@ -296,7 +296,7 @@ class ShopBlockServiceImplTest extends ServerTest {
         sign.setLine(SignService.ITEM_LINE, "Diamond");
         sign.update();
 
-        assertThat(service.findAnyNearbyShopSign(chest)).isNotNull();
+        assertThat(service.findAnyNearbyShopSign(chest).getLocation()).isEqualTo(signBlock.getLocation());
     }
 
     @Test
@@ -513,7 +513,7 @@ class ShopBlockServiceImplTest extends ServerTest {
         sign.setLine(SignService.ITEM_LINE, "Diamond");
         sign.update();
 
-        assertThat(service.findAnyNearbyShopSign(chest)).isNotNull();
+        assertThat(service.findAnyNearbyShopSign(chest).getLocation()).isEqualTo(signBlock.getLocation());
     }
 
     @Test

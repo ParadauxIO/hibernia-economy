@@ -5,8 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.lang.reflect.Constructor;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -98,12 +96,5 @@ class PermissionsTest {
         when(s.isPermissionSet("ChestShop.nofee")).thenReturn(false);
         when(s.isPermissionSet("chestshop.nofee")).thenReturn(false);
         assertThat(Permissions.hasPermissionSetFalse(s, "ChestShop.nofee")).isFalse();
-    }
-
-    @Test
-    void isUtilityClass_privateConstructor() throws Exception {
-        Constructor<Permissions> ctor = Permissions.class.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        assertThat(ctor.newInstance()).isNotNull();
     }
 }

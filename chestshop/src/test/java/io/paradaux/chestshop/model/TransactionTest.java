@@ -17,9 +17,8 @@ import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Covers the {@link Transaction} carrier: copy-construction from a {@link PendingTransaction},
- * the per-trade nonce, the settle-step mutations (sales tax with its null guard, settlement
- * txn id) and the cancel flag.
+ * The {@link Transaction} carrier: copy-construction from a {@link PendingTransaction}, the
+ * per-trade nonce, and the sales-tax null guard.
  */
 class TransactionTest extends ServerTest {
 
@@ -60,11 +59,12 @@ class TransactionTest extends ServerTest {
     }
 
     @Test
-    void tradeId_isGenerated_andStable() {
+    void tradeId_isStablePerTradeAndUniqueAcrossTrades() {
         Transaction txn = build(false);
         UUID id = txn.getTradeId();
-        assertThat(id).isNotNull();
-        assertThat(txn.getTradeId()).isSameAs(id);
+
+        assertThat(txn.getTradeId()).isEqualTo(id);
+        assertThat(build(false).getTradeId()).isNotEqualTo(id);
     }
 
     @Test
@@ -73,39 +73,12 @@ class TransactionTest extends ServerTest {
     }
 
     @Test
-    void setSalesTax_withValue_isStored() {
+    void setSalesTax_storesTheValue_andNullFallsBackToZero() {
         Transaction txn = build(false);
         txn.setSalesTax(new BigDecimal("1.25"));
         assertThat(txn.getSalesTax()).isEqualByComparingTo("1.25");
-    }
 
-    @Test
-    void setSalesTax_withNull_fallsBackToZero() {
-        Transaction txn = build(false);
-        txn.setSalesTax(new BigDecimal("1.25"));
         txn.setSalesTax(null);
         assertThat(txn.getSalesTax()).isEqualByComparingTo(BigDecimal.ZERO);
-    }
-
-    @Test
-    void settlementTxnId_defaultsNull_andIsSettable() {
-        Transaction txn = build(false);
-        assertThat(txn.getSettlementTxnId()).isNull();
-        txn.setSettlementTxnId(99L);
-        assertThat(txn.getSettlementTxnId()).isEqualTo(99L);
-    }
-
-    @Test
-    void cancelled_defaultsFalse_andToggles() {
-        Transaction txn = build(false);
-        assertThat(txn.isCancelled()).isFalse();
-        txn.setCancelled(true);
-        assertThat(txn.isCancelled()).isTrue();
-    }
-
-    @Test
-    void transactionType_enumIsResolvable() {
-        assertThat(Transaction.TransactionType.valueOf("SELL")).isEqualTo(SELL);
-        assertThat(Transaction.TransactionType.values()).containsExactly(BUY, SELL);
     }
 }

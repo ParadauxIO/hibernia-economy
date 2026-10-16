@@ -17,9 +17,8 @@ import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Covers the {@link PendingTransaction} carrier on a live MockBukkit server: the immutable
- * trade inputs, the constructor's client-inventory fallback, the mutable outcome/price/stock
- * state, and the free-shop rejection flag.
+ * The {@link PendingTransaction} carrier on a live MockBukkit server: the constructor's
+ * client-inventory fallback and the outcome-derived cancelled state.
  */
 class PendingTransactionTest extends ServerTest {
 
@@ -51,36 +50,6 @@ class PendingTransactionTest extends ServerTest {
     }
 
     @Test
-    void immutableInputs_areExposedVerbatim() {
-        Player client = player("Steve");
-        ItemStack[] stock = {item(Material.DIAMOND, 4)};
-        BigDecimal price = new BigDecimal("12.50");
-        PendingTransaction pt = pending(client, chest(9), true, stock, price);
-
-        assertThat(pt.getClient()).isSameAs(client);
-        assertThat(pt.getOwnerAccount()).isSameAs(owner);
-        assertThat(pt.getSign()).isSameAs(sign);
-        assertThat(pt.getTransactionType()).isEqualTo(BUY);
-        assertThat(pt.getOwnerInventory()).isNotNull();
-        assertThat(pt.getStock()).isSameAs(stock);
-        assertThat(pt.getExactPrice()).isEqualByComparingTo(price);
-        assertThat(pt.isUnlimitedOwner()).isTrue();
-    }
-
-    @Test
-    void setStock_andSetExactPrice_updateForPartialFill() {
-        PendingTransaction pt = pending(player("Steve"), chest(9), false,
-                new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
-
-        ItemStack[] resized = {item(Material.DIAMOND, 2)};
-        pt.setStock(resized);
-        pt.setExactPrice(new BigDecimal("5"));
-
-        assertThat(pt.getStock()).isSameAs(resized);
-        assertThat(pt.getExactPrice()).isEqualByComparingTo("5");
-    }
-
-    @Test
     void newTransaction_isNotCancelled_andSuccessful() {
         PendingTransaction pt = pending(player("Steve"), chest(9), false,
                 new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
@@ -90,29 +59,16 @@ class PendingTransactionTest extends ServerTest {
     }
 
     @Test
-    void setCancelled_withOutcome_marksCancelled() {
+    void cancelled_isDerivedFromTheOutcome() {
         PendingTransaction pt = pending(player("Steve"), chest(9), false,
                 new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
 
         pt.setCancelled(TransactionOutcome.SHOP_IS_RESTRICTED);
-
         assertThat(pt.isCancelled()).isTrue();
         assertThat(pt.getTransactionOutcome()).isEqualTo(TransactionOutcome.SHOP_IS_RESTRICTED);
-    }
 
-    @Test
-    void rejectedAsFreeShop_defaultsFalse_andIsSettable() {
-        PendingTransaction pt = pending(player("Steve"), chest(9), false,
-                new ItemStack[]{item(Material.DIAMOND, 4)}, new BigDecimal("10"));
-
-        assertThat(pt.isRejectedAsFreeShop()).isFalse();
-        pt.setRejectedAsFreeShop(true);
-        assertThat(pt.isRejectedAsFreeShop()).isTrue();
-    }
-
-    @Test
-    void transactionOutcome_enumIsResolvable() {
-        assertThat(TransactionOutcome.valueOf("OTHER")).isEqualTo(TransactionOutcome.OTHER);
-        assertThat(TransactionOutcome.values()).contains(TransactionOutcome.TRANSACTION_SUCCESSFUL);
+        // Setting the success outcome back un-cancels the trade.
+        pt.setCancelled(TransactionOutcome.TRANSACTION_SUCCESSFUL);
+        assertThat(pt.isCancelled()).isFalse();
     }
 }

@@ -48,10 +48,11 @@ class StringUtilTest {
 
     @Test
     void stripColourCodes_processesArrays() {
-        String[] in  = { ChatColor.GREEN + "ok", ChatColor.RED + "bad" };
+        String[] in  = { ChatColor.GREEN + "ok", ChatColor.RED + "bad", null };
         String[] out = StringUtil.stripColourCodes(in);
 
-        assertThat(out).containsExactly("ok", "bad");
+        // An unset (null) line passes through as null rather than throwing.
+        assertThat(out).containsExactly("ok", "bad", null);
         // Doesn't mutate the input array.
         assertThat(in[0]).startsWith("§");
     }
