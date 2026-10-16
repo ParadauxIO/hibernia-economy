@@ -6,7 +6,7 @@ import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
-import io.paradaux.treasury.utils.Money;
+import io.paradaux.common.AmountInput;
 import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
@@ -69,8 +69,10 @@ public class PayAccountCommand implements CommandHandler {
     }
 
     private void doPay(Player sender, String type, String account, BigDecimal amount, String memo) {
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }

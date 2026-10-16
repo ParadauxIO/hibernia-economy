@@ -9,7 +9,7 @@ import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
-import io.paradaux.treasury.utils.Money;
+import io.paradaux.common.AmountInput;
 import io.paradaux.treasury.utils.TreasuryConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -69,8 +69,10 @@ public class PayCommand implements CommandHandler {
     }
 
     private void doPay(Player sender, String targetName, BigDecimal amount, String memo) {
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }

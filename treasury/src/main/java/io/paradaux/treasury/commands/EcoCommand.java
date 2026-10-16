@@ -7,6 +7,7 @@ import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
+import io.paradaux.common.AmountInput;
 import io.paradaux.treasury.utils.Money;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
@@ -59,8 +60,10 @@ public class EcoCommand implements CommandHandler {
             message.send(sender, "treasury.general.unknown-player");
             return;
         }
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }
@@ -97,8 +100,10 @@ public class EcoCommand implements CommandHandler {
             message.send(sender, "treasury.general.unknown-player");
             return;
         }
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }
@@ -145,19 +150,13 @@ public class EcoCommand implements CommandHandler {
             message.send(sender, "treasury.general.unknown-player");
             return;
         }
-        // Reject sub-cent precision BEFORE normalize, so 100.001 doesn't
-        // silently round to 100.00.
-        try {
-            Money.requireValidScale(amount);
-        } catch (IllegalArgumentException e) {
-            message.send(sender, "treasury.general.invalid-amount");
-            return;
-        }
-        BigDecimal normalized = Money.normalize(amount);
+        // Sub-cent precision is rejected rather than rounded, so 100.001 doesn't
+        // silently become 100.00; so are negatives and out-of-ledger-range values.
         // Asymmetric with give/take on purpose: setting a balance to exactly
         // 0 is a valid admin action (e.g., zeroing out a banned player's
-        // funds), while giving/taking 0 is a no-op. signum() < 0 only.
-        if (normalized.signum() < 0) {
+        // funds), while giving/taking 0 is a no-op — hence nonNegative.
+        BigDecimal normalized = AmountInput.nonNegative(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }
