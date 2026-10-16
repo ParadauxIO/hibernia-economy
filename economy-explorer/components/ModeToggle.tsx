@@ -9,8 +9,18 @@
 // while System is selected.
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { ModeChoice } from '@/lib/theme';
+
+// The cookie is the store: SSR renders the 'dark' default, the client reads the
+// cookie right after hydration, and the toggle notifies after writing it.
+const modeListeners = new Set<() => void>();
+function subscribeMode(listener: () => void): () => void {
+  modeListeners.add(listener);
+  return () => {
+    modeListeners.delete(listener);
+  };
+}
 
 const NEXT: Record<ModeChoice, ModeChoice> = { system: 'light', light: 'dark', dark: 'system' };
 const LABEL: Record<ModeChoice, string> = { system: 'System', light: 'Light', dark: 'Dark' };
@@ -24,7 +34,7 @@ function resolve(choice: ModeChoice): 'dark' | 'light' {
 function readModeCookie(): ModeChoice {
   if (typeof document === 'undefined') return 'dark';
   const m = document.cookie.match(/(?:^|; )mode=([^;]+)/);
-  const v = m ? decodeURIComponent(m[1]).toLowerCase() : 'dark';
+  const v = m?.[1] ? decodeURIComponent(m[1]).toLowerCase() : 'dark';
   return v === 'light' || v === 'system' ? v : 'dark';
 }
 
@@ -33,10 +43,7 @@ export function ModeToggle() {
   // Read the cookie client-side (the layout no longer resolves it server-side,
   // so it can stay static). The pre-paint script already set data-mode; this
   // just syncs the toggle's own label. SSR renders the 'dark' default.
-  const [choice, setChoice] = useState<ModeChoice>('dark');
-  useEffect(() => {
-    setChoice(readModeCookie());
-  }, []);
+  const choice = useSyncExternalStore(subscribeMode, readModeCookie, () => 'dark' as const);
 
   // While on System, track the OS preference live so toggling the OS theme
   // updates the page without a reload.
@@ -51,9 +58,9 @@ export function ModeToggle() {
 
   const cycle = useCallback(() => {
     const next = NEXT[choice];
-    setChoice(next);
     document.documentElement.setAttribute('data-mode', resolve(next));
     document.cookie = `mode=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+    for (const listener of modeListeners) listener();
     router.refresh();
   }, [choice, router]);
 

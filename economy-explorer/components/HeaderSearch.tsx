@@ -18,7 +18,7 @@ export function HeaderSearch() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState('');
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [fetched, setResults] = useState<SearchResult[]>([]);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -54,10 +54,7 @@ export function HeaderSearch() {
   useEffect(() => {
     if (!open) return;
     const term = value.trim();
-    if (term.length < 2) {
-      setResults([]);
-      return;
-    }
+    if (term.length < 2) return; // no preview below two characters (see `results`)
     let active = true;
     const id = setTimeout(() => {
       startTransition(async () => {
@@ -89,6 +86,7 @@ export function HeaderSearch() {
     else router.push(`/search?q=${encodeURIComponent(value)}` as Route);
   }
 
+  const results = value.trim().length < 2 ? [] : fetched;
   const grouped = {
     account: results.filter((r) => r.kind === 'account'),
     firm: results.filter((r) => r.kind === 'firm'),

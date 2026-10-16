@@ -3,15 +3,13 @@
 // icon is missing or fails to load. Reused on cards, tables, and the item
 // detail header.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export function ItemIcon({ icon, name, size = 36 }: { icon: string | null; name: string; size?: number }) {
-  const [failed, setFailed] = useState(false);
-  // Reset the fallback when the icon changes (React reuses the instance across
-  // list re-renders, so a 404 would otherwise stick to a different item).
-  useEffect(() => {
-    setFailed(false);
-  }, [icon]);
+  // Remember WHICH icon failed, not just that one did: React reuses the instance
+  // across list re-renders, so a 404 must not stick to a different item.
+  const [failedIcon, setFailedIcon] = useState<string | null>(null);
+  const failed = failedIcon !== null && failedIcon === icon;
   const dim = { width: size, height: size };
   // Defence-in-depth: only ever feed an http(s) or root-relative URL into <img src>.
   // Callers pass itemIconUrl()'s output (already regex-validated), but guarding here
@@ -27,6 +25,6 @@ export function ItemIcon({ icon, name, size = 36 }: { icon: string | null; name:
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img className="item-icon" src={safeIcon} alt="" style={dim} loading="lazy" onError={() => setFailed(true)} />
+    <img className="item-icon" src={safeIcon} alt="" style={dim} loading="lazy" onError={() => setFailedIcon(safeIcon)} />
   );
 }

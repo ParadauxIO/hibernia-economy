@@ -1,11 +1,12 @@
-import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
+import { test as base, expect, type BrowserContext } from '@playwright/test';
 import { encode } from 'next-auth/jwt';
 import { randomUUID } from 'node:crypto';
 import mysql, { type Connection, type RowDataPacket } from 'mysql2/promise';
 import { visit, submitReload } from './helpers';
+import { testDbOptions } from '../integration/db';
 
-// No e2e_viewer cookie: these tests use signed Auth.js sessions, the real edge
-// middleware, live identity/role resolution and the real database. Only the
+// No e2e_viewer cookie: these tests use signed Auth.js sessions, the real request
+// proxy (proxy.ts), live identity/role resolution and the real database. Only the
 // external identity provider and LP server are represented by session/sync fixtures.
 const secret = process.env.E2E_AUTH_SECRET;
 const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100';
@@ -21,7 +22,7 @@ type Fixture = { conn: Connection; admin: string; player: string; key: string; g
 const test = base.extend<{ policy: Fixture }>({
   policy: async ({}, use) => {
     if (!/test/i.test(process.env.DB_NAME ?? '')) throw new Error('Authorization E2E requires a disposable DB_NAME containing test.');
-    const conn = await mysql.createConnection({ host: process.env.DB_HOST, port: Number(process.env.DB_PORT ?? 3306), user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, database: process.env.DB_NAME });
+    const conn = await mysql.createConnection(testDbOptions());
     const admin = randomUUID(), player = randomUUID(), key = `test_${randomUUID().slice(0, 8)}`;
     const groupName = `Group ${key}`;
     await conn.query('INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, ?)', [bin(admin), 'admin']);
@@ -208,7 +209,8 @@ test('firm roster membership does not grant finances until the member has a fina
   await expect(page.locator('.privacy-gate')).toHaveCount(0);
   await visit(page, '/accounts/3');
   await expect(page.locator('.privacy-gate')).toHaveCount(0);
-  await policy.conn.query('UPDATE firm_employee SET left_at = NOW() WHERE player_uuid_bin = ?', [bin(policy.player)]);
+  // Business records who removed the member alongside left_at (V1 CHECK constraint).
+  await policy.conn.query('UPDATE firm_employee SET left_at = NOW(), removed_by_uuid_bin = ? WHERE player_uuid_bin = ?', [bin(policy.admin), bin(policy.player)]);
   await visit(page, '/accounts/3');
   await expect(page.locator('.privacy-gate')).toBeVisible();
 });

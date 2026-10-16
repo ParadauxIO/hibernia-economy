@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { withoutUndefined } from '../../lib/util/withoutUndefined';
 
 // Integration tests run only when RUN_INTEGRATION=1 and DB_* point at a
 // disposable MariaDB (a CI service container, or a local mariadbd). They exercise
@@ -27,14 +28,23 @@ export function migrationFiles(dir: string = MIGRATIONS): string[] {
   return files.sort((a, b) => version(a) - version(b)).map((f) => resolve(dir, f));
 }
 
+/** Connection options for the disposable test DB named by DB_*. */
+export function testDbOptions(): mysql.ConnectionOptions {
+  return {
+    ...withoutUndefined({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    }),
+    port: Number(process.env.DB_PORT ?? 3306),
+  };
+}
+
 /** Drop everything, apply the Flyway migrations, and load the deterministic seed. */
 export async function resetDb(): Promise<void> {
   const conn = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT ?? 3306),
-    user: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    ...testDbOptions(),
     multipleStatements: true,
     // mysql2 asks for IGNORE_SPACE by default; Flyway's JDBC driver doesn't, and
     // the triggers/functions record the sql_mode they were created under.

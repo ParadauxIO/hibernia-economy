@@ -21,7 +21,9 @@ test.describe('anonymous browsing', () => {
     await page.getByRole('link', { name: 'Wealth', exact: true }).click();
     const gini = page.locator('.insight', { hasText: 'Gini' }).locator('.value');
     await expect(gini).toHaveText(/^0\.\d+$/);
-    await page.waitForTimeout(1500);
+    // Charts only mount client-side (useHydrated), so a rendered chart means the
+    // wealth tree has committed — any hydration/render error has been reported.
+    await expect(page.locator('.recharts-responsive-container').first()).toBeVisible();
     expect(errors.filter((e) => /#\d+/.test(e))).toEqual([]);
   });
 
@@ -63,8 +65,8 @@ test.describe('anonymous browsing', () => {
 
   test('per-firm financials are private to anonymous viewers', async ({ page }) => {
     await visit(page, '/chestshop/firms');
-    const firmLink = page.locator('a[href^="/chestshop/firms/"]').first();
-    if ((await firmLink.count()) === 0) test.skip(true, 'no market firms in this dataset');
+    // seed.sql gives Acme Corp (firm 1) ChestShop sales, so it is always listed.
+    const firmLink = page.locator('a[href="/chestshop/firms/1"]').first();
     await firmLink.click();
     await expect(page.locator('.privacy-gate')).toBeVisible();
   });
@@ -126,7 +128,6 @@ test('shop discovery normalises batches and switches to selling', async ({ page 
   await expect(page.locator('.offer-price').first()).toContainText('$1.00');
   await page.getByLabel('Trade direction', { exact: true }).selectOption('sell');
   await expect(page).toHaveURL(/direction=sell/);
-  await page.waitForLoadState('networkidle');
   await expect(page.locator('.offer-price').first()).toContainText('$1.50');
   await page.getByLabel('Price units').selectOption('64');
   await expect(page.locator('.offer-price').first()).toContainText('$96.00');
