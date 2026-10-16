@@ -13,6 +13,7 @@ import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
+import { TableWrap } from '@/components/TableWrap';
 
 const DAYS = 90;
 
@@ -87,7 +88,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
             <JsonButton filename={`${prefix}-accounts.json`} data={accounts} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Accounts">
           <table className="data-table">
             <thead>
               <tr>
@@ -118,7 +119,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       <div className="card">
@@ -140,7 +141,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
             <JsonButton filename={`${prefix}-transactions.json`} data={recentTxns} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Recent transactions">
           <table className="data-table">
             <thead>
               <tr>
@@ -176,7 +177,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
               })}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {partners.length > 0 && (
@@ -197,7 +198,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
               <JsonButton filename={`${prefix}-counterparties.json`} data={partners} />
             </span>
           </div>
-          <div className="table-wrap">
+          <TableWrap label="Top counterparties">
             <table className="data-table">
               <thead>
                 <tr>
@@ -225,7 +226,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         </div>
       )}
     </>

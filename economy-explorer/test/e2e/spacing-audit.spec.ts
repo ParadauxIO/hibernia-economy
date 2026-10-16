@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { visit } from './helpers';
 
 // UI consistency audit. Drives both a desktop and a mobile viewport on Chromium
 // (the device presets default to WebKit, which we don't install — and this is a
@@ -58,9 +59,10 @@ for (const route of ROUTES) {
     const failures: string[] = [];
     for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await page.setViewportSize(size);
-      await page.goto(route.path, { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('networkidle').catch(() => {});
-      await page.waitForTimeout(250);
+      // Settled = streamed sections swapped in and web fonts applied (both move
+      // the boxes being measured); no fixed sleep.
+      await visit(page, route.path);
+      await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
       // Guard: the page actually rendered content (a blank/errored page would
       // trivially pass the overflow + gap checks, so assert it isn't empty).
@@ -81,9 +83,10 @@ for (const route of ROUTES) {
           return r.height > 0 && cs.display !== 'none' && cs.position !== 'absolute';
         });
         const out: number[] = [];
-        for (let i = 1; i < kids.length; i++) {
-          out.push(Math.round(kids[i].getBoundingClientRect().top - kids[i - 1].getBoundingClientRect().bottom));
-        }
+        kids.slice(1).forEach((kid, i) => {
+          const prev = kids[i]; // kids.slice(1)[i] follows kids[i]
+          if (prev) out.push(Math.round(kid.getBoundingClientRect().top - prev.getBoundingClientRect().bottom));
+        });
         return out;
       });
       const distinctGaps = [...new Set(gaps.filter((g) => g >= 0))].sort((a, b) => a - b);

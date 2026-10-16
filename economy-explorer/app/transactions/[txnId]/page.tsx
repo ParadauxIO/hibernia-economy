@@ -11,6 +11,7 @@ import { auditView } from '@/lib/audit';
 import { BackLink } from '@/components/BackLink';
 import { Player } from '@/components/Player';
 import { PrivacyGate } from '@/components/PrivacyGate';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +90,7 @@ export default async function TransactionDetailPage({
 
       <div className="card">
         <div className="card-title">Postings</div>
-        <div className="table-wrap"><table className="data-table">
+        <TableWrap label="Postings"><table className="data-table">
           <thead>
             <tr>
               <th>Posting</th>
@@ -119,7 +120,7 @@ export default async function TransactionDetailPage({
               );
             })}
           </tbody>
-        </table></div>
+        </table></TableWrap>
       </div>
     </>
   );

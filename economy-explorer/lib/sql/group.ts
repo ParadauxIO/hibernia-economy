@@ -1,5 +1,5 @@
 import 'server-only';
-import { Kysely, sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { db, type DB, uuidToBin, binToUuid } from '@/lib/db';
 
 /**

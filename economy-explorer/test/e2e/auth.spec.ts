@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
 import mysql from 'mysql2/promise';
 import { dataTable, visit, submitReload } from './helpers';
+import { testDbOptions } from '../integration/db';
 
 // These require the app running with E2E_TEST_AUTH=1 against the seeded test DB
 // (the CI e2e job sets E2E_AUTH_SHIM=1 to enable them). Skipped otherwise so a
@@ -37,18 +38,12 @@ test.describe('admin', () => {
     await visit(page, '/transactions'); // a privileged read of everyone's transactions
     // There is no audit page in the explorer; assert on the row itself. The insert
     // is awaited by the page render, so it is committed once the page has settled.
-    const conn = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT ?? 3306),
-      user: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-    });
+    const conn = await mysql.createConnection(testDbOptions());
     try {
       const [rows] = await conn.query<mysql.RowDataPacket[]>(
         "SELECT actor_role FROM explorer_audit WHERE actor_sub = 'e2e-admin' AND path = '/transactions'");
       expect(rows.length).toBeGreaterThan(0);
-      expect(rows[0].actor_role).toBe('admin');
+      expect(rows[0]?.actor_role).toBe('admin');
     } finally {
       await conn.end();
     }
@@ -95,7 +90,7 @@ test.describe('government relationships', () => {
 
 test('configures custom roles and enforces changes in the admin tools', async ({ page, context }, testInfo) => {
   const key = `test_reader_${testInfo.project.name}`;
-  const conn = await mysql.createConnection({ host: process.env.DB_HOST, port: Number(process.env.DB_PORT ?? 3306), user: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, database: process.env.DB_NAME });
+  const conn = await mysql.createConnection(testDbOptions());
   try {
     // The shim authenticates Alice; policy mutations also verify her live DB grants.
     await conn.query("INSERT IGNORE INTO explorer_role (player_uuid_bin, role) VALUES (UNHEX('0000000000000000000000000000A1CE'), 'admin')");

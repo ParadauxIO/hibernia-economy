@@ -14,7 +14,16 @@ const authenticatedAdmin = auth((req, event: NextFetchEvent) => {
   return handleRequest(req);
 });
 
-export default function middleware(req: NextRequest, event: NextFetchEvent) {
+export default function proxy(req: NextRequest, event: NextFetchEvent) {
+  // Pre-consolidation Health bookmarks keep their window on the overview. Done
+  // here as a plain HTTP redirect: a redirect() from the page fires after the
+  // loading.tsx shell has streamed, so the browser got a 200, a client-side
+  // replace AND a <meta refresh> reload of the same target.
+  if (req.nextUrl.pathname === '/economy/health') {
+    const overview = new URL('/', req.url);
+    overview.searchParams.set('days', req.nextUrl.searchParams.get('days') === '7' ? '7' : '30');
+    return NextResponse.redirect(overview);
+  }
   const admin = req.nextUrl.pathname === '/admin' || req.nextUrl.pathname.startsWith('/admin/');
   // Only the explicit legacy role shim bypasses session verification in test builds.
   // Signed-session browser tests (no shim cookie) exercise the real edge boundary.

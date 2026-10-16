@@ -6,7 +6,7 @@ import { join } from 'node:path';
 // Every process.env.X the app reads must appear there (uncommented if required,
 // commented with its default if optional), so the file cannot drift.
 const ROOT = process.cwd();
-const SOURCES = ['app', 'components', 'lib', 'middleware.ts', 'next.config.ts'];
+const SOURCES = ['app', 'components', 'lib', 'proxy.ts', 'next.config.ts'];
 // Read by scripts and tooling, not by the running app.
 const NOT_APP_CONFIG = new Set(['NODE_ENV', 'CI']);
 
@@ -20,7 +20,7 @@ function variablesRead(): Set<string> {
   const found = new Set<string>();
   for (const file of SOURCES.flatMap(files).filter((f) => /\.(ts|tsx)$/.test(f))) {
     for (const match of readFileSync(file, 'utf8').matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
-      found.add(match[1]);
+      if (match[1]) found.add(match[1]);
     }
   }
   return found;
@@ -30,7 +30,7 @@ function variablesDocumented(): Set<string> {
   const documented = new Set<string>();
   for (const line of readFileSync(join(ROOT, '.env.example'), 'utf8').split('\n')) {
     const match = /^#?\s?([A-Z][A-Z0-9_]*)=/.exec(line);
-    if (match) documented.add(match[1]);
+    if (match?.[1]) documented.add(match[1]);
   }
   return documented;
 }

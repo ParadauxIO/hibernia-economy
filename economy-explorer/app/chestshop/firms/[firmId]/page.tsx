@@ -15,6 +15,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { canViewFirmFinancials, hasPermission } from '@/lib/auth/access';
 import { hasFirmFinancialAccess } from '@/lib/sql/firm';
 import { auditView } from '@/lib/audit';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,7 +128,7 @@ export default async function MarketFirmDetailPage({
                 <JsonButton filename={`firm-${firm.firm_id}-items${fileSuffix}.json`} data={items} />
               </span>
             </div>
-            <div className="table-wrap">
+            <TableWrap label="Items sold">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -157,7 +158,7 @@ export default async function MarketFirmDetailPage({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
         </>
       )}

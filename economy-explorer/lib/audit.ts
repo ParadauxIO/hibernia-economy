@@ -9,7 +9,7 @@ import { auditRole } from '@/lib/auth/access';
  * Per-page audit insert for privacy-sensitive accesses (admin / moderator /
  * scoped government inspecting another player's data). Mirrors Spring's ExplorerAuditInterceptor
  * but called explicitly from the RSC page once it has decided to render gated
- * content — middleware can't know which tier the route required.
+ * content — the proxy can't know which tier the route required.
  *
  * Fail-open: a thrown error from this helper never blocks the page.
  */

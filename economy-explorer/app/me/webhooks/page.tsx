@@ -11,6 +11,7 @@ import { fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CreateWebhookForm } from './create-webhook-form';
 import { WebhookRowActions } from './webhook-row-actions';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +89,7 @@ export default async function WebhooksPage() {
 
       <div className="card">
         <div className="card-title">Your webhooks</div>
-        <div className="table-wrap">
+        <TableWrap label="Your webhooks">
           <table className="data-table">
             <thead>
               <tr>
@@ -129,7 +130,7 @@ export default async function WebhooksPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );

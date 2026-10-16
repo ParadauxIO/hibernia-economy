@@ -42,14 +42,23 @@ export function parseTaxRates(rows: ConfigRow[]): TaxRates {
   return { balanceTax: balanceTax(by), incomeTax: incomeTax(by) };
 }
 
+type Bracket = { floor: string; rate: string };
+
+function isBracket(b: unknown): b is Bracket {
+  if (typeof b !== 'object' || b === null) return false;
+  const { floor, rate } = b as Record<string, unknown>;
+  return typeof floor === 'string' && typeof rate === 'string';
+}
+
 function balanceTax(by: Map<string, ConfigRow>): TaxRates['balanceTax'] {
   const enabled = by.get('tax.balance.enabled');
   const brackets = by.get('tax.balance.brackets');
   if (!enabled || !brackets) return null;
-  let list: { floor: string; rate: string }[];
+  let list: Bracket[];
   try {
-    list = JSON.parse(brackets.config_value);
-    if (!Array.isArray(list) || list.some((b) => typeof b?.floor !== 'string' || typeof b?.rate !== 'string')) return null;
+    const parsed: unknown = JSON.parse(brackets.config_value);
+    if (!Array.isArray(parsed) || !parsed.every(isBracket)) return null;
+    list = parsed;
   } catch {
     return null;
   }
@@ -73,8 +82,9 @@ function incomeTax(by: Map<string, ConfigRow>): TaxRates['incomeTax'] {
   if (!enabled || !defaultRate || !pluginRates) return null;
   let rates: Record<string, unknown>;
   try {
-    rates = JSON.parse(pluginRates.config_value);
-    if (rates === null || typeof rates !== 'object' || Array.isArray(rates)) return null;
+    const parsed: unknown = JSON.parse(pluginRates.config_value);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    rates = parsed as Record<string, unknown>;
   } catch {
     return null;
   }

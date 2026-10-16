@@ -19,6 +19,7 @@ import { Player } from '@/components/Player';
 import { BackLink } from '@/components/BackLink';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,7 +149,7 @@ export default async function FirmDetailPage({
               </Link>
             </span>
           </div>
-          <div className="table-wrap">
+          <TableWrap label="ChestShop activity">
             <table className="data-table">
               <thead>
                 <tr>
@@ -175,7 +176,7 @@ export default async function FirmDetailPage({
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         </div>
       )}
 
@@ -194,7 +195,7 @@ export default async function FirmDetailPage({
             <div className="card-title">
               Accounts <span className="sub">{fmtN(accounts.length)} active · total {fmtAmtFull(totalBalance)}</span>
             </div>
-            <div className="table-wrap">
+            <TableWrap label="Accounts">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -227,7 +228,7 @@ export default async function FirmDetailPage({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
 
           {/* Employees */}
@@ -235,7 +236,7 @@ export default async function FirmDetailPage({
             <div className="card-title">
               Employees <span className="sub">{fmtN(employees.length)} active</span>
             </div>
-            <div className="table-wrap">
+            <TableWrap label="Employees">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -257,7 +258,7 @@ export default async function FirmDetailPage({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
 
           {/* Roles + permissions */}
@@ -265,7 +266,7 @@ export default async function FirmDetailPage({
             <div className="card-title">
               Roles <span className="sub">{fmtN(roles.length)} role{roles.length === 1 ? '' : 's'}</span>
             </div>
-            <div className="table-wrap">
+            <TableWrap label="Roles">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -300,7 +301,7 @@ export default async function FirmDetailPage({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
         </>
       )}

@@ -7,6 +7,7 @@ import { fmtAmtFull, fmtN } from '@/lib/format';
 import { SectionTabs } from '@/components/SectionTabs';
 import { WindowTabs } from '@/components/WindowTabs';
 import { InfoTip } from '@/components/InfoTip';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(1).max(30).default(30) });
 
@@ -82,7 +83,7 @@ export default async function MoneyFlowPage({
         <div className="card-title">
           Flows by account-type pair <span className="sub">sorted by total amount</span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Flows by account-type pair">
           <table className="data-table">
             <thead>
               <tr>
@@ -108,7 +109,7 @@ export default async function MoneyFlowPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );

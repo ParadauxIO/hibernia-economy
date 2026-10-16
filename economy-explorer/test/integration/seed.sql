@@ -22,8 +22,13 @@ INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name, is
 
 -- Balances. Active personal: 1=5000, 2=100000, 7=1500 → personalSupply 106500.
 -- totalSupply (!=SYSTEM, active) = 5000+100000+25000+8000+1500 = 139500. SYSTEM is negative.
+-- These are OPENING balances (history older than the fixture ledger): V1's
+-- trg_postings_ai adds every ledger_postings row below to account_balances_mat,
+-- exactly as in production. The ledger nets #1 -500, #2 -200, #3 +700 (the Penny
+-- legs net to zero), so #1/#2/#3 open at 5500 / 100200 / 24300 and land on the
+-- figures above.
 INSERT INTO account_balances_mat (account_id, balance) VALUES
-  (1, 5000.00), (2, 100000.00), (3, 25000.00), (4, -3000.00), (5, 8000.00), (6, 200.00), (7, 1500.00);
+  (1, 5500.00), (2, 100200.00), (3, 24300.00), (4, -3000.00), (5, 8000.00), (6, 200.00), (7, 1500.00);
 
 -- Firm "Acme Corp": Alice=Owner(ADMIN), Bob=Finance(FINANCIAL), Carol=Worker(DEFAULT only).
 INSERT INTO firm (firm_id, display_name, proprietor_uuid_bin, hq_region, is_archived) VALUES

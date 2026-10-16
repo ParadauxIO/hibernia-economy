@@ -8,6 +8,7 @@ import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { WindowTabs } from '@/components/WindowTabs';
 import { SectionTabs } from '@/components/SectionTabs';
 import { TaxRevenueTimeline } from '@/components/charts/AreaTimeline';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() {
@@ -40,20 +41,20 @@ export default async function TaxationPage({ searchParams }: {
     </div>
     <div className="card">
       <h2 className="card-title">Revenue by type</h2>
-      <div className="table-wrap"><table className="data-table">
+      <TableWrap label="Revenue by type"><table className="data-table">
         <thead><tr><th>Type</th><th className="amount">Collected</th><th className="amount">Refunded</th><th className="amount">Net</th></tr></thead>
         <tbody>{data.byType.map(row => <tr key={row.kind}><td>{row.label}</td><td className="amount">{fmtAmtFull(row.collected)}</td><td className="amount">{fmtAmtFull(row.refunded)}</td><td className="amount">{fmtAmtFull(row.net)}</td></tr>)}</tbody>
-      </table></div>
+      </table></TableWrap>
       <p className="chart-subtitle">Recognised personal and corporate balance taxes, source income taxes, ChestShop sales taxes, and recorded fines. Other government transfers and property taxes are excluded. A refund is counted when it settles, even if the fine was collected before this period.</p>
     </div>
     <div className="card">
       <h2 className="card-title">Where it lands</h2>
-      <div className="table-wrap"><table className="data-table">
+      <TableWrap label="Where it lands"><table className="data-table">
         <thead><tr><th>Government account</th><th className="amount">Collected</th><th className="amount">Refunded</th><th className="amount">Net</th></tr></thead>
         <tbody>{!data.accounts.length && <tr><td colSpan={4} className="empty">No receiving accounts in this period.</td></tr>}
           {data.accounts.map(row => <tr key={row.id}><td>{row.name}</td><td className="amount">{fmtAmtFull(row.collected)}</td><td className="amount">{fmtAmtFull(row.refunded)}</td><td className="amount">{fmtAmtFull(row.net)}</td></tr>)}
         </tbody>
-      </table></div>
+      </table></TableWrap>
       <p className="chart-subtitle">Revenue totals include archived government accounts. Individual payments, payer identities, fine reasons and account balances remain private.</p>
     </div>
     <div className="card">
@@ -62,18 +63,18 @@ export default async function TaxationPage({ searchParams }: {
       {rates.balanceTax ? <>
         <p>{rates.balanceTax.enabled ? 'Enabled' : 'Disabled'} · Published <LocalTimestamp value={rates.balanceTax.updatedAt} /></p>
         <p className="chart-subtitle">Weekly rates apply to the whole balance at the highest floor reached, prorated at login. Balances below the first floor pay no balance tax.</p>
-        <div className="table-wrap"><table className="data-table tax-rates-table"><thead><tr><th>Balance floor</th><th className="amount">Weekly rate</th></tr></thead>
+        <TableWrap label="Personal balance tax"><table className="data-table tax-rates-table"><thead><tr><th>Balance floor</th><th className="amount">Weekly rate</th></tr></thead>
           <tbody>{rates.balanceTax.brackets.map(row => <tr key={row.floor}><td>{fmtAmtFull(row.floor)} and above</td><td className="amount">{percent(row.weeklyRate)}</td></tr>)}</tbody>
-        </table></div>
+        </table></TableWrap>
       </> : <p>Live personal balance-tax rates are currently unavailable.</p>}
       <h3>Source / income tax</h3>
       {rates.sourceIncomeTax ? <>
         <p>{rates.sourceIncomeTax.enabled ? 'Enabled' : 'Disabled'} · Published <LocalTimestamp value={rates.sourceIncomeTax.updatedAt} /></p>
         <p>Default rate: {percent(rates.sourceIncomeTax.defaultRate)}. Applies to sources without an override when enabled.</p>
-        <div className="table-wrap"><table className="data-table tax-rates-table"><thead><tr><th>Income source</th><th className="amount">Rate override</th></tr></thead>
+        <TableWrap label="Source / income tax"><table className="data-table tax-rates-table"><thead><tr><th>Income source</th><th className="amount">Rate override</th></tr></thead>
           <tbody>{!rates.sourceIncomeTax.pluginRates.length && <tr><td colSpan={2} className="empty">No source overrides.</td></tr>}
             {rates.sourceIncomeTax.pluginRates.map(row => <tr key={row.plugin}><td>{row.plugin}</td><td className="amount">{percent(row.rate)}</td></tr>)}</tbody>
-        </table></div>
+        </table></TableWrap>
       </> : <p>Live source / income-tax rates are currently unavailable.</p>}
       <p className="chart-subtitle">Rates show the latest configuration published by Treasury, independently of the selected revenue period. Corporate and ChestShop rates are not published here. Unavailable does not mean disabled or zero. <Link href="/docs/guides/tax">How taxes work</Link>.</p>
     </div>

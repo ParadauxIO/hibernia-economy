@@ -134,10 +134,10 @@ body { background: var(--bg); }
 }
 .explorer-header .btn.btn-primary {
     color: #fff;
-    background: var(--accent);
+    background: var(--accent-fill);
     border-color: transparent;
 }
-.explorer-header .btn.btn-primary:hover { color: #fff; background: var(--accent); filter: brightness(0.94); }
+.explorer-header .btn.btn-primary:hover { color: #fff; background: var(--accent-fill); filter: brightness(0.94); }
 .explorer-header .header-search input {
     background: var(--bg);
     border-color: var(--border);
@@ -266,6 +266,37 @@ body { background: var(--bg); }
     font-size: 12px;
     border-top: 1px solid var(--border);
     padding-top: 14px;
+}
+
+/* Links inside running text need more than colour to stand out (WCAG 1.4.1;
+   the accent is too close to the muted body text on dark surfaces). */
+p a:not(.btn),
+.footer-meta a,
+.sub a,
+.doc-prose a {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+}
+
+/* Text for screen readers only (e.g. names for icon/action-only columns). */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Scrollable regions (tables, the activity calendar) are tab stops. */
+.table-wrap:focus-visible,
+.scroll-region:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 /* Player name links — subtle hover so the affordance reads but doesn't
@@ -774,7 +805,7 @@ a.result-row:hover { background: var(--bg-soft); color: var(--fg); }
     color: var(--fg-muted);
 }
 .window-tabs a:hover { color: var(--fg); }
-.window-tabs a.active { color: #fff; background: var(--accent); }
+.window-tabs a.active { color: #fff; background: var(--accent-fill); }
 
 /* ─────────────────── market item cards ─────────────────── */
 .item-card-grid {
@@ -1070,12 +1101,12 @@ select option {
 .btn:hover { border-color: var(--accent-line); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.btn-primary {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: #fff;
     border-color: transparent;
 }
 .btn.btn-primary:hover {
-    background: var(--accent);
+    background: var(--accent-fill);
     filter: brightness(0.92);
     color: #fff;
 }
@@ -2153,7 +2184,7 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
 .doc-prose h2 + h3 { margin-top: 14px; }
 .doc-prose p { margin: 0 0 16px; }
 .doc-prose strong { color: var(--fg); font-weight: 600; }
-.doc-prose a { color: var(--accent); text-decoration: none; }
+.doc-prose a { color: var(--accent); }
 .doc-prose a:hover { text-decoration: underline; }
 .doc-prose ul, .doc-prose ol { margin: 0 0 16px; padding-left: 22px; }
 .doc-prose li { margin: 4px 0; }

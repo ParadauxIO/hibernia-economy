@@ -10,6 +10,7 @@ import { searchPlayers } from '@/lib/sql/me';
 import { fmtN } from '@/lib/format';
 import { Player } from '@/components/Player';
 import { Toolbar } from '@/components/Toolbar';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,13 +51,13 @@ export default async function AdminPlayersPage({
             Looks like a UUID — <Link href={`/admin/players/${directUuid}` as Route} className="rowlink">view this player&apos;s data →</Link>
           </p>
         )}
-        <div className="table-wrap" style={{ marginTop: 12 }}>
+        <TableWrap label="Players" style={{ marginTop: 12 }}>
           <table className="data-table">
             <thead>
               <tr>
                 <th>Player</th>
                 <th>UUID</th>
-                <th></th>
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -73,7 +74,7 @@ export default async function AdminPlayersPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
         {results.length > 0 && <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>{fmtN(results.length)} match(es) (capped at 50).</p>}
       </div>
     </>

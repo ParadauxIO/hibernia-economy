@@ -2,13 +2,13 @@ import 'server-only';
 import { cookies } from 'next/headers';
 
 /**
- * Resolve the active brand theme: ?theme= cookie override (set by middleware)
+ * Resolve the active brand theme: ?theme= cookie override (set by the proxy)
  * then the THEME env default. Shared by the layout and any page that needs
  * server-identity (e.g. the BlueMap base URL on the shops pages).
  */
 export async function resolveTheme(): Promise<'blue' | 'red'> {
   const c = await cookies();
-  const ck = c.get('theme')?.value?.toLowerCase().trim();
+  const ck = c.get('theme')?.value.toLowerCase().trim();
   if (ck === 'red' || ck === 'blue') return ck;
   return (process.env.THEME ?? 'blue').toLowerCase().trim() === 'red' ? 'red' : 'blue';
 }
@@ -21,7 +21,7 @@ export type ModeChoice = 'system' | 'dark' | 'light';
 
 export async function resolveModeChoice(): Promise<ModeChoice> {
   const c = await cookies();
-  const v = c.get('mode')?.value?.toLowerCase().trim();
+  const v = c.get('mode')?.value.toLowerCase().trim();
   return v === 'light' || v === 'system' ? v : 'dark';
 }
 

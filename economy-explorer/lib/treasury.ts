@@ -39,7 +39,7 @@ async function call<T>(path: string, method: string, body?: unknown): Promise<T>
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...(body !== undefined && { body: JSON.stringify(body) }),
     cache: 'no-store',
   });
   if (!res.ok) {
@@ -111,7 +111,7 @@ async function callVoid(path: string, method: string, body?: unknown): Promise<v
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...(body !== undefined && { body: JSON.stringify(body) }),
     cache: 'no-store',
   });
   if (!res.ok) {

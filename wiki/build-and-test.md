@@ -293,8 +293,9 @@ npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
 
 The SQL integration suite and the Playwright end-to-end suite both need a
-**disposable** MariaDB — every table in it is dropped and reseeded from
-`test/integration/schema.sql` + `seed.sql`:
+**disposable** MariaDB — every table in it is dropped, rebuilt by applying the
+real `economy-flyway` migrations in version order (from Node; no JVM needed), and
+reseeded from `test/integration/seed.sql`:
 
 ```bash
 export DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=economy_test DB_USERNAME=... DB_PASSWORD=...
@@ -302,6 +303,10 @@ RUN_INTEGRATION=1 npm test          # unit + SQL integration (skipped without RU
 npx playwright install chromium     # once
 npm run test:e2e                    # seeds the DB, builds + starts the app, runs every spec
 ```
+
+The e2e suite includes `test/e2e/a11y.spec.ts`, an axe-core scan of every
+top-level route (logged out and as the shim roles) that fails on serious or
+critical violations.
 
 `test:e2e` refuses a `DB_NAME` that doesn't contain `test`. Set `E2E_BASE_URL` to
 run only the public specs against an instance that is already running; nothing is

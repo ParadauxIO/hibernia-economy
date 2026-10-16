@@ -17,8 +17,9 @@ export function Heatmap({ cells, label = 'Transactions' }: HeatmapProps) {
   const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
   let max = 0;
   for (const c of cells) {
-    if (c.dow0 < 0 || c.dow0 > 6 || c.hr < 0 || c.hr > 23) continue;
-    grid[c.dow0][c.hr] = c.txn_count;
+    const day = grid[c.dow0];
+    if (!day || c.hr < 0 || c.hr > 23) continue;
+    day[c.hr] = c.txn_count;
     if (c.txn_count > max) max = c.txn_count;
   }
 
