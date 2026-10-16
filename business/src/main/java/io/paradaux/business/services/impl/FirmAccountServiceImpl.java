@@ -73,7 +73,7 @@ public class FirmAccountServiceImpl implements FirmAccountService {
 
     @Override
     public Integer resolveShopAlias(String alias) {
-        if (alias == null || !alias.matches("[A-Za-z][A-Za-z0-9_-]{0,11}")) return null;
+        if (alias == null || !alias.matches("[A-Za-z]{1,12}")) return null;
         Integer accountId = firmAccounts.resolveShopAlias(alias);
         if (accountId == null) return null;
         Account account = treasury.getAccountById(accountId);
@@ -85,10 +85,11 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         return firmAccounts.getShopAlias(firmId, accountId);
     }
 
+    @Transactional
     @Override
     public void setShopAlias(int firmId, int accountId, String alias, UUID actorId) {
-        if (alias != null && !alias.matches("[A-Za-z][A-Za-z0-9_-]{0,11}")) {
-            throw new BadCommandException("Shop aliases must be 1–12 letters, digits, underscores or hyphens, starting with a letter.");
+        if (alias != null && !alias.matches("[A-Za-z]{1,12}")) {
+            throw new BadCommandException("Shop aliases must be 1–12 alphabetic characters (A–Z) only.");
         }
         Firm firm = firms.getFirmById(firmId);
         if (firm == null || Boolean.TRUE.equals(firm.getArchived())) {
@@ -105,6 +106,13 @@ public class FirmAccountServiceImpl implements FirmAccountService {
             throw new BadCommandException("Account not found or archived");
         }
         try {
+            if (alias != null) {
+                // Never let an old sign resolve to another account after an alias is reused.
+                firmAccounts.reserveShopAlias(alias, accountId);
+                if (!Integer.valueOf(accountId).equals(firmAccounts.getShopAliasReservation(alias))) {
+                    throw new BadCommandException("That shop alias is already reserved by another account");
+                }
+            }
             if (firmAccounts.setShopAlias(firmId, accountId, alias) == 0) {
                 throw new BadCommandException("Firm account is no longer active");
             }

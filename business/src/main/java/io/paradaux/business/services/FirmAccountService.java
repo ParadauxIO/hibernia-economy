@@ -8,7 +8,10 @@ import java.util.UUID;
 
 public interface FirmAccountService {
 
-    /** Sets (or clears with null) a globally unique shop alias; proprietor only. */
+    /**
+     * Sets (or clears with null) a letters-only shop alias; proprietor only.
+     * Previous aliases stop resolving but remain reserved to the same account.
+     */
     void setShopAlias(int firmId, int accountId, String alias, UUID actorId);
 
     String getShopAlias(int firmId, int accountId);

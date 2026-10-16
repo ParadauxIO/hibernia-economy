@@ -122,4 +122,20 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         assertThat(firmAccounts.resolveShopAlias("acme")).isNull();
         assertThat(firmAccounts.setShopAlias(firmId, account, "other")).isZero();
     }
+    @Test
+    void shopAliasReservationSurvivesClearingAndCannotChangeAccount() throws Exception {
+        int original = insertStubAccount("Original");
+        int other = insertStubAccount("Other");
+        firmAccounts.insertFirmAccount(firmId, original);
+        firmAccounts.insertFirmAccount(firmId, other);
+        firmAccounts.reserveShopAlias("Acme", original);
+        firmAccounts.setShopAlias(firmId, original, "Acme");
+        firmAccounts.setShopAlias(firmId, original, null);
+        assertThat(firmAccounts.resolveShopAlias("Acme")).isNull();
+        firmAccounts.reserveShopAlias("ACME", other);
+        assertThat(firmAccounts.getShopAliasReservation("acme")).isEqualTo(original);
+        firmAccounts.reserveShopAlias("Acme", original);
+        firmAccounts.setShopAlias(firmId, original, "Acme");
+        assertThat(firmAccounts.resolveShopAlias("acme")).isEqualTo(original);
+    }
 }

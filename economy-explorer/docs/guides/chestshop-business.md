@@ -92,21 +92,20 @@ NETHERITE_INGOT
 The proprietor can give each firm account one memorable alias:
 
 ```text
-/business account alias Acme 16 acme-shop
+/business account alias Acme 16 Acme
 /business account list Acme
 ```
 
-Use the **decimal account ID** from the account list in the command. Put
-`B:@acme-shop` on the first line of a new shop sign. ChestShop checks your usual
-`CHESTSHOP` permission and replaces the alias with the permanent account code
-(`B:G` for account 16) when the shop is created. The alias is a creation shortcut,
-not a display name: changing or clearing it cannot redirect existing shops.
+Use the **decimal account ID** from the account list in the command. Put `B:@Acme`
+on the first line of a shop sign. ChestShop checks your usual `CHESTSHOP` permission
+and **keeps `B:@Acme` visible**, both when the shop is created and after trades.
+Payments still go to account 16. Numeric account-code signs continue to work.
 
-Aliases are globally unique, case-insensitive, and contain 1–12 letters, digits,
-underscores or hyphens, starting with a letter. The `@` distinguishes aliases from
-account codes and legacy firm names. Each alias points to one specific account,
-independently of the firm's default account. Archived accounts and disbanded firms
-cannot be resolved by alias; their aliases remain reserved.
+Aliases are globally unique, case-insensitive, and contain **1–12 letters (A–Z)
+only**. Digits, spaces, underscores and hyphens are not allowed. The `B:@` prefix
+identifies an alias; it is not part of the alias itself. Each alias points to one
+specific account, independently of the firm's default account. Archived accounts
+and disbanded firms cannot be resolved by alias.
 
 Set another alias with the same command, or clear it with:
 
@@ -114,5 +113,8 @@ Set another alias with the same command, or clear it with:
 /business account clearalias Acme 16
 ```
 
-Cleared or replaced aliases become available for reuse. Existing shops retain
-their original account code. Business must be installed to resolve aliases.
+Changing or clearing an alias stops signs using the old alias from working. Update
+those signs to the new alias or the account code. Old aliases stay reserved to their
+original account permanently, so another account cannot take over existing signs.
+The proprietor can restore a previous alias to its original account. Business must
+be installed to resolve aliases.

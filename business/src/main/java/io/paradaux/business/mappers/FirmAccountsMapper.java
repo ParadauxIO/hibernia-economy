@@ -15,6 +15,16 @@ import java.util.List;
  */
 public interface FirmAccountsMapper {
 
+    @Insert("""
+        INSERT INTO firm_shop_alias_reservations (alias, account_id) VALUES (#{alias}, #{accountId})
+        ON DUPLICATE KEY UPDATE alias = alias
+        """)
+    void reserveShopAlias(@Param("alias") String alias, @Param("accountId") int accountId);
+
+    @Select("SELECT account_id FROM firm_shop_alias_reservations WHERE alias = #{alias}")
+    Integer getShopAliasReservation(@Param("alias") String alias);
+
+
     @Select("""
         SELECT fa.account_id FROM firm_accounts fa
         JOIN firm f ON f.firm_id = fa.firm_id

@@ -60,10 +60,11 @@ public class SignService {
     };
     public static final String AUTOFILL_CODE = "?";
 
-    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^B:(?:[0-9A-Z]+|@[A-Z][A-Z0-9_-]{0,11})$");
+    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^B:(?:[0-9A-Z]+|@[A-Z]{1,12})$");
 
     public static boolean isBusinessAccount(String owner) {
-        return BUSINESS_PATTERN.matcher(owner).matches();
+        // Reserve malformed alias tokens too, so creation rejects them instead of using a player name.
+        return owner.regionMatches(true, 0, "B:@", 0, 3) || BUSINESS_PATTERN.matcher(owner).matches();
     }
 
     public static boolean isBusinessAccount(String[] lines) {

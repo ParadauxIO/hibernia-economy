@@ -54,13 +54,13 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
 
             // Explicit alias namespace cannot collide with base-36 ids or legacy names.
             if (token.startsWith("@")) {
-                if (businessApi == null) return null;
+                if (businessApi == null || !token.substring(1).matches("[A-Za-z]{1,12}")) return null;
                 Integer resolved = businessApi.firms().resolveShopAlias(token.substring(1));
                 if (resolved == null) return null;
                 treasuryAccount = treasury.getAccountById(resolved);
                 if (treasuryAccount == null || treasuryAccount.isArchived()) return null;
                 return new Account(treasuryAccount.getDisplayName(),
-                        SignService.businessAccountSignName(resolved),
+                        "B:" + token,
                         BusinessAccountUtil.toBusinessUuid(resolved));
             }
 

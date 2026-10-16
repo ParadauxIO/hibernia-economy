@@ -494,17 +494,18 @@ class FirmAccountServiceImplTest {
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
         when(treasury.getAccountById(7)).thenReturn(new Account());
-        when(firmAccounts.setShopAlias(1, 7, "Acme-shop")).thenReturn(1);
+        when(firmAccounts.getShopAliasReservation("AcmeShop")).thenReturn(7);
+        when(firmAccounts.setShopAlias(1, 7, "AcmeShop")).thenReturn(1);
         when(firmAccounts.setShopAlias(1, 7, null)).thenReturn(1);
-        svc.setShopAlias(1, 7, "Acme-shop", actor);
+        svc.setShopAlias(1, 7, "AcmeShop", actor);
         svc.setShopAlias(1, 7, null, actor);
-        verify(firmAccounts).setShopAlias(1, 7, "Acme-shop");
+        verify(firmAccounts).setShopAlias(1, 7, "AcmeShop");
         verify(firmAccounts).setShopAlias(1, 7, null);
     }
 
     @Test
     void shopAlias_rejectsInvalidNames() {
-        for (String alias : List.of("", "1acme", "My Shop", "@acme", "abcdefghijklm", "<red>")) {
+        for (String alias : List.of("", "123", "acme1", "ac1me", "acme-shop", "acme_shop", "1acme", "My Shop", "@acme", "abcdefghijklm", "<red>")) {
             assertThatThrownBy(() -> svc.setShopAlias(1, 7, alias, actor))
                     .isInstanceOf(BadCommandException.class);
             assertThat(svc.resolveShopAlias(alias)).isNull();
@@ -554,6 +555,7 @@ class FirmAccountServiceImplTest {
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
         when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(firmAccounts.getShopAliasReservation("acme")).thenReturn(7);
         when(firmAccounts.setShopAlias(1, 7, "acme")).thenThrow(
                 new org.apache.ibatis.exceptions.PersistenceException(new java.sql.SQLException("duplicate", "23000", 1062)));
         assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
@@ -563,4 +565,16 @@ class FirmAccountServiceImplTest {
         assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
                 .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
     }
+    @Test
+    void shopAlias_cannotReassignPreviouslyUsedName() {
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
+        when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(firmAccounts.getShopAliasReservation("acme")).thenReturn(99);
+        assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("reserved");
+        verify(firmAccounts, never()).setShopAlias(anyInt(), anyInt(), any());
+    }
+
 }

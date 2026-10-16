@@ -86,11 +86,14 @@ route money to a firm or check a staff permission).
 
 `FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's
 shop alias, or null. Business owns alias persistence and proprietor-only management;
-ChestShop resolves `B:@alias` through this API, checks normal shop access, and writes
-its canonical `B:<base36>` account code to the sign. Alias changes therefore do not
-retarget existing shops. Aliases are unique across `firm_accounts` (case-insensitive),
-including removed links; archived firms/accounts do not resolve. Apply migration
-`V34__business_shop_aliases.sql` before deploying the updated Business and ChestShop
+ChestShop resolves `B:@alias` through this API, checks normal shop access, and keeps
+that alias as the account's sign name. Its synthetic UUID still encodes the Treasury
+account ID for payments. Aliases contain 1–12 ASCII letters only. Changing or clearing
+an alias stops old signs from resolving; `firm_shop_alias_reservations` permanently
+reserves each used name to its original account, so old signs cannot be redirected.
+Reservation and current-alias updates share a transaction. Aliases are case-insensitive;
+archived firms/accounts and removed links do not resolve. Apply migration
+`V35__business_shop_aliases.sql` before deploying the updated Business and ChestShop
 plugins together.
 
 ---
