@@ -37,7 +37,7 @@ dependencies {
     // CarbonChat API — the server's chat plugin (provided at runtime). Pinned to a
     // specific 3.0.0-beta because the API churns across betas (PAR-20). compileOnly:
     // Carbon ships the impl; we only register a channel against its API.
-    compileOnly("de.hexaoxi:carbonchat-api:3.0.0-beta.32")
+    compileOnly("de.hexaoxi:carbonchat-api:3.0.0-beta.39")
 
     // Vault API, exclude Bukkit to avoid capability conflict with Paper
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
@@ -89,7 +89,7 @@ dependencies {
     // NOT because the injector needs it: nothing Guice reflects over may name a
     // net.draycia.* type, and the testWithoutCarbon task below re-runs the startup
     // test with this jar stripped from the classpath to prove it.
-    testImplementation("de.hexaoxi:carbonchat-api:3.0.0-beta.32")
+    testImplementation("de.hexaoxi:carbonchat-api:3.0.0-beta.39")
 
     // Treasury API + Paper API are compileOnly in production; tests need them too.
     testImplementation(project(":treasury:treasury-api"))
