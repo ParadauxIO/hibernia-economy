@@ -2,7 +2,10 @@ package io.paradaux.treasuryrestapi.service;
 
 import io.paradaux.treasuryrestapi.dto.AccountBalanceResponse;
 import io.paradaux.treasuryrestapi.dto.AccountByPlayerResponse;
+import io.paradaux.treasuryrestapi.dto.BaltopEntry;
+import io.paradaux.treasuryrestapi.dto.BaltopResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
+import io.paradaux.treasuryrestapi.mapper.AccountMapper;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,15 +20,20 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * Integration tests for {@link AccountService} (finding treasury-rest-api/testing/0004):
  * getBalance (present / zero-default via the account_balances view / not-found),
  * resolvePlayerAccount by uuid and name, the exactly-one-of guard, and the PAR-144
- * player↔GOVERNMENT AMBIGUOUS_NAME collision. Drives the real service + mappers +
- * SQL against the embedded MariaDB.
+ * player↔GOVERNMENT AMBIGUOUS_NAME collision, and getBaltop (PAR-335). Drives the
+ * real service + mappers + SQL against the embedded MariaDB.
  */
 class AccountServiceIT extends EmbeddedDbIT {
 
     @Autowired
     private AccountService accountService;
 
+    @Autowired
+    private AccountMapper accountMapper;
+
     private static final UUID PLAYER = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID OTHER = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID THIRD = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     // ── getBalance ────────────────────────────────────────────────────────────────
 
@@ -143,5 +151,63 @@ class AccountServiceIT extends EmbeddedDbIT {
 
         AccountByPlayerResponse r = accountService.resolvePlayerAccount(PLAYER.toString(), null);
         assertThat(r.accountId()).isEqualTo(1L);
+    }
+
+    // ── getBaltop ─────────────────────────────────────────────────────────────────
+
+    @Test
+    void getBaltop_ranksRichestFirst() {
+        insertAccount(1, "PERSONAL", PLAYER, "Steve");
+        insertAccount(2, "PERSONAL", OTHER, "OldAlex");
+        insertPlayer(OTHER, "Alex");
+        seedBalance(1, "50.00");
+        seedBalance(2, "900.00");
+
+        BaltopResponse r = accountService.getBaltop(1, 10);
+        assertThat(r.totalItems()).isEqualTo(2L);
+        assertThat(r.items()).extracting(BaltopEntry::playerName).containsExactly("Alex", "Steve");
+        assertThat(r.items()).extracting(BaltopEntry::balance).containsExactly("900.00", "50.00");
+        assertThat(r.items()).extracting(BaltopEntry::rank).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void getBaltop_onlyActivePersonalAccounts() {
+        insertAccount(1, "PERSONAL", PLAYER, "Steve");
+        insertAccount(2, "GOVERNMENT", null, "Treasury");
+        insertAccount(3, "PERSONAL", OTHER, "Alex");
+        seedBalance(1, "10.00");
+        seedBalance(2, "1000000.00");
+        seedBalance(3, "99.00");
+        accountMapper.archiveAccount(3);
+
+        BaltopResponse r = accountService.getBaltop(1, 10);
+        assertThat(r.items()).extracting(BaltopEntry::accountId).containsExactly(1L);
+    }
+
+    @Test
+    void getBaltop_tieAcrossPages_ordersByAccountIdAndContinuesRank() {
+        insertAccount(1, "PERSONAL", PLAYER, "Steve");
+        insertAccount(2, "PERSONAL", OTHER, "Alex");
+        insertAccount(3, "PERSONAL", THIRD, "Notch");
+        seedBalance(1, "100.00");
+        seedBalance(2, "100.00");
+        seedBalance(3, "100.00");
+
+        assertThat(accountService.getBaltop(1, 2).items()).extracting(BaltopEntry::accountId).containsExactly(1L, 2L);
+
+        BaltopResponse r = accountService.getBaltop(2, 2);
+        assertThat(r.totalPages()).isEqualTo(2);
+        assertThat(r.items()).extracting(BaltopEntry::accountId).containsExactly(3L);
+        assertThat(r.items()).extracting(BaltopEntry::rank).containsExactly(3L);
+    }
+
+    @Test
+    void getBaltop_badPageOrLimit_400() {
+        ApiException page = catchThrowableOfType(ApiException.class, () -> accountService.getBaltop(0, 10));
+        assertThat(page.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(page.getErrorCode()).isEqualTo("INVALID_PARAM");
+
+        ApiException limit = catchThrowableOfType(ApiException.class, () -> accountService.getBaltop(1, 101));
+        assertThat(limit.getErrorCode()).isEqualTo("INVALID_PARAM");
     }
 }

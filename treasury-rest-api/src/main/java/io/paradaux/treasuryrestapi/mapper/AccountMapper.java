@@ -2,12 +2,14 @@ package io.paradaux.treasuryrestapi.mapper;
 
 import io.paradaux.treasuryrestapi.model.Account;
 import io.paradaux.treasuryrestapi.model.AccountBalance;
+import io.paradaux.treasuryrestapi.model.BaltopRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Mapper
@@ -41,6 +43,29 @@ public interface AccountMapper {
      */
     @Select("SELECT account_id, balance FROM account_balances WHERE account_id = #{accountId}")
     AccountBalance findBalance(@Param("accountId") long accountId);
+
+    /**
+     * Non-archived PERSONAL accounts by balance, richest first: the same accounts
+     * as the in-game /baltop. account_id breaks ties for deterministic ordering.
+     * Balance changes between requests can still move accounts between pages.
+     * STRAIGHT_JOIN makes MariaDB read account_balances_mat first so the sort runs on
+     * that table alone. Without it, 10.11 starts from accounts and sorts through a
+     * temp table (first page took about 0.33s instead of 0.02s at 100k accounts).
+     */
+    @Select("SELECT a.account_id, a.owner_uuid_bin AS owner_uuid, " +
+            "       COALESCE(p.current_name, a.display_name) AS player_name, b.balance " +
+            "FROM account_balances_mat b " +
+            "STRAIGHT_JOIN accounts a ON a.account_id = b.account_id " +
+            "LEFT JOIN economy_players p ON p.player_uuid_bin = a.owner_uuid_bin " +
+            "WHERE a.account_type = 'PERSONAL' AND a.is_archived = 0 " +
+            "ORDER BY b.balance DESC, b.account_id ASC " +
+            "LIMIT #{limit} OFFSET #{offset}")
+    List<BaltopRow> findTopPersonalBalances(@Param("limit") int limit, @Param("offset") int offset);
+
+    @Select("SELECT COUNT(*) FROM accounts a " +
+            "JOIN account_balances_mat b ON b.account_id = a.account_id " +
+            "WHERE a.account_type = 'PERSONAL' AND a.is_archived = 0")
+    long countBaltopAccounts();
 
     /**
      * Pessimistic lock on the balance row. Must be called within a transaction.

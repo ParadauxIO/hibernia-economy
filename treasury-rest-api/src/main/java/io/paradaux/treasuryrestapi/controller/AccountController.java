@@ -2,6 +2,7 @@ package io.paradaux.treasuryrestapi.controller;
 
 import io.paradaux.treasuryrestapi.dto.AccountBalanceResponse;
 import io.paradaux.treasuryrestapi.dto.AccountByPlayerResponse;
+import io.paradaux.treasuryrestapi.dto.BaltopResponse;
 import io.paradaux.treasuryrestapi.dto.TransactionFeedResponse;
 import io.paradaux.treasuryrestapi.dto.TransactionsResponse;
 import io.paradaux.treasuryrestapi.ratelimit.RateLimit;
@@ -70,6 +71,23 @@ public class AccountController {
                 response.accountId(), response.playerUuid(), verified.keyId());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * GET /api/v1/accounts/baltop?page={n}&limit={n}
+     * Returns personal accounts ranked by balance, like the in-game /baltop.
+     * Any authenticated caller may query it.
+     */
+    @GetMapping("/baltop")
+    @RateLimit(personalPerMinute = 10, businessPerMinute = 10)
+    public ResponseEntity<BaltopResponse> getBaltop(
+            @AuthenticationPrincipal VerifiedToken verified,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int limit) {
+
+        log.info("GET /accounts/baltop requested by keyId={} | page={} limit={}", verified.keyId(), page, limit);
+
+        return ResponseEntity.ok(accountService.getBaltop(page, limit));
     }
 
     /**

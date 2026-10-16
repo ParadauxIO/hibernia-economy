@@ -2,15 +2,21 @@ package io.paradaux.treasuryrestapi.service;
 
 import io.paradaux.treasuryrestapi.dto.AccountBalanceResponse;
 import io.paradaux.treasuryrestapi.dto.AccountByPlayerResponse;
+import io.paradaux.treasuryrestapi.dto.BaltopEntry;
+import io.paradaux.treasuryrestapi.dto.BaltopResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.mapper.AccountMapper;
 import io.paradaux.treasuryrestapi.mapper.FirmMapper;
 import io.paradaux.treasuryrestapi.model.AccountBalance;
+import io.paradaux.treasuryrestapi.model.BaltopRow;
+import io.paradaux.treasuryrestapi.util.Pagination;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -100,5 +106,35 @@ public class AccountService {
         log.debug("Resolved player {} → accountId={}", playerUuid, accountId);
 
         return new AccountByPlayerResponse(accountId, playerUuid.toString(), playerName);
+    }
+
+    /**
+     * Personal accounts ranked by balance, richest first: the REST version of the
+     * in-game /baltop (PAR-335).
+     *
+     * @throws ApiException 400 if page or limit is out of range
+     */
+    public BaltopResponse getBaltop(int page, int limit) {
+        if (page < 1) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAM",
+                    "Query parameter 'page' must be >= 1.");
+        }
+        if (limit < 1 || limit > 100) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAM",
+                    "Query parameter 'limit' must be between 1 and 100.");
+        }
+        int offset = Pagination.offset(page, limit);
+
+        List<BaltopRow> rows = accountMapper.findTopPersonalBalances(limit, offset);
+        long totalItems = accountMapper.countBaltopAccounts();
+
+        List<BaltopEntry> items = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            BaltopRow row = rows.get(i);
+            items.add(new BaltopEntry(offset + i + 1, row.getAccountId(), row.getOwnerUuid().toString(),
+                    row.getPlayerName(), row.getBalance().toPlainString()));
+        }
+        int totalPages = (int) Math.ceil((double) totalItems / limit);
+        return new BaltopResponse(page, totalPages, totalItems, items);
     }
 }
