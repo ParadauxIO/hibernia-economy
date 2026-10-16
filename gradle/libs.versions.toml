@@ -85,7 +85,9 @@ mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.
 mariadb4j = { module = "ch.vorburger.mariaDB4j:mariaDB4j", version.ref = "mariadb4j" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
-archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+# Plain ArchUnit core driven from ordinary @Test methods (not the archunit-junit5
+# engine), so it rides the existing JUnit Jupiter setup whatever the platform version.
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 
 # Static analysis — the checkers, resolved into the errorprone configuration by
 # io.paradaux.static-analysis-conventions (looked up there by alias).

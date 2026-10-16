@@ -89,6 +89,9 @@ plugins.withId("java") {
     dependencies {
         "errorprone"(catalog.findLibrary("errorprone-core").get())
         "errorprone"(catalog.findLibrary("nullaway").get())
+        // ArchUnit for the per-module ArchitectureTest layering rules. Declared here
+        // rather than in each module so adding a rule never touches a build file.
+        "testImplementation"(catalog.findLibrary("archunit").get())
     }
 
     val nullAwayPackages = nullAwayScope[path]
