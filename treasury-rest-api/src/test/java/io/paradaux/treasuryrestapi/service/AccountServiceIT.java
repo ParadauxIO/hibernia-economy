@@ -158,7 +158,7 @@ class AccountServiceIT extends EmbeddedDbIT {
     @Test
     void getBaltop_ranksRichestFirst() {
         insertAccount(1, "PERSONAL", PLAYER, "Steve");
-        insertAccount(2, "PERSONAL", OTHER, "Alex");
+        insertAccount(2, "PERSONAL", OTHER, "OldAlex");
         insertPlayer(OTHER, "Alex");
         seedBalance(1, "50.00");
         seedBalance(2, "900.00");
@@ -185,13 +185,13 @@ class AccountServiceIT extends EmbeddedDbIT {
     }
 
     @Test
-    void getBaltop_secondPage_continuesRank() {
+    void getBaltop_tieAcrossPages_ordersByAccountIdAndContinuesRank() {
         insertAccount(1, "PERSONAL", PLAYER, "Steve");
         insertAccount(2, "PERSONAL", OTHER, "Alex");
         insertAccount(3, "PERSONAL", THIRD, "Notch");
         seedBalance(1, "100.00");
         seedBalance(2, "100.00");
-        seedBalance(3, "5.00");
+        seedBalance(3, "100.00");
 
         assertThat(accountService.getBaltop(1, 2).items()).extracting(BaltopEntry::accountId).containsExactly(1L, 2L);
 

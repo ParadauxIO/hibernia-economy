@@ -46,7 +46,8 @@ public interface AccountMapper {
 
     /**
      * Non-archived PERSONAL accounts by balance, richest first: the same accounts
-     * as the in-game /baltop. account_id breaks ties so pages don't overlap.
+     * as the in-game /baltop. account_id breaks ties for deterministic ordering.
+     * Balance changes between requests can still move accounts between pages.
      * STRAIGHT_JOIN makes MariaDB read account_balances_mat first so the sort runs on
      * that table alone. Without it, 10.11 starts from accounts and sorts through a
      * temp table (first page took about 0.33s instead of 0.02s at 100k accounts).

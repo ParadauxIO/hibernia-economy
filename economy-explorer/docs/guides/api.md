@@ -96,7 +96,12 @@ authoritative list of endpoints and exact request bodies. The core capabilities 
 - **Transfers** — move money to a player or to a firm.
 - **Transactions** — read an account's history.
 - **Balance** — read an account's current balance.
-- **Baltop** — the richest players, ranked (the same list as `/baltop` in-game).
+- **Baltop** — `GET /api/v1/accounts/baltop?page=1&limit=10` lists active personal
+  accounts ranked by balance, as in `/baltop` in-game. Any valid API key can read
+  player UUIDs, names, account IDs and balances. Pages start at 1; the default
+  page size is 10 and the maximum is 100. Balances are decimal strings. Ties
+  are ordered by account ID, but balance changes between requests can move
+  accounts between pages, so pagination does not provide a fixed snapshot.
 - **Webhooks** — get a signed POST when the account moves money, instead of polling (see
   the [Webhooks guide](/docs/guides/webhooks)).
 - **Token rotation** — refresh your token before it expires.
