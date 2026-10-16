@@ -73,12 +73,15 @@ class AdminFirmDisbandSweepIT extends EmbeddedDbIT {
         // Conservation, proven at the ledger (the source of truth): the whole LOCKED 750
         // is swept, not the stale snapshot 500. The debit posting drains the firm account
         // in full and the proprietor is credited the identical amount — no residual left
-        // behind, no over-sweep. (Postings are asserted rather than the materialised
-        // balance because that view is trigger-maintained; the ledger is authoritative.)
+        // behind, no over-sweep.
         assertThat(resp.accounts()).hasSize(1);
         assertThat(resp.accounts().get(0).sweptAmount()).isEqualTo("750.00");
         assertThat(sumPostings(2)).isEqualByComparingTo("-750.00"); // firm account fully drained
         assertThat(sumPostings(1)).isEqualByComparingTo("750.00");  // proprietor received all of it
+        // The harness runs the real trg_postings_* triggers, so the materialised balance
+        // must agree with the ledger too: exactly zero left on the archived account.
+        assertThat(matBalance(2)).isEqualByComparingTo("0.00");
+        assertThat(matBalance(1)).isEqualByComparingTo("750.00");
         assertThat(isAccountArchived(2)).isTrue();
         assertThat(isFirmArchived(10)).isTrue();
     }

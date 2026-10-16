@@ -73,11 +73,39 @@ dependencies {
     // Embedded MariaDB for market read-side integration tests (real MariaDB SQL:
     // ON DUPLICATE KEY, DATE_FORMAT, INTERVAL — H2 can't stand in).
     testImplementation(libs.mariadb4j)
+    // The IT harness builds its schema by running the authoritative economy-flyway
+    // migrations (staged onto the test classpath below) instead of a hand-written
+    // stand-in, so tests see the real FKs, NOT NULLs and the trg_postings_* balance
+    // triggers — same approach as Treasury (PAR-239) and Business (PAR-242).
+    // Plain flyway-core, not spring-boot-flyway: no auto-configuration, the harness
+    // migrates exactly once per JVM before the first Spring context boots.
+    testImplementation(libs.flyway.core)
+    testImplementation(libs.flyway.mysql)
     testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+// Stage the economy-flyway migrations onto the test classpath (under db/migration)
+// so EmbeddedMariaDb can run them with Flyway (classpath:db/migration).
+tasks.named<Copy>("processTestResources") {
+    from(project(":economy-flyway").file("src/main/resources/db/migration")) {
+        into("db/migration")
+    }
 }
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    // OpenApiSnapshotIT compares the runtime /v3/api-docs against the committed
+    // openapi/openapi.json. Absolute paths so IDE and Gradle runs agree, and the
+    // snapshot is a declared input so editing it re-runs the test instead of
+    // reporting a stale UP-TO-DATE pass.
+    val snapshot = layout.projectDirectory.file("openapi/openapi.json")
+    systemProperty("openapi.snapshot", snapshot.asFile.path)
+    systemProperty("openapi.actual", layout.buildDirectory.file("openapi/openapi.json").get().asFile.path)
+    inputs.files(snapshot).withPropertyName("openApiSnapshot").withPathSensitivity(PathSensitivity.RELATIVE)
+    // `-Dopenapi.update=true` on the Gradle command line rewrites the snapshot. The
+    // forked test JVM doesn't inherit the build's -D flags, so forward it explicitly.
+    providers.systemProperty("openapi.update").orNull?.let { systemProperty("openapi.update", it) }
 }
 
 // ADT-50: the money service had no coverage gate. Report on every test run and
@@ -98,7 +126,9 @@ tasks.jacocoTestCoverageVerification {
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                minimum = "0.72".toBigDecimal()
+                // Measured 82.5% line coverage (1514/1834) after the route-table,
+                // filter and real-schema tests; floor sits ~2.5 points below.
+                minimum = "0.80".toBigDecimal()
             }
         }
     }

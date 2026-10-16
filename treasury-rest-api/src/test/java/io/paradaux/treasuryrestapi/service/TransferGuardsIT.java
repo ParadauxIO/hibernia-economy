@@ -60,6 +60,10 @@ class TransferGuardsIT extends EmbeddedDbIT {
         assertThat(sumPostings(1)).isEqualByComparingTo("-150.00");
         assertThat(sumPostings(2)).isEqualByComparingTo("150.00");
         assertThat(sumPostings(1).add(sumPostings(2))).isEqualByComparingTo("0.00");
+        // The real schema's trg_postings_ai is the sole writer of the materialised
+        // balance: the API only posts legs, and the trigger moves the seeded balances.
+        assertThat(matBalance(1)).isEqualByComparingTo("850.00");
+        assertThat(matBalance(2)).isEqualByComparingTo("150.00");
     }
 
     // ── SELF_TRANSFER ─────────────────────────────────────────────────────────────
