@@ -183,6 +183,11 @@ runs the tests and tears everything down. Work files and logs go to
 - **Iterating:** `IT_SKIP_BUILD=1` reuses the jars from the last run;
   `IT_GRADLE_ARGS` passes extra arguments to the plugin build (for example
   `-PuseMavenLocal` to test against a locally published hibernia-framework).
+- **Timings:** the test task ends by printing the ten slowest classes and tests, and
+  writes every duration to `integration-tests/tests/build/reports/test-timings.txt`.
+- **Waiting in tests:** never `Thread.sleep` for the server. Poll converging state with
+  `Await`, and before asserting that something did *not* happen use a positive barrier
+  (`Barrier.sync` / `Barrier.settle`) — see the suite README.
 - **In CI:** the **Integration Tests (live server)** workflow runs the same script
   on pull requests that touch a plugin, the REST API, the migrations or the suite.
 
