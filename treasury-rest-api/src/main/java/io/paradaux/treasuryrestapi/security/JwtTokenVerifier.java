@@ -53,7 +53,10 @@ public class JwtTokenVerifier {
                     .parseSignedClaims(token);
         } catch (ExpiredJwtException e) {
             throw new TokenException(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "Token has expired.");
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
+            // jjwt signals some malformed input (null/blank compact string) with
+            // IllegalArgumentException rather than a JwtException; both are a bad
+            // token (401), never an unhandled 500.
             log.warn("JWT verification failed: [{}] {}", e.getClass().getSimpleName(), e.getMessage());
             throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token signature or format is invalid.");
         }

@@ -124,6 +124,16 @@ class JwtTokenVerifierTest {
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
 
+    /** jjwt throws IllegalArgumentException (not JwtException) for these; still a 401. */
+    @Test
+    void blankOrNullToken_rejectedAsInvalidToken() {
+        JwtTokenVerifier verifier = verifierFor(personalKey());
+
+        assertInvalid(verifier, "", "INVALID_TOKEN");
+        assertInvalid(verifier, "   ", "INVALID_TOKEN");
+        assertInvalid(verifier, null, "INVALID_TOKEN");
+    }
+
     @Test
     void expiredToken_rejectedAsTokenExpired() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
