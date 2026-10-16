@@ -46,6 +46,51 @@
         },
         "type" : "object"
       },
+      "BaltopEntry" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balance" : {
+            "type" : "string"
+          },
+          "playerName" : {
+            "type" : "string"
+          },
+          "playerUuid" : {
+            "type" : "string"
+          },
+          "rank" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BaltopResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BaltopEntry"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalItems" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalPages" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "Bracket" : {
         "properties" : {
           "floor" : {
@@ -862,6 +907,44 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/accounts/baltop" : {
+      "get" : {
+        "description" : "**Rate limits:** 10 requests/minute for PERSONAL keys, 10 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getBaltop",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 1,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 10,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BaltopResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "account-controller" ]
+      }
+    },
     "/api/v1/accounts/by-player" : {
       "get" : {
         "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",

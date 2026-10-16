@@ -124,6 +124,7 @@ class RouteSecurityIT extends EmbeddedDbIT {
             Map.entry("POST /api/v1/auth/rotate", auth()),
             Map.entry("GET /api/v1/accounts/{accountId}/balance", auth()),
             Map.entry("GET /api/v1/accounts/by-player", auth()),
+            Map.entry("GET /api/v1/accounts/baltop", auth()),
             Map.entry("GET /api/v1/accounts/{accountId}/transactions", auth()),
             Map.entry("GET /api/v1/accounts/{accountId}/transactions/feed", auth()),
             Map.entry("GET /api/v1/firms/{firmName}", auth()),
