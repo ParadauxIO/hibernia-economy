@@ -1,23 +1,5 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.mappers.AccountMapper;
-import io.paradaux.chestshop.model.Account;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.utils.Permissions;
-import org.apache.ibatis.exceptions.PersistenceException;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.block.Sign;
-import org.bukkit.entity.Player;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-
-import java.util.Collections;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +9,23 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.chestshop.ChestShop;
+import io.paradaux.chestshop.mappers.AccountMapper;
+import io.paradaux.chestshop.model.Account;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.utils.Permissions;
+import java.util.Collections;
+import java.util.UUID;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.block.Sign;
+import org.bukkit.entity.Player;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 /**
  * Comprehensive coverage for {@link AccountServiceImpl}: the get-or-create resolution,
@@ -70,7 +69,7 @@ class AccountServiceImplTest {
 
     private Sign signOwned(String owner) {
         Sign s = mock(Sign.class);
-        lenient().when(s.getLines()).thenReturn(new String[]{owner, "5", "B 10", "STONE"});
+        lenient().when(s.getLines()).thenReturn(new String[] {owner, "5", "B 10", "STONE"});
         return s;
     }
 
@@ -174,6 +173,58 @@ class AccountServiceImplTest {
         assertThat(service.getAccountFromShortName("Notch")).isNull();
     }
 
+    // ═══════════════════ storeAccount ═══════════════════
+
+    @Test
+    void storeAccount_defaultsAMissingLastSeenToNow() {
+        // The admin-shop account is built without a lastSeen; users.db requires it NOT NULL.
+        Account account = new Account("AdminShop", "AdminShop", UUID.randomUUID());
+        long before = System.currentTimeMillis();
+
+        service.storeAccount(account);
+
+        org.mockito.Mockito.verify(mapper).save(account);
+        assertThat(account.getLastSeen().getTime()).isBetween(before, System.currentTimeMillis());
+    }
+
+    @Test
+    void storeAccount_keepsAnExistingLastSeen() {
+        Account account = new Account("Player", "Player", UUID.randomUUID());
+        java.util.Date seen = new java.util.Date(1_000_000L);
+        account.setLastSeen(seen);
+
+        service.storeAccount(account);
+
+        org.mockito.Mockito.verify(mapper).save(account);
+        assertThat(account.getLastSeen()).isEqualTo(seen);
+    }
+
+    // ═══════════════════ getNewShortenedName ═══════════════════
+
+    private static io.paradaux.chestshop.model.PlayerSnapshot snapshot(String name) {
+        return new io.paradaux.chestshop.model.PlayerSnapshot(UUID.randomUUID(), name);
+    }
+
+    @Test
+    void getNewShortenedName_returnsTheNameTruncatedTo15_whenFree() {
+        when(mapper.findByShortName(anyString())).thenReturn(null);
+
+        assertThat(service.getNewShortenedName(snapshot("Acrobot"))).isEqualTo("Acrobot");
+        assertThat(service.getNewShortenedName(snapshot("SixteenCharName1"))).isEqualTo("SixteenCharName");
+    }
+
+    @Test
+    void getNewShortenedName_appendsTheFirstFreeBase62Suffix_within15Chars() {
+        Account taken = new Account("taken", "taken", UUID.randomUUID());
+        when(mapper.findByShortName(anyString())).thenReturn(null);
+        when(mapper.findByShortName("Acrobot")).thenReturn(taken);
+        when(mapper.findByShortName("Acrobot:0")).thenReturn(taken);
+        when(mapper.findByShortName("SixteenCharName")).thenReturn(taken);
+
+        assertThat(service.getNewShortenedName(snapshot("Acrobot"))).isEqualTo("Acrobot:1");
+        assertThat(service.getNewShortenedName(snapshot("SixteenCharName1"))).isEqualTo("SixteenCharNa:0");
+    }
+
     // ═══════════════════ getOrCreateAccount ═══════════════════
 
     @Test
@@ -199,7 +250,8 @@ class AccountServiceImplTest {
     @Test
     void getOrCreateAccount_nullArgsRejected() {
         assertThatThrownBy(() -> service.getOrCreateAccount(null, "x")).isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> service.getOrCreateAccount(UUID.randomUUID(), null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> service.getOrCreateAccount(UUID.randomUUID(), null))
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -258,7 +310,9 @@ class AccountServiceImplTest {
         UUID id = UUID.randomUUID();
         when(mapper.findByUuidAndName(id, "Notch")).thenReturn(null);
         when(mapper.findByShortName(anyString())).thenReturn(null);
-        org.mockito.Mockito.doThrow(new PersistenceException("save fail")).when(mapper).save(any());
+        org.mockito.Mockito.doThrow(new PersistenceException("save fail"))
+                .when(mapper)
+                .save(any());
         Account result = service.storeUsername(new io.paradaux.chestshop.model.PlayerSnapshot(id, "Notch"));
         assertThat(result).isNull();
     }
@@ -418,18 +472,21 @@ class AccountServiceImplTest {
 
     @Test
     void hasPermission_nullPlayer_false() {
-        assertThat(service.hasPermission(null, Permissions.OTHER_NAME, signOwned("Notch"))).isFalse();
+        assertThat(service.hasPermission(null, Permissions.OTHER_NAME, signOwned("Notch")))
+                .isFalse();
     }
 
     @Test
     void hasPermission_nullSign_true() {
-        assertThat(service.hasPermission(player("Notch", UUID.randomUUID()), Permissions.OTHER_NAME, null)).isTrue();
+        assertThat(service.hasPermission(player("Notch", UUID.randomUUID()), Permissions.OTHER_NAME, null))
+                .isTrue();
     }
 
     @Test
     void hasPermission_emptyOwner_true() {
         Player p = player("Notch", UUID.randomUUID());
-        assertThat(service.hasPermission(p, Permissions.OTHER_NAME, signOwned(""))).isTrue();
+        assertThat(service.hasPermission(p, Permissions.OTHER_NAME, signOwned("")))
+                .isTrue();
     }
 
     @Test
@@ -451,7 +508,8 @@ class AccountServiceImplTest {
 
     @Test
     void isOwner_emptyOwnerLine_false() {
-        assertThat(service.isOwner(player("Notch", UUID.randomUUID()), signOwned(""))).isFalse();
+        assertThat(service.isOwner(player("Notch", UUID.randomUUID()), signOwned("")))
+                .isFalse();
     }
 
     @Test
@@ -591,7 +649,7 @@ class AccountServiceImplTest {
     @Test
     void load_fallsBackToOfflineUuid_whenMojangRatelimited() {
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class);
-             MockedStatic<ChestShop> cs = mockStatic(ChestShop.class)) {
+                MockedStatic<ChestShop> cs = mockStatic(ChestShop.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
             // getOfflinePlayer returns null → NPE on getUniqueId() → fallback path.
             bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(null);
@@ -600,7 +658,8 @@ class AccountServiceImplTest {
             service.load();
 
             // Admin account still established via the deterministic offline UUID.
-            UUID expected = UUID.nameUUIDFromBytes("OfflinePlayer:Server".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            UUID expected =
+                    UUID.nameUUIDFromBytes("OfflinePlayer:Server".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             assertThat(service.isAdminShop(expected)).isTrue();
         }
     }
@@ -673,7 +732,9 @@ class AccountServiceImplTest {
             when(op.getUniqueId()).thenReturn(UUID.randomUUID());
             bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
             // storeAccount(adminAccount) → mapper.save throws → outer catch logs, no throw.
-            org.mockito.Mockito.doThrow(new PersistenceException("db")).when(mapper).save(any());
+            org.mockito.Mockito.doThrow(new PersistenceException("db"))
+                    .when(mapper)
+                    .save(any());
 
             service.load(); // must not throw
 
@@ -749,14 +810,15 @@ class AccountServiceImplTest {
     @Test
     void hasPermission_nullOwnerLine_true() {
         Sign s = mock(Sign.class);
-        when(s.getLines()).thenReturn(new String[]{null, "", "", ""}); // getOwner → null
-        assertThat(service.hasPermission(player("Notch", UUID.randomUUID()), Permissions.OTHER_NAME, s)).isTrue();
+        when(s.getLines()).thenReturn(new String[] {null, "", "", ""}); // getOwner → null
+        assertThat(service.hasPermission(player("Notch", UUID.randomUUID()), Permissions.OTHER_NAME, s))
+                .isTrue();
     }
 
     @Test
     void isOwner_nullOwnerLine_false() {
         Sign s = mock(Sign.class);
-        when(s.getLines()).thenReturn(new String[]{null, "", "", ""}); // getOwner → null
+        when(s.getLines()).thenReturn(new String[] {null, "", "", ""}); // getOwner → null
         assertThat(service.isOwner(player("Notch", UUID.randomUUID()), s)).isFalse();
     }
 
@@ -855,7 +917,9 @@ class AccountServiceImplTest {
         }
     }
 
-    private interface ThrowingRunnable { void run() throws Throwable; }
+    private interface ThrowingRunnable {
+        void run() throws Throwable;
+    }
 
     @Test
     void getLastAccountFromName_offline_resolvesValidPlayer() throws Throwable {
@@ -882,12 +946,14 @@ class AccountServiceImplTest {
     void getLastAccountFromName_offline_marksInvalid_whenNameOrUuidMissing() throws Throwable {
         OfflinePlayer noName = mock(OfflinePlayer.class);
         when(noName.getName()).thenReturn(null);
-        withOfflineServer(noName, () -> assertThat(invokeGetLast("Ghost1", true)).isNull());
+        withOfflineServer(
+                noName, () -> assertThat(invokeGetLast("Ghost1", true)).isNull());
 
         OfflinePlayer noUuid = mock(OfflinePlayer.class);
         when(noUuid.getName()).thenReturn("Ghost2");
         when(noUuid.getUniqueId()).thenReturn(null);
-        withOfflineServer(noUuid, () -> assertThat(invokeGetLast("Ghost2", true)).isNull());
+        withOfflineServer(
+                noUuid, () -> assertThat(invokeGetLast("Ghost2", true)).isNull());
     }
 
     @Test
@@ -942,9 +1008,24 @@ class AccountServiceImplTest {
      */
     private static final class FakeBusinessAccounts implements io.paradaux.chestshop.services.BusinessAccountService {
         java.util.function.Function<String, io.paradaux.chestshop.model.Account> resolve = name -> null;
-        java.util.function.BiPredicate<org.bukkit.entity.Player, io.paradaux.chestshop.model.Account> canAccess = (p, a) -> false;
-        @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, io.paradaux.business.api.BusinessApi businessApi) { /* unused headless */ }
-        @Override public io.paradaux.chestshop.model.Account resolveBusinessAccount(String name) { return resolve.apply(name); }
-        @Override public boolean canAccessBusinessAccount(org.bukkit.entity.Player player, io.paradaux.chestshop.model.Account account) { return canAccess.test(player, account); }
+        java.util.function.BiPredicate<org.bukkit.entity.Player, io.paradaux.chestshop.model.Account> canAccess =
+                (p, a) -> false;
+
+        @Override
+        public void bind(
+                io.paradaux.treasury.api.TreasuryApi treasury, io.paradaux.business.api.BusinessApi businessApi) {
+            /* unused headless */
+        }
+
+        @Override
+        public io.paradaux.chestshop.model.Account resolveBusinessAccount(String name) {
+            return resolve.apply(name);
+        }
+
+        @Override
+        public boolean canAccessBusinessAccount(
+                org.bukkit.entity.Player player, io.paradaux.chestshop.model.Account account) {
+            return canAccess.test(player, account);
+        }
     }
 }

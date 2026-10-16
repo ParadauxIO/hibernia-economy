@@ -3,13 +3,12 @@ package io.paradaux.chestshop.services;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.plugin.java.JavaPlugin;
-
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /** Main-thread, plain-text shop templates. Optional providers never leak plugin API types. */
 @Singleton
@@ -38,14 +37,16 @@ public final class ShopDisplayService {
     }
 
     public String format(String template, String worldName, int x, int y, int z) {
-        return TOKEN.matcher(template).replaceAll(match -> Matcher.quoteReplacement(switch (match.group(1)) {
-            case "world" -> worldName;
-            case "x" -> Integer.toString(x);
-            case "y" -> Integer.toString(y);
-            case "z" -> Integer.toString(z);
-            case "region-name" -> regionAt(worldName, x, y, z);
-            default -> match.group();
-        }));
+        return TOKEN.matcher(template)
+                .replaceAll(match -> Matcher.quoteReplacement(
+                        switch (match.group(1)) {
+                            case "world" -> worldName;
+                            case "x" -> Integer.toString(x);
+                            case "y" -> Integer.toString(y);
+                            case "z" -> Integer.toString(z);
+                            case "region-name" -> regionAt(worldName, x, y, z);
+                            default -> match.group();
+                        }));
     }
 
     private String regionAt(String worldName, int x, int y, int z) {

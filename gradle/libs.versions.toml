@@ -32,13 +32,39 @@ slf4j = "2.0.18"
 # for the shadow classpath dep, from build-logic — see [plugins] below).
 shadow = "9.0.2"
 
+# Static analysis (io.paradaux.static-analysis-conventions). The Gradle plugins are
+# build-logic classpath deps (like shadow); the analysers themselves are resolved
+# into each project's errorprone / spotless configurations at build time.
+errorprone-plugin = "5.1.1"
+errorprone = "2.50.0"
+nullaway = "0.14.2"
+spotless = "8.10.4"
+palantir-java-format = "2.102.0"
+ktlint = "1.8.0"
+
 # Test
 junit = "6.1.0"
 assertj = "3.27.7"
 mockito = "5.23.0"
 mariadb4j = "3.3.1"
+# Property-based testing. 1.10.x runs on JUnit Platform 6 (its engine is built
+# against Platform 1.14 but resolves to the BOM's 6.x without API breaks — see
+# MoneyProperties et al.).
+jqwik = "1.10.2"
 flyway = "12.9.0"
 jacoco = "0.8.15"
+# Mutation testing (io.paradaux.mutation-testing-conventions). The Gradle plugin
+# is a build-logic classpath dep; PIT itself and its JUnit Platform test plugin
+# are resolved by that plugin's `pitest` configuration from these versions.
+# pitest-junit5-plugin declares the platform launcher `provided`, so it runs on
+# whatever Platform the module tests with (JUnit 6 / Platform 6 here).
+pitest-gradle = "1.19.0"
+pitest = "1.30.1"
+pitest-junit5 = "1.2.3"
+# PIT 1.23 moved incremental analysis (history files) out of core into this
+# open-source plugin; without it `withHistory` fails the run.
+pitest-history = "0.0.1"
+archunit = "1.5.1"
 
 [libraries]
 # Server / framework
@@ -72,14 +98,31 @@ assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
 mariadb4j = { module = "ch.vorburger.mariaDB4j:mariaDB4j", version.ref = "mariadb4j" }
+jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
+# Plain ArchUnit core driven from ordinary @Test methods (not the archunit-junit5
+# engine), so it rides the existing JUnit Jupiter setup whatever the platform version.
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
+
+# Static analysis — the checkers, resolved into the errorprone configuration by
+# io.paradaux.static-analysis-conventions (looked up there by alias).
+errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorprone" }
+nullaway = { module = "com.uber.nullaway:nullaway", version.ref = "nullaway" }
 
 # The shadow plugin coordinate, so build-logic can build the shadow plugin
 # classpath dep from the same version the root build applies (single source of
 # truth). build-logic references it as `libs.plugins.shadow.get().pluginId` +
 # `.version`; the root build as `alias(libs.plugins.shadow)`.
 shadow-lib = { module = "com.gradleup.shadow:shadow-gradle-plugin", version.ref = "shadow" }
+# Same pattern for the static-analysis Gradle plugins build-logic applies.
+errorprone-gradle-plugin = { module = "net.ltgt.gradle:gradle-errorprone-plugin", version.ref = "errorprone-plugin" }
+spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless" }
+
+# The PIT Gradle plugin, as a build-logic classpath dep so the
+# io.paradaux.mutation-testing-conventions plugin can apply and configure it.
+pitest-gradle-plugin = { module = "info.solidsoft.gradle.pitest:gradle-pitest-plugin", version.ref = "pitest-gradle" }
+pitest-history-plugin = { module = "org.pitest:pitest-history-plugin", version.ref = "pitest-history" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

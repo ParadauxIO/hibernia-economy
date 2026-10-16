@@ -83,6 +83,24 @@ public final class JwtForge {
     }
 
     /**
+     * Mints a SERVICE (admin) token the way {@code economy-explorer/scripts/mint-service-token.mjs}
+     * does: claims {@code sub}, {@code type=SERVICE}, {@code jti}, {@code iat}, {@code exp} and
+     * no {@code acc}/{@code firm} scope. Nothing in-game can issue SERVICE keys, so this is the
+     * only way the suite gets one; it verifies once the {@code api_keys} row carries the same
+     * {@code jti} — use {@link ApiTokens#mintServiceKey}, which writes the row.
+     */
+    public static String signService(long keyId, String jti, UUID ownerUuid, Duration ttl) {
+        Instant now = Instant.now();
+        Map<String, Object> claims = new LinkedHashMap<>();
+        claims.put("sub", ownerUuid.toString());
+        claims.put("type", "SERVICE");
+        claims.put("jti", jti);
+        claims.put("iat", now.getEpochSecond());
+        claims.put("exp", now.plus(ttl).getEpochSecond());
+        return signCustom(claims, keyId, SECRET);
+    }
+
+    /**
      * Mints a token signed with an explicitly-supplied secret — for the
      * wrong-secret-rejection test. Pass any secret string ≥ 32 chars.
      */

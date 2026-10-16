@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -30,7 +31,7 @@ class TaxCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business tax info " + firm);
                 p.awaitMessageContaining("Tax Information for " + firm, TIMEOUT);
             });
@@ -49,7 +50,7 @@ class TaxCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business tax exempt " + firm + " true");
                 p.awaitMessageContaining(firm + " is now exempt", TIMEOUT);
             });
@@ -68,11 +69,11 @@ class TaxCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business tax exempt " + firm + " yes");
                 p.awaitMessageContaining(firm + " is now exempt", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business tax exempt " + firm + " no");
                 p.awaitMessageContaining(firm + " is now not exempt", TIMEOUT);
             });
@@ -117,7 +118,7 @@ class TaxCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business tax exempt " + firm + " maybe");
                 p.awaitMessageContaining("Invalid value 'maybe'", TIMEOUT);
             });

@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.chestshop;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.RconClient;
@@ -61,17 +62,9 @@ class NexoCustomItemTest {
             Ledger.waitForPersonalBalance(b.getUuid(), STARTING.subtract(BigDecimal.valueOf(PRICE)), TIMEOUT);
             Ledger.waitForPersonalBalance(s.getUuid(), STARTING.add(BigDecimal.valueOf(PRICE)), TIMEOUT);
 
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
-            String last = "";
-            while (System.nanoTime() < deadline) {
-                last = RconClient.send("nexocount " + buyer + " test_ruby");
-                if (last.contains("nexocount test_ruby = " + QTY)) {
-                    break;
-                }
-                try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(last).as("buyer should receive %d of the Nexo custom item", QTY)
-                    .contains("nexocount test_ruby = " + QTY);
+            Await.until("buyer to receive " + QTY + " of the Nexo custom item",
+                    () -> RconClient.send("nexocount " + buyer + " test_ruby"),
+                    r -> r.contains("nexocount test_ruby = " + QTY), TIMEOUT);
         }
     }
 }

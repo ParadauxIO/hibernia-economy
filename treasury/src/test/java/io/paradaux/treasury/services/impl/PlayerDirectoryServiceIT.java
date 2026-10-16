@@ -1,17 +1,17 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Locale;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class PlayerDirectoryServiceIT extends IntegrationTestBase {
 
@@ -93,7 +93,7 @@ class PlayerDirectoryServiceIT extends IntegrationTestBase {
         directory.recordLogin(newOwner, "Steve", 2000L);
 
         assertThat(directory.resolveUuidByName("Steve")).contains(newOwner);
-        assertThat(directory.resolveNameByUuid(oldOwner)).isEmpty();   // stale claim evicted
+        assertThat(directory.resolveNameByUuid(oldOwner)).isEmpty(); // stale claim evicted
         assertThat(directory.resolveNameByUuid(newOwner)).contains("Steve");
     }
 
@@ -126,14 +126,14 @@ class PlayerDirectoryServiceIT extends IntegrationTestBase {
 
     /** Hex of a UUID as MariaDB's HEX(BINARY(16)) renders it — the placeholder name. */
     private static String hex(UUID uuid) {
-        return uuid.toString().replace("-", "").toUpperCase();
+        return uuid.toString().replace("-", "").toUpperCase(Locale.ROOT);
     }
 
     private String[] rowOf(UUID uuid) throws Exception {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT current_name, first_seen, last_seen, last_login_epoch "
-                             + "FROM economy_players WHERE HEX(player_uuid_bin) = ?")) {
+                PreparedStatement ps =
+                        c.prepareStatement("SELECT current_name, first_seen, last_seen, last_login_epoch "
+                                + "FROM economy_players WHERE HEX(player_uuid_bin) = ?")) {
             ps.setString(1, hex(uuid));
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
@@ -148,7 +148,8 @@ class PlayerDirectoryServiceIT extends IntegrationTestBase {
         UUID newOwner = UUID.randomUUID();
         directory.recordLogin(oldOwner, "Steve", 1000L);
         // Age the row so an unwanted ON UPDATE CURRENT_TIMESTAMP bump would show.
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
             st.execute("UPDATE economy_players SET first_seen = '2020-01-01 00:00:00', "
                     + "last_seen = '2020-06-01 00:00:00'");
         }
@@ -180,7 +181,8 @@ class PlayerDirectoryServiceIT extends IntegrationTestBase {
 
         assertThat(rowOf(oldOwner)[0]).isEqualTo(hex(oldOwner));
         assertThat(directory.resolveUuidByName(hex(oldOwner))).isEmpty();
-        assertThat(directory.resolveUuidByName(hex(oldOwner).toLowerCase())).isEmpty();
+        assertThat(directory.resolveUuidByName(hex(oldOwner).toLowerCase(Locale.ROOT)))
+                .isEmpty();
         assertThat(directory.resolveNameByUuid(oldOwner)).isEmpty();
     }
 }

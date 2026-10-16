@@ -76,6 +76,9 @@ export function LiveDocBlocks() {
     });
     // Drop the static "loading" text; React renders the block's content in its place.
     found.forEach((t) => t.el.replaceChildren());
+    // The portal targets are server-rendered placeholders that only exist in the
+    // DOM after commit, so reading them is inherently an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTargets(found);
     if (!found.length) return;
 

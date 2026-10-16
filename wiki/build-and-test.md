@@ -39,6 +39,9 @@ subprojects apply by id (no version):
   `-PuseMavenLocal`-gated `mavenLocal`), `plugin.yml`/`messages` resource
   expansion, the base test setup, the shaded-jar defaults (`archiveClassifier=""`,
   `mergeServiceFiles`, `:jar` disabled), and the `copyPlugin` dev-server staging.
+- **`io.paradaux.static-analysis-conventions`** — applied by `jvm-conventions`
+  (so by every JVM project) and by the root project: Error Prone, NullAway and
+  Spotless. See [Static analysis](#static-analysis).
 
 Each project still owns what genuinely differs: its **shadow relocations**, its
 **dependencies**, and (treasury/business) its **jacoco coverage gate**. ChestShop
@@ -126,11 +129,17 @@ Things worth knowing if you touch it:
 ## Testing
 
 ```bash
+./gradlew check                # everything CI gates on, all projects
 ./gradlew test                 # all tests, all projects
 ./gradlew :treasury:test       # one project
 ./gradlew test -PskipIT        # fast loop: unit tests only (Treasury & Business)
 ```
 
+- **`check` is the CI contract.** CI runs `./gradlew build` (every project's
+  `check` plus `assemble`), so anything wired into a project's `check` gates
+  merges with no workflow change. See [ci-cd.md](ci-cd.md#the-ci-pipeline-ciyml).
+- The **build cache** is enabled in `gradle.properties`; `--no-build-cache` forces
+  a task to re-run when you suspect a stale cached result.
 - **Treasury & Business** enforce a **≥ 95 % line coverage** gate on their in-scope
   set (`jacocoTestCoverageVerification`, wired into `check`). Bukkit/I-O glue is
   excluded from the in-scope set.
@@ -138,15 +147,93 @@ Things worth knowing if you touch it:
   MariaDB**:
   - **Locally:** an embedded MariaDB is unpacked and run by **MariaDB4j** — no
     Docker needed. `-PskipIT` skips these for a fast unit-only loop.
-  - **In CI:** the workflows start a **MariaDB service container** and point tests
-    at it via `TREASURY_TEST_JDBC_URL` / `BUSINESS_TEST_JDBC_URL`, bypassing
+  - **In CI:** the `JVM` job starts a **MariaDB 10.11 service container** and
+    points each suite at its own database via `TREASURY_TEST_JDBC_URL`,
+    `BUSINESS_TEST_JDBC_URL`, `TREASURYAPI_TEST_JDBC_URL` and
+    `TREASURY_REST_TEST_JDBC_URL` (plus `_DB_USER` / `_DB_PASS`), bypassing
     MariaDB4j (whose bundled binary needs system libs CI runners don't ship).
+    Set the same variables to run against a local MariaDB.
 
 > **Heads-up (Windows):** MariaDB4j can be flaky under heavy local build load —
 > `mysqld` installs and initializes but occasionally times out reaching
 > "ready for connections" within its 30 s window. It's environmental, not a code
 > issue. Use `-PskipIT` for fast iteration, or point the tests at a real MariaDB
 > the way CI does.
+
+## Static analysis
+
+Every JVM project runs **Error Prone** (+ **NullAway**) inside `javac` and a
+ratcheted **Spotless** check in `check`. Config lives in
+`build-logic/src/main/kotlin/io.paradaux.static-analysis-conventions.gradle.kts`.
+
+### Formatting (Spotless)
+
+```bash
+./gradlew spotlessApply        # format everything you've changed
+./gradlew spotlessCheck        # what CI runs (part of ./gradlew check)
+```
+
+- Java: **palantir-java-format**. Build scripts: **ktlint** (`intellij_idea`
+  style). `*.md`/`*.yml`/`*.sql`: no trailing whitespace, newline at EOF.
+- **Ratcheted from `origin/develop`**: only files that differ from it are checked
+  or formatted, so the tree is converted one touched file at a time instead of
+  in one reformat that would conflict with every open branch. Touch a file, and
+  the *whole* file must be formatted — run `spotlessApply` before committing.
+- The ref must exist locally (`git fetch origin develop`; in CI, check out with
+  `fetch-depth: 0`). If it's missing, Spotless is skipped with a warning — and
+  `check` fails when `CI=true`, so a shallow CI checkout can't pass silently.
+  Ratchet from something else with `-PspotlessRatchetFrom=<ref>`.
+
+### Error Prone
+
+Findings at ERROR fail compilation (main **and** test sources). On top of Error
+Prone's defaults these are promoted to ERROR: `BigDecimalEquals`,
+`BigDecimalLiteralDouble`, `MissingCasesInEnumSwitch`, `StringCaseLocaleUsage`,
+`DefaultCharset`, `FutureReturnValueIgnored`, `CatchAndPrintStackTrace`,
+`OperatorPrecedence`, `UnusedVariable`, `UnusedMethod`. Everything else is a
+warning. Fix the finding; the message links the check's docs and usually a fix.
+
+If the check is genuinely wrong at that spot, suppress it on the **narrowest**
+element with a one-line reason — never file- or module-wide:
+
+```java
+// Identity is the point: a cause chain that loops back on itself.
+@SuppressWarnings("ReferenceEquality")
+private static Throwable root(Throwable t) { ... }
+```
+
+To promote another check, or to understand why one is left as a warning, see
+the comments next to `promotedChecks` in the convention plugin.
+
+### NullAway
+
+NullAway is an ERROR, main sources only, and **scoped per project** to code that
+has been annotated:
+
+| Project | Null-checked packages |
+|---|---|
+| `:common` | `io.paradaux.common` |
+| `:test-support` | `io.paradaux.hibernia.testsupport` |
+| `:treasury:treasury-api` | `io.paradaux.treasury` |
+| `:business:business-api` | `io.paradaux.business` |
+
+Everything else (the plugins, `treasury-rest-api`, all tests) is unchecked.
+Inside the scope, an unannotated type means *non-null*; mark anything that can be
+null with `org.jetbrains.annotations.Nullable` (the annotation the published APIs
+already use). Lombok `@Data`/`@NoArgsConstructor` beans are treated as
+externally initialised (MyBatis/Jackson fill them), but a nullable column still
+needs `@Nullable` on its field. To widen the scope, add the project to
+`nullAwayScope` in the convention plugin and fix what it reports.
+
+### Layering (ArchUnit)
+
+Each plugin module and `treasury-rest-api` has an `ArchitectureTest` (plain
+JUnit, runs with `test`) enforcing the
+[architectural layering](conventions.md#architectural-layering) on the compiled
+main classes: entrypoints (commands, listeners, tasks/jobs, dialogs, controllers)
+never depend on mappers, mappers never depend on services or entrypoints, and
+services never depend on entrypoints. Known, documented exceptions are spelled out
+in each test's javadoc rather than frozen silently.
 
 ## Live integration tests
 
@@ -183,8 +270,14 @@ runs the tests and tears everything down. Work files and logs go to
 - **Iterating:** `IT_SKIP_BUILD=1` reuses the jars from the last run;
   `IT_GRADLE_ARGS` passes extra arguments to the plugin build (for example
   `-PuseMavenLocal` to test against a locally published hibernia-framework).
-- **In CI:** the **Integration Tests (live server)** workflow runs the same script
-  on pull requests that touch a plugin, the REST API, the migrations or the suite.
+- **Timings:** the test task ends by printing the ten slowest classes and tests, and
+  writes every duration to `integration-tests/tests/build/reports/test-timings.txt`.
+- **Waiting in tests:** never `Thread.sleep` for the server. Poll converging state with
+  `Await`, and before asserting that something did *not* happen use a positive barrier
+  (`Barrier.sync` / `Barrier.settle`) — see the suite README.
+- **In CI:** the `Integration (live server)` job in `ci.yml` runs the same script
+  on every push to `develop`/`main`, nightly, and on pull requests that touch a
+  plugin, the REST API, `common`, the migrations, the build files or the suite.
 
 ## The web app (`economy-explorer`)
 
@@ -200,8 +293,9 @@ npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
 
 The SQL integration suite and the Playwright end-to-end suite both need a
-**disposable** MariaDB — every table in it is dropped and reseeded from
-`test/integration/schema.sql` + `seed.sql`:
+**disposable** MariaDB — every table in it is dropped, rebuilt by applying the
+real `economy-flyway` migrations in version order (from Node; no JVM needed), and
+reseeded from `test/integration/seed.sql`:
 
 ```bash
 export DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=economy_test DB_USERNAME=... DB_PASSWORD=...
@@ -210,9 +304,14 @@ npx playwright install chromium     # once
 npm run test:e2e                    # seeds the DB, builds + starts the app, runs every spec
 ```
 
+The e2e suite includes `test/e2e/a11y.spec.ts`, an axe-core scan of every
+top-level route (logged out and as the shim roles) that fails on serious or
+critical violations.
+
 `test:e2e` refuses a `DB_NAME` that doesn't contain `test`. Set `E2E_BASE_URL` to
 run only the public specs against an instance that is already running; nothing is
-seeded or started in that mode. CI runs both suites in **Economy Explorer · CI**.
+seeded or started in that mode. CI runs both suites in the `Explorer` job of `ci.yml`
+(e2e only when the explorer changed, on PRs).
 
 ## Adding a new module
 

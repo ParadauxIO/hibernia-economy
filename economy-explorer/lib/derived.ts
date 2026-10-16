@@ -10,10 +10,10 @@ export function gini(values: number[]): number {
   if (n === 0) return 0;
   let cumulative = 0;
   let weighted = 0;
-  for (let i = 0; i < n; i++) {
-    cumulative += v[i];
-    weighted += v[i] * (i + 1);
-  }
+  v.forEach((x, i) => {
+    cumulative += x;
+    weighted += x * (i + 1);
+  });
   if (cumulative === 0) return 0;
   return (2 * weighted) / (n * cumulative) - (n + 1) / n;
 }

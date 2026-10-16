@@ -237,8 +237,8 @@ export async function topItemsWithSeries(days: number, limit: number): Promise<I
 
   return items.map((i) => {
     const series = byKey.get(i.item_key) ?? [];
-    const current = series.length ? series[series.length - 1].price : null;
-    const first = series.length ? series[0].price : null;
+    const current = series.at(-1)?.price ?? null;
+    const first = series.at(0)?.price ?? null;
     const change = first && first > 0 && current != null ? (current - first) / first : null;
     return { ...i, series, current_price: current, price_change_pct: change };
   });

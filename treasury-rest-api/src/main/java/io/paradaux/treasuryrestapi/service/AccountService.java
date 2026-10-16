@@ -10,14 +10,13 @@ import io.paradaux.treasuryrestapi.mapper.FirmMapper;
 import io.paradaux.treasuryrestapi.model.AccountBalance;
 import io.paradaux.treasuryrestapi.model.BaltopRow;
 import io.paradaux.treasuryrestapi.util.Pagination;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Account reads that aren't transaction history: current balance and the
@@ -66,8 +65,7 @@ public class AccountService {
         boolean hasUuid = uuid != null && !uuid.isBlank();
         boolean hasName = name != null && !name.isBlank();
         if (hasUuid == hasName) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_QUERY",
-                    "Provide exactly one of 'uuid' or 'name'.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_QUERY", "Provide exactly one of 'uuid' or 'name'.");
         }
 
         UUID playerUuid;
@@ -75,30 +73,32 @@ public class AccountService {
             try {
                 playerUuid = UUID.fromString(uuid.trim());
             } catch (IllegalArgumentException e) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_QUERY",
-                        "Query parameter 'uuid' is not a valid UUID.");
+                throw new ApiException(
+                        HttpStatus.BAD_REQUEST, "INVALID_QUERY", "Query parameter 'uuid' is not a valid UUID.");
             }
         } else {
             String trimmed = name.trim();
             playerUuid = firmMapper.findPlayerUuidByName(trimmed);
             if (playerUuid == null) {
-                throw new ApiException(HttpStatus.NOT_FOUND, "PLAYER_NOT_FOUND",
-                        "No player known by the name '" + name + "'.");
+                throw new ApiException(
+                        HttpStatus.NOT_FOUND, "PLAYER_NOT_FOUND", "No player known by the name '" + name + "'.");
             }
             // PAR-144: governments run as player alts of the same name. A bare name
             // that is both a player and a non-archived GOVERNMENT account is
             // ambiguous — refuse rather than silently returning the personal
             // account; the caller should query by uuid to disambiguate.
             if (accountMapper.existsGovernmentAccountByName(trimmed)) {
-                throw new ApiException(HttpStatus.CONFLICT, "AMBIGUOUS_NAME",
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "AMBIGUOUS_NAME",
                         "'" + name + "' is both a player and a government account; query by 'uuid' to disambiguate.");
             }
         }
 
         Long accountId = accountMapper.findPersonalAccountIdByOwner(playerUuid);
         if (accountId == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND",
-                    "The target player has no personal account.");
+            throw new ApiException(
+                    HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "The target player has no personal account.");
         }
 
         String playerName = hasName ? name.trim() : firmMapper.findPlayerNameByUuid(playerUuid);
@@ -116,12 +116,11 @@ public class AccountService {
      */
     public BaltopResponse getBaltop(int page, int limit) {
         if (page < 1) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAM",
-                    "Query parameter 'page' must be >= 1.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAM", "Query parameter 'page' must be >= 1.");
         }
         if (limit < 1 || limit > 100) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PARAM",
-                    "Query parameter 'limit' must be between 1 and 100.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "INVALID_PARAM", "Query parameter 'limit' must be between 1 and 100.");
         }
         int offset = Pagination.offset(page, limit);
 
@@ -131,8 +130,12 @@ public class AccountService {
         List<BaltopEntry> items = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
             BaltopRow row = rows.get(i);
-            items.add(new BaltopEntry(offset + i + 1, row.getAccountId(), row.getOwnerUuid().toString(),
-                    row.getPlayerName(), row.getBalance().toPlainString()));
+            items.add(new BaltopEntry(
+                    offset + i + 1,
+                    row.getAccountId(),
+                    row.getOwnerUuid().toString(),
+                    row.getPlayerName(),
+                    row.getBalance().toPlainString()));
         }
         int totalPages = (int) Math.ceil((double) totalItems / limit);
         return new BaltopResponse(page, totalPages, totalItems, items);

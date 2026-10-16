@@ -1,27 +1,5 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.PartialFillCalculator;
-
-import io.paradaux.chestshop.model.Account;
-import io.paradaux.chestshop.model.PendingTransaction;
-import io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.services.InventoryService;
-import io.paradaux.chestshop.services.MaterialService;
-import org.bukkit.Material;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.mockito.stubbing.Answer;
-
-import java.math.BigDecimal;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.UUID;
-
 import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
 import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +9,26 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.chestshop.model.Account;
+import io.paradaux.chestshop.model.PendingTransaction;
+import io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.InventoryService;
+import io.paradaux.chestshop.services.MaterialService;
+import io.paradaux.chestshop.services.PartialFillCalculator;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.mockito.stubbing.Answer;
 
 /**
  * Drives {@link PartialFillCalculator#adjustBuy}/{@link PartialFillCalculator#adjustSell}
@@ -82,8 +80,8 @@ class PartialFillCalculatorTest {
         });
         // getItemsStacked echoes the requested stack (no new mocks created inside the answer —
         // creating/stubbing a Mockito mock mid-answer corrupts the stubbing state).
-        lenient().when(inventory.getItemsStacked(any(ItemStack.class)))
-                .thenAnswer(i -> new ItemStack[]{i.getArgument(0)});
+        lenient().when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i ->
+                new ItemStack[] {i.getArgument(0)});
     }
 
     // ── stateful ItemStack fake ───────────────────────────────────────────────
@@ -95,7 +93,10 @@ class PartialFillCalculatorTest {
         Answer<Object> behaviour = inv -> switch (inv.getMethod().getName()) {
             case "getType" -> type;
             case "getAmount" -> amt[0];
-            case "setAmount" -> { amt[0] = inv.getArgument(0); yield null; }
+            case "setAmount" -> {
+                amt[0] = inv.getArgument(0);
+                yield null;
+            }
             case "clone" -> item(type, amt[0]);
             case "toString" -> "Item(" + type + "x" + amt[0] + ")";
             case "equals" -> inv.getMock() == inv.getArgument(0);
@@ -105,8 +106,11 @@ class PartialFillCalculatorTest {
         return mock(ItemStack.class, behaviour);
     }
 
-    private PendingTransaction ctx(ItemStack[] stock, BigDecimal price, boolean unlimited,
-                                   io.paradaux.chestshop.model.Transaction.TransactionType type) {
+    private PendingTransaction ctx(
+            ItemStack[] stock,
+            BigDecimal price,
+            boolean unlimited,
+            io.paradaux.chestshop.model.Transaction.TransactionType type) {
         return new PendingTransaction(ownerInv, clientInv, stock, price, client, ownerAccount, null, type, unlimited);
     }
 
@@ -114,7 +118,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_returnsImmediately_whenAlreadyCancelled() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 1)}, new BigDecimal("5"), false, BUY);
         ctx.setCancelled(TransactionOutcome.INVALID_SHOP);
         calc.adjustBuy(ctx);
         assertThat(ctx.getTransactionOutcome()).isEqualTo(TransactionOutcome.INVALID_SHOP);
@@ -122,21 +126,21 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_returnsImmediately_forSellTransaction() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 1)}, new BigDecimal("5"), false, SELL);
         calc.adjustBuy(ctx);
         assertThat(ctx.isCancelled()).isFalse();
     }
 
     @Test
     void adjustBuy_returnsImmediately_whenNoItems() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 0)}, new BigDecimal("5"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 0)}, new BigDecimal("5"), false, BUY);
         calc.adjustBuy(ctx);
         assertThat(ctx.isCancelled()).isFalse();
     }
 
     @Test
     void adjustSell_returnsImmediately_whenAlreadyCancelled() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 1)}, new BigDecimal("5"), false, SELL);
         ctx.setCancelled(TransactionOutcome.INVALID_SHOP);
         calc.adjustSell(ctx);
         assertThat(ctx.getTransactionOutcome()).isEqualTo(TransactionOutcome.INVALID_SHOP);
@@ -144,14 +148,14 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_returnsImmediately_forBuyTransaction() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 1)}, new BigDecimal("5"), false, BUY);
         calc.adjustSell(ctx);
         assertThat(ctx.isCancelled()).isFalse();
     }
 
     @Test
     void adjustSell_returnsImmediately_whenNoItems() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 0)}, new BigDecimal("5"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 0)}, new BigDecimal("5"), false, SELL);
         calc.adjustSell(ctx);
         assertThat(ctx.isCancelled()).isFalse();
     }
@@ -162,14 +166,17 @@ class PartialFillCalculatorTest {
 
     @Test
     void getAmountOfAffordableItems_freeItem_isTheWholeRequest() {
-        assertThat(PartialFillCalculatorImpl.getAmountOfAffordableItems(BigDecimal.ZERO, BigDecimal.ZERO, 64)).isEqualTo(64);
-        assertThat(PartialFillCalculatorImpl.getAmountOfAffordableItems(new BigDecimal("-5"), new BigDecimal("0.00"), 3)).isEqualTo(3);
+        assertThat(PartialFillCalculatorImpl.getAmountOfAffordableItems(BigDecimal.ZERO, BigDecimal.ZERO, 64))
+                .isEqualTo(64);
+        assertThat(PartialFillCalculatorImpl.getAmountOfAffordableItems(
+                        new BigDecimal("-5"), new BigDecimal("0.00"), 3))
+                .isEqualTo(3);
     }
 
     @Test
     void adjustBuy_freeShop_fundsCheckFailing_stillFillsTheWholeOrder() {
         // e.g. an overdrawn buyer: hasFunds(0) is false, which used to divide the wallet by 0.
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("0.00"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("0.00"), false, BUY);
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("-3.00");
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
@@ -183,7 +190,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_fullyAffordableAndInStock_completesUnchanged() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), false, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
@@ -196,7 +203,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_cancelsWhenCannotAffordASingleItem() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("100.00"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("100.00"), false, BUY);
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("5.00"); // price/item=10 → affords 0
         calc.adjustBuy(ctx);
@@ -206,7 +213,7 @@ class PartialFillCalculatorTest {
     @Test
     void adjustBuy_scalesDownToAffordableAmount() {
         // 10 items @ 100 total = 10/item. Wallet 45 → affords 4 → scaled price 40.00.
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("100.00"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("100.00"), false, BUY);
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("45.00");
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
@@ -221,7 +228,7 @@ class PartialFillCalculatorTest {
     @Test
     void adjustBuy_cancelsWhenAffordableAmountRoundsPriceToZero() {
         // 0.04/100 = 0.0004 per item; wallet 0.0004 → affords 1 → scaled 0.0004 → 0.00 at 2dp.
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 100)}, new BigDecimal("0.04"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 100)}, new BigDecimal("0.04"), false, BUY);
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("0.0004");
         calc.adjustBuy(ctx);
@@ -232,14 +239,14 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_scalesToOwnerStock_whenChestPartlyStocked() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), false, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(false); // not fully stocked
         Map<ItemStack, Integer> counts = new LinkedHashMap<>();
         counts.put(item(Material.STONE, 10), 10);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getAmount(any(), eq(ownerInv))).thenReturn(4);
-        when(inventory.getItemStacked(any(), eq(4))).thenReturn(new ItemStack[]{item(Material.STONE, 4)});
+        when(inventory.getItemStacked(any(), eq(4))).thenReturn(new ItemStack[] {item(Material.STONE, 4)});
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
 
         calc.adjustBuy(ctx);
@@ -250,7 +257,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_cancelsWhenOwnerHasNoStock() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), false, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(false);
         Map<ItemStack, Integer> counts = new LinkedHashMap<>();
@@ -266,14 +273,14 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_cancelsWhenOwnerStockScalesPriceToZero() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 100)}, new BigDecimal("0.04"), false, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 100)}, new BigDecimal("0.04"), false, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(false);
         Map<ItemStack, Integer> counts = new LinkedHashMap<>();
         counts.put(item(Material.STONE, 100), 100);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getAmount(any(), eq(ownerInv))).thenReturn(1); // 0.0004*1 → 0.00
-        when(inventory.getItemStacked(any(), eq(1))).thenReturn(new ItemStack[]{item(Material.STONE, 1)});
+        when(inventory.getItemStacked(any(), eq(1))).thenReturn(new ItemStack[] {item(Material.STONE, 1)});
 
         calc.adjustBuy(ctx);
 
@@ -282,7 +289,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_unlimitedOwner_skipsStockCheck() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), true, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), true, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
         calc.adjustBuy(ctx);
@@ -293,16 +300,16 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_scalesToClientSpace_whenInventoryPartlyFull() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), true, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), true, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(false);
         Map<ItemStack, Integer> counts = new LinkedHashMap<>();
         counts.put(item(Material.STONE, 10), 10);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{null, null});
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{null}); // 1 empty slot → holds up to 64
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 10)});
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {null, null});
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {null}); // 1 empty slot → holds up to 64
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 10)});
 
         calc.adjustBuy(ctx);
 
@@ -311,15 +318,15 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_cancelsWhenClientHasNoSpace() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), true, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), true, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(false);
         Map<ItemStack, Integer> counts = new LinkedHashMap<>();
         counts.put(item(Material.STONE, 10), 10);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{null}); // no matching items, free=0
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{item(Material.STONE, 64)}); // 0 empty slots
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {null}); // no matching items, free=0
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {item(Material.STONE, 64)}); // 0 empty slots
         when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[0]);
 
         calc.adjustBuy(ctx);
@@ -329,16 +336,16 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustBuy_cancelsWhenClientSpaceScalesPriceToZero() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 100)}, new BigDecimal("0.04"), true, BUY);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 100)}, new BigDecimal("0.04"), true, BUY);
         economy.hasFunds = (u, a) -> true;
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(false);
         Map<ItemStack, Integer> counts = new LinkedHashMap<>();
         counts.put(item(Material.STONE, 100), 100);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{null});
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{null}); // 1 empty slot
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 1)});
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {null});
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {null}); // 1 empty slot
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 1)});
 
         calc.adjustBuy(ctx);
 
@@ -349,7 +356,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_ownerNotEconomicallyActive_skipsShopFundsCheck() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), true, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), true, SELL);
         economy.ownerEconomicallyActive = false; // unlimited server-less shop
         when(inventory.hasItems(any(), eq(clientInv))).thenReturn(true);
         calc.adjustSell(ctx);
@@ -358,7 +365,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_scalesToShopFunds() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("100.00"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("100.00"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("45.00"); // affords 4 @10/item
@@ -373,7 +380,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_cancelsWhenShopCannotAffordOne() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("100.00"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("100.00"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("5.00"); // affords 0
@@ -383,7 +390,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_cancelsWhenShopFundsScaleToZero() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 100)}, new BigDecimal("0.04"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 100)}, new BigDecimal("0.04"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("0.0004"); // affords 1 → 0.00
@@ -393,7 +400,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_scalesToClientStock() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(clientInv))).thenReturn(false);
@@ -401,7 +408,7 @@ class PartialFillCalculatorTest {
         counts.put(item(Material.STONE, 10), 10);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getAmount(any(), eq(clientInv))).thenReturn(4);
-        when(inventory.getItemStacked(any(), eq(4))).thenReturn(new ItemStack[]{item(Material.STONE, 4)});
+        when(inventory.getItemStacked(any(), eq(4))).thenReturn(new ItemStack[] {item(Material.STONE, 4)});
         when(inventory.fits(any(ItemStack[].class), eq(ownerInv))).thenReturn(true);
 
         calc.adjustSell(ctx);
@@ -412,7 +419,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_cancelsWhenClientHasNoStock() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(clientInv))).thenReturn(false);
@@ -429,7 +436,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_cancelsWhenClientStockScalesToZero() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 100)}, new BigDecimal("0.04"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 100)}, new BigDecimal("0.04"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(clientInv))).thenReturn(false);
@@ -437,7 +444,7 @@ class PartialFillCalculatorTest {
         counts.put(item(Material.STONE, 100), 100);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getAmount(any(), eq(clientInv))).thenReturn(1);
-        when(inventory.getItemStacked(any(), eq(1))).thenReturn(new ItemStack[]{item(Material.STONE, 1)});
+        when(inventory.getItemStacked(any(), eq(1))).thenReturn(new ItemStack[] {item(Material.STONE, 1)});
 
         calc.adjustSell(ctx);
 
@@ -446,7 +453,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_scalesToOwnerSpace() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(clientInv))).thenReturn(true);
@@ -455,9 +462,9 @@ class PartialFillCalculatorTest {
         counts.put(item(Material.STONE, 10), 10);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(ownerInv.getContents()).thenReturn(new ItemStack[]{null});
-        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[]{null});
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 10)});
+        when(ownerInv.getContents()).thenReturn(new ItemStack[] {null});
+        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[] {null});
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 10)});
 
         calc.adjustSell(ctx);
 
@@ -466,7 +473,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_cancelsWhenOwnerHasNoSpace() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("10.00"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(clientInv))).thenReturn(true);
@@ -475,8 +482,8 @@ class PartialFillCalculatorTest {
         counts.put(item(Material.STONE, 10), 10);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(ownerInv.getContents()).thenReturn(new ItemStack[]{null});
-        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[]{item(Material.STONE, 64)}); // 0 empty
+        when(ownerInv.getContents()).thenReturn(new ItemStack[] {null});
+        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[] {item(Material.STONE, 64)}); // 0 empty
         when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[0]);
 
         calc.adjustSell(ctx);
@@ -486,7 +493,7 @@ class PartialFillCalculatorTest {
 
     @Test
     void adjustSell_cancelsWhenOwnerSpaceScalesToZero() {
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 100)}, new BigDecimal("0.04"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 100)}, new BigDecimal("0.04"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> true;
         when(inventory.hasItems(any(), eq(clientInv))).thenReturn(true);
@@ -495,9 +502,9 @@ class PartialFillCalculatorTest {
         counts.put(item(Material.STONE, 100), 100);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(ownerInv.getContents()).thenReturn(new ItemStack[]{null});
-        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[]{null});
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 1)});
+        when(ownerInv.getContents()).thenReturn(new ItemStack[] {null});
+        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[] {null});
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 1)});
 
         calc.adjustSell(ctx);
 
@@ -510,7 +517,7 @@ class PartialFillCalculatorTest {
         // server-less admin shop. walletMoney / pricePerItem then far exceeds Integer.MAX_VALUE.
         // intValueExact() would throw ArithmeticException and abort the trade on the main thread;
         // the affordable amount must instead clamp to the requested item count (10 here).
-        PendingTransaction ctx = ctx(new ItemStack[]{item(Material.STONE, 10)}, new BigDecimal("0.01"), false, SELL);
+        PendingTransaction ctx = ctx(new ItemStack[] {item(Material.STONE, 10)}, new BigDecimal("0.01"), false, SELL);
         economy.ownerEconomicallyActive = true;
         economy.hasFunds = (u, a) -> false; // force the scale-to-affordable branch
         economy.balance = u -> BigDecimal.valueOf(Double.MAX_VALUE); // astronomically large wallet
@@ -534,7 +541,7 @@ class PartialFillCalculatorTest {
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("60.00"); // 1/item → affords 60
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[]{i.getArgument(0)});
+        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[] {i.getArgument(0)});
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
 
@@ -552,7 +559,7 @@ class PartialFillCalculatorTest {
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("80.00"); // affords 80
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[]{i.getArgument(0)});
+        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[] {i.getArgument(0)});
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
 
@@ -570,7 +577,7 @@ class PartialFillCalculatorTest {
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("1000.00"); // affords 1000, stock only 10
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[]{i.getArgument(0)});
+        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[] {i.getArgument(0)});
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
 
@@ -592,10 +599,10 @@ class PartialFillCalculatorTest {
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
         // one partial 40-stack in-inventory → 24 free; plus 2 empty storage slots
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40), null, null});
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40), null, null});
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40), null, null});
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40), null, null});
         // free=24 + 2 empty slots*64 → all 100 fit; return a single 100 stack.
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 100)});
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 100)});
 
         calc.adjustBuy(ctx);
 
@@ -614,10 +621,10 @@ class PartialFillCalculatorTest {
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
         // no partial stacks (free=0), only 1 empty slot → caps to 64
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{null});
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{null});
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {null});
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {null});
         // free=0, 1 empty slot → capped to 64.
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 64)});
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 64)});
 
         calc.adjustBuy(ctx);
 
@@ -637,10 +644,10 @@ class PartialFillCalculatorTest {
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
         // partial 40-stack → 24 free, which already covers the 10 requested; no empty slots.
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40)});
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40)}); // 0 empty
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40)});
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40)}); // 0 empty
         // amount (10) <= free (24) → all 10 fit inside the partial stack.
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 10)});
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 10)});
 
         calc.adjustBuy(ctx);
 
@@ -657,7 +664,7 @@ class PartialFillCalculatorTest {
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("80.00"); // affords all 80
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[]{i.getArgument(0)});
+        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[] {i.getArgument(0)});
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
 
@@ -675,7 +682,7 @@ class PartialFillCalculatorTest {
         economy.hasFunds = (u, a) -> false;
         economy.balance = u -> new BigDecimal("94.00"); // affords all 94
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[]{i.getArgument(0)});
+        when(inventory.getItemsStacked(any(ItemStack.class))).thenAnswer(i -> new ItemStack[] {i.getArgument(0)});
         when(inventory.hasItems(any(), eq(ownerInv))).thenReturn(true);
         when(inventory.fits(any(ItemStack[].class), eq(clientInv))).thenReturn(true);
 
@@ -695,9 +702,9 @@ class PartialFillCalculatorTest {
         counts.put(item(Material.STONE, 30), 30);
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40)}); // 24 free
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40)}); // 0 empty
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 24)});
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40)}); // 24 free
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40)}); // 0 empty
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 24)});
 
         calc.adjustBuy(ctx);
 
@@ -719,9 +726,9 @@ class PartialFillCalculatorTest {
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
         // one real partial stack (contributes free) and a null slot (must be skipped).
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40), null});
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{item(Material.STONE, 40), null}); // 1 empty
-        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[]{item(Material.STONE, 10)});
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40), null});
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {item(Material.STONE, 40), null}); // 1 empty
+        when(inventory.getItemStacked(any(), anyInt())).thenReturn(new ItemStack[] {item(Material.STONE, 10)});
 
         calc.adjustBuy(ctx);
 
@@ -740,8 +747,8 @@ class PartialFillCalculatorTest {
         when(inventory.getItemCounts(any())).thenReturn(counts);
         when(inventory.getMaxStackSize(any())).thenReturn(64);
         // a full 64-stack (0 free) and no empty slots → nothing fits.
-        when(clientInv.getContents()).thenReturn(new ItemStack[]{item(Material.STONE, 64)});
-        when(clientInv.getStorageContents()).thenReturn(new ItemStack[]{item(Material.STONE, 64)});
+        when(clientInv.getContents()).thenReturn(new ItemStack[] {item(Material.STONE, 64)});
+        when(clientInv.getStorageContents()).thenReturn(new ItemStack[] {item(Material.STONE, 64)});
         when(inventory.getItemStacked(any(), anyInt())).thenAnswer(i -> new ItemStack[0]);
 
         calc.adjustBuy(ctx);
@@ -762,17 +769,60 @@ class PartialFillCalculatorTest {
         java.util.function.Function<java.util.UUID, java.math.BigDecimal> balance = u -> java.math.BigDecimal.ZERO;
         boolean hasAccount = true;
         boolean settleResult = true;
-        int settleCalls = 0;
-        int migrateCalls = 0;
-        @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
-        @Override public String format(java.math.BigDecimal amount) { return amount.toPlainString(); }
-        @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
-        @Override public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) { return hasFunds.test(account, amount); }
-        @Override public java.math.BigDecimal getBalance(java.util.UUID account) { return balance.apply(account); }
-        @Override public boolean hasAccount(java.util.UUID account) { return hasAccount; }
-        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { settleCalls++; return settleResult; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { migrateCalls++; }
+
+        @Override
+        public void bind(
+                io.paradaux.treasury.api.TreasuryApi treasury,
+                int systemAccountId,
+                io.paradaux.treasury.api.TaxApi taxApi) {
+            /* unused headless */
+        }
+
+        @Override
+        public String format(java.math.BigDecimal amount) {
+            return amount.toPlainString();
+        }
+
+        @Override
+        public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) {
+            return ownerEconomicallyActive;
+        }
+
+        @Override
+        public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) {
+            return hasFunds.test(account, amount);
+        }
+
+        @Override
+        public java.math.BigDecimal getBalance(java.util.UUID account) {
+            return balance.apply(account);
+        }
+
+        @Override
+        public boolean hasAccount(java.util.UUID account) {
+            return hasAccount;
+        }
+
+        @Override
+        public boolean settle(
+                java.math.BigDecimal amount,
+                org.bukkit.entity.Player initiator,
+                java.util.UUID partner,
+                io.paradaux.chestshop.model.Transaction txn) {
+            return settleResult;
+        }
+
+        @Override
+        public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) {}
     }
 }

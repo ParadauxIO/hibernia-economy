@@ -1,15 +1,14 @@
 package io.paradaux.business.mappers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmAccount;
 import io.paradaux.business.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class FirmAccountsMapperIT extends IntegrationTestBase {
 
@@ -37,11 +36,10 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         firmAccounts.insertFirmAccount(firmId, removed);
         firmAccounts.removeFirmAccount(firmId, removed);
 
-        assertThat(firmAccounts.listActiveAccountLinks())
-                .singleElement().satisfies(link -> {
-                    assertThat(link.getFirmId()).isEqualTo(firmId);
-                    assertThat(link.getAccountId()).isEqualTo(live);
-                });
+        assertThat(firmAccounts.listActiveAccountLinks()).singleElement().satisfies(link -> {
+            assertThat(link.getFirmId()).isEqualTo(firmId);
+            assertThat(link.getAccountId()).isEqualTo(live);
+        });
     }
 
     @Test
@@ -104,7 +102,8 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         firms.archiveFirm(firmId);
 
         assertThat(firmAccounts.listAccountsByFirm(firmId))
-                .extracting(FirmAccount::getAccountId).containsExactly(retained);
+                .extracting(FirmAccount::getAccountId)
+                .containsExactly(retained);
         assertThat(firmAccounts.getFirmIdByAccountId(retained)).isEqualTo(firmId);
         assertThat(firmAccounts.getFirmIdByAccountId(removed)).isNull();
         assertThat(firmAccounts.listAccountsByFirm(-1)).isEmpty();
@@ -138,6 +137,7 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         assertThat(firmAccounts.resolveShopAlias("acme")).isNull();
         assertThat(firmAccounts.setShopAlias(firmId, account, "other")).isZero();
     }
+
     @Test
     void shopAliasReservationSurvivesClearingAndCannotChangeAccount() throws Exception {
         int original = insertStubAccount("Original");

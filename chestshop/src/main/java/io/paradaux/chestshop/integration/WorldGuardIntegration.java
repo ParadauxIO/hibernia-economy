@@ -17,20 +17,17 @@ import com.sk89q.worldguard.protection.flags.StateFlag;
 import com.sk89q.worldguard.protection.flags.registry.FlagConflictException;
 import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
-
 import io.paradaux.chestshop.model.BuildPermission;
 import io.paradaux.chestshop.model.ProtectionCheck;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.ProtectionService;
 import io.paradaux.chestshop.services.ShopDisplayService;
 import io.paradaux.chestshop.utils.BlockUtil;
-
+import java.util.Comparator;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.plugin.Plugin;
-
-import java.util.Comparator;
 
 /**
  * WorldGuard soft-dependency, self-contained: region/built-in chest protection (the custom
@@ -52,7 +49,8 @@ public class WorldGuardIntegration implements Integration {
     private final ShopDisplayService displays;
 
     @Inject
-    public WorldGuardIntegration(ProtectionService protection, ChestShopConfiguration config, ShopDisplayService displays) {
+    public WorldGuardIntegration(
+            ProtectionService protection, ChestShopConfiguration config, ShopDisplayService displays) {
         this.displays = displays;
         this.protection = protection;
         this.config = config;
@@ -87,18 +85,24 @@ public class WorldGuardIntegration implements Integration {
     /** Region IDs are stable; prefer priority, then ID for deterministic overlapping regions. */
     static final class RegionNames {
         static String at(org.bukkit.Location location) {
-            RegionManager manager = WorldGuard.getInstance().getPlatform().getRegionContainer()
+            RegionManager manager = WorldGuard.getInstance()
+                    .getPlatform()
+                    .getRegionContainer()
                     .get(BukkitAdapter.adapt(location.getWorld()));
             if (manager == null) return "";
-            return select(manager.getApplicableRegions(BukkitAdapter.asBlockVector(location)).getRegions());
+            return select(manager.getApplicableRegions(BukkitAdapter.asBlockVector(location))
+                    .getRegions());
         }
 
         static String select(java.util.Set<ProtectedRegion> regions) {
             return regions.stream()
                     .filter(region -> !region.getId().equals("__global__"))
-                    .sorted(Comparator.comparingInt(ProtectedRegion::getPriority).reversed()
+                    .sorted(Comparator.comparingInt(ProtectedRegion::getPriority)
+                            .reversed()
                             .thenComparing(ProtectedRegion::getId))
-                    .map(ProtectedRegion::getId).findFirst().orElse("");
+                    .map(ProtectedRegion::getId)
+                    .findFirst()
+                    .orElse("");
         }
     }
 
@@ -117,8 +121,7 @@ public class WorldGuardIntegration implements Integration {
             ENABLE_SHOP = flag;
         }
 
-        private ShopFlag() {
-        }
+        private ShopFlag() {}
     }
 
     /** WorldGuard region / built-in chest protection (WORLDGUARD_USE_PROTECTION). */
@@ -150,7 +153,8 @@ public class WorldGuardIntegration implements Integration {
             if (manager == null) {
                 return;
             }
-            ApplicableRegionSet set = manager.getApplicableRegions(location.toVector().toBlockPoint());
+            ApplicableRegionSet set =
+                    manager.getApplicableRegions(location.toVector().toBlockPoint());
 
             StateFlag flag = Flags.CHEST_ACCESS;
             if (BlockUtil.isSign(block)) {
@@ -163,7 +167,8 @@ public class WorldGuardIntegration implements Integration {
         }
 
         private boolean canAccess(LocalPlayer player, Block block, Location location) {
-            BukkitWorldConfiguration wcfg = (BukkitWorldConfiguration) platform.getGlobalStateManager().get((World) location.getExtent());
+            BukkitWorldConfiguration wcfg =
+                    (BukkitWorldConfiguration) platform.getGlobalStateManager().get((World) location.getExtent());
             return !wcfg.signChestProtection
                     || !wcfg.getChestProtection().isChest(BukkitAdapter.asBlockType(block.getType()))
                     || !wcfg.getChestProtection().isProtected(location, player);
@@ -189,12 +194,14 @@ public class WorldGuardIntegration implements Integration {
         }
 
         void canBuild(BuildPermission event) {
-            ApplicableRegionSet regions = getApplicableRegions(event.getSign().getBlock().getLocation());
+            ApplicableRegionSet regions =
+                    getApplicableRegions(event.getSign().getBlock().getLocation());
 
             if (regions == null) {
                 event.allow(false);
             } else if (config.isWorldguardUseFlag()) {
-                event.allow(regions.queryState(worldGuard.wrapPlayer(event.getPlayer()), ShopFlag.ENABLE_SHOP) == StateFlag.State.ALLOW);
+                event.allow(regions.queryState(worldGuard.wrapPlayer(event.getPlayer()), ShopFlag.ENABLE_SHOP)
+                        == StateFlag.State.ALLOW);
             } else {
                 event.allow(regions.size() > 0);
             }
@@ -205,7 +212,8 @@ public class WorldGuardIntegration implements Integration {
             if (regionManager == null) {
                 return null;
             }
-            return regionManager.getApplicableRegions(BukkitAdapter.adapt(location).toVector().toBlockPoint());
+            return regionManager.getApplicableRegions(
+                    BukkitAdapter.adapt(location).toVector().toBlockPoint());
         }
     }
 }

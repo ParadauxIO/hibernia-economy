@@ -13,6 +13,7 @@ import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { SectionTabs } from '@/components/SectionTabs';
 import { WindowTabs } from '@/components/WindowTabs';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(7).max(30).default(30), view: z.enum(['accounts', 'fines']).catch('accounts'), page: z.coerce.number().int().min(1).catch(1), q: z.string().optional(), status: z.enum(['active', 'revoked']).optional().catch(undefined) });
 
@@ -73,7 +74,7 @@ export default async function GovernmentPage({
         <div className="card-title">
           Government accounts <span className="sub">non-archived</span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Government accounts">
           <table className="data-table">
             <thead>
               <tr>
@@ -107,7 +108,7 @@ export default async function GovernmentPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       </> : <>
@@ -116,7 +117,7 @@ export default async function GovernmentPage({
         <div className="card-title">
           Recent fines <span className="sub">{fmtN(total)} matching this window</span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Recent fines">
           <table className="data-table">
             <thead>
               <tr>
@@ -148,7 +149,7 @@ export default async function GovernmentPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
       <Pagination page={sp.page} totalPages={Math.max(1, Math.ceil(total / 25))} totalItems={total} basePath="/government" searchParams={{ view: 'fines', days: String(sp.days), q: sp.q, status: sp.status }} />
       </>}

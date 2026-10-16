@@ -1,6 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { addGroupMemberAction, removeGroupMemberAction } from '@/lib/actions/admin';
+import { TableWrap } from '@/components/TableWrap';
 
 interface Member {
   uuid: string;
@@ -48,7 +49,7 @@ export function MemberManager({ groupId, members, disabled = false }: { groupId:
         {err && <span className="state-error" style={{ fontSize: 11 }}>{err}</span>}
       </form>
 
-      <div className="table-wrap">
+      <TableWrap label="Group members">
         <table className="data-table">
           <thead>
             <tr><th>Player</th><th>Source</th><th>Actions</th></tr>
@@ -72,7 +73,7 @@ export function MemberManager({ groupId, members, disabled = false }: { groupId:
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
     </div>
   );
 }

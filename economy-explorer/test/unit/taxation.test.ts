@@ -28,7 +28,7 @@ describe('tax revenue summaries', () => {
     expect(data.accounts).toEqual([]);
     expect(data.byType).toHaveLength(5);
     expect(data.daily).toHaveLength(31);
-    expect(data.daily[0].date).toBe('2026-05-16');
+    expect(data.daily[0]?.date).toBe('2026-05-16');
   });
   it('bounds all user input to the two cache windows', () => {
     expect(taxationDays('7')).toBe(7);

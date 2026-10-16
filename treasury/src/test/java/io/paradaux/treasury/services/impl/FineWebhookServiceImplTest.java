@@ -1,5 +1,11 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+
 import com.sun.net.httpserver.HttpServer;
 import io.paradaux.treasury.model.config.FineWebhookConfiguration;
 import io.paradaux.treasury.model.economy.Account;
@@ -7,11 +13,6 @@ import io.paradaux.treasury.model.economy.GovernmentFine;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.testsupport.TestConfigs;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
@@ -20,11 +21,10 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class FineWebhookServiceImplTest {
 
@@ -37,7 +37,7 @@ class FineWebhookServiceImplTest {
     private PlayerDirectoryService playerDirectory;
 
     private static final UUID OFFENDER = UUID.randomUUID();
-    private static final UUID ISSUER   = UUID.randomUUID();
+    private static final UUID ISSUER = UUID.randomUUID();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -110,7 +110,7 @@ class FineWebhookServiceImplTest {
 
         assertThat(callCount).hasValue(1);
         String body = lastPayload.get();
-        assertThat(body).contains("\"color\":15548997");   // 0xED4245 red
+        assertThat(body).contains("\"color\":15548997"); // 0xED4245 red
         assertThat(body).contains("Fine Issued");
         assertThat(body).contains("Offender");
         assertThat(body).contains("$250.00");
@@ -131,7 +131,7 @@ class FineWebhookServiceImplTest {
         svc(true, hookUrl()).sendFineRevoked(fine);
 
         String body = lastPayload.get();
-        assertThat(body).contains("\"color\":5763719");    // 0x57F287 green
+        assertThat(body).contains("\"color\":5763719"); // 0x57F287 green
         assertThat(body).contains("Fine Revoked");
         assertThat(body).contains("Amount Refunded");
         assertThat(body).contains("reverse txn #55555");
@@ -144,8 +144,14 @@ class FineWebhookServiceImplTest {
         when(accountService.getAccountById(12)).thenReturn(business);
 
         GovernmentFine firmFine = GovernmentFine.builder()
-                .fineId(8).playerUuid(null).debtorAccountId(12).govAccountId(50)
-                .amount(new BigDecimal("1000.00")).reason("dumping").txnId(1).issuedBy(ISSUER)
+                .fineId(8)
+                .playerUuid(null)
+                .debtorAccountId(12)
+                .govAccountId(50)
+                .amount(new BigDecimal("1000.00"))
+                .reason("dumping")
+                .txnId(1)
+                .issuedBy(ISSUER)
                 .build();
 
         svc(true, hookUrl()).sendFineIssued(firmFine);
@@ -172,6 +178,8 @@ class FineWebhookServiceImplTest {
 
     @Test
     void unreachableHost_swallowsException() {
-        svc(true, "http://127.0.0.1:1/never-listens").sendFineIssued(playerFine());
+        // Port 1 reliably refuses; a webhook outage must never fail the fine itself.
+        assertThatCode(() -> svc(true, "http://127.0.0.1:1/never-listens").sendFineIssued(playerFine()))
+                .doesNotThrowAnyException();
     }
 }

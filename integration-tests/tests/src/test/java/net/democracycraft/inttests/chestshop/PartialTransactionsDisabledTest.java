@@ -53,7 +53,7 @@ class PartialTransactionsDisabledTest {
             RconClient.send("diag warmname " + seller);
 
             shop.clickBuy(b, buyer);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click), so the rejection is final.
 
             // All-or-nothing: nothing moved.
             assertThat(Ledger.personalBalance(b.getUuid()).orElseThrow()).isEqualByComparingTo(STARTING);

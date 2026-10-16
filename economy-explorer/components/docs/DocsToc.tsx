@@ -13,8 +13,8 @@ export function DocsToc({ headings }: { headings: DocHeading[] }) {
     if (headings.length < 2) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries.filter((e) => e.isIntersecting);
-        if (visible.length) setActive((visible[0].target as HTMLElement).id);
+        const first = entries.find((e) => e.isIntersecting);
+        if (first) setActive((first.target as HTMLElement).id);
       },
       // Fire as a heading nears the top of the viewport.
       { rootMargin: '0px 0px -70% 0px', threshold: 0 },

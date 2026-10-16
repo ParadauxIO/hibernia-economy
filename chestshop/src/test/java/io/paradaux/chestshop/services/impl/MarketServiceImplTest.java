@@ -1,5 +1,10 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.api.BusinessApi;
 import io.paradaux.business.api.FirmApi;
 import io.paradaux.business.model.Firm;
@@ -7,6 +12,7 @@ import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.utils.MaterialUtil;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.ShopQueryApi;
@@ -15,6 +21,9 @@ import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.ChestShopShopRecord;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
+import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -28,19 +37,6 @@ import org.bukkit.plugin.ServicePriority;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.world.WorldMock;
-
-import java.lang.reflect.Method;
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import io.paradaux.chestshop.support.ServerTest;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * The market DTO builder + Treasury API holder. Real MockBukkit signs, items and inventories;
@@ -119,14 +115,14 @@ class MarketServiceImplTest extends ServerTest {
     void init_marketWithoutTreasury_isDisabled() {
         register(MarketApi.class, mock(MarketApi.class)); // market present, treasury absent
         market.init();
-        assertThat(market.enabled()).isFalse();       // market != null but treasury == null
+        assertThat(market.enabled()).isFalse(); // market != null but treasury == null
         assertThat(market.searchEnabled()).isFalse(); // shopQuery absent
     }
 
     @Test
     void init_nothingRegistered_isDisabled() {
         market.init(); // server up, no providers -> every getRegistration returns null
-        assertThat(market.enabled()).isFalse();        // market == null short-circuits
+        assertThat(market.enabled()).isFalse(); // market == null short-circuits
         assertThat(market.searchEnabled()).isFalse();
     }
 
@@ -295,7 +291,7 @@ class MarketServiceImplTest extends ServerTest {
 
     @Test
     void totalAmount_sumsSkippingNulls() {
-        assertThat(market.totalAmount(new ItemStack[]{item(Material.DIAMOND, 5), null, item(Material.DIAMOND, 3)}))
+        assertThat(market.totalAmount(new ItemStack[] {item(Material.DIAMOND, 5), null, item(Material.DIAMOND, 3)}))
                 .isEqualTo(8);
     }
 
@@ -315,8 +311,17 @@ class MarketServiceImplTest extends ServerTest {
         when(itemCodes.encode(sword, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("DIAMOND_SWORD");
 
         Sign sign = signAt(0, 5, 0, "Owner", "1", "B 10", "Diamond Sword");
-        ChestShopSaleRecord rec = market.sale(sign, sword, 4, UUID.randomUUID(), personalOwner(),
-                BigDecimal.valueOf(40), BigDecimal.valueOf(2), "BUY", 100, 7L);
+        ChestShopSaleRecord rec = market.sale(
+                sign,
+                sword,
+                4,
+                UUID.randomUUID(),
+                personalOwner(),
+                BigDecimal.valueOf(40),
+                BigDecimal.valueOf(2),
+                "BUY",
+                100,
+                7L);
 
         assertThat(rec.material()).isEqualTo("DIAMOND_SWORD");
         assertThat(rec.itemKey()).isEqualTo("nexo:excalibur#01");
@@ -337,14 +342,14 @@ class MarketServiceImplTest extends ServerTest {
 
         Sign sign = signAt(1, 5, 1, "Owner", "1", "B 10", "Stone");
         MarketService.Owner admin = new MarketService.Owner(null, null, null, null, true);
-        ChestShopSaleRecord rec = market.sale(sign, stone, 0, UUID.randomUUID(), admin,
-                BigDecimal.valueOf(10), null, "SELL", 50, null);
+        ChestShopSaleRecord rec =
+                market.sale(sign, stone, 0, UUID.randomUUID(), admin, BigDecimal.valueOf(10), null, "SELL", 50, null);
 
         assertThat(rec.unitPrice()).isEqualByComparingTo("10"); // quantity 0 -> unit = total
-        assertThat(rec.taxAmount()).isEqualByComparingTo("0");  // null tax -> ZERO
-        assertThat(rec.shopStock()).isNull();                   // admin -> stock hidden
+        assertThat(rec.taxAmount()).isEqualByComparingTo("0"); // null tax -> ZERO
+        assertThat(rec.shopStock()).isNull(); // admin -> stock hidden
         assertThat(rec.itemCustom()).isFalse();
-        assertThat(rec.itemData()).isNull();                    // not custom -> no data
+        assertThat(rec.itemData()).isNull(); // not custom -> no data
     }
 
     @Test
@@ -356,8 +361,17 @@ class MarketServiceImplTest extends ServerTest {
         Sign sign = mock(Sign.class);
         when(sign.getLocation()).thenReturn(new Location(null, 3, 4, 5));
 
-        ChestShopSaleRecord rec = market.sale(sign, stone, 2, UUID.randomUUID(), personalOwner(),
-                BigDecimal.valueOf(10), BigDecimal.ZERO, "BUY", 1, 1L);
+        ChestShopSaleRecord rec = market.sale(
+                sign,
+                stone,
+                2,
+                UUID.randomUUID(),
+                personalOwner(),
+                BigDecimal.valueOf(10),
+                BigDecimal.ZERO,
+                "BUY",
+                1,
+                1L);
         assertThat(rec.world()).isNull();
         assertThat(rec.signX()).isEqualTo(3);
     }
@@ -392,9 +406,9 @@ class MarketServiceImplTest extends ServerTest {
         MarketService.Owner admin = new MarketService.Owner(null, null, null, null, true);
         ChestShopShopRecord rec = market.shop(sign, stone, admin, 32, 100);
 
-        assertThat(rec.buyPrice()).isNull();          // no buy offered -> nonNegativeOrNull(NO_PRICE)
+        assertThat(rec.buyPrice()).isNull(); // no buy offered -> nonNegativeOrNull(NO_PRICE)
         assertThat(rec.sellPrice()).isEqualByComparingTo("5");
-        assertThat(rec.currentStock()).isNull();      // admin
+        assertThat(rec.currentStock()).isNull(); // admin
         assertThat(rec.estimatedCapacity()).isNull(); // admin
     }
 
@@ -429,7 +443,7 @@ class MarketServiceImplTest extends ServerTest {
 
         Sign sign = mock(Sign.class);
         when(sign.getLocation()).thenReturn(new Location(null, 10, 20, 30));
-        when(sign.getLines()).thenReturn(new String[]{"Owner", "8", "B 10", "Stone"});
+        when(sign.getLines()).thenReturn(new String[] {"Owner", "8", "B 10", "Stone"});
         org.bukkit.block.sign.SignSide side = mock(org.bukkit.block.sign.SignSide.class);
         when(sign.getSide(Side.FRONT)).thenReturn(side);
         when(side.line(2)).thenReturn(Component.text("B 10"));
@@ -444,8 +458,8 @@ class MarketServiceImplTest extends ServerTest {
 
     private ChestShopSaleRecord saleOf(ItemStack it) {
         Sign sign = signAt(0, 6, 0, "Owner", "1", "B 10", "x");
-        return market.sale(sign, it, 1, UUID.randomUUID(), personalOwner(),
-                BigDecimal.TEN, BigDecimal.ZERO, "BUY", 1, 1L);
+        return market.sale(
+                sign, it, 1, UUID.randomUUID(), personalOwner(), BigDecimal.TEN, BigDecimal.ZERO, "BUY", 1, 1L);
     }
 
     /** A meta-less item — MockBukkit's real ItemStacks always report {@code hasItemMeta()}. */
@@ -484,9 +498,9 @@ class MarketServiceImplTest extends ServerTest {
         when(items.getName(stone, 0)).thenThrow(new RuntimeException("no resolver")); // canonicalCode -> null
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE#3");
         ChestShopSaleRecord rec = saleOf(stone);
-        assertThat(rec.itemCustom()).isTrue();      // vanilla contains '#'
+        assertThat(rec.itemCustom()).isTrue(); // vanilla contains '#'
         assertThat(rec.itemKey()).isEqualTo("STONE#3"); // code null -> encode
-        assertThat(rec.itemName()).isEqualTo("Stone");  // canonical null -> pretty(type)
+        assertThat(rec.itemName()).isEqualTo("Stone"); // canonical null -> pretty(type)
     }
 
     @Test
@@ -498,7 +512,7 @@ class MarketServiceImplTest extends ServerTest {
         when(items.getName(diamond, 0)).thenReturn("DIAMOND");
         when(itemCodes.encode(diamond, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("DIAMOND");
         ChestShopSaleRecord rec = saleOf(diamond);
-        assertThat(rec.itemCustom()).isTrue();   // canonical==vanilla, no '#', but hasItemMeta
+        assertThat(rec.itemCustom()).isTrue(); // canonical==vanilla, no '#', but hasItemMeta
         assertThat(rec.itemName()).isEqualTo("Diamond");
     }
 
@@ -526,7 +540,7 @@ class MarketServiceImplTest extends ServerTest {
     @Test
     void identity_customWithBlankCanonical_namesFromType() {
         ItemStack stone = noMetaItem(Material.STONE);
-        when(items.getName(stone, 0)).thenReturn("   ");   // canonical present but blank
+        when(items.getName(stone, 0)).thenReturn("   "); // canonical present but blank
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE#1");
         ChestShopSaleRecord rec = saleOf(stone);
         assertThat(rec.itemCustom()).isTrue();

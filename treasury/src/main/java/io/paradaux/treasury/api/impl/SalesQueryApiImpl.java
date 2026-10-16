@@ -6,11 +6,11 @@ import io.paradaux.treasury.api.market.SaleRow;
 import io.paradaux.treasury.api.market.SalesQuery;
 import io.paradaux.treasury.api.market.SalesSummary;
 import io.paradaux.treasury.mappers.ChestShopSalesReadMapper;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.mybatis.guice.transactional.Transactional;
 
 /**
  * Reads the ChestShop sales tracker for the in-game sales commands (PAR-176).
@@ -21,10 +21,19 @@ import java.util.List;
 public class SalesQueryApiImpl implements SalesQueryApi {
 
     private final ChestShopSalesReadMapper mapper;
+    private final Clock clock;
 
     @Inject
     public SalesQueryApiImpl(ChestShopSalesReadMapper mapper) {
+        // System default zone: the window bound is compared with the TIMESTAMP column as
+        // the DB session renders it, so it keeps the JVM-local wall time it always used.
+        this(mapper, Clock.systemDefaultZone());
+    }
+
+    /** Test seam: pins "now" so the windowDays lower bound is deterministic. */
+    SalesQueryApiImpl(ChestShopSalesReadMapper mapper, Clock clock) {
         this.mapper = mapper;
+        this.clock = clock;
     }
 
     @Override
@@ -49,8 +58,8 @@ public class SalesQueryApiImpl implements SalesQueryApi {
         SalesSummary summary = mapper.summarizeTotals(query, since);
         if (summary == null) {
             // COUNT(*) always returns a row, so this is defensive only.
-            summary = new SalesSummary(0, 0, BigDecimal.ZERO, BigDecimal.ZERO,
-                    0, BigDecimal.ZERO, 0, BigDecimal.ZERO, null, null);
+            summary = new SalesSummary(
+                    0, 0, BigDecimal.ZERO, BigDecimal.ZERO, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO, null, null);
         }
         summary.setTopItems(mapper.topItems(query, since, topN));
         summary.setTopCustomers(mapper.topCustomers(query, since, topN));
@@ -71,8 +80,7 @@ public class SalesQueryApiImpl implements SalesQueryApi {
                 + (query.getOwnerUuid() != null ? 1 : 0)
                 + (query.getAccountId() != null ? 1 : 0);
         if (scopes == 0) {
-            throw new IllegalArgumentException(
-                    "SalesQuery requires an owner scope (firmId, ownerUuid or accountId)");
+            throw new IllegalArgumentException("SalesQuery requires an owner scope (firmId, ownerUuid or accountId)");
         }
         if (scopes > 1) {
             throw new IllegalArgumentException(
@@ -81,8 +89,8 @@ public class SalesQueryApiImpl implements SalesQueryApi {
     }
 
     /** Absolute lower bound for the query window, or null for all-time. */
-    private static LocalDateTime since(SalesQuery query) {
+    private LocalDateTime since(SalesQuery query) {
         Integer days = query.getWindowDays();
-        return (days == null) ? null : LocalDateTime.now().minusDays(days);
+        return (days == null) ? null : LocalDateTime.now(clock).minusDays(days);
     }
 }

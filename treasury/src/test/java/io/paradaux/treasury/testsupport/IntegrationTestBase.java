@@ -2,22 +2,28 @@ package io.paradaux.treasury.testsupport;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import io.paradaux.hibernia.testsupport.db.TestDatabase;
+import io.paradaux.hibernia.testsupport.db.TestDatabaseExtension;
 import io.paradaux.treasury.guice.DatabaseModule;
+import java.nio.ByteBuffer;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.UUID;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Statement;
-
 /**
- * Base class for integration tests that hit a real MariaDB via Testcontainers.
+ * Base class for integration tests that hit a real MariaDB — embedded MariaDB4j
+ * locally, or the server named by {@code TREASURY_TEST_JDBC_URL} in CI — through the
+ * shared {@link TestDatabaseExtension} harness in test-support.
  *
- * <p>The container is started once per JVM and shared across every subclass.
- * Each test method gets a clean slate via {@link MariadbContainerExtension#truncateAll}.
+ * <p>The database is booted and migrated once per JVM and shared across every
+ * subclass. Before each test the harness resets every table to its just-migrated
+ * state; after each test it runs {@code ops/money-invariants.sql} and fails the test
+ * if the ledger was left inconsistent (opt out with {@code @SkipLedgerInvariants}).
  *
  * <p>Subclasses receive a fully-wired Guice {@link Injector} with the production
  * service implementations and {@link TestServicesModule} bindings for configurations
@@ -26,58 +32,70 @@ import java.sql.Statement;
 @Tag("integration")
 public abstract class IntegrationTestBase {
 
+    public static final TestDatabase DATABASE = TestDatabase.of("treasury_test", "TREASURY");
+
     @RegisterExtension
-    static final ContextHolder CONTEXT = new ContextHolder();
+    static final TestDatabaseExtension DB = new TestDatabaseExtension(DATABASE);
 
     protected DataSource dataSource;
     protected Injector injector;
 
     @BeforeEach
-    void setUpIntegration() throws Exception {
-        this.dataSource = MariadbContainerExtension.dataSource(CONTEXT.context);
-        MariadbContainerExtension.truncateAll(dataSource);
-        this.injector = Guice.createInjector(
-                new DatabaseModule(dataSource),
-                new TestServicesModule()
-        );
+    void setUpIntegration() {
+        this.dataSource = DB.dataSource();
+        this.injector = Guice.createInjector(new DatabaseModule(dataSource), new TestServicesModule());
     }
 
     /**
-     * Drop the economy-schema V20 ChestShop market foreign keys
-     * ({@code fk_cs_sale_*} / {@code fk_cs_shop_*}) if present. The market /
-     * sales-query ITs exercise the mapper SQL with synthetic txn/account/firm
-     * ids rather than seeding real ledger/accounts/firm rows, so FK enforcement
-     * on those two analytics tables is dropped for those tests. Best-effort and
-     * idempotent — a missing constraint is ignored.
+     * Seeds the parent rows the V20 ChestShop market foreign keys reference
+     * ({@code chestshop_sale.txn_id → ledger_txns}, {@code shop_account_id →
+     * accounts}, {@code shop_firm_id → firm}) under the fixed ids the market ITs use.
+     *
+     * <p>Those ITs used to drop the five FKs instead, which removed them for the rest
+     * of the JVM (and, on a persistent database, for every later run), so every other
+     * IT then ran against a weaker schema than production. Seeding the referenced
+     * rows keeps the constraints in force. The rows carry no postings, so the ledger
+     * invariants are unaffected. Explicit ids are fine here: none of these parents has
+     * a foreign key of its own that would need FK checks relaxed.
      */
-    protected void dropChestShopMarketForeignKeys() {
-        String[] drops = {
-                "ALTER TABLE chestshop_sale DROP FOREIGN KEY fk_cs_sale_txn",
-                "ALTER TABLE chestshop_sale DROP FOREIGN KEY fk_cs_sale_account",
-                "ALTER TABLE chestshop_sale DROP FOREIGN KEY fk_cs_sale_firm",
-                "ALTER TABLE chestshop_shop DROP FOREIGN KEY fk_cs_shop_account",
-                "ALTER TABLE chestshop_shop DROP FOREIGN KEY fk_cs_shop_firm",
-        };
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
-            for (String drop : drops) {
-                try {
-                    st.execute(drop);
-                } catch (SQLException ignore) {
-                    // Constraint already absent (dropped by a prior test on the
-                    // shared container, or not yet created) — nothing to do.
+    protected void seedMarketReferences(long[] txnIds, int[] accountIds, int[] firmIds) {
+        try (Connection c = dataSource.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO ledger_txns (txn_id, message, initiator_uuid_bin) VALUES (?, 'market IT fixture', ?)")) {
+                for (long id : txnIds) {
+                    ps.setLong(1, id);
+                    ps.setBytes(2, uuidBytes(UUID.randomUUID()));
+                    ps.executeUpdate();
+                }
+            }
+            try (PreparedStatement ps =
+                    c.prepareStatement("INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name) "
+                            + "VALUES (?, 'BUSINESS', ?, ?)")) {
+                for (int id : accountIds) {
+                    ps.setInt(1, id);
+                    ps.setBytes(2, uuidBytes(UUID.randomUUID()));
+                    ps.setString(3, "market-fixture-" + id);
+                    ps.executeUpdate();
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO firm (firm_id, display_name, proprietor_uuid_bin) VALUES (?, ?, ?)")) {
+                for (int id : firmIds) {
+                    ps.setInt(1, id);
+                    ps.setString(2, "Market Fixture Firm " + id);
+                    ps.setBytes(3, uuidBytes(UUID.randomUUID()));
+                    ps.executeUpdate();
                 }
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to drop ChestShop market foreign keys for test setup", e);
+            throw new IllegalStateException("Failed to seed ChestShop market FK parents", e);
         }
     }
 
-    /** Captures an ExtensionContext so the static container helper can access JUnit's store. */
-    static final class ContextHolder
-            implements org.junit.jupiter.api.extension.BeforeAllCallback {
-        ExtensionContext context;
-        @Override public void beforeAll(ExtensionContext ctx) {
-            this.context = ctx;
-        }
+    private static byte[] uuidBytes(UUID uuid) {
+        return ByteBuffer.allocate(16)
+                .putLong(uuid.getMostSignificantBits())
+                .putLong(uuid.getLeastSignificantBits())
+                .array();
     }
 }

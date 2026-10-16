@@ -21,6 +21,7 @@ import { resolveTheme } from '@/lib/theme';
 import { serverIdentity, blueMapUrl } from '@/lib/serverIdentity';
 import { getViewer } from '@/lib/auth/viewer';
 import { hasPermission } from '@/lib/auth/access';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -55,8 +56,8 @@ export default async function ItemDetailPage({
   // Windows capped at 30 days (there isn't more data yet, and tighter windows
   // give denser, readable candles).
   const candleWindowDays = sp.interval === '1h' ? 7 : sp.interval === '4h' ? 14 : 30;
-  const candlesFrom = new Date(Date.now() - candleWindowDays * 24 * 60 * 60 * 1000);
   const candlesTo = new Date();
+  const candlesFrom = new Date(candlesTo.getTime() - candleWindowDays * 24 * 60 * 60 * 1000);
 
   const [viewer, sales, totalSales, sellers, totalSellers, byDay, samples, theme, [offers, offerCount]] = await Promise.all([
     getViewer(),
@@ -102,8 +103,10 @@ export default async function ItemDetailPage({
   const avgPrice = last30Quantity > 0 ? last30Volume / last30Quantity : null;
 
   // 30-day price movement (first vs last daily avg unit price).
-  const firstPrice = byDay.length ? parseFloat(byDay[0].avg_unit_price) : null;
-  const lastPrice = byDay.length ? parseFloat(byDay[byDay.length - 1].avg_unit_price) : null;
+  const firstDay = byDay.at(0);
+  const lastDay = byDay.at(-1);
+  const firstPrice = firstDay ? parseFloat(firstDay.avg_unit_price) : null;
+  const lastPrice = lastDay ? parseFloat(lastDay.avg_unit_price) : null;
   const changePct = firstPrice && firstPrice > 0 && lastPrice != null ? (lastPrice - firstPrice) / firstPrice : null;
   const dir = changePct == null ? 'flat' : changePct > 0.001 ? 'up' : changePct < -0.001 ? 'down' : 'flat';
 
@@ -210,7 +213,7 @@ export default async function ItemDetailPage({
             <JsonButton filename={`item-${fileKey}-sellers.json`} data={sellersExport} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Historical sellers">
           <table className="data-table">
             <thead>
               <tr>
@@ -239,7 +242,7 @@ export default async function ItemDetailPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {/* Sales feed — individual transactions (money + quantity per sale) are
@@ -268,7 +271,7 @@ export default async function ItemDetailPage({
             <JsonButton filename={`item-${fileKey}-sales-page-${sp.page}.json`} data={sales} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Recent sales">
           <table className="data-table">
             <thead>
               <tr>
@@ -310,7 +313,7 @@ export default async function ItemDetailPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
 
         <Pagination
           page={sp.page}

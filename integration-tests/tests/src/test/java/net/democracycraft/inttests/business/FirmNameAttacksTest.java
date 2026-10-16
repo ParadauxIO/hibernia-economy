@@ -1,11 +1,12 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -106,25 +107,18 @@ class FirmNameAttacksTest {
     }
 
     @Test
-    @Disabled("Minecraft chat protocol kicks the player with 'Illegal characters in chat' "
-            + "before the command reaches Business — the attack surface is blocked at the "
-            + "protocol layer. Validation is still a worthwhile defence-in-depth but can't "
-            + "be exercised via the mock chat client. Re-enable via a non-chat injection "
-            + "vector (e.g. REST API ingest) when one is available.")
     void createRejectsNewlineInName() {
-        // Chat-command parsers usually strip newlines but a name carrying
-        // a literal \n in the body would split chat rendering across two
-        // lines. Brigadier discards \n at tokenisation, but the resulting
-        // empty arg should also be rejected as missing — test the path.
-        assertCreateIsRejected("Acme\nEvil" + suffix());
+        // A name carrying a literal \n would split chat rendering across two lines. The
+        // chat protocol refuses it outright (kick), so it can never reach Business. The
+        // same characters through the non-chat vector — the admin firm-rename endpoint —
+        // are covered by AdminApiTest.firmRenameRejectsControlCharacters.
+        assertCreateIsBlockedByProtocol("Acme\nEvil" + suffix());
     }
 
     @Test
-    @Disabled("Minecraft chat protocol kicks the player with 'Illegal characters in chat' "
-            + "before the command reaches Business — see createRejectsNewlineInName.")
     void createRejectsControlCharacters() {
-        // Tab + bell — should be filtered by the character allowlist.
-        assertCreateIsRejected("Acme\t" + suffix());
+        // Tab + bell — likewise refused by the protocol before Business sees them.
+        assertCreateIsBlockedByProtocol("Acme\t\u0007" + suffix());
     }
 
     @Test
@@ -156,6 +150,7 @@ class FirmNameAttacksTest {
                 p.drainMessages();
                 p.chatCommand("/business create ");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -178,6 +173,7 @@ class FirmNameAttacksTest {
                 // Try the same name with different casing.
                 p.chatCommand("/business create " + firm.toUpperCase());
                 String reply = p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 // Should refuse — exact message varies, but it must NOT be
                 // "Successfully created" again.
                 assertThat(reply).doesNotContainIgnoringCase("successfully created");
@@ -216,11 +212,36 @@ class FirmNameAttacksTest {
                 p.drainMessages();
                 p.chatCommand("/business create " + firmName);
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
+                // The reply may not be the handler's last act; wait until it has finished.
+                Barrier.settle();
                 // The cardinal assertion: no row landed in `firm`.
                 assertThat(BusinessLedger.firmExists(firmName))
                         .as("firm row must NOT exist after rejected /business create '" + firmName + "'")
                         .isFalse();
             });
         }
+    }
+
+    /**
+     * Names with characters the chat protocol forbids never reach Business: the server
+     * disconnects the client ("Illegal characters in chat") while decoding the command
+     * packet, before dispatch. Assert that defence — the kick — and its outcome: no firm.
+     * (Business's own validator is unreachable for these through the only entry point.)
+     */
+    private static void assertCreateIsBlockedByProtocol(String firmName) {
+        String player = Usernames.fresh("Crk");
+        try (MockPlayer p = MockPlayer.connectLocal(player)) {
+            Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
+            Ops.run(player, () -> {
+                p.chatCommand("/business create " + firmName);
+                Await.untilTrue(player + " to be disconnected for illegal chat characters",
+                        () -> !p.isConnected(), TIMEOUT);
+            });
+        }
+        // The kick happens before dispatch, so there is no handler to wait for.
+        assertThat(BusinessLedger.firmExists(firmName))
+                .as("firm row must NOT exist after /business create '" + firmName + "'")
+                .isFalse();
     }
 }

@@ -48,28 +48,12 @@ public final class Inv {
 
     /** Wait until {@link #chestCount(BlockPos, String)} reaches {@code expected} or time out. */
     public static void waitForChestCount(BlockPos pos, String material, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = chestCount(pos, material);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Chest at " + pos + " did not reach " + expected + " " + material
-                + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals(material + " in the chest at " + pos, () -> chestCount(pos, material), expected, timeout);
     }
 
     /** Wait until {@link #playerCount(String, String)} reaches {@code expected}. */
     public static void waitForPlayerCount(String player, String material, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = playerCount(player, material);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Player " + player + " did not reach " + expected + " " + material
-                + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals(material + " held by " + player, () -> playerCount(player, material), expected, timeout);
     }
 
     private static int parseCount(String rconReply) {
@@ -78,13 +62,6 @@ public final class Inv {
             throw new IllegalStateException("expected 'count=N' in RCON reply, got: " + rconReply);
         }
         return Integer.parseInt(m.group(1));
-    }
-
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted", e);
-        }
     }
 
     private Inv() {}

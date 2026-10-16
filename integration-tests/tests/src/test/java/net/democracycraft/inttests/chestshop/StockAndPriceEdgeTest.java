@@ -112,7 +112,7 @@ class StockAndPriceEdgeTest {
             Ledger.waitForPersonalBalance(b.getUuid(), budget, TIMEOUT);
 
             shop.clickBuy(b, buyer);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click), so the rejection is final.
 
             // Can't afford a single item → nothing happens.
             assertThat(Ledger.personalBalance(b.getUuid()).orElseThrow()).isEqualByComparingTo(budget);

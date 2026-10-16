@@ -1,0 +1,1790 @@
+{
+  "components" : {
+    "schemas" : {
+      "AccountBalanceResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balance" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AccountByPlayerResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "playerName" : {
+            "type" : "string"
+          },
+          "playerUuid" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BalanceTax" : {
+        "properties" : {
+          "brackets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Bracket"
+            },
+            "type" : "array"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BaltopEntry" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "balance" : {
+            "type" : "string"
+          },
+          "playerName" : {
+            "type" : "string"
+          },
+          "playerUuid" : {
+            "type" : "string"
+          },
+          "rank" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BaltopResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BaltopEntry"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalItems" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalPages" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "Bracket" : {
+        "properties" : {
+          "floor" : {
+            "type" : "string"
+          },
+          "weeklyRate" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ChestShopItemDetailResponse" : {
+        "properties" : {
+          "activeShopCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "avgUnitPrice" : {
+            "type" : "string"
+          },
+          "cheapestShops" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChestShopShopResponse"
+            },
+            "type" : "array"
+          },
+          "itemCustom" : {
+            "type" : "boolean"
+          },
+          "itemKey" : {
+            "type" : "string"
+          },
+          "itemName" : {
+            "type" : "string"
+          },
+          "material" : {
+            "type" : "string"
+          },
+          "priceByDay" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChestShopPricePoint"
+            },
+            "type" : "array"
+          },
+          "totalQuantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalVolume" : {
+            "type" : "string"
+          },
+          "tradeCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "windowDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ChestShopItemResponse" : {
+        "properties" : {
+          "itemCustom" : {
+            "type" : "boolean"
+          },
+          "itemKey" : {
+            "type" : "string"
+          },
+          "itemName" : {
+            "type" : "string"
+          },
+          "material" : {
+            "type" : "string"
+          },
+          "totalQuantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalVolume" : {
+            "type" : "string"
+          },
+          "tradeCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ChestShopItemsResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChestShopItemResponse"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalItems" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalPages" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ChestShopMarketStatsResponse" : {
+        "properties" : {
+          "activeShops" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "distinctItems" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalSales" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalVolume" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ChestShopPricePoint" : {
+        "properties" : {
+          "avgUnitPrice" : {
+            "type" : "string"
+          },
+          "day" : {
+            "type" : "string"
+          },
+          "sales" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalQuantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalVolume" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ChestShopShopResponse" : {
+        "properties" : {
+          "accountType" : {
+            "type" : "string"
+          },
+          "adminShop" : {
+            "type" : "boolean"
+          },
+          "batchQty" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "buyPrice" : {
+            "type" : "string"
+          },
+          "currentSpace" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "currentStock" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "firmId" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "itemCustom" : {
+            "type" : "boolean"
+          },
+          "itemKey" : {
+            "type" : "string"
+          },
+          "itemName" : {
+            "type" : "string"
+          },
+          "lastSeen" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "material" : {
+            "type" : "string"
+          },
+          "ownerName" : {
+            "type" : "string"
+          },
+          "ownerUuid" : {
+            "type" : "string"
+          },
+          "sellPrice" : {
+            "type" : "string"
+          },
+          "shopId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stockAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "world" : {
+            "type" : "string"
+          },
+          "x" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "y" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "z" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "ChestShopShopsResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ChestShopShopResponse"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalItems" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalPages" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "Counterparty" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "accountType" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "ownerUuid" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CreateWebhookRequest" : {
+        "properties" : {
+          "url" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "url" ],
+        "type" : "object"
+      },
+      "CreateWebhookResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "active" : {
+            "type" : "boolean"
+          },
+          "firmId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "secret" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FirmAccountSummaryResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "accountType" : {
+            "type" : "string"
+          },
+          "archived" : {
+            "type" : "boolean"
+          },
+          "balance" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FirmBalanceResponse" : {
+        "properties" : {
+          "displayName" : {
+            "type" : "string"
+          },
+          "firmId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalBalance" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FirmEmployeeResponse" : {
+        "properties" : {
+          "joinedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "playerName" : {
+            "type" : "string"
+          },
+          "playerUuid" : {
+            "type" : "string"
+          },
+          "roleName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FirmResponse" : {
+        "properties" : {
+          "archived" : {
+            "type" : "boolean"
+          },
+          "discordUrl" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "firmId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "hqRegion" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FirmRoleResponse" : {
+        "properties" : {
+          "defaultRole" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "permissions" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "proprietorLike" : {
+            "type" : "boolean"
+          },
+          "rankOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "FirmTransferRequest" : {
+        "properties" : {
+          "amount" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "fromAccountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "memo" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "toFirm" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount", "toFirm" ],
+        "type" : "object"
+      },
+      "FirmUpdateRequest" : {
+        "properties" : {
+          "discordUrl" : {
+            "type" : "string"
+          },
+          "hqRegion" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MeResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "firmId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "keyId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "keyType" : {
+            "type" : "string"
+          },
+          "ownerUuid" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PlayerTransferRequest" : {
+        "properties" : {
+          "amount" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "fromAccountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "memo" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "toPlayerName" : {
+            "type" : "string"
+          },
+          "toPlayerUuid" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount" ],
+        "type" : "object"
+      },
+      "PluginRate" : {
+        "properties" : {
+          "plugin" : {
+            "type" : "string"
+          },
+          "rate" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicFirmResponse" : {
+        "properties" : {
+          "archived" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "defaultAccountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "discordUrl" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "firmId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "hqRegion" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RotateResponse" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "issuedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "keyId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "token" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SourceIncomeTax" : {
+        "properties" : {
+          "defaultRate" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "pluginRates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PluginRate"
+            },
+            "type" : "array"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TaxConfigResponse" : {
+        "properties" : {
+          "balanceTax" : {
+            "$ref" : "#/components/schemas/BalanceTax"
+          },
+          "sourceIncomeTax" : {
+            "$ref" : "#/components/schemas/SourceIncomeTax"
+          }
+        },
+        "type" : "object"
+      },
+      "TransactionFeedResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cursor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "hasMore" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TransactionItem"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TransactionItem" : {
+        "properties" : {
+          "amount" : {
+            "type" : "string"
+          },
+          "counterparty" : {
+            "$ref" : "#/components/schemas/Counterparty"
+          },
+          "initiatorUuid" : {
+            "type" : "string"
+          },
+          "memo" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "pluginSystem" : {
+            "type" : "string"
+          },
+          "postingId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "settledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "txnId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TransactionsResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TransactionItem"
+            },
+            "type" : "array"
+          },
+          "page" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "totalItems" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalPages" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TransferRequest" : {
+        "properties" : {
+          "amount" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "fromAccountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "memo" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "toAccountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "amount", "toAccountId" ],
+        "type" : "object"
+      },
+      "TransferResponse" : {
+        "properties" : {
+          "amount" : {
+            "type" : "string"
+          },
+          "fromAccountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "memo" : {
+            "type" : "string"
+          },
+          "settledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "toAccountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "txnId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "UpdateDisplayNameRequest" : {
+        "properties" : {
+          "displayName" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayName" ],
+        "type" : "object"
+      },
+      "UpdateWebhookRequest" : {
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "WebhookListResponse" : {
+        "properties" : {
+          "webhooks" : {
+            "items" : {
+              "$ref" : "#/components/schemas/WebhookResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "WebhookResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "active" : {
+            "type" : "boolean"
+          },
+          "consecutiveFailures" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "firmId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      }
+    },
+    "securitySchemes" : {
+      "BearerJWT" : {
+        "bearerFormat" : "JWT",
+        "description" : "Pass the full JWT issued by `/treasuryapi personal issue` or `/treasuryapi business issue` in the `Authorization: Bearer <jwt>` header.\n",
+        "in" : "header",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "contact" : {
+      "name" : "DemocracyCraft",
+      "url" : "https://democracycraft.net"
+    },
+    "description" : "HTTP surface for the DemocracyCraft Treasury economy. Players issue an API key in-game with `/treasuryapi`, then use the token to authenticate every call here.\n\n**Two token scopes:**\n- **PERSONAL** — JWT carries an `acc` claim. Source of every transfer is   the player's PERSONAL account.\n- **BUSINESS** — JWT carries a `firm` claim. The caller picks one of the   firm's accounts to debit via the `fromAccountId` body field; the firm   ownership check happens server-side.\n\n**Money is always a decimal string.** Never JSON `number` — IEEE 754 rounding will silently corrupt amounts at scale.\n\n**Errors share a flat envelope** `{ \"error\": \"SNAKE_CASE_CODE\", \"message\": \"...\" }`. The `error` code is stable across versions; the message is informational.\n",
+    "license" : {
+      "name" : "Proprietary"
+    },
+    "title" : "Treasury REST API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/v1/accounts/baltop" : {
+      "get" : {
+        "description" : "**Rate limits:** 10 requests/minute for PERSONAL keys, 10 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getBaltop",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 1,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 10,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BaltopResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "account-controller" ]
+      }
+    },
+    "/api/v1/accounts/by-player" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getAccountByPlayer",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "uuid",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AccountByPlayerResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "account-controller" ]
+      }
+    },
+    "/api/v1/accounts/{accountId}/balance" : {
+      "get" : {
+        "description" : "**Rate limits:** 120 requests/minute for PERSONAL keys, 600 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getBalance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AccountBalanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "account-controller" ]
+      }
+    },
+    "/api/v1/accounts/{accountId}/transactions" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getTransactions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 1,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 20,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransactionsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "account-controller" ]
+      }
+    },
+    "/api/v1/accounts/{accountId}/transactions/feed" : {
+      "get" : {
+        "description" : "**Rate limits:** 120 requests/minute for PERSONAL keys, 600 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getTransactionFeed",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "since",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 0,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransactionFeedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "account-controller" ]
+      }
+    },
+    "/api/v1/auth/me" : {
+      "get" : {
+        "description" : "**Rate limits:** 30 requests/minute for PERSONAL keys, 30 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "me",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "auth-controller" ]
+      }
+    },
+    "/api/v1/auth/rotate" : {
+      "post" : {
+        "description" : "**Rate limits:** 5 requests/minute for PERSONAL keys, 5 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "rotate",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RotateResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "auth-controller" ]
+      }
+    },
+    "/api/v1/chestshop/items" : {
+      "get" : {
+        "description" : "**Rate limits:** 120 requests/minute for PERSONAL keys, 600 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "listItems",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "search",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 1,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 50,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChestShopItemsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "chest-shop-controller" ]
+      }
+    },
+    "/api/v1/chestshop/items/{itemKey}" : {
+      "get" : {
+        "description" : "**Rate limits:** 120 requests/minute for PERSONAL keys, 600 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getItem",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "itemKey",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "days",
+          "required" : false,
+          "schema" : {
+            "default" : 30,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChestShopItemDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "chest-shop-controller" ]
+      }
+    },
+    "/api/v1/chestshop/shops" : {
+      "get" : {
+        "description" : "**Rate limits:** 120 requests/minute for PERSONAL keys, 600 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "listShops",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "itemKey",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "material",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "firmId",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "buyable",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "inStock",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "search",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "page",
+          "required" : false,
+          "schema" : {
+            "default" : 1,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 50,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChestShopShopsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "chest-shop-controller" ]
+      }
+    },
+    "/api/v1/chestshop/stats" : {
+      "get" : {
+        "description" : "**Rate limits:** 120 requests/minute for PERSONAL keys, 600 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "stats",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChestShopMarketStatsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "chest-shop-controller" ]
+      }
+    },
+    "/api/v1/config/tax" : {
+      "get" : {
+        "description" : "**Rate limits:** 120 requests/minute for PERSONAL keys, 600 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "tax",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TaxConfigResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "config-controller" ]
+      }
+    },
+    "/api/v1/firms/me" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getFirm",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FirmResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      },
+      "patch" : {
+        "description" : "**Rate limits:** 15 requests/minute for PERSONAL keys, 60 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "updateFirm",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/FirmUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FirmResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/firms/me/accounts" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "listAccounts",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/FirmAccountSummaryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/firms/me/accounts/{accountId}/display-name" : {
+      "patch" : {
+        "description" : "**Rate limits:** 15 requests/minute for PERSONAL keys, 60 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "updateAccountDisplayName",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateDisplayNameRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FirmAccountSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/firms/me/employees" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "listEmployees",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/FirmEmployeeResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/firms/me/roles" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "listRoles",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/FirmRoleResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/firms/{firmName}" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getPublicFirm",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "firmName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicFirmResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/firms/{firmName}/balance" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getFirmBalance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "firmName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FirmBalanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/transfers" : {
+      "post" : {
+        "description" : "**Rate limits:** 30 requests/minute for PERSONAL keys, 120 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "transfer",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TransferRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "transfer-controller" ]
+      }
+    },
+    "/api/v1/transfers/to-firm" : {
+      "post" : {
+        "description" : "**Rate limits:** 30 requests/minute for PERSONAL keys, 120 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "transferToFirm",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/FirmTransferRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "transfer-controller" ]
+      }
+    },
+    "/api/v1/transfers/to-player" : {
+      "post" : {
+        "description" : "**Rate limits:** 30 requests/minute for PERSONAL keys, 120 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "transferToPlayer",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlayerTransferRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TransferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "transfer-controller" ]
+      }
+    },
+    "/api/v1/webhooks" : {
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 120 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "list",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WebhookListResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "webhook-controller" ]
+      },
+      "post" : {
+        "description" : "**Rate limits:** 20 requests/minute for PERSONAL keys, 60 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "create",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateWebhookRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CreateWebhookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "webhook-controller" ]
+      }
+    },
+    "/api/v1/webhooks/{id}" : {
+      "delete" : {
+        "description" : "**Rate limits:** 20 requests/minute for PERSONAL keys, 60 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "delete",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "webhook-controller" ]
+      },
+      "get" : {
+        "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 120 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "get",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WebhookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "webhook-controller" ]
+      },
+      "patch" : {
+        "description" : "**Rate limits:** 20 requests/minute for PERSONAL keys, 60 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "update",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateWebhookRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/WebhookResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "webhook-controller" ]
+      }
+    }
+  },
+  "security" : [ {
+    "BearerJWT" : [ ]
+  } ]
+}

@@ -1,5 +1,14 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.TransferRequest;
@@ -9,6 +18,16 @@ import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.TreasuryConstants;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.context.ContextManager;
 import net.luckperms.api.context.ImmutableContextSet;
@@ -24,35 +43,26 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class SalaryServiceImplTest {
 
-    @Mock AccountService accountService;
-    @Mock LedgerService ledgerService;
-    @Mock Server server;
-    @Mock LuckPerms luckPerms;
-    @Mock UserManager userManager;
-    @Mock EconomyNotifier notifier;
+    @Mock
+    AccountService accountService;
+
+    @Mock
+    LedgerService ledgerService;
+
+    @Mock
+    Server server;
+
+    @Mock
+    LuckPerms luckPerms;
+
+    @Mock
+    UserManager userManager;
+
+    @Mock
+    EconomyNotifier notifier;
 
     private static final Map<String, BigDecimal> AMOUNTS = Map.of(
             "senator", new BigDecimal("65.0"),
@@ -71,21 +81,34 @@ class SalaryServiceImplTest {
 
     /** Wire an online player whose LuckPerms user resolves to the given groups. */
     private Player onlinePlayer(UUID uuid, String... groups) {
+        return onlinePlayer(false, uuid, groups);
+    }
+
+    /**
+     * As {@link #onlinePlayer(UUID, String...)}; {@code lenient} is for a salaried player
+     * the service must skip before it ever reads their groups (e.g. AFK), so strict
+     * stubs don't flag the group wiring as unused.
+     */
+    private Player onlinePlayer(boolean lenient, UUID uuid, String... groups) {
         Player p = org.mockito.Mockito.mock(Player.class);
-        when(p.getUniqueId()).thenReturn(uuid);
+        stub(lenient, p.getUniqueId()).thenReturn(uuid);
         User user = org.mockito.Mockito.mock(User.class);
         QueryOptions qo = org.mockito.Mockito.mock(QueryOptions.class);
-        when(luckPerms.getUserManager()).thenReturn(userManager);
-        when(userManager.getUser(uuid)).thenReturn(user);
-        when(user.getQueryOptions()).thenReturn(qo);
+        stub(lenient, luckPerms.getUserManager()).thenReturn(userManager);
+        stub(lenient, userManager.getUser(uuid)).thenReturn(user);
+        stub(lenient, user.getQueryOptions()).thenReturn(qo);
         Set<Group> set = new LinkedHashSet<>();
         for (String g : groups) {
             Group grp = org.mockito.Mockito.mock(Group.class);
-            when(grp.getName()).thenReturn(g);
+            stub(lenient, grp.getName()).thenReturn(g);
             set.add(grp);
         }
-        when(user.getInheritedGroups(qo)).thenReturn(set);
+        stub(lenient, user.getInheritedGroups(qo)).thenReturn(set);
         return p;
+    }
+
+    private static <T> org.mockito.stubbing.OngoingStubbing<T> stub(boolean lenient, T call) {
+        return lenient ? org.mockito.Mockito.lenient().when(call) : when(call);
     }
 
     private void online(Player... players) {
@@ -139,6 +162,52 @@ class SalaryServiceImplTest {
         when(ctx.contains("afk", "true")).thenReturn(true); // default afk context
 
         assertThat(service(cfg(true, AMOUNTS), true).planPayroll()).isEmpty();
+    }
+
+    @Test
+    void plan_withAContextManager_paysActivePlayers_andSkipsOnlyTheAfkOnes() {
+        // Both players are salaried; only the AFK context distinguishes them. A
+        // player whose context set is unavailable (null) counts as active.
+        UUID active = UUID.randomUUID();
+        UUID afk = UUID.randomUUID();
+        UUID unknownContext = UUID.randomUUID();
+        Player pActive = onlinePlayer(active, "senator");
+        Player pAfk = onlinePlayer(true, afk, "senator");
+        Player pUnknown = onlinePlayer(unknownContext, "president");
+        online(pActive, pAfk, pUnknown);
+        ContextManager cm = org.mockito.Mockito.mock(ContextManager.class);
+        ImmutableContextSet activeCtx = org.mockito.Mockito.mock(ImmutableContextSet.class);
+        ImmutableContextSet afkCtx = org.mockito.Mockito.mock(ImmutableContextSet.class);
+        when(luckPerms.getContextManager()).thenReturn(cm);
+        when(cm.getContext(pActive)).thenReturn(activeCtx);
+        when(cm.getContext(pAfk)).thenReturn(afkCtx);
+        when(cm.getContext(pUnknown)).thenReturn(null);
+        when(activeCtx.contains("afk", "true")).thenReturn(false);
+        when(afkCtx.contains("afk", "true")).thenReturn(true);
+
+        List<SalaryPayment> plan = service(cfg(true, AMOUNTS), true).planPayroll();
+
+        assertThat(plan).extracting(SalaryPayment::player).containsExactlyInAnyOrder(active, unknownContext);
+    }
+
+    @Test
+    void plan_usesTheConfiguredAfkContext_andPaysAfkPlayersWhenSkippingIsOff() {
+        SalaryConfiguration config = cfg(true, AMOUNTS);
+        UUID u = UUID.randomUUID();
+        Player p = onlinePlayer(u, "senator");
+        online(p);
+        ContextManager cm = org.mockito.Mockito.mock(ContextManager.class);
+        ImmutableContextSet ctx = org.mockito.Mockito.mock(ImmutableContextSet.class);
+        when(luckPerms.getContextManager()).thenReturn(cm);
+        when(cm.getContext(p)).thenReturn(ctx);
+        when(ctx.contains("away", "yes")).thenReturn(true);
+        SalaryServiceImpl svc = service(config, true);
+
+        config.publish(new SalaryConfiguration.Snapshot(true, "DCGovernment", 900, AMOUNTS, true, "away", "yes"));
+        assertThat(svc.planPayroll()).isEmpty();
+
+        config.publish(new SalaryConfiguration.Snapshot(true, "DCGovernment", 900, AMOUNTS, false, "away", "yes"));
+        assertThat(svc.planPayroll()).extracting(SalaryPayment::player).containsExactly(u);
     }
 
     @Test
@@ -213,8 +282,8 @@ class SalaryServiceImplTest {
         when(ledgerService.transferChecked(any())).thenReturn(new LedgerService.TransferResult(1L, true));
 
         Clock clock = Clock.fixed(Instant.ofEpochSecond(1_000_000L), ZoneOffset.UTC);
-        SalaryServiceImpl svc = new SalaryServiceImpl(
-                cfg(true, AMOUNTS), accountService, ledgerService, server, notifier, clock);
+        SalaryServiceImpl svc =
+                new SalaryServiceImpl(cfg(true, AMOUNTS), accountService, ledgerService, server, notifier, clock);
 
         svc.payout(List.of(new SalaryPayment(alice, "senator", new BigDecimal("65.0"))));
 
@@ -262,7 +331,8 @@ class SalaryServiceImplTest {
         when(accountService.getOrCreatePersonalAccountId(b)).thenReturn(2);
         doThrow(new RuntimeException("boom"))
                 .doReturn(new LedgerService.TransferResult(99L, true))
-                .when(ledgerService).transferChecked(any());
+                .when(ledgerService)
+                .transferChecked(any());
 
         List<SalaryPayment> plan = new ArrayList<>();
         plan.add(new SalaryPayment(a, "senator", new BigDecimal("65.0")));
@@ -284,8 +354,8 @@ class SalaryServiceImplTest {
         Player player = onlinePlayer(uuid, "senator");
         doReturn(List.of(player)).when(server).getOnlinePlayers();
         var payroll = svc.preparePayroll();
-        config.publish(new SalaryConfiguration.Snapshot(true, "NewGovernment", 900,
-                Map.of("senator", BigDecimal.ONE), true, "afk", "true"));
+        config.publish(new SalaryConfiguration.Snapshot(
+                true, "NewGovernment", 900, Map.of("senator", BigDecimal.ONE), true, "afk", "true"));
         Account government = new Account();
         government.setAccountId(7);
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(government);

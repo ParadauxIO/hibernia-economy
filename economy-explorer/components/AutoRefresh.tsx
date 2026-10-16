@@ -21,8 +21,8 @@ interface AutoRefreshProps {
 
 export function AutoRefresh({ windowMs = 30_000, lagMs = 1_500, label = 'Live' }: AutoRefreshProps) {
   const router = useRouter();
-  const [lastTick, setLastTick] = useState<number>(Date.now());
-  const [now, setNow] = useState<number>(Date.now());
+  const [lastTick, setLastTick] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   // Schedule each refresh at the next window boundary + lag, then re-arm.
   useEffect(() => {

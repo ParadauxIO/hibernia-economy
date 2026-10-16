@@ -2,20 +2,19 @@ package io.paradaux.business.commands;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.commander.annotations.*;
-import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.OnlineFirmName;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmPlayer;
 import io.paradaux.business.services.*;
-import io.paradaux.business.commands.resolvers.FirmName;
-import io.paradaux.business.commands.resolvers.OnlineFirmName;
+import io.paradaux.hibernia.framework.commander.annotations.*;
+import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
+import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.TransactionEntry;
-import org.bukkit.entity.Player;
-
 import java.math.BigDecimal;
+import org.bukkit.entity.Player;
 
 @Singleton
 @Command({"db", "democracybusiness", "business", "firm", "company"})
@@ -25,20 +24,21 @@ public class MiscCommands implements CommandHandler {
 
     private final FirmService firms;
     private final FirmStaffService staff;
-    private final FirmRoleService roles;
     private final FirmTransactionService audit;
     private final TreasuryApi treasury;
     private final Message message;
     private final FirmNotificationService notifications;
 
     @Inject
-    public MiscCommands(FirmService firms, FirmStaffService staff, FirmRoleService roles,
-                        FirmTransactionService audit,
-                        TreasuryApi treasury, Message message,
-                        FirmNotificationService notifications) {
+    public MiscCommands(
+            FirmService firms,
+            FirmStaffService staff,
+            FirmTransactionService audit,
+            TreasuryApi treasury,
+            Message message,
+            FirmNotificationService notifications) {
         this.firms = firms;
         this.staff = staff;
-        this.roles = roles;
         this.audit = audit;
         this.treasury = treasury;
         this.message = message;
@@ -77,8 +77,11 @@ public class MiscCommands implements CommandHandler {
     @Permission("business.finance")
     @Async
     @Description("Deposit into a firm's treasury with a memo recorded on the transaction")
-    public void deposit(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("amount") BigDecimal amount,
-                        @GreedyArg("memo") String memo) {
+    public void deposit(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
         doDeposit(sender, firmRef, amount, memo);
     }
 
@@ -145,8 +148,16 @@ public class MiscCommands implements CommandHandler {
         audit.payIntoFirm(f.getFirmId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
         message.send(sender, "business.finance.pay.into.success", "firm", f.getDisplayName(), "amount", formatted);
-        notifications.notifyFirmExcept(f.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                "firm", f.getDisplayName(), "amount", formatted, "sender", sender.getName());
+        notifications.notifyFirmExcept(
+                f.getFirmId(),
+                sender.getUniqueId(),
+                "business.notify.transfer.incoming",
+                "firm",
+                f.getDisplayName(),
+                "amount",
+                formatted,
+                "sender",
+                sender.getName());
     }
 
     // ---- PAY: BUSINESS -> PLAYER ------------------------------------------------
@@ -155,8 +166,11 @@ public class MiscCommands implements CommandHandler {
     @Permission("business.finance")
     @Async
     @Description("Pay money from a business to a player")
-    public void payPlayer(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                          @Arg("player") FirmPlayer target, @Arg("amount") BigDecimal amount) {
+    public void payPlayer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("player") FirmPlayer target,
+            @Arg("amount") BigDecimal amount) {
         String firm = firmRef.value();
         Firm f = firms.getFirmByNameOrId(firm);
         if (f == null) {
@@ -171,8 +185,15 @@ public class MiscCommands implements CommandHandler {
 
         audit.payPlayer(f.getFirmId(), target.getUniqueId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.finance.pay.player.success",
-                "firm", f.getDisplayName(), "player", target.getCurrentName(), "amount", formatted);
+        message.send(
+                sender,
+                "business.finance.pay.player.success",
+                "firm",
+                f.getDisplayName(),
+                "player",
+                target.getCurrentName(),
+                "amount",
+                formatted);
     }
 
     // ---- PAY: BUSINESS -> BUSINESS ----------------------------------------------
@@ -181,8 +202,11 @@ public class MiscCommands implements CommandHandler {
     @Permission("business.finance")
     @Async
     @Description("Pay money from one business to another")
-    public void payBusiness(@Sender Player sender, @Arg("firm") FirmName firmRef,
-                            @Arg("target") OnlineFirmName targetRef, @Arg("amount") BigDecimal amount) {
+    public void payBusiness(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("target") OnlineFirmName targetRef,
+            @Arg("amount") BigDecimal amount) {
         String firm = firmRef.value();
         String targetFirm = targetRef.value();
         Firm f = firms.getFirmByNameOrId(firm);
@@ -209,10 +233,25 @@ public class MiscCommands implements CommandHandler {
 
         audit.payFirm(f.getFirmId(), targetF.getFirmId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.finance.pay.business.success",
-                "firm", f.getDisplayName(), "target", targetF.getDisplayName(), "amount", formatted);
-        notifications.notifyFirmExcept(targetF.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                "firm", targetF.getDisplayName(), "amount", formatted, "sender", f.getDisplayName());
+        message.send(
+                sender,
+                "business.finance.pay.business.success",
+                "firm",
+                f.getDisplayName(),
+                "target",
+                targetF.getDisplayName(),
+                "amount",
+                formatted);
+        notifications.notifyFirmExcept(
+                targetF.getFirmId(),
+                sender.getUniqueId(),
+                "business.notify.transfer.incoming",
+                "firm",
+                targetF.getDisplayName(),
+                "amount",
+                formatted,
+                "sender",
+                f.getDisplayName());
     }
 
     // ---- SEND: BUSINESS -> BUSINESS (multi-firm operator) -----------------------
@@ -239,8 +278,11 @@ public class MiscCommands implements CommandHandler {
     @Permission("business.finance")
     @Async
     @Description("Send money from one of your firms to another firm")
-    public void send(@Sender Player sender, @Arg("source") FirmName sourceRef,
-                     @Arg("target") OnlineFirmName targetRef, @Arg("amount") BigDecimal amount) {
+    public void send(
+            @Sender Player sender,
+            @Arg("source") FirmName sourceRef,
+            @Arg("target") OnlineFirmName targetRef,
+            @Arg("amount") BigDecimal amount) {
         doSend(sender, sourceRef.value(), targetRef.value(), amount, null);
     }
 
@@ -248,9 +290,12 @@ public class MiscCommands implements CommandHandler {
     @Permission("business.finance")
     @Async
     @Description("Send money between firms with a memo recorded on the transaction")
-    public void send(@Sender Player sender, @Arg("source") FirmName sourceRef,
-                     @Arg("target") OnlineFirmName targetRef, @Arg("amount") BigDecimal amount,
-                     @GreedyArg("memo") String memo) {
+    public void send(
+            @Sender Player sender,
+            @Arg("source") FirmName sourceRef,
+            @Arg("target") OnlineFirmName targetRef,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
         doSend(sender, sourceRef.value(), targetRef.value(), amount, memo);
     }
 
@@ -279,10 +324,25 @@ public class MiscCommands implements CommandHandler {
 
         audit.payFirm(source.getFirmId(), target.getFirmId(), sender.getUniqueId(), amount, memo);
         String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.finance.send.success",
-                "source", source.getDisplayName(), "target", target.getDisplayName(), "amount", formatted);
-        notifications.notifyFirmExcept(target.getFirmId(), sender.getUniqueId(), "business.notify.transfer.incoming",
-                "firm", target.getDisplayName(), "amount", formatted, "sender", source.getDisplayName());
+        message.send(
+                sender,
+                "business.finance.send.success",
+                "source",
+                source.getDisplayName(),
+                "target",
+                target.getDisplayName(),
+                "amount",
+                formatted);
+        notifications.notifyFirmExcept(
+                target.getFirmId(),
+                sender.getUniqueId(),
+                "business.notify.transfer.incoming",
+                "firm",
+                target.getDisplayName(),
+                "amount",
+                formatted,
+                "sender",
+                source.getDisplayName());
     }
 
     // ---- TRANSACTIONS -----------------------------------------------------------
@@ -319,15 +379,26 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        message.send(sender, "business.finance.transactions.header",
-                "firm", f.getDisplayName(), "page", txPage.pageNumber(), "totalPages", txPage.totalPages());
+        message.send(
+                sender,
+                "business.finance.transactions.header",
+                "firm",
+                f.getDisplayName(),
+                "page",
+                txPage.pageNumber(),
+                "totalPages",
+                txPage.totalPages());
 
-        CommandSupport.renderTransactionLines(message, treasury, sender, txPage,
-                "business.finance.transactions.line");
+        CommandSupport.renderTransactionLines(message, treasury, sender, txPage, "business.finance.transactions.line");
 
         if (txPage.hasMore()) {
-            message.send(sender, "business.finance.transactions.next-page",
-                    "firm", f.getDisplayName(), "nextPage", txPage.pageNumber() + 1);
+            message.send(
+                    sender,
+                    "business.finance.transactions.next-page",
+                    "firm",
+                    f.getDisplayName(),
+                    "nextPage",
+                    txPage.pageNumber() + 1);
         }
     }
 

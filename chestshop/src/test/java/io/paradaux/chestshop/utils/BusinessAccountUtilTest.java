@@ -1,11 +1,9 @@
 package io.paradaux.chestshop.utils;
 
-import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Constructor;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
 
 class BusinessAccountUtilTest {
 
@@ -18,7 +16,8 @@ class BusinessAccountUtilTest {
 
     @Test
     void isBusinessUuid_trueForAnEncodedBusinessUuid() {
-        assertThat(BusinessAccountUtil.isBusinessUuid(BusinessAccountUtil.toBusinessUuid(7))).isTrue();
+        assertThat(BusinessAccountUtil.isBusinessUuid(BusinessAccountUtil.toBusinessUuid(7)))
+                .isTrue();
     }
 
     @Test
@@ -30,12 +29,5 @@ class BusinessAccountUtilTest {
     void systemUuid_isTheReservedConstant() {
         assertThat(BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID)
                 .isEqualTo(new UUID(0xC5B0FFFFFFFFFFFEL, 0xFFFFFFFFFFFFFFFEL));
-    }
-
-    @Test
-    void isUtilityClass_privateConstructor() throws Exception {
-        Constructor<BusinessAccountUtil> ctor = BusinessAccountUtil.class.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        assertThat(ctor.newInstance()).isNotNull();
     }
 }

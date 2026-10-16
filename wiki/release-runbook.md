@@ -11,7 +11,7 @@ For the general mechanics see [database.md](database.md) (Flyway workflows) and
 
 | Fact | Where |
 |---|---|
-| Merging to `main` builds and pushes `production-sha-<short>` (+ `:prod`) images for `economy-explorer` and `treasury-rest-api`. Argo CD Image Updater rolls any new `production-sha-*` tag into the production overlay on its own. | `.github/workflows/economy-explorer-ci.yml`, `treasury-rest-api-docker.yml` |
+| Merging to `main` builds and pushes `production-sha-<short>` (+ `:prod`) images for `economy-explorer` and `treasury-rest-api`. Argo CD Image Updater rolls any new `production-sha-*` tag into the production overlay on its own. | `.github/workflows/economy-explorer-docker.yml`, `treasury-rest-api-docker.yml` |
 | One REST image and one explorer image serve **every** production tenant, so all tenants pick up the new code at the same moment. | comment in `treasury-rest-api-docker.yml` ("Compute tags") |
 | Schema deploys are manual, one tenant per run. | `.github/workflows/economy-flyway-migrate.yml` |
 | The Paper plugins (Treasury, Business, ChestShop, TreasuryAPI) are not deployed by CI at all — jars are copied to the server and load on restart. | [build-and-test.md](build-and-test.md#the-release-bundle) |
@@ -98,7 +98,7 @@ buffer pool is the slowest thing that can happen in the window.
    auto-sync for the explorer and REST API apps). The manifests live outside this
    repo.
 2. Merge the release PR. Wait for these runs on `main` to go green:
-   **Economy Explorer · CI / Build and Push**, **Treasury REST API · Build and
+   **Economy Explorer · Build and Push Docker Image to Harbor**, **Treasury REST API · Build and
    Push Docker Image to Harbor**, **Treasury · Build & Publish API**,
    **Business · Publish API**.
 

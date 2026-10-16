@@ -1,6 +1,8 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -56,11 +58,8 @@ class GovCommandTest {
                 a.awaitMessageContaining("Archived", TIMEOUT);
             });
             // Archive is also async; poll outside the Ops.run block.
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
-            while (System.nanoTime() < deadline && !Ledger.governmentAccountIsArchived(name)) {
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(Ledger.governmentAccountIsArchived(name)).isTrue();
+            Await.untilTrue("gov account " + name + " to be archived",
+                    () -> Ledger.governmentAccountIsArchived(name), TIMEOUT);
         }
     }
 
@@ -138,14 +137,7 @@ class GovCommandTest {
             });
 
             // Transfer is also @Async; poll for the materialised balance.
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
-            while (System.nanoTime() < deadline) {
-                BigDecimal bal = Ledger.governmentBalance(dst).orElse(null);
-                if (bal != null && bal.compareTo(new BigDecimal("1000.00")) == 0) return;
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(Ledger.governmentBalance(dst)).hasValueSatisfying(b ->
-                    assertThat(b).isEqualByComparingTo("1000.00"));
+            Ledger.waitForGovernmentBalance(dst, new BigDecimal("1000.00"), TIMEOUT);
         }
     }
 
@@ -160,7 +152,7 @@ class GovCommandTest {
                 a.awaitMessageContaining("Created", TIMEOUT);
                 Ledger.waitForGovernmentAccount(name, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/gov account transfer " + name + " " + name + " 10 self");
                 a.awaitMessageContaining("same account", TIMEOUT);
@@ -242,7 +234,7 @@ class GovCommandTest {
 
                 // Adding an authorizer who isn't a member should fail
                 // explicitly (rather than auto-promote silently).
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/gov account auth add " + account + " " + authName);
                 a.awaitMessageContaining("must be a member", TIMEOUT);
@@ -288,19 +280,14 @@ class GovCommandTest {
                 int firmAccountId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
                 // 2. Create + seed the gov source account.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/gov account create " + govAcct);
                 a.awaitMessageContaining("Created", TIMEOUT);
                 Ledger.waitForGovernmentAccount(govAcct, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/gov account transfer DCGovernment " + govAcct + " 500 seed");
                 a.awaitMessageContaining("Transferred", TIMEOUT);
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                while (System.nanoTime() < deadline) {
-                    BigDecimal b = Ledger.governmentBalance(govAcct).orElse(null);
-                    if (b != null && b.compareTo(new BigDecimal("500.00")) == 0) break;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
+                Ledger.waitForGovernmentBalance(govAcct, new BigDecimal("500.00"), TIMEOUT);
 
                 BigDecimal firmBefore = Ledger.accountBalanceById(firmAccountId)
                         .orElse(BigDecimal.ZERO);
@@ -310,7 +297,7 @@ class GovCommandTest {
                 // can't fit in one token; doExternalPayout's fallback path
                 // appends " Corporate Account" automatically so users only
                 // have to type the firm name.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/gov payout " + govAcct + " " + firm + " 200 corp stipend");
                 a.awaitMessageContaining("Paid", TIMEOUT);
@@ -339,19 +326,19 @@ class GovCommandTest {
                     a.chatCommand("/gov account create " + account);
                     a.awaitMessageContaining("Created", TIMEOUT);
                     Ledger.waitForGovernmentAccount(account, TIMEOUT);
-                    Ledger.asyncSettle();
+                    Barrier.settle();
 
                     a.drainMessages();
                     a.chatCommand("/gov account member addgroup " + account + " " + group);
                     a.awaitMessageContaining("group", TIMEOUT);
 
-                    Ledger.asyncSettle();
+                    Barrier.settle();
                     a.drainMessages();
                     a.chatCommand("/gov account member list " + account);
                     String r = a.awaitMessageContaining("[group]", TIMEOUT);
                     assertThat(r).contains(group);
 
-                    Ledger.asyncSettle();
+                    Barrier.settle();
                     a.drainMessages();
                     a.chatCommand("/gov account member removegroup " + account + " " + group);
                     a.awaitMessageContaining("Removed", TIMEOUT);
@@ -376,11 +363,12 @@ class GovCommandTest {
                     a.chatCommand("/gov account create " + account);
                     a.awaitMessageContaining("Created", TIMEOUT);
                     Ledger.waitForGovernmentAccount(account, TIMEOUT);
-                    Ledger.asyncSettle();
+                    Barrier.settle();
 
                     a.drainMessages();
                     a.chatCommand("/gov account auth addgroup " + account + " " + group);
                     String r = a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                    Barrier.settle();
                     assertThat(r).containsIgnoringCase("group member");
                 });
             } finally {
@@ -400,11 +388,11 @@ class GovCommandTest {
                 a.awaitMessageContaining("Created", TIMEOUT);
                 Ledger.waitForGovernmentAccount(account, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/gov account transfer DCGovernment " + account + " 50 history seed");
                 a.awaitMessageContaining("Transferred", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/gov account history " + account);
                 a.awaitMessageContaining(account, TIMEOUT);

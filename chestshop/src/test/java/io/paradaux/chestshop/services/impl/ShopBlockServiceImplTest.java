@@ -1,9 +1,16 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
+import java.util.List;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -18,14 +25,6 @@ import org.bukkit.inventory.InventoryHolder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 /**
  * Real block↔sign geometry on MockBukkit: {@link ShopBlockServiceImpl} resolving the sign a
  * container is attached to (and vice-versa) and the shop-container predicates, over a real
@@ -39,8 +38,7 @@ class ShopBlockServiceImplTest extends ServerTest {
 
     @BeforeEach
     void wire() {
-        ChestShopConfiguration config = TestConfigs.with(TestConfigs.defaults(),
-                "shopContainersRaw", List.of("CHEST"));
+        ChestShopConfiguration config = TestConfigs.with(TestConfigs.defaults(), "shopContainersRaw", List.of("CHEST"));
         service = new ShopBlockServiceImpl(config, new SignService(config));
         world = server.addSimpleWorld("blockworld");
         for (int cx = -2; cx <= 40; cx++) {
@@ -69,7 +67,7 @@ class ShopBlockServiceImplTest extends ServerTest {
         sign.setLine(SignService.ITEM_LINE, "Diamond");
         sign.update();
 
-        return new Block[]{chest, signBlock};
+        return new Block[] {chest, signBlock};
     }
 
     // ---- couldBeShopContainer ---------------------------------------------------
@@ -274,7 +272,8 @@ class ShopBlockServiceImplTest extends ServerTest {
     void findConnectedShopSigns_holder_emptyForNonShopChest() {
         Block loneChest = world.getBlockAt(base += 6, 64, 0);
         loneChest.setType(Material.CHEST);
-        assertThat(service.findConnectedShopSigns((InventoryHolder) loneChest.getState())).isEmpty();
+        assertThat(service.findConnectedShopSigns((InventoryHolder) loneChest.getState()))
+                .isEmpty();
     }
 
     @Test
@@ -296,7 +295,7 @@ class ShopBlockServiceImplTest extends ServerTest {
         sign.setLine(SignService.ITEM_LINE, "Diamond");
         sign.update();
 
-        assertThat(service.findAnyNearbyShopSign(chest)).isNotNull();
+        assertThat(service.findAnyNearbyShopSign(chest).getLocation()).isEqualTo(signBlock.getLocation());
     }
 
     @Test
@@ -490,7 +489,7 @@ class ShopBlockServiceImplTest extends ServerTest {
         when(wd.getFacing()).thenReturn(BlockFace.NORTH); // == the search face below
         when(wallFace.getBlockData()).thenReturn(wd);
         Sign sign = mock(Sign.class);
-        when(sign.getLines()).thenReturn(new String[]{"Notch", "64", "B 5", "Diamond"});
+        when(sign.getLines()).thenReturn(new String[] {"Notch", "64", "B 5", "Diamond"});
         when(wallFace.getState(false)).thenReturn(sign);
         Block air = unloadedBlock();
         when(origin.getRelative(any(BlockFace.class))).thenReturn(air);
@@ -513,7 +512,7 @@ class ShopBlockServiceImplTest extends ServerTest {
         sign.setLine(SignService.ITEM_LINE, "Diamond");
         sign.update();
 
-        assertThat(service.findAnyNearbyShopSign(chest)).isNotNull();
+        assertThat(service.findAnyNearbyShopSign(chest).getLocation()).isEqualTo(signBlock.getLocation());
     }
 
     @Test
@@ -528,7 +527,8 @@ class ShopBlockServiceImplTest extends ServerTest {
         Container stoneContainer = mock(Container.class);
         when(stoneContainer.getBlock()).thenReturn(stone);
         // Container holder whose block isn't a shop container -> 209 second operand false.
-        assertThat(service.couldBeShopContainer((InventoryHolder) stoneContainer)).isFalse();
+        assertThat(service.couldBeShopContainer((InventoryHolder) stoneContainer))
+                .isFalse();
 
         DoubleChest dc = mock(DoubleChest.class);
         when(dc.getLeftSide(false)).thenReturn((InventoryHolder) stoneContainer);

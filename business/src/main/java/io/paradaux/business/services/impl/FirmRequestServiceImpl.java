@@ -1,12 +1,9 @@
 package io.paradaux.business.services.impl;
 
+import static io.paradaux.hibernia.framework.utils.StringUtils.random32;
+
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.InternalException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
-import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.RolePermission;
@@ -14,14 +11,16 @@ import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmRequestService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import org.apache.ibatis.exceptions.PersistenceException;
-import org.mybatis.guice.transactional.Transactional;
-
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.InternalException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import java.sql.SQLIntegrityConstraintViolationException;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import static io.paradaux.hibernia.framework.utils.StringUtils.random32;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.mybatis.guice.transactional.Transactional;
 
 @Singleton
 public class FirmRequestServiceImpl implements FirmRequestService {
@@ -31,14 +30,30 @@ public class FirmRequestServiceImpl implements FirmRequestService {
     private final FirmService firms;
     private final FirmStaffService staff;
     private final FirmAccountService accounts;
+    private final Clock clock;
 
     @Inject
-    public FirmRequestServiceImpl(FirmRequestMapper requests, FirmService firms, FirmStaffService staff,
-                                  FirmAccountService accounts) {
+    public FirmRequestServiceImpl(
+            FirmRequestMapper requests, FirmService firms, FirmStaffService staff, FirmAccountService accounts) {
+        // System default zone, not UTC: expires_at is a wall-clock DATETIME that the
+        // mapper compares against the database's NOW(), so it must stay in the JVM's
+        // local time exactly as before this seam existed. (That coupling — correct only
+        // while the server JVM and the DB session share a time zone — is pre-existing.)
+        this(requests, firms, staff, accounts, Clock.systemDefaultZone());
+    }
+
+    /** Test seam: pins "now" so offer/transfer expiry times are deterministic. */
+    FirmRequestServiceImpl(
+            FirmRequestMapper requests,
+            FirmService firms,
+            FirmStaffService staff,
+            FirmAccountService accounts,
+            Clock clock) {
         this.requests = requests;
         this.firms = firms;
         this.staff = staff;
         this.accounts = accounts;
+        this.clock = clock;
     }
 
     @Override
@@ -59,7 +74,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
     }
 
     private void offerEmployment(Firm firm, UUID targetId, UUID actorId) {
-        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OFFER_EXPIRATION_MINUTES);
+        LocalDateTime expiresAt = LocalDateTime.now(clock).plusMinutes(OFFER_EXPIRATION_MINUTES);
 
         if (firm == null) {
             throw new NotFoundException("Firm not found.");
@@ -73,7 +88,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
             throw new BadCommandException("This user is already employed.");
         }
 
-        if(targetId.equals(actorId)) {
+        if (targetId.equals(actorId)) {
             throw new BadCommandException("You cannot do this to yourself.");
         }
 
@@ -132,7 +147,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
             throw new BadCommandException("This user is already employed.");
         }
 
-        if(playerId.equals(actorId)) {
+        if (playerId.equals(actorId)) {
             throw new BadCommandException("You cannot do this to yourself.");
         }
 
@@ -186,8 +201,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
         // longer valid. We leave the row pending (don't reject) so it becomes
         // acceptable again if a valid admin's authority is restored, or expires.
         if (!staff.hasPermission(firm.getFirmId(), inviter, RolePermission.ADMIN)) {
-            throw new BadCommandException(
-                    "This offer is no longer valid — the person who invited you no longer has "
+            throw new BadCommandException("This offer is no longer valid — the person who invited you no longer has "
                     + "permission to hire for this firm.");
         }
 
@@ -244,7 +258,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
             throw new NoPermissionException("Only the current proprietor can transfer a firm.");
         }
 
-        if(newProprietorId.equals(actorId)) {
+        if (newProprietorId.equals(actorId)) {
             throw new BadCommandException("You cannot do this to yourself.");
         }
 
@@ -255,10 +269,15 @@ public class FirmRequestServiceImpl implements FirmRequestService {
 
         String code = random32();
         try {
-            requests.createTransferRequest(firm.getFirmId(), newProprietorId.toString(), code ,LocalDateTime.now().plusMinutes(OFFER_EXPIRATION_MINUTES));
+            requests.createTransferRequest(
+                    firm.getFirmId(),
+                    newProprietorId.toString(),
+                    code,
+                    LocalDateTime.now(clock).plusMinutes(OFFER_EXPIRATION_MINUTES));
         } catch (PersistenceException ex) {
             if (ex.getCause() instanceof SQLIntegrityConstraintViolationException) {
-                throw new BadCommandException("You already have a pending transfer request. Cancel the previous or wait for it to be approved.");
+                throw new BadCommandException(
+                        "You already have a pending transfer request. Cancel the previous or wait for it to be approved.");
             }
             // Any other persistence failure means the request was NOT stored —
             // don't return a code for a transfer that doesn't exist (ADT-56).
@@ -337,8 +356,7 @@ public class FirmRequestServiceImpl implements FirmRequestService {
         // this new proprietor, refuse — otherwise updateProprietor would hand
         // the firm over with no began/confirmed transfer at all (firm theft).
         if (requests.acceptTransfer(firm.getFirmId(), newProprietorId.toString()) != 1) {
-            throw new BadCommandException(
-                    "No confirmed proprietorship transfer to accept for this firm.");
+            throw new BadCommandException("No confirmed proprietorship transfer to accept for this firm.");
         }
 
         if (staff.isEmployedBy(firm.getFirmId(), newProprietorId)) {

@@ -1,11 +1,27 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.mappers.ItemCodeMapper;
 import io.paradaux.chestshop.model.Item;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.chestshop.support.TestConfigs;
 import io.paradaux.chestshop.utils.encoding.Base62;
+import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
@@ -13,23 +29,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Real item-code serialisation on MockBukkit: {@link ItemCodeServiceImpl} over a real
@@ -46,10 +45,14 @@ class ItemCodeServiceImplTest extends ServerTest {
         final Map<Integer, String> rows = new HashMap<>();
         int seq = 0;
 
-        @Override public void createTable() {}
-        @Override public void createCodeIndex() {}
+        @Override
+        public void createTable() {}
 
-        @Override public Integer findIdByBlob(String blob) {
+        @Override
+        public void createCodeIndex() {}
+
+        @Override
+        public Integer findIdByBlob(String blob) {
             for (Map.Entry<Integer, String> e : rows.entrySet()) {
                 if (e.getValue().equals(blob)) {
                     return e.getKey();
@@ -58,25 +61,30 @@ class ItemCodeServiceImplTest extends ServerTest {
             return null;
         }
 
-        @Override public void insert(Item item) {
+        @Override
+        public void insert(Item item) {
             int id = ++seq;
             rows.put(id, item.getBase64ItemCode());
             item.setId(id);
         }
 
-        @Override public String findBlobById(int id) {
+        @Override
+        public String findBlobById(int id) {
             return rows.get(id);
         }
 
-        @Override public void updateBlob(int id, String blob) {
+        @Override
+        public void updateBlob(int id, String blob) {
             rows.put(id, blob);
         }
 
-        @Override public List<Integer> findAllIds() {
+        @Override
+        public List<Integer> findAllIds() {
             return new ArrayList<>(rows.keySet());
         }
 
-        @Override public long count() {
+        @Override
+        public long count() {
             return rows.size();
         }
     }
@@ -108,20 +116,29 @@ class ItemCodeServiceImplTest extends ServerTest {
     }
 
     @Test
-    void getItemCode_resetsDamageOnThrowawayMeta() {
+    void getItemCode_keepsDamageInTheStoredItem() {
+        // The legacy "reset damage" only touches a throwaway meta copy, so damage stays part of
+        // the stored item: a damaged and an undamaged sword get distinct codes (byte-identical
+        // to codes on existing shops).
         ItemStack sword = new ItemStack(Material.DIAMOND_SWORD);
         ItemMeta meta = sword.getItemMeta();
         ((Damageable) meta).setDamage(25);
         sword.setItemMeta(meta);
-        assertThat(service.getItemCode(sword)).isNotNull();
+
+        String damagedCode = service.getItemCode(sword);
+        String pristineCode = service.getItemCode(new ItemStack(Material.DIAMOND_SWORD));
+
+        assertThat(damagedCode).isNotEqualTo(pristineCode);
+        assertThat(((Damageable) service.getFromCode(damagedCode).getItemMeta()).getDamage())
+                .isEqualTo(25);
     }
 
     @Test
     void getItemCode_returnsNull_whenMapperThrows() {
         ItemCodeMapper boom = mock(ItemCodeMapper.class);
         when(boom.findIdByBlob(anyString())).thenThrow(new RuntimeException("db down"));
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(boom,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(boom, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
         assertThat(svc.getItemCode(item(Material.DIAMOND, 1))).isNull();
     }
 
@@ -270,8 +287,8 @@ class ItemCodeServiceImplTest extends ServerTest {
         String before = mapper.rows.get(1);
 
         org.bukkit.configuration.file.YamlConfiguration cfg = new org.bukkit.configuration.file.YamlConfiguration();
-        cfg.set("blob-encoding", 1);       // skip the blob migration
-        cfg.set("metadata-version", -5);   // below the current (-1) so the re-serialiser runs
+        cfg.set("blob-encoding", 1); // skip the blob migration
+        cfg.set("metadata-version", -5); // below the current (-1) so the re-serialiser runs
         cfg.save(new File(dataFolder, "version"));
 
         service.migrateIfNeeded();
@@ -284,16 +301,28 @@ class ItemCodeServiceImplTest extends ServerTest {
         assertThat(before).isNotNull();
     }
 
+    private org.bukkit.configuration.file.YamlConfiguration readVersion() {
+        return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(new File(dataFolder, "version"));
+    }
+
+    private static String legacyBlobOf(java.io.Serializable payload) throws Exception {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+            oos.writeObject(payload);
+        }
+        return java.util.Base64.getEncoder().encodeToString(bos.toByteArray());
+    }
+
     @Test
-    void migrateIfNeeded_logsCorruptRow_duringReserialisation() throws Exception {
-        mapper.rows.put(1, ItemCodeServiceImpl.encodeBlob("not: [valid: yaml")); // corrupt blob
+    void migrateIfNeeded_skipsCorruptRow_duringReserialisation_andStillAdvancesTheVersion() {
+        String corrupt = ItemCodeServiceImpl.encodeBlob("not: [valid: yaml");
+        mapper.rows.put(1, corrupt);
+        writeVersion(1, -5);
 
-        org.bukkit.configuration.file.YamlConfiguration cfg = new org.bukkit.configuration.file.YamlConfiguration();
-        cfg.set("blob-encoding", 1);
-        cfg.set("metadata-version", -5);
-        cfg.save(new File(dataFolder, "version"));
+        service.migrateIfNeeded();
 
-        service.migrateIfNeeded(); // must not throw; the corrupt row is logged and skipped
+        assertThat(mapper.rows.get(1)).isEqualTo(corrupt);
+        assertThat(readVersion().getInt("metadata-version")).isGreaterThan(-5);
     }
 
     private void writeVersion(int blobEncoding, int metadataVersion) {
@@ -308,9 +337,14 @@ class ItemCodeServiceImplTest extends ServerTest {
     }
 
     @Test
-    void migrateBlobEncoding_skipsNullBlobRows() {
-        mapper.rows.put(1, null); // id present, blob null -> continue
-        service.migrateIfNeeded(); // must not throw
+    void migrateBlobEncoding_skipsNullBlobRows_andCompletes() {
+        mapper.rows.put(1, null);
+        mapper.rows.put(2, ItemCodeServiceImpl.encodeBlob("type: STONE\n"));
+
+        service.migrateIfNeeded();
+
+        assertThat(mapper.rows.get(1)).isNull();
+        assertThat(readVersion().getInt("blob-encoding")).isEqualTo(1);
     }
 
     @Test
@@ -322,30 +356,26 @@ class ItemCodeServiceImplTest extends ServerTest {
     }
 
     @Test
-    void migrateBlobEncoding_logsRowThatCannotBeDecoded() throws Exception {
-        // A legacy blob serialising a non-String object: decodeBlob throws -> per-row catch.
-        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
-            oos.writeObject(new java.util.ArrayList<>());
-        }
-        mapper.rows.put(1, java.util.Base64.getEncoder().encodeToString(bos.toByteArray()));
-        service.migrateIfNeeded(); // must not throw; the row is logged and skipped
-    }
+    void migrateBlobEncoding_leavesAnUndecodableRow_butMigratesTheRest() throws Exception {
+        // A legacy blob of a non-String object is rejected by the String-only filter.
+        String rejected = legacyBlobOf(new java.util.ArrayList<>());
+        String legacy = legacyBlobOf("type: STONE\n");
+        mapper.rows.put(1, rejected);
+        mapper.rows.put(2, legacy);
 
-    @Test
-    void migrateBlobEncoding_hitsProgressLogEveryThousandRows() {
-        for (int i = 1; i <= 1000; i++) {
-            mapper.rows.put(i, ItemCodeServiceImpl.encodeBlob("x" + i));
-        }
-        service.migrateIfNeeded(); // seen % 1000 == 0 branch fires at row 1000
+        service.migrateIfNeeded();
+
+        assertThat(mapper.rows.get(1)).isEqualTo(rejected);
+        assertThat(mapper.rows.get(2)).isEqualTo(ItemCodeServiceImpl.encodeBlob("type: STONE\n"));
+        assertThat(readVersion().getInt("blob-encoding")).isEqualTo(1);
     }
 
     @Test
     void migrateBlobEncoding_returnsFalse_whenStoreScanThrows() {
         ItemCodeMapper boom = mock(ItemCodeMapper.class);
         when(boom.findAllIds()).thenThrow(new RuntimeException("db down"));
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(boom,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(boom, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
         svc.migrateIfNeeded(); // outer catch -> returns false; blob-encoding not recorded, no throw
         File versionFile = new File(dataFolder, "version");
         org.bukkit.configuration.file.YamlConfiguration cfg =
@@ -358,39 +388,34 @@ class ItemCodeServiceImplTest extends ServerTest {
         writeVersion(1, -5); // skip blob migration; trigger metadata re-serialisation
         ItemCodeMapper boom = mock(ItemCodeMapper.class);
         when(boom.findAllIds()).thenThrow(new RuntimeException("db down"));
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(boom,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
-        svc.migrateIfNeeded(); // reserialiseAll outer catch -> false -> warn, no throw
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(boom, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        assertThatCode(svc::migrateIfNeeded).doesNotThrowAnyException();
+        // The re-serialisation failed, so the metadata version is not advanced (retried next boot).
+        assertThat(readVersion().getInt("metadata-version")).isEqualTo(-5);
     }
 
     @Test
-    void reserialiseAll_skipsNullBlobRows() {
+    void reserialiseAll_skipsNullBlobRows_andAdvancesTheVersion() {
         writeVersion(1, -5);
         mapper.rows.put(1, null);
-        service.migrateIfNeeded(); // blob null -> continue in the re-serialiser
+
+        service.migrateIfNeeded();
+
+        assertThat(mapper.rows.get(1)).isNull();
+        assertThat(readVersion().getInt("metadata-version")).isGreaterThan(-5);
     }
 
     @Test
-    void reserialiseAll_logsRowThatFailsToDecode() throws Exception {
-        // Non-String legacy blob -> decodeBlob throws IOException inside the re-serialiser.
+    void reserialiseAll_leavesARowThatFailsToDecode_andAdvancesTheVersion() throws Exception {
         writeVersion(1, -5);
-        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-        try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
-            oos.writeObject(new java.util.ArrayList<>());
-        }
-        mapper.rows.put(1, java.util.Base64.getEncoder().encodeToString(bos.toByteArray()));
-        service.migrateIfNeeded(); // per-row IOException catch, no throw
-    }
+        String rejected = legacyBlobOf(new java.util.ArrayList<>());
+        mapper.rows.put(1, rejected);
 
-    @Test
-    void reserialiseAll_logsCorruptYamlRow_andHitsProgressLog() {
-        // 1000 rows of non-ItemStack YAML: each fails loadAs (RuntimeException catch) and the
-        // seen % 1000 progress log fires.
-        writeVersion(1, -5);
-        for (int i = 1; i <= 1000; i++) {
-            mapper.rows.put(i, ItemCodeServiceImpl.encodeBlob("not-an-item-" + i));
-        }
-        service.migrateIfNeeded(); // must not throw
+        service.migrateIfNeeded();
+
+        assertThat(mapper.rows.get(1)).isEqualTo(rejected);
+        assertThat(readVersion().getInt("metadata-version")).isGreaterThan(-5);
     }
 
     @Test
@@ -407,7 +432,8 @@ class ItemCodeServiceImplTest extends ServerTest {
     void migrateIfNeeded_skipsBlobMigration_whenAlreadyAtPlainEncoding() {
         // Pre-write a version file at the plain blob-encoding + current metadata version.
         int metaVersion = new ItemStack(Material.STONE).serialize().containsKey("v")
-                ? (int) new ItemStack(Material.STONE).serialize().get("v") : -1;
+                ? (int) new ItemStack(Material.STONE).serialize().get("v")
+                : -1;
         org.bukkit.configuration.file.YamlConfiguration cfg = new org.bukkit.configuration.file.YamlConfiguration();
         cfg.set("blob-encoding", 1);
         cfg.set("metadata-version", metaVersion);
@@ -418,14 +444,14 @@ class ItemCodeServiceImplTest extends ServerTest {
         }
 
         ItemCodeMapper spy = mock(ItemCodeMapper.class);
-        ItemCodeServiceImpl svc = new ItemCodeServiceImpl(spy,
-                new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
+        ItemCodeServiceImpl svc =
+                new ItemCodeServiceImpl(spy, new MaterialServiceImpl(TestConfigs.defaults()), dataFolder);
         svc.migrateIfNeeded();
         // Already migrated + up to date: no blob scan, no re-serialise.
         verify(spy, never()).findAllIds();
     }
 
-    // ---- residual branches ------------------------------------------------------
+    // ---- version advance and failure paths (stubbed YAML / item construction) ----
 
     /** Replace the service's private {@code yaml} so we can force a StackOverflowError / non-round-trip. */
     private static void setYaml(ItemCodeServiceImpl svc, org.yaml.snakeyaml.Yaml y) throws Exception {
@@ -438,14 +464,13 @@ class ItemCodeServiceImplTest extends ServerTest {
     void migrateIfNeeded_reserialisesWhenDataVersionAdvances() {
         // MockBukkit's ItemStack.serialize() omits the data-version "v", pinning
         // currentMetadataVersion() to -1 so the re-serialiser never runs with a non-negative
-        // previous version. Mock ItemStack construction so the synthetic STONE probe reports v=5,
-        // exercising the version-advance path: 237 (meta == null), 246/247 (previousVersion > -1
-        // log), and both 266 version-sniff arcs (blob missing vs already-at "\nv: 5\n").
+        // previous version. Mock ItemStack construction so the synthetic STONE probe reports v=5:
+        // a known older version (0) is upgraded and the new version recorded.
         writeVersion(1, 0); // blob migration done; metadata-version 0 (>-1) and below the mocked 5
         mapper.rows.put(1, ItemCodeServiceImpl.encodeBlob("not: [valid: yaml")); // no "\nv: 5\n"
-        mapper.rows.put(2, ItemCodeServiceImpl.encodeBlob("x\nv: 5\n"));          // already at v5
-        try (org.mockito.MockedConstruction<ItemStack> mc = org.mockito.Mockito.mockConstruction(
-                ItemStack.class, (m, ctx) -> {
+        mapper.rows.put(2, ItemCodeServiceImpl.encodeBlob("x\nv: 5\n")); // already at v5
+        try (org.mockito.MockedConstruction<ItemStack> mc =
+                org.mockito.Mockito.mockConstruction(ItemStack.class, (m, ctx) -> {
                     when(m.serialize()).thenReturn(java.util.Map.of("v", 5));
                     when(m.getItemMeta()).thenReturn(null);
                 })) {
@@ -457,25 +482,18 @@ class ItemCodeServiceImplTest extends ServerTest {
     }
 
     @Test
-    void getItemCode_handlesItemWithNullMeta() {
-        // An AIR item's meta is null, so the `meta instanceof Damageable` guard is false (109 false).
-        service.getItemCode(item(Material.AIR, 1)); // must not throw
-    }
-
-    @Test
-    void encode_handlesItemWithNullMeta() {
-        // AIR meta null -> the encode() durability guard's Damageable check is false (169 false).
-        assertThat(service.encode(item(Material.AIR, 1), 0)).isNotNull();
-    }
-
-    @Test
-    void getItemCode_reDumpsWhenRoundTripDiffers() throws Exception {
-        // Force the YAML round-trip to yield a not-similar item -> the re-dump path runs (115/116).
+    void getItemCode_storesTheReloadedDump_whenTheYamlRoundTripDiffers() throws Exception {
+        // If the YAML round-trip doesn't reproduce the item, the stored blob is the dump of the
+        // reloaded item (so later loads are stable), not the first dump.
+        ItemStack reloaded = item(Material.DIRT, 1);
         org.yaml.snakeyaml.Yaml y = mock(org.yaml.snakeyaml.Yaml.class);
-        when(y.dump(any())).thenReturn("dummy");
-        when(y.loadAs(anyString(), eq(ItemStack.class))).thenReturn(item(Material.DIRT, 1));
+        when(y.dump(any())).thenAnswer(inv -> inv.getArgument(0) == reloaded ? "reloaded" : "original");
+        when(y.loadAs(anyString(), eq(ItemStack.class))).thenReturn(reloaded);
         setYaml(service, y);
-        assertThat(service.getItemCode(item(Material.DIAMOND, 1))).isNotNull();
+
+        String code = service.getItemCode(item(Material.DIAMOND, 1));
+
+        assertThat(mapper.rows.get(Base62.decode(code))).isEqualTo(ItemCodeServiceImpl.encodeBlob("reloaded"));
     }
 
     @Test
@@ -484,36 +502,45 @@ class ItemCodeServiceImplTest extends ServerTest {
         org.yaml.snakeyaml.Yaml y = mock(org.yaml.snakeyaml.Yaml.class);
         when(y.loadAs(anyString(), eq(ItemStack.class))).thenThrow(new StackOverflowError());
         setYaml(service, y);
-        assertThat(service.getFromCode(Base62.encode(1))).isNull(); // 150/151
+        assertThat(service.getFromCode(Base62.encode(1))).isNull();
     }
 
     @Test
-    void reserialiseAll_logsStackOverflowRow() throws Exception {
+    void reserialiseAll_leavesAStackOverflowingRow_andAdvancesTheVersion() throws Exception {
         writeVersion(1, -5); // skip blob migration, trigger metadata re-serialisation
-        mapper.rows.put(1, ItemCodeServiceImpl.encodeBlob("type: STONE\n"));
+        String blob = ItemCodeServiceImpl.encodeBlob("type: STONE\n");
+        mapper.rows.put(1, blob);
         org.yaml.snakeyaml.Yaml y = mock(org.yaml.snakeyaml.Yaml.class);
         when(y.loadAs(anyString(), eq(ItemStack.class))).thenThrow(new StackOverflowError());
         setYaml(service, y);
-        service.migrateIfNeeded(); // outer StackOverflowError catch (280/281/282), no throw
+
+        assertThatCode(service::migrateIfNeeded).doesNotThrowAnyException();
+
+        assertThat(mapper.rows.get(1)).isEqualTo(blob);
+        assertThat(readVersion().getInt("metadata-version")).isGreaterThan(-5);
     }
 
     @Test
-    void migrateIfNeeded_logsError_whenBlobVersionSaveFails() {
-        // Make the 'version' path a directory so save() throws IOException while recording the
-        // blob-encoding version (75/76). No metadata re-serialise runs (newVersion == -1).
+    void migrateIfNeeded_stillMigratesBlobs_whenTheVersionFileCannotBeSaved() throws Exception {
+        // A directory at the 'version' path makes recording the blob-encoding version fail;
+        // startup must carry on with the rows already rewritten.
         new File(dataFolder, "version").mkdirs();
-        service.migrateIfNeeded(); // must not throw
+        mapper.rows.put(1, legacyBlobOf("type: STONE\n"));
+
+        assertThatCode(service::migrateIfNeeded).doesNotThrowAnyException();
+
+        assertThat(mapper.rows.get(1)).isEqualTo(ItemCodeServiceImpl.encodeBlob("type: STONE\n"));
     }
 
     @Test
     void migrateIfNeeded_logsError_whenMetadataVersionSaveFails() {
         // metadata-version -5 < currentVersion so reserialiseAll runs; the read-only version file
-        // then makes the metadata-version save throw IOException (89/90/91).
+        // then makes the metadata-version save throw IOException, which must not abort startup.
         writeVersion(1, -5);
         File versionFile = new File(dataFolder, "version");
         assertThat(versionFile.setWritable(false)).isTrue();
         try {
-            service.migrateIfNeeded(); // must not throw
+            assertThatCode(service::migrateIfNeeded).doesNotThrowAnyException();
         } finally {
             versionFile.setWritable(true);
         }
@@ -521,8 +548,8 @@ class ItemCodeServiceImplTest extends ServerTest {
 
     @Test
     void decodeBlob_treatsAcNonEdPrefixAsPlainText() {
-        // Standard-Base64 bytes starting 0xAC but not 0xED: the legacy-header check is false
-        // (329 second sub-condition), so it is read as (garbage) UTF-8 -> corrupt YAML -> null.
+        // Standard-Base64 bytes starting 0xAC but not 0xED aren't a Java-serialization header,
+        // so they are read as (garbage) UTF-8 -> corrupt YAML -> null, not deserialized.
         byte[] weird = {(byte) 0xAC, 0x00, (byte) 0x99, 0x3A, 0x20, 0x5B};
         mapper.rows.put(1, java.util.Base64.getEncoder().encodeToString(weird));
         assertThat(service.getFromCode(Base62.encode(1))).isNull();
@@ -534,8 +561,8 @@ class ItemCodeServiceImplTest extends ServerTest {
         // ALLOWED arm of 345/346), returning the YAML which then decodes to the item. Re-use the
         // real ItemStack YAML the service produced so the round-trip yields a valid item.
         service.getItemCode(item(Material.STONE, 1)); // stores a plain-Base64 blob at id 1
-        String realYaml = new String(java.util.Base64.getDecoder().decode(mapper.rows.get(1)),
-                java.nio.charset.StandardCharsets.UTF_8);
+        String realYaml = new String(
+                java.util.Base64.getDecoder().decode(mapper.rows.get(1)), java.nio.charset.StandardCharsets.UTF_8);
 
         java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
         try (java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {

@@ -27,6 +27,7 @@ public final class NameValidator {
      * shared by the command layer and {@code FirmServiceImpl}.
      */
     public static final String DISCORD_INVITE_REGEX = "https://discord\\.gg/[A-Za-z0-9]{2,32}";
+
     private static final Pattern DISCORD_INVITE = Pattern.compile(DISCORD_INVITE_REGEX);
 
     private NameValidator() {}
@@ -47,8 +48,10 @@ public final class NameValidator {
      */
     public static boolean containsBlockedTerm(String name, List<String> blockedTerms) {
         String normalizedName = normalizeFilterText(name);
-        return blockedTerms.stream().map(NameValidator::normalizeFilterText)
-                .filter(term -> !term.isEmpty()).anyMatch(normalizedName::contains);
+        return blockedTerms.stream()
+                .map(NameValidator::normalizeFilterText)
+                .filter(term -> !term.isEmpty())
+                .anyMatch(normalizedName::contains);
     }
 
     private static String normalizeFilterText(String text) {

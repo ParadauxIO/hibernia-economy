@@ -1,11 +1,23 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.GoodsTransfer;
-import io.paradaux.chestshop.services.TradeSettlement;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.PendingTransaction;
 import io.paradaux.chestshop.model.Transaction;
+import io.paradaux.chestshop.services.GoodsTransfer;
+import io.paradaux.chestshop.services.TradeSettlement;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -18,20 +30,6 @@ import org.bukkit.inventory.PlayerInventory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Coverage for {@link TradeSettlement#execute}: atomic goods+money settlement with rollback,
@@ -61,7 +59,10 @@ class TradeSettlementTest {
         Answer<Object> behaviour = inv -> switch (inv.getMethod().getName()) {
             case "getType" -> type;
             case "getAmount" -> amt[0];
-            case "setAmount" -> { amt[0] = inv.getArgument(0); yield null; }
+            case "setAmount" -> {
+                amt[0] = inv.getArgument(0);
+                yield null;
+            }
             case "clone" -> item(type, amt[0]);
             case "toString" -> "Item(" + type + "x" + amt[0] + ")";
             case "equals" -> inv.getMock() == inv.getArgument(0);
@@ -94,15 +95,23 @@ class TradeSettlementTest {
         Sign s = mock(Sign.class);
         lenient().when(s.getLocation()).thenReturn(loc);
         lenient().when(s.getWorld()).thenReturn(w);
-        lenient().when(s.getLines()).thenReturn(new String[]{"Alice", "1", "B 5", "STONE"});
+        lenient().when(s.getLines()).thenReturn(new String[] {"Alice", "1", "B 5", "STONE"});
         return s;
     }
 
     /** A completed-trade context. */
-    private Transaction txn(Transaction.TransactionType type, boolean unlimited, Sign s,
-                            Player client, Account owner, Inventory ownerInv, Inventory clientInv,
-                            ItemStack[] stock, BigDecimal price) {
-        PendingTransaction pending = new PendingTransaction(ownerInv, clientInv, stock, price, client, owner, s, type, unlimited);
+    private Transaction txn(
+            Transaction.TransactionType type,
+            boolean unlimited,
+            Sign s,
+            Player client,
+            Account owner,
+            Inventory ownerInv,
+            Inventory clientInv,
+            ItemStack[] stock,
+            BigDecimal price) {
+        PendingTransaction pending =
+                new PendingTransaction(ownerInv, clientInv, stock, price, client, owner, s, type, unlimited);
         return new Transaction(pending, s);
     }
 
@@ -114,8 +123,16 @@ class TradeSettlementTest {
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
         Inventory ownerInv = mock(Inventory.class);
         Inventory clientInv = mock(Inventory.class);
-        Transaction event = txn(BUY, false, sign(location(mock(World.class))), client, owner, ownerInv, clientInv,
-                new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+        Transaction event = txn(
+                BUY,
+                false,
+                sign(location(mock(World.class))),
+                client,
+                owner,
+                ownerInv,
+                clientInv,
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5.00"));
         when(goodsTransfer.transfer(eq(ownerInv), eq(clientInv), any())).thenReturn(true);
         economy.settleResult = true;
 
@@ -132,8 +149,16 @@ class TradeSettlementTest {
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
         Inventory ownerInv = mock(Inventory.class);
         Inventory clientInv = mock(Inventory.class);
-        Transaction event = txn(SELL, false, sign(location(mock(World.class))), client, owner, ownerInv, clientInv,
-                new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+        Transaction event = txn(
+                SELL,
+                false,
+                sign(location(mock(World.class))),
+                client,
+                owner,
+                ownerInv,
+                clientInv,
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5.00"));
         when(goodsTransfer.transfer(eq(clientInv), eq(ownerInv), any())).thenReturn(true);
         economy.settleResult = false;
 
@@ -149,8 +174,16 @@ class TradeSettlementTest {
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
         Inventory ownerInv = mock(Inventory.class);
         Inventory clientInv = mock(Inventory.class);
-        Transaction event = txn(BUY, false, sign(location(mock(World.class))), client, owner, ownerInv, clientInv,
-                new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+        Transaction event = txn(
+                BUY,
+                false,
+                sign(location(mock(World.class))),
+                client,
+                owner,
+                ownerInv,
+                clientInv,
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5.00"));
         when(goodsTransfer.transfer(any(), any(), any())).thenReturn(false);
 
         settlement.execute(event);
@@ -163,8 +196,16 @@ class TradeSettlementTest {
     void execute_cancelsOnShortfall_logsWithNullLocation() {
         Player client = player("Notch", UUID.randomUUID());
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
-        Transaction event = txn(BUY, false, null, client, owner, mock(Inventory.class), mock(Inventory.class),
-                new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+        Transaction event = txn(
+                BUY,
+                false,
+                null,
+                client,
+                owner,
+                mock(Inventory.class),
+                mock(Inventory.class),
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5.00"));
         when(goodsTransfer.transfer(any(), any(), any())).thenReturn(false);
 
         settlement.execute(event);
@@ -177,8 +218,16 @@ class TradeSettlementTest {
         Player client = player("Notch", UUID.randomUUID());
         Account owner = new Account("Server", "Server", UUID.randomUUID());
         Inventory clientInv = mock(Inventory.class);
-        Transaction event = txn(BUY, true, sign(location(mock(World.class))), client, owner, null, clientInv,
-                new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+        Transaction event = txn(
+                BUY,
+                true,
+                sign(location(mock(World.class))),
+                client,
+                owner,
+                null,
+                clientInv,
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5.00"));
         when(goodsTransfer.moveUnlimited(eq(clientInv), any(), eq(true))).thenReturn(true);
         economy.settleResult = true;
 
@@ -203,16 +252,61 @@ class TradeSettlementTest {
         boolean hasAccount = true;
         boolean settleResult = true;
         int settleCalls = 0;
-        int migrateCalls = 0;
-        @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
-        @Override public String format(java.math.BigDecimal amount) { return amount.toPlainString(); }
-        @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
-        @Override public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) { return hasFunds.test(account, amount); }
-        @Override public java.math.BigDecimal getBalance(java.util.UUID account) { return balance.apply(account); }
-        @Override public boolean hasAccount(java.util.UUID account) { return hasAccount; }
-        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { settleCalls++; return settleResult; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { migrateCalls++; }
+
+        @Override
+        public void bind(
+                io.paradaux.treasury.api.TreasuryApi treasury,
+                int systemAccountId,
+                io.paradaux.treasury.api.TaxApi taxApi) {
+            /* unused headless */
+        }
+
+        @Override
+        public String format(java.math.BigDecimal amount) {
+            return amount.toPlainString();
+        }
+
+        @Override
+        public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) {
+            return ownerEconomicallyActive;
+        }
+
+        @Override
+        public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) {
+            return hasFunds.test(account, amount);
+        }
+
+        @Override
+        public java.math.BigDecimal getBalance(java.util.UUID account) {
+            return balance.apply(account);
+        }
+
+        @Override
+        public boolean hasAccount(java.util.UUID account) {
+            return hasAccount;
+        }
+
+        @Override
+        public boolean settle(
+                java.math.BigDecimal amount,
+                org.bukkit.entity.Player initiator,
+                java.util.UUID partner,
+                io.paradaux.chestshop.model.Transaction txn) {
+            settleCalls++;
+            return settleResult;
+        }
+
+        @Override
+        public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) {}
     }
 }

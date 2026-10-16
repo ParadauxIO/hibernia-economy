@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
@@ -145,6 +146,7 @@ class AmountAttacksTest {
                 i.drainMessages();
                 i.chatCommand("/fine issue GovernmentFines " + target + " 0.001 testing");
                 String reply = i.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 assertThat(reply).doesNotContainIgnoringCase("never joined");
                 assertThat(reply).doesNotContainIgnoringCase("never played");
                 assertThat(reply).contains("greater than zero");
@@ -169,6 +171,7 @@ class AmountAttacksTest {
                 i.drainMessages();
                 i.chatCommand("/fine issue GovernmentFines " + target + " 0.00000000001 sub-sub-cent");
                 i.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
 
             assertThat(Ledger.personalBalance(t.getUuid()).orElseThrow())
@@ -194,6 +197,7 @@ class AmountAttacksTest {
                 // 19,993 — comma works now; target has $10,000 starting balance.
                 i.chatCommand("/fine issue GovernmentFines " + target + " 19,993 too-big");
                 String reply = i.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 // Should be "insufficient" — NOT "never joined".
                 assertThat(reply).doesNotContainIgnoringCase("never joined");
                 assertThat(reply).containsIgnoringCase("insufficient");
@@ -227,6 +231,7 @@ class AmountAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/gov account transfer " + acct1 + " " + acct2 + " 0.001 sub-cent");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 assertThat(Ledger.governmentBalance(acct1).orElseThrow()).isEqualByComparingTo(startA);
                 assertThat(Ledger.governmentBalance(acct2).orElseThrow()).isEqualByComparingTo(startB);
@@ -246,11 +251,13 @@ class AmountAttacksTest {
                 Ledger.waitForGovernmentAccount(acct, TIMEOUT);
                 a.chatCommand("/eco give " + admin + " 100");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 BigDecimal start = Ledger.personalBalance(a.getUuid()).orElseThrow();
                 a.drainMessages();
                 a.chatCommand("/gov payout " + acct + " " + admin + " 1.0001 over-precise");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 assertThat(Ledger.personalBalance(a.getUuid()).orElseThrow())
                         .isEqualByComparingTo(start);
@@ -272,6 +279,7 @@ class AmountAttacksTest {
             s.drainMessages();
             s.chatCommand("/pay " + target + " " + amount);
             s.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+            Barrier.settle();
 
             assertThat(Ledger.personalBalance(s.getUuid()).orElseThrow())
                     .as("sender balance unchanged after rejected /pay " + amount)
@@ -294,6 +302,7 @@ class AmountAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/eco give " + target + " " + amount);
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
 
             assertThat(Ledger.personalBalance(t.getUuid()).orElseThrow())
@@ -314,6 +323,7 @@ class AmountAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/eco take " + target + " " + amount);
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
 
             assertThat(Ledger.personalBalance(t.getUuid()).orElseThrow())
@@ -334,6 +344,7 @@ class AmountAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/eco set " + target + " " + amount);
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
 
             assertThat(Ledger.personalBalance(t.getUuid()).orElseThrow())

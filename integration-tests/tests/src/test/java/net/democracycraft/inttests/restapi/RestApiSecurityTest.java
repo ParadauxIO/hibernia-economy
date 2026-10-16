@@ -3,6 +3,7 @@ package net.democracycraft.inttests.restapi;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.ApiTokens;
 import net.democracycraft.inttests.support.ApiTokens.IssuedKey;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.DevServer;
 import net.democracycraft.inttests.support.JwtForge;
@@ -123,7 +124,7 @@ class RestApiSecurityTest {
                 pb.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmBId = BusinessLedger.waitForFirm(firmB, TIMEOUT);
                 firmBDefaultAcc[0] = BusinessLedger.firmDefaultAccountId(firmBId).orElseThrow();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 pb.chatCommand("/business deposit " + firmB + " 50");
                 pb.awaitMessageContaining("Deposited", TIMEOUT);
             });

@@ -1,11 +1,12 @@
 package io.paradaux.chestshop.model;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * Covers {@link ShopAttribute}: display names, the ascending base comparator, direction
@@ -15,13 +16,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ShopAttributeTest {
 
     private static FoundShop withBuyPrice(BigDecimal buy) {
-        return new FoundShop("k", "n", "STONE", false, null, "Steve",
-                buy, null, 1, 1, 1, "world", 0, 0, 0, 0);
+        return new FoundShop("k", "n", "STONE", false, null, "Steve", buy, null, 1, 1, 1, "world", 0, 0, 0, 0);
     }
 
     private static FoundShop withDistance(long distSq) {
-        return new FoundShop("k", "n", "STONE", false, null, "Steve",
-                BigDecimal.ONE, null, 1, 1, 1, "world", 0, 0, 0, distSq);
+        return new FoundShop(
+                "k", "n", "STONE", false, null, "Steve", BigDecimal.ONE, null, 1, 1, 1, "world", 0, 0, 0, distSq);
     }
 
     @Test
@@ -36,11 +36,33 @@ class ShopAttributeTest {
         assertThat(ShopAttribute.DISTANCE.displayName()).isEqualTo("Distance");
     }
 
-    @Test
-    void everyAttributeExposesAComparator() {
-        for (ShopAttribute attr : ShopAttribute.values()) {
-            assertThat(attr.comparator()).isNotNull();
-        }
+    @ParameterizedTest
+    @EnumSource(ShopAttribute.class)
+    void everyAttribute_sortsTheSmallerValueFirstByDefault(ShopAttribute attr) {
+        // "low" is strictly smaller than "high" on every attribute (prices, unit prices, stock,
+        // capacity, batch quantity and distance).
+        FoundShop low = new FoundShop(
+                "k", "n", "STONE", false, null, "Steve", BigDecimal.ONE, BigDecimal.ONE, 1, 1, 1, "world", 0, 0, 0, 1);
+        FoundShop high = new FoundShop(
+                "k",
+                "n",
+                "STONE",
+                false,
+                null,
+                "Steve",
+                new BigDecimal("100"),
+                new BigDecimal("100"),
+                2,
+                2,
+                2,
+                "world",
+                0,
+                0,
+                0,
+                4);
+
+        assertThat(attr.comparator().compare(low, high)).isNegative();
+        assertThat(attr.comparator().compare(high, low)).isPositive();
     }
 
     @Test
@@ -57,7 +79,8 @@ class ShopAttributeTest {
 
     @Test
     void comparator_defaultIsAscending() {
-        assertThat(ShopAttribute.DISTANCE.comparator().compare(withDistance(1), withDistance(2))).isNegative();
+        assertThat(ShopAttribute.DISTANCE.comparator().compare(withDistance(1), withDistance(2)))
+                .isNegative();
     }
 
     // ── nullsLastDouble branches, via the BUY_PRICE comparator ──────────────────
@@ -71,19 +94,23 @@ class ShopAttributeTest {
     @Test
     void nullsLastDouble_firstNull_sortsAfter() {
         Comparator<FoundShop> cmp = ShopAttribute.BUY_PRICE.comparator();
-        assertThat(cmp.compare(withBuyPrice(null), withBuyPrice(BigDecimal.ONE))).isPositive();
+        assertThat(cmp.compare(withBuyPrice(null), withBuyPrice(BigDecimal.ONE)))
+                .isPositive();
     }
 
     @Test
     void nullsLastDouble_secondNull_sortsBefore() {
         Comparator<FoundShop> cmp = ShopAttribute.BUY_PRICE.comparator();
-        assertThat(cmp.compare(withBuyPrice(BigDecimal.ONE), withBuyPrice(null))).isNegative();
+        assertThat(cmp.compare(withBuyPrice(BigDecimal.ONE), withBuyPrice(null)))
+                .isNegative();
     }
 
     @Test
     void nullsLastDouble_bothPresent_comparesNumerically() {
         Comparator<FoundShop> cmp = ShopAttribute.BUY_PRICE.comparator();
-        assertThat(cmp.compare(withBuyPrice(new BigDecimal("1")), withBuyPrice(new BigDecimal("2")))).isNegative();
-        assertThat(cmp.compare(withBuyPrice(new BigDecimal("2")), withBuyPrice(new BigDecimal("2")))).isZero();
+        assertThat(cmp.compare(withBuyPrice(new BigDecimal("1")), withBuyPrice(new BigDecimal("2"))))
+                .isNegative();
+        assertThat(cmp.compare(withBuyPrice(new BigDecimal("2")), withBuyPrice(new BigDecimal("2"))))
+                .isZero();
     }
 }

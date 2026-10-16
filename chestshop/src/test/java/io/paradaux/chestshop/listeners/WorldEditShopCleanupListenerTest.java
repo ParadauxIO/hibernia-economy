@@ -1,21 +1,21 @@
 package io.paradaux.chestshop.listeners;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
 import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.function.operation.Operation;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockType;
-import org.junit.jupiter.api.Test;
-
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
 
 class WorldEditShopCleanupListenerTest {
-    @Test void actorlessEditsAreDeferredUntilTheirChunkLoads() throws Exception {
+    @Test
+    void actorlessEditsAreDeferredUntilTheirChunkLoads() throws Exception {
         var plugin = mock(org.bukkit.plugin.java.JavaPlugin.class);
         var server = mock(org.bukkit.Server.class);
         var plugins = mock(org.bukkit.plugin.PluginManager.class);
@@ -64,7 +64,8 @@ class WorldEditShopCleanupListenerTest {
         return state;
     }
 
-    @Test void publishesAcceptedSignChangesOnlyAfterDelegateCommit() throws Exception {
+    @Test
+    void publishesAcceptedSignChangesOnlyAfterDelegateCommit() throws Exception {
         Queue<WorldEditShopCleanupListener.Pos> queue = new ConcurrentLinkedQueue<>();
         Extent extent = mock(Extent.class);
         BlockVector3 pos = BlockVector3.at(-17, 64, 33);
@@ -85,7 +86,8 @@ class WorldEditShopCleanupListenerTest {
         assertThat(queue).containsExactly(new WorldEditShopCleanupListener.Pos("world", -17, 64, 33));
     }
 
-    @Test void rejectedEditsAndOrdinaryBlocksDoNotEnterQueue() throws Exception {
+    @Test
+    void rejectedEditsAndOrdinaryBlocksDoNotEnterQueue() throws Exception {
         Queue<WorldEditShopCleanupListener.Pos> queue = new ConcurrentLinkedQueue<>();
         Extent extent = mock(Extent.class);
         BlockVector3 pos = BlockVector3.at(1, 2, 3);
@@ -101,7 +103,8 @@ class WorldEditShopCleanupListenerTest {
         assertThat(queue).isEmpty();
     }
 
-    @Test void undoOrPasteQueuesRestoredSignAndDeduplicatesWithinSession() throws Exception {
+    @Test
+    void undoOrPasteQueuesRestoredSignAndDeduplicatesWithinSession() throws Exception {
         Queue<WorldEditShopCleanupListener.Pos> queue = new ConcurrentLinkedQueue<>();
         Extent extent = mock(Extent.class);
         BlockVector3 pos = BlockVector3.at(1, 2, 3);

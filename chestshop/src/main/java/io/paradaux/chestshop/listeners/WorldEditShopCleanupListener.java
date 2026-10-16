@@ -18,23 +18,20 @@ import com.sk89q.worldedit.world.biome.BiomeType;
 import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
-
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.MarketSyncService;
-
-import org.bukkit.World;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.server.PluginDisableEvent;
-import org.bukkit.event.world.ChunkLoadEvent;
-import org.bukkit.plugin.java.JavaPlugin;
-
 import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import org.bukkit.World;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.PluginDisableEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * Keeps the shop registry in step when WorldEdit/FastAsyncWorldEdit bulk-edits
@@ -99,7 +96,8 @@ public final class WorldEditShopCleanupListener implements Listener {
     public void onChunkLoad(ChunkLoadEvent event) {
         deferred.removeIf(pos -> {
             if (pos.world().equals(event.getWorld().getName())
-                    && (pos.x() >> 4) == event.getChunk().getX() && (pos.z() >> 4) == event.getChunk().getZ()) {
+                    && (pos.x() >> 4) == event.getChunk().getX()
+                    && (pos.z() >> 4) == event.getChunk().getZ()) {
                 queue.add(pos);
                 return true;
             }
@@ -109,14 +107,16 @@ public final class WorldEditShopCleanupListener implements Listener {
 
     @Subscribe
     public void onEditSession(EditSessionEvent event) {
-        if (!marketService.enabled() || event.getWorld() == null
+        if (!marketService.enabled()
+                || event.getWorld() == null
                 || event.getStage() != EditSession.Stage.BEFORE_CHANGE) {
             return;
         }
         if (fawe) {
             FaweShopCleanup.install(event, queue);
         } else {
-            event.setExtent(new SignChangeLogger(queue, event.getExtent(), event.getWorld().getName()));
+            event.setExtent(new SignChangeLogger(
+                    queue, event.getExtent(), event.getWorld().getName()));
         }
     }
 
@@ -160,27 +160,71 @@ public final class WorldEditShopCleanupListener implements Listener {
         }
 
         // Composition is intentional: ordinary WorldEdit makes AbstractDelegateExtent.commit final.
-        @Override public BlockVector3 getMinimumPoint() { return extent.getMinimumPoint(); }
-        @Override public BlockVector3 getMaximumPoint() { return extent.getMaximumPoint(); }
-        @Override public List<? extends Entity> getEntities(Region region) { return extent.getEntities(region); }
-        @Override public List<? extends Entity> getEntities() { return extent.getEntities(); }
-        @Override public Entity createEntity(Location location, BaseEntity entity) { return extent.createEntity(location, entity); }
-        @Override public BlockState getBlock(BlockVector3 position) { return extent.getBlock(position); }
-        @Override public BaseBlock getFullBlock(BlockVector3 position) { return extent.getFullBlock(position); }
-        @Override public BiomeType getBiome(BlockVector3 position) { return extent.getBiome(position); }
-        @Override public boolean setBiome(BlockVector3 position, BiomeType biome) { return extent.setBiome(position, biome); }
-        @Override public boolean fullySupports3DBiomes() { return extent.fullySupports3DBiomes(); }
+        @Override
+        public BlockVector3 getMinimumPoint() {
+            return extent.getMinimumPoint();
+        }
+
+        @Override
+        public BlockVector3 getMaximumPoint() {
+            return extent.getMaximumPoint();
+        }
+
+        @Override
+        public List<? extends Entity> getEntities(Region region) {
+            return extent.getEntities(region);
+        }
+
+        @Override
+        public List<? extends Entity> getEntities() {
+            return extent.getEntities();
+        }
+
+        @Override
+        public Entity createEntity(Location location, BaseEntity entity) {
+            return extent.createEntity(location, entity);
+        }
+
+        @Override
+        public BlockState getBlock(BlockVector3 position) {
+            return extent.getBlock(position);
+        }
+
+        @Override
+        public BaseBlock getFullBlock(BlockVector3 position) {
+            return extent.getFullBlock(position);
+        }
+
+        @Override
+        public BiomeType getBiome(BlockVector3 position) {
+            return extent.getBiome(position);
+        }
+
+        @Override
+        public boolean setBiome(BlockVector3 position, BiomeType biome) {
+            return extent.setBiome(position, biome);
+        }
+
+        @Override
+        public boolean fullySupports3DBiomes() {
+            return extent.fullySupports3DBiomes();
+        }
 
         @Override
         public Operation commit() {
             Operation delegate = extent.commit();
             Operation publish = new Operation() {
-                @Override public Operation resume(RunContext context) {
+                @Override
+                public Operation resume(RunContext context) {
                     queue.addAll(changed);
                     changed.clear();
                     return null;
                 }
-                @Override public void cancel() { changed.clear(); }
+
+                @Override
+                public void cancel() {
+                    changed.clear();
+                }
             };
             return delegate == null ? publish : new OperationQueue(delegate, publish);
         }

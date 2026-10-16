@@ -1,6 +1,7 @@
 package net.democracycraft.inttests;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -118,10 +119,11 @@ class PaginationEdgeTest {
                 a.awaitMessageContaining("Created", TIMEOUT);
                 Ledger.waitForGovernmentAccount(account, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/gov account history " + account + " 0");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -137,10 +139,11 @@ class PaginationEdgeTest {
                 a.awaitMessageContaining("Created", TIMEOUT);
                 Ledger.waitForGovernmentAccount(account, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/gov account history " + account + " -1");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -156,10 +159,11 @@ class PaginationEdgeTest {
                 a.awaitMessageContaining("Created", TIMEOUT);
                 Ledger.waitForGovernmentAccount(account, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/gov account history " + account + " 9999999");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -176,10 +180,11 @@ class PaginationEdgeTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business transactions " + firm + " 0");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -194,10 +199,11 @@ class PaginationEdgeTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business transactions " + firm + " -1");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -212,10 +218,11 @@ class PaginationEdgeTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business transactions " + firm + " 9999999");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -233,10 +240,11 @@ class PaginationEdgeTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int acctId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account transactions " + firm + " " + acctId + " 0");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -252,10 +260,11 @@ class PaginationEdgeTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int acctId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account transactions " + firm + " " + acctId + " 9999999");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }

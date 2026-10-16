@@ -113,15 +113,8 @@ class MultiBuyerTest {
             }
 
             // Firm BUSINESS account credited 3×; each buyer debited once.
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
             BigDecimal expectedFirm = firmBefore.add(BigDecimal.valueOf((long) PRICE * 3));
-            BigDecimal lastFirm = null;
-            while (System.nanoTime() < deadline) {
-                lastFirm = BusinessLedger.firmDefaultBalance(firmId).orElse(null);
-                if (lastFirm != null && lastFirm.compareTo(expectedFirm) == 0) break;
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(lastFirm).isEqualByComparingTo(expectedFirm);
+            BusinessLedger.waitForFirmDefaultBalance(firmId, expectedFirm, TIMEOUT);
             for (int i = 0; i < buyers.length; i++) {
                 Ledger.waitForPersonalBalance(mocks[i].getUuid(),
                         STARTING.subtract(BigDecimal.valueOf(PRICE)), TIMEOUT);

@@ -12,6 +12,7 @@ import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { ItemIcon } from '@/components/market/ItemIcon';
 import { itemIconUrl } from '@/lib/itemIcon';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -64,7 +65,7 @@ export default async function ChestShopPage({
         }
       />
 
-      <div className="table-wrap">
+      <TableWrap label="Items">
         <table className="data-table">
           <thead>
             <tr>
@@ -96,7 +97,7 @@ export default async function ChestShopPage({
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
 
       <Pagination
         page={sp.page}

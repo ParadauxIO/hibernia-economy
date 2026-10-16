@@ -1,11 +1,9 @@
 package io.paradaux.chestshop.utils;
 
-import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Constructor;
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 class MessageUtilTest {
 
@@ -32,12 +30,5 @@ class MessageUtilTest {
         Map<String, Object> v = MessageUtil.values(true, null, "a", "1", "b", "2", "c");
         assertThat(v).containsEntry("a", "1").containsEntry("b", "2");
         assertThat(v).doesNotContainKey("c"); // unpaired trailing value is ignored
-    }
-
-    @Test
-    void isUtilityClass_privateConstructor() throws Exception {
-        Constructor<MessageUtil> ctor = MessageUtil.class.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        assertThat(ctor.newInstance()).isNotNull();
     }
 }

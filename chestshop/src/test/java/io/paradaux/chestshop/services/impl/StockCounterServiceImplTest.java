@@ -1,5 +1,15 @@
 package io.paradaux.chestshop.services.impl;
 
+import static io.paradaux.chestshop.services.SignService.QUANTITY_LINE;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.model.Transaction;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
@@ -11,6 +21,9 @@ import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.InventoryUtil;
 import io.paradaux.chestshop.utils.QuantityUtil;
 import io.paradaux.chestshop.utils.SignText;
+import java.util.IllegalFormatConversionException;
+import java.util.IllegalFormatException;
+import java.util.List;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
@@ -20,22 +33,6 @@ import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
-
-import java.util.Formatter;
-import java.util.IllegalFormatException;
-import java.util.List;
-
-import static io.paradaux.chestshop.services.SignService.QUANTITY_LINE;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit coverage for {@link StockCounterServiceImpl}: the {@code Q n : C m} stock-counter maths that
@@ -68,18 +65,13 @@ class StockCounterServiceImplTest {
         inventoryService = mock(InventoryService.class);
         materialService = mock(MaterialService.class);
 
-        service = new StockCounterServiceImpl(items, config, signService, shopBlockService,
-                inventoryService, materialService);
+        service = new StockCounterServiceImpl(
+                items, config, signService, shopBlockService, inventoryService, materialService);
     }
 
     // A genuine IllegalFormatException instance for the narrow catch arcs.
     private static IllegalFormatException illegalFormat() {
-        try {
-            new Formatter().format("%d", "not-a-number"); // throws IllegalFormatConversionException
-            throw new AssertionError("expected an IllegalFormatException");
-        } catch (IllegalFormatException e) {
-            return e;
-        }
+        return new IllegalFormatConversionException('d', String.class);
     }
 
     private ShopCreation shopCreation(String[] lines, Sign sign) {
@@ -95,13 +87,13 @@ class StockCounterServiceImplTest {
         ShopCreation event = shopCreation(lines, sign);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class)) {
-            ss.when(() -> SignService.getQuantity(any(String[].class)))
-                    .thenThrow(new IllegalArgumentException("nope"));
+            ss.when(() -> SignService.getQuantity(any(String[].class))).thenThrow(new IllegalArgumentException("nope"));
 
             service.onPreShopCreation(event);
         }
         // Untouched line 1.
-        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE)).isEqualTo("bad");
+        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE))
+                .isEqualTo("bad");
     }
 
     @Test
@@ -112,15 +104,17 @@ class StockCounterServiceImplTest {
         when(config.isUseStockCounter()).thenReturn(false);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantity(any(String[].class))).thenReturn(64);
             ss.when(() -> SignService.getQuantityLine(any(String[].class))).thenReturn("Q 64 : C 3");
-            qu.when(() -> QuantityUtil.quantityLineContainsCounter("Q 64 : C 3")).thenReturn(true);
+            qu.when(() -> QuantityUtil.quantityLineContainsCounter("Q 64 : C 3"))
+                    .thenReturn(true);
 
             service.onPreShopCreation(event);
         }
         // The counter line was normalised to the bare quantity.
-        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE)).isEqualTo("64");
+        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE))
+                .isEqualTo("64");
     }
 
     @Test
@@ -133,7 +127,7 @@ class StockCounterServiceImplTest {
         when(signService.isAdminShop(any(String[].class))).thenReturn(true);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantity(any(String[].class))).thenReturn(64);
             ss.when(() -> SignService.getQuantityLine(any(String[].class))).thenReturn("64");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
@@ -153,7 +147,7 @@ class StockCounterServiceImplTest {
         when(config.getMaxShopAmount()).thenReturn(100000);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantity(any(String[].class))).thenReturn(64);
             ss.when(() -> SignService.getQuantityLine(any(String[].class))).thenReturn("64");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
@@ -184,7 +178,7 @@ class StockCounterServiceImplTest {
         when(inventoryService.getAmount(traded, inv)).thenReturn(12);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantity(any(String[].class))).thenReturn(64);
             ss.when(() -> SignService.getQuantityLine(any(String[].class))).thenReturn("64");
             ss.when(() -> SignService.getItem(any(String[].class))).thenReturn("Diamond");
@@ -192,7 +186,8 @@ class StockCounterServiceImplTest {
 
             service.onPreShopCreation(event);
         }
-        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE)).isEqualTo("Q 64 : C 12");
+        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE))
+                .isEqualTo("Q 64 : C 12");
     }
 
     @Test
@@ -206,7 +201,7 @@ class StockCounterServiceImplTest {
         when(items.parse("Rubbish")).thenReturn(null);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantity(any(String[].class))).thenReturn(64);
             ss.when(() -> SignService.getQuantityLine(any(String[].class))).thenReturn("64");
             ss.when(() -> SignService.getItem(any(String[].class))).thenReturn("Rubbish");
@@ -215,7 +210,8 @@ class StockCounterServiceImplTest {
             service.onPreShopCreation(event);
         }
         verify(shopBlockService, never()).findConnectedContainer(any(Sign.class));
-        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE)).isEqualTo("64");
+        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE))
+                .isEqualTo("64");
     }
 
     @Test
@@ -230,7 +226,7 @@ class StockCounterServiceImplTest {
         when(shopBlockService.findConnectedContainer(sign)).thenReturn(null);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantity(any(String[].class))).thenReturn(64);
             ss.when(() -> SignService.getQuantityLine(any(String[].class))).thenReturn("64");
             ss.when(() -> SignService.getItem(any(String[].class))).thenReturn("Diamond");
@@ -238,7 +234,8 @@ class StockCounterServiceImplTest {
 
             service.onPreShopCreation(event);
         }
-        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE)).isEqualTo("64");
+        org.assertj.core.api.Assertions.assertThat(event.getSignLine(QUANTITY_LINE))
+                .isEqualTo("64");
     }
 
     // ═══════════════════════════ onTransaction ═══════════════════════════
@@ -251,11 +248,12 @@ class StockCounterServiceImplTest {
         when(config.isUseStockCounter()).thenReturn(false);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("Q 64 : C 3");
             ss.when(() -> SignService.getQuantity(sign)).thenReturn(64);
-            qu.when(() -> QuantityUtil.quantityLineContainsCounter("Q 64 : C 3")).thenReturn(true);
+            qu.when(() -> QuantityUtil.quantityLineContainsCounter("Q 64 : C 3"))
+                    .thenReturn(true);
 
             service.onTransaction(event);
 
@@ -273,8 +271,8 @@ class StockCounterServiceImplTest {
         when(config.isUseStockCounter()).thenReturn(false);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
 
@@ -294,11 +292,12 @@ class StockCounterServiceImplTest {
         when(config.getMaxShopAmount()).thenReturn(100000);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("Q 64 : C 3");
             ss.when(() -> SignService.getQuantity(sign)).thenReturn(64);
-            qu.when(() -> QuantityUtil.quantityLineContainsCounter("Q 64 : C 3")).thenReturn(true);
+            qu.when(() -> QuantityUtil.quantityLineContainsCounter("Q 64 : C 3"))
+                    .thenReturn(true);
 
             service.onTransaction(event);
 
@@ -316,8 +315,8 @@ class StockCounterServiceImplTest {
         when(config.getMaxShopAmount()).thenReturn(100000);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
 
@@ -339,7 +338,7 @@ class StockCounterServiceImplTest {
         when(signService.isAdminShop(sign)).thenReturn(true);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
 
@@ -361,7 +360,7 @@ class StockCounterServiceImplTest {
         when(config.isForceUnlimitedAdminShop()).thenReturn(false);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
 
@@ -382,7 +381,7 @@ class StockCounterServiceImplTest {
         when(config.isForceUnlimitedAdminShop()).thenReturn(false);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
 
@@ -408,8 +407,8 @@ class StockCounterServiceImplTest {
         when(shopBlockService.findConnectedShopSigns(holder)).thenReturn(List.of(connected));
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
-             MockedStatic<InventoryUtil> iu = mockStatic(InventoryUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
+                MockedStatic<InventoryUtil> iu = mockStatic(InventoryUtil.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
             ss.when(() -> SignService.getItem(connected)).thenReturn("Rubbish");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
@@ -443,8 +442,8 @@ class StockCounterServiceImplTest {
         when(ownerInv.getHolder(false)).thenReturn(holder);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
-             MockedStatic<InventoryUtil> iu = mockStatic(InventoryUtil.class)) {
+                MockedStatic<QuantityUtil> qu = mockStatic(QuantityUtil.class);
+                MockedStatic<InventoryUtil> iu = mockStatic(InventoryUtil.class)) {
             ss.when(() -> SignService.getQuantityLine(sign)).thenReturn("64");
             ss.when(() -> SignService.getItem(connected)).thenReturn("Rubbish");
             qu.when(() -> QuantityUtil.quantityLineContainsCounter("64")).thenReturn(false);
@@ -496,7 +495,7 @@ class StockCounterServiceImplTest {
         when(match.getAmount()).thenReturn(5);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getItem(sign)).thenReturn("Diamond");
             when(items.parse("Diamond")).thenReturn(traded);
             ss.when(() -> SignService.getQuantity(sign)).thenReturn(64);
@@ -520,7 +519,7 @@ class StockCounterServiceImplTest {
         ItemStack traded = mock(ItemStack.class);
 
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getItem(sign)).thenReturn("Diamond");
             when(items.parse("Diamond")).thenReturn(traded);
             ss.when(() -> SignService.getQuantity(sign)).thenReturn(64);
@@ -529,7 +528,9 @@ class StockCounterServiceImplTest {
 
             service.updateCounterOnQuantityLine(sign, inv);
 
-            st.verify(() -> SignText.setLine(any(Sign.class), org.mockito.ArgumentMatchers.anyInt(), anyString()), never());
+            st.verify(
+                    () -> SignText.setLine(any(Sign.class), org.mockito.ArgumentMatchers.anyInt(), anyString()),
+                    never());
         }
         verify(sign, never()).update(true);
     }
@@ -564,7 +565,7 @@ class StockCounterServiceImplTest {
     void removeCounter_returnsWhenQuantityFormatInvalid() {
         Sign sign = mock(Sign.class);
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getQuantity(sign)).thenThrow(illegalFormat());
 
             service.removeCounterFromQuantityLine(sign);
@@ -578,7 +579,7 @@ class StockCounterServiceImplTest {
     void removeCounter_rewritesBareQuantity() {
         Sign sign = mock(Sign.class);
         try (MockedStatic<SignService> ss = mockStatic(SignService.class);
-             MockedStatic<SignText> st = mockStatic(SignText.class)) {
+                MockedStatic<SignText> st = mockStatic(SignText.class)) {
             ss.when(() -> SignService.getQuantity(sign)).thenReturn(64);
 
             service.removeCounterFromQuantityLine(sign);
@@ -611,7 +612,8 @@ class StockCounterServiceImplTest {
             ss.when(() -> SignService.getItem(sign)).thenReturn("Diamond");
             when(items.parse("Diamond")).thenReturn(traded);
 
-            org.assertj.core.api.Assertions.assertThat(service.determineItemTradedByShop(sign)).isSameAs(traded);
+            org.assertj.core.api.Assertions.assertThat(service.determineItemTradedByShop(sign))
+                    .isSameAs(traded);
         }
     }
 
@@ -620,6 +622,7 @@ class StockCounterServiceImplTest {
         ItemStack traded = mock(ItemStack.class);
         when(items.parse("Diamond")).thenReturn(traded);
 
-        org.assertj.core.api.Assertions.assertThat(service.determineItemTradedByShop("Diamond")).isSameAs(traded);
+        org.assertj.core.api.Assertions.assertThat(service.determineItemTradedByShop("Diamond"))
+                .isSameAs(traded);
     }
 }

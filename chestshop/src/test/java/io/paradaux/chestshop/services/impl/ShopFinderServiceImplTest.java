@@ -1,5 +1,11 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.dialogs.FindState;
 import io.paradaux.chestshop.model.FoundShop;
 import io.paradaux.chestshop.services.MarketService;
@@ -7,23 +13,17 @@ import io.paradaux.chestshop.support.ServerTest;
 import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.market.ShopResult;
 import io.paradaux.treasury.api.market.ShopSearchQuery;
-import org.bukkit.Material;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockbukkit.mockbukkit.MockBukkit;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import java.util.concurrent.TimeUnit;
+import org.bukkit.Material;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockbukkit.mockbukkit.MockBukkit;
 
 /**
  * {@link ShopFinderServiceImpl}: the off-thread {@code /find} query + in-memory pipeline over a
@@ -43,17 +43,33 @@ class ShopFinderServiceImplTest extends ServerTest {
     }
 
     private FindState state(String world) {
-        return new FindState(item(Material.DIAMOND, 1), "Diamond", "Diamond",
-                world, 0, 64, 0, true);
+        return new FindState(item(Material.DIAMOND, 1), "Diamond", "Diamond", world, 0, 64, 0, true);
     }
 
     private ShopResult row(String world, int x) {
         return new ShopResult(
-                world, UUID.randomUUID(), x, 64, 0, false,
-                "PERSONAL", null, UUID.randomUUID(), "Notch",
-                "DIAMOND", "Diamond", "Diamond", false, null,
-                BigDecimal.valueOf(5), null, 1,
-                10, 20, true, false);
+                world,
+                UUID.randomUUID(),
+                x,
+                64,
+                0,
+                false,
+                "PERSONAL",
+                null,
+                UUID.randomUUID(),
+                "Notch",
+                "DIAMOND",
+                "Diamond",
+                "Diamond",
+                false,
+                null,
+                BigDecimal.valueOf(5),
+                null,
+                1,
+                10,
+                20,
+                true,
+                false);
     }
 
     // ---- available --------------------------------------------------------------
@@ -78,8 +94,7 @@ class ShopFinderServiceImplTest extends ServerTest {
     void query_mapsRowsThroughPipeline() {
         ShopQueryApi api = mock(ShopQueryApi.class);
         when(market.shopQuery()).thenReturn(api);
-        when(api.searchShops(any(ShopSearchQuery.class)))
-                .thenReturn(List.of(row("world", 3), row("world", 9)));
+        when(api.searchShops(any(ShopSearchQuery.class))).thenReturn(List.of(row("world", 3), row("world", 9)));
 
         List<FoundShop> result = finder.query(state("world"));
         assertThat(result).hasSize(2);
@@ -107,7 +122,11 @@ class ShopFinderServiceImplTest extends ServerTest {
         CompletableFuture<List<FoundShop>> future = finder.find(state("world"));
         server.getScheduler().waitAsyncTasksFinished();
 
+        // Bounded get rather than an immediate isCompletedExceptionally(): under load the
+        // async task can still be completing the future when waitAsyncTasksFinished returns.
+        assertThatThrownBy(() -> future.get(5, TimeUnit.SECONDS))
+                .isInstanceOf(ExecutionException.class)
+                .hasRootCauseMessage("boom");
         assertThat(future.isCompletedExceptionally()).isTrue();
-        assertThatThrownBy(future::get).isInstanceOf(ExecutionException.class);
     }
 }

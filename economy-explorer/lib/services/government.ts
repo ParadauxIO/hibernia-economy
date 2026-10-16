@@ -4,7 +4,7 @@ import { getGovernmentAccounts, getRecentFines, getFineTotals, countFines } from
 import { auditView } from '@/lib/audit';
 
 /** Authorization stays inside the service so a new route cannot forget scope. */
-export async function getGovernmentDashboard(days: number, options?: { page: number; q?: string; status?: string }) {
+export async function getGovernmentDashboard(days: number, options?: { page: number; q?: string | undefined; status?: string | undefined }) {
   const viewer = await getViewer();
   const global = hasPermission(viewer, 'government.read.all');
   if (!global) requirePermission(viewer, 'government.read');

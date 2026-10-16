@@ -144,7 +144,7 @@ interface AdminRawRow extends SubDbRow {
 function toAdminRow(r: AdminRawRow): AdminWebhookRow {
   return {
     ...toRow(r),
-    ownerUuid: r.owner_uuid_bin ? binToUuid(r.owner_uuid_bin) : null,
+    ownerUuid: binToUuid(r.owner_uuid_bin), // NOT NULL (V13)
     ownerName: r.owner_name,
     accountName: r.account_name,
     firmName: r.firm_name,

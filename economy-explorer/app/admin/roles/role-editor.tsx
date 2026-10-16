@@ -14,7 +14,7 @@ export function RoleEditor({ role, actorPermissions }: { role?: RoleDefinition; 
   const delegable = !role || role.permissions.every(p => actorPermissions.includes(p));
   const canSave = delegable && actorPermissions.includes(role ? 'roles.update' : 'roles.create');
   const canDelete = role && role.key !== 'player' && delegable && actorPermissions.includes('roles.delete');
-  const groups = [...new Set(PERMISSIONS.map(p => p.split('.')[0]))];
+  const groups = [...new Set(PERMISSIONS.map(p => p.split('.')[0] ?? p))];
 
   function save(event: React.FormEvent) {
     event.preventDefault(); setError(null);
@@ -22,6 +22,9 @@ export function RoleEditor({ role, actorPermissions }: { role?: RoleDefinition; 
       const value = { key, name, description: description || null, permissions: [...selected] };
       const result = role ? await updateRoleAction(value, role.revision) : await createRoleAction(value);
       if (!result.ok) setError(result.error ?? 'Could not save the role.');
+      // A full document load on purpose: every server component (nav, gates)
+      // must re-resolve the changed grants, not just this route segment.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       else window.location.assign(`/admin/roles/${encodeURIComponent(key)}`);
     });
   }
@@ -31,6 +34,8 @@ export function RoleEditor({ role, actorPermissions }: { role?: RoleDefinition; 
     startTransition(async () => {
       const result = await deleteRoleAction(role.key, role.revision);
       if (!result.ok) setError(result.error ?? 'Could not delete the role.');
+      // Full document load, as after a save.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       else window.location.assign('/admin/roles');
     });
   }

@@ -54,6 +54,26 @@ can create concurrently; firm-name uniqueness remains enforced by the existing
 unique index. Lock rows are retained after disband and must not be pruned while
 writers are active. Deploy Flyway V34 before the updated Business plugin.
 
+Firm creation is **not crash-safe across Business and Treasury** (ADT-92).
+The firm, default roles/permissions, account link, and default-account update
+share one Business transaction. Roles/permissions are written before Treasury
+creation to reduce the orphan window, but Treasury commits independently. A
+crash after Treasury commits its account and before Business commits can leave
+an active BUSINESS account (possibly with owner membership/authorization) with
+no firm or account link. Runtime exceptions inside the guarded creation block
+attempt to archive the account; process death and a later transaction-commit
+failure bypass that compensation. An archive failure is logged as requiring
+manual cleanup.
+
+The membership sweep below only visits committed links and **cannot repair these
+creation orphans**. After an interrupted create, an operator must investigate
+Treasury BUSINESS accounts against persisted Business links while firm creation
+is quiescent across servers. An absent link during a running create is not proof
+of an orphan. Verify ownership and balance before cleanup through Treasury's
+supported operations; preserve funds and ledger history. Retrying creation does
+not discover or re-link the earlier account. Durable provisioning/retry support
+or a dedicated orphan reconciliation API remains future work.
+
 - **Stack:** same shape as Treasury (Paper · Guice · MyBatis · HikariCP ·
   `hibernia-framework`). Libs relocated under `io.paradaux.business.libs.*`.
 - **Layering:** `commands/` → `services/`(+`impl/`) → `mappers/`.

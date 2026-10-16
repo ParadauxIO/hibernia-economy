@@ -8,7 +8,14 @@ commands:
   diag:
     description: Diagnostic commands. Subcommands - click <player> <world> <x> <y> <z>; break <player> <world> <x> <y> <z>; pos <player>; logon, logoff
     usage: /diag <subcommand> [args...]
+  dcsync:
+    description: Barrier sentinel for the integration tests - echoes "dcsync <nonce>" back to the sender.
+    usage: /dcsync <nonce>
+    permission: dcdiag.sync
 permissions:
   dcdiag.use:
     description: Run /diag commands.
     default: op
+  dcdiag.sync:
+    description: Run /dcsync (every mock player needs it, op or not).
+    default: true

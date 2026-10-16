@@ -87,14 +87,13 @@ public final class WebhookReceiver {
 
     /** The first delivery for {@code subscriptionId} matching {@code filter}, waiting up to {@code timeout}. */
     public Delivery await(long subscriptionId, Predicate<JsonNode> filter, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            Optional<Delivery> match = find(subscriptionId, filter);
-            if (match.isPresent()) return match.get();
-            sleep(250);
+        try {
+            return Await.until("a matching webhook delivery for subscription " + subscriptionId,
+                    () -> find(subscriptionId, filter).orElse(null), d -> d != null, timeout);
+        } catch (AssertionError e) {
+            throw new AssertionError(e.getMessage() + " (deliveries received for it: "
+                    + forSubscription(subscriptionId).stream().map(d -> d.json().toString()).toList() + ")", e);
         }
-        throw new AssertionError("No webhook delivery for subscription " + subscriptionId + " within "
-                + timeout + " (received for it: " + forSubscription(subscriptionId).size() + ")");
     }
 
     /** Every delivery recorded so far for {@code subscriptionId}. */
@@ -117,15 +116,6 @@ public final class WebhookReceiver {
                 received.add(new Delivery(Map.copyOf(exchange.getRequestHeaders()), body));
             }
             exchange.sendResponseHeaders(200, -1);
-        }
-    }
-
-    private static void sleep(long ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted", e);
         }
     }
 }

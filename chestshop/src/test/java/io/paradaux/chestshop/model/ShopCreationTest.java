@@ -1,21 +1,18 @@
 package io.paradaux.chestshop.model;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.chestshop.model.ShopCreation.CreationOutcome;
 import io.paradaux.chestshop.support.ServerTest;
+import java.util.EnumSet;
+import java.util.Set;
 import org.bukkit.block.Sign;
-import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.EnumSet;
-import java.util.Set;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Covers the {@link ShopCreation} carrier: defensive cloning of sign lines, the cancel/outcome
- * state machine, owner-account resolution, and the {@link CreationOutcome} break-sign flag
+ * state machine, and the {@link CreationOutcome} break-sign flag
  * (both enum constructors).
  */
 class ShopCreationTest extends ServerTest {
@@ -83,24 +80,6 @@ class ShopCreationTest extends ServerTest {
         ShopCreation creation = creation("a", "b", "c", "d");
         creation.setSignLine((byte) 2, "new");
         assertThat(creation.getSignLine((byte) 2)).isEqualTo("new");
-    }
-
-    @Test
-    void exposesPlayerAndSign() {
-        Player creator = player("Steve");
-        ShopCreation creation = new ShopCreation(creator, sign, new String[]{"a", "b", "c", "d"});
-        assertThat(creation.getPlayer()).isSameAs(creator);
-        assertThat(creation.getSign()).isSameAs(sign);
-    }
-
-    @Test
-    void ownerAccount_defaultsNull_andIsSettable() {
-        ShopCreation creation = creation("a", "b", "c", "d");
-        assertThat(creation.getOwnerAccount()).isNull();
-
-        Account owner = new Account("Owner", UUID.randomUUID());
-        creation.setOwnerAccount(owner);
-        assertThat(creation.getOwnerAccount()).isSameAs(owner);
     }
 
     @Test

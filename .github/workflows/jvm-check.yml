@@ -1,0 +1,134 @@
+name: JVM · Check
+
+# The JVM half of CI, as a reusable workflow: ci.yml calls it with the default
+# `build` (every project's `check` — tests, :business:testWithoutCarbon /
+# testWithoutPlaceholderApi, the jacoco gates — plus `assemble`, so a shading
+# regression in any shadowJar/bootJar still fails a PR). The publish and image
+# workflows call it with a narrower task list so they gate on the same job
+# definition instead of a copy (ADT-19, ADT-52).
+#
+# `check` is the contract: what gates a merge is what `./gradlew check` runs, and
+# the coverage thresholds live in the Gradle builds, not here.
+
+on:
+  workflow_call:
+    inputs:
+      tasks:
+        description: Gradle tasks to run (space-separated).
+        type: string
+        default: build
+      check-name:
+        description: Name of the JUnit check run, unique per calling workflow.
+        type: string
+        default: JVM tests
+
+permissions:
+  contents: read
+  checks: write          # surface JUnit results as a check run
+
+jobs:
+  check:
+    name: gradle ${{ inputs.tasks }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # One real MariaDB for every DB-backed suite, each on its own database.
+    # The harnesses (MariadbContainerExtension / EmbeddedMariaDb) see the
+    # *_TEST_JDBC_URL below and skip MariaDB4j, whose bundled binary needs system
+    # libs the runner image doesn't ship. 10.11 is production's major; 11.6+
+    # turns on innodb_snapshot_isolation, which makes concurrent transfers that
+    # share a balance row fail with error 1020 under REPEATABLE READ.
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=20
+
+    env:
+      TREASURY_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_test
+      TREASURY_TEST_DB_USER: root
+      TREASURY_TEST_DB_PASS: ci
+      BUSINESS_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/business_test
+      BUSINESS_TEST_DB_USER: root
+      BUSINESS_TEST_DB_PASS: ci
+      TREASURYAPI_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasuryapi_test
+      TREASURYAPI_TEST_DB_USER: root
+      TREASURYAPI_TEST_DB_PASS: ci
+      TREASURY_REST_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_rest_test
+      TREASURY_REST_TEST_DB_USER: root
+      TREASURY_REST_TEST_DB_PASS: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Spotless ratchets against origin/develop (only files changed from it are
+          # format-checked); check fails loudly on CI if that ref is missing.
+          fetch-depth: 0
+
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
+
+      # The harnesses run the economy-flyway migrations themselves; they only
+      # need the empty databases to exist.
+      - name: Create the test databases
+        run: |
+          docker exec "${{ job.services.mariadb.id }}" mariadb -uroot -pci -e "
+            CREATE DATABASE treasury_test;
+            CREATE DATABASE business_test;
+            CREATE DATABASE treasuryapi_test;
+            CREATE DATABASE treasury_rest_test;"
+
+      # --parallel: the suites use separate databases, so projects can test
+      # concurrently. --continue: report every failing project, not just the first.
+      - name: gradle ${{ inputs.tasks }}
+        env:
+          GRADLE_TASKS: ${{ inputs.tasks }}
+        run: |
+          read -ra tasks <<<"$GRADLE_TASKS"
+          sh ./gradlew "${tasks[@]}" --parallel --continue -Pci=true
+
+      # Fork PRs get a read-only token, so annotate instead of creating a check.
+      - name: Publish test results
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@db71d41eb79864e25ab0337e395c352e84523afe # v4.3.1
+        with:
+          report_paths: '**/build/test-results/*/TEST-*.xml'
+          check_name: ${{ inputs.check-name }}
+          annotate_only: ${{ github.event.pull_request.head.repo.fork == true }}
+          require_tests: true
+          detailed_summary: true
+
+      # Consumed by ci.yml's PR coverage comment.
+      - name: Upload coverage XML
+        if: ${{ !cancelled() }}
+        continue-on-error: true   # a convenience for the comment, not a gate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: jacoco-xml
+          path: |
+            treasury/build/reports/jacoco/test/jacocoTestReport.xml
+            business/build/reports/jacoco/test/jacocoTestReport.xml
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Upload test reports on failure
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: jvm-test-reports
+          path: |
+            **/build/reports/tests/
+            **/build/reports/jacoco/
+            **/build/test-results/
+            treasury-rest-api/build/openapi/
+            !economy-explorer/**
+          if-no-files-found: ignore

@@ -15,6 +15,7 @@ import { Player } from '@/components/Player';
 import { RevokeButton } from './revoke-button';
 import { RotateButton } from './rotate-button';
 import { LimitDialog } from './limit-dialog';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +60,7 @@ export default async function AdminApiKeysPage() {
         <div className="card-title">All keys
           <span className="sub">limit multiplier is per-issuer (applies to every one of their keys)</span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="All keys">
           <table className="data-table">
             <thead>
               <tr>
@@ -140,7 +141,7 @@ export default async function AdminApiKeysPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );

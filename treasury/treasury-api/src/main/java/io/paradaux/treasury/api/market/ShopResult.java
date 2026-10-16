@@ -21,27 +21,29 @@ import java.util.UUID;
 public record ShopResult(
         // identity = sign location
         String world,
-        UUID worldUuid,           // stable world id; null for rows written before V25
-        int signX, int signY, int signZ,
+        UUID worldUuid, // stable world id; null for rows written before V25
+        int signX,
+        int signY,
+        int signZ,
         boolean adminShop,
         // owner
         String shopAccountType,
         Integer shopFirmId,
         UUID shopOwnerUuid,
-        String ownerName,         // resolved; null for admin / unknown
+        String ownerName, // resolved; null for admin / unknown
         // item
         String material,
         String itemKey,
         String itemName,
         boolean itemCustom,
-        String itemData,          // Bukkit YAML ItemStack under the "item" key when itemCustom; else null
+        String itemData, // Bukkit YAML ItemStack under the "item" key when itemCustom; else null
         // pricing
-        BigDecimal buyPrice,      // customer buys from shop; null if not offered
-        BigDecimal sellPrice,     // customer sells to shop; null if not offered
-        int batchQty,             // units per transaction
+        BigDecimal buyPrice, // customer buys from shop; null if not offered
+        BigDecimal sellPrice, // customer sells to shop; null if not offered
+        int batchQty, // units per transaction
         // live state
-        Integer currentStock,     // units in the chest; null = admin/infinite/unknown
-        Integer estimatedCapacity,// remaining free space; null = admin/infinite/unknown
-        boolean visible,          // owner search-visibility flag
-        boolean hologram          // per-shop hologram flag
-) {}
+        Integer currentStock, // units in the chest; null = admin/infinite/unknown
+        Integer estimatedCapacity, // remaining free space; null = admin/infinite/unknown
+        boolean visible, // owner search-visibility flag
+        boolean hologram // per-shop hologram flag
+        ) {}

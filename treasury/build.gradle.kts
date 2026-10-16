@@ -5,6 +5,12 @@ plugins {
     id("com.gradleup.shadow")
     id("maven-publish")
     id("io.paradaux.paper-server-conventions")
+    // TestServicesModule/TestConfigs (the real-service Guice wiring the ITs use) live in
+    // src/testFixtures so business can run its ITs against the REAL TreasuryApi.
+    // treasury itself is never published (only treasury-api is), so the fixtures
+    // variant never reaches a repository.
+    `java-test-fixtures`
+    id("io.paradaux.mutation-testing-conventions")
 }
 
 // group + version are set centrally by the root allprojects block (single
@@ -67,6 +73,9 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
 
+    // Property-based tests (jqwik runs as a second JUnit Platform engine).
+    testImplementation(libs.jqwik)
+
     // Embedded MariaDB for integration tests — no Docker required.
     // MariaDB4j unpacks a real MariaDB binary into a temp dir and runs it on a
     // dynamic port.
@@ -104,6 +113,11 @@ dependencies {
     // schema.sql snapshot to drift. flyway-mysql handles the MySQL/MariaDB URL.
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.mysql)
+
+    // Test fixtures: compile against the same API/Guice the services use.
+    testFixturesImplementation(project(":treasury:treasury-api"))
+    testFixturesImplementation(libs.guice)
+    testFixturesImplementation(libs.hibernia.framework)
 }
 
 // Stage the economy-flyway migrations onto the test classpath (under db/migration)
@@ -113,6 +127,38 @@ tasks.named<Copy>("processTestResources") {
         into("db/migration")
     }
 }
+
+// The paper-server conventions disable :jar so it can't overwrite the shaded plugin
+// jar. Re-enable it under a "thin" classifier (no clash with the shadow jar) so a
+// testFixtures(project(":treasury")) dependency resolves to the plain, unrelocated
+// classes — business's ITs run against the real TreasuryApi through it. Only the
+// shadow jar is staged or shipped.
+tasks.named<Jar>("jar") {
+    enabled = true
+    archiveClassifier.set("thin")
+}
+
+// Bukkit / I/O glue that can't be exercised without a running server — the
+// plugin main, command and listener entrypoints, the scheduler tasks, the Guice
+// wiring and the MyBatis mapper interfaces. Logic does not belong in these: the
+// tax-cycle calendar maths moved out of tasks/TaxCycleTask into
+// utils/TaxCycleSchedule and the command amount rules into :common AmountInput,
+// both of which are measured. VaultEconomyAdapter is no longer excluded: it is
+// every Vault plugin's way into the economy and is unit-tested. Shared by the
+// report and the verification rule so the gate evaluates exactly the set the
+// report shows.
+val coverageExcludes = listOf(
+    "io/paradaux/treasury/Treasury.class",
+    "io/paradaux/treasury/Treasury\$*.class",
+    "io/paradaux/treasury/commands/**",
+    "io/paradaux/treasury/adapters/VaultEconomyRegistrar.class",
+    "io/paradaux/treasury/events/**",
+    "io/paradaux/treasury/tasks/**",
+    "io/paradaux/treasury/guice/**",
+    "io/paradaux/treasury/utils/CallingPluginDetector.class",
+    "io/paradaux/treasury/utils/LoggingConfigurer.class",
+    "io/paradaux/treasury/mappers/**",
+)
 
 tasks {
     test {
@@ -125,33 +171,32 @@ tasks {
 
     jacocoTestCoverageVerification {
         dependsOn(jacocoTestReport)
-        // Mirror the report's class-level exclusion so the rule applies to the
-        // same in-scope set as the report.
-        val excludes = listOf(
-            "io/paradaux/treasury/Treasury.class",
-            "io/paradaux/treasury/Treasury\$*.class",
-            "io/paradaux/treasury/commands/**",
-            "io/paradaux/treasury/adapters/VaultEconomyAdapter.class",
-            "io/paradaux/treasury/adapters/VaultEconomyRegistrar.class",
-            "io/paradaux/treasury/events/**",
-            "io/paradaux/treasury/tasks/**",
-            "io/paradaux/treasury/guice/**",
-            "io/paradaux/treasury/utils/CallingPluginDetector.class",
-            "io/paradaux/treasury/utils/LoggingConfigurer.class",
-            "io/paradaux/treasury/mappers/**"
-        )
+        // Same in-scope set as the report (coverageExcludes, defined once above).
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(excludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
+        // A ratchet, not a target: a few points under the measured coverage so a
+        // change that drops tests fails, without pushing anyone to write tests
+        // that only execute lines. Whether those tests would catch a bug is
+        // measured by mutation testing (`pitest`, see below), not by this gate.
+        // Measured 2026-10 (VaultEconomyAdapter now in scope, Lombok-generated code
+        // filtered): LINE 96.0%, BRANCH 86.5%. Was a LINE-only 0.95 gate.
         violationRules {
             rule {
                 element = "BUNDLE"
                 limit {
                     counter = "LINE"
                     value = "COVEREDRATIO"
-                    minimum = "0.95".toBigDecimal()
+                    minimum = "0.93".toBigDecimal()
+                }
+                limit {
+                    counter = "BRANCH"
+                    value = "COVEREDRATIO"
+                    minimum = "0.83".toBigDecimal()
                 }
             }
         }
@@ -163,25 +208,12 @@ tasks {
             xml.required.set(true)
             html.required.set(true)
         }
-        // Bukkit / I/O glue that can't be exercised without a running server.
-        // Coverage targets apply to the in-scope set (services, api, utils, configs).
-        val excludes = listOf(
-            "io/paradaux/treasury/Treasury.class",
-            "io/paradaux/treasury/Treasury\$*.class",
-            "io/paradaux/treasury/commands/**",
-            "io/paradaux/treasury/adapters/VaultEconomyAdapter.class",
-            "io/paradaux/treasury/adapters/VaultEconomyRegistrar.class",
-            "io/paradaux/treasury/events/**",
-            "io/paradaux/treasury/tasks/**",
-            "io/paradaux/treasury/guice/**",
-            "io/paradaux/treasury/utils/CallingPluginDetector.class",
-            "io/paradaux/treasury/utils/LoggingConfigurer.class",
-            "io/paradaux/treasury/mappers/**"
-        )
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(excludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
     }
 
@@ -198,6 +230,37 @@ tasks {
 
 jacoco {
     toolVersion = libs.versions.jacoco.get()
+}
+
+// Mutation testing (`./gradlew :treasury:pitest`; not part of `check`). Scoped to
+// the money logic: the ledger/account/gov/salary/tax services and caches, the
+// public API impls (Treasury/Tax/Market), the Vault adapter's money paths and the
+// Money/dedup utilities — never the command/listener/Guice glue.
+pitest {
+    targetClasses.set(
+        listOf(
+            "io.paradaux.treasury.services.impl.*",
+            "io.paradaux.treasury.services.cache.*",
+            "io.paradaux.treasury.api.impl.*",
+            "io.paradaux.treasury.adapters.VaultEconomyAdapter*",
+            "io.paradaux.treasury.utils.*",
+        ),
+    )
+    excludedClasses.set(
+        listOf(
+            // Bukkit/log4j glue (also outside the jacoco gate).
+            "io.paradaux.treasury.utils.CallingPluginDetector*",
+            "io.paradaux.treasury.utils.LoggingConfigurer*",
+        ),
+    )
+    // DB ITs run under PIT and share one schema: one minion at a time (see the
+    // convention plugin's header).
+    threads.set(1)
+    // Ratchet a couple of points under the measured scores (2026-10, unit + DB
+    // ITs: 77.5% mutation score — 69.2% before the ledger/tax/Vault tests — and
+    // 95% line coverage of the mutated classes). Raise as survivors are killed.
+    mutationThreshold.set(75)
+    coverageThreshold.set(92)
 }
 
 // The publish repository target (snapshot/release URL + REPO_USER/REPO_PASS creds)

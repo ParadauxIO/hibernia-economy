@@ -1,22 +1,22 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.paradaux.treasury.api.exceptions.FineAlreadyRevokedException;
 import io.paradaux.treasury.api.exceptions.FineNotFoundException;
 import io.paradaux.treasury.api.exceptions.GovAccountNotFoundException;
 import io.paradaux.treasury.api.exceptions.InsufficientFineFundsException;
 import io.paradaux.treasury.api.exceptions.PrimitiveAccountException;
+import io.paradaux.treasury.mappers.GovernmentFineMapper;
+import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.GovernmentFine;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.GovService;
-import io.paradaux.treasury.mappers.GovernmentFineMapper;
-import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -26,9 +26,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class GovServiceIT extends IntegrationTestBase {
 
@@ -38,9 +37,9 @@ class GovServiceIT extends IntegrationTestBase {
 
     @BeforeEach
     void setUp() {
-        govService     = injector.getInstance(GovService.class);
+        govService = injector.getInstance(GovService.class);
         accountService = injector.getInstance(AccountService.class);
-        ledgerService  = injector.getInstance(LedgerService.class);
+        ledgerService = injector.getInstance(LedgerService.class);
         ledgerService.bootstrapGovernmentAccounts();
     }
 
@@ -124,8 +123,8 @@ class GovServiceIT extends IntegrationTestBase {
         ledgerService.resolveOrCreatePersonal(player);
         Account police = govService.createDepartmentAccount("Police", issuer);
 
-        GovernmentFine fine = govService.issueFine(
-                player, police.getAccountId(), new BigDecimal("100.00"), "patrol fine", issuer);
+        GovernmentFine fine =
+                govService.issueFine(player, police.getAccountId(), new BigDecimal("100.00"), "patrol fine", issuer);
 
         // The fine remembers the specified account, not the default fines account.
         assertThat(fine.getGovAccountId()).isEqualTo(police.getAccountId());
@@ -133,7 +132,8 @@ class GovServiceIT extends IntegrationTestBase {
         assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("9900.00");
         assertThat(accountService.getBalanceReadOnly(police.getAccountId())).isEqualByComparingTo("100.00");
         Account defaultFines = accountService.getGovernmentAccountByName("GovernmentFines");
-        assertThat(accountService.getBalanceReadOnly(defaultFines.getAccountId())).isEqualByComparingTo("0.00");
+        assertThat(accountService.getBalanceReadOnly(defaultFines.getAccountId()))
+                .isEqualByComparingTo("0.00");
     }
 
     @Test
@@ -141,9 +141,39 @@ class GovServiceIT extends IntegrationTestBase {
         UUID player = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, 999_999, new BigDecimal("10.00"), "x", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, 999_999, new BigDecimal("10.00"), "x", UUID.randomUUID()))
                 .isInstanceOf(GovAccountNotFoundException.class);
+    }
+
+    @Test
+    void issueFine_intoANonGovernmentAccount_isRefused_andMovesNothing() {
+        // The destination of a fine must be a GOVERNMENT account: otherwise a
+        // fine becomes a way to move a player's money into any other player's or
+        // firm's account, bypassing their authorization.
+        UUID debtor = UUID.randomUUID();
+        UUID beneficiary = UUID.randomUUID();
+        Account debtorAccount = ledgerService.resolveOrCreatePersonal(debtor);
+        Account personal = ledgerService.resolveOrCreatePersonal(beneficiary);
+        Account firm = accountService.createAccount(
+                io.paradaux.treasury.model.economy.AccountType.BUSINESS, UUID.randomUUID(), "Shell Co");
+        BigDecimal debtorBefore = accountService.getBalanceReadOnly(debtorAccount.getAccountId());
+        BigDecimal personalBefore = accountService.getBalanceReadOnly(personal.getAccountId());
+
+        assertThatThrownBy(() -> govService.issueFine(
+                        debtor, personal.getAccountId(), new BigDecimal("10.00"), "x", UUID.randomUUID()))
+                .isInstanceOf(GovAccountNotFoundException.class);
+        assertThatThrownBy(() -> govService.issueFine(
+                        debtorAccount.getAccountId(),
+                        firm.getAccountId(),
+                        new BigDecimal("10.00"),
+                        "x",
+                        UUID.randomUUID()))
+                .isInstanceOf(GovAccountNotFoundException.class);
+
+        assertThat(accountService.getBalanceReadOnly(debtorAccount.getAccountId()))
+                .isEqualByComparingTo(debtorBefore);
+        assertThat(accountService.getBalanceReadOnly(personal.getAccountId())).isEqualByComparingTo(personalBefore);
+        assertThat(accountService.getBalanceReadOnly(firm.getAccountId())).isEqualByComparingTo("0.00");
     }
 
     @Test
@@ -153,8 +183,8 @@ class GovServiceIT extends IntegrationTestBase {
         ledgerService.resolveOrCreatePersonal(player);
         Account police = govService.createDepartmentAccount("Police", issuer);
 
-        GovernmentFine fine = govService.issueFine(
-                player, police.getAccountId(), new BigDecimal("100.00"), "patrol fine", issuer);
+        GovernmentFine fine =
+                govService.issueFine(player, police.getAccountId(), new BigDecimal("100.00"), "patrol fine", issuer);
         govService.revokeFine(fine.getFineId(), issuer);
 
         // Refund comes back out of the same account the fine was paid into.
@@ -194,7 +224,7 @@ class GovServiceIT extends IntegrationTestBase {
         Account police = govService.createDepartmentAccount("Police", issuer);
 
         assertThatThrownBy(() -> govService.issueFine(
-                firm.getAccountId(), police.getAccountId(), new BigDecimal("50.00"), "x", issuer))
+                        firm.getAccountId(), police.getAccountId(), new BigDecimal("50.00"), "x", issuer))
                 .isInstanceOf(InsufficientFineFundsException.class);
     }
 
@@ -203,8 +233,8 @@ class GovServiceIT extends IntegrationTestBase {
         UUID issuer = UUID.randomUUID();
         Account police = govService.createDepartmentAccount("Police", issuer);
 
-        assertThatThrownBy(() -> govService.issueFine(
-                999_999, police.getAccountId(), new BigDecimal("10.00"), "x", issuer))
+        assertThatThrownBy(() ->
+                        govService.issueFine(999_999, police.getAccountId(), new BigDecimal("10.00"), "x", issuer))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("No account found");
     }
@@ -232,8 +262,14 @@ class GovServiceIT extends IntegrationTestBase {
     private void fund(UUID fromPlayer, int toAccountId, BigDecimal amount) {
         int fromId = accountService.getAccountByUUID(fromPlayer).getAccountId();
         ledgerService.transfer(new io.paradaux.treasury.model.economy.TransferRequest(
-                fromId, toAccountId, amount, "test funding", fromPlayer, null,
-                io.paradaux.treasury.utils.TreasuryConstants.TREASURY_PLUGIN_NAME, null));
+                fromId,
+                toAccountId,
+                amount,
+                "test funding",
+                fromPlayer,
+                null,
+                io.paradaux.treasury.utils.TreasuryConstants.TREASURY_PLUGIN_NAME,
+                null));
     }
 
     @Test
@@ -254,8 +290,7 @@ class GovServiceIT extends IntegrationTestBase {
         // IllegalStateException as InsufficientFineFundsException.
         ledgerService.adminSet(player, BigDecimal.ZERO, "test setup", UUID.randomUUID());
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, new BigDecimal("100.00"), "x", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, new BigDecimal("100.00"), "x", UUID.randomUUID()))
                 .isInstanceOf(InsufficientFineFundsException.class);
     }
 
@@ -289,13 +324,11 @@ class GovServiceIT extends IntegrationTestBase {
         UUID player = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, new BigDecimal("0.001"), "x", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, new BigDecimal("0.001"), "x", UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("more than 2 decimal places");
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, new BigDecimal("0.00000000001"), "x", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, new BigDecimal("0.00000000001"), "x", UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("more than 2 decimal places");
     }
@@ -311,8 +344,7 @@ class GovServiceIT extends IntegrationTestBase {
         UUID player = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, new BigDecimal("0.00"), "x", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, new BigDecimal("0.00"), "x", UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("fine amount > 0");
     }
@@ -322,8 +354,7 @@ class GovServiceIT extends IntegrationTestBase {
         UUID player = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, new BigDecimal("-50.00"), "x", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, new BigDecimal("-50.00"), "x", UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("fine amount > 0");
     }
@@ -341,8 +372,7 @@ class GovServiceIT extends IntegrationTestBase {
 
         assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("0.00");
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, new BigDecimal("0.01"), "any", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, new BigDecimal("0.01"), "any", UUID.randomUUID()))
                 .isInstanceOf(InsufficientFineFundsException.class)
                 .isNotInstanceOf(IllegalArgumentException.class);
     }
@@ -365,8 +395,7 @@ class GovServiceIT extends IntegrationTestBase {
         // Now an invalid amount: the message must be about the amount, not the
         // player. Today FineCommand maps this to "unknown-player" — that's the
         // bug. Service-layer message stays correct.
-        assertThatThrownBy(() ->
-                govService.issueFine(player, new BigDecimal("0.001"), "ok", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, new BigDecimal("0.001"), "ok", UUID.randomUUID()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .satisfies(t -> assertThat(t.getMessage()).doesNotContainIgnoringCase("personal account"));
     }
@@ -414,17 +443,15 @@ class GovServiceIT extends IntegrationTestBase {
         ledgerService.resolveOrCreatePersonal(player);
 
         // Drop the fines account row to trigger the defensive check.
-        io.paradaux.treasury.model.economy.Account fines =
-                accountService.getGovernmentAccountByName("GovernmentFines");
+        io.paradaux.treasury.model.economy.Account fines = accountService.getGovernmentAccountByName("GovernmentFines");
         try (var conn = dataSource.getConnection();
-             var st = conn.createStatement()) {
+                var st = conn.createStatement()) {
             st.execute("SET FOREIGN_KEY_CHECKS = 0");
             st.execute("DELETE FROM accounts WHERE account_id = " + fines.getAccountId());
             st.execute("SET FOREIGN_KEY_CHECKS = 1");
         }
 
-        assertThatThrownBy(() ->
-                govService.issueFine(player, BigDecimal.TEN, "x", UUID.randomUUID()))
+        assertThatThrownBy(() -> govService.issueFine(player, BigDecimal.TEN, "x", UUID.randomUUID()))
                 .isInstanceOf(GovAccountNotFoundException.class)
                 .hasMessageContaining("not found");
     }
@@ -438,7 +465,7 @@ class GovServiceIT extends IntegrationTestBase {
         // Drop the player's PERSONAL account row — the revoke flow looks it up by UUID.
         io.paradaux.treasury.model.economy.Account p = accountService.getAccountByUUID(player);
         try (var conn = dataSource.getConnection();
-             var st = conn.createStatement()) {
+                var st = conn.createStatement()) {
             st.execute("SET FOREIGN_KEY_CHECKS = 0");
             st.execute("DELETE FROM accounts WHERE account_id = " + p.getAccountId());
             st.execute("SET FOREIGN_KEY_CHECKS = 1");
@@ -456,7 +483,7 @@ class GovServiceIT extends IntegrationTestBase {
         GovernmentFine fine = govService.issueFine(player, new BigDecimal("10.00"), "x", UUID.randomUUID());
 
         try (var conn = dataSource.getConnection();
-             var st = conn.createStatement()) {
+                var st = conn.createStatement()) {
             st.execute("SET FOREIGN_KEY_CHECKS = 0");
             st.execute("DELETE FROM accounts WHERE account_id = " + fine.getGovAccountId());
             st.execute("SET FOREIGN_KEY_CHECKS = 1");
@@ -475,41 +502,38 @@ class GovServiceIT extends IntegrationTestBase {
 
     @Test
     void issueFine_recordsRealAdminAsLedgerInitiator() {
-        UUID admin  = UUID.randomUUID();
+        UUID admin = UUID.randomUUID();
         UUID player = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
         GovernmentFine fine = govService.issueFine(player, new BigDecimal("25.00"), "speeding", admin);
 
-        io.paradaux.treasury.model.economy.LedgerTxn txn =
-                ledgerService.getTransaction(fine.getTxnId());
+        io.paradaux.treasury.model.economy.LedgerTxn txn = ledgerService.getTransaction(fine.getTxnId());
         assertThat(txn).isNotNull();
         assertThat(txn.getInitiatorUuid())
                 .as("ledger initiator must be the admin who issued the fine")
                 .isEqualTo(admin);
-        assertThat(txn.getInitiatorUuid()).isNotEqualTo(
-                io.paradaux.treasury.utils.TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
+        assertThat(txn.getInitiatorUuid())
+                .isNotEqualTo(io.paradaux.treasury.utils.TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
     }
 
     @Test
     void revokeFine_recordsRealRevokerAsLedgerInitiator() {
-        UUID issuer  = UUID.randomUUID();
+        UUID issuer = UUID.randomUUID();
         UUID revoker = UUID.randomUUID();
-        UUID player  = UUID.randomUUID();
+        UUID player = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(player);
 
         GovernmentFine fine = govService.issueFine(player, new BigDecimal("10.00"), "wrongful", issuer);
         GovernmentFine revoked = govService.revokeFine(fine.getFineId(), revoker);
 
-        io.paradaux.treasury.model.economy.LedgerTxn revokeTxn =
-                ledgerService.getTransaction(revoked.getRevokeTxnId());
+        io.paradaux.treasury.model.economy.LedgerTxn revokeTxn = ledgerService.getTransaction(revoked.getRevokeTxnId());
         assertThat(revokeTxn).isNotNull();
         assertThat(revokeTxn.getInitiatorUuid())
                 .as("ledger initiator must be the admin who revoked the fine")
                 .isEqualTo(revoker);
         // And the original issue txn still attributes to the issuer (unchanged by revoke).
-        io.paradaux.treasury.model.economy.LedgerTxn issueTxn =
-                ledgerService.getTransaction(revoked.getTxnId());
+        io.paradaux.treasury.model.economy.LedgerTxn issueTxn = ledgerService.getTransaction(revoked.getTxnId());
         assertThat(issueTxn.getInitiatorUuid()).isEqualTo(issuer);
     }
 
@@ -525,8 +549,10 @@ class GovServiceIT extends IntegrationTestBase {
         GovernmentFine fineA = govService.issueFine(playerA, BigDecimal.ONE, "x", adminA);
         GovernmentFine fineB = govService.issueFine(playerB, BigDecimal.ONE, "x", adminB);
 
-        assertThat(ledgerService.getTransaction(fineA.getTxnId()).getInitiatorUuid()).isEqualTo(adminA);
-        assertThat(ledgerService.getTransaction(fineB.getTxnId()).getInitiatorUuid()).isEqualTo(adminB);
+        assertThat(ledgerService.getTransaction(fineA.getTxnId()).getInitiatorUuid())
+                .isEqualTo(adminA);
+        assertThat(ledgerService.getTransaction(fineB.getTxnId()).getInitiatorUuid())
+                .isEqualTo(adminB);
     }
 
     @Test
@@ -539,16 +565,16 @@ class GovServiceIT extends IntegrationTestBase {
 
         assertThat(govService.getFine(f2.getFineId())).isNotNull();
         assertThat(govService.getPlayerFines(player)).hasSize(2);
-        assertThat(govService.getActivePlayerFines(player))
-                .hasSize(1)
-                .allMatch(f -> !f.isRevoked());
+        assertThat(govService.getActivePlayerFines(player)).hasSize(1).allMatch(f -> !f.isRevoked());
     }
 
     // ---- Double-submit: one fine row per ledger debit ----
 
     /** A GovService on a pinned clock, so two issues share the per-second dedup key. */
     private GovService govServiceAt(Instant now) {
-        return new GovServiceImpl(accountService, ledgerService,
+        return new GovServiceImpl(
+                accountService,
+                ledgerService,
                 injector.getInstance(GovernmentFineMapper.class),
                 injector.getInstance(GovernmentConfiguration.class),
                 injector.getInstance(PlayerDirectoryService.class),
@@ -556,8 +582,9 @@ class GovServiceIT extends IntegrationTestBase {
     }
 
     private long countFines() throws Exception {
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM government_fines")) {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM government_fines")) {
             rs.next();
             return rs.getLong(1);
         }
@@ -570,7 +597,7 @@ class GovServiceIT extends IntegrationTestBase {
         ledgerService.resolveOrCreatePersonal(player);
         GovService gov = govServiceAt(Instant.parse("2026-01-01T12:00:00.250Z"));
 
-        GovernmentFine first  = gov.issueFine(player, new BigDecimal("250.00"), "speeding", issuer);
+        GovernmentFine first = gov.issueFine(player, new BigDecimal("250.00"), "speeding", issuer);
         GovernmentFine second = gov.issueFine(player, new BigDecimal("250.00"), "speeding", issuer);
 
         // The ledger collapsed the second debit; the fine must collapse with it.
@@ -621,7 +648,6 @@ class GovServiceIT extends IntegrationTestBase {
                 .issuedBy(issuer)
                 .build();
 
-        assertThatThrownBy(() -> mapper.insertFine(duplicate))
-                .hasMessageContaining("uq_fines_txn");
+        assertThatThrownBy(() -> mapper.insertFine(duplicate)).hasMessageContaining("uq_fines_txn");
     }
 }

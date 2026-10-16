@@ -1,11 +1,12 @@
 package io.paradaux.chestshop.utils.encoding;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class Base62Test {
 
@@ -43,5 +44,19 @@ class Base62Test {
     })
     void decode_returnsCorrectNumber(String code, int expected) {
         assertThat(Base62.decode(code)).isEqualTo(expected);
+    }
+
+    @Test
+    void encode_rejectsNegativeNumbersInsteadOfReturningEmpty() {
+        assertThatThrownBy(() -> Base62.encode(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("negative");
+    }
+
+    @Test
+    void decode_rejectsAnInvalidCharacter() {
+        assertThatThrownBy(() -> Base62.decode("12!45"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid Base62 character");
     }
 }

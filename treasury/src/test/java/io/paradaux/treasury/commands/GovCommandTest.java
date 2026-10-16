@@ -1,5 +1,16 @@
 package io.paradaux.treasury.commands;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+
 import com.google.inject.Provider;
 import io.paradaux.hibernia.framework.commander.CommandManager;
 import io.paradaux.hibernia.framework.i18n.Message;
@@ -13,6 +24,9 @@ import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.utils.TreasuryConstants;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
@@ -26,21 +40,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
-
 /** Exercises the private access gates through public command entrypoints, without a DB. */
 @ExtendWith(MockitoExtension.class)
 class GovCommandTest {
@@ -49,15 +48,33 @@ class GovCommandTest {
     private static final UUID PLAYER_ID = UUID.randomUUID();
     private static final BigDecimal AMOUNT = new BigDecimal("5.00");
 
-    @Mock AccountService accounts;
-    @Mock LedgerService ledger;
-    @Mock MembershipService membership;
-    @Mock GovService government;
-    @Mock PlayerDirectoryService directory;
-    @Mock Message message;
-    @Mock Provider<CommandManager> commandManager;
-    @Mock Player player;
-    @Mock ConsoleCommandSender console;
+    @Mock
+    AccountService accounts;
+
+    @Mock
+    LedgerService ledger;
+
+    @Mock
+    MembershipService membership;
+
+    @Mock
+    GovService government;
+
+    @Mock
+    PlayerDirectoryService directory;
+
+    @Mock
+    Message message;
+
+    @Mock
+    Provider<CommandManager> commandManager;
+
+    @Mock
+    Player player;
+
+    @Mock
+    ConsoleCommandSender console;
+
     private GovCommand command;
 
     @BeforeEach
@@ -67,10 +84,10 @@ class GovCommandTest {
 
     @ParameterizedTest(name = "transfer: admin={0}, globalTransfer={1}, canSpend={2}, allowed={3}")
     @CsvSource({
-            "false, false, false, false",
-            "false, false, true, true",
-            "false, true, false, true",
-            "true, false, false, true"
+        "false, false, false, false",
+        "false, false, true, true",
+        "false, true, false, true",
+        "true, false, false, true"
     })
     void transfer_requiresSourceSpendAccessOrAnExplicitGlobalGrant(
             boolean admin, boolean globalTransfer, boolean canSpend, boolean allowed) {
@@ -94,11 +111,11 @@ class GovCommandTest {
 
     @ParameterizedTest(name = "read: viewNode={0}, admin={1}, canView={2}, allowed={3}")
     @CsvSource({
-            "false, false, false, false",
-            "false, true, true, false",
-            "true, false, false, false",
-            "true, false, true, true",
-            "true, true, false, true"
+        "false, false, false, false",
+        "false, true, true, false",
+        "true, false, false, false",
+        "true, false, true, true",
+        "true, true, false, true"
     })
     void balanceAndHistory_requireBothTheViewNodeAndAccountAccess(
             boolean viewNode, boolean admin, boolean canView, boolean allowed) {
@@ -129,11 +146,11 @@ class GovCommandTest {
 
     @ParameterizedTest(name = "manage: manageNode={0}, admin={1}, authorizer={2}, allowed={3}")
     @CsvSource({
-            "false, false, true, false",
-            "false, true, false, false",
-            "true, false, false, false",
-            "true, false, true, true",
-            "true, true, false, true"
+        "false, false, true, false",
+        "false, true, false, false",
+        "true, false, false, false",
+        "true, false, true, true",
+        "true, true, false, true"
     })
     void memberManagement_requiresManageNodeAndAuthorizerOrAdmin(
             boolean manageNode, boolean admin, boolean authorizer, boolean allowed) {
@@ -220,7 +237,8 @@ class GovCommandTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void missingOrArchivedSourceIsRejectedEvenForConsole(boolean archived) {
-        when(accounts.getGovernmentAccountByName("Police")).thenReturn(archived ? account(SOURCE_ID, "Police", true) : null);
+        when(accounts.getGovernmentAccountByName("Police"))
+                .thenReturn(archived ? account(SOURCE_ID, "Police", true) : null);
 
         command.accountBalance(console, "Police");
         command.accountHistory(console, "Police");

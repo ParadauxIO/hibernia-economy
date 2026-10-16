@@ -1,27 +1,5 @@
 package io.paradaux.chestshop.services.impl;
 
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
-import io.paradaux.chestshop.model.PendingTransaction;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.services.EconomyService;
-import io.paradaux.chestshop.services.PartialFillCalculator;
-import io.paradaux.chestshop.services.InventoryService;
-import io.paradaux.chestshop.services.MaterialService;
-import io.paradaux.chestshop.utils.InventoryUtil;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.math.RoundingMode;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.CLIENT_DOES_NOT_HAVE_ENOUGH_MONEY;
 import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_SPACE_IN_CHEST;
 import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.NOT_ENOUGH_SPACE_IN_INVENTORY;
@@ -30,6 +8,27 @@ import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.
 import static io.paradaux.chestshop.model.PendingTransaction.TransactionOutcome.SHOP_DOES_NOT_HAVE_ENOUGH_MONEY;
 import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
 import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
+import io.paradaux.chestshop.model.PendingTransaction;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.EconomyService;
+import io.paradaux.chestshop.services.InventoryService;
+import io.paradaux.chestshop.services.MaterialService;
+import io.paradaux.chestshop.services.PartialFillCalculator;
+import io.paradaux.chestshop.utils.InventoryUtil;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * Resizes a partial fill: when the buyer/shop can't afford, stock, or hold the full amount, scale
@@ -47,8 +46,11 @@ public class PartialFillCalculatorImpl implements PartialFillCalculator {
     private final ChestShopConfiguration config;
 
     @Inject
-    PartialFillCalculatorImpl(EconomyService economy, InventoryService inventoryService,
-                          MaterialService materialService, ChestShopConfiguration config) {
+    PartialFillCalculatorImpl(
+            EconomyService economy,
+            InventoryService inventoryService,
+            MaterialService materialService,
+            ChestShopConfiguration config) {
         this.economy = economy;
         this.inventoryService = inventoryService;
         this.materialService = materialService;
@@ -197,16 +199,18 @@ public class PartialFillCalculatorImpl implements PartialFillCalculator {
         if (pricePerItem.signum() == 0) {
             return cap;
         }
-        BigDecimal affordable = walletMoney.divide(pricePerItem, 0, RoundingMode.FLOOR)
-                .min(BigDecimal.valueOf(cap));
+        BigDecimal affordable =
+                walletMoney.divide(pricePerItem, 0, RoundingMode.FLOOR).min(BigDecimal.valueOf(cap));
         return affordable.intValue();
     }
 
     private ItemStack[] getItems(ItemStack[] stock, Inventory inventory) {
         List<ItemStack> toReturn = new LinkedList<>();
-        for (Map.Entry<ItemStack, Integer> entry : inventoryService.getItemCounts(stock).entrySet()) {
+        for (Map.Entry<ItemStack, Integer> entry :
+                inventoryService.getItemCounts(stock).entrySet()) {
             int amount = inventoryService.getAmount(entry.getKey(), inventory);
-            Collections.addAll(toReturn, inventoryService.getItemStacked(entry.getKey(), Math.min(amount, entry.getValue())));
+            Collections.addAll(
+                    toReturn, inventoryService.getItemStacked(entry.getKey(), Math.min(amount, entry.getValue())));
         }
         return toReturn.toArray(new ItemStack[0]);
     }
@@ -258,12 +262,17 @@ public class PartialFillCalculatorImpl implements PartialFillCalculator {
         List<ItemStack> resultStock = new LinkedList<>();
         int emptySlots = InventoryUtil.countEmpty(inventory);
 
-        for (Map.Entry<ItemStack, Integer> entry : inventoryService.getItemCounts(stock).entrySet()) {
+        for (Map.Entry<ItemStack, Integer> entry :
+                inventoryService.getItemCounts(stock).entrySet()) {
             ItemStack item = entry.getKey();
             int amount = entry.getValue();
             int maxStackSize = inventoryService.getMaxStackSize(item);
             int free = 0;
-            for (ItemStack itemInInventory : inventory.getContents()) {
+            // Storage slots only, like countEmpty()/fits() and the addItem() that
+            // delivers the goods: a player's armour/off-hand stack is not room the
+            // delivery can use, and counting it sized (and priced) fills that then
+            // failed at transfer.
+            for (ItemStack itemInInventory : InventoryUtil.getStorageContents(inventory)) {
                 if (materialService.equals(item, itemInInventory) && itemInInventory != null) {
                     free += (maxStackSize - itemInInventory.getAmount()) % maxStackSize;
                 }

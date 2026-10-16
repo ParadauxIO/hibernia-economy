@@ -1,21 +1,22 @@
 package io.paradaux.chestshop.services.impl;
 
-import lombok.extern.slf4j.Slf4j;
-
-import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.ItemService;
-import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.chestshop.services.MarketSyncService;
-import io.paradaux.chestshop.services.PreviewService;
-import io.paradaux.chestshop.services.ShopBlockService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.CreatedShop;
 import io.paradaux.chestshop.model.DestroyedShop;
 import io.paradaux.chestshop.model.Transaction;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.MarketSyncService;
+import io.paradaux.chestshop.services.PreviewService;
+import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.treasury.api.MarketApi;
+import java.util.List;
+import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Container;
@@ -24,9 +25,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Keeps the market sales tracker + live shop registry in sync with ChestShop activity, extracted
@@ -52,9 +50,14 @@ public class MarketSyncServiceImpl implements MarketSyncService {
     private final PreviewService previews;
 
     @Inject
-    public MarketSyncServiceImpl(JavaPlugin plugin, MarketService marketService, ItemService items,
-                                 SignService signService, ShopBlockService shopBlockService,
-                                 AccountService accounts, PreviewService previews) {
+    public MarketSyncServiceImpl(
+            JavaPlugin plugin,
+            MarketService marketService,
+            ItemService items,
+            SignService signService,
+            ShopBlockService shopBlockService,
+            AccountService accounts,
+            PreviewService previews) {
         this.plugin = plugin;
         this.marketService = marketService;
         this.items = items;
@@ -75,15 +78,25 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             int quantity = marketService.totalAmount(stock);
             Sign sign = event.getSign();
             boolean admin = signService.isAdminShop(sign);
-            UUID ownerUuid = event.getOwnerAccount() != null ? event.getOwnerAccount().getUuid() : null;
+            UUID ownerUuid =
+                    event.getOwnerAccount() != null ? event.getOwnerAccount().getUuid() : null;
             MarketService.Owner owner = marketService.ownerFromUuid(ownerUuid, admin);
             String direction = event.getTransactionType() == Transaction.TransactionType.BUY ? "BUY" : "SELL";
             Integer shopStock = admin ? null : marketService.stockOf(item, event.getOwnerInventory());
             Integer capacity = admin ? null : marketService.capacityOf(item, event.getOwnerInventory());
 
             MarketApi market = marketService.market();
-            market.recordSale(marketService.sale(sign, item, quantity, event.getClient().getUniqueId(),
-                    owner, event.getExactPrice(), event.getSalesTax(), direction, shopStock, event.getSettlementTxnId()));
+            market.recordSale(marketService.sale(
+                    sign,
+                    item,
+                    quantity,
+                    event.getClient().getUniqueId(),
+                    owner,
+                    event.getExactPrice(),
+                    event.getSalesTax(),
+                    direction,
+                    shopStock,
+                    event.getSettlementTxnId()));
             market.upsertShop(marketService.shop(sign, item, owner, shopStock, capacity));
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
@@ -100,10 +113,12 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             ItemStack item = items.parse(event.getSignLines()[SignService.ITEM_LINE]);
             if (item == null) return;
             boolean admin = signService.isAdminShop(event.getSignLines());
-            UUID ownerUuid = event.getOwnerAccount() != null ? event.getOwnerAccount().getUuid() : null;
+            UUID ownerUuid =
+                    event.getOwnerAccount() != null ? event.getOwnerAccount().getUuid() : null;
             MarketService.Owner owner = marketService.ownerFromUuid(ownerUuid, admin);
             Inventory container = (!admin && event.getContainer() != null)
-                    ? event.getContainer().getInventory() : null;
+                    ? event.getContainer().getInventory()
+                    : null;
             Integer stock = container != null ? marketService.stockOf(item, container) : null;
             Integer capacity = container != null ? marketService.capacityOf(item, container) : null;
             marketService.market().upsertShop(marketService.shop(sign, item, owner, stock, capacity));
@@ -140,8 +155,13 @@ public class MarketSyncServiceImpl implements MarketSyncService {
                 ItemStack item = items.parse(SignService.getItem(sign));
                 if (item == null) continue;
                 Location l = sign.getLocation();
-                market.updateShopStock(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ(),
-                        marketService.stockOf(item, inv), marketService.capacityOf(item, inv));
+                market.updateShopStock(
+                        worldName(l),
+                        l.getBlockX(),
+                        l.getBlockY(),
+                        l.getBlockZ(),
+                        marketService.stockOf(item, inv),
+                        marketService.capacityOf(item, inv));
             }
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
@@ -200,7 +220,8 @@ public class MarketSyncServiceImpl implements MarketSyncService {
     /** The valid shop sign at a position, or null — never loads a chunk to look. */
     private Sign shopSignAt(World world, int x, int y, int z) {
         return world.getBlockAt(x, y, z).getState(false) instanceof Sign sign && signService.isValid(sign)
-                ? sign : null;
+                ? sign
+                : null;
     }
 
     private static String worldName(Location l) {

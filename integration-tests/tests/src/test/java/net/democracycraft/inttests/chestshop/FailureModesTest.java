@@ -76,7 +76,7 @@ class FailureModesTest {
             clickAt(b, buyer, shop);
 
             // Error chat receipt + no balance change.
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click), so the rejection is final.
             assertThat(Ledger.personalBalance(b.getUuid()).orElseThrow()).isEqualByComparingTo(buyerBefore);
             assertThat(Inv.chestCount(shop.chestPos(), "DIRT")).isZero();
             assertThat(Inv.playerCount(buyer, "DIRT")).isZero();
@@ -118,7 +118,7 @@ class FailureModesTest {
             if (!business) RconClient.send("diag warmname " + seller);
 
             clickAt(b, buyer, shop);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click), so the rejection is final.
 
             // Buyer balance still 0, chest stock unchanged, buyer inventory empty.
             assertThat(Ledger.personalBalance(b.getUuid()).orElseThrow()).isEqualByComparingTo(BigDecimal.ZERO);
@@ -165,7 +165,7 @@ class FailureModesTest {
             if (!business) RconClient.send("diag warmname " + seller);
 
             clickAt(b, buyer, shop);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click), so the rejection is final.
 
             assertThat(Ledger.personalBalance(b.getUuid()).orElseThrow()).isEqualByComparingTo(buyerBefore);
             assertThat(Inv.chestCount(shop.chestPos(), "DIRT")).isEqualTo(initialStock);

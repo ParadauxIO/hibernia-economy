@@ -1,5 +1,15 @@
 package io.paradaux.treasury.commands;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.GovernmentFine;
@@ -8,6 +18,8 @@ import io.paradaux.treasury.services.FineWebhookService;
 import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -19,19 +31,6 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FineCommandAuthorizationTest {
     private static final int GOV_ID = 501;
@@ -40,14 +39,30 @@ class FineCommandAuthorizationTest {
     private static final UUID TARGET_ID = UUID.randomUUID();
     private static final BigDecimal AMOUNT = new BigDecimal("5.00");
 
-    @Mock AccountService accounts;
-    @Mock GovService government;
-    @Mock MembershipService membership;
-    @Mock PlayerDirectoryService directory;
-    @Mock FineWebhookService webhook;
-    @Mock Message message;
-    @Mock Player sender;
-    @Mock OfflinePlayer target;
+    @Mock
+    AccountService accounts;
+
+    @Mock
+    GovService government;
+
+    @Mock
+    MembershipService membership;
+
+    @Mock
+    PlayerDirectoryService directory;
+
+    @Mock
+    FineWebhookService webhook;
+
+    @Mock
+    Message message;
+
+    @Mock
+    Player sender;
+
+    @Mock
+    OfflinePlayer target;
+
     private FineCommand command;
 
     @BeforeEach
@@ -57,15 +72,20 @@ class FineCommandAuthorizationTest {
 
     @ParameterizedTest(name = "{0}: admin={1}, canSpend={2}, allowed={3}")
     @CsvSource({
-            "issue, false, false, false", "issue, false, true, true", "issue, true, false, true",
-            "firm, false, false, false", "firm, false, true, true", "firm, true, false, true",
-            "revoke, false, false, false", "revoke, false, true, true", "revoke, true, false, true"
+        "issue, false, false, false", "issue, false, true, true", "issue, true, false, true",
+        "firm, false, false, false", "firm, false, true, true", "firm, true, false, true",
+        "revoke, false, false, false", "revoke, false, true, true", "revoke, true, false, true"
     })
     void finesRequireSpendAccessToTheGovernmentAccountOrAdmin(
             String route, boolean admin, boolean canSpend, boolean allowed) {
         Account account = account(GOV_ID, "Police");
-        GovernmentFine fine = GovernmentFine.builder().fineId(9).govAccountId(GOV_ID)
-                .debtorAccountId(FIRM_ID).amount(AMOUNT).reason("speeding").build();
+        GovernmentFine fine = GovernmentFine.builder()
+                .fineId(9)
+                .govAccountId(GOV_ID)
+                .debtorAccountId(FIRM_ID)
+                .amount(AMOUNT)
+                .reason("speeding")
+                .build();
         if (route.equals("revoke")) {
             when(government.getFine(9)).thenReturn(fine);
             when(accounts.getAccountById(GOV_ID)).thenReturn(account);
@@ -81,11 +101,13 @@ class FineCommandAuthorizationTest {
                     when(target.hasPlayedBefore()).thenReturn(true);
                     when(target.getUniqueId()).thenReturn(TARGET_ID);
                     when(target.getName()).thenReturn("Offender");
-                    when(government.issueFine(TARGET_ID, GOV_ID, AMOUNT, "speeding", SENDER_ID)).thenReturn(fine);
+                    when(government.issueFine(TARGET_ID, GOV_ID, AMOUNT, "speeding", SENDER_ID))
+                            .thenReturn(fine);
                 }
                 case "firm" -> {
                     when(accounts.resolveBusinessAccountByToken("Acme")).thenReturn(account(FIRM_ID, "Acme"));
-                    when(government.issueFine(FIRM_ID, GOV_ID, AMOUNT, "speeding", SENDER_ID)).thenReturn(fine);
+                    when(government.issueFine(FIRM_ID, GOV_ID, AMOUNT, "speeding", SENDER_ID))
+                            .thenReturn(fine);
                 }
                 case "revoke" -> when(government.revokeFine(9, SENDER_ID)).thenReturn(fine);
             }
@@ -117,12 +139,13 @@ class FineCommandAuthorizationTest {
     @CsvSource({"issue", "firm", "revoke"})
     void globalTransferPermissionDoesNotGrantFineAccess(String route) {
         // Unlike government transfers, fines accept only admin or per-account spend access.
-        when(sender.hasPermission(anyString())).thenAnswer(invocation ->
-                invocation.getArgument(0).equals("treasury.gov.account.transfer"));
+        when(sender.hasPermission(anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0).equals("treasury.gov.account.transfer"));
         when(sender.getUniqueId()).thenReturn(SENDER_ID);
         Account account = account(GOV_ID, "Police");
         if (route.equals("revoke")) {
-            when(government.getFine(9)).thenReturn(GovernmentFine.builder().govAccountId(GOV_ID).build());
+            when(government.getFine(9))
+                    .thenReturn(GovernmentFine.builder().govAccountId(GOV_ID).build());
             when(accounts.getAccountById(GOV_ID)).thenReturn(account);
         } else {
             when(accounts.getGovernmentAccountByName("Police")).thenReturn(account);
