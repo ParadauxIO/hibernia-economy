@@ -6,6 +6,7 @@ import io.paradaux.chestshop.model.SortDirection;
 import io.paradaux.chestshop.model.ShopType;
 import io.paradaux.chestshop.model.ShopAttribute;
 import com.google.inject.Inject;
+import io.paradaux.chestshop.services.ShopDisplayService;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.hibernia.framework.usher.ButtonSpec;
 import io.paradaux.hibernia.framework.usher.DialogContext;
@@ -47,9 +48,11 @@ public final class FindDialog implements DialogHandler {
 
     private final ShopFinderService finder;
     private final Message message;
+    private final ShopDisplayService displays;
 
     @Inject
-    public FindDialog(ShopFinderService finder, Message message) {
+    public FindDialog(ShopFinderService finder, Message message, ShopDisplayService displays) {
+        this.displays = displays;
         this.finder = finder;
         this.message = message;
     }
@@ -283,7 +286,7 @@ public final class FindDialog implements DialogHandler {
             b.append(Component.text(shop.distanceBlocks() + "m", NamedTextColor.GRAY));
         }
         b.append(sep());
-        b.append(Component.text(shop.x() + ", " + shop.y() + ", " + shop.z(), NamedTextColor.DARK_GRAY));
+        b.append(Component.text(displays.location(shop.world(), shop.x(), shop.y(), shop.z()), NamedTextColor.DARK_GRAY));
         return b.build();
     }
 

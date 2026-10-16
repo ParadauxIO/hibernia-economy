@@ -16,15 +16,21 @@ import com.sk89q.worldguard.protection.flags.Flags;
 import com.sk89q.worldguard.protection.flags.StateFlag;
 import com.sk89q.worldguard.protection.flags.registry.FlagConflictException;
 import com.sk89q.worldguard.protection.managers.RegionManager;
+import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+
 import io.paradaux.chestshop.model.BuildPermission;
 import io.paradaux.chestshop.model.ProtectionCheck;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.ProtectionService;
+import io.paradaux.chestshop.services.ShopDisplayService;
 import io.paradaux.chestshop.utils.BlockUtil;
+
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.plugin.Plugin;
+
+import java.util.Comparator;
 
 /**
  * WorldGuard soft-dependency, self-contained: region/built-in chest protection (the custom
@@ -43,9 +49,11 @@ public class WorldGuardIntegration implements Integration {
 
     private final ProtectionService protection;
     private final ChestShopConfiguration config;
+    private final ShopDisplayService displays;
 
     @Inject
-    public WorldGuardIntegration(ProtectionService protection, ChestShopConfiguration config) {
+    public WorldGuardIntegration(ProtectionService protection, ChestShopConfiguration config, ShopDisplayService displays) {
+        this.displays = displays;
         this.protection = protection;
         this.config = config;
     }
@@ -57,9 +65,7 @@ public class WorldGuardIntegration implements Integration {
 
     @Override
     public boolean hook(Plugin plugin) {
-        if (!config.isWorldguardUseProtection() && !config.isWorldguardIntegration()) {
-            return false;
-        }
+        displays.setRegionNameProvider(location -> plugin.isEnabled() ? RegionNames.at(location) : "");
         if (config.isWorldguardUseProtection()) {
             protection.setWorldGuardProtection(new Protection(plugin)::onProtectionCheck);
         }
@@ -76,6 +82,24 @@ public class WorldGuardIntegration implements Integration {
      */
     public static void registerFlag() {
         ShopFlag.ENABLE_SHOP.getName();
+    }
+
+    /** Region IDs are stable; prefer priority, then ID for deterministic overlapping regions. */
+    static final class RegionNames {
+        static String at(org.bukkit.Location location) {
+            RegionManager manager = WorldGuard.getInstance().getPlatform().getRegionContainer()
+                    .get(BukkitAdapter.adapt(location.getWorld()));
+            if (manager == null) return "";
+            return select(manager.getApplicableRegions(BukkitAdapter.asBlockVector(location)).getRegions());
+        }
+
+        static String select(java.util.Set<ProtectedRegion> regions) {
+            return regions.stream()
+                    .filter(region -> !region.getId().equals("__global__"))
+                    .sorted(Comparator.comparingInt(ProtectedRegion::getPriority).reversed()
+                            .thenComparing(ProtectedRegion::getId))
+                    .map(ProtectedRegion::getId).findFirst().orElse("");
+        }
     }
 
     /** The {@code allow-shop} WorldGuard flag — isolated so its static init runs only on demand. */
