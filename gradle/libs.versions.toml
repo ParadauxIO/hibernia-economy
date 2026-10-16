@@ -39,6 +39,17 @@ mockito = "5.23.0"
 mariadb4j = "3.3.1"
 flyway = "12.9.0"
 jacoco = "0.8.15"
+# Mutation testing (io.paradaux.mutation-testing-conventions). The Gradle plugin
+# is a build-logic classpath dep; PIT itself and its JUnit Platform test plugin
+# are resolved by that plugin's `pitest` configuration from these versions.
+# pitest-junit5-plugin declares the platform launcher `provided`, so it runs on
+# whatever Platform the module tests with (JUnit 6 / Platform 6 here).
+pitest-gradle = "1.19.0"
+pitest = "1.30.1"
+pitest-junit5 = "1.2.3"
+# PIT 1.23 moved incremental analysis (history files) out of core into this
+# open-source plugin; without it `withHistory` fails the run.
+pitest-history = "0.0.1"
 
 [libraries]
 # Server / framework
@@ -80,6 +91,11 @@ flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
 # truth). build-logic references it as `libs.plugins.shadow.get().pluginId` +
 # `.version`; the root build as `alias(libs.plugins.shadow)`.
 shadow-lib = { module = "com.gradleup.shadow:shadow-gradle-plugin", version.ref = "shadow" }
+
+# The PIT Gradle plugin, as a build-logic classpath dep so the
+# io.paradaux.mutation-testing-conventions plugin can apply and configure it.
+pitest-gradle-plugin = { module = "info.solidsoft.gradle.pitest:gradle-pitest-plugin", version.ref = "pitest-gradle" }
+pitest-history-plugin = { module = "org.pitest:pitest-history-plugin", version.ref = "pitest-history" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

@@ -8,6 +8,7 @@
 plugins {
     `java-library`
     id("io.paradaux.jvm-conventions")
+    id("io.paradaux.mutation-testing-conventions")
 }
 
 group = "io.paradaux"
@@ -31,4 +32,19 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// Mutation testing (`./gradlew :common:pitest`; not part of `check`). Everything
+// here is logic shared by the money paths — the command amount rules, the
+// balance-tax brackets, the overdraft policy, the JWT key derivation both sides
+// must agree on.
+pitest {
+    targetClasses.set(listOf("io.paradaux.common.*"))
+    // HikariCP pool wiring: building a pool needs a live MariaDB (Hikari 7 seeds
+    // it eagerly), so its setters are only exercised by the plugins' DB ITs.
+    excludedClasses.set(listOf("io.paradaux.common.DataSourceProvider*"))
+    // Ratchet a couple of points under the measured scores (2026-10: 97.8%
+    // mutation score, 92% line coverage of the mutated classes).
+    mutationThreshold.set(95)
+    coverageThreshold.set(89)
 }

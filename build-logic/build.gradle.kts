@@ -22,4 +22,7 @@ dependencies {
     // catalog (gradle/libs.versions.toml, shadow = "…"), the same entry the root
     // build applies via `alias(libs.plugins.shadow)`, so the two never drift.
     implementation(libs.shadow.lib)
+
+    // The PIT plugin, applied + configured by io.paradaux.mutation-testing-conventions.
+    implementation(libs.pitest.gradle.plugin)
 }
