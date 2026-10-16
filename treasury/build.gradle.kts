@@ -67,6 +67,9 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
 
+    // Property-based tests (jqwik runs as a second JUnit Platform engine).
+    testImplementation(libs.jqwik)
+
     // Embedded MariaDB for integration tests — no Docker required.
     // MariaDB4j unpacks a real MariaDB binary into a temp dir and runs it on a
     // dynamic port.

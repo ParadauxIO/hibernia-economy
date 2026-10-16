@@ -37,6 +37,10 @@ junit = "6.1.0"
 assertj = "3.27.7"
 mockito = "5.23.0"
 mariadb4j = "3.3.1"
+# Property-based testing. 1.10.x runs on JUnit Platform 6 (its engine is built
+# against Platform 1.14 but resolves to the BOM's 6.x without API breaks — see
+# MoneyProperties et al.).
+jqwik = "1.10.2"
 flyway = "12.9.0"
 jacoco = "0.8.15"
 
@@ -72,6 +76,7 @@ assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
 mariadb4j = { module = "ch.vorburger.mariaDB4j:mariaDB4j", version.ref = "mariadb4j" }
+jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
 

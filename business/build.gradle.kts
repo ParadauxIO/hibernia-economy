@@ -74,6 +74,9 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
 
+    // Property-based tests (jqwik runs as a second JUnit Platform engine).
+    testImplementation(libs.jqwik)
+
     // Shared startup + message-key test-kit. Brings JUnit, Guice, the framework and
     // MockBukkit transitively (declared `api` there) so the startup test can boot an
     // in-memory server and drive the real injector without re-declaring them.

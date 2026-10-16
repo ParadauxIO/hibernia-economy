@@ -66,6 +66,8 @@ dependencies {
     compileOnly(libs.mariadb4j)
     compileOnly(libs.hikaricp)
     compileOnly(libs.flyway.core)
+    // FixedSeedInCi (jqwik lifecycle hook); consumers with property tests declare jqwik.
+    compileOnly(libs.jqwik)
 }
 
 // Stage ops/money-invariants.sql into the jar so LedgerInvariants runs the exact
