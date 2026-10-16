@@ -347,10 +347,10 @@ class FirmBalanceTaxServiceImplTest {
     }
 
     @Test
-    void largestBalanceTie_firstAccountAbsorbsPositiveDrift() {
-        // Three equal 100.00 accounts, total 300.00 × 0.00033 = 0.099 → 0.10.
-        // Each share is 0.10 × 0.3333333333 = 0.0333 → 0.03; allocated 0.09, drift +0.01.
-        // On a balance tie the FIRST account in listing order is "largest" and takes it.
+    void equalBalances_leftoverCentGoesToTheFirstAccountInListingOrder() {
+        // Three equal 100.00 accounts, total 300.00 × 0.00033 = 0.099 → 0.10 (10 cents).
+        // Each exact quota is 3⅓ cents → 3 each, 1 cent left over. The remainders and
+        // balances all tie, so listing order decides: the first account takes it.
         when(firmService.listAllActiveFirms()).thenReturn(List.of(firm(1)));
         when(firmAccountService.listAccountIds(1)).thenReturn(List.of(10, 11, 12));
         when(treasury.getBalancesByIds(List.of(10, 11, 12))).thenReturn(Map.of(
@@ -373,12 +373,11 @@ class FirmBalanceTaxServiceImplTest {
     }
 
     @Test
-    void negativeDrift_reducesLargestToZero_whichIsDroppedRatherThanAbortingTheFirm() {
-        // Three equal 1.00 accounts, total 3.00 × 0.0067 = 0.0201 → 0.02.
-        // Each share rounds UP: 0.02 × 0.3333333333 = 0.00667 → 0.01; allocated 0.03,
-        // drift −0.01 folded into the first (tie-winning) account → 0.00. A 0.00
-        // TaxCollection would throw, so that account must simply be skipped; the
-        // other two are still charged and the firm total stays exact.
+    void shareOfZeroCents_isSkippedRatherThanAbortingTheFirm() {
+        // Three equal 1.00 accounts, total 3.00 × 0.0067 = 0.0201 → 0.02 (2 cents).
+        // Each quota is ⅔ cent → 0 each, 2 cents left over → the first two accounts in
+        // listing order. The third account's share is 0.00; a 0.00 TaxCollection would
+        // throw, so it must simply be skipped while the firm total stays exact.
         when(firmService.listAllActiveFirms()).thenReturn(List.of(firm(1)));
         when(firmAccountService.listAccountIds(1)).thenReturn(List.of(10, 11, 12));
         when(treasury.getBalancesByIds(List.of(10, 11, 12))).thenReturn(Map.of(
@@ -393,17 +392,18 @@ class FirmBalanceTaxServiceImplTest {
         assertThat(result).isEqualTo(new BalanceTaxCycleResult(2, 0, 0));
         List<TaxCollection> collections = capturedBatch();
         Map<Integer, BigDecimal> amounts = amountsBySource(collections);
-        assertThat(amounts).containsOnlyKeys(11, 12);
+        assertThat(amounts).containsOnlyKeys(10, 11);
+        assertThat(amounts.get(10)).isEqualByComparingTo("0.01");
         assertThat(amounts.get(11)).isEqualByComparingTo("0.01");
-        assertThat(amounts.get(12)).isEqualByComparingTo("0.01");
         assertThat(sum(collections)).isEqualByComparingTo("0.02");
     }
 
     @Test
-    void thirds_driftLandsOnTheStrictlyLargestAccount_andSumIsExact() {
-        // 33.33 / 33.33 / 33.34 (total 100.00) × 0.0005 = 0.05.
-        // Shares: 0.05 × 0.3333 = 0.016665 → 0.02, 0.02, 0.05 × 0.3334 = 0.01667 → 0.02.
-        // allocated 0.06, drift −0.01 → the strictly largest (33.34, id 12) → 0.01.
+    void thirds_leftoverCentsGoToTheLargestRemainders_andSumIsExact() {
+        // 33.33 / 33.33 / 33.34 (total 100.00) × 0.0005 = 0.05 (5 cents).
+        // Quotas 1.6665 / 1.6665 / 1.667 cents → 1 each, 2 cents left over. The largest
+        // remainder (.667, id 12) takes one; ids 10 and 11 tie at .6665 on remainder and
+        // balance, so listing order gives the other to id 10.
         when(firmService.listAllActiveFirms()).thenReturn(List.of(firm(1)));
         when(firmAccountService.listAccountIds(1)).thenReturn(List.of(10, 11, 12));
         when(treasury.getBalancesByIds(List.of(10, 11, 12))).thenReturn(Map.of(
@@ -411,29 +411,24 @@ class FirmBalanceTaxServiceImplTest {
         when(config.getWeeklyRate(new BigDecimal("100.00"))).thenReturn(new BigDecimal("0.0005"));
         when(taxApi.collectBatch(anyList())).thenReturn(List.of(
                 new TaxResult.Collected(1L, new BigDecimal("0.02"), 500),
-                new TaxResult.Collected(2L, new BigDecimal("0.02"), 500),
-                new TaxResult.Collected(3L, new BigDecimal("0.01"), 500)));
+                new TaxResult.Collected(2L, new BigDecimal("0.01"), 500),
+                new TaxResult.Collected(3L, new BigDecimal("0.02"), 500)));
 
         svc.runWeeklyCycle(event);
 
         List<TaxCollection> collections = capturedBatch();
         Map<Integer, BigDecimal> amounts = amountsBySource(collections);
         assertThat(amounts.get(10)).isEqualByComparingTo("0.02");
-        assertThat(amounts.get(11)).isEqualByComparingTo("0.02");
-        assertThat(amounts.get(12)).isEqualByComparingTo("0.01");
+        assertThat(amounts.get(11)).isEqualByComparingTo("0.01");
+        assertThat(amounts.get(12)).isEqualByComparingTo("0.02");
         assertThat(sum(collections)).isEqualByComparingTo("0.05");
     }
 
     @Test
-    void manySmallEqualAccounts_negativeDriftLargerThanTheLargestShare_overchargesTheFirm() {
-        // Ten equal 1.00 accounts, total 10.00 × 0.005 = 0.05 total tax.
-        // Each share is 0.05 × 0.1 = 0.005 → 0.01 (HALF_UP), so allocated = 0.10 and
-        // drift = −0.05. Folding −0.05 into the first (tie-winning) account gives −0.04,
-        // which the `<= 0` guard drops — but the other nine still pay 0.01 each.
-        // BUG?: the firm is charged 0.09 against a computed tax of 0.05; the "per-account
-        // sum matches totalTax exactly" invariant breaks whenever |drift| exceeds the
-        // largest share (only reachable with many accounts and a few-cent tax). Pinned
-        // as current behaviour; the fix would spread negative drift across accounts.
+    void manySmallEqualAccounts_chargeExactlyTheFirmTax() {
+        // Ten equal 1.00 accounts, total 10.00 × 0.005 = 0.05 (5 cents). Each quota is
+        // ½ cent → 0 each, 5 cents left over → the first five accounts pay 0.01. The old
+        // split rounded every share up to 0.01 and charged the firm 0.09 (PAR-354).
         List<Integer> ids = List.of(10, 11, 12, 13, 14, 15, 16, 17, 18, 19);
         Map<Integer, BigDecimal> balances = new java.util.LinkedHashMap<>();
         ids.forEach(id -> balances.put(id, new BigDecimal("1.00")));
@@ -441,39 +436,40 @@ class FirmBalanceTaxServiceImplTest {
         when(firmAccountService.listAccountIds(1)).thenReturn(ids);
         when(treasury.getBalancesByIds(ids)).thenReturn(balances);
         when(config.getWeeklyRate(new BigDecimal("10.00"))).thenReturn(new BigDecimal("0.005"));
-        when(taxApi.collectBatch(anyList())).thenReturn(java.util.Collections.nCopies(9,
+        when(taxApi.collectBatch(anyList())).thenReturn(java.util.Collections.nCopies(5,
                 new TaxResult.Collected(1L, new BigDecimal("0.01"), 500)));
 
         BalanceTaxCycleResult result = svc.runWeeklyCycle(event);
 
-        assertThat(result).isEqualTo(new BalanceTaxCycleResult(9, 0, 0));
+        assertThat(result).isEqualTo(new BalanceTaxCycleResult(5, 0, 0));
         List<TaxCollection> collections = capturedBatch();
         assertThat(collections).extracting(TaxCollection::sourceAccountId)
-                .containsExactly(11, 12, 13, 14, 15, 16, 17, 18, 19);
+                .containsExactly(10, 11, 12, 13, 14);
         assertThat(collections).allSatisfy(c -> assertThat(c.amount()).isEqualByComparingTo("0.01"));
-        assertThat(sum(collections)).isEqualByComparingTo("0.09"); // vs. computed total tax 0.05
+        assertThat(sum(collections)).isEqualByComparingTo("0.05");
     }
 
     @Test
-    void largestAccountInTheMiddle_absorbsDrift_notTheLastOne() {
-        // 50 / 101 / 50 (total 201) × 0.0333 = 6.69; shares 1.66 / 3.36 / 1.66 → drift +0.01
-        // goes to the middle account (101), proving "largest" is chosen by balance,
-        // not by position.
+    void leftoverCent_goesToTheLargestRemainder_notTheLargestBalance() {
+        // 50 / 101 / 50 (total 201) × 0.0333 = 6.69 (669 cents). Quotas 166.418 /
+        // 336.164 / 166.418 → 166 / 336 / 166, 1 cent left over. The 101 account has the
+        // largest balance but the smallest remainder, so the cent goes to id 10 (the
+        // first of the two .418 remainders), not to the biggest account.
         when(firmService.listAllActiveFirms()).thenReturn(List.of(firm(1)));
         when(firmAccountService.listAccountIds(1)).thenReturn(List.of(10, 11, 12));
         when(treasury.getBalancesByIds(List.of(10, 11, 12))).thenReturn(Map.of(
                 10, new BigDecimal("50.00"), 11, new BigDecimal("101.00"), 12, new BigDecimal("50.00")));
         when(config.getWeeklyRate(new BigDecimal("201.00"))).thenReturn(new BigDecimal("0.0333"));
         when(taxApi.collectBatch(anyList())).thenReturn(List.of(
-                new TaxResult.Collected(1L, new BigDecimal("1.66"), 500),
-                new TaxResult.Collected(2L, new BigDecimal("3.37"), 500),
+                new TaxResult.Collected(1L, new BigDecimal("1.67"), 500),
+                new TaxResult.Collected(2L, new BigDecimal("3.36"), 500),
                 new TaxResult.Collected(3L, new BigDecimal("1.66"), 500)));
 
         svc.runWeeklyCycle(event);
 
         Map<Integer, BigDecimal> amounts = amountsBySource(capturedBatch());
-        assertThat(amounts.get(10)).isEqualByComparingTo("1.66");
-        assertThat(amounts.get(11)).isEqualByComparingTo("3.37");
+        assertThat(amounts.get(10)).isEqualByComparingTo("1.67");
+        assertThat(amounts.get(11)).isEqualByComparingTo("3.36");
         assertThat(amounts.get(12)).isEqualByComparingTo("1.66");
     }
 
