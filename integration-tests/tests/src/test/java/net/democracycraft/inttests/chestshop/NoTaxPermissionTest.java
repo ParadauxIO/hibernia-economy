@@ -3,6 +3,7 @@ package net.democracycraft.inttests.chestshop;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Ledger;
+import net.democracycraft.inttests.support.Perms;
 import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.AfterEach;
@@ -46,16 +47,18 @@ class NoTaxPermissionTest {
             Ledger.waitForPersonalBalance(b.getUuid(), STARTING, TIMEOUT);
 
             shop.setupSellShop(seller, qty, price, "dirt");
-            RconClient.send("lp user " + buyer + " permission set chestshop.notax.buy true");
+            // Live before the click: LuckPerms applies grants asynchronously.
+            Perms.grant(buyer, "chestshop.notax.buy");
 
             shop.clickBuy(b, buyer);
 
-            // No tax: buyer -100, seller +100 (full), DCGovernment unchanged.
+            // No tax: buyer -100, seller +100 (full), DCGovernment unchanged. The click
+            // returned once processed, and the tax leg settles inside the same synchronous
+            // trade, so these are final.
             Ledger.waitForPersonalBalance(b.getUuid(),
                     STARTING.subtract(BigDecimal.valueOf(price)), TIMEOUT);
             Ledger.waitForPersonalBalance(s.getUuid(),
                     STARTING.add(BigDecimal.valueOf(price)), TIMEOUT);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             assertThat(Ledger.governmentBalance("DCGovernment").orElse(BigDecimal.ZERO))
                     .as("no tax should reach DCGovernment when the buyer is exempt")
                     .isEqualByComparingTo(govBefore);

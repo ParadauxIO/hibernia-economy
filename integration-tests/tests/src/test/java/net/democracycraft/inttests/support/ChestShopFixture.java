@@ -44,6 +44,12 @@ public final class ChestShopFixture implements AutoCloseable {
     private static final int X_BASE = 100;
     private static final int X_STRIDE = 4;
     private static final AtomicInteger COUNTER = new AtomicInteger(0);
+    private static final Duration TIMEOUT = Duration.ofSeconds(10);
+    /** When each player's last trade click was handled (test clock; see {@link #awaitInteractionInterval}). */
+    private static final java.util.Map<String, Long> LAST_CLICK_HANDLED = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Slack for millisecond-clock granularity between the server's and our timestamps. */
+    private static final long CLOCK_MARGIN_MS = 20;
+    private static volatile Long interactionIntervalMs;
 
     private final BlockPos chestPos;
     private final BlockPos signPos;
@@ -257,54 +263,144 @@ public final class ChestShopFixture implements AutoCloseable {
      * the {@code tp} and the await registering. Each retry stages the player a few
      * blocks up first so the re-{@code tp} actually moves them (a re-tp to the same
      * spot emits no packet).
+     *
+     * <p>Returns once the server has handled the client's position update ({@link
+     * MockPlayer#sync}), so a click sent next is judged from the shop position, and once
+     * everything the server sent before that (gamemode/teleport chatter) has been drained.
      */
     public void positionClicker(MockPlayer client, String name) {
         RconClient.send("gamemode adventure " + name);
         Position target = new Position(
                 chestPos.x() + 0.5, chestPos.y(), chestPos.z() + 1.5, 180f, 0f);
+        Position staging = new Position(chestPos.x() + 0.5, chestPos.y() + 6, chestPos.z() + 0.5, 0f, 0f);
         boolean arrived = false;
         for (int attempt = 0; attempt < 6 && !arrived; attempt++) {
             if (attempt > 0) {
                 RconClient.send(String.format("tp %s %.1f %d %.1f",
-                        name, chestPos.x() + 0.5, chestPos.y() + 6, chestPos.z() + 0.5));
-                sleep(300);
+                        name, staging.x(), (int) staging.y(), staging.z()));
+                reaches(client, staging, Duration.ofSeconds(3));
             }
             RconClient.send("tp " + name + " " + teleportArgs());
-            long deadline = System.currentTimeMillis() + 6000;
-            while (System.currentTimeMillis() < deadline) {
-                if (client.getPosition().filter(p -> p.within(target, 2.0)).isPresent()) {
-                    arrived = true;
-                    break;
-                }
-                sleep(150);
-            }
+            arrived = reaches(client, target, Duration.ofSeconds(6));
         }
         if (!arrived) {
             throw new AssertionError("clicker " + name + " never reached the shop position " + target);
         }
         client.sendPosition(target);
-        sleep(3000);
+        client.sync(TIMEOUT);
         client.drainMessages();
     }
 
-    /** Position the client, then right-click the sign — a buy on a {@code "B"} shop. */
-    public void clickBuy(MockPlayer client, String name) {
-        positionClicker(client, name);
-        client.useBlock(signPos, BlockFace.SOUTH);
+    /** Whether the client's known position comes within 2 blocks of {@code target} in time. */
+    private static boolean reaches(MockPlayer client, Position target, Duration timeout) {
+        try {
+            Await.untilTrue(client.getUsername() + " to reach " + target,
+                    () -> client.getPosition().filter(p -> p.within(target, 2.0)).isPresent(), timeout);
+            return true;
+        } catch (AssertionError notYet) {
+            return false;
+        }
     }
 
-    /** Position the client, then left-click the sign — a sell on an {@code "S"} shop. */
+    /**
+     * Position the client, then right-click the sign — a buy on a {@code "B"} shop.
+     *
+     * <p>Returns once the click has been fully processed: the trade, if any, is complete
+     * (see {@link #click}). Tests can assert balances and stock straight away.
+     */
+    public void clickBuy(MockPlayer client, String name) {
+        positionClicker(client, name);
+        click(client, name, () -> client.useBlock(signPos, BlockFace.SOUTH));
+    }
+
+    /** Position the client, then left-click the sign — a sell on an {@code "S"} shop. Same contract as {@link #clickBuy}. */
     public void clickSell(MockPlayer client, String name) {
         positionClicker(client, name);
-        client.leftClickBlock(signPos, BlockFace.SOUTH);
+        click(client, name, () -> client.leftClickBlock(signPos, BlockFace.SOUTH));
+    }
+
+    /**
+     * Send a click and return once the server has processed it, having proved it was
+     * processed as an interaction at all.
+     *
+     * <ul>
+     *   <li>{@link MockPlayer#sync} after the click: the click and the barrier share
+     *       Paper's FIFO packet queue, and ChestShop settles a trade synchronously inside
+     *       its {@code PlayerInteractEvent} handler (goods and the Treasury transfer, see
+     *       its {@code TransactionService}), so after the barrier the outcome is final.</li>
+     *   <li>DcDiag's per-player {@code PlayerInteractEvent} counter (MONITOR, sees cancelled
+     *       events too) must have moved. Without that, a "rejected trade changes nothing"
+     *       test would pass if Paper silently dropped the packet (range, rate limit).</li>
+     * </ul>
+     *
+     * A dropped click fired no event, so no plugin saw it and re-sending is safe; it is
+     * retried a couple of times (re-positioning first) before failing.
+     */
+    private void click(MockPlayer client, String name, Runnable send) {
+        for (int attempt = 1; ; attempt++) {
+            awaitInteractionInterval(name);
+            long before = interactions(name);
+            send.run();
+            client.sync(TIMEOUT);
+            // The server handled the click no later than now (test and server share a clock).
+            LAST_CLICK_HANDLED.put(name, System.currentTimeMillis());
+            if (interactions(name) > before) return;
+            if (attempt == 3) {
+                throw new AssertionError("click by " + name + " on the sign at " + signPos
+                        + " never reached Bukkit as a PlayerInteractEvent (" + attempt
+                        + " attempts) — the server dropped it");
+            }
+            System.err.println("[ChestShopFixture] click by " + name + " was dropped server-side; "
+                    + "re-positioning and retrying (attempt " + (attempt + 1) + ")");
+            positionClicker(client, name);
+        }
+    }
+
+    /**
+     * Honour ChestShop's per-player trade throttle: a trade click less than
+     * {@code SHOP_INTERACTION_INTERVAL} ms after that player's previous one is dropped
+     * silently (PlayerInteractListener, ADT-44) — the event still fires, so the dropped-click
+     * check can't see it. Wait out whatever is left of the interval since this player's last
+     * click was handled. This is a product rule measured on the shared wall clock, not a
+     * guess at server latency; back-to-back trades by one player pay at most the interval.
+     */
+    private static void awaitInteractionInterval(String name) {
+        Long last = LAST_CLICK_HANDLED.get(name);
+        if (last == null) return;
+        long remaining = last + interactionIntervalMs() + CLOCK_MARGIN_MS - System.currentTimeMillis();
+        if (remaining <= 0) return;
+        try {
+            Thread.sleep(remaining);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted", e);
+        }
+    }
+
+    /** ChestShop's live {@code SHOP_INTERACTION_INTERVAL}, read once from the server. */
+    private static long interactionIntervalMs() {
+        Long cached = interactionIntervalMs;
+        if (cached != null) return cached;
+        String reply = RconClient.send("diag configget shopInteractionInterval");
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("= (\\d+)").matcher(reply);
+        if (!m.find()) {
+            throw new IllegalStateException("could not read ChestShop's shopInteractionInterval: " + reply);
+        }
+        interactionIntervalMs = Long.parseLong(m.group(1));
+        return interactionIntervalMs;
+    }
+
+    /** PlayerInteractEvents DcDiag has seen for {@code name}. */
+    private static long interactions(String name) {
+        String reply = RconClient.send("diag interactions " + name).trim();
+        if (!reply.startsWith("interactions=")) {
+            throw new IllegalStateException("unexpected /diag interactions reply: " + reply);
+        }
+        return Long.parseLong(reply.substring("interactions=".length()));
     }
 
     public BlockPos chestPos() { return chestPos; }
     public BlockPos signPos() { return signPos; }
-
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-    }
 
     @Override
     public void close() {

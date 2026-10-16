@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -33,11 +34,11 @@ class RoleCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role create " + firm + " Lead 100");
                 p.awaitMessageContaining("role Lead has been created", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.roleExists(firmId, "Lead")).isTrue();
                 assertThat(BusinessLedger.rolePermissionCount(firmId, "Lead")).isEqualTo(1);
             });
@@ -56,15 +57,15 @@ class RoleCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role create " + firm + " Junior 50");
                 p.awaitMessageContaining("role Junior has been created", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role rename " + firm + " Junior Senior");
                 p.awaitMessageContaining("renamed to Senior", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.roleExists(firmId, "Junior")).isFalse();
                 assertThat(BusinessLedger.roleExists(firmId, "Senior")).isTrue();
             });
@@ -83,15 +84,15 @@ class RoleCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role create " + firm + " Temp 25");
                 p.awaitMessageContaining("role Temp has been created", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role delete " + firm + " Temp");
                 p.awaitMessageContaining("role Temp has been deleted", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.roleExists(firmId, "Temp")).isFalse();
             });
         }
@@ -109,24 +110,24 @@ class RoleCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role create " + firm + " Officer 75");
                 p.awaitMessageContaining("role Officer has been created", TIMEOUT);
                 int baseline = BusinessLedger.rolePermissionCount(firmId, "Officer");
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role permission add " + firm + " Officer FINANCIAL");
                 p.awaitMessageContaining("permission FINANCIAL has been added", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.rolePermissionCount(firmId, "Officer"))
                         .isEqualTo(baseline + 1);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role permission remove " + firm + " Officer FINANCIAL");
                 p.awaitMessageContaining("permission FINANCIAL has been removed", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.rolePermissionCount(firmId, "Officer"))
                         .isEqualTo(baseline);
             });
@@ -145,7 +146,7 @@ class RoleCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role list " + firm);
                 p.awaitMessageContaining("Roles within " + firm, TIMEOUT);
             });
@@ -164,11 +165,11 @@ class RoleCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role create " + firm + " Hat 10");
                 p.awaitMessageContaining("role Hat has been created", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role permission list " + firm + " Hat");
                 p.awaitMessageContaining("Permissions within Hat", TIMEOUT);
             });

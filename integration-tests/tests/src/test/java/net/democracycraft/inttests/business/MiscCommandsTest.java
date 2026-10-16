@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -37,7 +38,7 @@ class MiscCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business balance " + firm);
                 p.awaitMessageContaining(firm + " balance:", TIMEOUT);
             });
@@ -58,20 +59,12 @@ class MiscCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 BigDecimal firmStart = BusinessLedger.firmDefaultBalance(firmId).orElse(BigDecimal.ZERO);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " " + amount.toPlainString());
                 p.awaitMessageContaining("Deposited", TIMEOUT);
 
                 Ledger.waitForPersonalBalance(p.getUuid(), personalStart.subtract(amount), TIMEOUT);
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                BigDecimal expected = firmStart.add(amount);
-                BigDecimal last = firmStart;
-                while (System.nanoTime() < deadline) {
-                    last = BusinessLedger.firmDefaultBalance(firmId).orElse(BigDecimal.ZERO);
-                    if (last.compareTo(expected) == 0) break;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(last).isEqualByComparingTo(expected);
+                BusinessLedger.waitForFirmDefaultBalance(firmId, firmStart.add(amount), TIMEOUT);
             });
         }
     }
@@ -89,24 +82,17 @@ class MiscCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " " + amount.toPlainString());
                 p.awaitMessageContaining("Deposited", TIMEOUT);
                 Ledger.waitForPersonalBalance(p.getUuid(), personalStart.subtract(amount), TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business withdraw " + firm + " " + amount.toPlainString());
                 p.awaitMessageContaining("Withdrew", TIMEOUT);
                 Ledger.waitForPersonalBalance(p.getUuid(), personalStart, TIMEOUT);
 
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                BigDecimal last = null;
-                while (System.nanoTime() < deadline) {
-                    last = BusinessLedger.firmDefaultBalance(firmId).orElse(BigDecimal.ZERO);
-                    if (last.compareTo(BigDecimal.ZERO) == 0) break;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(last).isEqualByComparingTo(BigDecimal.ZERO);
+                BusinessLedger.waitForFirmDefaultBalance(firmId, BigDecimal.ZERO, TIMEOUT);
             });
         }
     }
@@ -123,7 +109,7 @@ class MiscCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business transactions " + firm);
                 p.awaitMessageContaining("No transactions for " + firm, TIMEOUT);
             });
@@ -142,11 +128,11 @@ class MiscCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " 25");
                 p.awaitMessageContaining("Deposited", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business transactions " + firm);
                 p.awaitMessageContaining("Transactions for " + firm, TIMEOUT);
             });
@@ -215,7 +201,7 @@ class MiscCommandsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business deposit " + firm + " 0");
                 p.awaitMessage(m -> m.contains("Invalid")
@@ -234,7 +220,7 @@ class MiscCommandsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // Fresh firm — default account empty.
                 p.chatCommand("/business withdraw " + firm + " 1000000");
@@ -257,7 +243,7 @@ class MiscCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " -10");
                 p.awaitMessageContaining("Invalid amount", TIMEOUT);
             });

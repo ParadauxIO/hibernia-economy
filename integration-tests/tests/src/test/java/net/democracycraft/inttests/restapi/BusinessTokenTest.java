@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.ApiTokens;
 import net.democracycraft.inttests.support.ApiTokens.IssuedKey;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -45,7 +46,7 @@ class BusinessTokenTest {
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
                 // Deposit 1000 into the firm's default account.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " 1000");
                 p.awaitMessageContaining("Deposited", TIMEOUT);
             });
@@ -82,7 +83,7 @@ class BusinessTokenTest {
                 o.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/business deposit " + firm + " 500");
                 o.awaitMessageContaining("Deposited", TIMEOUT);
             });
@@ -128,7 +129,7 @@ class BusinessTokenTest {
                 o.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/business deposit " + firm + " 250");
                 o.awaitMessageContaining("Deposited", TIMEOUT);
             });

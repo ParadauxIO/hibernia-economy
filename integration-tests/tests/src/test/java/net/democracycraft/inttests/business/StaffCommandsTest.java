@@ -1,6 +1,8 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -35,7 +37,7 @@ class StaffCommandsTest {
         ownerP.awaitMessageContaining("Successfully created", TIMEOUT);
         int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-        Ledger.asyncSettle();
+        Barrier.settle();
         ownerP.chatCommand("/business offer " + firm + " " + hireName);
         ownerP.awaitMessageContaining("job offer has sent", TIMEOUT);
         return firmId;
@@ -125,7 +127,7 @@ class StaffCommandsTest {
             Ops.run(owner, () -> {
                 firmId[0] = seedFirmWithEmployee(firm, o, hire, h);
                 // Create a role above the default so promote has somewhere to go.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/business staff role create " + firm + " Senior 200");
                 o.awaitMessageContaining("role Senior has been created", TIMEOUT);
             });
@@ -139,23 +141,18 @@ class StaffCommandsTest {
             String startingRole = BusinessLedger.currentEmployeeRoleName(firmId[0], h.getUuid()).orElseThrow();
 
             Ops.run(owner, () -> {
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.drainMessages();
                 o.chatCommand("/business staff promote " + firm + " " + hire);
                 o.awaitMessageContaining("has been promoted to", TIMEOUT);
             });
             // New role is whatever sits above startingRole — assert it changed.
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
-            String afterPromote = startingRole;
-            while (System.nanoTime() < deadline) {
-                afterPromote = BusinessLedger.currentEmployeeRoleName(firmId[0], h.getUuid()).orElse(startingRole);
-                if (!afterPromote.equals(startingRole)) break;
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(afterPromote).isNotEqualTo(startingRole);
+            String afterPromote = Await.until("the hire's role to change from " + startingRole,
+                    () -> BusinessLedger.currentEmployeeRoleName(firmId[0], h.getUuid()).orElse(startingRole),
+                    role -> !role.equals(startingRole), TIMEOUT);
 
             Ops.run(owner, () -> {
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.drainMessages();
                 o.chatCommand("/business staff demote " + firm + " " + hire);
                 o.awaitMessageContaining("has been demoted to", TIMEOUT);
@@ -178,7 +175,7 @@ class StaffCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff list " + firm);
                 p.awaitMessageContaining("Employees of " + firm, TIMEOUT);
             });

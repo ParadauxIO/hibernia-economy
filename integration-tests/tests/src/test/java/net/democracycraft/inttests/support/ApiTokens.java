@@ -86,23 +86,12 @@ public final class ApiTokens {
     }
 
     public static IssuedKey waitForLatestKey(UUID ownerUuid, String type, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            IssuedKey k = latestKeyFor(ownerUuid, type);
-            if (k != null) return k;
-            sleep(150);
-        }
-        throw new AssertionError("No " + type + " key for " + ownerUuid + " within " + timeout);
+        return Await.until("a " + type + " key for " + ownerUuid,
+                () -> latestKeyFor(ownerUuid, type), k -> k != null, timeout);
     }
 
     public static IssuedKey waitForKeyById(int keyId, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            IssuedKey k = keyById(keyId);
-            if (k != null) return k;
-            sleep(150);
-        }
-        throw new AssertionError("Key " + keyId + " not found within " + timeout);
+        return Await.until("key " + keyId, () -> keyById(keyId), k -> k != null, timeout);
     }
 
     public static IssuedKey latestKeyFor(UUID ownerUuid, String type) {
@@ -194,13 +183,6 @@ public final class ApiTokens {
 
     private static Connection connect() throws SQLException {
         return DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
-    }
-
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted", e);
-        }
     }
 
     private ApiTokens() {}

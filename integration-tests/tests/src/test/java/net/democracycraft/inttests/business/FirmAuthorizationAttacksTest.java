@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -63,8 +64,10 @@ class FirmAuthorizationAttacksTest {
                 // Seed the firm so a successful withdraw would be observable.
                 o.chatCommand("/eco give " + owner + " 1000");
                 o.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 o.chatCommand("/business account deposit " + firm + " " + acctId + " 1000");
                 o.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 BigDecimal firmBefore = Ledger.governmentBalance(firm + " Corporate Account")
                         .orElse(BigDecimal.ZERO);
@@ -74,6 +77,7 @@ class FirmAuthorizationAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/business account withdraw " + firm + " " + acctId + " 1000");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 // Cardinal assertion: firm balance unchanged.
                 assertThat(Ledger.governmentBalance(firm + " Corporate Account").orElse(BigDecimal.ZERO))
@@ -107,6 +111,7 @@ class FirmAuthorizationAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/business account deposit " + firm + " " + acctId + " 50");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 // The membership-creation post-condition: attacker MUST NOT
                 // become an employee as a side-effect of the deposit attempt.
@@ -139,11 +144,14 @@ class FirmAuthorizationAttacksTest {
                 // Seed.
                 o.chatCommand("/eco give " + owner + " 500");
                 o.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 o.chatCommand("/business account deposit " + firm + " " + acctId + " 500");
                 o.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 // Hire the attacker at default rank.
                 o.chatCommand("/business hire " + firm + " " + employee);
                 o.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
 
             BigDecimal firmBefore = Ledger.governmentBalance(firm + " Corporate Account")
@@ -155,6 +163,7 @@ class FirmAuthorizationAttacksTest {
                     + BusinessLedger.firmDefaultAccountId(BusinessLedger.firmId(firm).orElseThrow()).orElseThrow()
                     + " 100");
             e.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+            Barrier.settle();
 
             assertThat(Ledger.governmentBalance(firm + " Corporate Account").orElse(BigDecimal.ZERO))
                     .as("Employee-rank member must not be able to withdraw firm funds")
@@ -228,6 +237,7 @@ class FirmAuthorizationAttacksTest {
             // No Ops.run — attacker is a vanilla player.
             p.chatCommand("/eco give " + attacker + " 1000000");
             p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+            Barrier.settle();
 
             assertThat(Ledger.personalBalance(p.getUuid()).orElseThrow())
                     .as("non-op /eco give must NOT credit the attacker")
@@ -249,6 +259,7 @@ class FirmAuthorizationAttacksTest {
             a.drainMessages();
             a.chatCommand("/fine issue GovernmentFines " + victim + " 9999 illegitimate");
             a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+            Barrier.settle();
 
             assertThat(Ledger.personalBalance(v.getUuid()).orElseThrow())
                     .as("non-op /fine issue must NOT debit the victim")

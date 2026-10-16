@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -36,7 +37,7 @@ class RoleCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // "Manager" is one of the default roles seeded at firm creation.
                 p.chatCommand("/business staff role create " + firm + " Manager 100");
@@ -60,7 +61,7 @@ class RoleCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business staff role delete " + firm + " Proprietor");
                 p.awaitMessage(m -> m.toLowerCase().contains("proprietor")
@@ -82,7 +83,7 @@ class RoleCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // Rename Manager -> Supervisor (both default-seeded).
                 p.chatCommand("/business staff role rename " + firm + " Manager Supervisor");
@@ -159,7 +160,7 @@ class RoleCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business staff role permission add " + firm + " NoSuchRole FINANCIAL");
                 p.awaitMessage(m -> m.contains("not found")
@@ -181,11 +182,11 @@ class RoleCommandsRejectionsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 p.chatCommand("/business staff role create " + firm + " Worker 200");
                 p.awaitMessageContaining("Worker has been created", TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 p.drainMessages();
                 p.chatCommand("/business staff role permission add " + firm + " Worker NOTAREALPERM");
@@ -220,11 +221,11 @@ class RoleCommandsRejectionsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 p.chatCommand("/business staff role create " + firm + " Worker 200");
                 p.awaitMessageContaining("Worker has been created", TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 p.drainMessages();
                 // Worker was just created with DEFAULT only; FINANCIAL not present.
@@ -274,7 +275,7 @@ class RoleCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business staff role delete " + firm + " NoSuchRole");
                 p.awaitMessage(m -> m.toLowerCase().contains("not found")

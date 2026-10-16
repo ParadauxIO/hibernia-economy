@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -42,13 +43,13 @@ class AdditionalCoverageTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account setdefault " + firm + " 999999");
                 // 999999 isn't one of the firm's accounts; the service refuses it as a
                 // bad command and the default account is left untouched.
                 p.awaitMessageContaining("does not belong to the firm", TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.firmDefaultAccountId(firmId)).hasValue(defaultId);
             });
         }
@@ -68,11 +69,11 @@ class AdditionalCoverageTest {
                 // Only https://discord.gg/<code> is accepted now: the invite is rendered
                 // into the public /firm info card, so the charset and scheme are strict
                 // (NameValidator.DISCORD_INVITE_REGEX). Plain http is refused.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business attribute set discord " + firm + " http://discord.gg/abc123");
                 p.awaitMessageContaining("Invalid URL", TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.firmDiscordUrl(firmId)).isEmpty();
             });
         }
@@ -94,11 +95,11 @@ class AdditionalCoverageTest {
                 o.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/business offer " + firm + " " + hire);
                 o.awaitMessageContaining("job offer has sent", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.drainMessages();
                 o.chatCommand("/business offer rescind " + firm + " " + hire);
                 o.awaitMessageContaining("rescinded", TIMEOUT);

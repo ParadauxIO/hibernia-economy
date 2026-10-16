@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -34,7 +35,7 @@ class StaffCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business fire " + firm + " " + owner);
                 // Either "cannot fire yourself" / "proprietor" / generic Error:.
@@ -87,7 +88,7 @@ class StaffCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business staff promote " + firm + " " + stranger);
                 p.awaitMessage(m -> m.toLowerCase().contains("not")
@@ -123,6 +124,7 @@ class StaffCommandsRejectionsTest {
                 p.drainMessages();
                 p.chatCommand("/business resign NoSuchFirmEv");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -170,6 +172,7 @@ class StaffCommandsRejectionsTest {
                 p.drainMessages();
                 p.chatCommand("/business staff list NoSuchFirmEv");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -189,7 +192,7 @@ class StaffCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business staff demote " + firm + " " + stranger);
                 p.awaitMessage(m -> m.toLowerCase().contains("not")

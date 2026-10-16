@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
@@ -138,12 +139,12 @@ class FineCommandRejectionsTest {
 
                 long fineId = pollForFineId(t.getUuid());
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 i.drainMessages();
                 i.chatCommand("/fine revoke " + fineId);
                 i.awaitMessageContaining("Revoked", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 i.drainMessages();
                 i.chatCommand("/fine revoke " + fineId);
                 i.awaitMessageContaining("already revoked", TIMEOUT);
@@ -152,12 +153,6 @@ class FineCommandRejectionsTest {
     }
 
     private static long pollForFineId(java.util.UUID playerUuid) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        while (System.nanoTime() < deadline) {
-            java.util.Optional<Long> id = Ledger.mostRecentFineFor(playerUuid);
-            if (id.isPresent()) return id.get();
-            try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-        throw new AssertionError("No fine recorded for " + playerUuid + " within " + TIMEOUT);
+        return Ledger.waitForMostRecentFine(playerUuid, TIMEOUT);
     }
 }

@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
@@ -44,6 +45,7 @@ class AdditionalCoverageTest {
             p.chatCommand("/baltop 99999");
             // Whatever the response is, server doesn't error out.
             p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+            Barrier.settle();
         }
     }
 
@@ -77,6 +79,7 @@ class AdditionalCoverageTest {
                 a.drainMessages();
                 a.chatCommand("/gov account history " + acct + " 0");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -106,21 +109,14 @@ class AdditionalCoverageTest {
                 i.chatCommand("/fine issue GovernmentFines " + target + " 25 testing");
                 i.awaitMessageContaining("Issued fine", TIMEOUT);
 
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                java.util.Optional<Long> fid = java.util.Optional.empty();
-                while (System.nanoTime() < deadline) {
-                    fid = Ledger.mostRecentFineFor(t.getUuid());
-                    if (fid.isPresent()) break;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                long fineId = fid.orElseThrow();
+                long fineId = Ledger.waitForMostRecentFine(t.getUuid(), TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 i.drainMessages();
                 i.chatCommand("/fine revoke " + fineId);
                 i.awaitMessageContaining("Revoked", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 i.drainMessages();
                 i.chatCommand("/fine info " + fineId);
                 i.awaitMessage(m -> m.toLowerCase().contains("revok"), TIMEOUT);

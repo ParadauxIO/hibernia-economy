@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -44,7 +45,7 @@ class RequestCommandsTest {
                 o.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.drainMessages();
                 h.drainMessages();
                 o.chatCommand("/business offer " + firm + " " + hire);
@@ -83,7 +84,7 @@ class RequestCommandsTest {
                 o.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/business offer " + firm + " " + hire);
                 o.awaitMessageContaining("job offer has sent", TIMEOUT);
             });
@@ -117,13 +118,13 @@ class RequestCommandsTest {
                 o.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.drainMessages();
                 h.drainMessages();
                 o.chatCommand("/business offer " + firm + " " + hire);
                 o.awaitMessageContaining("job offer has sent", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.drainMessages();
                 o.chatCommand("/business offer rescind " + firm + " " + hire);
                 o.awaitMessageContaining("rescinded", TIMEOUT);
@@ -161,7 +162,7 @@ class RequestCommandsTest {
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 assertThat(BusinessLedger.firmProprietor(firmId[0])).hasValue(a.getUuid());
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/business transfer begin " + firm + " " + newOwner);
                 a.awaitMessageContaining("Confirm transfer", TIMEOUT);
                 BusinessLedger.waitForActiveTransferToken(firmId[0], b.getUuid(), TIMEOUT);
@@ -171,7 +172,7 @@ class RequestCommandsTest {
                 // component which the plain serialiser collapses.
                 String code = BusinessLedger.activeTransferToken(firmId[0], b.getUuid()).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 b.drainMessages();
                 a.chatCommand("/business transfer confirm " + firm + " " + newOwner + " " + code);
@@ -206,12 +207,12 @@ class RequestCommandsTest {
                 a.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/business transfer begin " + firm + " " + newOwner);
                 a.awaitMessageContaining("Confirm transfer", TIMEOUT);
                 BusinessLedger.waitForActiveTransferToken(firmId[0], b.getUuid(), TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/business transfer cancel " + firm + " " + newOwner);
                 a.awaitMessageContaining("cancelled", TIMEOUT);
@@ -239,13 +240,13 @@ class RequestCommandsTest {
                 a.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmId[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/business transfer begin " + firm + " " + newOwner);
                 a.awaitMessageContaining("Confirm transfer", TIMEOUT);
                 BusinessLedger.waitForActiveTransferToken(firmId[0], b.getUuid(), TIMEOUT);
 
                 String code = BusinessLedger.activeTransferToken(firmId[0], b.getUuid()).orElseThrow();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/business transfer confirm " + firm + " " + newOwner + " " + code);
                 a.awaitMessageContaining("request has been confirmed", TIMEOUT);
             });

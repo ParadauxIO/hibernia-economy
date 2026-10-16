@@ -84,25 +84,13 @@ public final class Market {
     }
 
     public static Sale waitForSaleForCustomer(UUID customer, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            Optional<Sale> s = latestSaleForCustomer(customer);
-            if (s.isPresent()) return s.get();
-            sleep();
-        }
-        throw new AssertionError("No chestshop_sale row for customer " + customer + " within " + timeout);
+        return Await.until("a chestshop_sale row for customer " + customer,
+                () -> latestSaleForCustomer(customer).orElse(null), s -> s != null, timeout);
     }
 
     public static void waitForSaleCount(UUID customer, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = saleCountForCustomer(customer);
-            if (last >= expected) return;
-            sleep();
-        }
-        throw new AssertionError("chestshop_sale count for " + customer + " reached " + last
-                + ", expected >= " + expected + " within " + timeout);
+        Await.until("chestshop_sale count for " + customer + " to reach >= " + expected,
+                () -> saleCountForCustomer(customer), n -> n >= expected, timeout);
     }
 
     // ── shops ───────────────────────────────────────────────────────────────────
@@ -131,17 +119,7 @@ public final class Market {
     }
 
     public static Shop waitForShopAt(String world, int x, int y, int z, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            Optional<Shop> s = shopAt(world, x, y, z);
-            if (s.isPresent()) return s.get();
-            sleep();
-        }
-        throw new AssertionError("No chestshop_shop row at " + world + " " + x + "," + y + "," + z
-                + " within " + timeout);
-    }
-
-    private static void sleep() {
-        try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        return Await.until("a chestshop_shop row at " + world + " " + x + "," + y + "," + z,
+                () -> shopAt(world, x, y, z).orElse(null), s -> s != null, timeout);
     }
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.ApiTokens;
 import net.democracycraft.inttests.support.ApiTokens.IssuedKey;
+import net.democracycraft.inttests.support.Await;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.RestApi;
 import net.democracycraft.inttests.support.RestApi.Response;
@@ -184,30 +185,19 @@ class TransactionFeedTest {
 
     /** Polls the feed from {@code since} until at least {@code count} items have settled. */
     private static JsonNode waitForFeed(String token, int accountId, long since, int count) {
-        long deadline = System.nanoTime() + SETTLE_TIMEOUT.toNanos();
-        Response last;
-        do {
-            last = RestApi.getTransactionFeed(token, accountId, since, null);
-            assertThat(last.status()).as("feed: %s", last.body()).isEqualTo(200);
-            if (last.json().path("items").size() >= count) return last.json();
-            sleep(500);
-        } while (System.nanoTime() < deadline);
-        throw new AssertionError("Feed for account " + accountId + " did not settle " + count
-                + " items within " + SETTLE_TIMEOUT + " (last body: " + last.body() + ")");
+        Response last = Await.until("the feed for account " + accountId + " to hold " + count + " items",
+                () -> {
+                    Response r = RestApi.getTransactionFeed(token, accountId, since, null);
+                    assertThat(r.status()).as("feed: %s", r.body()).isEqualTo(200);
+                    return r;
+                },
+                r -> r.json().path("items").size() >= count, SETTLE_TIMEOUT);
+        return last.json();
     }
 
     private static List<Long> txnIds(JsonNode items) {
         List<Long> ids = new ArrayList<>();
         items.forEach(item -> ids.add(item.path("txnId").asLong()));
         return ids;
-    }
-
-    private static void sleep(long ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted", e);
-        }
     }
 }

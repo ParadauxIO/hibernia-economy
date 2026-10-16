@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
@@ -45,6 +46,7 @@ class TaxCommandRejectionsTest {
                 a.drainMessages();
                 a.chatCommand("/tax trigger balance NeverJoinedTax");
                 String r = a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 assertThat(r).contains("command.unknown.argument");
                 assertThat(r).doesNotContain("Firing");
             });

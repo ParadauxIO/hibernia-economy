@@ -83,7 +83,7 @@ class BusinessShopTest {
             // 3. Proprietor's PERSONAL is unchanged — proves the route went
             //    through the B:<id> path, not a fallback to proprietor personal.
             Ledger.waitForPersonalBalance(b.getUuid(), STARTING.subtract(BigDecimal.valueOf(price)), TIMEOUT);
-            waitForFirmDefaultBalance(firmId, firmBefore.add(BigDecimal.valueOf(price)), TIMEOUT);
+            BusinessLedger.waitForFirmDefaultBalance(firmId, firmBefore.add(BigDecimal.valueOf(price)), TIMEOUT);
             BigDecimal proprietorAfter = Ledger.personalBalance(p.getUuid())
                     .orElseThrow(() -> new AssertionError("proprietor balance missing"));
             assertThat(proprietorAfter).isEqualByComparingTo(STARTING);
@@ -97,17 +97,6 @@ class BusinessShopTest {
         }
     }
 
-    private static void waitForFirmDefaultBalance(int firmId, BigDecimal expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        BigDecimal last = null;
-        while (System.nanoTime() < deadline) {
-            last = BusinessLedger.firmDefaultBalance(firmId).orElse(null);
-            if (last != null && last.compareTo(expected) == 0) return;
-            try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-        throw new AssertionError("Firm " + firmId + " default balance did not reach "
-                + expected + " within " + timeout + " (last seen: " + last + ")");
-    }
 
     private static int numTransfersInto(int accountId) {
         try (Connection c = DriverManager.getConnection(

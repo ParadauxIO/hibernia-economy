@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -38,7 +39,7 @@ class AccountCommandsRejectionsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account deposit " + firm + " " + defaultId + " -10");
                 p.awaitMessageContaining("Invalid amount", TIMEOUT);
@@ -62,7 +63,7 @@ class AccountCommandsRejectionsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account withdraw " + firm + " " + defaultId + " -10");
                 p.awaitMessageContaining("Invalid amount", TIMEOUT);
@@ -82,7 +83,7 @@ class AccountCommandsRejectionsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // Brand-new firm — default account empty.
                 p.chatCommand("/business account withdraw " + firm + " " + defaultId + " 1000000");
@@ -116,7 +117,7 @@ class AccountCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account deposit " + firm + " " + defaultId + " 0");
                 p.awaitMessage(m -> m.contains("Invalid")
@@ -136,7 +137,7 @@ class AccountCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account withdraw " + firm + " " + defaultId + " 0");
                 p.awaitMessage(m -> m.contains("Invalid")
@@ -158,11 +159,12 @@ class AccountCommandsRejectionsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // 99999999 is well above any account_id likely to exist.
                 p.chatCommand("/business account balance " + firm + " 99999999");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -177,10 +179,11 @@ class AccountCommandsRejectionsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account archive " + firm + " 99999999");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -195,10 +198,11 @@ class AccountCommandsRejectionsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account setdefault " + firm + " 99999999");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -213,10 +217,11 @@ class AccountCommandsRejectionsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account sync " + firm + " 99999999");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -234,10 +239,11 @@ class AccountCommandsRejectionsTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account addmember " + firm + " 99999999 " + tgt);
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
