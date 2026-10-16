@@ -1,6 +1,16 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.PostTradeReactions;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.paradaux.chestshop.ChestShop;
 import io.paradaux.chestshop.model.Account;
@@ -10,10 +20,15 @@ import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.PostTradeReactions;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.ShopService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -30,23 +45,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.stubbing.Answer;
-
-import java.math.BigDecimal;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Coverage for {@link PostTradeReactions}: the ChestShop-internal MONITOR reactions to a settled
@@ -85,13 +83,15 @@ class PostTradeReactionsTest {
 
         lenient().when(items.getItemList(any())).thenReturn("64 Stone");
         lenient().when(items.getName(any())).thenReturn("Stone");
-        lenient().when(message.component(anyString(), any(java.util.Map.class)))
+        lenient()
+                .when(message.component(anyString(), any(java.util.Map.class)))
                 .thenReturn(mock(net.kyori.adventure.text.Component.class));
-        lenient().when(message.component(anyString(), any(Object[].class)))
+        lenient()
+                .when(message.component(anyString(), any(Object[].class)))
                 .thenReturn(mock(net.kyori.adventure.text.Component.class));
 
-        postTrade = new PostTradeReactionsImpl(economy, shops, accounts, message, items, config, signService,
-                shopBlockService, inventoryService);
+        postTrade = new PostTradeReactionsImpl(
+                economy, shops, accounts, message, items, config, signService, shopBlockService, inventoryService);
     }
 
     // ── builders ──────────────────────────────────────────────────────────────
@@ -101,7 +101,10 @@ class PostTradeReactionsTest {
         Answer<Object> behaviour = inv -> switch (inv.getMethod().getName()) {
             case "getType" -> type;
             case "getAmount" -> amt[0];
-            case "setAmount" -> { amt[0] = inv.getArgument(0); yield null; }
+            case "setAmount" -> {
+                amt[0] = inv.getArgument(0);
+                yield null;
+            }
             case "clone" -> item(type, amt[0]);
             case "toString" -> "Item(" + type + "x" + amt[0] + ")";
             case "equals" -> inv.getMock() == inv.getArgument(0);
@@ -134,24 +137,38 @@ class PostTradeReactionsTest {
         Sign s = mock(Sign.class);
         lenient().when(s.getLocation()).thenReturn(loc);
         lenient().when(s.getWorld()).thenReturn(w);
-        lenient().when(s.getLines()).thenReturn(new String[]{"Alice", "1", "B 5", "STONE"});
+        lenient().when(s.getLines()).thenReturn(new String[] {"Alice", "1", "B 5", "STONE"});
         return s;
     }
 
     /** A completed-trade context. */
-    private Transaction txn(Transaction.TransactionType type, boolean unlimited, Sign s,
-                            Player client, Account owner, Inventory ownerInv, Inventory clientInv,
-                            ItemStack[] stock, BigDecimal price) {
-        PendingTransaction pending = new PendingTransaction(ownerInv, clientInv, stock, price, client, owner, s, type, unlimited);
+    private Transaction txn(
+            Transaction.TransactionType type,
+            boolean unlimited,
+            Sign s,
+            Player client,
+            Account owner,
+            Inventory ownerInv,
+            Inventory clientInv,
+            ItemStack[] stock,
+            BigDecimal price) {
+        PendingTransaction pending =
+                new PendingTransaction(ownerInv, clientInv, stock, price, client, owner, s, type, unlimited);
         return new Transaction(pending, s);
     }
 
-    private Account owner() { return new Account("Alice", "Alice", UUID.randomUUID()); }
-
     /** A BUY transaction whose owner chest is {@code ownerInv}, for deleteEmptyShop scenarios. */
     private Transaction deletableBuy(Sign s, Inventory ownerInv, Account owner) {
-        return txn(BUY, false, s, player("Notch", UUID.randomUUID()), owner, ownerInv, mock(Inventory.class),
-                new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+        return txn(
+                BUY,
+                false,
+                s,
+                player("Notch", UUID.randomUUID()),
+                owner,
+                ownerInv,
+                mock(Inventory.class),
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5.00"));
     }
 
     // ═══════════════════════════ deleteEmptyShop ═══════════════════════════
@@ -160,8 +177,16 @@ class PostTradeReactionsTest {
     void deleteEmptyShop_sellTrade_isNoOp() {
         Sign s = sign(location(mock(World.class)));
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
-        Transaction event = txn(SELL, false, s, player("Notch", UUID.randomUUID()), owner,
-                mock(Inventory.class), mock(Inventory.class), new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5"));
+        Transaction event = txn(
+                SELL,
+                false,
+                s,
+                player("Notch", UUID.randomUUID()),
+                owner,
+                mock(Inventory.class),
+                mock(Inventory.class),
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5"));
 
         postTrade.deleteEmptyShop(event);
 
@@ -205,7 +230,7 @@ class PostTradeReactionsTest {
         Block signBlock = mock(Block.class);
         when(s.getBlock()).thenReturn(signBlock);
         Inventory ownerInv = mock(Inventory.class);
-        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[]{null}); // empty chest
+        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[] {null}); // empty chest
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
         Transaction event = deletableBuy(s, ownerInv, owner);
         when(signService.isAdminShop(s)).thenReturn(false);
@@ -276,14 +301,15 @@ class PostTradeReactionsTest {
         Block signBlock = mock(Block.class);
         when(s.getBlock()).thenReturn(signBlock);
         Inventory ownerInv = mock(Inventory.class);
-        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[]{null});
+        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[] {null});
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
         Transaction event = deletableBuy(s, ownerInv, owner);
         when(signService.isAdminShop(s)).thenReturn(false);
         when(config.isRemoveEmptyShops()).thenReturn(true);
         when(config.isAllowPartialTransactions()).thenReturn(true);
         when(ownerInv.containsAtLeast(any(), eq(1))).thenReturn(false);
-        when(config.getRemoveEmptyWorlds()).thenReturn(java.util.Collections.singleton("world")); // world listed → contains true
+        when(config.getRemoveEmptyWorlds())
+                .thenReturn(java.util.Collections.singleton("world")); // world listed → contains true
         when(config.isRemoveEmptyChests()).thenReturn(true);
         Container container = mock(Container.class);
         when(container.getBlock()).thenReturn(mock(Block.class));
@@ -303,7 +329,7 @@ class PostTradeReactionsTest {
         when(s.getType()).thenReturn(Material.OAK_SIGN);
         when(s.getBlock()).thenReturn(mock(Block.class));
         Inventory ownerInv = mock(Inventory.class);
-        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[]{null});
+        when(ownerInv.getStorageContents()).thenReturn(new ItemStack[] {null});
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
         Transaction event = deletableBuy(s, ownerInv, owner);
         when(signService.isAdminShop(s)).thenReturn(false);
@@ -342,8 +368,16 @@ class PostTradeReactionsTest {
             when(world.getName()).thenReturn("world");
             Sign s = sign(location(world));
             Account owner = new Account("Alice", "Alice", UUID.randomUUID());
-            Transaction event = txn(BUY, false, s, player("Notch", UUID.randomUUID()), owner,
-                    mock(Inventory.class), mock(Inventory.class), new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+            Transaction event = txn(
+                    BUY,
+                    false,
+                    s,
+                    player("Notch", UUID.randomUUID()),
+                    owner,
+                    mock(Inventory.class),
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5.00"));
             Map<ItemStack, Integer> counts = new LinkedHashMap<>();
             counts.put(item(Material.STONE, 1), 1);
             when(inventoryService.getItemCounts(any())).thenReturn(counts);
@@ -366,8 +400,16 @@ class PostTradeReactionsTest {
             when(world.getName()).thenReturn("world");
             Sign s = sign(location(world));
             Account owner = new Account("Alice", "Alice", UUID.randomUUID());
-            Transaction event = txn(SELL, false, s, player("Notch", UUID.randomUUID()), owner,
-                    mock(Inventory.class), mock(Inventory.class), new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+            Transaction event = txn(
+                    SELL,
+                    false,
+                    s,
+                    player("Notch", UUID.randomUUID()),
+                    owner,
+                    mock(Inventory.class),
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5.00"));
             Map<ItemStack, Integer> counts = new LinkedHashMap<>();
             counts.put(item(Material.STONE, 1), 1);
             when(inventoryService.getItemCounts(any())).thenReturn(counts);
@@ -394,8 +436,16 @@ class PostTradeReactionsTest {
             Account owner = new Account("Alice", "Alice", ownerId);
             Player ownerPlayer = player("Alice", ownerId);
             Sign s = sign(location(world));
-            Transaction event = txn(BUY, false, s, client, owner, mock(Inventory.class), mock(Inventory.class),
-                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+            Transaction event = txn(
+                    BUY,
+                    false,
+                    s,
+                    client,
+                    owner,
+                    mock(Inventory.class),
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5.00"));
             when(config.isShowTransactionInformationClient()).thenReturn(true);
             when(config.isShowTransactionInformationOwner()).thenReturn(true);
             when(accounts.isIgnoring(ownerId)).thenReturn(false);
@@ -417,8 +467,16 @@ class PostTradeReactionsTest {
             Player client = player("Notch", UUID.randomUUID());
             Account owner = new Account("Alice", "Alice", ownerId);
             Sign s = sign(location(world));
-            Transaction event = txn(BUY, false, s, client, owner, mock(Inventory.class), mock(Inventory.class),
-                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+            Transaction event = txn(
+                    BUY,
+                    false,
+                    s,
+                    client,
+                    owner,
+                    mock(Inventory.class),
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5.00"));
             when(config.isShowTransactionInformationClient()).thenReturn(true);
             when(config.isShowTransactionInformationOwner()).thenReturn(true);
             when(accounts.isIgnoring(ownerId)).thenReturn(true); // owner muted → skip owner notify
@@ -438,8 +496,16 @@ class PostTradeReactionsTest {
             Player client = player("Notch", UUID.randomUUID());
             Account owner = new Account("Alice", "Alice", ownerId);
             Sign s = sign(location(world));
-            Transaction event = txn(BUY, false, s, client, owner, mock(Inventory.class), mock(Inventory.class),
-                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+            Transaction event = txn(
+                    BUY,
+                    false,
+                    s,
+                    client,
+                    owner,
+                    mock(Inventory.class),
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5.00"));
             when(config.isShowTransactionInformationClient()).thenReturn(false); // skip client branch
             when(config.isShowTransactionInformationOwner()).thenReturn(true);
             when(accounts.isIgnoring(ownerId)).thenReturn(false);
@@ -461,8 +527,16 @@ class PostTradeReactionsTest {
             Account owner = new Account("Alice", "Alice", ownerId);
             Player ownerPlayer = player("Alice", ownerId);
             Sign s = sign(location(world));
-            Transaction event = txn(SELL, false, s, client, owner, mock(Inventory.class), mock(Inventory.class),
-                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+            Transaction event = txn(
+                    SELL,
+                    false,
+                    s,
+                    client,
+                    owner,
+                    mock(Inventory.class),
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5.00"));
             when(config.isShowTransactionInformationClient()).thenReturn(true);
             when(config.isShowTransactionInformationOwner()).thenReturn(true);
             when(accounts.isIgnoring(ownerId)).thenReturn(false);
@@ -484,8 +558,16 @@ class PostTradeReactionsTest {
             Player client = player("Notch", UUID.randomUUID());
             Account owner = new Account("Alice", "Alice", ownerId);
             Sign s = sign(location(world));
-            Transaction event = txn(BUY, false, s, client, owner, mock(Inventory.class), mock(Inventory.class),
-                    new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+            Transaction event = txn(
+                    BUY,
+                    false,
+                    s,
+                    client,
+                    owner,
+                    mock(Inventory.class),
+                    mock(Inventory.class),
+                    new ItemStack[] {item(Material.STONE, 1)},
+                    new BigDecimal("5.00"));
             // both config flags default false → neither the client nor the owner branch fires.
 
             postTrade.sendTransactionMessages(event);
@@ -501,13 +583,21 @@ class PostTradeReactionsTest {
         Player recipient = player("Alice", UUID.randomUUID());
         Sign s = sign(location(null)); // unloaded world
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
-        Transaction event = txn(BUY, false, s, player("Notch", UUID.randomUUID()), owner,
-                mock(Inventory.class), mock(Inventory.class), new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5"));
+        Transaction event = txn(
+                BUY,
+                false,
+                s,
+                player("Notch", UUID.randomUUID()),
+                owner,
+                mock(Inventory.class),
+                mock(Inventory.class),
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5"));
 
         var m = PostTradeReactionsImpl.class.getDeclaredMethod(
                 "sendTradeMessage", Player.class, String.class, Transaction.class, String[].class);
         m.setAccessible(true);
-        m.invoke(postTrade, recipient, "chestshop.YOU_BOUGHT_FROM_SHOP", event, new String[]{"owner", "Alice"});
+        m.invoke(postTrade, recipient, "chestshop.YOU_BOUGHT_FROM_SHOP", event, new String[] {"owner", "Alice"});
 
         verify(recipient).sendMessage(any(net.kyori.adventure.text.Component.class));
     }
@@ -526,17 +616,60 @@ class PostTradeReactionsTest {
         java.util.function.Function<java.util.UUID, java.math.BigDecimal> balance = u -> java.math.BigDecimal.ZERO;
         boolean hasAccount = true;
         boolean settleResult = true;
-        int settleCalls = 0;
-        int migrateCalls = 0;
-        @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
-        @Override public String format(java.math.BigDecimal amount) { return amount.toPlainString(); }
-        @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
-        @Override public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) { return hasFunds.test(account, amount); }
-        @Override public java.math.BigDecimal getBalance(java.util.UUID account) { return balance.apply(account); }
-        @Override public boolean hasAccount(java.util.UUID account) { return hasAccount; }
-        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { settleCalls++; return settleResult; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { migrateCalls++; }
+
+        @Override
+        public void bind(
+                io.paradaux.treasury.api.TreasuryApi treasury,
+                int systemAccountId,
+                io.paradaux.treasury.api.TaxApi taxApi) {
+            /* unused headless */
+        }
+
+        @Override
+        public String format(java.math.BigDecimal amount) {
+            return amount.toPlainString();
+        }
+
+        @Override
+        public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) {
+            return ownerEconomicallyActive;
+        }
+
+        @Override
+        public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) {
+            return hasFunds.test(account, amount);
+        }
+
+        @Override
+        public java.math.BigDecimal getBalance(java.util.UUID account) {
+            return balance.apply(account);
+        }
+
+        @Override
+        public boolean hasAccount(java.util.UUID account) {
+            return hasAccount;
+        }
+
+        @Override
+        public boolean settle(
+                java.math.BigDecimal amount,
+                org.bukkit.entity.Player initiator,
+                java.util.UUID partner,
+                io.paradaux.chestshop.model.Transaction txn) {
+            return settleResult;
+        }
+
+        @Override
+        public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) {}
     }
 }

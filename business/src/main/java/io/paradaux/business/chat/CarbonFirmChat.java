@@ -1,10 +1,11 @@
 package io.paradaux.business.chat;
 
+import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import net.draycia.carbon.api.CarbonChat;
 import net.draycia.carbon.api.CarbonChatProvider;
 import net.draycia.carbon.api.channels.ChatChannel;
-
-import java.util.UUID;
 
 /**
  * Holder for everything that touches {@code net.draycia.carbon.*} on behalf of
@@ -22,6 +23,8 @@ import java.util.UUID;
  * ({@link #register}) needs Carbon on the classpath.
  */
 final class CarbonFirmChat {
+
+    private static final Logger LOG = Logger.getLogger(CarbonFirmChat.class.getName());
 
     private final CarbonChat carbon;
     private final FirmChatChannel channel;
@@ -50,7 +53,14 @@ final class CarbonFirmChat {
     }
 
     private void select(UUID uuid, ChatChannel target) {
-        // userManager().user(uuid) is async; selecting on completion is fine for a toggle.
-        carbon.userManager().user(uuid).thenAccept(cp -> cp.selectedChannel(target));
+        // userManager().user(uuid) is async; selecting on completion is fine for a toggle,
+        // but a failed lookup/select must be logged rather than dropped with the future.
+        carbon.userManager()
+                .user(uuid)
+                .thenAccept(cp -> cp.selectedChannel(target))
+                .exceptionally(t -> {
+                    LOG.log(Level.WARNING, "Could not switch " + uuid + "'s CarbonChat channel", t);
+                    return null;
+                });
     }
 }

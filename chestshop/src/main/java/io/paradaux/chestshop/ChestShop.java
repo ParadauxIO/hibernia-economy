@@ -1,45 +1,40 @@
 package io.paradaux.chestshop;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.dialogs.FindDialog;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.commands.GiveCommand;
 import io.paradaux.chestshop.commands.ItemInfoCommand;
 import io.paradaux.chestshop.commands.ShopInfoCommand;
 import io.paradaux.chestshop.commands.ToggleCommand;
 import io.paradaux.chestshop.commands.VersionCommand;
-import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.chestshop.listeners.MarketListener;
+import io.paradaux.chestshop.integration.IntegrationRegistrar;
+import io.paradaux.chestshop.integration.WorldGuardIntegration;
 import io.paradaux.chestshop.listeners.BlockPlaceListener;
 import io.paradaux.chestshop.listeners.ChestBreakListener;
-import io.paradaux.chestshop.listeners.SignBreakListener;
-import io.paradaux.chestshop.listeners.SignCreateListener;
 import io.paradaux.chestshop.listeners.GarbageTextListener;
 import io.paradaux.chestshop.listeners.ItemMoveListener;
-import io.paradaux.chestshop.listeners.StockCounterListener;
+import io.paradaux.chestshop.listeners.MarketListener;
 import io.paradaux.chestshop.listeners.PlayerConnectListener;
 import io.paradaux.chestshop.listeners.PlayerInteractListener;
 import io.paradaux.chestshop.listeners.PlayerInventoryListener;
 import io.paradaux.chestshop.listeners.PlayerTeleportListener;
-import io.paradaux.chestshop.integration.IntegrationRegistrar;
-import io.paradaux.chestshop.integration.WorldGuardIntegration;
-import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.listeners.RestrictedSignListener;
-
-
-
-import org.bukkit.Bukkit;
-import org.bukkit.Server;
-import org.bukkit.event.Event;
-import org.bukkit.plugin.PluginDescriptionFile;
-import org.bukkit.plugin.java.JavaPlugin;
-
+import io.paradaux.chestshop.listeners.SignBreakListener;
+import io.paradaux.chestshop.listeners.SignCreateListener;
+import io.paradaux.chestshop.listeners.StockCounterListener;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.ItemCodeService;
+import io.paradaux.chestshop.services.MarketService;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.Bukkit;
+import org.bukkit.Server;
+import org.bukkit.event.Event;
+import org.bukkit.plugin.PluginDescriptionFile;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * Main file of the plugin
@@ -52,7 +47,6 @@ public class ChestShop extends JavaPlugin {
     private static Server server;
     private static PluginDescriptionFile description;
     private static final ExecutorService executorService = Executors.newCachedThreadPool();
-
 
     // Instance references the plugin main class resolves at enable for its own
     // orchestration (DB migration, account-cache load). Not a service locator — every
@@ -99,10 +93,14 @@ public class ChestShop extends JavaPlugin {
         io.paradaux.hibernia.framework.guice.HiberniaModule hibernia =
                 io.paradaux.hibernia.framework.guice.HiberniaModule.forPlugin(this)
                         .scanConfiguration("io.paradaux.chestshop.model.config")
-                        .handlers(io.paradaux.chestshop.commands.ChestShopCommand.class,
+                        .handlers(
+                                io.paradaux.chestshop.commands.ChestShopCommand.class,
                                 io.paradaux.chestshop.commands.BypassCommand.class,
-                                ItemInfoCommand.class, ShopInfoCommand.class, VersionCommand.class,
-                                io.paradaux.chestshop.commands.MetricsCommand.class, GiveCommand.class,
+                                ItemInfoCommand.class,
+                                ShopInfoCommand.class,
+                                VersionCommand.class,
+                                io.paradaux.chestshop.commands.MetricsCommand.class,
+                                GiveCommand.class,
                                 ToggleCommand.class,
                                 io.paradaux.chestshop.commands.FindCommand.class,
                                 io.paradaux.chestshop.commands.ShopToggleCommand.class,
@@ -133,15 +131,17 @@ public class ChestShop extends JavaPlugin {
                                 ItemMoveListener.class,
                                 io.paradaux.chestshop.listeners.PreviewListener.class)
                         .build();
-        this.injector = com.google.inject.Guice.createInjector(hibernia,
+        this.injector = com.google.inject.Guice.createInjector(
+                hibernia,
                 new io.paradaux.chestshop.guice.ChestShopModule(getDataFolder()),
                 new io.paradaux.chestshop.guice.DatabaseModule(loadFile("users.db"), loadFile("items.db")));
-        this.configurationLoader = injector.getInstance(
-                io.paradaux.hibernia.framework.configurator.ConfigurationLoader.class);
+        this.configurationLoader =
+                injector.getInstance(io.paradaux.hibernia.framework.configurator.ConfigurationLoader.class);
         itemCodes = injector.getInstance(io.paradaux.chestshop.services.ItemCodeService.class);
         accounts = injector.getInstance(io.paradaux.chestshop.services.AccountService.class);
 
-        injector.getInstance(io.paradaux.hibernia.framework.commander.CommandManager.class).registerAll();
+        injector.getInstance(io.paradaux.hibernia.framework.commander.CommandManager.class)
+                .registerAll();
 
         loadConfig();
 
@@ -153,10 +153,12 @@ public class ChestShop extends JavaPlugin {
         }
 
         // Register every Bukkit listener bound via HiberniaModule.listeners(...) above.
-        injector.getInstance(io.paradaux.hibernia.framework.events.ListenerManager.class).registerAll();
+        injector.getInstance(io.paradaux.hibernia.framework.events.ListenerManager.class)
+                .registerAll();
         injector.getInstance(MarketService.class).init();
         // Chunks already loaded at enable never fire a ChunkLoadEvent for us — give them their previews.
-        injector.getInstance(io.paradaux.chestshop.services.PreviewService.class).loadAll();
+        injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)
+                .loadAll();
 
         // Optional: keep the shop registry clean when WorldEdit/FAWE bulk-removes
         // shops (WE bypasses Bukkit block events). Only touched when WE is present,
@@ -164,15 +166,15 @@ public class ChestShop extends JavaPlugin {
         if (getServer().getPluginManager().getPlugin("WorldEdit") != null
                 || getServer().getPluginManager().getPlugin("FastAsyncWorldEdit") != null) {
             try {
-                new io.paradaux.chestshop.listeners.WorldEditShopCleanupListener(this,
-                        injector.getInstance(io.paradaux.chestshop.services.MarketService.class),
-                        injector.getInstance(io.paradaux.chestshop.services.MarketSyncService.class)).register();
+                new io.paradaux.chestshop.listeners.WorldEditShopCleanupListener(
+                                this,
+                                injector.getInstance(io.paradaux.chestshop.services.MarketService.class),
+                                injector.getInstance(io.paradaux.chestshop.services.MarketSyncService.class))
+                        .register();
             } catch (Throwable t) {
                 log.warn("WorldEdit shop-cleanup adapter unavailable", t);
             }
         }
-
-
     }
 
     public void loadConfig() {
@@ -211,12 +213,15 @@ public class ChestShop extends JavaPlugin {
         executorService.shutdown();
         try {
             executorService.awaitTermination(15, TimeUnit.SECONDS);
-        } catch (InterruptedException ignored) {}
+        } catch (InterruptedException ignored) {
+        }
 
         if (injector != null) {
             // The preview displays are live entities; untracked, they'd float on until chunk unload.
-            injector.getInstance(io.paradaux.chestshop.services.PreviewService.class).destroyAll();
-            injector.getInstance(io.paradaux.chestshop.guice.ChestShopDatabases.class).close();
+            injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)
+                    .destroyAll();
+            injector.getInstance(io.paradaux.chestshop.guice.ChestShopDatabases.class)
+                    .close();
         }
     }
 
@@ -254,13 +259,15 @@ public class ChestShop extends JavaPlugin {
         return plugin;
     }
 
-
     public static <E extends Event> E callEvent(E event) {
         Bukkit.getPluginManager().callEvent(event);
         return event;
     }
 
     public static void runInAsyncThread(Runnable runnable) {
-        executorService.submit(runnable);
+        // execute, not submit: submit parks a task's exception in a Future nobody reads, so a
+        // failed async write (e.g. storeUsername) vanished silently. execute lets it reach the
+        // worker's uncaught-exception handler and the server log.
+        executorService.execute(runnable);
     }
 }

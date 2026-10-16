@@ -1,6 +1,17 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.TradeContextFactory;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.PendingTransaction;
@@ -10,7 +21,9 @@ import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.services.TradeContextFactory;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.util.UUID;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -26,21 +39,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.stubbing.Answer;
-
-import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Trade-context construction coverage for {@link TradeContextFactory#prepare}: owner resolution,
@@ -76,13 +74,15 @@ class TradeContextFactoryTest {
         lenient().when(config.getMaxShopAmount()).thenReturn(3840);
         lenient().when(items.getItemList(any())).thenReturn("64 Stone");
         lenient().when(items.getName(any())).thenReturn("Stone");
-        lenient().when(message.component(anyString(), any(java.util.Map.class)))
+        lenient()
+                .when(message.component(anyString(), any(java.util.Map.class)))
                 .thenReturn(mock(net.kyori.adventure.text.Component.class));
-        lenient().when(message.component(anyString(), any(Object[].class)))
+        lenient()
+                .when(message.component(anyString(), any(Object[].class)))
                 .thenReturn(mock(net.kyori.adventure.text.Component.class));
 
-        factory = new TradeContextFactoryImpl(economy, accounts, message, items, config, signService,
-                shopBlockService, inventoryService);
+        factory = new TradeContextFactoryImpl(
+                economy, accounts, message, items, config, signService, shopBlockService, inventoryService);
     }
 
     // ── builders ──────────────────────────────────────────────────────────────
@@ -92,7 +92,10 @@ class TradeContextFactoryTest {
         Answer<Object> behaviour = inv -> switch (inv.getMethod().getName()) {
             case "getType" -> type;
             case "getAmount" -> amt[0];
-            case "setAmount" -> { amt[0] = inv.getArgument(0); yield null; }
+            case "setAmount" -> {
+                amt[0] = inv.getArgument(0);
+                yield null;
+            }
             case "clone" -> item(type, amt[0]);
             case "toString" -> "Item(" + type + "x" + amt[0] + ")";
             case "equals" -> inv.getMock() == inv.getArgument(0);
@@ -125,7 +128,7 @@ class TradeContextFactoryTest {
         Sign s = mock(Sign.class);
         lenient().when(s.getLocation()).thenReturn(loc);
         lenient().when(s.getWorld()).thenReturn(w);
-        lenient().when(s.getLines()).thenReturn(new String[]{"Alice", "1", "B 5", "STONE"});
+        lenient().when(s.getLines()).thenReturn(new String[] {"Alice", "1", "B 5", "STONE"});
         return s;
     }
 
@@ -151,7 +154,8 @@ class TradeContextFactoryTest {
             Sign s = prepSign();
             ss.when(() -> SignService.getOwner(s)).thenReturn("Ghost");
             when(accounts.resolveAccount("Ghost")).thenReturn(null);
-            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK)).isNull();
+            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK))
+                    .isNull();
             verify(message).send(any(org.bukkit.command.CommandSender.class), eq("chestshop.PLAYER_NOT_FOUND"));
         }
     }
@@ -165,7 +169,8 @@ class TradeContextFactoryTest {
             when(accounts.resolveAccount("Alice")).thenReturn(acc);
             when(signService.isAdminShop(s)).thenReturn(false);
             economy.hasAccount = false;
-            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK)).isNull();
+            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK))
+                    .isNull();
             verify(message).send(any(org.bukkit.command.CommandSender.class), eq("chestshop.NO_ECONOMY_ACCOUNT"));
         }
     }
@@ -182,7 +187,8 @@ class TradeContextFactoryTest {
             when(signService.isAdminShop(s)).thenReturn(false);
             economy.hasAccount = true;
             when(items.parse("NOPE")).thenReturn(null);
-            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK)).isNull();
+            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK))
+                    .isNull();
             verify(message).send(any(org.bukkit.command.CommandSender.class), eq("chestshop.INVALID_SHOP_DETECTED"));
         }
     }
@@ -201,7 +207,8 @@ class TradeContextFactoryTest {
             economy.hasAccount = true;
             when(items.parse("STONE")).thenReturn(item(Material.STONE, 1));
             when(shopBlockService.findConnectedContainer(s)).thenReturn(mock(Container.class));
-            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK)).isNull();
+            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK))
+                    .isNull();
             verify(message).send(any(org.bukkit.command.CommandSender.class), eq("chestshop.INVALID_SHOP_PRICE"));
         }
     }
@@ -220,7 +227,8 @@ class TradeContextFactoryTest {
             economy.hasAccount = true;
             when(items.parse("STONE")).thenReturn(item(Material.STONE, 1));
             when(shopBlockService.findConnectedContainer(s)).thenReturn(mock(Container.class));
-            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK)).isNull();
+            assertThat(factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK))
+                    .isNull();
         }
     }
 
@@ -242,7 +250,7 @@ class TradeContextFactoryTest {
             Inventory ownerInv = mock(Inventory.class);
             when(container.getInventory()).thenReturn(ownerInv);
             when(shopBlockService.findConnectedContainer(s)).thenReturn(container);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK);
 
@@ -271,7 +279,7 @@ class TradeContextFactoryTest {
             Container container = mock(Container.class);
             when(container.getInventory()).thenReturn(mock(Inventory.class));
             when(shopBlockService.findConnectedContainer(s)).thenReturn(container);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK);
 
@@ -294,7 +302,7 @@ class TradeContextFactoryTest {
             ItemStack parsed = item(Material.STONE, 1);
             when(items.parse("STONE")).thenReturn(parsed);
             when(shopBlockService.findConnectedContainer(s)).thenReturn(null); // no chest
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK);
 
@@ -319,7 +327,7 @@ class TradeContextFactoryTest {
             when(container.getInventory()).thenReturn(mock(Inventory.class));
             when(shopBlockService.findConnectedContainer(s)).thenReturn(container);
             when(config.isForceUnlimitedAdminShop()).thenReturn(true);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK);
 
@@ -348,7 +356,7 @@ class TradeContextFactoryTest {
             when(config.isShiftSellsInStacks()).thenReturn(true);
             when(config.getShiftAllows()).thenReturn("ALL");
             when(inventoryService.getMaxStackSize(parsed)).thenReturn(64);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -382,7 +390,7 @@ class TradeContextFactoryTest {
             when(ownerInv.containsAtLeast(eq(parsed), anyInt())).thenReturn(false);
             when(inventoryService.getMaxStackSize(parsed)).thenReturn(64);
             when(inventoryService.getAmount(parsed, ownerInv)).thenReturn(10);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -414,7 +422,7 @@ class TradeContextFactoryTest {
             when(config.isShiftSellsEverything()).thenReturn(true);
             when(config.getShiftAllows()).thenReturn("SELL");
             when(inventoryService.getAmount(parsed, pInv)).thenReturn(7);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.LEFT_CLICK_BLOCK);
 
@@ -447,7 +455,7 @@ class TradeContextFactoryTest {
             when(config.isShiftSellsEverything()).thenReturn(true);
             when(config.getShiftAllows()).thenReturn("BUY");
             when(inventoryService.getAmount(parsed, ownerInv)).thenReturn(9);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -477,7 +485,7 @@ class TradeContextFactoryTest {
             when(p.isSneaking()).thenReturn(true);
             when(config.isShiftSellsInStacks()).thenReturn(true);
             when(config.getShiftAllows()).thenReturn("SELL"); // buy click, but only SELL allowed → skip shift
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -509,7 +517,7 @@ class TradeContextFactoryTest {
             when(config.getShiftAllows()).thenReturn("ALL");
             when(inventoryService.getMaxStackSize(parsed)).thenReturn(64);
             when(ownerInv.containsAtLeast(parsed, 64)).thenReturn(true); // a full stack is present
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -534,7 +542,7 @@ class TradeContextFactoryTest {
             when(container.getInventory()).thenReturn(mock(Inventory.class));
             when(shopBlockService.findConnectedContainer(s)).thenReturn(container);
             when(config.isForceUnlimitedAdminShop()).thenReturn(false);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, player("Notch", UUID.randomUUID()), Action.RIGHT_CLICK_BLOCK);
 
@@ -567,7 +575,7 @@ class TradeContextFactoryTest {
             when(inventoryService.getMaxStackSize(parsed)).thenReturn(64);
             when(pInv.containsAtLeast(parsed, 64)).thenReturn(false);
             when(inventoryService.getAmount(parsed, pInv)).thenReturn(5);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.LEFT_CLICK_BLOCK); // SELL
 
@@ -624,7 +632,7 @@ class TradeContextFactoryTest {
             when(p.isSneaking()).thenReturn(true);
             when(config.isShiftSellsEverything()).thenReturn(true);
             when(config.getShiftAllows()).thenReturn("ALL");
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -653,7 +661,7 @@ class TradeContextFactoryTest {
             when(p.isSneaking()).thenReturn(false); // not sneaking → both shift blocks skipped
             when(config.isShiftSellsInStacks()).thenReturn(true);
             when(config.isShiftSellsEverything()).thenReturn(true);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -675,7 +683,7 @@ class TradeContextFactoryTest {
             when(p.isSneaking()).thenReturn(true);
             when(config.isShiftSellsInStacks()).thenReturn(true);
             when(config.isShiftSellsEverything()).thenReturn(true);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK); // BUY with no buy price
 
@@ -695,7 +703,7 @@ class TradeContextFactoryTest {
             when(p.isSneaking()).thenReturn(true);
             when(config.isShiftSellsEverything()).thenReturn(true);
             when(config.getShiftAllows()).thenReturn("ALL");
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -719,7 +727,7 @@ class TradeContextFactoryTest {
             when(config.isShiftSellsEverything()).thenReturn(true);
             when(config.getShiftAllows()).thenReturn("ALL");
             when(inventoryService.getAmount(parsed, ownerInv)).thenReturn(0); // empty chest → newAmount 0 → unchanged
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -746,7 +754,7 @@ class TradeContextFactoryTest {
             when(inventoryService.getMaxStackSize(parsed)).thenReturn(64);
             when(ownerInv.containsAtLeast(parsed, 64)).thenReturn(false);
             when(inventoryService.getAmount(parsed, ownerInv)).thenReturn(3);
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.LEFT_CLICK_BLOCK); // BUY (reversed)
 
@@ -772,8 +780,9 @@ class TradeContextFactoryTest {
             when(config.getShiftAllows()).thenReturn("ALL");
             when(inventoryService.getMaxStackSize(parsed)).thenReturn(64);
             when(ownerInv.containsAtLeast(parsed, 64)).thenReturn(false);
-            when(inventoryService.getAmount(parsed, ownerInv)).thenReturn(0); // getStackAmount → 0 → newAmount not applied
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(inventoryService.getAmount(parsed, ownerInv))
+                    .thenReturn(0); // getStackAmount → 0 → newAmount not applied
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.RIGHT_CLICK_BLOCK);
 
@@ -794,8 +803,9 @@ class TradeContextFactoryTest {
             Player p = player("Notch", UUID.randomUUID());
             when(p.isSneaking()).thenReturn(true);
             when(config.isShiftSellsEverything()).thenReturn(true);
-            when(config.getShiftAllows()).thenReturn("BUY"); // SELL click but only BUY shift allowed → isAllowedForShift false
-            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[]{parsed});
+            when(config.getShiftAllows())
+                    .thenReturn("BUY"); // SELL click but only BUY shift allowed → isAllowedForShift false
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
 
             PendingTransaction ctx = factory.prepare(s, p, Action.LEFT_CLICK_BLOCK); // SELL
 
@@ -817,17 +827,60 @@ class TradeContextFactoryTest {
         java.util.function.Function<java.util.UUID, java.math.BigDecimal> balance = u -> java.math.BigDecimal.ZERO;
         boolean hasAccount = true;
         boolean settleResult = true;
-        int settleCalls = 0;
-        int migrateCalls = 0;
-        @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
-        @Override public String format(java.math.BigDecimal amount) { return amount.toPlainString(); }
-        @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
-        @Override public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) { return hasFunds.test(account, amount); }
-        @Override public java.math.BigDecimal getBalance(java.util.UUID account) { return balance.apply(account); }
-        @Override public boolean hasAccount(java.util.UUID account) { return hasAccount; }
-        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { settleCalls++; return settleResult; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { migrateCalls++; }
+
+        @Override
+        public void bind(
+                io.paradaux.treasury.api.TreasuryApi treasury,
+                int systemAccountId,
+                io.paradaux.treasury.api.TaxApi taxApi) {
+            /* unused headless */
+        }
+
+        @Override
+        public String format(java.math.BigDecimal amount) {
+            return amount.toPlainString();
+        }
+
+        @Override
+        public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) {
+            return ownerEconomicallyActive;
+        }
+
+        @Override
+        public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) {
+            return hasFunds.test(account, amount);
+        }
+
+        @Override
+        public java.math.BigDecimal getBalance(java.util.UUID account) {
+            return balance.apply(account);
+        }
+
+        @Override
+        public boolean hasAccount(java.util.UUID account) {
+            return hasAccount;
+        }
+
+        @Override
+        public boolean settle(
+                java.math.BigDecimal amount,
+                org.bukkit.entity.Player initiator,
+                java.util.UUID partner,
+                io.paradaux.chestshop.model.Transaction txn) {
+            return settleResult;
+        }
+
+        @Override
+        public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) {}
     }
 }

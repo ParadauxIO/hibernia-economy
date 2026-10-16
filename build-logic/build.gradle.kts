@@ -25,4 +25,9 @@ dependencies {
 
     // The PIT plugin, applied + configured by io.paradaux.mutation-testing-conventions.
     implementation(libs.pitest.gradle.plugin)
+    // The static-analysis convention applies Error Prone (+ NullAway) and Spotless
+    // by id, so their Gradle plugins must be on this build's classpath. Versions
+    // come from the catalog, like shadow above.
+    implementation(libs.errorprone.gradle.plugin)
+    implementation(libs.spotless.gradle.plugin)
 }

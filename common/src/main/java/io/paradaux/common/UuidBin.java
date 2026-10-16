@@ -2,6 +2,7 @@ package io.paradaux.common;
 
 import java.nio.ByteBuffer;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * UUID ↔ {@code BINARY(16)} conversion — the single source of truth (ADT-22).
@@ -13,7 +14,7 @@ public final class UuidBin {
 
     private UuidBin() {}
 
-    public static byte[] toBytes(UUID uuid) {
+    public static byte @Nullable [] toBytes(@Nullable UUID uuid) {
         if (uuid == null) return null;
         ByteBuffer bb = ByteBuffer.allocate(16);
         bb.putLong(uuid.getMostSignificantBits());
@@ -21,14 +22,13 @@ public final class UuidBin {
         return bb.array();
     }
 
-    public static UUID fromBytes(byte[] bytes) {
+    public static @Nullable UUID fromBytes(byte @Nullable [] bytes) {
         if (bytes == null) return null;
         // ADT-147: a non-16-byte buffer previously either threw an opaque
         // BufferUnderflowException (too short) or silently dropped trailing bytes
         // (too long), yielding a wrong-but-plausible UUID. Fail loudly instead.
         if (bytes.length != 16) {
-            throw new IllegalArgumentException(
-                    "UUID BINARY value must be exactly 16 bytes, got " + bytes.length);
+            throw new IllegalArgumentException("UUID BINARY value must be exactly 16 bytes, got " + bytes.length);
         }
         ByteBuffer bb = ByteBuffer.wrap(bytes);
         return new UUID(bb.getLong(), bb.getLong());

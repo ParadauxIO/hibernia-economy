@@ -1,8 +1,17 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.ItemInfoLines;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.EconomyService;
 import io.paradaux.chestshop.services.InventoryService;
@@ -10,8 +19,12 @@ import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.support.ServerTest;
-import io.paradaux.chestshop.support.TestConfigs;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Color;
 import org.bukkit.Material;
@@ -51,22 +64,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 /**
  * The {@code /iteminfo} + {@code /shopinfo} formatter. Real MockBukkit items exercise every
  * item-type contributor; the two metas MockBukkit can't populate (map view, potion base data)
@@ -81,7 +78,6 @@ class InfoServiceImplTest extends ServerTest {
     private SignService signService;
     private ShopBlockService shopBlockService;
     private InventoryService inventoryService;
-    private ChestShopConfiguration config;
     private InfoServiceImpl info;
     private CommandSender sender;
 
@@ -94,12 +90,10 @@ class InfoServiceImplTest extends ServerTest {
         signService = mock(SignService.class);
         shopBlockService = mock(ShopBlockService.class);
         inventoryService = mock(InventoryService.class);
-        config = TestConfigs.defaults();
         sender = mock(CommandSender.class);
         lenient().when(message.component(anyString(), any(Map.class))).thenReturn(Component.text("x"));
         lenient().when(items.getName(any())).thenReturn("Name");
-        info = new InfoServiceImpl(accounts, economy, items, message, config, signService,
-                shopBlockService, inventoryService);
+        info = new InfoServiceImpl(accounts, economy, items, message, signService, shopBlockService, inventoryService);
     }
 
     private Set<String> keys(ItemInfoLines lines) {
@@ -234,7 +228,8 @@ class InfoServiceImplTest extends ServerTest {
         loaded.setItemMeta(m);
         Set<String> k = collect(loaded);
         assertThat(k).contains("chestshop.iteminfo_crossbow_projectiles");
-        assertThat(k.stream().anyMatch(s -> s.startsWith("crossbow_projectile_"))).isTrue();
+        assertThat(k.stream().anyMatch(s -> s.startsWith("crossbow_projectile_")))
+                .isTrue();
     }
 
     @Test
@@ -347,7 +342,7 @@ class InfoServiceImplTest extends ServerTest {
         PotionMeta meta = mock(PotionMeta.class);
         PotionData data = baseData(true, false); // -> "II"
         when(meta.getBasePotionData()).thenReturn(data);
-        when(meta.getBasePotionType()).thenReturn(PotionType.SWIFTNESS);   // extended: non-null
+        when(meta.getBasePotionType()).thenReturn(PotionType.SWIFTNESS); // extended: non-null
         List<PotionEffect> effects = List.of(
                 new PotionEffect(PotionEffectType.SPEED, 200, 1),
                 new PotionEffect(PotionEffectType.JUMP_BOOST, 100, 0));
@@ -361,8 +356,8 @@ class InfoServiceImplTest extends ServerTest {
         PotionMeta meta = mock(PotionMeta.class);
         PotionData data = baseData(false, true); // -> "+"
         when(meta.getBasePotionData()).thenReturn(data);
-        when(meta.getBasePotionType()).thenReturn(null);                  // extended: skips base type
-        when(meta.getCustomEffects()).thenReturn(List.of());             // extended: empty -> no line
+        when(meta.getBasePotionType()).thenReturn(null); // extended: skips base type
+        when(meta.getCustomEffects()).thenReturn(List.of()); // extended: empty -> no line
 
         // basic emits the potion line; extended produces an empty message and adds nothing.
         assertThat(collect(potionItem(meta))).contains("iteminfo_potion");
@@ -384,10 +379,12 @@ class InfoServiceImplTest extends ServerTest {
     @Test
     void sendItemName_successAndFailure() {
         when(items.getName(any())).thenReturn("Diamond");
-        assertThat(info.sendItemName(sender, new ItemStack(Material.DIAMOND), "chestshop.key")).isTrue();
+        assertThat(info.sendItemName(sender, new ItemStack(Material.DIAMOND), "chestshop.key"))
+                .isTrue();
 
         when(items.getName(any())).thenThrow(new IllegalArgumentException("bad"));
-        assertThat(info.sendItemName(sender, new ItemStack(Material.DIAMOND), "chestshop.key")).isFalse();
+        assertThat(info.sendItemName(sender, new ItemStack(Material.DIAMOND), "chestshop.key"))
+                .isFalse();
     }
 
     // ── showShopInfo ──────────────────────────────────────────────────────────
@@ -501,7 +498,8 @@ class InfoServiceImplTest extends ServerTest {
         Player p = mock(Player.class);
         Sign sign = shopSign("Owner", "5", "B 10", "Stone"); // sell price absent -> sell line skipped
         when(signService.isValid(sign)).thenReturn(true);
-        when(accounts.resolveAccount("Owner")).thenReturn(new Account(null, "Owner", java.util.UUID.randomUUID())); // name null -> nameLine
+        when(accounts.resolveAccount("Owner"))
+                .thenReturn(new Account(null, "Owner", java.util.UUID.randomUUID())); // name null -> nameLine
         when(items.parse(any())).thenReturn(new ItemStack(Material.STONE));
         when(shopBlockService.findConnectedContainer(sign)).thenReturn(null); // no chest -> infinity
         when(economy.format(any(BigDecimal.class))).thenReturn("$X");

@@ -1,5 +1,6 @@
 package io.paradaux.chestshop.integration;
-import io.paradaux.chestshop.utils.StringUtil;
+
+import static io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -35,7 +36,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
-import static io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth;
 
 /**
  * Nexo (and ItemsAdder) soft-dependency: registers itself as a {@link CustomItemResolver} on
@@ -90,8 +90,7 @@ public class NexoIntegration implements Integration, CustomItemResolver {
 
     private static final class Nexo {
 
-        private Nexo() {
-        }
+        private Nexo() {}
 
         private static final NamespacedKey NEXO_KEY = NamespacedKey.fromString("nexo:id");
         private static final String NEXO_PREFIX = "nexo:";
@@ -99,19 +98,15 @@ public class NexoIntegration implements Integration, CustomItemResolver {
         private static final String ITEMSADDER_ID_KEY = "id";
         private static final Pattern HEX_TAG = Pattern.compile("(?i)^(?:#|0x|hex[-_])?([0-9a-f]{6})$");
 
-        private static final Map<Integer, String> DYE_TAG_BY_RGB;
         private static final Map<String, Color> COLOR_BY_TAG;
 
         static {
-            Map<Integer, String> byRgb = new ConcurrentHashMap<>();
             Map<String, Color> byTag = new ConcurrentHashMap<>();
             for (DyeColor dyeColor : DyeColor.values()) {
                 Color color = dyeColor.getColor();
                 String tag = dyeColor.name().toLowerCase(Locale.ROOT);
-                byRgb.put(color.asRGB(), tag);
                 byTag.put(tag, color);
             }
-            DYE_TAG_BY_RGB = Collections.unmodifiableMap(byRgb);
             COLOR_BY_TAG = Collections.unmodifiableMap(byTag);
         }
 
@@ -144,12 +139,15 @@ public class NexoIntegration implements Integration, CustomItemResolver {
          * ({@code /nexo reload}), so a changed item isn't served stale until a ChestShop reload.
          */
         public static void listenForItemReloads() {
-            Bukkit.getPluginManager().registerEvents(new Listener() {
-                @EventHandler
-                public void onItemsLoaded(NexoItemsLoadedEvent event) {
-                    baseItemCache.clear();
-                }
-            }, ChestShop.getPlugin());
+            Bukkit.getPluginManager()
+                    .registerEvents(
+                            new Listener() {
+                                @EventHandler
+                                public void onItemsLoaded(NexoItemsLoadedEvent event) {
+                                    baseItemCache.clear();
+                                }
+                            },
+                            ChestShop.getPlugin());
         }
 
         /** Reload {@code nexo.yml} (aliases + display/input settings), writing a defaulted file if absent. */
@@ -157,10 +155,11 @@ public class NexoIntegration implements Integration, CustomItemResolver {
             File file = new File(ChestShop.getFolder(), "nexo.yml");
             YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
             if (!file.exists()) {
-                cfg.options().header("Nexo / ItemsAdder custom-item support for ChestShop signs.\n"
-                        + "aliases: short_name -> nexo_id, or  ItemName#metadataCode -> short_alias\n"
-                        + "display.preferAlias / fallbackFormat / signMaxChars control the sign text.\n"
-                        + "input.acceptBareIds lets players type an id without the nexo: prefix.");
+                cfg.options()
+                        .header("Nexo / ItemsAdder custom-item support for ChestShop signs.\n"
+                                + "aliases: short_name -> nexo_id, or  ItemName#metadataCode -> short_alias\n"
+                                + "display.preferAlias / fallbackFormat / signMaxChars control the sign text.\n"
+                                + "input.acceptBareIds lets players type an id without the nexo: prefix.");
                 cfg.addDefault("aliases.example_alias", "example_nexo_id");
                 cfg.addDefault("input.acceptBareIds", true);
                 cfg.addDefault("input.supportItemsAdder", true);
@@ -301,7 +300,8 @@ public class NexoIntegration implements Integration, CustomItemResolver {
             }
 
             if (maxWidth > 0 && getMinecraftStringWidth(code) > maxWidth) {
-                ChestShop.logDebug("Can't use Nexo code " + code + " — wider than the allowed max width of " + maxWidth);
+                ChestShop.logDebug(
+                        "Can't use Nexo code " + code + " — wider than the allowed max width of " + maxWidth);
                 return null;
             }
             return code;
@@ -345,8 +345,11 @@ public class NexoIntegration implements Integration, CustomItemResolver {
             if (lore == null || lore.isEmpty()) {
                 return false;
             }
-            return lore.stream().anyMatch(line ->
-                    LegacyComponentSerializer.legacySection().serialize(line).toLowerCase(Locale.ROOT).contains("autograph"));
+            return lore.stream()
+                    .anyMatch(line -> LegacyComponentSerializer.legacySection()
+                            .serialize(line)
+                            .toLowerCase(Locale.ROOT)
+                            .contains("autograph"));
         }
 
         private static String getItemsAdderId(ItemStack item) {
@@ -355,7 +358,8 @@ public class NexoIntegration implements Integration, CustomItemResolver {
             }
             var container = item.getItemMeta().getPersistentDataContainer();
             for (NamespacedKey key : container.getKeys()) {
-                if (key.getNamespace().equals(ITEMSADDER_NAMESPACE) && key.getKey().equals(ITEMSADDER_ID_KEY)) {
+                if (key.getNamespace().equals(ITEMSADDER_NAMESPACE)
+                        && key.getKey().equals(ITEMSADDER_ID_KEY)) {
                     String id = container.get(key, PersistentDataType.STRING);
                     if (id != null && !id.isBlank()) {
                         return id;
@@ -420,7 +424,11 @@ public class NexoIntegration implements Integration, CustomItemResolver {
                 }
                 if (meta.displayName() != null) {
                     Component name = meta.displayName();
-                    if (name == null || LegacyComponentSerializer.legacySection().serialize(name).trim().isEmpty()) {
+                    if (name == null
+                            || LegacyComponentSerializer.legacySection()
+                                    .serialize(name)
+                                    .trim()
+                                    .isEmpty()) {
                         meta.displayName(null);
                     }
                 }
