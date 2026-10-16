@@ -56,10 +56,11 @@ val pluginVersion = project.version.toString()
 
 // Maven's `provided` scope is visible to tests; Gradle's `compileOnly` is not.
 // Make the provided APIs visible to test *compilation*, but NOT to the test
-// runtime — dumping the soft-deps' full closures onto the runtime classpath
+// runtime wholesale — dumping the soft-deps' full closures onto the runtime classpath
 // pulls a second Bukkit API (via worldguard) that collides with spigot-api and
 // breaks Bukkit-backed static initializers (MaterialUtil) under test. The
-// server API alone is added to the test runtime below.
+// server API and selected non-transitive editing API jars are added below; a
+// separate startup task also verifies the optional editing APIs are absent.
 configurations.testCompileOnly.get().extendsFrom(configurations.compileOnly.get())
 
 // EngineHub moved its toolchain to Java 25, so anything they publish from now on
@@ -103,6 +104,7 @@ dependencies {
     // chain otherwise resolves worldedit 8.0.0-SNAPSHOT, which needs Java 25).
     compileOnly("com.sk89q.worldedit:worldedit-core:7.3.9") { isTransitive = false }
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.9") { isTransitive = false }
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.13.1") { isTransitive = false }
     // WorldGuard soft-depend: pull only its own API jars, non-transitively, so
     // none of its server-provided transitives (bukkit/gson/fastutil/guava) fight
     // paper-api. They carry the classes we touch (WorldGuard, StateFlag, Flags,
@@ -147,6 +149,10 @@ dependencies {
     // --- tests
     // Server API on the test runtime (tests mock/instantiate org.bukkit.* types).
     testImplementation(libs.paper.api)
+    // Only EngineHub API jars, never their transitive Bukkit implementations.
+    testRuntimeOnly("com.sk89q.worldedit:worldedit-core:7.3.9") { isTransitive = false }
+    testRuntimeOnly("com.sk89q.worldguard:worldguard-core:7.0.17") { isTransitive = false }
+    testRuntimeOnly("com.sk89q.worldedit.worldedit-libs:core:7.3.9") { isTransitive = false }
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
@@ -346,3 +352,35 @@ val copyPlugin = tasks.register<Copy>("copyPlugin") {
     }
 }
 tasks.shadowJar { finalizedBy(copyPlugin) }
+
+// Exercise each optional editing API on its own runtime: FAWE replaces WorldEdit.
+val faweTestLibraries = configurations.create("faweTestLibraries")
+dependencies {
+    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.13.1") { isTransitive = false }
+    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Libs-Core:2.13.1") { isTransitive = false }
+}
+tasks.test { exclude("**/FaweShopCleanupTest*") }
+val faweTest = tasks.register<Test>("faweTest") {
+    description = "Test the FAWE completed-chunk adapter on FAWE's own WorldEdit API."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = faweTestLibraries + sourceSets.test.get().runtimeClasspath.filter {
+        !it.name.startsWith("worldedit-core-")
+    }
+    include("**/FaweShopCleanupTest*")
+    useJUnitPlatform()
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
+}
+tasks.named("check") { dependsOn(faweTest) }
+
+val testWithoutWorldEditingApis = tasks.register<Test>("testWithoutWorldEditingApis") {
+    description = "Verify the real plugin injector starts without WorldEdit, FAWE or WorldGuard APIs."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath.filter {
+        !it.name.startsWith("worldedit-") && !it.name.startsWith("worldguard-") &&
+            it.name != "core-7.3.9.jar"
+    }
+    include("**/ChestShopStartupTest*")
+    useJUnitPlatform()
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
+}
+tasks.named("check") { dependsOn(testWithoutWorldEditingApis) }

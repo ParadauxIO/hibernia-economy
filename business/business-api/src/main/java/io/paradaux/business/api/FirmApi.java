@@ -129,13 +129,55 @@ public interface FirmApi {
      *
      * <p>Because each Treasury account belongs to at most one firm, this returns
      * {@code null} when the account is a personal account or is not registered
-     * with any firm.
+     * with any firm. Removed links are excluded; archived firms with remaining
+     * links are included. This is a relationship lookup, not an access check.
      *
      * @param accountId the Treasury account ID (as returned by {@code Account.getAccountId()})
      * @return the owning firm, or {@code null} if the account is not a firm account
      */
     @Nullable
     Firm getFirmByAccountId(int accountId);
+
+    /**
+     * Lists Treasury account IDs currently linked to a firm (not just its default).
+     * Removed links are excluded; an unknown firm or one without links returns an
+     * empty list. Archived firms may retain links after an incomplete disband, so
+     * this lookup includes those links. It does not check Treasury account status
+     * or grant permission to use an account. No ordering is guaranteed.
+     *
+     * @param firmId the firm ID
+     * @return the linked account IDs, never null
+     * @throws UnsupportedOperationException if an older provider does not support
+     *         this lookup; upgrade the Business plugin alongside the API
+     */
+    default List<Integer> getAccountIds(int firmId) {
+        throw new UnsupportedOperationException("Firm account lookup requires an updated Business provider");
+    }
+
+    /**
+     * Reads the firm's configured default Treasury account ID without creating an
+     * account or falling back to another linked account. Includes archived firms,
+     * matching {@link #getFirmById(int)}; this is not an account-access check.
+     *
+     * @param firmId the firm ID
+     * @return the configured account ID, or null for an unknown firm or unset default
+     */
+    default @Nullable Integer getDefaultAccountId(int firmId) {
+        Firm firm = getFirmById(firmId);
+        return firm == null ? null : firm.getDefaultAccountId();
+    }
+
+    /**
+     * Resolves a Treasury account ID to its linked firm ID, including archived
+     * firms. Removed links, personal accounts and unknown accounts return null.
+     *
+     * @param accountId the Treasury account ID
+     * @return the firm ID, or null if no linked firm exists
+     */
+    default @Nullable Integer getFirmIdByAccountId(int accountId) {
+        Firm firm = getFirmByAccountId(accountId);
+        return firm == null ? null : firm.getFirmId();
+    }
 
     /**
      * Returns a firm's total balance, summed across all of its treasury accounts.

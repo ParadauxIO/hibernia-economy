@@ -16,11 +16,14 @@ import com.sk89q.worldguard.protection.flags.Flags;
 import com.sk89q.worldguard.protection.flags.StateFlag;
 import com.sk89q.worldguard.protection.flags.registry.FlagConflictException;
 import com.sk89q.worldguard.protection.managers.RegionManager;
+import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import io.paradaux.chestshop.model.BuildPermission;
 import io.paradaux.chestshop.model.ProtectionCheck;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.ProtectionService;
+import io.paradaux.chestshop.services.ShopDisplayService;
 import io.paradaux.chestshop.utils.BlockUtil;
+import java.util.Comparator;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -43,9 +46,12 @@ public class WorldGuardIntegration implements Integration {
 
     private final ProtectionService protection;
     private final ChestShopConfiguration config;
+    private final ShopDisplayService displays;
 
     @Inject
-    public WorldGuardIntegration(ProtectionService protection, ChestShopConfiguration config) {
+    public WorldGuardIntegration(
+            ProtectionService protection, ChestShopConfiguration config, ShopDisplayService displays) {
+        this.displays = displays;
         this.protection = protection;
         this.config = config;
     }
@@ -57,9 +63,7 @@ public class WorldGuardIntegration implements Integration {
 
     @Override
     public boolean hook(Plugin plugin) {
-        if (!config.isWorldguardUseProtection() && !config.isWorldguardIntegration()) {
-            return false;
-        }
+        displays.setRegionNameProvider(location -> plugin.isEnabled() ? RegionNames.at(location) : "");
         if (config.isWorldguardUseProtection()) {
             protection.setWorldGuardProtection(new Protection(plugin)::onProtectionCheck);
         }
@@ -78,6 +82,30 @@ public class WorldGuardIntegration implements Integration {
         ShopFlag.ENABLE_SHOP.getName();
     }
 
+    /** Region IDs are stable; prefer priority, then ID for deterministic overlapping regions. */
+    static final class RegionNames {
+        static String at(org.bukkit.Location location) {
+            RegionManager manager = WorldGuard.getInstance()
+                    .getPlatform()
+                    .getRegionContainer()
+                    .get(BukkitAdapter.adapt(location.getWorld()));
+            if (manager == null) return "";
+            return select(manager.getApplicableRegions(BukkitAdapter.asBlockVector(location))
+                    .getRegions());
+        }
+
+        static String select(java.util.Set<ProtectedRegion> regions) {
+            return regions.stream()
+                    .filter(region -> !region.getId().equals("__global__"))
+                    .sorted(Comparator.comparingInt(ProtectedRegion::getPriority)
+                            .reversed()
+                            .thenComparing(ProtectedRegion::getId))
+                    .map(ProtectedRegion::getId)
+                    .findFirst()
+                    .orElse("");
+        }
+    }
+
     /** The {@code allow-shop} WorldGuard flag — isolated so its static init runs only on demand. */
     private static final class ShopFlag {
         static final StateFlag ENABLE_SHOP;
@@ -93,8 +121,7 @@ public class WorldGuardIntegration implements Integration {
             ENABLE_SHOP = flag;
         }
 
-        private ShopFlag() {
-        }
+        private ShopFlag() {}
     }
 
     /** WorldGuard region / built-in chest protection (WORLDGUARD_USE_PROTECTION). */
@@ -126,7 +153,8 @@ public class WorldGuardIntegration implements Integration {
             if (manager == null) {
                 return;
             }
-            ApplicableRegionSet set = manager.getApplicableRegions(location.toVector().toBlockPoint());
+            ApplicableRegionSet set =
+                    manager.getApplicableRegions(location.toVector().toBlockPoint());
 
             StateFlag flag = Flags.CHEST_ACCESS;
             if (BlockUtil.isSign(block)) {
@@ -139,7 +167,8 @@ public class WorldGuardIntegration implements Integration {
         }
 
         private boolean canAccess(LocalPlayer player, Block block, Location location) {
-            BukkitWorldConfiguration wcfg = (BukkitWorldConfiguration) platform.getGlobalStateManager().get((World) location.getExtent());
+            BukkitWorldConfiguration wcfg =
+                    (BukkitWorldConfiguration) platform.getGlobalStateManager().get((World) location.getExtent());
             return !wcfg.signChestProtection
                     || !wcfg.getChestProtection().isChest(BukkitAdapter.asBlockType(block.getType()))
                     || !wcfg.getChestProtection().isProtected(location, player);
@@ -165,12 +194,14 @@ public class WorldGuardIntegration implements Integration {
         }
 
         void canBuild(BuildPermission event) {
-            ApplicableRegionSet regions = getApplicableRegions(event.getSign().getBlock().getLocation());
+            ApplicableRegionSet regions =
+                    getApplicableRegions(event.getSign().getBlock().getLocation());
 
             if (regions == null) {
                 event.allow(false);
             } else if (config.isWorldguardUseFlag()) {
-                event.allow(regions.queryState(worldGuard.wrapPlayer(event.getPlayer()), ShopFlag.ENABLE_SHOP) == StateFlag.State.ALLOW);
+                event.allow(regions.queryState(worldGuard.wrapPlayer(event.getPlayer()), ShopFlag.ENABLE_SHOP)
+                        == StateFlag.State.ALLOW);
             } else {
                 event.allow(regions.size() > 0);
             }
@@ -181,7 +212,8 @@ public class WorldGuardIntegration implements Integration {
             if (regionManager == null) {
                 return null;
             }
-            return regionManager.getApplicableRegions(BukkitAdapter.adapt(location).toVector().toBlockPoint());
+            return regionManager.getApplicableRegions(
+                    BukkitAdapter.adapt(location).toVector().toBlockPoint());
         }
     }
 }

@@ -42,8 +42,8 @@ public interface MarketSyncService {
     /**
      * Reconcile one sign position against the world after a block change that bypassed the
      * Bukkit events (WorldEdit): a valid shop sign standing there is (re-)registered, anything
-     * else deactivates the row. A position in an unloaded chunk can't be inspected and is
-     * deactivated.
+     * else deactivates the row. Unloaded worlds/chunks are left untouched until resync can
+     * inspect them; absence from memory is not evidence of deletion.
      */
     void onBlockReplaced(String world, int x, int y, int z);
 }

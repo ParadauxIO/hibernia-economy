@@ -3,35 +3,30 @@ package io.paradaux.business.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
-
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
-import io.paradaux.hibernia.framework.utils.StringUtils;
 import io.paradaux.business.chat.FirmChatService;
+import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.FirmAccount;
 import io.paradaux.business.model.FirmRole;
+import io.paradaux.business.model.FirmRoleDefaults;
 import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmAreaShopService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.utils.NameValidator;
-import io.paradaux.business.model.FirmRoleDefaults;
-import io.paradaux.business.model.FirmAccount;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.utils.StringUtils;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
-import org.mybatis.guice.transactional.Transactional;
-
-import org.jetbrains.annotations.Nullable;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -39,6 +34,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.jetbrains.annotations.Nullable;
+import org.mybatis.guice.transactional.Transactional;
 
 @Singleton
 public class FirmServiceImpl implements FirmService {
@@ -55,6 +52,7 @@ public class FirmServiceImpl implements FirmService {
     private final Provider<FirmStaffService> staffProvider;
     /** Lazy-injected to break the FirmService ↔ FirmAccountService cycle. */
     private final Provider<FirmAccountService> firmAccountServiceProvider;
+
     private final FirmConfiguration firmConfig;
     private final FirmAreaShopService areas;
     /** Lazy-injected to break the FirmService ↔ FirmChatService cycle. */
@@ -64,16 +62,17 @@ public class FirmServiceImpl implements FirmService {
     private final Set<Integer> draining = ConcurrentHashMap.newKeySet();
 
     @Inject
-    public FirmServiceImpl(FirmMapper firms,
-                           TreasuryApi treasury,
-                           FirmAccountsMapper accounts,
-                           FirmRoleMapper roles,
-                           FirmRequestMapper requests,
-                           Provider<FirmStaffService> staffProvider,
-                           Provider<FirmAccountService> firmAccountServiceProvider,
-                           FirmConfiguration firmConfig,
-                           FirmAreaShopService areas,
-                           Provider<FirmChatService> chatProvider) {
+    public FirmServiceImpl(
+            FirmMapper firms,
+            TreasuryApi treasury,
+            FirmAccountsMapper accounts,
+            FirmRoleMapper roles,
+            FirmRequestMapper requests,
+            Provider<FirmStaffService> staffProvider,
+            Provider<FirmAccountService> firmAccountServiceProvider,
+            FirmConfiguration firmConfig,
+            FirmAreaShopService areas,
+            Provider<FirmChatService> chatProvider) {
         this.firms = firms;
         this.treasury = treasury;
         this.accounts = accounts;
@@ -120,8 +119,7 @@ public class FirmServiceImpl implements FirmService {
         // Validation checks, name uniqueness / ownership limit
         if (firms.getFirmsByNameCount(name) > 0) {
             // Archived firms reserve their names until an administrator explicitly releases them.
-            throw new ExceedsLimitException(
-                    "The name '" + name + "' is already taken");
+            throw new ExceedsLimitException("The name '" + name + "' is already taken");
         }
 
         if (firmConfig.hasOwnedFirmLimit()
@@ -188,8 +186,11 @@ public class FirmServiceImpl implements FirmService {
             treasury.archiveAccount(accountId);
         } catch (RuntimeException cleanupFailure) {
             cause.addSuppressed(cleanupFailure);
-            LOG.log(Level.SEVERE, "Failed to archive orphaned Treasury account " + accountId
-                    + " after firm creation rolled back; manual cleanup required.", cleanupFailure);
+            LOG.log(
+                    Level.SEVERE,
+                    "Failed to archive orphaned Treasury account " + accountId
+                            + " after firm creation rolled back; manual cleanup required.",
+                    cleanupFailure);
         }
     }
 
@@ -240,14 +241,16 @@ public class FirmServiceImpl implements FirmService {
             throw new BadCommandException("Only disbanded firms can have their names released.");
         }
         if (firms.releaseFirmName(firmId) == 0) {
-            throw new BadCommandException("Firm name is already released or the firm is no longer disbanded: " + firmId);
+            throw new BadCommandException(
+                    "Firm name is already released or the firm is no longer disbanded: " + firmId);
         }
         return firm;
     }
 
     @Override
     public boolean isDisbandIncomplete(Firm firm) {
-        return Boolean.TRUE.equals(firm.getArchived()) && !accounts.listAccountsByFirm(firm.getFirmId()).isEmpty();
+        return Boolean.TRUE.equals(firm.getArchived())
+                && !accounts.listAccountsByFirm(firm.getFirmId()).isEmpty();
     }
 
     /**
@@ -312,7 +315,9 @@ public class FirmServiceImpl implements FirmService {
         // flag was flipped by the run it is finishing.
         if (!resumed) {
             if (firms.archiveFirm(firm.getFirmId()) == 0) {
-                LOG.log(Level.FINE, "Firm {0} was already archived by a concurrent disband; skipping drain.",
+                LOG.log(
+                        Level.FINE,
+                        "Firm {0} was already archived by a concurrent disband; skipping drain.",
                         firm.getFirmId());
                 return new DisbandResult(true, List.of());
             }
@@ -330,17 +335,20 @@ public class FirmServiceImpl implements FirmService {
                 // (conservation stays exact). Mirrors the treasury-rest-api disband
                 // sweep (TransferService.sweepAll) so both engines drain identically
                 // (business/behaviour/0003).
-                treasury.sweepAll(fa.getAccountId(), personal.getAccountId(), "Firm disbanded", proprietorUuid,
-                        "BusinessPlugin");
+                treasury.sweepAll(
+                        fa.getAccountId(), personal.getAccountId(), "Firm disbanded", proprietorUuid, "BusinessPlugin");
                 treasury.archiveAccount(fa.getAccountId());
                 accounts.removeFirmAccount(firm.getFirmId(), fa.getAccountId());
             } catch (RuntimeException ex) {
                 // Leave this account linked so re-running the disband can finish
                 // draining it; don't strand the rest. Reported to the caller below.
                 undrained.add(fa.getAccountId());
-                LOG.log(Level.WARNING, "Failed to drain/archive account " + fa.getAccountId()
-                        + " while disbanding firm " + firm.getFirmId()
-                        + "; it stays linked until the disband is re-run.", ex);
+                LOG.log(
+                        Level.WARNING,
+                        "Failed to drain/archive account " + fa.getAccountId()
+                                + " while disbanding firm " + firm.getFirmId()
+                                + "; it stays linked until the disband is re-run.",
+                        ex);
             }
         }
         return new DisbandResult(resumed, List.copyOf(undrained));
@@ -527,8 +535,12 @@ public class FirmServiceImpl implements FirmService {
         // staff/DOC override is traceable (who did it, from whom, to whom) instead
         // of an invisible proprietor change (PAR-315). Recorded before the IPC so no
         // DB write follows the un-rollback-able Treasury reassignment below.
-        requests.recordAdminOverride(firm.getFirmId(), previousProprietor.toString(),
-                newProprietor.toString(), actorId.toString(), StringUtils.random32());
+        requests.recordAdminOverride(
+                firm.getFirmId(),
+                previousProprietor.toString(),
+                newProprietor.toString(),
+                actorId.toString(),
+                StringUtils.random32());
 
         // Hand the firm's Treasury accounts to the new proprietor and re-sync access.
         // Cross-plugin IPC — kept last so nothing that can throw follows it.
@@ -543,7 +555,7 @@ public class FirmServiceImpl implements FirmService {
         return firm;
     }
 
-    /** Format + length checks shared by {@link #createFirm} and {@link #renameFirm}. */
+    /** Format, length and moderation checks shared by create and rename. */
     private void validateFirmName(String name) {
         if (name == null || name.length() > FIRM_NAME_LENGTH_LIMIT) {
             throw new BadCommandException("This firm name is too long");
@@ -552,7 +564,12 @@ public class FirmServiceImpl implements FirmService {
             throw new BadCommandException("Firm names cannot start with a number.");
         }
         if (!NameValidator.isValidFirmName(name)) {
-            throw new BadCommandException("Firm name must be 2–32 characters of letters, digits, space, underscore, hyphen, or period.");
+            throw new BadCommandException(
+                    "Firm name must be 2–32 characters of letters, digits, space, underscore, hyphen, or period.");
+        }
+        if (NameValidator.containsBlockedTerm(name, firmConfig.getBlockedNameTerms())) {
+            throw new BadCommandException(
+                    "This firm name contains a blocked word or phrase. Please choose another name.");
         }
     }
 

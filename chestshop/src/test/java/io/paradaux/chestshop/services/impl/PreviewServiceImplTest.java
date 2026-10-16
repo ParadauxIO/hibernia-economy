@@ -55,6 +55,17 @@ class PreviewServiceImplTest {
     private final Deque<Runnable> asyncTasks = new ArrayDeque<>();
     private final Deque<Runnable> mainTasks = new ArrayDeque<>();
 
+    @Test
+    void configuredPreviewNameIsLiteralAndVisible() {
+        var config = mock(io.paradaux.chestshop.model.config.ChestShopConfiguration.class);
+        when(config.getPreviewNameFormat()).thenReturn("%world%: %x%, %y%, %z%");
+        preview = new PreviewServiceImpl(
+                plugin, marketService, new io.paradaux.chestshop.services.ShopDisplayService(plugin, config));
+        preview.render("world", 1, 64, 3, new ItemStack(Material.DIAMOND));
+        verify(display).customName(net.kyori.adventure.text.Component.text("world: 1, 64, 3"));
+        verify(display).setCustomNameVisible(true);
+    }
+
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
@@ -95,7 +106,11 @@ class PreviewServiceImplTest {
         });
         lenient().when(world.getName()).thenReturn("world");
         lenient().when(world.isChunkLoaded(1, 2)).thenReturn(true);
-        preview = new PreviewServiceImpl(plugin, marketService);
+        preview = new PreviewServiceImpl(
+                plugin,
+                marketService,
+                new io.paradaux.chestshop.services.ShopDisplayService(
+                        plugin, new io.paradaux.chestshop.model.config.ChestShopConfiguration()));
     }
 
     @org.junit.jupiter.api.AfterEach

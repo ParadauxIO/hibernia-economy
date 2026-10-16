@@ -92,6 +92,28 @@ caller. No Treasury API or schema upgrade is required for this repair.
 `io.paradaux:business-api`. Consumed by ChestShop (and anything else that needs to
 route money to a firm or check a staff permission).
 
+Account resolution (PAR-14) stays with the API that owns the relationship:
+
+| Lookup | API |
+|---|---|
+| Player UUID → personal account ID | `treasury.getAccountByUUID(uuid)`, then `getAccountId()` (null if absent) |
+| Player UUID → accounts by type | `treasury.getAccountsByTypeAndOwner(AccountType.BUSINESS, uuid)` |
+| Account ID → player owner UUID | `treasury.getAccountById(id)`, then `getOwnerUuid()` (check for null account) |
+| Firm ID → all linked account IDs | `business.firms().getAccountIds(firmId)` |
+| Firm ID → configured default account ID | `business.firms().getDefaultAccountId(firmId)` |
+| Account ID → firm ID / firm | `business.firms().getFirmIdByAccountId(id)` / `getFirmByAccountId(id)` |
+
+Firm lookups exclude removed links but include archived firms' remaining links
+(e.g. an incomplete disband). The list is empty for unknown/unlinked firms; singular
+lookups return null when absent. Default lookup does not select a fallback account.
+These are relationship reads, not permission or Treasury account-status checks.
+A proprietor can own several firms, so filtering Treasury accounts by owner is not
+a substitute for firm lookup. None of these reads creates an account; use
+`resolveOrCreatePersonal` only when creation and starting-balance funding are intended.
+Upgrade the Business provider with the API: older implementations remain compatible,
+but the default `getAccountIds` implementation throws `UnsupportedOperationException`
+rather than silently reporting an incomplete list. No migration is needed.
+
 `FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's
 shop alias, or null. Business owns alias persistence and proprietor-only management;
 ChestShop resolves `B:@alias` through this API, checks normal shop access, and keeps

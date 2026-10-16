@@ -163,8 +163,8 @@ public class ChestShop extends JavaPlugin {
         // Optional: keep the shop registry clean when WorldEdit/FAWE bulk-removes
         // shops (WE bypasses Bukkit block events). Only touched when WE is present,
         // so its classes are never loaded otherwise.
-        if (getServer().getPluginManager().getPlugin("WorldEdit") != null
-                || getServer().getPluginManager().getPlugin("FastAsyncWorldEdit") != null) {
+        if (getServer().getPluginManager().isPluginEnabled("WorldEdit")
+                || getServer().getPluginManager().isPluginEnabled("FastAsyncWorldEdit")) {
             try {
                 new io.paradaux.chestshop.listeners.WorldEditShopCleanupListener(
                                 this,

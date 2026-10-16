@@ -725,7 +725,7 @@ class MarketSyncServiceImplTest {
     }
 
     @Test
-    void onBlockReplaced_unloadedChunk_deactivatesWithoutLoadingIt() {
+    void onBlockReplaced_unloadedChunk_leavesRegistryAlone() {
         World w = world("world");
         when(server.getWorld("world")).thenReturn(w);
         when(w.isChunkLoaded(0, 0)).thenReturn(false);
@@ -733,14 +733,14 @@ class MarketSyncServiceImplTest {
         sync.onBlockReplaced("world", 1, 2, 3);
 
         verify(w, never()).getBlockAt(anyInt(), anyInt(), anyInt());
-        verify(market).deactivateShop("world", 1, 2, 3);
+        verifyNoInteractions(market, previews);
     }
 
     @Test
-    void onBlockReplaced_unknownWorld_deactivates() {
+    void onBlockReplaced_unknownWorld_leavesRegistryAlone() {
         when(server.getWorld("gone")).thenReturn(null);
         sync.onBlockReplaced("gone", 1, 2, 3);
-        verify(market).deactivateShop("gone", 1, 2, 3);
+        verifyNoInteractions(market, previews);
     }
 
     @Test

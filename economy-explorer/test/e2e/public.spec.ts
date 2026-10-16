@@ -120,7 +120,9 @@ test('healthz returns 200 without the DB', async ({ request }) => {
 test('Health bookmarks preserve their window on the consolidated overview', async ({ page }) => {
   await visit(page, '/economy/health?days=7');
   await expect(page).toHaveURL(/\?days=7$/);
-  await expect(page.getByText('Active players / 7d', { exact: true })).toBeVisible();
+  // React can retain a hidden streamed copy outside main while swapping the
+  // live dashboard into place. Assert on the displayed page, not that source.
+  await expect(page.getByRole('main').getByText('Active players / 7d', { exact: true })).toBeVisible();
 });
 
 test('shop discovery normalises batches and switches to selling', async ({ page }) => {
@@ -138,7 +140,10 @@ test('item pages put observed offers before optional advanced history', async ({
   await expect(page.getByRole('heading', { name: 'Where to trade' })).toBeVisible();
   await expect(page.locator('.offer-card')).toHaveCount(2);
   await expect(page.getByText('Candles', { exact: true })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Show advanced candlesticks' }).click();
+  await Promise.all([
+    page.waitForURL(/advanced=true/),
+    page.getByRole('link', { name: 'Show advanced candlesticks' }).click(),
+  ]);
   await expect(page.getByRole('link', { name: 'Hide advanced candlesticks' })).toBeVisible();
 });
 

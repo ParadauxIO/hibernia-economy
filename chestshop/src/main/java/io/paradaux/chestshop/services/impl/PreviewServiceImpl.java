@@ -1,10 +1,20 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.chestshop.services.PreviewService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.PreviewService;
+import io.paradaux.chestshop.services.ShopDisplayService;
 import io.paradaux.treasury.api.market.ShopResult;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -18,16 +28,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.util.Transformation;
 import org.joml.Vector3f;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Floating item previews above shop signs — a port of the legacy chestshop-database
@@ -50,6 +50,7 @@ public class PreviewServiceImpl implements PreviewService {
 
     private final JavaPlugin plugin;
     private final MarketService marketService;
+    private final ShopDisplayService displays;
 
     // chunkKey -> (posKey -> display)
     private final Map<String, Map<String, ItemDisplay>> byChunk = new ConcurrentHashMap<>();
@@ -60,7 +61,8 @@ public class PreviewServiceImpl implements PreviewService {
     private boolean lookupInFlight;
 
     @Inject
-    public PreviewServiceImpl(JavaPlugin plugin, MarketService marketService) {
+    public PreviewServiceImpl(JavaPlugin plugin, MarketService marketService, ShopDisplayService displays) {
+        this.displays = displays;
         this.plugin = plugin;
         this.marketService = marketService;
     }
@@ -85,14 +87,19 @@ public class PreviewServiceImpl implements PreviewService {
         destroy(worldName, x, y, z); // replace any existing
 
         Location loc = new Location(world, x + 0.5, y + 1, z + 0.5);
+        String name = displays.previewName(worldName, x, y, z);
         ItemDisplay display = world.spawn(loc, ItemDisplay.class, d -> {
             d.setItemStack(item);
+            d.customName(net.kyori.adventure.text.Component.text(name));
+            d.setCustomNameVisible(!name.isEmpty());
             d.setBillboard(Display.Billboard.CENTER);
             d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.GROUND);
             Transformation tr = d.getTransformation();
             d.setTransformation(new Transformation(
-                    tr.getTranslation(), tr.getLeftRotation(),
-                    new Vector3f(SCALE, SCALE, SCALE), tr.getRightRotation()));
+                    tr.getTranslation(),
+                    tr.getLeftRotation(),
+                    new Vector3f(SCALE, SCALE, SCALE),
+                    tr.getRightRotation()));
             d.setPersistent(false);
             d.setVisibleByDefault(true);
         });
@@ -177,8 +184,9 @@ public class PreviewServiceImpl implements PreviewService {
             Map<Lookup, List<ShopResult>> found = new LinkedHashMap<>();
             for (Lookup lookup : batch) {
                 try {
-                    found.put(lookup, marketService.shopQuery()
-                            .shopsInChunk(lookup.world(), lookup.chunkX(), lookup.chunkZ()));
+                    found.put(
+                            lookup,
+                            marketService.shopQuery().shopsInChunk(lookup.world(), lookup.chunkX(), lookup.chunkZ()));
                 } catch (RuntimeException e) {
                     // registry unreachable — leave this chunk's holograms as they are
                 }

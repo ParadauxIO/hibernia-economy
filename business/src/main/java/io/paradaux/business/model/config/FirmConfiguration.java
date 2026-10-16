@@ -3,6 +3,7 @@ package io.paradaux.business.model.config;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
+import java.util.List;
 
 /**
  * General firm settings.
@@ -27,6 +28,7 @@ public class FirmConfiguration {
     private int maxSalesExportDays;
     private boolean salesNotifyDefault;
     private int salesNotifyFlushSeconds;
+    private List<String> blockedNameTerms;
 
     @Inject
     public FirmConfiguration(Business plugin) {
@@ -43,19 +45,25 @@ public class FirmConfiguration {
     }
 
     private void load() {
+        this.blockedNameTerms = List.copyOf(plugin.getConfig().getStringList("firm.name-filter.blocked-terms"));
         // Max firms a single player may own (be proprietor of). 0 or below = unlimited.
         this.ownedFirmLimit = plugin.getConfig().getInt("firm.owned-limit", DEFAULT_OWNED_FIRM_LIMIT);
-        plugin.getLogger().info(ownedFirmLimit > 0
-                ? "Firm ownership limit: " + ownedFirmLimit + " per player"
-                : "Firm ownership limit: unlimited");
+        plugin.getLogger()
+                .info(
+                        ownedFirmLimit > 0
+                                ? "Firm ownership limit: " + ownedFirmLimit + " per player"
+                                : "Firm ownership limit: unlimited");
 
         // Minimum seconds between a player creating firms. Keyed on creation time
         // (not active count) so rapid create/disband cycling is throttled too.
         // 0 or below = no cooldown.
-        this.createCooldownSeconds = plugin.getConfig().getInt("firm.create-cooldown-seconds", DEFAULT_CREATE_COOLDOWN_SECONDS);
-        plugin.getLogger().info(createCooldownSeconds > 0
-                ? "Firm creation cooldown: " + createCooldownSeconds + "s per player"
-                : "Firm creation cooldown: disabled");
+        this.createCooldownSeconds =
+                plugin.getConfig().getInt("firm.create-cooldown-seconds", DEFAULT_CREATE_COOLDOWN_SECONDS);
+        plugin.getLogger()
+                .info(
+                        createCooldownSeconds > 0
+                                ? "Firm creation cooldown: " + createCooldownSeconds + "s per player"
+                                : "Firm creation cooldown: disabled");
 
         // economy-explorer base URL that /firm sales export deep-links into (per
         // tenant). Empty disables the export command. The day cap mirrors the
@@ -66,13 +74,18 @@ public class FirmConfiguration {
         // Real-time firm sale notifications: per-firm default state (opt-in) and the
         // digest flush cadence — bursts within a window are condensed into one message.
         this.salesNotifyDefault = plugin.getConfig().getBoolean("sales.notify-default", false);
-        this.salesNotifyFlushSeconds = Math.max(1,
-                plugin.getConfig().getInt("sales.notify-flush-seconds", DEFAULT_SALES_NOTIFY_FLUSH_SECONDS));
+        this.salesNotifyFlushSeconds = Math.max(
+                1, plugin.getConfig().getInt("sales.notify-flush-seconds", DEFAULT_SALES_NOTIFY_FLUSH_SECONDS));
     }
 
     /** Maximum number of firms a player may own; {@code <= 0} means unlimited. */
     public int getOwnedFirmLimit() {
         return ownedFirmLimit;
+    }
+
+    /** Literal terms rejected in new firm names; refreshed by configuration reload. */
+    public List<String> getBlockedNameTerms() {
+        return blockedNameTerms;
     }
 
     /** Whether a finite ownership limit is enforced. */

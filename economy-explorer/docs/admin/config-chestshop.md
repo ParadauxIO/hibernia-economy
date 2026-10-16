@@ -131,3 +131,27 @@ manually reconciling; ChestShop does not automatically retry or compensate.
 
 If SQLite cannot save the record, an error includes the trade ID and serialized
 evidence in the server log. Preserve that log for manual investigation.
+
+### WorldEdit, FAWE and WorldGuard
+
+WorldEdit and FastAsyncWorldEdit are optional. Completed edits reconcile affected
+shop signs with Treasury: removed signs disappear from `/find` and lose their
+previews; pasted or restored shop signs are registered again. Cleanup is drained
+on the server thread in batches of at most 256 positions per second. If a chunk
+unloads first, cleanup waits for it to load; it never force-loads chunks. After a
+server restart interrupts pending cleanup, use `/find resync` on loaded chunks.
+
+With WorldGuard installed, `%region-name%` is available in these plain-text
+`config.yml` templates (no PlaceholderAPI required):
+
+```yaml
+FIND_LOCATION_FORMAT: '%region-name% %world%: %x%, %y%, %z%'
+PREVIEW_NAME_FORMAT: '%region-name%'
+```
+
+The defaults keep coordinate-only `/find` labels and unnamed item previews.
+`%region-name%` uses the highest-priority applicable region ID, breaking ties by
+alphabetical ID. It is empty outside regions, for unavailable worlds, or without
+WorldGuard. The global region is excluded. Region names work independently of
+WorldGuard's ChestShop protection settings. Templates also support `%world%`,
+`%x%`, `%y%` and `%z%`; values are literal text, not formatting markup.

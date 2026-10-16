@@ -333,3 +333,19 @@ shared MariaDB/Flyway schema. Each attempt is append-only, keyed for correlation
 the transaction's existing trade UUID. The serialized evidence is committed before
 returning from the reversal failure path, including for unlimited admin shops.
 A failed audit write is logged with its payload and does not escape cancellation.
+
+### Optional shop-search integrations (PAR-173)
+
+ChestShop owns the `/find` presentation and its optional adapters. WorldEdit
+cleanup wraps `BEFORE_CHANGE` (including actor-less edits and undo), collects
+accepted sign changes and publishes them only after the delegated commit.
+The FAWE adapter (compiled against 2.13.1) uses an `IBatchProcessor` postprocessor instead: bulk queue paths can
+bypass per-block extents. Old and new tile positions are copied from completed
+chunk snapshots; no Bukkit/world/registry calls run on FAWE worker threads.
+Both feed a bounded main-thread reconciliation queue. Unloaded positions are
+retained until chunk load, and shutdown unregisters the WorldEdit event bus.
+All optional APIs are compile-only and remain outside the shaded jar.
+
+WorldGuard's region-name provider is isolated behind `ShopDisplayService` and a
+nested integration class so absent plugins do not prevent startup. It supplies
+plain-text location and optional preview-name templates; see the admin guide.

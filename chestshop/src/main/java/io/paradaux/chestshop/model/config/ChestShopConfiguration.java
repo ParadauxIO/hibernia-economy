@@ -1,12 +1,7 @@
 package io.paradaux.chestshop.model.config;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.ChestShop;
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationComponent;
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationValue;
-import lombok.Getter;
-import org.bukkit.Material;
-
 import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
@@ -14,6 +9,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.Material;
 
 /**
  * ChestShop's configuration, loaded by HiberniaFramework's Configurator from
@@ -34,6 +32,13 @@ import java.util.UUID;
 @Getter
 @Slf4j
 public class ChestShopConfiguration {
+
+    // Plain-text location templates; empty preview name keeps the item-only hologram.
+    @ConfigurationValue(path = "FIND_LOCATION_FORMAT", defaultValue = "%x%, %y%, %z%")
+    private String findLocationFormat = "%x%, %y%, %z%";
+
+    @ConfigurationValue(path = "PREVIEW_NAME_FORMAT", defaultValue = "")
+    private String previewNameFormat = "";
 
     @ConfigurationValue(path = "DEBUG", defaultValue = "false")
     private boolean debug;
@@ -234,6 +239,8 @@ public class ChestShopConfiguration {
 
     /** Item-meta attributes excluded from the item-similarity comparison. */
     public Set<String> getExcludedItemAttributes() {
-        return excludedItemAttributesRaw == null ? new LinkedHashSet<>() : new LinkedHashSet<>(excludedItemAttributesRaw);
+        return excludedItemAttributesRaw == null
+                ? new LinkedHashSet<>()
+                : new LinkedHashSet<>(excludedItemAttributesRaw);
     }
 }

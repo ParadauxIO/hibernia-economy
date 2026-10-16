@@ -14,6 +14,12 @@ firm:
   # time (counting disbanded firms too) so create/disband spam is throttled.
   # Set to 0 (or below) to disable.
   create-cooldown-seconds: 300
+  name-filter:
+    # Literal words/phrases rejected on create and rename (including admin rename).
+    # Case, spaces, underscores, hyphens and periods are ignored; substrings match.
+    # Add your server's prohibited terms. Empty means no word filtering.
+    # Existing names are unaffected. Apply edits with /firm reload.
+    blocked-terms: []
 
 sales:
   # economy-explorer base URL that `/firm sales export` deep-links into (the
