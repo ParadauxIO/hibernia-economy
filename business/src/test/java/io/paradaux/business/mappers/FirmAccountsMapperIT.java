@@ -95,6 +95,22 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
     }
 
     @Test
+    void accountResolutionExcludesRemovedLinksAndKeepsArchivedFirmLinks() throws Exception {
+        int retained = insertStubAccount("Retained");
+        int removed = insertStubAccount("Removed");
+        firmAccounts.insertFirmAccount(firmId, retained);
+        firmAccounts.insertFirmAccount(firmId, removed);
+        firmAccounts.removeFirmAccount(firmId, removed);
+        firms.archiveFirm(firmId);
+
+        assertThat(firmAccounts.listAccountsByFirm(firmId))
+                .extracting(FirmAccount::getAccountId).containsExactly(retained);
+        assertThat(firmAccounts.getFirmIdByAccountId(retained)).isEqualTo(firmId);
+        assertThat(firmAccounts.getFirmIdByAccountId(removed)).isNull();
+        assertThat(firmAccounts.listAccountsByFirm(-1)).isEmpty();
+    }
+
+    @Test
     void shopAliases_areUniqueCaseInsensitiveAndClearable() throws Exception {
         int first = insertStubAccount("First");
         int second = insertStubAccount("Second");

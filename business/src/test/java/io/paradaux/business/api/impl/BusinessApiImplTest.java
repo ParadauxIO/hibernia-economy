@@ -168,6 +168,50 @@ class BusinessApiImplTest {
         assertThat(api.firms().getFirmByAccountId(99)).isSameAs(f);
     }
 
+    @Test
+    void firms_olderProviderReportsUnsupportedAccountListing() {
+        var legacy = org.mockito.Mockito.mock(io.paradaux.business.api.FirmApi.class,
+                org.mockito.Mockito.CALLS_REAL_METHODS);
+        assertThatThrownBy(() -> legacy.getAccountIds(7))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void firms_accountIdsIncludeAllLinksAndRoundTripToArchivedFirm() {
+        Firm firm = new Firm();
+        firm.setFirmId(7);
+        firm.setArchived(true);
+        when(accountService.listAccountIds(7)).thenReturn(List.of(41, 42));
+        when(firmService.getAnyFirmById(7)).thenReturn(firm);
+        for (int accountId : List.of(41, 42)) {
+            when(accountService.getFirmIdByAccountId(accountId)).thenReturn(7);
+        }
+
+        assertThat(api.firms().getAccountIds(7)).containsExactlyInAnyOrder(41, 42);
+        for (int accountId : api.firms().getAccountIds(7)) {
+            assertThat(api.firms().getFirmIdByAccountId(accountId)).isEqualTo(7);
+            assertThat(api.firms().getFirmByAccountId(accountId)).isSameAs(firm);
+        }
+    }
+
+    @Test
+    void firms_unknownOrUnlinkedAccountsHaveNoResolution() {
+        when(accountService.listAccountIds(999)).thenReturn(List.of());
+        assertThat(api.firms().getAccountIds(999)).isEmpty();
+        assertThat(api.firms().getFirmIdByAccountId(999)).isNull();
+        assertThat(api.firms().getDefaultAccountId(999)).isNull();
+    }
+
+    @Test
+    void firms_defaultAccountUsesConfiguredValueWithoutFallback() {
+        Firm firm = new Firm();
+        firm.setDefaultAccountId(42);
+        when(firmService.getAnyFirmById(7)).thenReturn(firm);
+        assertThat(api.firms().getDefaultAccountId(7)).isEqualTo(42);
+        firm.setDefaultAccountId(null);
+        assertThat(api.firms().getDefaultAccountId(7)).isNull();
+    }
+
     // ---- StaffApi delegate ----
 
     @Test

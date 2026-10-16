@@ -143,6 +143,11 @@ public class BusinessApiImpl implements BusinessApi {
         }
 
         @Override
+        public List<Integer> getAccountIds(int firmId) {
+            return accounts.listAccountIds(firmId);
+        }
+
+        @Override
         public java.math.BigDecimal getTotalBalance(int firmId) {
             return transactions.getAggregateBalance(firmId);
         }
