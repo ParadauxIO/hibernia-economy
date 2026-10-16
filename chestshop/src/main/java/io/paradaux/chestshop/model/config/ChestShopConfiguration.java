@@ -35,6 +35,13 @@ import java.util.UUID;
 @Slf4j
 public class ChestShopConfiguration {
 
+    // Plain-text location templates; empty preview name keeps the item-only hologram.
+    @ConfigurationValue(path = "FIND_LOCATION_FORMAT", defaultValue = "%x%, %y%, %z%")
+    private String findLocationFormat = "%x%, %y%, %z%";
+
+    @ConfigurationValue(path = "PREVIEW_NAME_FORMAT", defaultValue = "")
+    private String previewNameFormat = "";
+
     @ConfigurationValue(path = "DEBUG", defaultValue = "false")
     private boolean debug;
 

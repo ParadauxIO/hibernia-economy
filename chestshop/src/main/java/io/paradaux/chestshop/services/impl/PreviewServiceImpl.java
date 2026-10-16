@@ -3,6 +3,7 @@ package io.paradaux.chestshop.services.impl;
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.PreviewService;
 import com.google.inject.Inject;
+import io.paradaux.chestshop.services.ShopDisplayService;
 import com.google.inject.Singleton;
 import io.paradaux.treasury.api.market.ShopResult;
 import org.bukkit.Chunk;
@@ -50,6 +51,7 @@ public class PreviewServiceImpl implements PreviewService {
 
     private final JavaPlugin plugin;
     private final MarketService marketService;
+    private final ShopDisplayService displays;
 
     // chunkKey -> (posKey -> display)
     private final Map<String, Map<String, ItemDisplay>> byChunk = new ConcurrentHashMap<>();
@@ -60,7 +62,8 @@ public class PreviewServiceImpl implements PreviewService {
     private boolean lookupInFlight;
 
     @Inject
-    public PreviewServiceImpl(JavaPlugin plugin, MarketService marketService) {
+    public PreviewServiceImpl(JavaPlugin plugin, MarketService marketService, ShopDisplayService displays) {
+        this.displays = displays;
         this.plugin = plugin;
         this.marketService = marketService;
     }
@@ -85,8 +88,11 @@ public class PreviewServiceImpl implements PreviewService {
         destroy(worldName, x, y, z); // replace any existing
 
         Location loc = new Location(world, x + 0.5, y + 1, z + 0.5);
+        String name = displays.previewName(worldName, x, y, z);
         ItemDisplay display = world.spawn(loc, ItemDisplay.class, d -> {
             d.setItemStack(item);
+            d.customName(net.kyori.adventure.text.Component.text(name));
+            d.setCustomNameVisible(!name.isEmpty());
             d.setBillboard(Display.Billboard.CENTER);
             d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.GROUND);
             Transformation tr = d.getTransformation();

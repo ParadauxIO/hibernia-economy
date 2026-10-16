@@ -180,7 +180,9 @@ public class MarketSyncServiceImpl implements MarketSyncService {
     public void onBlockReplaced(String world, int x, int y, int z) {
         if (!marketService.enabled()) return;
         try {
-            Sign sign = shopSignAt(world, x, y, z);
+            World loaded = plugin.getServer().getWorld(world);
+            if (loaded == null || !loaded.isChunkLoaded(x >> 4, z >> 4)) return;
+            Sign sign = shopSignAt(loaded, x, y, z);
             if (sign != null) {
                 // Still (or again, after an undo) a shop: keep the row live and current. A row that
                 // can't be rebuilt right now is left as it was rather than deactivated.
@@ -196,11 +198,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
     }
 
     /** The valid shop sign at a position, or null — never loads a chunk to look. */
-    private Sign shopSignAt(String worldName, int x, int y, int z) {
-        World world = plugin.getServer().getWorld(worldName);
-        if (world == null || !world.isChunkLoaded(x >> 4, z >> 4)) {
-            return null;
-        }
+    private Sign shopSignAt(World world, int x, int y, int z) {
         return world.getBlockAt(x, y, z).getState(false) instanceof Sign sign && signService.isValid(sign)
                 ? sign : null;
     }
