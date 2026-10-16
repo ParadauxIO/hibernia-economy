@@ -8,7 +8,8 @@ import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { listAllWebhooks, countAllWebhooks } from '@/lib/sql/webhook';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
 import { Pagination } from '@/components/Pagination';
@@ -135,7 +136,7 @@ export default async function AdminWebhooksPage({
                   </td>
                   <td className="amount mono">{fmtN(h.consecutiveFailures)}</td>
                   <td><span className="badge">{h.viaApiKey ? 'API key' : 'explorer'}</span></td>
-                  <td className="ts">{fmtTs(h.createdAt)}</td>
+                  <td className="ts"><LocalTimestamp value={h.createdAt} /></td>
                   <td style={{ whiteSpace: 'nowrap' }}><AdminWebhookRowActions id={h.id} active={h.active} url={h.url} /></td>
                 </tr>
               ))}

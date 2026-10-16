@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { getShopOffers } from '@/lib/services/market';
 import { ShopOffers } from '@/components/market/ShopOffers';
 import { listItemSales, countItemSales, listItemSellers, countItemSellers, itemPriceByDay, listSamplesInRange } from '@/lib/sql/market';
-import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { bucketSamples, type CandleInterval } from '@/lib/derived';
 import { BackLink } from '@/components/BackLink';
 import { Pagination } from '@/components/Pagination';
@@ -286,7 +287,7 @@ export default async function ItemDetailPage({
               )}
               {sales.map((s) => (
                 <tr key={s.sale_id}>
-                  <td className="ts">{fmtTs(s.occurred_at)}</td>
+                  <td className="ts"><LocalTimestamp value={s.occurred_at} /></td>
                   <td><span className={`badge ${s.direction === 'BUY' ? 'badge-active' : 'badge-archived'}`}>{s.direction}</span></td>
                   <td className="amount mono">{fmtN(s.quantity)}</td>
                   <td className="amount neutral">{fmtAmtFull(s.unit_price)}</td>

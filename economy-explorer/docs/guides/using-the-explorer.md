@@ -21,6 +21,17 @@ Plenty is public:
 - **Money flow** and other economy-wide charts.
 - **Search** — the search box up top finds accounts, players, firms, and account IDs.
 
+## Dates and times
+
+Timestamps use your browser’s local timezone, including daylight saving time.
+The timezone is shown beside each timestamp; hover over it for the exact UTC
+instant and full timezone name. Before JavaScript loads (or if it is disabled),
+timestamps are shown in UTC.
+
+Daily charts and activity calendars use **UTC days**, as labelled. Their totals
+cover midnight to midnight UTC, so a local timestamp can fall on a different
+calendar date from its chart bucket.
+
 ## What signing in unlocks
 
 Your **own** detailed data is private to you — your accounts, your income and spending

@@ -29,14 +29,14 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
 
   // 365 days ending today.
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
   const days: { iso: string; count: number; col: number; row: number }[] = [];
   for (let i = 364; i >= 0; i--) {
     const d = new Date(today);
-    d.setDate(today.getDate() - i);
+    d.setUTCDate(today.getUTCDate() - i);
     const iso = d.toISOString().slice(0, 10);
     const col = Math.floor((364 - i) / 7);
-    const row = (d.getDay() + 6) % 7; // Mon=0, Sun=6
+    const row = (d.getUTCDay() + 6) % 7; // Mon=0, Sun=6
     days.push({ iso, count: map.get(iso) ?? 0, col, row });
   }
 
@@ -56,7 +56,7 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
   const opacities = [1, 0.25, 0.5, 0.75, 1];
 
   const fmtDate = (iso: string) =>
-    new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    new Date(iso + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
 
   // The horizontal-scroll wrapper (overflowX: auto) also clips vertically —
   // CSS resolves the cross-axis `visible` to `auto` — so a tooltip rendered
@@ -95,6 +95,7 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
           })}
         </svg>
       </div>
+      <p className="chart-subtitle">Daily activity in UTC.</p>
       {hover && (
         <div
           className="tooltip"

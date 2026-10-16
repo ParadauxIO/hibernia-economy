@@ -9,16 +9,13 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isLiveBlock, type LiveBlock } from '@/lib/docsLive';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import type { TaxRates } from '@/lib/taxRates';
 
 type Target = { el: HTMLElement; name: LiveBlock };
 type Rates = TaxRates | 'error' | null;
 
 const UNAVAILABLE = "The current rates aren't available right now.";
-
-function since(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 function Status({ children }: { children: React.ReactNode }) {
   return <p className="doc-live-status">{children}</p>;
@@ -37,7 +34,7 @@ function BalanceTax({ rates }: { rates: TaxRates['balanceTax'] }) {
           ))}
         </tbody>
       </table>
-      <Status>Live from this server · last changed {since(rates.updatedAt)}</Status>
+      <Status>Live from this server · last changed <LocalTimestamp value={rates.updatedAt} /></Status>
     </>
   );
 }
@@ -56,7 +53,7 @@ function IncomeTax({ rates }: { rates: TaxRates['incomeTax'] }) {
           <tr><td>{rates.sources.length ? 'Anything else' : 'All taxed income'}</td><td>{rates.defaultRate}</td></tr>
         </tbody>
       </table>
-      <Status>Live from this server · last changed {since(rates.updatedAt)}</Status>
+      <Status>Live from this server · last changed <LocalTimestamp value={rates.updatedAt} /></Status>
     </>
   );
 }

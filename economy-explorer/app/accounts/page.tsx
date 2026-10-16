@@ -6,7 +6,8 @@ import type { Route } from 'next';
 import { z } from 'zod';
 import { listAccounts, countAccounts, type SortColumn, type SortDir } from '@/lib/sql/ledger';
 import { memo } from '@/lib/cache';
-import { accountLabel, fmtAmtFull, fmtTs, shortenUuid, looksLikeUuid } from '@/lib/format';
+import { accountLabel, fmtAmtFull, shortenUuid, looksLikeUuid } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
 import { Pagination } from '@/components/Pagination';
 import { CsvButton } from '@/components/CsvButton';
@@ -132,13 +133,13 @@ export default async function AccountsPage({
                     <span className="mono muted small" title={a.owner_uuid}>{` ${shortenUuid(a.owner_uuid)}`}</span>
                   )}
                 </Link>
-                <details className="mobile-only directory-details"><summary>Details</summary><p>#{a.account_id} · {a.account_type}</p><p>Created {fmtTs(a.created_at)}</p></details>
+                <details className="mobile-only directory-details"><summary>Details</summary><p>#{a.account_id} · {a.account_type}</p><p>Created <LocalTimestamp value={a.created_at} /></p></details>
               </td>
               <td data-secondary="true">
                 <span className={`badge badge-${a.account_type}`}>{a.account_type}</span>
               </td>
               <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
-              <td data-secondary="true" className="ts">{fmtTs(a.created_at)}</td>
+              <td data-secondary="true" className="ts"><LocalTimestamp value={a.created_at} /></td>
             </tr>
           ))}
         </tbody>

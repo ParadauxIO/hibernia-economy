@@ -9,7 +9,8 @@ import { PrivacyGate } from '@/components/PrivacyGate';
 import { listAdminApiKeys } from '@/lib/sql/apiKey';
 import { listRateLimitOverrides } from '@/lib/sql/rateLimitOverride';
 import { queryKeyUsage, type KeyUsage } from '@/lib/prometheus';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { RevokeButton } from './revoke-button';
 import { RotateButton } from './rotate-button';
@@ -112,8 +113,8 @@ export default async function AdminApiKeysPage() {
                       </td>
                     )}
                     <td className={`amount mono ${!isDefault ? 'pos' : ''}`}>×{mult}</td>
-                    <td className="ts">{fmtTs(k.issued_at)}</td>
-                    <td className="ts">{fmtTs(k.expires_at)}</td>
+                    <td className="ts"><LocalTimestamp value={k.issued_at} /></td>
+                    <td className="ts"><LocalTimestamp value={k.expires_at} /></td>
                     <td>
                       {k.revoked
                         ? <span className="badge badge-archived">Revoked</span>

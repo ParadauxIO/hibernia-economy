@@ -240,3 +240,15 @@ The annotation-driven framework components still use the existing in-place reloa
 for Guice compatibility; their fields are volatile for visibility. They do not
 provide a multi-field snapshot or a transaction spanning messages, logging and all
 configuration components. The snapshot guarantee above is per manual configuration.
+
+### Explorer timestamps (PAR-40)
+
+Render event instants with `components/LocalTimestamp.tsx` in both server and
+client components. It uses a UTC server/hydration snapshot, then detects the
+browser's IANA timezone without a cookie or request-specific layout. Pass a
+`Date` or ISO timestamp with an explicit offset. `fmtTs` defaults to UTC and
+accepts an explicit timezone for pure formatting.
+
+Daily SQL aggregates remain UTC buckets: `fmtDate` and activity calendar date
+arithmetic must stay in UTC, rather than shifting already aggregated dates
+into the browser's zone. Daily charts label this distinction.

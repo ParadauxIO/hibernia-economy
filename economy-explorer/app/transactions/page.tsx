@@ -5,7 +5,8 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
 import { listTransactions, countTransactions, type SortDir } from '@/lib/sql/ledger';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { Pagination } from '@/components/Pagination';
@@ -153,7 +154,7 @@ export default async function TransactionsPage({
               </td>
               <td>{r.message}</td>
               <td className="amount mono">{fmtN(r.posting_count)}</td>
-              <td className="ts">{fmtTs(r.settlement_time)}</td>
+              <td className="ts"><LocalTimestamp value={r.settlement_time} /></td>
               <td><Player name={r.initiator_name} uuid={r.initiator_uuid} /></td>
               <td>
                 <span className="mono" style={{ color: 'var(--fg-muted)' }}>{r.plugin_system ?? '—'}</span>

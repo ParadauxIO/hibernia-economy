@@ -3,7 +3,8 @@ import { buildMetadata } from '@/lib/metadata';
 import { getTaxationDashboard } from '@/lib/services/taxation';
 import { getTaxationRates } from '@/lib/services/taxationRates';
 import { taxationDays } from '@/lib/taxation';
-import { fmtAmtFull, fmtTs } from '@/lib/format';
+import { fmtAmtFull } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { WindowTabs } from '@/components/WindowTabs';
 import { SectionTabs } from '@/components/SectionTabs';
 import { TaxRevenueTimeline } from '@/components/charts/AreaTimeline';
@@ -59,7 +60,7 @@ export default async function TaxationPage({ searchParams }: {
       <h2 className="card-title">Rates in effect</h2>
       <h3>Personal balance tax</h3>
       {rates.balanceTax ? <>
-        <p>{rates.balanceTax.enabled ? 'Enabled' : 'Disabled'} · Published {fmtTs(rates.balanceTax.updatedAt)}</p>
+        <p>{rates.balanceTax.enabled ? 'Enabled' : 'Disabled'} · Published <LocalTimestamp value={rates.balanceTax.updatedAt} /></p>
         <p className="chart-subtitle">Weekly rates apply to the whole balance at the highest floor reached, prorated at login. Balances below the first floor pay no balance tax.</p>
         <div className="table-wrap"><table className="data-table tax-rates-table"><thead><tr><th>Balance floor</th><th className="amount">Weekly rate</th></tr></thead>
           <tbody>{rates.balanceTax.brackets.map(row => <tr key={row.floor}><td>{fmtAmtFull(row.floor)} and above</td><td className="amount">{percent(row.weeklyRate)}</td></tr>)}</tbody>
@@ -67,7 +68,7 @@ export default async function TaxationPage({ searchParams }: {
       </> : <p>Live personal balance-tax rates are currently unavailable.</p>}
       <h3>Source / income tax</h3>
       {rates.sourceIncomeTax ? <>
-        <p>{rates.sourceIncomeTax.enabled ? 'Enabled' : 'Disabled'} · Published {fmtTs(rates.sourceIncomeTax.updatedAt)}</p>
+        <p>{rates.sourceIncomeTax.enabled ? 'Enabled' : 'Disabled'} · Published <LocalTimestamp value={rates.sourceIncomeTax.updatedAt} /></p>
         <p>Default rate: {percent(rates.sourceIncomeTax.defaultRate)}. Applies to sources without an override when enabled.</p>
         <div className="table-wrap"><table className="data-table tax-rates-table"><thead><tr><th>Income source</th><th className="amount">Rate override</th></tr></thead>
           <tbody>{!rates.sourceIncomeTax.pluginRates.length && <tr><td colSpan={2} className="empty">No source overrides.</td></tr>}

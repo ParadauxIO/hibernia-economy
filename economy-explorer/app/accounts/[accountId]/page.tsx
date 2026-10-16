@@ -11,7 +11,8 @@ import {
   getCounterparties,
   getAccountActivityCalendar,
 } from '@/lib/sql/ledger';
-import { accountLabel, fmtAmt, fmtAmtFull, fmtN, fmtTs, shortenUuid } from '@/lib/format';
+import { accountLabel, fmtAmt, fmtAmtFull, fmtN, shortenUuid } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { hasElevatedRead, canViewAccount } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
@@ -202,7 +203,7 @@ export default async function AccountDetailPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Created</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>{fmtTs(account.created_at)}</div>
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}><LocalTimestamp value={account.created_at} /></div>
           <div className="kpi-meta">{account.account_type.toLowerCase()} account</div>
         </div>
         <div className="kpi">
@@ -347,7 +348,7 @@ export default async function AccountDetailPage({
                     <td>
                       <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.memo ?? '—'}</span>
                     </td>
-                    <td className="ts">{fmtTs(p.settlement_time)}</td>
+                    <td className="ts"><LocalTimestamp value={p.settlement_time} /></td>
                     <td><Player name={p.initiator_name} uuid={p.initiator_uuid} /></td>
                     <td>
                       <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.plugin_system ?? '—'}</span>
