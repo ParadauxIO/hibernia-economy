@@ -3,11 +3,12 @@ package net.democracycraft.inttests.treasury;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
+import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Usernames;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,20 +18,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The route looks up an {@link net.democracycraft.treasury.api.ingest.IngestApi}
  * provider registered as a Bukkit service whose {@code supportedSources()}
  * contains the requested source name. TreasuryIngest is the only provider
- * normally registered (sources: {@code essentialsx}).
+ * normally registered (sources: {@code essentialsx}); it is not part of the
+ * integration stack, so the dispatch test uses DcDiag's stub provider.
  *
  * <p>This test class covers the two user-visible branches:
  * <ol>
  *   <li>Unknown source → {@code "No ingest plugin is registered for source '…'"}</li>
- *   <li>Known source dispatched → response begins with the
- *       {@code "Starting … ingest…"} prefix (the rest depends on EssentialsX
- *       userdata, which the dedicated {@code EssentialsXIngestTest} covers in
- *       depth — here we just prove dispatch reaches the provider).</li>
+ *   <li>Known source dispatched → {@code "Starting … ingest…"}, the provider runs,
+ *       and its report is rendered as {@code "Ingest complete — …"}.</li>
  * </ol>
  */
 class TreasuryAdminTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
+    /** Registered by {@code /diag ingeststub}; must never match a real provider's source. */
+    private static final String STUB_SOURCE = "dcdiagstub";
 
     @Test
     void adminIngestRejectsUnknownSource() {
@@ -62,23 +64,22 @@ class TreasuryAdminTest {
     }
 
     @Test
-    @Disabled("Needs the standalone TreasuryIngest plugin, which the integration stack does not install "
-            + "(same gate as EssentialsXIngestTest)")
-    void adminIngestDispatchesToRegisteredEssentialsxProvider() {
-        // TreasuryIngest registers an IngestApi for "essentialsx" — the
-        // command should reach the provider and emit the "Starting ingest"
-        // line before processing the (empty) userdata directory. Doesn't
-        // assert on the post-ingest summary; that's EssentialsXIngestTest's
-        // territory. Asserting that dispatch reaches the provider proves the
-        // happy-path lookup branch, which the unknown-source tests cannot.
+    void adminIngestDispatchesToARegisteredProvider() {
+        // TreasuryIngest (the real "essentialsx" provider) is a separate plugin the stack
+        // doesn't install, so DcDiag registers a stub IngestApi for a made-up source. That
+        // still proves the happy-path branch the unknown-source tests can't reach: provider
+        // lookup by lower-cased source → "Starting" → provider invoked → its IngestReport
+        // rendered in the completion line.
+        assertThat(RconClient.send("diag ingeststub " + STUB_SOURCE)).contains("ingeststub");
         String admin = Usernames.fresh("Idp");
         try (MockPlayer p = MockPlayer.connectLocal(admin)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
             Ops.run(admin, () -> {
                 p.drainMessages();
-                p.chatCommand("/treasury admin ingest essentialsx");
-                String r = p.awaitMessageContaining("Starting", TIMEOUT);
-                assertThat(r).containsIgnoringCase("essentialsx");
+                p.chatCommand("/treasury admin ingest " + STUB_SOURCE.toUpperCase(Locale.ROOT));
+                assertThat(p.awaitMessageContaining("Starting", TIMEOUT)).contains(STUB_SOURCE);
+                assertThat(p.awaitMessageContaining("Ingest complete", TIMEOUT))
+                        .contains("created=0").contains("scanned=0");
             });
         }
     }

@@ -169,6 +169,8 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doPerm(sender, args);
             case "asyncidle":
                 return doAsyncIdle(sender, args);
+            case "ingeststub":
+                return doIngestStub(sender, args);
             default:
                 sender.sendMessage("unknown subcommand: " + args[0]);
                 return true;
@@ -801,6 +803,51 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
             sender.sendMessage("asyncidle failed: " + t);
         }
         return true;
+    }
+
+    /** The stub provider, once registered — kept so a second call doesn't register twice. */
+    private Object ingestStub;
+
+    /**
+     * {@code /diag ingeststub <source>} → registers (once) a Treasury {@code IngestApi}
+     * provider for {@code source} that ingests nothing and reports {@code scanned=0}. It
+     * stands in for the standalone TreasuryIngest plugin (not part of this repo or the
+     * integration stack) so {@code /treasury admin ingest}'s dispatch-to-provider branch can
+     * be exercised. Built as a {@link java.lang.reflect.Proxy} over the interface loaded from
+     * Treasury's class loader, so DcDiag needs no compile-time Treasury dependency.
+     */
+    private boolean doIngestStub(CommandSender sender, String[] args) {
+        if (args.length != 2) { sender.sendMessage("usage: /diag ingeststub <source>"); return true; }
+        if (ingestStub != null) { sender.sendMessage("ingeststub already registered"); return true; }
+        String source = args[1].toLowerCase(Locale.ROOT);
+        try {
+            org.bukkit.plugin.Plugin treasury = Bukkit.getPluginManager().getPlugin("Treasury");
+            if (treasury == null) { sender.sendMessage("Treasury not loaded"); return true; }
+            ClassLoader cl = treasury.getClass().getClassLoader();
+            Class<?> apiType = cl.loadClass("io.paradaux.treasury.api.ingest.IngestApi");
+            Class<?> reportType = cl.loadClass("io.paradaux.treasury.api.ingest.IngestReport");
+            java.lang.reflect.Constructor<?> report = reportType.getConstructors()[0];
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(cl, new Class<?>[] {apiType}, (self, m, a) ->
+                    switch (m.getName()) {
+                        case "supportedSources" -> java.util.Set.of(source);
+                        case "ingest" -> report.newInstance(a[0], 0, 0, 0, 0, java.math.BigDecimal.ZERO, 0L);
+                        case "toString" -> "DcDiag ingest stub for " + source;
+                        case "hashCode" -> System.identityHashCode(self);
+                        case "equals" -> self == a[0];
+                        default -> throw new UnsupportedOperationException(m.getName());
+                    });
+            registerService(apiType, proxy);
+            ingestStub = proxy;
+            sender.sendMessage("ingeststub registered for " + source);
+        } catch (Throwable t) {
+            sender.sendMessage("ingeststub failed: " + t);
+        }
+        return true;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void registerService(Class<?> type, Object provider) {
+        Bukkit.getServicesManager().register((Class) type, provider, this, org.bukkit.plugin.ServicePriority.Lowest);
     }
 
     private static Object field(Object target, String name) throws ReflectiveOperationException {
