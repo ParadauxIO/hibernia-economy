@@ -247,6 +247,7 @@ CREATE TABLE `chestshop_shop` (
   `sell_price` decimal(19,2) DEFAULT NULL,
   `batch_qty` int(11) NOT NULL,
   `current_stock` int(11) DEFAULT NULL,
+  `estimated_capacity` int(11) DEFAULT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `stock_at` timestamp NULL DEFAULT NULL,
