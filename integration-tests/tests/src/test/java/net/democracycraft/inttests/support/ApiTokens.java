@@ -7,6 +7,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -143,6 +144,34 @@ public final class ApiTokens {
                 rs.getString("jwt_id"),
                 null,
                 rs.getBoolean("revoked"));
+    }
+
+    /**
+     * Creates a SERVICE (admin) key owned by {@code ownerUuid} and returns it with a valid
+     * token — the same two steps as {@code economy-explorer/scripts/mint-service-token.mjs}
+     * ({@code --create}, then a token for the new key id). The owner is recorded as the
+     * ledger initiator of admin transfers made with it.
+     */
+    public static IssuedKey mintServiceKey(UUID ownerUuid) {
+        String jti = UUID.randomUUID().toString();
+        try (Connection c = connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO api_keys (key_type, account_id, firm_id, owner_uuid_bin, jwt_id, issued_at, "
+                             + "expires_at, revoked) VALUES ('SERVICE', NULL, NULL, UNHEX(REPLACE(?, '-', '')), ?, "
+                             + "UTC_TIMESTAMP(), UTC_TIMESTAMP() + INTERVAL 1 DAY, 0)",
+                     Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, ownerUuid.toString());
+            ps.setString(2, jti);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (!keys.next()) throw new IllegalStateException("no key_id generated for the SERVICE key");
+                int keyId = keys.getInt(1);
+                String token = JwtForge.signService(keyId, jti, ownerUuid, Duration.ofHours(1));
+                return new IssuedKey(keyId, null, null, ownerUuid, jti, token, false);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /** Set revoked=1 directly (for testing the revoked-token rejection branch
