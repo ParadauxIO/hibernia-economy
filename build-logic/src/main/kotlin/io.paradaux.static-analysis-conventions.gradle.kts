@@ -158,14 +158,21 @@ if (ratchetRefExists) {
             // The root owns every build script (incl. build-logic and the separate
             // integration-tests build) and the repo's prose/config/SQL, so each
             // file is checked exactly once.
+            // Excludes go INTO the file tree (not targetExclude, which Spotless applies
+            // by subtracting a second tree) so Gradle prunes build/ and node_modules/
+            // instead of walking them: walking build/ races a parallel `clean` and fails.
             val excluded = listOf(
                 "**/build/**", "**/.gradle/**", "**/node_modules/**", "**/.next/**",
                 "hibernia-framework/**", "realty/**", "economy-explorer/**",
                 "server/**", "release/**", ".claude/**",
             )
             kotlinGradle {
-                target("**/*.gradle.kts")
-                targetExclude(excluded)
+                target(
+                    fileTree(rootDir) {
+                        include("**/*.gradle.kts")
+                        exclude(excluded)
+                    },
+                )
                 // intellij_idea rather than ktlint_official: measured against the
                 // existing scripts it rewrites 9 files (+73/-46) instead of 13
                 // (+288/-201) — it matches how the build files are already written.
@@ -173,8 +180,12 @@ if (ratchetRefExists) {
                     .editorConfigOverride(mapOf("ktlint_code_style" to "intellij_idea"))
             }
             format("misc") {
-                target("**/*.md", "**/*.yml", "**/*.yaml", "**/*.sql")
-                targetExclude(excluded)
+                target(
+                    fileTree(rootDir) {
+                        include("**/*.md", "**/*.yml", "**/*.yaml", "**/*.sql")
+                        exclude(excluded)
+                    },
+                )
                 trimTrailingWhitespace()
                 endWithNewline()
             }
