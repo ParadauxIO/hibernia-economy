@@ -35,18 +35,18 @@ dependencies {
     // Pinned MyBatis starter 4.0.1: verified compile+test-green against this module's
     // Spring Boot 4.1.0 GA target (global/dependencies/0003). A Spring-Boot-4-aligned
     // MyBatis starter bump should be evaluated when network/catalog access is available.
-    implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:4.0.1")
+    implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0")
 
     // Swagger / OpenAPI
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
 
     // Rate limiting — Bucket4j core + Caffeine (in-memory) and Lettuce
     // (Redis). Caffeine is the default; Redis kicks in when the
     // rate-limit.redis-host property is set (see RateLimitConfig).
-    implementation("com.bucket4j:bucket4j_jdk17-core:8.19.0")
-    implementation("com.bucket4j:bucket4j_jdk17-caffeine:8.19.0")
-    implementation("com.bucket4j:bucket4j_jdk17-redis-common:8.19.0")
-    implementation("com.bucket4j:bucket4j_jdk17-lettuce:8.19.0")
+    implementation("com.bucket4j:bucket4j_jdk17-core:8.21.0")
+    implementation("com.bucket4j:bucket4j_jdk17-caffeine:8.21.0")
+    implementation("com.bucket4j:bucket4j_jdk17-redis-common:8.21.0")
+    implementation("com.bucket4j:bucket4j_jdk17-lettuce:8.21.0")
     // Lettuce and Caffeine versions are both left to the Spring Boot BOM
     // (lettuce 7.x, caffeine 3.2.x). bucket4j_jdk17-lettuce declares lettuce 6.x
     // as a `provided` compile floor, but every lettuce symbol it actually calls
@@ -69,7 +69,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-jdbc-test")
     testImplementation("org.springframework.boot:spring-boot-starter-security-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
-    testImplementation("org.mybatis.spring.boot:mybatis-spring-boot-starter-test:4.0.1")
+    testImplementation("org.mybatis.spring.boot:mybatis-spring-boot-starter-test:4.1.0")
     // Embedded MariaDB for market read-side integration tests (real MariaDB SQL:
     // ON DUPLICATE KEY, DATE_FORMAT, INTERVAL — H2 can't stand in).
     testImplementation(libs.mariadb4j)
