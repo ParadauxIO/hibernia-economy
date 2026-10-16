@@ -9,6 +9,7 @@ import io.paradaux.treasury.mappers.ChestShopSalesReadMapper;
 import org.mybatis.guice.transactional.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -21,10 +22,19 @@ import java.util.List;
 public class SalesQueryApiImpl implements SalesQueryApi {
 
     private final ChestShopSalesReadMapper mapper;
+    private final Clock clock;
 
     @Inject
     public SalesQueryApiImpl(ChestShopSalesReadMapper mapper) {
+        // System default zone: the window bound is compared with the TIMESTAMP column as
+        // the DB session renders it, so it keeps the JVM-local wall time it always used.
+        this(mapper, Clock.systemDefaultZone());
+    }
+
+    /** Test seam: pins "now" so the windowDays lower bound is deterministic. */
+    SalesQueryApiImpl(ChestShopSalesReadMapper mapper, Clock clock) {
         this.mapper = mapper;
+        this.clock = clock;
     }
 
     @Override
@@ -81,8 +91,8 @@ public class SalesQueryApiImpl implements SalesQueryApi {
     }
 
     /** Absolute lower bound for the query window, or null for all-time. */
-    private static LocalDateTime since(SalesQuery query) {
+    private LocalDateTime since(SalesQuery query) {
         Integer days = query.getWindowDays();
-        return (days == null) ? null : LocalDateTime.now().minusDays(days);
+        return (days == null) ? null : LocalDateTime.now(clock).minusDays(days);
     }
 }
