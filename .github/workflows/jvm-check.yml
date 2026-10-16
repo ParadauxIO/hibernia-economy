@@ -68,6 +68,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Spotless ratchets against origin/develop (only files changed from it are
+          # format-checked); check fails loudly on CI if that ref is missing.
+          fetch-depth: 0
 
       - name: Set up JVM build
         uses: ./.github/actions/setup-jvm
@@ -125,5 +129,6 @@ jobs:
             **/build/reports/tests/
             **/build/reports/jacoco/
             **/build/test-results/
+            treasury-rest-api/build/openapi/
             !economy-explorer/**
           if-no-files-found: ignore

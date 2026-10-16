@@ -9,6 +9,8 @@ name: CI
 #   changes ──┬─ explorer (typecheck, lint, vitest; playwright if explorer changed)
 #             └─ integration (live Paper server suite, if JVM/schema/suite changed)
 #   jvm ── coverage (PR comment)
+#   mutation (PIT; incremental on PRs/pushes, full nightly — if JVM changed)
+#   api-contract (OpenAPI breaking-change diff, PRs only)
 #   migrations (guard, upgrade test, money invariants, kysely schema drift)
 #   ci-gate ◄── all of the above
 #
@@ -92,10 +94,11 @@ jobs:
       contents: read
       checks: write
 
-  # PR-only coverage comment for the two plugins with a coverage gate. The gate
-  # itself (95 % line, in-scope classes) is jacocoTestCoverageVerification in
-  # their build.gradle.kts and already ran in `jvm`; this only reports, so the
-  # overall threshold is 0 here and the 80 % changed-files mark is advisory.
+  # PR-only coverage comment for the two plugins with a coverage gate. The gates
+  # themselves (line + branch ratchets, in-scope classes) are
+  # jacocoTestCoverageVerification in their build.gradle.kts and already ran in
+  # `jvm`; this only reports, so the overall threshold is 0 here and the 80 %
+  # changed-files mark is advisory. Mutation score is the quality gate (below).
   coverage:
     name: Coverage comment
     needs: jvm
@@ -139,6 +142,111 @@ jobs:
           update-comment: true
           pass-emoji: ':white_check_mark:'
           fail-emoji: ':x:'
+
+  # PIT mutation testing for the money-critical modules (thresholds live in each
+  # module's `pitest {}` block). Too slow for `check`, so it is its own job:
+  # PRs and pushes restore the newest history file and only re-analyse what
+  # changed (seconds per module); the nightly run starts cold, so the score is
+  # recomputed from scratch at least daily. Treasury runs its DB ITs under PIT,
+  # hence the MariaDB service.
+  mutation:
+    name: Mutation testing
+    needs: changes
+    if: needs.changes.outputs.live == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci
+          MARIADB_DATABASE: treasury_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=20
+    env:
+      TREASURY_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_test
+      TREASURY_TEST_DB_USER: root
+      TREASURY_TEST_DB_PASS: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
+
+      # Saved under a per-commit key; restore-keys picks the newest one this ref
+      # can see (a PR sees its own and its base branch's). Skipped nightly.
+      - name: Restore PIT history
+        if: github.event_name != 'schedule'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: '*/build/pitest-history/'
+          key: pitest-${{ runner.os }}-${{ github.sha }}
+          restore-keys: pitest-${{ runner.os }}-
+
+      - name: gradle pitest
+        run: >-
+          sh ./gradlew --continue -Pci=true
+          :common:pitest :treasury:pitest :business:pitest
+          :treasury-api-plugin:pitest :chestshop:pitest
+
+      - name: Save PIT history
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: '*/build/pitest-history/'
+          key: pitest-${{ runner.os }}-${{ github.sha }}
+
+      - name: Upload PIT reports
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pitest-reports
+          path: '*/build/reports/pitest/'
+          if-no-files-found: ignore
+
+  # treasury-rest-api/openapi/openapi.json is kept equal to what the app serves by
+  # OpenApiSnapshotIT (in `jvm`), so diffing the committed files is enough — no
+  # app boot here. Fails on breaking changes unless the PR carries the
+  # api-breaking-change label; skipped until the base branch has a spec.
+  api-contract:
+    name: REST API contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Extract the base branch spec
+        id: base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          mkdir -p build/oasdiff
+          if git show "origin/$BASE_REF:treasury-rest-api/openapi/openapi.json" >build/oasdiff/base.json 2>/dev/null; then
+            echo "present=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "origin/$BASE_REF has no committed OpenAPI spec yet — nothing to diff."
+            echo "present=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail on breaking API changes
+        if: steps.base.outputs.present == 'true' && !contains(github.event.pull_request.labels.*.name, 'api-breaking-change')
+        uses: oasdiff/oasdiff-action/breaking@b9325c9e0a27ab65b0da3b766522cedec6be81dc # v0.1.18
+        with:
+          base: build/oasdiff/base.json
+          revision: treasury-rest-api/openapi/openapi.json
+          fail-on: ERR
+          review: false
 
   explorer:
     name: Explorer
@@ -248,7 +356,7 @@ jobs:
   # Boots a real Paper server with the plugins built from this commit, a migrated
   # MariaDB and the REST API, then runs the mock-client suite in
   # integration-tests/ against it. ops/integration/run.sh is the whole
-  # environment — the same script runs locally. ~15 minutes.
+  # environment — the same script runs locally. ~6 minutes.
   integration:
     name: Integration (live server)
     needs: changes
@@ -300,6 +408,7 @@ jobs:
           path: |
             build/integration/*.log
             integration-tests/tests/build/reports/tests/
+            integration-tests/tests/build/reports/test-timings.txt
             integration-tests/tests/build/test-results/
           if-no-files-found: ignore
 
@@ -307,7 +416,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [ changes, jvm, coverage, explorer, migrations, integration ]
+    needs: [ changes, jvm, coverage, mutation, api-contract, explorer, migrations, integration ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
