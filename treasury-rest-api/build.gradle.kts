@@ -94,6 +94,18 @@ tasks.named<Copy>("processTestResources") {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    // OpenApiSnapshotIT compares the runtime /v3/api-docs against the committed
+    // openapi/openapi.json. Absolute paths so IDE and Gradle runs agree, and the
+    // snapshot is a declared input so editing it re-runs the test instead of
+    // reporting a stale UP-TO-DATE pass.
+    val snapshot = layout.projectDirectory.file("openapi/openapi.json")
+    systemProperty("openapi.snapshot", snapshot.asFile.path)
+    systemProperty("openapi.actual", layout.buildDirectory.file("openapi/openapi.json").get().asFile.path)
+    inputs.files(snapshot).withPropertyName("openApiSnapshot").withPathSensitivity(PathSensitivity.RELATIVE)
+    // `-Dopenapi.update=true` on the Gradle command line rewrites the snapshot. The
+    // forked test JVM doesn't inherit the build's -D flags, so forward it explicitly.
+    providers.systemProperty("openapi.update").orNull?.let { systemProperty("openapi.update", it) }
 }
 
 // ADT-50: the money service had no coverage gate. Report on every test run and
