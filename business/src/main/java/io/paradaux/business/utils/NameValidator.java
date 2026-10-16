@@ -1,5 +1,7 @@
 package io.paradaux.business.utils;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -36,6 +38,21 @@ public final class NameValidator {
 
     public static boolean isValidFirmName(String s) {
         return s != null && FIRM_NAME.matcher(s).matches();
+    }
+
+    /**
+     * Literal substring matching, ignoring case and firm-name separators. This
+     * also catches a blocked term embedded in a longer name or split by spaces.
+     * Empty/separator-only entries are ignored rather than rejecting every name.
+     */
+    public static boolean containsBlockedTerm(String name, List<String> blockedTerms) {
+        String normalizedName = normalizeFilterText(name);
+        return blockedTerms.stream().map(NameValidator::normalizeFilterText)
+                .filter(term -> !term.isEmpty()).anyMatch(normalizedName::contains);
+    }
+
+    private static String normalizeFilterText(String text) {
+        return text.toLowerCase(Locale.ROOT).replaceAll("[ _.-]", "");
     }
 
     public static boolean isValidAccountName(String s) {

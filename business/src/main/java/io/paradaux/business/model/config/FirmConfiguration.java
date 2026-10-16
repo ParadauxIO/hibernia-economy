@@ -4,6 +4,8 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
 
+import java.util.List;
+
 /**
  * General firm settings.
  *
@@ -27,6 +29,7 @@ public class FirmConfiguration {
     private int maxSalesExportDays;
     private boolean salesNotifyDefault;
     private int salesNotifyFlushSeconds;
+    private List<String> blockedNameTerms;
 
     @Inject
     public FirmConfiguration(Business plugin) {
@@ -43,6 +46,7 @@ public class FirmConfiguration {
     }
 
     private void load() {
+        this.blockedNameTerms = List.copyOf(plugin.getConfig().getStringList("firm.name-filter.blocked-terms"));
         // Max firms a single player may own (be proprietor of). 0 or below = unlimited.
         this.ownedFirmLimit = plugin.getConfig().getInt("firm.owned-limit", DEFAULT_OWNED_FIRM_LIMIT);
         plugin.getLogger().info(ownedFirmLimit > 0
@@ -73,6 +77,11 @@ public class FirmConfiguration {
     /** Maximum number of firms a player may own; {@code <= 0} means unlimited. */
     public int getOwnedFirmLimit() {
         return ownedFirmLimit;
+    }
+
+    /** Literal terms rejected in new firm names; refreshed by configuration reload. */
+    public List<String> getBlockedNameTerms() {
+        return blockedNameTerms;
     }
 
     /** Whether a finite ownership limit is enforced. */

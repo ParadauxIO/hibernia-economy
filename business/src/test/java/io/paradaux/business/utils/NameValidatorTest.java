@@ -1,10 +1,28 @@
 package io.paradaux.business.utils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class NameValidatorTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Banned", "BANNED Trading", "Ban.n-ed", "B a n n e d", "ShopBannedCo", "Ban_ned"})
+    void blocksLiteralTermsIgnoringCaseAndSeparators(String name) {
+        assertThat(NameValidator.containsBlockedTerm(name, List.of("banned"))).isTrue();
+    }
+
+    @Test
+    void handlesPhrasesAndEmptyListsWithoutRegexInterpretation() {
+        assertThat(NameValidator.containsBlockedTerm("Bad_Phrase Inc", List.of("bad phrase"))).isTrue();
+        assertThat(NameValidator.containsBlockedTerm("Acme", List.of())).isFalse();
+        assertThat(NameValidator.containsBlockedTerm("Acme", List.of("", " ._-", "a.*"))).isFalse();
+        assertThat(NameValidator.containsBlockedTerm("Acme", List.of("banned"))).isFalse();
+    }
 
     @Test
     void firmName_acceptsCommonCases() {

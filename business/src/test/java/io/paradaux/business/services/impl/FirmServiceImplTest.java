@@ -86,6 +86,28 @@ class FirmServiceImplTest {
     }
 
     @Test
+    void createFirm_blockedNameRejectsBeforeAnySideEffects() {
+        when(firmConfig.getBlockedNameTerms()).thenReturn(List.of("banned"));
+        assertThatThrownBy(() -> svc.createFirm("B.a.n.n.e.d Inc", UUID.randomUUID()))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("blocked word or phrase");
+        org.mockito.Mockito.verifyNoInteractions(firms, treasury, accounts, roles, requests);
+    }
+
+    @Test
+    void renameFirm_blockedNameLeavesExistingFirmUntouched() {
+        Firm firm = new Firm();
+        firm.setFirmId(1);
+        firm.setDisplayName("Acme");
+        when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(firmConfig.getBlockedNameTerms()).thenReturn(List.of("banned"));
+        assertThatThrownBy(() -> svc.renameFirm("Acme", "BANNED Inc"))
+                .isInstanceOf(BadCommandException.class).hasMessageContaining("blocked word or phrase");
+        assertThat(firm.getDisplayName()).isEqualTo("Acme");
+        verify(firms, never()).updateFirm(any());
+        org.mockito.Mockito.verifyNoInteractions(treasury, accounts, roles, requests);
+    }
+
+    @Test
     void createFirm_assignsTreasuryAccount_andPersistsDefaultRoles() {
         UUID actor = UUID.randomUUID();
         stubOfflinePlayer(actor, "Alice");

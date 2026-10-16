@@ -17,6 +17,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class FirmConfigurationTest {
 
+    @Test
+    void blockedTermsDefaultToEmptyAndReloadFromConfig() {
+        FirmConfiguration config = new FirmConfiguration(plugin);
+        assertThat(config.getBlockedNameTerms()).isEmpty();
+        when(cfg.getStringList("firm.name-filter.blocked-terms")).thenReturn(java.util.List.of("blocked phrase"));
+        config.reload();
+        assertThat(config.getBlockedNameTerms()).containsExactly("blocked phrase");
+        when(cfg.getStringList("firm.name-filter.blocked-terms")).thenReturn(java.util.List.of());
+        config.reload();
+        assertThat(config.getBlockedNameTerms()).isEmpty();
+    }
+
     @Mock Business plugin;
     @Mock FileConfiguration cfg;
 
