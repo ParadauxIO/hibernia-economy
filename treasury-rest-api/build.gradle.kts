@@ -73,7 +73,23 @@ dependencies {
     // Embedded MariaDB for market read-side integration tests (real MariaDB SQL:
     // ON DUPLICATE KEY, DATE_FORMAT, INTERVAL — H2 can't stand in).
     testImplementation(libs.mariadb4j)
+    // The IT harness builds its schema by running the authoritative economy-flyway
+    // migrations (staged onto the test classpath below) instead of a hand-written
+    // stand-in, so tests see the real FKs, NOT NULLs and the trg_postings_* balance
+    // triggers — same approach as Treasury (PAR-239) and Business (PAR-242).
+    // Plain flyway-core, not spring-boot-flyway: no auto-configuration, the harness
+    // migrates exactly once per JVM before the first Spring context boots.
+    testImplementation(libs.flyway.core)
+    testImplementation(libs.flyway.mysql)
     testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+// Stage the economy-flyway migrations onto the test classpath (under db/migration)
+// so EmbeddedMariaDb can run them with Flyway (classpath:db/migration).
+tasks.named<Copy>("processTestResources") {
+    from(project(":economy-flyway").file("src/main/resources/db/migration")) {
+        into("db/migration")
+    }
 }
 
 tasks.withType<Test> {

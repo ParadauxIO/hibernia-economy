@@ -165,6 +165,7 @@ class ChestShopServiceIT extends EmbeddedDbIT {
     @Test
     void listItems_aggregatesByItemKey_orderedByTradeCount() {
         // dirt: 2 sales (qty 5 @ 10, qty 3 @ 6) ; diamond: 1 sale
+        insertFirm(7, "Acme"); // chestshop_sale.shop_firm_id is an FK to firm (V20)
         insertSale("BUY", CUST, "PERSONAL", null, SELLER, false, "DIRT", "minecraft:dirt", "Dirt", 5, "50.00", now());
         insertSale("BUY", CUST, "PERSONAL", null, SELLER, false, "DIRT", "minecraft:dirt", "Dirt", 3, "18.00", now());
         insertSale("BUY", CUST, "BUSINESS", 7, null, false, "DIAMOND", "minecraft:diamond", "Diamond", 1, "100.00", now());

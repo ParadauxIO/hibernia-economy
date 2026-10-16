@@ -44,32 +44,52 @@ public abstract class EmbeddedDbIT {
         EmbeddedMariaDb.truncateAll();
     }
 
-    // ── seed: economy stand-ins ─────────────────────────────────────────────────
+    // ── seed: economy core ──────────────────────────────────────────────────────
 
+    /**
+     * Stable synthetic owner for an account whose test doesn't care who owns it.
+     * {@code accounts.owner_uuid_bin} is NOT NULL in the real schema (the old stand-in
+     * let tests seed NULL, which production can never hold), and PERSONAL rows carry a
+     * one-per-owner unique key — so the placeholder is unique per account and lives in
+     * a prefix no test player UUID uses.
+     */
+    protected static UUID placeholderOwner(int accountId) {
+        return new UUID(0x5EED_0000_0000_0000L, accountId);
+    }
+
+    /** Stable synthetic proprietor for a firm seeded without one ({@code firm.proprietor_uuid_bin} is NOT NULL). */
+    protected static UUID placeholderProprietor(int firmId) {
+        return new UUID(0x5EED_F12A_0000_0000L, firmId);
+    }
+
+    /** Seed an account; a {@code null} owner gets {@link #placeholderOwner(int)}. */
     protected void insertAccount(int accountId, String type, UUID ownerUuid, String displayName) {
+        UUID owner = ownerUuid != null ? ownerUuid : placeholderOwner(accountId);
         exec("INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name) VALUES (?,?,?,?)",
                 ps -> {
                     ps.setInt(1, accountId);
                     ps.setString(2, type);
-                    setUuid(ps, 3, ownerUuid);
+                    setUuid(ps, 3, owner);
                     ps.setString(4, displayName);
                 });
     }
 
+    /** Seed a firm with a {@link #placeholderProprietor(int)} and no default account. */
     protected void insertFirm(int firmId, String displayName) {
-        exec("INSERT INTO firm (firm_id, display_name) VALUES (?,?)", ps -> {
-            ps.setInt(1, firmId);
-            ps.setString(2, displayName);
-        });
+        insertFirm(firmId, displayName, null, null);
     }
 
-    /** Seed a firm with a proprietor (and optional default account) for admin firm tests. */
+    /**
+     * Seed a firm with a proprietor (and optional default account) for admin firm tests.
+     * A {@code null} proprietor gets {@link #placeholderProprietor(int)}.
+     */
     protected void insertFirm(int firmId, String displayName, UUID proprietorUuid, Integer defaultAccountId) {
+        UUID proprietor = proprietorUuid != null ? proprietorUuid : placeholderProprietor(firmId);
         exec("INSERT INTO firm (firm_id, display_name, proprietor_uuid_bin, default_account_id) VALUES (?,?,?,?)",
                 ps -> {
                     ps.setInt(1, firmId);
                     ps.setString(2, displayName);
-                    setUuid(ps, 3, proprietorUuid);
+                    setUuid(ps, 3, proprietor);
                     if (defaultAccountId == null) ps.setNull(4, Types.INTEGER); else ps.setInt(4, defaultAccountId);
                 });
     }
@@ -119,7 +139,12 @@ public abstract class EmbeddedDbIT {
         });
     }
 
-    /** Seed a materialised balance row (transfers lock account_balances_mat FOR UPDATE). */
+    /**
+     * Seed a materialised balance row (transfers lock account_balances_mat FOR UPDATE).
+     * This stands in for the account's prior ledger history without writing it: the
+     * {@code trg_postings_*} triggers then apply every posting the test makes on top,
+     * so {@link #matBalance} = seeded balance + {@link #sumPostings}.
+     */
     protected void seedBalance(int accountId, String balance) {
         exec("INSERT INTO account_balances_mat (account_id, balance, version) VALUES (?,?,0)", ps -> {
             ps.setInt(1, accountId);
@@ -181,14 +206,24 @@ public abstract class EmbeddedDbIT {
         });
     }
 
+    /**
+     * Seed an employment row. A departed employee ({@code left}) is recorded as having
+     * left voluntarily: firm_employee's CHECK requires {@code removed_by_uuid_bin} to be
+     * set exactly when {@code left_at} is.
+     */
     protected void insertEmployee(int firmId, UUID player, int roleId, boolean left) {
-        exec("INSERT INTO firm_employee (firm_id, player_uuid_bin, role_id, joined_at, left_at) "
-                + "VALUES (?,?,?, CURRENT_TIMESTAMP, ?)", ps -> {
+        exec("INSERT INTO firm_employee (firm_id, player_uuid_bin, role_id, joined_at, left_at, removed_by_uuid_bin) "
+                + "VALUES (?,?,?, CURRENT_TIMESTAMP, ?, ?)", ps -> {
             ps.setInt(1, firmId);
             ps.setBytes(2, EmbeddedMariaDb.uuidBytes(player));
             ps.setInt(3, roleId);
-            if (left) ps.setTimestamp(4, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
-            else ps.setNull(4, Types.TIMESTAMP);
+            if (left) {
+                ps.setTimestamp(4, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
+                ps.setBytes(5, EmbeddedMariaDb.uuidBytes(player));
+            } else {
+                ps.setNull(4, Types.TIMESTAMP);
+                ps.setNull(5, Types.BINARY);
+            }
         });
     }
 
@@ -397,6 +432,21 @@ public abstract class EmbeddedDbIT {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT COALESCE(SUM(amount), 0) FROM ledger_postings WHERE account_id = ?")) {
+            ps.setInt(1, accountId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getBigDecimal(1);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** The trigger-maintained balance in {@code account_balances_mat} (0 if no row). */
+    protected java.math.BigDecimal matBalance(int accountId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT COALESCE((SELECT balance FROM account_balances_mat WHERE account_id = ?), 0)")) {
             ps.setInt(1, accountId);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
