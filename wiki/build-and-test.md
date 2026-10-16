@@ -126,11 +126,17 @@ Things worth knowing if you touch it:
 ## Testing
 
 ```bash
+./gradlew check                # everything CI gates on, all projects
 ./gradlew test                 # all tests, all projects
 ./gradlew :treasury:test       # one project
 ./gradlew test -PskipIT        # fast loop: unit tests only (Treasury & Business)
 ```
 
+- **`check` is the CI contract.** CI runs `./gradlew build` (every project's
+  `check` plus `assemble`), so anything wired into a project's `check` gates
+  merges with no workflow change. See [ci-cd.md](ci-cd.md#the-ci-pipeline-ciyml).
+- The **build cache** is enabled in `gradle.properties`; `--no-build-cache` forces
+  a task to re-run when you suspect a stale cached result.
 - **Treasury & Business** enforce a **≥ 95 % line coverage** gate on their in-scope
   set (`jacocoTestCoverageVerification`, wired into `check`). Bukkit/I-O glue is
   excluded from the in-scope set.
@@ -138,9 +144,12 @@ Things worth knowing if you touch it:
   MariaDB**:
   - **Locally:** an embedded MariaDB is unpacked and run by **MariaDB4j** — no
     Docker needed. `-PskipIT` skips these for a fast unit-only loop.
-  - **In CI:** the workflows start a **MariaDB service container** and point tests
-    at it via `TREASURY_TEST_JDBC_URL` / `BUSINESS_TEST_JDBC_URL`, bypassing
+  - **In CI:** the `JVM` job starts a **MariaDB 10.11 service container** and
+    points each suite at its own database via `TREASURY_TEST_JDBC_URL`,
+    `BUSINESS_TEST_JDBC_URL`, `TREASURYAPI_TEST_JDBC_URL` and
+    `TREASURY_REST_TEST_JDBC_URL` (plus `_DB_USER` / `_DB_PASS`), bypassing
     MariaDB4j (whose bundled binary needs system libs CI runners don't ship).
+    Set the same variables to run against a local MariaDB.
 
 > **Heads-up (Windows):** MariaDB4j can be flaky under heavy local build load —
 > `mysqld` installs and initializes but occasionally times out reaching
@@ -183,8 +192,9 @@ runs the tests and tears everything down. Work files and logs go to
 - **Iterating:** `IT_SKIP_BUILD=1` reuses the jars from the last run;
   `IT_GRADLE_ARGS` passes extra arguments to the plugin build (for example
   `-PuseMavenLocal` to test against a locally published hibernia-framework).
-- **In CI:** the **Integration Tests (live server)** workflow runs the same script
-  on pull requests that touch a plugin, the REST API, the migrations or the suite.
+- **In CI:** the `Integration (live server)` job in `ci.yml` runs the same script
+  on every push to `develop`/`main`, nightly, and on pull requests that touch a
+  plugin, the REST API, `common`, the migrations, the build files or the suite.
 
 ## The web app (`economy-explorer`)
 
@@ -212,7 +222,8 @@ npm run test:e2e                    # seeds the DB, builds + starts the app, run
 
 `test:e2e` refuses a `DB_NAME` that doesn't contain `test`. Set `E2E_BASE_URL` to
 run only the public specs against an instance that is already running; nothing is
-seeded or started in that mode. CI runs both suites in **Economy Explorer · CI**.
+seeded or started in that mode. CI runs both suites in the `Explorer` job of `ci.yml`
+(e2e only when the explorer changed, on PRs).
 
 ## Adding a new module
 

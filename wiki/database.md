@@ -11,6 +11,11 @@ API, the explorer — points at the same MariaDB and agrees on that schema.
 - **All** schema changes are new migrations. Don't hand-edit a live schema, and
   don't treat the `schema.sql` snapshots that exist inside other projects as
   authoritative — those are derived test fixtures or stale copies.
+- A merged `V<n>` script is never edited, renamed or deleted, and a new one takes
+  the next free version. CI enforces both
+  ([`check-migrations.mjs`](../economy-flyway/scripts/check-migrations.mjs)) and
+  upgrade-tests every change from the previous schema (see
+  [ci-cd.md](ci-cd.md#migration-safety)).
 - Flyway runs with `mysql-connector-j` on its classpath (wire-compatible with
   MariaDB).
 
@@ -48,7 +53,7 @@ The workflows live at the repo root under `.github/workflows/` (see
 
 | Workflow | What it does |
 |---|---|
-| `economy-flyway-info` | Read-only `flywayInfo` + `flywayValidate` against a chosen target. Run any time to preview what's pending. |
+| `economy-flyway-info` | Read-only `flywayInfo` + `flywayValidate` against a chosen target. Run any time to preview what's pending; validation ignores pending migrations and fails on checksum drift or a missing applied script. |
 | `economy-flyway-migrate` | Applies migrations to a target. Requires typing the target name to confirm; supports a `baseline` flag for a pre-existing DB. |
 | `economy-flyway-staging-clean` | Wipes the **staging** schema for reproducible dry runs. Cannot target production. |
 
