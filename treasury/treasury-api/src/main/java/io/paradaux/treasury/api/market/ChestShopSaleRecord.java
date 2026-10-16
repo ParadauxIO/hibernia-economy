@@ -27,7 +27,7 @@ public record ChestShopSaleRecord(
         String itemKey,
         String itemName,
         boolean itemCustom,
-        String itemData,            // base64 ItemStack; nullable
+        String itemData,            // Bukkit YAML ItemStack under the "item" key; nullable
         // price
         int quantity,
         BigDecimal unitPrice,

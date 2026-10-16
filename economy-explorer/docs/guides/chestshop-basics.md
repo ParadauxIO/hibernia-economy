@@ -136,3 +136,8 @@ instead, see **[ChestShops for your firm](/docs/guides/chestshop-business)**.
 
 - Route sales to a business: **[ChestShops for your firm](/docs/guides/chestshop-business)**.
 - Every ChestShop command and the full sign format: the **[ChestShop reference](/docs/reference/chestshop)**.
+
+The `/find` results dialog shows each shop's item preview above the selection
+buttons, including stored names, enchantments and other item details. Older or
+incomplete shop records fall back to the basic material icon; an unreadable icon
+does not prevent selecting the shop. Searches remain scoped to your current world.

@@ -217,7 +217,6 @@ class PreviewServiceImplTest {
     void renderShop_skipsWhenItemUnresolvable() {
         ShopResult shop = mock(ShopResult.class);
         when(shop.hologram()).thenReturn(true);
-        when(shop.itemCustom()).thenReturn(false);
         when(shop.material()).thenReturn("NOT_A_MATERIAL"); // toItemStack -> null
         preview.render(shop);
         verify(world, never()).spawn(any(Location.class), any(), any(Consumer.class));
@@ -227,7 +226,6 @@ class PreviewServiceImplTest {
     void renderShop_rendersResolvedItem() {
         ShopResult shop = mock(ShopResult.class);
         when(shop.hologram()).thenReturn(true);
-        when(shop.itemCustom()).thenReturn(false);
         when(shop.material()).thenReturn("DIAMOND");
         when(shop.world()).thenReturn("world");
         when(shop.signX()).thenReturn(16);
@@ -432,7 +430,6 @@ class PreviewServiceImplTest {
     @Test
     void toItemStack_customWithValidData_returnsStoredItem() {
         ShopResult shop = mock(ShopResult.class);
-        when(shop.itemCustom()).thenReturn(true);
         when(shop.itemData()).thenReturn(yamlFor(new ItemStack(Material.DIAMOND_SWORD)));
         ItemStack out = PreviewServiceImpl.toItemStack(shop);
         assertThat(out).isNotNull();
@@ -442,7 +439,6 @@ class PreviewServiceImplTest {
     @Test
     void toItemStack_customButDataHasNoItemKey_fallsBackToMaterial() {
         ShopResult shop = mock(ShopResult.class);
-        when(shop.itemCustom()).thenReturn(true);
         when(shop.itemData()).thenReturn("other: 1"); // loads, but no "item" key -> null
         when(shop.material()).thenReturn("STONE");
         assertThat(PreviewServiceImpl.toItemStack(shop).getType()).isEqualTo(Material.STONE);
@@ -451,7 +447,6 @@ class PreviewServiceImplTest {
     @Test
     void toItemStack_customButBrokenYaml_fallsBackToMaterial() {
         ShopResult shop = mock(ShopResult.class);
-        when(shop.itemCustom()).thenReturn(true);
         when(shop.itemData()).thenReturn("::: not : valid : yaml :::"); // loadFromString throws
         when(shop.material()).thenReturn("STONE");
         assertThat(PreviewServiceImpl.toItemStack(shop).getType()).isEqualTo(Material.STONE);
@@ -460,7 +455,6 @@ class PreviewServiceImplTest {
     @Test
     void toItemStack_customButNullData_usesMaterial() {
         ShopResult shop = mock(ShopResult.class);
-        when(shop.itemCustom()).thenReturn(true);
         when(shop.itemData()).thenReturn(null);
         when(shop.material()).thenReturn("STONE");
         assertThat(PreviewServiceImpl.toItemStack(shop).getType()).isEqualTo(Material.STONE);
@@ -469,7 +463,6 @@ class PreviewServiceImplTest {
     @Test
     void toItemStack_vanilla_usesMaterial() {
         ShopResult shop = mock(ShopResult.class);
-        when(shop.itemCustom()).thenReturn(false);
         when(shop.material()).thenReturn("STONE");
         assertThat(PreviewServiceImpl.toItemStack(shop).getType()).isEqualTo(Material.STONE);
     }
@@ -477,7 +470,6 @@ class PreviewServiceImplTest {
     @Test
     void toItemStack_invalidMaterial_returnsNull() {
         ShopResult shop = mock(ShopResult.class);
-        when(shop.itemCustom()).thenReturn(false);
         when(shop.material()).thenReturn("NOPE");
         assertThat(PreviewServiceImpl.toItemStack(shop)).isNull();
     }

@@ -1,5 +1,6 @@
 package io.paradaux.chestshop.services.impl;
 
+import io.paradaux.chestshop.model.ShopItem;
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.PreviewService;
 import com.google.inject.Inject;
@@ -8,9 +9,7 @@ import com.google.inject.Singleton;
 import io.paradaux.treasury.api.market.ShopResult;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
@@ -234,25 +233,9 @@ public class PreviewServiceImpl implements PreviewService {
         }
     }
 
-    /** Reconstruct the display item: the custom ItemStack if stored, else the base material. */
+    /** Reconstruct the display item: the ItemStack if stored, else the base material. */
     static ItemStack toItemStack(ShopResult shop) {
-        if (shop.itemCustom() && shop.itemData() != null) {
-            try {
-                YamlConfiguration yc = new YamlConfiguration();
-                yc.loadFromString(shop.itemData());
-                ItemStack item = yc.getItemStack("item");
-                if (item != null) {
-                    return item;
-                }
-            } catch (Exception ignored) {
-                // fall back to the base material below
-            }
-        }
-        try {
-            return new ItemStack(Material.valueOf(shop.material()));
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+        return ShopItem.decode(shop.material(), shop.itemData());
     }
 
     private static String chunkKey(String world, int chunkX, int chunkZ) {

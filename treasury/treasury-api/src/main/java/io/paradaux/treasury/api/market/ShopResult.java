@@ -34,7 +34,7 @@ public record ShopResult(
         String itemKey,
         String itemName,
         boolean itemCustom,
-        String itemData,          // base64 ItemStack when itemCustom; else null
+        String itemData,          // Bukkit YAML ItemStack under the "item" key when itemCustom; else null
         // pricing
         BigDecimal buyPrice,      // customer buys from shop; null if not offered
         BigDecimal sellPrice,     // customer sells to shop; null if not offered

@@ -549,6 +549,32 @@ class MarketServiceImplTest extends ServerTest {
     }
 
     @Test
+    void identity_vanillaMetadata_roundTripsWithoutCustomProvider() {
+        ItemStack sword = new ItemStack(Material.DIAMOND_SWORD);
+        org.bukkit.inventory.meta.Damageable damage = (org.bukkit.inventory.meta.Damageable) sword.getItemMeta();
+        damage.setDamage(42);
+        damage.displayName(Component.text("Keepsake"));
+        damage.addEnchant(org.bukkit.enchantments.Enchantment.SHARPNESS, 3, true);
+        sword.setItemMeta(damage);
+
+        ItemStack potion = new ItemStack(Material.POTION);
+        org.bukkit.inventory.meta.PotionMeta potionMeta = (org.bukkit.inventory.meta.PotionMeta) potion.getItemMeta();
+        potionMeta.setBasePotionType(org.bukkit.potion.PotionType.HEALING);
+        potion.setItemMeta(potionMeta);
+
+        for (ItemStack item : java.util.List.of(sword, potion)) {
+            String code = item.getType().name();
+            when(items.getName(item, 0)).thenReturn(code);
+            when(itemCodes.encode(item, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn(code);
+            ChestShopSaleRecord record = saleOf(item);
+            assertThat(record.itemCustom()).isTrue();
+            assertThat(record.itemData()).isNotBlank();
+            assertThat(io.paradaux.chestshop.model.ShopItem.decode(record.material(), record.itemData()))
+                    .isEqualTo(item);
+        }
+    }
+
+    @Test
     void identity_itemDataSerializationFailure_yieldsNullData() {
         ItemStack broken = mock(ItemStack.class);
         when(broken.getType()).thenReturn(Material.STONE);

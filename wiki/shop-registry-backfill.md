@@ -65,3 +65,29 @@ attempts; no shop rows change. No ledger balances or transactions are modified.
 scans retain one row/ID per location, explicitly refresh `last_seen`, set `stock_at`
 for measured stock and clear it for unknown/infinite stock. Owner flags survive
 refreshes of active rows; a revived tombstone gets new-shop defaults.
+
+## Item fidelity and world identity (PAR-171)
+
+Registry `item_data` is Bukkit YAML with an `item` key, not Base64. Plain vanilla
+items can be reconstructed from `material`; `item_name` is a search/display label,
+not a replacement ItemStack display name. Metadata-bearing vanilla items (including
+names, enchantments, damage and potions) are classified as custom by `hasItemMeta`
+and retain serialized data even without a custom-item provider. The capture policy
+therefore remains unchanged. Serialization failure still leaves NULL data; it is
+not a guarantee of exact reconstruction for damaged or incomplete historic rows.
+
+`/find` result bodies and floating previews use the same decoder: prefer stored
+YAML regardless of the custom flag, fall back to material for missing/invalid data,
+and omit the icon if neither is usable. Result selection remains available. Tests
+cover vanilla fallback, named/enchanted/damaged swords, potions and malformed rows.
+
+The world identity decision is **UUID alongside name**, already implemented by V25:
+`world_uuid BINARY(16)` is nullable for older callers/rows, captured from the live
+world and exposed through `ShopResult`. No duplicate migration is needed. Names
+remain the location unique key and `/find` filter/distance basis; UUID storage does
+not automatically reconcile a world rename. Before renaming, pause registry writes,
+back up the registry, reconcile old-name rows (including location collisions) and
+verify UUID/location sets before resuming. Resync alone can create new-name rows
+while leaving old-name rows behind. Unloaded worlds cannot be resolved by the
+legacy importer until loaded, even though their UUID remains stored. Cross-server
+world identity and automatic rename reconciliation remain outside this contract.
