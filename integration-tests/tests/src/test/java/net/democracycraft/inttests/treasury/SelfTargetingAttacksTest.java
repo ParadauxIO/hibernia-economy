@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -58,6 +59,7 @@ class SelfTargetingAttacksTest {
             p.drainMessages();
             p.chatCommand("/pay " + me + " 100");
             p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+            Barrier.settle();
 
             assertThat(Ledger.personalBalance(p.getUuid()).orElseThrow())
                     .as("self-pay must not change personal balance")
@@ -86,6 +88,7 @@ class SelfTargetingAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/gov account transfer " + acct + " " + acct + " 100 self-loop");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 assertThat(Ledger.governmentBalance(acct).orElseThrow())
                         .as("self-transfer between identical gov accounts must not change balance")
@@ -115,11 +118,13 @@ class SelfTargetingAttacksTest {
                 // baseline, otherwise beforePayout sees a stale balance.
                 a.chatCommand("/eco give " + admin + " 500");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 Ledger.waitForPersonalBalance(a.getUuid(),
                         startPersonal.add(new BigDecimal("500.00")), TIMEOUT);
 
                 a.chatCommand("/pay " + acct + " 500");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 Ledger.waitForPersonalBalance(a.getUuid(), startPersonal, TIMEOUT);
 
                 BigDecimal beforePayout = Ledger.personalBalance(a.getUuid()).orElseThrow();
@@ -128,6 +133,7 @@ class SelfTargetingAttacksTest {
                 a.drainMessages();
                 a.chatCommand("/gov payout " + acct + " " + admin + " 100 self-payout");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 // Personal balance up by exactly 100, gov down by exactly 100.
                 // Wait for the personal balance to land — both postings commit
@@ -198,6 +204,7 @@ class SelfTargetingAttacksTest {
                 p.drainMessages();
                 p.chatCommand("/business account transfer " + firm + " " + acctId + " " + acctId + " 100 self-loop");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 // Balance from BusinessLedger view — must remain 0 (fresh firm).
                 assertThat(Ledger.governmentBalance(firm + " Corporate Account").orElse(BigDecimal.ZERO))
@@ -225,6 +232,7 @@ class SelfTargetingAttacksTest {
                 p.drainMessages();
                 p.chatCommand("/business hire " + firm + " " + owner);
                 String reply = p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 // Should NOT succeed silently — message must communicate
                 // either "you can't do this to yourself" or "already
                 // employed".

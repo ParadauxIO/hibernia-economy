@@ -28,8 +28,7 @@ public class AccountController {
     private final TransactionService transactionService;
     private final AccountService accountService;
 
-    public AccountController(TransactionService transactionService,
-                             AccountService accountService) {
+    public AccountController(TransactionService transactionService, AccountService accountService) {
         this.transactionService = transactionService;
         this.accountService = accountService;
     }
@@ -42,8 +41,7 @@ public class AccountController {
     @GetMapping("/{accountId}/balance")
     @RateLimit(personalPerMinute = 120, businessPerMinute = 600)
     public ResponseEntity<AccountBalanceResponse> getBalance(
-            @AuthenticationPrincipal VerifiedToken verified,
-            @PathVariable long accountId) {
+            @AuthenticationPrincipal VerifiedToken verified, @PathVariable long accountId) {
 
         log.info("GET /accounts/{}/balance requested by keyId={}", accountId, verified.keyId());
 
@@ -67,8 +65,11 @@ public class AccountController {
 
         AccountByPlayerResponse response = accountService.resolvePlayerAccount(uuid, name);
 
-        log.info("GET /accounts/by-player resolved accountId={} (player={}) for keyId={}",
-                response.accountId(), response.playerUuid(), verified.keyId());
+        log.info(
+                "GET /accounts/by-player resolved accountId={} (player={}) for keyId={}",
+                response.accountId(),
+                response.playerUuid(),
+                verified.keyId());
 
         return ResponseEntity.ok(response);
     }
@@ -103,13 +104,23 @@ public class AccountController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
 
-        log.info("GET /accounts/{}/transactions requested by keyId={} ownerUuid={} | page={} limit={}",
-                accountId, verified.keyId(), verified.ownerUuid(), page, limit);
+        log.info(
+                "GET /accounts/{}/transactions requested by keyId={} ownerUuid={} | page={} limit={}",
+                accountId,
+                verified.keyId(),
+                verified.ownerUuid(),
+                page,
+                limit);
 
         TransactionsResponse response = transactionService.getTransactions(verified, accountId, page, limit);
 
-        log.info("Returning {} transactions for accountId={} (page {}/{}, totalItems={})",
-                response.items().size(), accountId, response.page(), response.totalPages(), response.totalItems());
+        log.info(
+                "Returning {} transactions for accountId={} (page {}/{}, totalItems={})",
+                response.items().size(),
+                accountId,
+                response.page(),
+                response.totalPages(),
+                response.totalItems());
 
         return ResponseEntity.ok(response);
     }
@@ -130,8 +141,12 @@ public class AccountController {
             @RequestParam(defaultValue = "0") long since,
             @RequestParam(defaultValue = "0") int limit) {
 
-        log.info("GET /accounts/{}/transactions/feed requested by keyId={} | since={} limit={}",
-                accountId, verified.keyId(), since, limit);
+        log.info(
+                "GET /accounts/{}/transactions/feed requested by keyId={} | since={} limit={}",
+                accountId,
+                verified.keyId(),
+                since,
+                limit);
 
         TransactionFeedResponse response = transactionService.getTransactionFeed(verified, accountId, since, limit);
         return ResponseEntity.ok(response);

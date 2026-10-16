@@ -40,7 +40,7 @@ class SelfTradeTest {
             RconClient.send("diag warmname " + owner);
 
             shop.clickBuy(o, owner);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click).
 
             // Money is conserved no matter how the interaction is interpreted.
             assertThat(Ledger.personalBalance(o.getUuid()).orElseThrow())

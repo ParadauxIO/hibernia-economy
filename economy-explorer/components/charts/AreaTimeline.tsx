@@ -1,5 +1,7 @@
 'use client';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
+import { useHydrated } from '@/components/useHydrated';
+import { useMediaQuery } from '@/components/useMediaQuery';
 import {
   Area, AreaChart, Bar, BarChart,
   CartesianGrid, Cell, Line, LineChart, Pie, PieChart,
@@ -19,8 +21,7 @@ const AXIS_TICK = { fontSize: 11, fill: 'var(--fg-muted)' };
  * chart with no layout shift.
  */
 function RC({ height, children, daily = false }: { height: number; children: ReactElement; daily?: boolean }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   return (
     <>
       {daily && <p className="chart-subtitle">Daily buckets in UTC.</p>}
@@ -38,9 +39,11 @@ interface VolumeTimelineProps {
 }
 
 export function VolumeTimeline({ data }: VolumeTimelineProps) {
-  const [metric, setMetric] = useState('both');
-  useEffect(() => { if (window.matchMedia('(max-width: 720px)').matches) setMetric('volume'); }, []);
-  if (!data || data.length === 0) {
+  // Phones default to volume only (two axes don't fit); an explicit choice wins.
+  const narrow = useMediaQuery('(max-width: 720px)');
+  const [chosen, setMetric] = useState<string | null>(null);
+  const metric = chosen ?? (narrow ? 'volume' : 'both');
+  if (data.length === 0) {
     return <EmptyChart>No data yet.</EmptyChart>;
   }
   const series = data.map((d) => ({ date: d.date, count: d.txn_count, volume: parseFloat(d.total_volume) }));
@@ -122,7 +125,7 @@ export function WealthDonut({ data }: DonutProps) {
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
             formatter={(value: number, _name, payload) => [
-              `${fmtAmtFull(value)} · ${fmtN((payload as { payload?: { accountCount?: number } })?.payload?.accountCount ?? 0)} accts`,
+              `${fmtAmtFull(value)} · ${fmtN((payload as { payload?: { accountCount?: number } }).payload?.accountCount ?? 0)} accts`,
               'Balance',
             ]}
           />

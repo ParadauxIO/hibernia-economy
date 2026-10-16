@@ -43,7 +43,6 @@ const config: NextConfig = {
   typedRoutes: false,
   // ESLint is wired up (`npm run lint`) but kept out of the production build so
   // a lint warning can't fail CI; run it separately in dev/PR.
-  eslint: { ignoreDuringBuilds: true },
 };
 
 export default config;

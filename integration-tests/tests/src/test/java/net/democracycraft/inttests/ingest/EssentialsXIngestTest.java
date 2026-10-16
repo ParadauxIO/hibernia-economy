@@ -1,9 +1,10 @@
 package net.democracycraft.inttests.ingest;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
-import net.democracycraft.inttests.support.RconClient;
+import net.democracycraft.inttests.support.Perms;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,14 +45,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       PERSONAL account now exists).</li>
  * </ul>
  *
- * <p><b>Disabled in the dev-server full-suite run:</b> EssentialsX is
- * removed from the dev server because its {@code PlayerInteractEvent}
- * listeners interfere with ChestShop sign clicks. These tests have been
- * manually verified against an EssentialsX-enabled server. Re-enable
- * by removing the {@link Disabled} annotation when EssentialsX is
- * re-installed in {@code server/plugins/}.
+ * <p><b>Disabled:</b> the code under test is not in the integration stack.
+ * {@code ops/integration/run.sh} installs only this repo's plugins, and the
+ * EssentialsX provider lives in the standalone TreasuryIngest plugin (a
+ * separate repository). The tests also plant files under a hardcoded
+ * dev-server path ({@link #USERDATA_DIR}) rather than the run's work dir.
+ * Treasury's side of the flow — provider lookup and dispatch — is covered by
+ * {@code TreasuryAdminTest.adminIngestDispatchesToARegisteredProvider}
+ * through DcDiag's stub provider. To re-enable: have run.sh fetch a pinned
+ * TreasuryIngest build and point {@link #USERDATA_DIR} at
+ * {@code $IT_WORK_DIR/server/plugins/Essentials/userdata}.
  */
-@Disabled("EssentialsX is removed from the dev server (conflicts with ChestShop); manually verified")
+@Disabled("Needs the standalone TreasuryIngest plugin, which is not in this repo and not installed by "
+        + "ops/integration/run.sh, plus a hardcoded dev-server userdata path. Follow-up ticket: install a "
+        + "pinned TreasuryIngest in the stack and re-enable. Dispatch is covered by TreasuryAdminTest.")
 class EssentialsXIngestTest {
 
     private static final Path USERDATA_DIR = Path.of(
@@ -95,14 +102,8 @@ class EssentialsXIngestTest {
         // player_login_times now contains the legacy timestamp so the next
         // real join's prorated balance tax measures from there, not from
         // the join itself.
-        long settleDeadline = System.nanoTime() + TIMEOUT.toNanos();
-        java.util.Optional<Long> recorded = java.util.Optional.empty();
-        while (System.nanoTime() < settleDeadline) {
-            recorded = Ledger.lastLoginEpoch(importedUuid);
-            if (recorded.isPresent()) break;
-            sleep(150);
-        }
-        assertThat(recorded).contains(loginEpochSeconds);
+        Await.untilEquals("last login epoch of " + importedUuid,
+                () -> Ledger.lastLoginEpoch(importedUuid).orElse(null), loginEpochSeconds, TIMEOUT);
 
         // The faucet absorbed the cost as overdraft (credit_limit = -1).
         BigDecimal faucetAfter = Ledger.governmentBalance("TreasuryIngest").orElse(BigDecimal.ZERO);
@@ -118,11 +119,11 @@ class EssentialsXIngestTest {
         // EssentialsX userdata file claiming a different amount. Ingest
         // must SKIP — never touch their live ledger state.
         String name = Usernames.fresh("Iexis");
-        try (MockPlayer p = MockPlayer.connectLocal(name)) {
-            Thread.sleep(2000);
-        }
         UUID activeUuid = offlineUuid(name);
-        BigDecimal balanceBefore = Ledger.waitForPersonalBalance(activeUuid, TIMEOUT);
+        BigDecimal balanceBefore;
+        try (MockPlayer p = MockPlayer.connectLocal(name)) {
+            balanceBefore = Ledger.waitForPersonalBalance(activeUuid, TIMEOUT);
+        }
         assertThat(balanceBefore).isGreaterThan(BigDecimal.ZERO);
 
         plantUserdata(activeUuid, name, new BigDecimal("99999.99"), 1_650_000_000_000L, false);
@@ -130,8 +131,7 @@ class EssentialsXIngestTest {
         BigDecimal faucetBefore = Ledger.governmentBalance("TreasuryIngest").orElse(BigDecimal.ZERO);
         runIngestAsAdmin();
 
-        // Confirm SKIP: balance unchanged after enough settle time.
-        sleep(2000);
+        // Confirm SKIP. runIngestAsAdmin returned on "Ingest complete", the handler's last act.
         assertThat(Ledger.personalBalance(activeUuid))
                 .as("existing PERSONAL accounts must not be touched by ingest")
                 .contains(balanceBefore);
@@ -151,9 +151,8 @@ class EssentialsXIngestTest {
         BigDecimal faucetAfterFirst = Ledger.governmentBalance("TreasuryIngest").orElse(BigDecimal.ZERO);
 
         // Second run: the PERSONAL account now exists, so the player must
-        // be SKIPPED. Faucet stays put.
+        // be SKIPPED. Faucet stays put. (runIngestAsAdmin returned on "Ingest complete".)
         runIngestAsAdmin();
-        sleep(2000);
         assertThat(Ledger.personalBalance(importedUuid))
                 .as("second ingest must not double-fund the player")
                 .contains(money);
@@ -165,15 +164,13 @@ class EssentialsXIngestTest {
     private void runIngestAsAdmin() {
         String adminName = Usernames.fresh("Iadm");
         try (MockPlayer p = MockPlayer.connectLocal(adminName)) {
-            Thread.sleep(2000);
+            Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
             Ops.run(adminName, () -> {
-                RconClient.send("lp user " + adminName + " permission set treasury.admin.ingest true");
+                Perms.grant(adminName, "treasury.admin.ingest");
                 p.chatCommand("/treasury admin ingest essentialsx");
                 p.awaitMessageContaining("Ingest complete", TIMEOUT);
                 p.drainMessages();
             });
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -214,12 +211,6 @@ class EssentialsXIngestTest {
             return new UUID(msb, lsb);
         } catch (Exception e) {
             throw new AssertionError(e);
-        }
-    }
-
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) {
-            Thread.currentThread().interrupt(); throw new AssertionError("interrupted", e);
         }
     }
 

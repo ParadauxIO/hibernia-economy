@@ -65,7 +65,8 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
   // upward; offset its x by the wrapper's scrollLeft to track the visible cell.
   return (
     <div className="activity-calendar" style={{ position: 'relative', maxWidth: '100%' }}>
-      <div ref={scrollRef} style={{ overflowX: 'auto', maxWidth: '100%' }}>
+      {/* Scrolls horizontally on narrow screens: focusable so keyboards can too. */}
+      <div ref={scrollRef} role="region" aria-label={label} tabIndex={0} className="scroll-region" style={{ overflowX: 'auto', maxWidth: '100%' }}>
         <svg width={width} height={height} role="img" aria-label={label} style={{ minWidth: width, display: 'block' }}>
           {days.map((d) => {
             const lv = level(d.count);

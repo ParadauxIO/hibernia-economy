@@ -17,6 +17,9 @@ plugins {
     alias(libs.plugins.shadow) apply false
     id("org.springframework.boot") version "4.1.0" apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
+    // Formatting for the repo-level files (every *.gradle.kts, md/yml/sql) that no
+    // JVM subproject owns; the JVM projects get it via io.paradaux.jvm-conventions.
+    id("io.paradaux.static-analysis-conventions")
     // NOTE: org.flywaydb.flyway is intentionally NOT centralized here. It must
     // load on the same buildscript classloader as the JDBC driver, so it's
     // declared with its version inside economy-flyway/build.gradle.kts.

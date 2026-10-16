@@ -1,25 +1,24 @@
 package io.paradaux.chestshop.listeners;
-import io.paradaux.chestshop.utils.SignText;
 
-import io.paradaux.chestshop.services.ShopBlockService;
+import static io.paradaux.chestshop.utils.Permissions.OTHER_NAME_DESTROY;
+
 import com.google.inject.Inject;
-import io.paradaux.chestshop.utils.BlockUtil;
-import io.paradaux.chestshop.utils.StringUtil;
 import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.model.CreatedShop;
+import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.ShopService;
 import io.paradaux.chestshop.services.SignBreakService;
 import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.utils.BlockUtil;
+import io.paradaux.chestshop.utils.SignText;
+import io.paradaux.chestshop.utils.StringUtil;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.SignChangeEvent;
-
-import static io.paradaux.chestshop.utils.Permissions.OTHER_NAME_DESTROY;
 
 /**
  * @author Acrobot
@@ -27,17 +26,19 @@ import static io.paradaux.chestshop.utils.Permissions.OTHER_NAME_DESTROY;
 public class SignCreateListener implements Listener {
 
     private final AccountService accounts;
-    private final ItemService items;
     private final ShopService shops;
     private final SignBreakService signBreak;
     private final SignService signService;
     private final ShopBlockService shopBlockService;
 
     @Inject
-    public SignCreateListener(AccountService accounts, ItemService items, ShopService shops, SignBreakService signBreak,
-                      SignService signService, ShopBlockService shopBlockService) {
+    public SignCreateListener(
+            AccountService accounts,
+            ShopService shops,
+            SignBreakService signBreak,
+            SignService signService,
+            ShopBlockService shopBlockService) {
         this.accounts = accounts;
-        this.items = items;
         this.shops = shops;
         this.signBreak = signBreak;
         this.signService = signService;
@@ -58,14 +59,22 @@ public class SignCreateListener implements Listener {
             // There was already a shop here, but the player does not have permission to change it
             event.setCancelled(true);
             sign.update();
-            ChestShop.logDebug("Shop sign creation at " + sign.getLocation() + " by " + event.getPlayer().getName() + " was cancelled as there already was a shop here and the player did not have permission to change it");
+            ChestShop.logDebug(
+                    "Shop sign creation at " + sign.getLocation() + " by "
+                            + event.getPlayer().getName()
+                            + " was cancelled as there already was a shop here and the player did not have permission to change it");
             return;
         }
 
-        if (signService.isValid(event.getLines()) && !accounts.canUseName(event.getPlayer(), OTHER_NAME_DESTROY, SignService.getOwner(event.getLines()))) {
+        if (signService.isValid(event.getLines())
+                && !accounts.canUseName(
+                        event.getPlayer(), OTHER_NAME_DESTROY, SignService.getOwner(event.getLines()))) {
             event.setCancelled(true);
             sign.update();
-            ChestShop.logDebug("Shop sign creation at " + sign.getLocation() + " by " + event.getPlayer().getName() + " was cancelled as they weren't able to create a shop for the account '" + SignService.getOwner(event.getLines()) + "'");
+            ChestShop.logDebug("Shop sign creation at " + sign.getLocation() + " by "
+                    + event.getPlayer().getName()
+                    + " was cancelled as they weren't able to create a shop for the account '"
+                    + SignService.getOwner(event.getLines()) + "'");
             return;
         }
 
@@ -84,7 +93,9 @@ public class SignCreateListener implements Listener {
         if (preEvent.getOutcome().shouldBreakSign()) {
             event.setCancelled(true);
             signBlock.breakNaturally();
-            ChestShop.logDebug("Shop sign creation at " + sign.getLocation() + " by " + event.getPlayer().getName() + " was cancelled (creation outcome: " + preEvent.getOutcome() + ") and the sign broken");
+            ChestShop.logDebug("Shop sign creation at " + sign.getLocation() + " by "
+                    + event.getPlayer().getName() + " was cancelled (creation outcome: " + preEvent.getOutcome()
+                    + ") and the sign broken");
             return;
         }
 
@@ -93,11 +104,18 @@ public class SignCreateListener implements Listener {
         }
 
         if (preEvent.isCancelled()) {
-            ChestShop.logDebug("Shop sign creation at " + sign.getLocation() + " by " + event.getPlayer().getName() + " was cancelled (creation outcome: " + preEvent.getOutcome() + ") and sign lines were set to " + String.join(", ", preEvent.getSignLines()));
+            ChestShop.logDebug("Shop sign creation at " + sign.getLocation() + " by "
+                    + event.getPlayer().getName() + " was cancelled (creation outcome: " + preEvent.getOutcome()
+                    + ") and sign lines were set to " + String.join(", ", preEvent.getSignLines()));
             return;
         }
 
-        CreatedShop postEvent = new CreatedShop(preEvent.getPlayer(), preEvent.getSign(), shopBlockService.findConnectedContainer(preEvent.getSign()), preEvent.getSignLines(), preEvent.getOwnerAccount());
+        CreatedShop postEvent = new CreatedShop(
+                preEvent.getPlayer(),
+                preEvent.getSign(),
+                shopBlockService.findConnectedContainer(preEvent.getSign()),
+                preEvent.getSignLines(),
+                preEvent.getOwnerAccount());
         shops.onCreated(postEvent);
     }
 }

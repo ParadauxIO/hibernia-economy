@@ -3,8 +3,8 @@ import type { Route } from 'next';
 import { shortenUuid, looksLikeUuid } from '@/lib/format';
 
 interface PlayerProps {
-  name?: string | null;
-  uuid?: string | null;
+  name?: string | null | undefined;
+  uuid?: string | null | undefined;
   /** When false, render plain text (e.g. inside a row that's already a link). */
   link?: boolean;
 }

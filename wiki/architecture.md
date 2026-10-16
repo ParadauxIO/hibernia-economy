@@ -106,7 +106,7 @@ Some integrations live outside Minecraft:
 - **Schema contract.** The shared schema is owned by `economy-flyway`. The
   explorer's full-schema kysely types are **generated from the migrated schema**
   into `economy-explorer/lib/db.generated.ts` (`npm run db:codegen`), and the
-  `economy-explorer-schema-drift` workflow fails any PR whose migrations leave
+  `Migrations` job in `ci.yml` fails any PR whose migrations leave
   that file stale (ADT-5). The queries themselves still use the hand-maintained
   `DB` registry in `lib/db.ts` (only the `explorer_*` tables) plus ad-hoc row
   interfaces for raw SQL, so the gate flags a rename/drop for review but does

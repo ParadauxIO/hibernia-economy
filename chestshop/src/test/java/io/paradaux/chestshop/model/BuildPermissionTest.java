@@ -1,16 +1,15 @@
 package io.paradaux.chestshop.model;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-
 /**
- * Covers the {@link BuildPermission} carrier: the nullable chest location, the allow/disallow
- * toggles (all overloads) and the default allowed state. The player/locations are pure
- * pass-through boundaries here, so they are mocked.
+ * The {@link BuildPermission} decision: allowed by default, and the allow/disallow toggles
+ * (all overloads). The player/locations are pure pass-through boundaries, so they are mocked.
  */
 class BuildPermissionTest {
 
@@ -19,19 +18,8 @@ class BuildPermissionTest {
     private final Location sign = mock(Location.class);
 
     @Test
-    void defaultsToAllowed_andExposesInputs() {
-        BuildPermission permission = new BuildPermission(player, chest, sign);
-
-        assertThat(permission.isAllowed()).isTrue();
-        assertThat(permission.getPlayer()).isSameAs(player);
-        assertThat(permission.getChest()).isSameAs(chest);
-        assertThat(permission.getSign()).isSameAs(sign);
-    }
-
-    @Test
-    void chestLocation_mayBeNull() {
-        BuildPermission permission = new BuildPermission(player, null, sign);
-        assertThat(permission.getChest()).isNull();
+    void defaultsToAllowed() {
+        assertThat(new BuildPermission(player, chest, sign).isAllowed()).isTrue();
     }
 
     @Test

@@ -27,7 +27,7 @@ function newSecret(): string {
 /** Asserts a signed-in, account-linked viewer and returns their Minecraft UUID. */
 function requireLinkedUuid(viewer: Viewer): string {
   requirePermission(viewer, 'webhooks.manage');
-  if (viewer.anon || !viewer.linked || !viewer.minecraftUuid) {
+  if (!viewer.linked || !viewer.minecraftUuid) {
     throw new ForbiddenError('Sign in and link your Minecraft account to manage webhooks.');
   }
   return viewer.minecraftUuid;

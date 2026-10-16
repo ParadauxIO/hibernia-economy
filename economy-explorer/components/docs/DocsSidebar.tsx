@@ -32,7 +32,7 @@ export function DocsSidebar({ tree }: { tree: DocsNavGroup[] }) {
   const groups = isAdmin ? [...tree, ADMIN_GROUP] : tree;
 
   return (
-    <aside className={`docs-sidebar${open ? ' open' : ''}`}>
+    <aside className={`docs-sidebar${open ? ' open' : ''}`} aria-label="Documentation">
       <button
         type="button"
         className="docs-sidebar-toggle"

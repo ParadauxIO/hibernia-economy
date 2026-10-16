@@ -28,8 +28,9 @@ mybatis:
 api:
   jwt-secret: test-jwt-secret-32-or-more-characters-of-deterministic-fixture-data
 
-# The embedded test DB only creates the subset of tables the API write-path
-# touches (no webhook_* tables), so keep the background dispatcher off in tests.
+# Keep the background webhook dispatcher off in tests: it would poll the shared
+# test DB on its own thread and race the tests' seeding and per-test truncation.
+# WebhookDispatcherIT drives tick() directly instead.
 treasury:
   webhook:
     enabled: false

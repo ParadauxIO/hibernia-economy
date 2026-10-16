@@ -1,7 +1,10 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.Ledger;
+import net.democracycraft.inttests.support.Perms;
 import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
@@ -29,12 +32,8 @@ class GovMemberTransferTest {
     }
 
     private static void waitForGovBalanceAtLeast(String account, BigDecimal min) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        while (System.nanoTime() < deadline) {
-            if (Ledger.governmentBalance(account).orElse(BigDecimal.ZERO).compareTo(min) >= 0) return;
-            try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-        throw new AssertionError("Gov account " + account + " never reached balance " + min);
+        Await.until("gov account " + account + " to reach a balance of at least " + min,
+                () -> Ledger.governmentBalance(account).orElse(BigDecimal.ZERO), b -> b.compareTo(min) >= 0, TIMEOUT);
     }
 
     @Test
@@ -55,7 +54,7 @@ class GovMemberTransferTest {
             Ops.run(owner, () -> {
                 o.chatCommand("/gov account create " + account);
                 acctId[0] = Ledger.waitForGovernmentAccount(account, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/gov account transfer DCGovernment " + account + " 1000 seed");
                 waitForGovBalanceAtLeast(account, new BigDecimal("1000"));
                 o.chatCommand("/gov account member add " + account + " " + member);
@@ -66,9 +65,7 @@ class GovMemberTransferTest {
             // node treasury.gov (their LP "spend access" group carries it); the
             // per-account spend right then comes purely from being a member —
             // NOT from any gov.account.* admin node. This is the delegation model.
-            net.democracycraft.inttests.support.RconClient.send(
-                    "lp user " + member + " permission set treasury.gov true");
-            try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            Perms.grant(member, "treasury.gov");
             try {
                 m.drainMessages();
                 m.chatCommand("/gov payout " + account + " " + recipient + " 250 dept stipend");
@@ -79,8 +76,7 @@ class GovMemberTransferTest {
                         .as("source gov account is debited by the member's payout")
                         .isEqualByComparingTo("750");
             } finally {
-                net.democracycraft.inttests.support.RconClient.send(
-                        "lp user " + member + " permission unset treasury.gov");
+                Perms.revoke(member, "treasury.gov");
             }
         }
     }
@@ -111,7 +107,7 @@ class GovMemberTransferTest {
             Ops.run(owner, () -> {
                 o.chatCommand("/gov account create " + account);
                 Ledger.waitForGovernmentAccount(account, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/gov account transfer DCGovernment " + account + " 1000 seed");
                 waitForGovBalanceAtLeast(account, new BigDecimal("1000"));
             });
@@ -125,7 +121,9 @@ class GovMemberTransferTest {
             // The group carries the command node, as a real "department" group would.
             RconClient.send("lp group " + lpGroup + " permission set treasury.gov true");
             RconClient.send("lp user " + member + " parent add " + lpGroup);
-            try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            // LuckPerms runs its commands in order, so once the inherited node is live the
+            // group creation and its grant (sent before) are too.
+            Perms.awaitHas(member, "treasury.gov");
             try {
                 m.drainMessages();
                 m.chatCommand("/gov payout " + account + " " + recipient + " 250 dept stipend");
@@ -154,7 +152,7 @@ class GovMemberTransferTest {
             Ops.run(owner, () -> {
                 o.chatCommand("/gov account create " + account);
                 Ledger.waitForGovernmentAccount(account, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.drainMessages();
                 o.chatCommand("/gov account member addgroup " + account + " " + typo);
                 o.awaitMessageContaining("as a member", TIMEOUT);
@@ -181,7 +179,7 @@ class GovMemberTransferTest {
             Ops.run(owner, () -> {
                 o.chatCommand("/gov account create " + account);
                 acctId[0] = Ledger.waitForGovernmentAccount(account, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/gov account member add " + account + " " + member);
                 Ledger.waitForMemberCount(acctId[0], 1, TIMEOUT);
             });
@@ -189,7 +187,7 @@ class GovMemberTransferTest {
             // A plain member (not an authorizer, no treasury.gov.account.manage)
             // tries to add another member — must have no effect.
             m.chatCommand("/gov account member add " + account + " " + outsider);
-            Ledger.asyncSettle();
+            Barrier.settle();
             assertThat(Ledger.memberCount(acctId[0]))
                     .as("a plain member must not be able to add other members")
                     .isEqualTo(1);

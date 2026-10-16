@@ -1,5 +1,8 @@
 package io.paradaux.treasuryrestapi.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+
 import io.paradaux.treasuryrestapi.dto.AccountBalanceResponse;
 import io.paradaux.treasuryrestapi.dto.AccountByPlayerResponse;
 import io.paradaux.treasuryrestapi.dto.BaltopEntry;
@@ -7,14 +10,10 @@ import io.paradaux.treasuryrestapi.dto.BaltopResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.mapper.AccountMapper;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Integration tests for {@link AccountService} (finding treasury-rest-api/testing/0004):
@@ -88,32 +87,32 @@ class AccountServiceIT extends EmbeddedDbIT {
 
     @Test
     void resolve_bothUuidAndName_400() {
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> accountService.resolvePlayerAccount(PLAYER.toString(), "Steve"));
+        ApiException ex = catchThrowableOfType(
+                ApiException.class, () -> accountService.resolvePlayerAccount(PLAYER.toString(), "Steve"));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ex.getErrorCode()).isEqualTo("INVALID_QUERY");
     }
 
     @Test
     void resolve_neither_400() {
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> accountService.resolvePlayerAccount(null, "  "));
+        ApiException ex =
+                catchThrowableOfType(ApiException.class, () -> accountService.resolvePlayerAccount(null, "  "));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ex.getErrorCode()).isEqualTo("INVALID_QUERY");
     }
 
     @Test
     void resolve_malformedUuid_400() {
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> accountService.resolvePlayerAccount("not-a-uuid", null));
+        ApiException ex =
+                catchThrowableOfType(ApiException.class, () -> accountService.resolvePlayerAccount("not-a-uuid", null));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ex.getErrorCode()).isEqualTo("INVALID_QUERY");
     }
 
     @Test
     void resolveByName_unknownPlayer_404() {
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> accountService.resolvePlayerAccount(null, "Ghost"));
+        ApiException ex =
+                catchThrowableOfType(ApiException.class, () -> accountService.resolvePlayerAccount(null, "Ghost"));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ex.getErrorCode()).isEqualTo("PLAYER_NOT_FOUND");
     }
@@ -121,8 +120,8 @@ class AccountServiceIT extends EmbeddedDbIT {
     @Test
     void resolve_playerWithoutPersonalAccount_404() {
         insertPlayer(PLAYER, "Steve"); // known player, but no PERSONAL account
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> accountService.resolvePlayerAccount(PLAYER.toString(), null));
+        ApiException ex = catchThrowableOfType(
+                ApiException.class, () -> accountService.resolvePlayerAccount(PLAYER.toString(), null));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ex.getErrorCode()).isEqualTo("ACCOUNT_NOT_FOUND");
     }
@@ -135,8 +134,8 @@ class AccountServiceIT extends EmbeddedDbIT {
         insertAccount(1, "PERSONAL", PLAYER, "Treasury");
         insertAccount(2, "GOVERNMENT", null, "Treasury");
 
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> accountService.resolvePlayerAccount(null, "Treasury"));
+        ApiException ex =
+                catchThrowableOfType(ApiException.class, () -> accountService.resolvePlayerAccount(null, "Treasury"));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ex.getErrorCode()).isEqualTo("AMBIGUOUS_NAME");
     }
@@ -193,7 +192,9 @@ class AccountServiceIT extends EmbeddedDbIT {
         seedBalance(2, "100.00");
         seedBalance(3, "100.00");
 
-        assertThat(accountService.getBaltop(1, 2).items()).extracting(BaltopEntry::accountId).containsExactly(1L, 2L);
+        assertThat(accountService.getBaltop(1, 2).items())
+                .extracting(BaltopEntry::accountId)
+                .containsExactly(1L, 2L);
 
         BaltopResponse r = accountService.getBaltop(2, 2);
         assertThat(r.totalPages()).isEqualTo(2);

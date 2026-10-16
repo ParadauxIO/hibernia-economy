@@ -4,7 +4,8 @@
 // HTML round-trip is the data fetch.
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState, useTransition, type ReactNode } from 'react';
+import { useState, useTransition, type ReactNode } from 'react';
+import { useHydrated } from '@/components/useHydrated';
 
 interface ToolbarProps {
   searchPlaceholder?: string;
@@ -18,13 +19,17 @@ export function Toolbar({ searchPlaceholder, filters, right }: ToolbarProps) {
   const params = useSearchParams();
   const urlQ = params.get('q') ?? '';
   const [input, setInput] = useState(urlQ);
+  const [syncedQ, setSyncedQ] = useState(urlQ);
   const [, startTransition] = useTransition();
 
   // Resync the box when the URL `q` changes externally (back/forward nav, a
   // HeaderSearch redirect) so the visible text never drifts from the URL.
-  useEffect(() => {
+  // Adjusted during render rather than in an effect, so there's no frame with
+  // the stale text.
+  if (syncedQ !== urlQ) {
+    setSyncedQ(urlQ);
     setInput(urlQ);
-  }, [urlQ]);
+  }
 
   function pushSearch(next: string) {
     const sp = new URLSearchParams(params);
@@ -71,8 +76,7 @@ export function FilterSelect({
   const pathname = usePathname();
   const params = useSearchParams();
   const value = params.get(paramKey) ?? options[0]?.value ?? '';
-  const [ready, setReady] = useState(false);
-  useEffect(() => setReady(true), []);
+  const ready = useHydrated();
   const [pending, startTransition] = useTransition();
 
   function onChange(next: string) {
@@ -115,9 +119,13 @@ export function FilterInput({
   const params = useSearchParams();
   const urlV = params.get(paramKey) ?? '';
   const [val, setVal] = useState(urlV);
+  const [syncedV, setSyncedV] = useState(urlV);
   const [, startTransition] = useTransition();
 
-  useEffect(() => { setVal(urlV); }, [urlV]);
+  if (syncedV !== urlV) {
+    setSyncedV(urlV);
+    setVal(urlV);
+  }
 
   function commit(next: string) {
     if (next === (params.get(paramKey) ?? '')) return;

@@ -1,5 +1,8 @@
 package io.paradaux.business.integration;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 import io.paradaux.business.Business;
 import io.paradaux.business.api.BusinessApi;
 import org.bukkit.Server;
@@ -7,9 +10,6 @@ import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 @Tag("placeholderapi-absent")
 class BusinessWithoutPlaceholderApiTest {
@@ -22,12 +22,13 @@ class BusinessWithoutPlaceholderApiTest {
     @Test
     void pluginAndHookCanBeReflectedOverWithoutTheOptionalApi() {
         assertThatCode(() -> {
-            for (Class<?> type : new Class<?>[]{Business.class, BusinessPlaceholderHook.class}) {
-                type.getDeclaredFields();
-                type.getDeclaredMethods();
-                type.getDeclaredConstructors();
-            }
-        }).doesNotThrowAnyException();
+                    for (Class<?> type : new Class<?>[] {Business.class, BusinessPlaceholderHook.class}) {
+                        assertThat(type.getDeclaredFields()).isNotNull();
+                        assertThat(type.getDeclaredMethods()).isNotNull();
+                        assertThat(type.getDeclaredConstructors()).isNotNull();
+                    }
+                })
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -38,7 +39,8 @@ class BusinessWithoutPlaceholderApiTest {
         BusinessApi api = mock(BusinessApi.class);
         when(plugin.getServer()).thenReturn(server);
         when(server.getPluginManager()).thenReturn(plugins);
-        assertThatCode(() -> BusinessPlaceholderHook.register(plugin, api).run()).doesNotThrowAnyException();
+        assertThatCode(() -> BusinessPlaceholderHook.register(plugin, api).run())
+                .doesNotThrowAnyException();
         verify(plugins).isPluginEnabled("PlaceholderAPI");
         verifyNoInteractions(api);
     }

@@ -9,7 +9,7 @@ export const TAX_LABELS: Record<TaxKind, string> = {
 
 // Keep every aggregate in integer cents; only chart coordinates become doubles.
 function cents(value: string): bigint {
-  const [whole, fraction = ''] = value.split('.');
+  const [whole = '0', fraction = ''] = value.split('.');
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
 }
 function decimal(value: bigint): string {

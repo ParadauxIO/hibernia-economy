@@ -7,6 +7,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -86,23 +87,12 @@ public final class ApiTokens {
     }
 
     public static IssuedKey waitForLatestKey(UUID ownerUuid, String type, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            IssuedKey k = latestKeyFor(ownerUuid, type);
-            if (k != null) return k;
-            sleep(150);
-        }
-        throw new AssertionError("No " + type + " key for " + ownerUuid + " within " + timeout);
+        return Await.until("a " + type + " key for " + ownerUuid,
+                () -> latestKeyFor(ownerUuid, type), k -> k != null, timeout);
     }
 
     public static IssuedKey waitForKeyById(int keyId, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            IssuedKey k = keyById(keyId);
-            if (k != null) return k;
-            sleep(150);
-        }
-        throw new AssertionError("Key " + keyId + " not found within " + timeout);
+        return Await.until("key " + keyId, () -> keyById(keyId), k -> k != null, timeout);
     }
 
     public static IssuedKey latestKeyFor(UUID ownerUuid, String type) {
@@ -156,6 +146,34 @@ public final class ApiTokens {
                 rs.getBoolean("revoked"));
     }
 
+    /**
+     * Creates a SERVICE (admin) key owned by {@code ownerUuid} and returns it with a valid
+     * token — the same two steps as {@code economy-explorer/scripts/mint-service-token.mjs}
+     * ({@code --create}, then a token for the new key id). The owner is recorded as the
+     * ledger initiator of admin transfers made with it.
+     */
+    public static IssuedKey mintServiceKey(UUID ownerUuid) {
+        String jti = UUID.randomUUID().toString();
+        try (Connection c = connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO api_keys (key_type, account_id, firm_id, owner_uuid_bin, jwt_id, issued_at, "
+                             + "expires_at, revoked) VALUES ('SERVICE', NULL, NULL, UNHEX(REPLACE(?, '-', '')), ?, "
+                             + "UTC_TIMESTAMP(), UTC_TIMESTAMP() + INTERVAL 1 DAY, 0)",
+                     Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, ownerUuid.toString());
+            ps.setString(2, jti);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (!keys.next()) throw new IllegalStateException("no key_id generated for the SERVICE key");
+                int keyId = keys.getInt(1);
+                String token = JwtForge.signService(keyId, jti, ownerUuid, Duration.ofHours(1));
+                return new IssuedKey(keyId, null, null, ownerUuid, jti, token, false);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /** Set revoked=1 directly (for testing the revoked-token rejection branch
      *  without needing /treasuryapi personal revoke between two players). */
     public static void revokeInDb(int keyId) {
@@ -194,13 +212,6 @@ public final class ApiTokens {
 
     private static Connection connect() throws SQLException {
         return DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
-    }
-
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted", e);
-        }
     }
 
     private ApiTokens() {}

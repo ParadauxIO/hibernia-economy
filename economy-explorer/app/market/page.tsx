@@ -15,7 +15,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
     <div className="page-heading"><h1>Market</h1><SectionTabs /></div>
     <section className="card market-search"><h2>What would you like to trade?</h2>
       <p>Search the full item catalogue, then compare places to buy or sell.</p>
-      <form action="/chestshop" role="search"><label htmlFor="market-item-search">Find an item</label><div className="search-row"><input id="market-item-search" name="q" type="search" placeholder="Item name or material…" className="toolbar-search" /><button className="btn btn-primary" type="submit">Search all items</button></div></form>
+      <form action="/chestshop" role="search" aria-label="Items"><label htmlFor="market-item-search">Find an item</label><div className="search-row"><input id="market-item-search" name="q" type="search" placeholder="Item name or material…" className="toolbar-search" /><button className="btn btn-primary" type="submit">Search all items</button></div></form>
       <p><Link href="/chestshop">Browse all items →</Link> · <Link href="/chestshop/shops">Find shops →</Link></p>
     </section>
     <div className="page-heading"><h2>Popular items</h2><WindowTabs basePath="/market" days={days} /></div>

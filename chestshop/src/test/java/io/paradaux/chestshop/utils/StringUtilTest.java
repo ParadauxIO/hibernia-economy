@@ -1,14 +1,12 @@
 package io.paradaux.chestshop.utils;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Map;
 import org.bukkit.ChatColor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
-
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class StringUtilTest {
 
@@ -28,8 +26,7 @@ class StringUtilTest {
     @Test
     void capitalizeFirstLetter_supportsCustomSeparator() {
         // Note: implementation always joins with a space, regardless of input separator.
-        assertThat(StringUtil.capitalizeFirstLetter("foo_bar_baz", '_'))
-                .isEqualTo("Foo Bar Baz");
+        assertThat(StringUtil.capitalizeFirstLetter("foo_bar_baz", '_')).isEqualTo("Foo Bar Baz");
     }
 
     @Test
@@ -48,10 +45,11 @@ class StringUtilTest {
 
     @Test
     void stripColourCodes_processesArrays() {
-        String[] in  = { ChatColor.GREEN + "ok", ChatColor.RED + "bad" };
+        String[] in = {ChatColor.GREEN + "ok", ChatColor.RED + "bad", null};
         String[] out = StringUtil.stripColourCodes(in);
 
-        assertThat(out).containsExactly("ok", "bad");
+        // An unset (null) line passes through as null rather than throwing.
+        assertThat(out).containsExactly("ok", "bad", null);
         // Doesn't mutate the input array.
         assertThat(in[0]).startsWith("§");
     }
@@ -60,11 +58,9 @@ class StringUtilTest {
 
     @ParameterizedTest
     @CsvSource({
-        "' ', 4",     // space
-        "'a', 6",     // alphabetic
-        "'I', 4",
-        "'i', 2",
-        "'.', 2",
+        "' ', 4", // space
+        "'a', 6", // alphabetic
+        "'I', 4", "'i', 2", "'.', 2",
     })
     void getMinecraftCharWidth_returnsHardcodedWidth(char c, int expected) {
         assertThat(StringUtil.getMinecraftCharWidth(c)).isEqualTo(expected);
@@ -118,9 +114,7 @@ class StringUtilTest {
     @Test
     void map_buildsLinkedHashMapFromVarargs() {
         Map<String, String> result = StringUtil.map("a", "1", "b", "2");
-        assertThat(result).containsExactly(
-                Map.entry("a", "1"),
-                Map.entry("b", "2"));
+        assertThat(result).containsExactly(Map.entry("a", "1"), Map.entry("b", "2"));
     }
 
     @Test

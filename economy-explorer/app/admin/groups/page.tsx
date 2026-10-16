@@ -9,6 +9,7 @@ import { listGroups } from '@/lib/services/group';
 import { fmtN } from '@/lib/format';
 import { CreateGroupForm } from './create-group-form';
 import { DeleteGroupButton } from './delete-group-button';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export default async function AdminGroupsPage() {
 
       <div className="card">
         <div className="card-title">All groups</div>
-        <div className="table-wrap">
+        <TableWrap label="All groups">
           <table className="data-table">
             <thead>
               <tr>
@@ -75,7 +76,7 @@ export default async function AdminGroupsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );

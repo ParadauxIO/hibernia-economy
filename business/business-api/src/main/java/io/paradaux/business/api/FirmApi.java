@@ -1,10 +1,10 @@
 package io.paradaux.business.api;
 
 import io.paradaux.business.model.Firm;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Firm lookup and modification operations.
@@ -19,10 +19,9 @@ public interface FirmApi {
      * Returns null for an unknown or inactive alias. Aliases are 1–12 ASCII letters, case-insensitive; existing API
      * implementations without alias support return null.
      */
-    default Integer resolveShopAlias(String alias) {
+    default @Nullable Integer resolveShopAlias(String alias) {
         return null;
     }
-
 
     /**
      * Looks up a firm by its display name or numeric ID.
@@ -30,6 +29,7 @@ public interface FirmApi {
      * @param nameOrId the firm name or ID string
      * @return the firm, or {@code null} if not found
      */
+    @Nullable
     Firm getFirm(String nameOrId);
 
     /**
@@ -41,7 +41,7 @@ public interface FirmApi {
      * @param firmId the firm id
      * @return the firm, or {@code null} if not found
      */
-    default Firm getFirmById(int firmId) {
+    default @Nullable Firm getFirmById(int firmId) {
         return getFirm(Integer.toString(firmId));
     }
 
@@ -52,7 +52,7 @@ public interface FirmApi {
      * @param name the firm display name
      * @return the firm, or {@code null} if not found
      */
-    default Firm getFirmByName(String name) {
+    default @Nullable Firm getFirmByName(String name) {
         return getFirm(name);
     }
 
@@ -135,6 +135,7 @@ public interface FirmApi {
      * @param accountId the Treasury account ID (as returned by {@code Account.getAccountId()})
      * @return the owning firm, or {@code null} if the account is not a firm account
      */
+    @Nullable
     Firm getFirmByAccountId(int accountId);
 
     /**
@@ -161,7 +162,7 @@ public interface FirmApi {
      * @param firmId the firm ID
      * @return the configured account ID, or null for an unknown firm or unset default
      */
-    default Integer getDefaultAccountId(int firmId) {
+    default @Nullable Integer getDefaultAccountId(int firmId) {
         Firm firm = getFirmById(firmId);
         return firm == null ? null : firm.getDefaultAccountId();
     }
@@ -173,7 +174,7 @@ public interface FirmApi {
      * @param accountId the Treasury account ID
      * @return the firm ID, or null if no linked firm exists
      */
-    default Integer getFirmIdByAccountId(int accountId) {
+    default @Nullable Integer getFirmIdByAccountId(int accountId) {
         Firm firm = getFirmByAccountId(accountId);
         return firm == null ? null : firm.getFirmId();
     }

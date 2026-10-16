@@ -1,6 +1,8 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -67,13 +69,13 @@ class FirmCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // Disbanding is destructive, so it is two-step (PAR-93/PAR-86): the bare
                 // command only warns and arms a 60s confirmation…
                 p.chatCommand("/business disband " + firm);
                 p.awaitMessageContaining("is permanent", TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.firmIsArchived(firm))
                         .as("the prompt alone must not disband the firm").isFalse();
 
@@ -84,11 +86,7 @@ class FirmCommandsTest {
             });
 
             // Wait for the disband transaction to commit, then assert state.
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
-            while (System.nanoTime() < deadline && !BusinessLedger.firmIsArchived(firm)) {
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(BusinessLedger.firmIsArchived(firm)).isTrue();
+            Await.untilTrue("firm " + firm + " to be archived", () -> BusinessLedger.firmIsArchived(firm), TIMEOUT);
         }
     }
 
@@ -105,7 +103,7 @@ class FirmCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business list");
                 String response = p.awaitMessageContaining("Firms for", TIMEOUT);
@@ -141,7 +139,7 @@ class FirmCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business info " + firm);
                 p.awaitMessageContaining(firm, TIMEOUT);
@@ -163,18 +161,14 @@ class FirmCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business attribute set hq " + firm + " " + region);
                 p.awaitMessageContaining("HQ", TIMEOUT);
 
                 // Settle then verify DB column.
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                while (System.nanoTime() < deadline) {
-                    if (region.equals(BusinessLedger.firmHqRegion(firmId).orElse(null))) return;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(BusinessLedger.firmHqRegion(firmId)).hasValue(region);
+                Await.untilEquals("HQ region of firm " + firmId,
+                        () -> BusinessLedger.firmHqRegion(firmId).orElse(null), region, TIMEOUT);
             });
         }
     }
@@ -193,17 +187,13 @@ class FirmCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business attribute set discord " + firm + " " + url);
                 p.awaitMessageContaining("Discord", TIMEOUT);
 
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                while (System.nanoTime() < deadline) {
-                    if (url.equals(BusinessLedger.firmDiscordUrl(firmId).orElse(null))) return;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(BusinessLedger.firmDiscordUrl(firmId)).hasValue(url);
+                Await.untilEquals("Discord URL of firm " + firmId,
+                        () -> BusinessLedger.firmDiscordUrl(firmId).orElse(null), url, TIMEOUT);
             });
         }
     }

@@ -9,6 +9,7 @@ import { findForOwner, listRecentDeliveries } from '@/lib/sql/webhook';
 import { fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { RotateSecretButton } from './rotate-secret-button';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,7 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
 
       <div className="card">
         <div className="card-title">Recent deliveries <span className="sub">latest 50</span></div>
-        <div className="table-wrap">
+        <TableWrap label="Recent deliveries">
           <table className="data-table">
             <thead>
               <tr>
@@ -96,7 +97,7 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );

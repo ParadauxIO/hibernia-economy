@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
@@ -27,7 +28,7 @@ class GovCommandRejectionsTest {
         issuer.chatCommand("/gov account create " + name);
         issuer.awaitMessageContaining("Created", TIMEOUT);
         Ledger.waitForGovernmentAccount(name, TIMEOUT);
-        Ledger.asyncSettle();
+        Barrier.settle();
     }
 
     @Test

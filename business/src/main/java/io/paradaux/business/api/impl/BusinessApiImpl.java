@@ -5,11 +5,10 @@ import com.google.inject.Singleton;
 import io.paradaux.business.api.*;
 import io.paradaux.business.model.*;
 import io.paradaux.business.services.*;
-import org.bukkit.entity.Player;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.bukkit.entity.Player;
 
 @Singleton
 public class BusinessApiImpl implements BusinessApi {
@@ -21,13 +20,14 @@ public class BusinessApiImpl implements BusinessApi {
     private final PlayerApi playerApi;
 
     @Inject
-    public BusinessApiImpl(FirmService firmService,
-                           FirmStaffService firmStaffService,
-                           FirmRoleService firmRoleService,
-                           FirmRequestService firmRequestService,
-                           FirmPlayerService firmPlayerService,
-                           FirmAccountService firmAccountService,
-                           FirmTransactionService firmTransactionService) {
+    public BusinessApiImpl(
+            FirmService firmService,
+            FirmStaffService firmStaffService,
+            FirmRoleService firmRoleService,
+            FirmRequestService firmRequestService,
+            FirmPlayerService firmPlayerService,
+            FirmAccountService firmAccountService,
+            FirmTransactionService firmTransactionService) {
         this.firmApi = new FirmApiDelegate(firmService, firmStaffService, firmAccountService, firmTransactionService);
         this.staffApi = new StaffApiDelegate(firmStaffService, firmAccountService);
         this.roleApi = new RoleApiDelegate(firmRoleService);
@@ -62,8 +62,12 @@ public class BusinessApiImpl implements BusinessApi {
 
     // ---- Delegate implementations ----
 
-    private record FirmApiDelegate(FirmService service, FirmStaffService staff, FirmAccountService accounts,
-                                   FirmTransactionService transactions) implements FirmApi {
+    private record FirmApiDelegate(
+            FirmService service,
+            FirmStaffService staff,
+            FirmAccountService accounts,
+            FirmTransactionService transactions)
+            implements FirmApi {
 
         @Override
         public Integer resolveShopAlias(String alias) {

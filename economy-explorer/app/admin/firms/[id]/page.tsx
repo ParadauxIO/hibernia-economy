@@ -12,6 +12,7 @@ import { fmtAmt } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { CsvButton } from '@/components/CsvButton';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,7 +58,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
           <CsvButton filename={`firm-${firmId}-accounts.csv`} headers={['Account', 'Name', 'Type', 'Balance', 'Archived']}
             rows={accounts.map((a) => [a.account_id, a.display_name ?? '', a.account_type, a.balance, a.archived ? 'yes' : 'no'])} />
         </div>
-        <div className="table-wrap"><table className="data-table">
+        <TableWrap label="Firm accounts"><table className="data-table">
           <thead><tr><th>Account</th><th>Name</th><th>Type</th><th className="amount">Balance</th></tr></thead>
           <tbody>
             {accounts.length === 0 && <tr><td colSpan={4} className="empty">No live accounts.</td></tr>}
@@ -70,7 +71,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table></TableWrap>
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
@@ -79,7 +80,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
           <CsvButton filename={`firm-${firmId}-employees.csv`} headers={['Player', 'Role', 'Joined']}
             rows={employees.map((e) => [e.player_name ?? e.player_uuid ?? '', e.role_name, e.joined_at?.toISOString() ?? ''])} />
         </div>
-        <div className="table-wrap"><table className="data-table">
+        <TableWrap label="Firm employees"><table className="data-table">
           <thead><tr><th>Player</th><th>Role</th><th className="ts">Joined</th></tr></thead>
           <tbody>
             {employees.length === 0 && <tr><td colSpan={3} className="empty">No current employees.</td></tr>}
@@ -91,7 +92,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table></TableWrap>
       </div>
     </>
   );

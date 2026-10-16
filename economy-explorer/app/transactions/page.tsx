@@ -16,6 +16,7 @@ import { PrivacyGate } from '@/components/PrivacyGate';
 import { AdminNav } from '@/components/AdminNav';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -128,7 +129,7 @@ export default async function TransactionsPage({
         }
       />
 
-      <div className="table-wrap"><table className="data-table">
+      <TableWrap label="Transactions"><table className="data-table">
         <thead>
           <tr>
             <th>Txn</th>
@@ -162,7 +163,7 @@ export default async function TransactionsPage({
             </tr>
           ))}
         </tbody>
-      </table></div>
+      </table></TableWrap>
 
       <Pagination
         page={sp.page}

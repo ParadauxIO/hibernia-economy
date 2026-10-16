@@ -225,9 +225,24 @@ render_config business Business
 render_config treasury-api-plugin TreasuryAPI
 
 # Every mock player connects from 127.0.0.1; GriefPrevention's default of three
-# logins per address kicks the fourth.
+# logins per address kicks the fourth. Fresh-spawn PvP protection is off because it
+# greets every new player with a chat line ("You're protected from attack…") at an
+# unpredictable moment after join, in the middle of the replies tests assert on.
 mkdir -p "$SERVER/plugins/GriefPreventionData"
-printf 'GriefPrevention:\n  MaxPlayersPerIpAddress: 0\n' >"$SERVER/plugins/GriefPreventionData/config.yml"
+printf 'GriefPrevention:\n  MaxPlayersPerIpAddress: 0\n  PvP:\n    ProtectFreshSpawns: false\n' \
+    >"$SERVER/plugins/GriefPreventionData/config.yml"
+
+# LuckPerms tells every op about each permission change ("[LP] LOG > ..."), on its own
+# thread and some time after the change applies. Tests op players and change their
+# permissions constantly, so those lines would land in the middle of the chat they assert
+# on. Every other LuckPerms setting keeps its default.
+mkdir -p "$SERVER/plugins/LuckPerms"
+printf 'log-notify: false\n' >"$SERVER/plugins/LuckPerms/config.yml"
+
+# The tests' barrier sentinel (/dcsync, support/Barrier.java) is a chat command, and
+# vanilla kicks a non-op player for spam after ~10 commands in quick succession. Exempt
+# only the sentinel (Spigot fills in every other default); /skill is Spigot's default.
+printf 'commands:\n  spam-exclusions:\n  - /skill\n  - /dcsync\n' >"$SERVER/spigot.yml"
 
 log "Starting Paper on :$MC_PORT (RCON :$RCON_PORT)"
 (cd "$SERVER" && exec java -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \

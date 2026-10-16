@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -59,7 +60,7 @@ class CrossFirmIsolationTest {
                 a.chatCommand("/business create " + firmA);
                 a.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firmA, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 BigDecimal firmBBefore = Ledger.accountBalanceById(firmBAccountId[0])
                         .orElse(BigDecimal.ZERO);
@@ -68,10 +69,11 @@ class CrossFirmIsolationTest {
                 // Firm A's proprietor passes firmA but firm B's account id.
                 a.chatCommand("/business account deposit " + firmA + " " + firmBAccountId[0] + " 50");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 // Firm B's balance must be unchanged; the deposit must not have
                 // landed because the (firm, account) pair is not associated.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(Ledger.accountBalanceById(firmBAccountId[0]).orElse(BigDecimal.ZERO))
                         .as("firm B account balance must not change when firm A "
                                 + "owner deposits using firm B's account id")
@@ -106,7 +108,7 @@ class CrossFirmIsolationTest {
                 firmBAccountId[0] = BusinessLedger.firmDefaultAccountId(firmBId).orElseThrow();
                 // Fund firm B so a withdrawal would actually move money if
                 // the isolation check were broken.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 b.chatCommand("/business deposit " + firmB + " 100");
                 b.awaitMessageContaining("Deposited", TIMEOUT);
             });
@@ -115,7 +117,7 @@ class CrossFirmIsolationTest {
                 a.chatCommand("/business create " + firmA);
                 a.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firmA, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 BigDecimal firmBBefore = Ledger.accountBalanceById(firmBAccountId[0])
                         .orElse(BigDecimal.ZERO);
@@ -123,8 +125,9 @@ class CrossFirmIsolationTest {
                 a.drainMessages();
                 a.chatCommand("/business account withdraw " + firmA + " " + firmBAccountId[0] + " 50");
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(Ledger.accountBalanceById(firmBAccountId[0]).orElse(BigDecimal.ZERO))
                         .as("firm B account balance must not drop when firm A "
                                 + "owner withdraws using firm B's account id")
@@ -159,14 +162,15 @@ class CrossFirmIsolationTest {
                 a.awaitMessageContaining("Successfully created", TIMEOUT);
                 firmAId[0] = BusinessLedger.waitForFirm(firmA, TIMEOUT);
                 firmAOriginalDefault[0] = BusinessLedger.firmDefaultAccountId(firmAId[0]).orElseThrow();
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 a.drainMessages();
                 a.chatCommand("/business account setdefault " + firmA + " " + firmBAccountId[0]);
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
                 // Firm A's default must not have moved to firm B's account.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.firmDefaultAccountId(firmAId[0]).orElseThrow())
                         .as("firm A default account id must not switch to firm B's account")
                         .isEqualTo(firmAOriginalDefault[0]);
@@ -197,14 +201,10 @@ class CrossFirmIsolationTest {
                 firmBId[0] = BusinessLedger.waitForFirm(firmB, TIMEOUT);
                 // Create a second account so the archive isn't blocked by the
                 // "can't archive the default" rule.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 b.chatCommand("/business account create " + firmB + " Secondary");
                 b.awaitMessageContaining("created account", TIMEOUT);
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                while (System.nanoTime() < deadline) {
-                    if (BusinessLedger.firmAccountCount(firmBId[0]) >= 2) break;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
+                BusinessLedger.waitForFirmAccountCountAtLeast(firmBId[0], 2, TIMEOUT);
                 firmBAccountId[0] = BusinessLedger.firmAccountIdAt(firmBId[0], 1);
             });
 
@@ -212,14 +212,15 @@ class CrossFirmIsolationTest {
                 a.chatCommand("/business create " + firmA);
                 a.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firmA, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
 
                 int beforeCount = BusinessLedger.firmAccountCount(firmBId[0]);
                 a.drainMessages();
                 a.chatCommand("/business account archive " + firmA + " " + firmBAccountId[0]);
                 a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 // firmAccountCount counts all rows (including archived in some
                 // mappers); the safer assertion is "firm B still has the
                 // account id active" — verified via accountBalanceById which

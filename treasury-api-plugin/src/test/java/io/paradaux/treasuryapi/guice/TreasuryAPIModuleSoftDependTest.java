@@ -1,16 +1,5 @@
 package io.paradaux.treasuryapi.guice;
 
-import io.paradaux.hibernia.framework.exceptions.ConflictException;
-import net.luckperms.api.LuckPerms;
-import org.bukkit.Bukkit;
-import org.bukkit.plugin.ServicesManager;
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
-
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -18,6 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import net.luckperms.api.LuckPerms;
+import org.bukkit.Bukkit;
+import org.bukkit.plugin.ServicesManager;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 /**
  * LuckPerms is a {@code softdepend}: the plugin must enable, and every command
@@ -73,14 +72,15 @@ class TreasuryAPIModuleSoftDependTest {
     // ---- LuckPerms absent entirely: net.luckperms.* cannot be loaded ----
 
     @Test
-    void injectorBuilds_whenLuckPermsClassesAreAbsent() throws Exception {
-        invokeWithoutLuckPerms("createInjector");
+    void injectorBuilds_whenLuckPermsClassesAreAbsent() {
+        // A LinkageError (missing net.luckperms class) is rethrown unwrapped.
+        assertDoesNotThrow(() -> invokeWithoutLuckPerms("createInjector"));
     }
 
     @Test
     void selfSync_isUnavailable_whenLuckPermsClassesAreAbsent() {
-        InvocationTargetException thrown = assertThrows(InvocationTargetException.class,
-                () -> invokeWithoutLuckPerms("selfSync"));
+        InvocationTargetException thrown =
+                assertThrows(InvocationTargetException.class, () -> invokeWithoutLuckPerms("selfSync"));
         ConflictException ex = assertInstanceOf(ConflictException.class, thrown.getCause());
         assertEquals("treasuryapi.ui.sync.unavailable", ex.getMessage());
     }

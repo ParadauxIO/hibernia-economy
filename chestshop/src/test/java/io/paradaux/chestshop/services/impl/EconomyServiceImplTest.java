@@ -1,5 +1,18 @@
 package io.paradaux.chestshop.services.impl;
 
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.Transaction;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
@@ -17,6 +30,9 @@ import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.model.tax.TaxResult;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -26,22 +42,6 @@ import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static io.paradaux.chestshop.model.Transaction.TransactionType.SELL;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Full line + branch coverage for {@link EconomyServiceImpl} — ChestShop's single point of
@@ -104,8 +104,13 @@ class EconomyServiceImplTest extends ServerTest {
         return (Sign) b.getState();
     }
 
-    private Transaction txn(Transaction.TransactionType type, ItemStack[] stock, String ownerName,
-                            Player client, Sign sign, UUID tradeId) {
+    private Transaction txn(
+            Transaction.TransactionType type,
+            ItemStack[] stock,
+            String ownerName,
+            Player client,
+            Sign sign,
+            UUID tradeId) {
         Transaction t = mock(Transaction.class);
         when(t.getTransactionType()).thenReturn(type);
         when(t.getStock()).thenReturn(stock);
@@ -166,8 +171,16 @@ class EconomyServiceImplTest extends ServerTest {
         // Tax leg: personal receiver authorises itself, off the receiver's account.
         ArgumentCaptor<Integer> srcAcct = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<UUID> taxInit = ArgumentCaptor.forClass(UUID.class);
-        verify(taxApi).collectRateTax(srcAcct.capture(), any(), any(), anyString(), anyString(),
-                taxInit.capture(), anyString(), any());
+        verify(taxApi)
+                .collectRateTax(
+                        srcAcct.capture(),
+                        any(),
+                        any(),
+                        anyString(),
+                        anyString(),
+                        taxInit.capture(),
+                        anyString(),
+                        any());
         assertThat(srcAcct.getValue()).isEqualTo(20);
         assertThat(taxInit.getValue()).isEqualTo(seller);
     }
@@ -191,7 +204,7 @@ class EconomyServiceImplTest extends ServerTest {
 
         assertThat(ok).isTrue();
         TransferRequest req = captureTransfer();
-        assertThat(req.fromAccountId()).isEqualTo(30);   // business seller resolves to its ledger id
+        assertThat(req.fromAccountId()).isEqualTo(30); // business seller resolves to its ledger id
         assertThat(req.toAccountId()).isEqualTo(40);
         assertThat(req.initiator()).isEqualTo(SYSTEM_UUID); // business authorises via SYSTEM
         assertThat(req.message()).contains("BuyerB sold x3 Gold to Firm");
@@ -218,7 +231,8 @@ class EconomyServiceImplTest extends ServerTest {
         assertThat(req.toAccountId()).isEqualTo(SYSTEM_ID);
         assertThat(req.initiator()).isEqualTo(buyer.getUniqueId());
         verify(t).setSettlementTxnId(700L);
-        verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
     }
 
     // ---- settle: sender is an admin shop with no server account → SYSTEM source ----
@@ -247,7 +261,9 @@ class EconomyServiceImplTest extends ServerTest {
         assertThat(req.initiator()).isEqualTo(SYSTEM_UUID);
         verify(t).setSettlementTxnId(800L);
         // Admin counterparty → server tax rate applied, and it was collected.
-        verify(taxApi).collectRateTax(eq(60), any(), any(), anyString(), anyString(), eq(buyer.getUniqueId()), anyString(), any());
+        verify(taxApi)
+                .collectRateTax(
+                        eq(60), any(), any(), anyString(), anyString(), eq(buyer.getUniqueId()), anyString(), any());
     }
 
     // ---- settle: both sides admin → nothing moves ------------------------------
@@ -266,7 +282,8 @@ class EconomyServiceImplTest extends ServerTest {
         assertThat(ok).isTrue();
         verify(treasury, never()).transfer(any());
         verify(t, never()).setSettlementTxnId(any());
-        verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
     }
 
     // ---- settle: free trade (ALLOW_FREE_SHOPS) → goods only, Treasury never asked ----
@@ -277,14 +294,17 @@ class EconomyServiceImplTest extends ServerTest {
         // throw, fail the settle and reverse the goods). It succeeds with nothing posted.
         Player buyer = player("BuyerFree");
         UUID seller = UUID.randomUUID();
-        org.mockito.Mockito.lenient().when(treasury.transfer(any())).thenThrow(new IllegalArgumentException("amount > 0"));
+        org.mockito.Mockito.lenient()
+                .when(treasury.transfer(any()))
+                .thenThrow(new IllegalArgumentException("amount > 0"));
 
         Transaction t = txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID());
         boolean ok = service.settle(new BigDecimal("0.00"), buyer, seller, t);
 
         assertThat(ok).isTrue();
         verify(treasury, never()).transfer(any());
-        verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
         verify(t, never()).setSettlementTxnId(any()); // the sale is recorded with a NULL txn id
         verify(t, never()).setSalesTax(any());
     }
@@ -367,7 +387,8 @@ class EconomyServiceImplTest extends ServerTest {
         Transaction t = txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID());
         service.settle(new BigDecimal("5"), buyer, seller, t);
 
-        verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
         verify(t).setSalesTax(BigDecimal.ZERO);
     }
 
@@ -387,7 +408,8 @@ class EconomyServiceImplTest extends ServerTest {
         Transaction t = txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID());
         service.settle(new BigDecimal("5"), buyer, seller, t);
 
-        verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
         verify(t).setSalesTax(BigDecimal.ZERO);
     }
 
@@ -466,7 +488,8 @@ class EconomyServiceImplTest extends ServerTest {
         service.settle(new BigDecimal("5"), buyer, businessSeller, t);
 
         // receiverAccountId == 0 → tax leg is skipped even though a rate is configured.
-        verify(taxApi, never()).collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
         verify(t).setSettlementTxnId(1000L);
     }
 
@@ -486,7 +509,8 @@ class EconomyServiceImplTest extends ServerTest {
         service.settle(new BigDecimal("5"), buyer, businessSeller, t);
 
         // Business receiver → the tax leg is authorised through the SYSTEM account, off account 15.
-        verify(taxApi).collectRateTax(eq(15), any(), any(), anyString(), anyString(), eq(SYSTEM_UUID), anyString(), any());
+        verify(taxApi)
+                .collectRateTax(eq(15), any(), any(), anyString(), anyString(), eq(SYSTEM_UUID), anyString(), any());
         verify(t).setSalesTax(new BigDecimal("0.25"));
     }
 
@@ -669,7 +693,9 @@ class EconomyServiceImplTest extends ServerTest {
         UUID target = UUID.randomUUID();
         when(treasury.resolveOrCreatePersonal(target)).thenReturn(tAccount(21));
         when(treasury.transfer(any())).thenThrow(new RuntimeException("down"));
-        service.deposit(target, new BigDecimal("5"), world); // must not throw
+        assertThatCode(() -> service.deposit(target, new BigDecimal("5"), world))
+                .doesNotThrowAnyException();
+        verify(treasury).transfer(any());
     }
 
     // ---- withdraw --------------------------------------------------------------
@@ -821,48 +847,61 @@ class EconomyServiceImplTest extends ServerTest {
 
     // ---- migrateLegacyBusinessSign ---------------------------------------------
 
+    private static String ownerLine(Sign sign) {
+        return SignService.getOwner((Sign) sign.getBlock().getState());
+    }
+
     @Test
     void migrate_returnsEarly_whenSignNull() {
         Transaction t = mock(Transaction.class);
         when(t.getSign()).thenReturn(null);
         when(t.getOwnerAccount()).thenReturn(businessOwner("B1"));
-        service.migrateLegacyBusinessSign(t); // no exception
+        assertThatCode(() -> service.migrateLegacyBusinessSign(t)).doesNotThrowAnyException();
     }
 
     @Test
-    void migrate_returnsEarly_whenOwnerNull() {
+    void migrate_leavesSignUntouched_whenOwnerNull() {
+        Sign sign = placeSign("X", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("X", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(null);
-        service.migrateLegacyBusinessSign(t);
+        assertThatCode(() -> service.migrateLegacyBusinessSign(t)).doesNotThrowAnyException();
+        assertThat(ownerLine(sign)).isEqualTo("X");
     }
 
     @Test
-    void migrate_returnsEarly_whenOwnerUuidNull() {
+    void migrate_leavesSignUntouched_whenOwnerUuidNull() {
         Account owner = new Account();
+        owner.setShortName("Firm");
         owner.setUuid(null);
+        Sign sign = placeSign("X", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("X", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(owner);
-        service.migrateLegacyBusinessSign(t);
+        assertThatCode(() -> service.migrateLegacyBusinessSign(t)).doesNotThrowAnyException();
+        assertThat(ownerLine(sign)).isEqualTo("X");
     }
 
     @Test
-    void migrate_returnsEarly_whenOwnerNotBusiness() {
+    void migrate_leavesSignUntouched_whenOwnerNotBusiness() {
         Account owner = new Account("Notch", "Notch", UUID.randomUUID()); // personal uuid
+        Sign sign = placeSign("X", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("X", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(owner);
         service.migrateLegacyBusinessSign(t);
+        assertThat(ownerLine(sign)).isEqualTo("X");
     }
 
     @Test
-    void migrate_returnsEarly_whenCanonicalNull() {
+    void migrate_leavesSignUntouched_whenCanonicalNull() {
         Account owner = businessOwner(null);
+        Sign sign = placeSign("OLD", "Y");
         Transaction t = mock(Transaction.class);
-        when(t.getSign()).thenReturn(placeSign("OLD", "Y"));
+        when(t.getSign()).thenReturn(sign);
         when(t.getOwnerAccount()).thenReturn(owner);
         service.migrateLegacyBusinessSign(t);
+        assertThat(ownerLine(sign)).isEqualTo("OLD");
     }
 
     @Test
@@ -886,7 +925,8 @@ class EconomyServiceImplTest extends ServerTest {
 
         service.migrateLegacyBusinessSign(t);
 
-        assertThat(SignText.getLine((Sign) sign.getBlock().getState(), SignService.NAME_LINE)).isEqualTo("NewFirm");
+        assertThat(SignText.getLine((Sign) sign.getBlock().getState(), SignService.NAME_LINE))
+                .isEqualTo("NewFirm");
     }
 
     private Account businessOwner(String shortName) {
@@ -986,7 +1026,7 @@ class EconomyServiceImplTest extends ServerTest {
     void transferItemName_nullFirstElement_fallsBackToSign() throws Exception {
         Sign sign = placeSign("Owner", "GuardOak");
         Transaction t = mock(Transaction.class);
-        when(t.getStock()).thenReturn(new ItemStack[]{null});
+        when(t.getStock()).thenReturn(new ItemStack[] {null});
         when(t.getSign()).thenReturn(sign);
         var m = EconomyServiceImpl.class.getDeclaredMethod("transferItemName", Transaction.class);
         m.setAccessible(true);
@@ -1009,15 +1049,23 @@ class EconomyServiceImplTest extends ServerTest {
         UUID receiver = UUID.randomUUID();
         collects(1L, new BigDecimal("0.25"));
 
-        var m = EconomyServiceImpl.class.getDeclaredMethod("collectSalesTax",
-                int.class, UUID.class, BigDecimal.class, UUID.class, Player.class, String.class, UUID.class);
+        var m = EconomyServiceImpl.class.getDeclaredMethod(
+                "collectSalesTax",
+                int.class,
+                UUID.class,
+                BigDecimal.class,
+                UUID.class,
+                Player.class,
+                String.class,
+                UUID.class);
         m.setAccessible(true);
-        BigDecimal charged = (BigDecimal) m.invoke(service, 7, receiver, new BigDecimal("5"),
-                receiver, null, "memo", UUID.randomUUID());
+        BigDecimal charged = (BigDecimal)
+                m.invoke(service, 7, receiver, new BigDecimal("5"), receiver, null, "memo", UUID.randomUUID());
 
         assertThat(charged).isEqualByComparingTo("0.25");
         verify(taxApi).collectRateTax(eq(7), any(), any(), anyString(), anyString(), eq(receiver), anyString(), any());
     }
+
     @Test
     void migrate_keepsAliasVisibleAfterTrade() {
         Sign sign = placeSign("B:@Acme", "Y");

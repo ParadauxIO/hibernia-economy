@@ -55,17 +55,23 @@ repositories {
 // for ad-hoc local invocation.
 // =====================================================================
 
-fun resolve(envName: String, propName: String, default: String): String =
-    (project.findProperty(propName) as String?)
-        ?: System.getenv(envName)
-        ?: default
+fun resolve(envName: String, propName: String, default: String): String = (project.findProperty(propName) as String?)
+    ?: System.getenv(envName)
+    ?: default
 
 flyway {
     url = resolve("FLYWAY_URL", "flywayUrl", "jdbc:mysql://localhost:3306/economy")
     user = resolve("FLYWAY_USER", "flywayUser", "root")
     password = resolve("FLYWAY_PASSWORD", "flywayPassword", "")
     schemas = arrayOf(resolve("FLYWAY_SCHEMA", "flywaySchema", "economy"))
-    locations = arrayOf("filesystem:src/main/resources/db/migration")
+    // -PflywayLocations=filesystem:/abs/dir points Flyway at another copy of the
+    // migrations. CI's upgrade test uses it to migrate a scratch DB with the base
+    // branch's migrations first, then this checkout's. A test hook, not deploy
+    // config, so there is no FLYWAY_* env counterpart wired here.
+    locations = arrayOf(
+        (project.findProperty("flywayLocations") as String?)
+            ?: "filesystem:src/main/resources/db/migration",
+    )
 
     // We expect a green-field database. Pass -Pbaseline=true on the first run
     // against a pre-existing DB so Flyway records a baseline at version 0
@@ -94,24 +100,31 @@ flyway {
 // credentials — so a bare `flywayMigrate` can't silently connect as root with no
 // password to whatever sits on localhost:3306 (ADT-148). CI / Docker / k8s set
 // FLYWAY_URL / FLYWAY_USER / FLYWAY_PASSWORD; ad-hoc local runs pass the -P forms.
-fun explicitlySet(envName: String, propName: String): Boolean =
-    project.findProperty(propName) != null || System.getenv(envName) != null
+fun explicitlySet(envName: String, propName: String): Boolean = project.findProperty(propName) != null || System.getenv(envName) != null
 
 val flywayCredsConfigured = explicitlySet("FLYWAY_URL", "flywayUrl") &&
     explicitlySet("FLYWAY_USER", "flywayUser") &&
     explicitlySet("FLYWAY_PASSWORD", "flywayPassword")
 
-listOf("flywayMigrate", "flywayClean", "flywayValidate", "flywayInfo",
-       "flywayBaseline", "flywayRepair", "flywayUndo").forEach { taskName ->
+listOf(
+    "flywayMigrate",
+    "flywayClean",
+    "flywayValidate",
+    "flywayInfo",
+    "flywayBaseline",
+    "flywayRepair",
+    "flywayUndo",
+).forEach { taskName ->
     tasks.matching { it.name == taskName }.configureEach {
         doFirst {
             if (!flywayCredsConfigured) {
                 throw GradleException(
                     "Refusing to run $taskName with the unconfigured default credentials " +
-                    "(root / empty password / localhost). Inject FLYWAY_URL, FLYWAY_USER and " +
-                    "FLYWAY_PASSWORD as environment variables, or pass -PflywayUrl / -PflywayUser / " +
-                    "-PflywayPassword (an explicit empty password is fine). See the configuration " +
-                    "block above in economy-flyway/build.gradle.kts.")
+                        "(root / empty password / localhost). Inject FLYWAY_URL, FLYWAY_USER and " +
+                        "FLYWAY_PASSWORD as environment variables, or pass -PflywayUrl / -PflywayUser / " +
+                        "-PflywayPassword (an explicit empty password is fine). See the configuration " +
+                        "block above in economy-flyway/build.gradle.kts.",
+                )
             }
         }
     }

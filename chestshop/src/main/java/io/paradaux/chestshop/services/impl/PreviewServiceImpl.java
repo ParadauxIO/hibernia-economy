@@ -1,11 +1,20 @@
 package io.paradaux.chestshop.services.impl;
 
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.PreviewService;
-import com.google.inject.Inject;
 import io.paradaux.chestshop.services.ShopDisplayService;
-import com.google.inject.Singleton;
 import io.paradaux.treasury.api.market.ShopResult;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -19,16 +28,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.util.Transformation;
 import org.joml.Vector3f;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Floating item previews above shop signs — a port of the legacy chestshop-database
@@ -97,8 +96,10 @@ public class PreviewServiceImpl implements PreviewService {
             d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.GROUND);
             Transformation tr = d.getTransformation();
             d.setTransformation(new Transformation(
-                    tr.getTranslation(), tr.getLeftRotation(),
-                    new Vector3f(SCALE, SCALE, SCALE), tr.getRightRotation()));
+                    tr.getTranslation(),
+                    tr.getLeftRotation(),
+                    new Vector3f(SCALE, SCALE, SCALE),
+                    tr.getRightRotation()));
             d.setPersistent(false);
             d.setVisibleByDefault(true);
         });
@@ -183,8 +184,9 @@ public class PreviewServiceImpl implements PreviewService {
             Map<Lookup, List<ShopResult>> found = new LinkedHashMap<>();
             for (Lookup lookup : batch) {
                 try {
-                    found.put(lookup, marketService.shopQuery()
-                            .shopsInChunk(lookup.world(), lookup.chunkX(), lookup.chunkZ()));
+                    found.put(
+                            lookup,
+                            marketService.shopQuery().shopsInChunk(lookup.world(), lookup.chunkX(), lookup.chunkZ()));
                 } catch (RuntimeException e) {
                     // registry unreachable — leave this chunk's holograms as they are
                 }

@@ -1,13 +1,16 @@
 import 'server-only';
 import { Kysely, MysqlDialect, type Generated } from 'kysely';
 import { createPool } from 'mysql2';
+import { withoutUndefined } from '@/lib/util/withoutUndefined';
 
 const pool = createPool({
-  host: process.env.DB_HOST,
+  ...withoutUndefined({
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+  }),
   port: Number(process.env.DB_PORT ?? 3306),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USERNAME,
-  password: process.env.DB_PASSWORD,
   connectionLimit: Number(process.env.DB_POOL ?? 100),
   timezone: 'Z',
   dateStrings: false,

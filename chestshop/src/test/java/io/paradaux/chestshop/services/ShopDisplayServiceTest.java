@@ -1,16 +1,17 @@
 package io.paradaux.chestshop.services;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
-
 class ShopDisplayServiceTest {
-    @Test void optionalRegionsAndTemplates() {
+    @Test
+    void optionalRegionsAndTemplates() {
         JavaPlugin plugin = mock(JavaPlugin.class);
         Server server = mock(Server.class);
         World world = mock(World.class);

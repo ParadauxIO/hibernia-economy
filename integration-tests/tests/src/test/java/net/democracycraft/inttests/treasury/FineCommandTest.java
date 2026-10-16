@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -79,7 +80,7 @@ class FineCommandTest {
                 long fineId = Ledger.mostRecentFineFor(t.getUuid()).orElseThrow();
                 assertThat(Ledger.fineIsRevoked(fineId)).isFalse();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/fine revoke " + fineId);
                 a.awaitMessageContaining("Revoked", TIMEOUT);
@@ -126,7 +127,7 @@ class FineCommandTest {
                 Ledger.waitForActiveFineCount(t.getUuid(), 1, TIMEOUT);
                 long fineId = Ledger.mostRecentFineFor(t.getUuid()).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/fine info " + fineId);
                 String response = a.awaitMessageContaining("Fine #", TIMEOUT);
@@ -165,7 +166,7 @@ class FineCommandTest {
                 a.awaitMessageContaining("Issued fine", TIMEOUT);
             });
 
-            Ledger.asyncSettle();
+            Barrier.settle();
             int fines = Ledger.totalFinesForPlayer(t.getUuid());
             assertThat(fines).isBetween(1, 2);
             Ledger.waitForPersonalBalance(t.getUuid(),
@@ -193,13 +194,13 @@ class FineCommandTest {
                 BigDecimal firmStart = Ledger.accountBalanceById(firmAccountId).orElse(BigDecimal.ZERO);
 
                 // Give the firm something to be fined out of.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/gov payout DCGovernment " + firm + " 200 seed");
                 a.awaitMessageContaining("Paid", TIMEOUT);
                 BigDecimal funded = firmStart.add(new BigDecimal("200.00"));
                 Ledger.waitForAccountBalanceById(firmAccountId, funded, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/fine firm " + FINES_ACCOUNT + " " + firm + " 50 unpaid licence");
                 String issued = a.awaitMessageContaining("Issued fine", TIMEOUT);
@@ -210,7 +211,7 @@ class FineCommandTest {
                 long fineId = Ledger.mostRecentFineForDebtorAccount(firmAccountId).orElseThrow();
                 assertThat(Ledger.fineIsRevoked(fineId)).isFalse();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/fine revoke " + fineId);
                 String revoked = a.awaitMessageContaining("Revoked fine #" + fineId, TIMEOUT);

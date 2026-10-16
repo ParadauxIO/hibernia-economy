@@ -1,6 +1,10 @@
 package io.paradaux.treasuryapi.testsupport;
 
+import io.paradaux.hibernia.testsupport.db.TestDatabase;
+import io.paradaux.hibernia.testsupport.db.TestDatabaseExtension;
 import io.paradaux.treasuryapi.mappers.typehandlers.UuidBinaryTypeHandler;
+import java.util.UUID;
+import javax.sql.DataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
@@ -10,18 +14,17 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import javax.sql.DataSource;
-import java.util.UUID;
-
 /**
- * Base class for treasury-api-plugin mapper integration tests that hit the
- * embedded MariaDB.
+ * Base class for treasury-api-plugin mapper integration tests that hit a real
+ * MariaDB — embedded MariaDB4j locally, or the server named by
+ * {@code TREASURYAPI_TEST_JDBC_URL} — through the shared
+ * {@link TestDatabaseExtension} harness in test-support.
  *
  * <p>The DB is started once per JVM and shared across every subclass. Each test
- * gets a clean slate via {@link MariadbContainerExtension#truncateAll} and a
+ * gets a clean slate (every table reset to its just-migrated state, the built-in
+ * explorer role definitions restored), a post-test ledger invariant check, and a
  * single auto-commit {@link SqlSession} closed in {@link #tearDownIntegration()}.
  * The {@link UuidBinaryTypeHandler} is registered on the MyBatis configuration
  * exactly as the production {@code DatabaseModule} does, so UUID ↔ BINARY(16)
@@ -30,8 +33,10 @@ import java.util.UUID;
 @Tag("integration")
 public abstract class IntegrationTestBase {
 
+    public static final TestDatabase DATABASE = TestDatabase.of("treasuryapi_test", "TREASURYAPI");
+
     @RegisterExtension
-    static final ContextHolder CONTEXT = new ContextHolder();
+    static final TestDatabaseExtension DB = new TestDatabaseExtension(DATABASE);
 
     private static volatile SqlSessionFactory sharedFactory;
 
@@ -40,9 +45,8 @@ public abstract class IntegrationTestBase {
     protected SqlSession sqlSession;
 
     @BeforeEach
-    void setUpIntegration() throws Exception {
-        this.dataSource = MariadbContainerExtension.dataSource(CONTEXT.context);
-        MariadbContainerExtension.truncateAll(dataSource);
+    void setUpIntegration() {
+        this.dataSource = DB.dataSource();
         this.sqlSessionFactory = factory(dataSource);
         this.sqlSession = sqlSessionFactory.openSession(true);
     }
@@ -68,8 +72,8 @@ public abstract class IntegrationTestBase {
         if (existing != null) return existing;
         synchronized (IntegrationTestBase.class) {
             if (sharedFactory == null) {
-                Configuration cfg = new Configuration(new Environment(
-                        "test", new JdbcTransactionFactory(), dataSource));
+                Configuration cfg =
+                        new Configuration(new Environment("test", new JdbcTransactionFactory(), dataSource));
                 cfg.setMapUnderscoreToCamelCase(true);
                 // Same handler the production DatabaseModule registers — UUID
                 // columns are BINARY(16) and only round-trip with it present.
@@ -77,15 +81,6 @@ public abstract class IntegrationTestBase {
                 sharedFactory = new SqlSessionFactoryBuilder().build(cfg);
             }
             return sharedFactory;
-        }
-    }
-
-    /** Captures an ExtensionContext so the static container helper can access JUnit's store. */
-    static final class ContextHolder
-            implements org.junit.jupiter.api.extension.BeforeAllCallback {
-        ExtensionContext context;
-        @Override public void beforeAll(ExtensionContext ctx) {
-            this.context = ctx;
         }
     }
 }

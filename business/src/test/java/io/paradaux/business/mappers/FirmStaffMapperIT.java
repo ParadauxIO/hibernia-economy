@@ -1,16 +1,16 @@
 package io.paradaux.business.mappers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmEmployee;
 import io.paradaux.business.model.FirmRole;
 import io.paradaux.business.testsupport.IntegrationTestBase;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class FirmStaffMapperIT extends IntegrationTestBase {
 
@@ -80,8 +80,9 @@ class FirmStaffMapperIT extends IntegrationTestBase {
         staff.endCurrentEmployment(firmId, e2.toString(), actor.toString());
 
         List<FirmEmployee> emps = staff.listCurrentEmployeesByFirm(firmId);
-        assertThat(emps).extracting(FirmEmployee::getPlayerUuid)
-                .extracting(s -> s.toLowerCase())
+        assertThat(emps)
+                .extracting(FirmEmployee::getPlayerUuid)
+                .extracting(s -> s.toLowerCase(Locale.ROOT))
                 .containsExactly(employee.toString());
     }
 }

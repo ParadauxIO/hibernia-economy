@@ -151,6 +151,21 @@ public final class RestApi {
         return send(req);
     }
 
+    /**
+     * Any request: {@code path} is relative to {@link #BASE_URL} (e.g. {@code "/admin/transfers"});
+     * {@code token} and {@code jsonBody} may be null (no Authorization header / empty body).
+     */
+    public static Response call(String method, String path, String token, String jsonBody) {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(BASE_URL + path))
+                .timeout(Duration.ofSeconds(10))
+                .method(method, jsonBody == null
+                        ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofString(jsonBody));
+        if (jsonBody != null) b.header("Content-Type", "application/json");
+        if (token != null) b.header("Authorization", "Bearer " + token);
+        return send(b.build());
+    }
+
     private static Response send(HttpRequest req) {
         try {
             HttpResponse<String> r = CLIENT.send(req, HttpResponse.BodyHandlers.ofString());

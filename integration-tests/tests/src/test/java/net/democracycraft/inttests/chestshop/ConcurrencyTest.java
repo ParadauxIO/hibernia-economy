@@ -2,6 +2,7 @@ package net.democracycraft.inttests.chestshop;
 
 import io.paradaux.mockclient.BlockFace;
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Inv;
 import net.democracycraft.inttests.support.Ledger;
@@ -96,8 +97,10 @@ class ConcurrencyTest {
             }
             assertThat(failure.get()).as("a buyer thread threw").isNull();
 
-            // Let all trades settle.
-            Thread.sleep(4000);
+            // Every buyer's click has been handled — and its trade, which ChestShop settles
+            // synchronously in the click handler, is final — once each connection's barrier
+            // round-trips.
+            Barrier.sync(mocks);
 
             BigDecimal sellerBalance = Ledger.personalBalance(s.getUuid()).orElseThrow();
             int chestLeft = Inv.chestCount(shop.chestPos(), "DIRT");

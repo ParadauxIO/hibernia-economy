@@ -1,5 +1,17 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.CreatedShop;
 import io.paradaux.chestshop.model.DestroyedShop;
@@ -13,6 +25,9 @@ import io.paradaux.chestshop.services.SignService;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.ChestShopShopRecord;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.Server;
 import org.bukkit.World;
@@ -28,21 +43,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Pure-Mockito coverage of {@link MarketSyncServiceImpl}. Every collaborator is a mock; the
@@ -75,8 +75,8 @@ class MarketSyncServiceImplTest {
         signService = mock(SignService.class);
         shopBlockService = mock(ShopBlockService.class);
         market = mock(MarketApi.class);
-        sync = new MarketSyncServiceImpl(plugin, marketService, items, signService, shopBlockService,
-                accounts, previews);
+        sync = new MarketSyncServiceImpl(
+                plugin, marketService, items, signService, shopBlockService, accounts, previews);
         lenient().when(marketService.enabled()).thenReturn(true);
         lenient().when(marketService.market()).thenReturn(market);
     }
@@ -128,7 +128,7 @@ class MarketSyncServiceImplTest {
     @Test
     void onTransaction_firstStockNull_returns() {
         Transaction event = mock(Transaction.class);
-        when(event.getStock()).thenReturn(new ItemStack[]{null});
+        when(event.getStock()).thenReturn(new ItemStack[] {null});
         sync.onTransaction(event);
         verify(marketService, never()).market();
     }
@@ -150,7 +150,7 @@ class MarketSyncServiceImplTest {
         when(ownerAccount.getUuid()).thenReturn(ownerUuid);
 
         Transaction event = mock(Transaction.class);
-        when(event.getStock()).thenReturn(new ItemStack[]{item});
+        when(event.getStock()).thenReturn(new ItemStack[] {item});
         when(event.getSign()).thenReturn(sign);
         when(event.getOwnerAccount()).thenReturn(ownerAccount);
         when(event.getClient()).thenReturn(client);
@@ -165,8 +165,8 @@ class MarketSyncServiceImplTest {
         when(marketService.ownerFromUuid(ownerUuid, false)).thenReturn(owner);
         when(marketService.stockOf(item, ownerInv)).thenReturn(15);
         when(marketService.capacityOf(item, ownerInv)).thenReturn(50);
-        when(marketService.sale(sign, item, 7, clientUuid, owner, BigDecimal.TEN, BigDecimal.ONE,
-                "BUY", 15, 42L)).thenReturn(saleRec);
+        when(marketService.sale(sign, item, 7, clientUuid, owner, BigDecimal.TEN, BigDecimal.ONE, "BUY", 15, 42L))
+                .thenReturn(saleRec);
         when(marketService.shop(sign, item, owner, 15, 50)).thenReturn(shopRec);
 
         sync.onTransaction(event);
@@ -188,7 +188,7 @@ class MarketSyncServiceImplTest {
         when(client.getUniqueId()).thenReturn(clientUuid);
 
         Transaction event = mock(Transaction.class);
-        when(event.getStock()).thenReturn(new ItemStack[]{item});
+        when(event.getStock()).thenReturn(new ItemStack[] {item});
         when(event.getSign()).thenReturn(sign);
         when(event.getOwnerAccount()).thenReturn(null); // ownerUuid -> null
         when(event.getClient()).thenReturn(client);
@@ -200,8 +200,8 @@ class MarketSyncServiceImplTest {
         when(signService.isAdminShop(sign)).thenReturn(true);
         when(marketService.totalAmount(any())).thenReturn(3);
         when(marketService.ownerFromUuid(null, true)).thenReturn(owner);
-        when(marketService.sale(sign, item, 3, clientUuid, owner, BigDecimal.TEN, BigDecimal.ZERO,
-                "SELL", null, null)).thenReturn(saleRec);
+        when(marketService.sale(sign, item, 3, clientUuid, owner, BigDecimal.TEN, BigDecimal.ZERO, "SELL", null, null))
+                .thenReturn(saleRec);
         when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
 
         sync.onTransaction(event);
@@ -216,7 +216,7 @@ class MarketSyncServiceImplTest {
     @Test
     void onTransaction_throwable_isSwallowed() {
         Transaction event = mock(Transaction.class);
-        when(event.getStock()).thenReturn(new ItemStack[]{mock(ItemStack.class)});
+        when(event.getStock()).thenReturn(new ItemStack[] {mock(ItemStack.class)});
         when(event.getSign()).thenReturn(mock(Sign.class));
         // marketService.market() throwing forces the catch arc.
         when(marketService.market()).thenThrow(new RuntimeException("boom"));
@@ -225,7 +225,7 @@ class MarketSyncServiceImplTest {
         when(event.getTransactionType()).thenReturn(Transaction.TransactionType.BUY);
         when(signService.isAdminShop(any(Sign.class))).thenReturn(true);
 
-        sync.onTransaction(event); // must not throw
+        assertThatCode(() -> sync.onTransaction(event)).doesNotThrowAnyException();
     }
 
     // ─────────────────────────── onShopCreated ───────────────────────────
@@ -296,7 +296,7 @@ class MarketSyncServiceImplTest {
         when(event.getSign()).thenReturn(sign);
         when(event.getSignLines()).thenReturn(lines);
         when(event.getOwnerAccount()).thenReturn(null); // ownerUuid -> null
-        when(event.getContainer()).thenReturn(null);    // container stays null (admin anyway)
+        when(event.getContainer()).thenReturn(null); // container stays null (admin anyway)
 
         when(items.parse("Diamond")).thenReturn(item);
         when(signService.isAdminShop(lines)).thenReturn(true);
@@ -348,7 +348,7 @@ class MarketSyncServiceImplTest {
         when(event.getSign()).thenReturn(mock(Sign.class));
         when(event.getSignLines()).thenThrow(new RuntimeException("boom"));
 
-        sync.onShopCreated(event); // must not throw
+        assertThatCode(() -> sync.onShopCreated(event)).doesNotThrowAnyException();
     }
 
     // ─────────────────────────── onShopDestroyed ───────────────────────────
@@ -394,7 +394,7 @@ class MarketSyncServiceImplTest {
         // getSign() throwing forces the catch arc.
         when(event.getSign()).thenThrow(new RuntimeException("boom"));
 
-        sync.onShopDestroyed(event); // must not throw
+        assertThatCode(() -> sync.onShopDestroyed(event)).doesNotThrowAnyException();
     }
 
     // ─────────────────────────── onInventoryClose ───────────────────────────
@@ -515,7 +515,8 @@ class MarketSyncServiceImplTest {
         // findConnectedShopSigns throwing forces the catch arc.
         when(shopBlockService.findConnectedShopSigns(holder)).thenThrow(new RuntimeException("boom"));
 
-        sync.onInventoryClose(holder, mock(Inventory.class)); // must not throw
+        assertThatCode(() -> sync.onInventoryClose(holder, mock(Inventory.class)))
+                .doesNotThrowAnyException();
     }
 
     // ─────────────────────────── custom-item resolution ───────────────────────────
@@ -547,7 +548,7 @@ class MarketSyncServiceImplTest {
 
     private Sign shopSign(String owner, String item) {
         Sign s = mock(Sign.class);
-        lenient().when(s.getLines()).thenReturn(new String[]{owner, "1", "B 10", item});
+        lenient().when(s.getLines()).thenReturn(new String[] {owner, "1", "B 10", item});
         return s;
     }
 
@@ -745,6 +746,6 @@ class MarketSyncServiceImplTest {
     @Test
     void onBlockReplaced_throwable_isSwallowed() {
         when(server.getWorld("world")).thenThrow(new RuntimeException("boom"));
-        sync.onBlockReplaced("world", 1, 2, 3); // must not throw
+        assertThatCode(() -> sync.onBlockReplaced("world", 1, 2, 3)).doesNotThrowAnyException();
     }
 }

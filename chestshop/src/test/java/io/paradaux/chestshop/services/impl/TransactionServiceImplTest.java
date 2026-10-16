@@ -1,16 +1,26 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.PostTradeReactions;
-import io.paradaux.chestshop.services.TradeContextFactory;
-import io.paradaux.chestshop.services.TradeSettlement;
-import io.paradaux.chestshop.services.TradeValidator;
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.PendingTransaction;
 import io.paradaux.chestshop.model.Transaction;
 import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.MetricsService;
+import io.paradaux.chestshop.services.PostTradeReactions;
 import io.paradaux.chestshop.services.StockCounterService;
+import io.paradaux.chestshop.services.TradeContextFactory;
+import io.paradaux.chestshop.services.TradeSettlement;
+import io.paradaux.chestshop.services.TradeValidator;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -24,18 +34,6 @@ import org.bukkit.inventory.PlayerInventory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
 /**
  * Orchestration coverage for {@link TransactionServiceImpl}: it is a thin delegator, so this test
@@ -71,8 +69,8 @@ class TransactionServiceImplTest {
         market = mock(MarketSyncService.class);
         metrics = mock(MetricsService.class);
 
-        service = new TransactionServiceImpl(contextFactory, validator, settlement, postTrade, economy,
-                stockCounter, market, metrics);
+        service = new TransactionServiceImpl(
+                contextFactory, validator, settlement, postTrade, economy, stockCounter, market, metrics);
     }
 
     // ── builders ──────────────────────────────────────────────────────────────
@@ -82,7 +80,10 @@ class TransactionServiceImplTest {
         Answer<Object> behaviour = inv -> switch (inv.getMethod().getName()) {
             case "getType" -> type;
             case "getAmount" -> amt[0];
-            case "setAmount" -> { amt[0] = inv.getArgument(0); yield null; }
+            case "setAmount" -> {
+                amt[0] = inv.getArgument(0);
+                yield null;
+            }
             case "clone" -> item(type, amt[0]);
             case "toString" -> "Item(" + type + "x" + amt[0] + ")";
             case "equals" -> inv.getMock() == inv.getArgument(0);
@@ -115,21 +116,36 @@ class TransactionServiceImplTest {
         Sign s = mock(Sign.class);
         lenient().when(s.getLocation()).thenReturn(loc);
         lenient().when(s.getWorld()).thenReturn(w);
-        lenient().when(s.getLines()).thenReturn(new String[]{"Alice", "1", "B 5", "STONE"});
+        lenient().when(s.getLines()).thenReturn(new String[] {"Alice", "1", "B 5", "STONE"});
         return s;
     }
 
-    private Transaction txn(Transaction.TransactionType type, Sign s, Player client, Account owner,
-                            Inventory ownerInv, Inventory clientInv, ItemStack[] stock, BigDecimal price) {
-        PendingTransaction pending = new PendingTransaction(ownerInv, clientInv, stock, price, client, owner, s, type, false);
+    private Transaction txn(
+            Transaction.TransactionType type,
+            Sign s,
+            Player client,
+            Account owner,
+            Inventory ownerInv,
+            Inventory clientInv,
+            ItemStack[] stock,
+            BigDecimal price) {
+        PendingTransaction pending =
+                new PendingTransaction(ownerInv, clientInv, stock, price, client, owner, s, type, false);
         return new Transaction(pending, s);
     }
 
     private Transaction sampleTransaction() {
         Player client = player("Notch", UUID.randomUUID());
         Account owner = new Account("Alice", "Alice", UUID.randomUUID());
-        return txn(BUY, sign(location(mock(World.class))), client, owner, mock(Inventory.class),
-                mock(Inventory.class), new ItemStack[]{item(Material.STONE, 1)}, new BigDecimal("5.00"));
+        return txn(
+                BUY,
+                sign(location(mock(World.class))),
+                client,
+                owner,
+                mock(Inventory.class),
+                mock(Inventory.class),
+                new ItemStack[] {item(Material.STONE, 1)},
+                new BigDecimal("5.00"));
     }
 
     // ═══════════════════════════ delegating methods ═══════════════════════════
@@ -188,8 +204,12 @@ class TransactionServiceImplTest {
     void process_cancelledTrade_stopsAfterStockCounter() {
         Transaction event = sampleTransaction();
         // execute is what cancels the trade — model that via the settlement mock.
-        doAnswer(inv -> { ((Transaction) inv.getArgument(0)).setCancelled(true); return null; })
-                .when(settlement).execute(event);
+        doAnswer(inv -> {
+                    ((Transaction) inv.getArgument(0)).setCancelled(true);
+                    return null;
+                })
+                .when(settlement)
+                .execute(event);
 
         service.process(event);
 
@@ -209,7 +229,8 @@ class TransactionServiceImplTest {
         // sign, so it blowing up must not lose the sale record, log line or confirmation.
         Transaction event = sampleTransaction();
         org.mockito.Mockito.doThrow(new NullPointerException("no owner inventory"))
-                .when(stockCounter).onTransaction(event);
+                .when(stockCounter)
+                .onTransaction(event);
 
         service.process(event);
 
@@ -235,17 +256,63 @@ class TransactionServiceImplTest {
         java.util.function.Function<java.util.UUID, java.math.BigDecimal> balance = u -> java.math.BigDecimal.ZERO;
         boolean hasAccount = true;
         boolean settleResult = true;
-        int settleCalls = 0;
         int migrateCalls = 0;
-        @Override public void bind(io.paradaux.treasury.api.TreasuryApi treasury, int systemAccountId, io.paradaux.treasury.api.TaxApi taxApi) { /* unused headless */ }
-        @Override public String format(java.math.BigDecimal amount) { return amount.toPlainString(); }
-        @Override public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) { return ownerEconomicallyActive; }
-        @Override public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) { return true; }
-        @Override public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) { return hasFunds.test(account, amount); }
-        @Override public java.math.BigDecimal getBalance(java.util.UUID account) { return balance.apply(account); }
-        @Override public boolean hasAccount(java.util.UUID account) { return hasAccount; }
-        @Override public boolean settle(java.math.BigDecimal amount, org.bukkit.entity.Player initiator, java.util.UUID partner, io.paradaux.chestshop.model.Transaction txn) { settleCalls++; return settleResult; }
-        @Override public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) { migrateCalls++; }
+
+        @Override
+        public void bind(
+                io.paradaux.treasury.api.TreasuryApi treasury,
+                int systemAccountId,
+                io.paradaux.treasury.api.TaxApi taxApi) {
+            /* unused headless */
+        }
+
+        @Override
+        public String format(java.math.BigDecimal amount) {
+            return amount.toPlainString();
+        }
+
+        @Override
+        public boolean isOwnerEconomicallyActive(boolean unlimitedOwner) {
+            return ownerEconomicallyActive;
+        }
+
+        @Override
+        public boolean deposit(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean withdraw(java.util.UUID target, java.math.BigDecimal amount, org.bukkit.World world) {
+            return true;
+        }
+
+        @Override
+        public boolean hasFunds(java.util.UUID account, java.math.BigDecimal amount) {
+            return hasFunds.test(account, amount);
+        }
+
+        @Override
+        public java.math.BigDecimal getBalance(java.util.UUID account) {
+            return balance.apply(account);
+        }
+
+        @Override
+        public boolean hasAccount(java.util.UUID account) {
+            return hasAccount;
+        }
+
+        @Override
+        public boolean settle(
+                java.math.BigDecimal amount,
+                org.bukkit.entity.Player initiator,
+                java.util.UUID partner,
+                io.paradaux.chestshop.model.Transaction txn) {
+            return settleResult;
+        }
+
+        @Override
+        public void migrateLegacyBusinessSign(io.paradaux.chestshop.model.Transaction event) {
+            migrateCalls++;
+        }
     }
 }

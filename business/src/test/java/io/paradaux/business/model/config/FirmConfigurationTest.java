@@ -1,18 +1,17 @@
 package io.paradaux.business.model.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.Business;
+import java.util.logging.Logger;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.logging.Logger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class FirmConfigurationTest {
@@ -29,8 +28,11 @@ class FirmConfigurationTest {
         assertThat(config.getBlockedNameTerms()).isEmpty();
     }
 
-    @Mock Business plugin;
-    @Mock FileConfiguration cfg;
+    @Mock
+    Business plugin;
+
+    @Mock
+    FileConfiguration cfg;
 
     @BeforeEach
     void setUp() {

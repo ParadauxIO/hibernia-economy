@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -43,10 +44,11 @@ class AccountCreateValidationTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account create " + firm + " X");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -66,10 +68,11 @@ class AccountCreateValidationTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account create " + firm + " " + longName);
                 String r = p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 assertThat(r).doesNotContain(".java:");
             });
         }
@@ -90,16 +93,17 @@ class AccountCreateValidationTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int countBefore = BusinessLedger.firmAccountCount(firmId);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account create " + firm + " " + tooLong);
                 String r = p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 assertThat(r).doesNotContain(".java:");
 
                 // Whether accepted (silently truncated) or rejected, the
                 // account count must reflect reality. Just assert no Java
                 // stack leak.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 int countAfter = BusinessLedger.firmAccountCount(firmId);
                 assertThat(countAfter).isBetween(countBefore, countBefore + 1);
             });
@@ -122,22 +126,18 @@ class AccountCreateValidationTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int countBefore = BusinessLedger.firmAccountCount(firmId);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account create " + firm + " " + acctName);
                 p.awaitMessageContaining("created account", TIMEOUT);
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                while (System.nanoTime() < deadline
-                        && BusinessLedger.firmAccountCount(firmId) == countBefore) {
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                int countAfterFirst = BusinessLedger.firmAccountCount(firmId);
+                int countAfterFirst = BusinessLedger.waitForFirmAccountCountAtLeast(firmId, countBefore + 1, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account create " + firm + " " + acctName);
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.firmAccountCount(firmId))
                         .as("duplicate /business account create must not insert a second row")
                         .isEqualTo(countAfterFirst);
@@ -159,10 +159,11 @@ class AccountCreateValidationTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account create " + firm + " " + sqlShape);
                 String r = p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 assertThat(r).doesNotContain(".java:")
                         .doesNotContain("SQLException");
             });

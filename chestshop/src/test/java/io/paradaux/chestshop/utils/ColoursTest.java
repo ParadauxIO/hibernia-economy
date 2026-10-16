@@ -1,10 +1,8 @@
 package io.paradaux.chestshop.utils;
 
-import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Constructor;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 class ColoursTest {
 
@@ -19,12 +17,5 @@ class ColoursTest {
         assertThat(Colours.GRAY).isEqualTo("§7");
         assertThat(Colours.DARK_GRAY).isEqualTo("§8");
         assertThat(Colours.BOLD).isEqualTo("§l");
-    }
-
-    @Test
-    void isUtilityClass_privateConstructor() throws Exception {
-        Constructor<Colours> ctor = Colours.class.getDeclaredConstructor();
-        ctor.setAccessible(true);
-        assertThat(ctor.newInstance()).isNotNull();
     }
 }

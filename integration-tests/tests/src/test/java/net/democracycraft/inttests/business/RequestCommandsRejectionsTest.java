@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -33,7 +34,7 @@ class RequestCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business offer " + firm + " " + owner);
                 // Service throws BadCommandException with a self-targeting message.
@@ -55,7 +56,7 @@ class RequestCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // The proprietor accepting a non-existent offer for their own firm
                 // should fail at the service layer (no pending offer).
@@ -93,10 +94,11 @@ class RequestCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business offer " + firm + " NobodyNeverJoinedZ" + Long.toHexString(System.nanoTime()));
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -115,11 +117,12 @@ class RequestCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // Rescind without ever offering.
                 p.chatCommand("/business offer rescind " + firm + " " + stranger);
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -135,10 +138,11 @@ class RequestCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business offer reject " + firm);
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -173,11 +177,12 @@ class RequestCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 // No transfer pending → service should reject.
                 p.chatCommand("/business transfer cancel " + firm + " " + target);
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -196,10 +201,11 @@ class RequestCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business transfer complete " + firm + " " + target);
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -220,12 +226,12 @@ class RequestCommandsRejectionsTest {
                 a.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.chatCommand("/business transfer begin " + firm + " " + newOwner);
                 a.awaitMessageContaining("Confirm transfer", TIMEOUT);
                 BusinessLedger.waitForActiveTransferToken(firmId, b.getUuid(), TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 a.drainMessages();
                 a.chatCommand("/business transfer confirm " + firm + " " + newOwner + " GARBAGECODE");
                 a.awaitMessageContaining("Invalid code", TIMEOUT);

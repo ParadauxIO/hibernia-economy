@@ -8,7 +8,6 @@ import com.fastasyncworldedit.core.queue.IChunkSet;
 import com.sk89q.worldedit.event.extent.EditSessionEvent;
 import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.math.BlockVector3;
-
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
@@ -29,8 +28,11 @@ final class FaweShopCleanup implements IBatchProcessor {
         // WorldEdit's Extent has no addPostProcessor method. Resolve the FAWE extension
         // only here, retaining binary compatibility with ordinary WorldEdit.
         try {
-            Extent extent = (Extent) Extent.class.getMethod("addPostProcessor", IBatchProcessor.class)
-                    .invoke(event.getExtent(), new FaweShopCleanup(event.getWorld().getName(), queue));
+            Extent extent = (Extent) Extent.class
+                    .getMethod("addPostProcessor", IBatchProcessor.class)
+                    .invoke(
+                            event.getExtent(),
+                            new FaweShopCleanup(event.getWorld().getName(), queue));
             event.setExtent(extent);
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("Cannot register FAWE shop cleanup", e);
@@ -45,17 +47,29 @@ final class FaweShopCleanup implements IBatchProcessor {
         Set<BlockVector3> tiles = new HashSet<>(before.tiles().keySet());
         tiles.addAll(after.tiles().keySet());
         for (BlockVector3 pos : tiles) {
-            queue.add(new WorldEditShopCleanupListener.Pos(world,
-                    (chunk.getX() << 4) + pos.x(), pos.y(), (chunk.getZ() << 4) + pos.z()));
+            queue.add(new WorldEditShopCleanupListener.Pos(
+                    world, (chunk.getX() << 4) + pos.x(), pos.y(), (chunk.getZ() << 4) + pos.z()));
         }
     }
 
-    @Override public Future<?> postProcessSet(IChunk chunk, IChunkGet before, IChunkSet after) {
+    @Override
+    public Future<?> postProcessSet(IChunk chunk, IChunkGet before, IChunkSet after) {
         postProcess(chunk, before, after);
         return CompletableFuture.completedFuture(null);
     }
 
-    @Override public ProcessorScope getScope() { return ProcessorScope.READING_BLOCKS; }
-    @Override public IChunkSet processSet(IChunk chunk, IChunkGet get, IChunkSet set) { return set; }
-    @Override public Extent construct(Extent child) { return child; }
+    @Override
+    public ProcessorScope getScope() {
+        return ProcessorScope.READING_BLOCKS;
+    }
+
+    @Override
+    public IChunkSet processSet(IChunk chunk, IChunkGet get, IChunkSet set) {
+        return set;
+    }
+
+    @Override
+    public Extent construct(Extent child) {
+        return child;
+    }
 }
