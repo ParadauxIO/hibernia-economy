@@ -153,8 +153,8 @@ class ChestShopSalesTrackerE2ETest {
 
             buyOnce(b, buyer, shop);
             Market.waitForSaleCount(b.getUuid(), 1, TIMEOUT);
-            // second purchase — repeat the full teleport/position-sync preamble so
-            // the click reliably lands (a bare second useBlock gets dropped).
+            // second purchase — clickBuy spaces it past ChestShop's per-player
+            // SHOP_INTERACTION_INTERVAL; a click inside it is dropped silently.
             buyOnce(b, buyer, shop);
 
             Market.waitForSaleCount(b.getUuid(), 2, TIMEOUT);

@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -37,10 +38,10 @@ class AccountMembershipTest {
 
     /** Owner offers, hire accepts: the hire joins at the lowest default role (Employee). */
     private static void hire(MockPlayer o, MockPlayer h, String hireName, String firm, int firmId) {
-        Ledger.asyncSettle();
+        Barrier.settle();
         o.chatCommand("/business offer " + firm + " " + hireName);
         o.awaitMessageContaining("job offer has sent", TIMEOUT);
-        Ledger.asyncSettle();
+        Barrier.settle();
         Ops.run(hireName, () -> {
             h.chatCommand("/business offer accept " + firm);
             h.awaitMessageContaining("accepted a job offer", TIMEOUT);
@@ -50,7 +51,7 @@ class AccountMembershipTest {
 
     private static void promoteTo(MockPlayer o, MockPlayer h, String hireName, String firm, int firmId,
                                   String role) {
-        Ledger.asyncSettle();
+        Barrier.settle();
         o.drainMessages();
         o.chatCommand("/business staff promote " + firm + " " + hireName);
         o.awaitMessageContaining("has been promoted to", TIMEOUT);
@@ -59,7 +60,7 @@ class AccountMembershipTest {
 
     private static void demoteTo(MockPlayer o, MockPlayer h, String hireName, String firm, int firmId,
                                  String role) {
-        Ledger.asyncSettle();
+        Barrier.settle();
         o.drainMessages();
         o.chatCommand("/business staff demote " + firm + " " + hireName);
         o.awaitMessageContaining("has been demoted to", TIMEOUT);
@@ -68,12 +69,13 @@ class AccountMembershipTest {
 
     /** Runs an account-access command and returns the (first non-blank) reply. */
     private static String accountCommand(MockPlayer o, String command) {
-        Ledger.asyncSettle();
+        Barrier.settle();
         o.drainMessages();
         o.chatCommand(command);
         String reply = o.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+        Barrier.settle();
         // Let the write + the reconcile that follows it commit before asserting.
-        Ledger.asyncSettle();
+        Barrier.settle();
         return reply;
     }
 
@@ -128,7 +130,7 @@ class AccountMembershipTest {
                 // Employee / Supervisor carry no FINANCIAL permission: no account access.
                 hire(p, e, employee, firm, firmId);
                 promoteTo(p, e, employee, firm, firmId, "Supervisor");
-                Ledger.asyncSettle();
+                Barrier.settle();
                 assertThat(BusinessLedger.isAccountMember(defaultId, e.getUuid())).isFalse();
 
                 // Manager carries FINANCIAL → becomes a member (not an authorizer).
@@ -266,7 +268,7 @@ class AccountMembershipTest {
                 promoteTo(p, e, employee, firm, firmId, "Manager");
                 BusinessLedger.waitForAccountMemberCount(defaultId, baseline + 1, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account members " + firm + " " + defaultId);
                 // Header message arrives first, then one entry per member as
@@ -304,7 +306,7 @@ class AccountMembershipTest {
                 promoteTo(p, e, employee, firm, firmId, "Co-Proprietor");
                 BusinessLedger.waitForAccountAuthorizerCount(defaultId, baselineAuth + 1, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business account authorizers " + firm + " " + defaultId);
                 String header = p.awaitMessageContaining("Authorizers of account", TIMEOUT);

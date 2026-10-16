@@ -50,6 +50,23 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
 
     private volatile boolean logging = true;
 
+    /**
+     * PlayerInteractEvents seen per player (lower-cased name), cancelled or not. Read with
+     * {@code /diag interactions <player>}: a test that expects a click to change nothing
+     * first proves the click reached Bukkit at all, so "nothing changed" can't pass because
+     * the server silently dropped the packet.
+     */
+    private final java.util.Map<String, java.util.concurrent.atomic.AtomicLong> interactions =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Ticks ahead within which a pending one-shot task counts as in flight for
+     * {@code /diag asyncidle}. Work a command hands to the scheduler runs on the next tick
+     * or two; anything scheduled further out (TaxCycleTask parks its next cycle hours
+     * ahead) is not part of the command and must not hold the barrier forever.
+     */
+    private static final long ASYNC_IDLE_HORIZON_TICKS = 40;
+
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(this, this);
@@ -60,6 +77,8 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
     public void onInteract(PlayerInteractEvent e) {
+        interactions.computeIfAbsent(e.getPlayer().getName().toLowerCase(Locale.ROOT),
+                k -> new java.util.concurrent.atomic.AtomicLong()).incrementAndGet();
         if (!logging) return;
         Block b = e.getClickedBlock();
         getLogger().info(String.format(
@@ -88,6 +107,13 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("dcsync")) {
+            // Barrier sentinel (support/Barrier.java): answered synchronously on the main
+            // thread, so the reply proves every command this player sent before it has
+            // been dispatched. Echo the caller's nonce so replies can't be confused.
+            sender.sendMessage("dcsync " + String.join(" ", args));
+            return true;
+        }
         if (args.length == 0) {
             sender.sendMessage("usage: /diag <click|break|pos|logon|logoff> [args...]");
             return true;
@@ -137,6 +163,14 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doGpClaim(sender, args);
             case "protclear":
                 return doProtClear(sender, args);
+            case "interactions":
+                return doInteractions(sender, args);
+            case "perm":
+                return doPerm(sender, args);
+            case "asyncidle":
+                return doAsyncIdle(sender, args);
+            case "ingeststub":
+                return doIngestStub(sender, args);
             default:
                 sender.sendMessage("unknown subcommand: " + args[0]);
                 return true;
@@ -704,5 +738,141 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
         } catch (Throwable t) { sender.sendMessage("gp clear failed: " + t); }
         sender.sendMessage("protclear removed regions=" + regions + " claims=" + claims);
         return true;
+    }
+
+    // ---------------------------------------------------------------- barrier helpers
+    //
+    // Support for the suite's positive barriers (tests/.../support/Barrier.java, Perms.java).
+    // RCON runs these on the main thread, so each answer is a consistent server-side read.
+
+    /** {@code /diag interactions <player>} → {@code interactions=N} (PlayerInteractEvents seen). */
+    private boolean doInteractions(CommandSender sender, String[] args) {
+        if (args.length != 2) { sender.sendMessage("usage: /diag interactions <player>"); return true; }
+        java.util.concurrent.atomic.AtomicLong n = interactions.get(args[1].toLowerCase(Locale.ROOT));
+        sender.sendMessage("interactions=" + (n == null ? 0 : n.get()));
+        return true;
+    }
+
+    /**
+     * {@code /diag perm <player> <node>} → {@code has=<bool> set=<bool>} — exactly what a
+     * command's permission check reads ({@link Player#hasPermission}), plus whether the node
+     * is explicitly set. LuckPerms applies {@code lp ... permission set} on its own thread;
+     * polling this is how a test knows the grant is live. {@code offline} if not online.
+     */
+    private boolean doPerm(CommandSender sender, String[] args) {
+        if (args.length != 3) { sender.sendMessage("usage: /diag perm <player> <node>"); return true; }
+        Player p = Bukkit.getPlayerExact(args[1]);
+        if (p == null) { sender.sendMessage("offline"); return true; }
+        sender.sendMessage("has=" + p.hasPermission(args[2]) + " set=" + p.isPermissionSet(args[2]));
+        return true;
+    }
+
+    /**
+     * {@code /diag asyncidle <plugin>...} → {@code idle}, or {@code busy <task>...} while any
+     * named plugin has a one-shot scheduler task (sync or async) that is queued to run
+     * within {@link #ASYNC_IDLE_HORIZON_TICKS} or is still running.
+     *
+     * <p>Why that observes "the plugin's command handlers have finished": Hibernia's
+     * {@code @Async} routes call {@code BukkitScheduler.runTaskAsynchronously} from the main
+     * thread. CraftScheduler keeps such a task visible to {@code getPendingTasks()} from the
+     * moment it is submitted (the pending list, then the {@code runners} map) until
+     * {@code CraftAsyncTask.run} removes it from {@code runners} <em>after</em> the body
+     * returned. Repeating timers (period &gt; 0) are excluded — they are never "done".
+     */
+    private boolean doAsyncIdle(CommandSender sender, String[] args) {
+        if (args.length < 2) { sender.sendMessage("usage: /diag asyncidle <plugin>..."); return true; }
+        java.util.Set<String> owners = new java.util.HashSet<>();
+        for (int i = 1; i < args.length; i++) owners.add(args[i].toLowerCase(Locale.ROOT));
+        try {
+            Object scheduler = Bukkit.getScheduler();
+            int syncTick = (int) field(scheduler, "currentTick");
+            Object asyncScheduler = field(scheduler, "asyncScheduler");
+            int asyncTick = asyncScheduler == null ? syncTick : (int) field(asyncScheduler, "currentTick");
+            java.util.List<String> busy = new java.util.ArrayList<>();
+            for (org.bukkit.scheduler.BukkitTask t : Bukkit.getScheduler().getPendingTasks()) {
+                if (!owners.contains(t.getOwner().getName().toLowerCase(Locale.ROOT))) continue;
+                long period = (long) call(t, "getPeriod");
+                if (period != -1L) continue; // repeating (>0) or cancelled/finished (<-1)
+                long ahead = (long) call(t, "getNextRun") - (t.isSync() ? syncTick : asyncTick);
+                if (ahead > ASYNC_IDLE_HORIZON_TICKS) continue; // parked far ahead, not in flight
+                busy.add(t.getOwner().getName() + "#" + t.getTaskId()
+                        + (t.isSync() ? "(sync," : "(async,") + "in " + ahead + " ticks)");
+            }
+            sender.sendMessage(busy.isEmpty() ? "idle" : "busy " + String.join(" ", busy));
+        } catch (Throwable t) {
+            sender.sendMessage("asyncidle failed: " + t);
+        }
+        return true;
+    }
+
+    /** The stub provider, once registered — kept so a second call doesn't register twice. */
+    private Object ingestStub;
+
+    /**
+     * {@code /diag ingeststub <source>} → registers (once) a Treasury {@code IngestApi}
+     * provider for {@code source} that ingests nothing and reports {@code scanned=0}. It
+     * stands in for the standalone TreasuryIngest plugin (not part of this repo or the
+     * integration stack) so {@code /treasury admin ingest}'s dispatch-to-provider branch can
+     * be exercised. Built as a {@link java.lang.reflect.Proxy} over the interface loaded from
+     * Treasury's class loader, so DcDiag needs no compile-time Treasury dependency.
+     */
+    private boolean doIngestStub(CommandSender sender, String[] args) {
+        if (args.length != 2) { sender.sendMessage("usage: /diag ingeststub <source>"); return true; }
+        if (ingestStub != null) { sender.sendMessage("ingeststub already registered"); return true; }
+        String source = args[1].toLowerCase(Locale.ROOT);
+        try {
+            org.bukkit.plugin.Plugin treasury = Bukkit.getPluginManager().getPlugin("Treasury");
+            if (treasury == null) { sender.sendMessage("Treasury not loaded"); return true; }
+            ClassLoader cl = treasury.getClass().getClassLoader();
+            Class<?> apiType = cl.loadClass("io.paradaux.treasury.api.ingest.IngestApi");
+            Class<?> reportType = cl.loadClass("io.paradaux.treasury.api.ingest.IngestReport");
+            java.lang.reflect.Constructor<?> report = reportType.getConstructors()[0];
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(cl, new Class<?>[] {apiType}, (self, m, a) ->
+                    switch (m.getName()) {
+                        case "supportedSources" -> java.util.Set.of(source);
+                        case "ingest" -> report.newInstance(a[0], 0, 0, 0, 0, java.math.BigDecimal.ZERO, 0L);
+                        case "toString" -> "DcDiag ingest stub for " + source;
+                        case "hashCode" -> System.identityHashCode(self);
+                        case "equals" -> self == a[0];
+                        default -> throw new UnsupportedOperationException(m.getName());
+                    });
+            registerService(apiType, proxy);
+            ingestStub = proxy;
+            sender.sendMessage("ingeststub registered for " + source);
+        } catch (Throwable t) {
+            sender.sendMessage("ingeststub failed: " + t);
+        }
+        return true;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void registerService(Class<?> type, Object provider) {
+        Bukkit.getServicesManager().register((Class) type, provider, this, org.bukkit.plugin.ServicePriority.Lowest);
+    }
+
+    private static Object field(Object target, String name) throws ReflectiveOperationException {
+        for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Field f = c.getDeclaredField(name);
+                f.setAccessible(true);
+                return f.get(target);
+            } catch (NoSuchFieldException ignored) {
+                // keep walking up
+            }
+        }
+        throw new NoSuchFieldException(name + " on " + target.getClass().getName());
+    }
+
+    private static Object call(Object target, String name) throws ReflectiveOperationException {
+        for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+            try {
+                java.lang.reflect.Method m = c.getDeclaredMethod(name);
+                m.setAccessible(true);
+                return m.invoke(target);
+            } catch (NoSuchMethodException ignored) {
+                // keep walking up
+            }
+        }
+        throw new NoSuchMethodException(name + " on " + target.getClass().getName());
     }
 }

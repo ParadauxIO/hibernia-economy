@@ -257,52 +257,24 @@ public final class Ledger {
 
     /** Wait until a non-archived GOVERNMENT account with this name exists. */
     public static int waitForGovernmentAccount(String displayName, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            Integer id = governmentAccountId(displayName).orElse(null);
-            if (id != null) return id;
-            sleep(150);
-        }
-        throw new AssertionError("Government account '" + displayName + "' not found within " + timeout);
+        return Await.until("government account '" + displayName + "'",
+                () -> governmentAccountId(displayName).orElse(null), id -> id != null, timeout);
     }
 
     /** Wait until the active fine count for a player equals {@code expected}. */
     public static void waitForActiveFineCount(java.util.UUID playerUuid, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = activeFinesForPlayer(playerUuid);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Active fines for " + playerUuid + " did not reach " + expected
-                + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("active fines for " + playerUuid, () -> activeFinesForPlayer(playerUuid), expected, timeout);
     }
 
     /** Wait until the member count of an account reaches {@code expected}. */
     public static void waitForMemberCount(int accountId, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = memberCount(accountId);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Member count for account " + accountId + " did not reach " + expected
-                + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("member count of account " + accountId, () -> memberCount(accountId), expected, timeout);
     }
 
     /** Wait until the authorizer count of an account reaches {@code expected}. */
     public static void waitForAuthorizerCount(int accountId, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = authorizerCount(accountId);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Authorizer count for account " + accountId + " did not reach " + expected
-                + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("authorizer count of account " + accountId, () -> authorizerCount(accountId),
+                expected, timeout);
     }
 
     // -------------------------------------------------------- player balance waiters
@@ -316,41 +288,37 @@ public final class Ledger {
      * @throws AssertionError if no balance materialises in time
      */
     public static BigDecimal waitForPersonalBalance(UUID ownerUuid, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            BigDecimal bal = personalBalance(ownerUuid).orElse(null);
-            if (bal != null) return bal;
-            sleep(150);
-        }
-        throw new AssertionError("Treasury did not seed a balance for " + ownerUuid + " within " + timeout);
+        return Await.until("Treasury to seed a balance for " + ownerUuid,
+                () -> personalBalance(ownerUuid).orElse(null), bal -> bal != null, timeout);
     }
 
     /** Wait until the materialised balance for {@code accountId} equals {@code expected}. */
     public static void waitForAccountBalanceById(int accountId, BigDecimal expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        BigDecimal last = null;
-        while (System.nanoTime() < deadline) {
-            last = accountBalanceById(accountId).orElse(null);
-            if (last != null && last.compareTo(expected) == 0) return;
-            sleep(150);
-        }
-        throw new AssertionError(
-                "Account " + accountId + " balance did not reach " + expected
-                        + " within " + timeout + " (last seen: " + last + ")");
+        Await.until("balance of account " + accountId + " to reach " + expected,
+                () -> accountBalanceById(accountId).orElse(null), sameAmount(expected), timeout);
     }
 
     /** Wait until the personal balance equals {@code expected}, comparing scale-insensitively. */
     public static void waitForPersonalBalance(UUID ownerUuid, BigDecimal expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        BigDecimal last = null;
-        while (System.nanoTime() < deadline) {
-            last = personalBalance(ownerUuid).orElse(null);
-            if (last != null && last.compareTo(expected) == 0) return;
-            sleep(150);
-        }
-        throw new AssertionError(
-                "Personal balance for " + ownerUuid + " did not reach " + expected + " within " + timeout
-                        + " (last seen: " + last + ")");
+        Await.until("personal balance of " + ownerUuid + " to reach " + expected,
+                () -> personalBalance(ownerUuid).orElse(null), sameAmount(expected), timeout);
+    }
+
+    /** Wait until a fine exists for the player; returns the most recent fine's id. */
+    public static long waitForMostRecentFine(UUID playerUuid, Duration timeout) {
+        return Await.until("a fine recorded for " + playerUuid,
+                () -> mostRecentFineFor(playerUuid).orElse(null), id -> id != null, timeout);
+    }
+
+    /** Wait until the named GOVERNMENT account's balance equals {@code expected} (scale-insensitive). */
+    public static void waitForGovernmentBalance(String displayName, BigDecimal expected, Duration timeout) {
+        Await.until("balance of gov account " + displayName + " to reach " + expected,
+                () -> governmentBalance(displayName).orElse(null), sameAmount(expected), timeout);
+    }
+
+    /** Scale-insensitive, null-safe "equals this amount" predicate for {@link Await}. */
+    public static java.util.function.Predicate<BigDecimal> sameAmount(BigDecimal expected) {
+        return v -> v != null && v.compareTo(expected) == 0;
     }
 
     /**
@@ -431,27 +399,6 @@ public final class Ledger {
 
     private static Connection connect() throws SQLException {
         return DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
-    }
-
-    private static void sleep(long ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted", e);
-        }
-    }
-
-    /**
-     * Test-helper "settle" delay between two consecutive Treasury commands.
-     * Treasury's command handlers are {@code @Async} and run on a per-plugin
-     * single-threaded scheduler; submitting commands faster than the
-     * scheduler can process can cause the second command to silently miss
-     * its chat response window. 750 ms is conservative; tighten if you have
-     * evidence this is over-padded.
-     */
-    public static void asyncSettle() {
-        sleep(750);
     }
 
     private Ledger() {}

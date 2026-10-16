@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.ApiTokens;
 import net.democracycraft.inttests.support.ApiTokens.IssuedKey;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.DevServer;
 import net.democracycraft.inttests.support.Ledger;
@@ -68,7 +69,7 @@ class SoftDeleteAuthTest {
                 o.awaitMessageContaining("Created", TIMEOUT);
                 accountIdHolder[0] = Ledger.waitForGovernmentAccount(account, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 o.chatCommand("/gov account member add " + account + " " + member);
                 o.awaitMessageContaining("Added", TIMEOUT);
                 Ledger.waitForMemberCount(accountIdHolder[0], 1, TIMEOUT);
@@ -124,18 +125,14 @@ class SoftDeleteAuthTest {
                 firmIdHolder[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int baseline = BusinessLedger.firmAccountCount(firmIdHolder[0]);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account create " + firm + " Savings");
                 p.awaitMessageContaining("created account", TIMEOUT);
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                while (System.nanoTime() < deadline
-                        && BusinessLedger.firmAccountCount(firmIdHolder[0]) == baseline) {
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
+                BusinessLedger.waitForFirmAccountCountAtLeast(firmIdHolder[0], baseline + 1, TIMEOUT);
                 secondAccountHolder[0] = BusinessLedger.firmAccountIdAt(firmIdHolder[0], 1);
 
                 // Fund the new account so we have something to transfer.
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account deposit " + firm + " " + secondAccountHolder[0] + " 200");
                 p.awaitMessageContaining("Deposited", TIMEOUT);
             });
@@ -185,21 +182,17 @@ class SoftDeleteAuthTest {
                 firmIdHolder[0] = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int baseline = BusinessLedger.firmAccountCount(firmIdHolder[0]);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " 100");
                 p.awaitMessageContaining("Deposited", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account create " + firm + " Vault");
                 p.awaitMessageContaining("created account", TIMEOUT);
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                while (System.nanoTime() < deadline
-                        && BusinessLedger.firmAccountCount(firmIdHolder[0]) == baseline) {
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
+                BusinessLedger.waitForFirmAccountCountAtLeast(firmIdHolder[0], baseline + 1, TIMEOUT);
                 savingsHolder[0] = BusinessLedger.firmAccountIdAt(firmIdHolder[0], 1);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account deposit " + firm + " " + savingsHolder[0] + " 250");
                 p.awaitMessageContaining("Deposited", TIMEOUT);
             });

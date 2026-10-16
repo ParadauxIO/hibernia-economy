@@ -46,7 +46,7 @@ class SellRejectionsTest {
             BigDecimal ownerBefore = Ledger.personalBalance(o.getUuid()).orElseThrow();
 
             shop.clickSell(c, client);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click), so the rejection is final.
 
             // Rejected: client keeps items + money, owner unchanged, no dirt in the chest.
             assertThat(Ledger.personalBalance(c.getUuid()).orElseThrow()).isEqualByComparingTo(STARTING);
@@ -77,7 +77,7 @@ class SellRejectionsTest {
             Ledger.waitForPersonalBalance(o.getUuid(), BigDecimal.ZERO, TIMEOUT);
 
             shop.clickSell(c, client);
-            try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // The click returned only once the server had processed it (ChestShopFixture#click), so the rejection is final.
 
             // Rejected: client keeps items + money, owner still broke, chest still empty.
             assertThat(Ledger.personalBalance(c.getUuid()).orElseThrow()).isEqualByComparingTo(STARTING);

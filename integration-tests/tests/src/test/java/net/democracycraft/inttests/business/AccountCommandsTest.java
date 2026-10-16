@@ -1,6 +1,8 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -40,18 +42,12 @@ class AccountCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int baseline = BusinessLedger.firmAccountCount(firmId);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account create " + firm + " Savings");
                 p.awaitMessageContaining("created account", TIMEOUT);
 
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                int last = baseline;
-                while (System.nanoTime() < deadline) {
-                    last = BusinessLedger.firmAccountCount(firmId);
-                    if (last == baseline + 1) break;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(last).isEqualTo(baseline + 1);
+                Await.untilEquals("account count of firm " + firmId, () -> BusinessLedger.firmAccountCount(firmId),
+                        baseline + 1, TIMEOUT);
             });
         }
     }
@@ -68,7 +64,7 @@ class AccountCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account list " + firm);
                 p.awaitMessageContaining("Treasury Accounts for " + firm, TIMEOUT);
             });
@@ -88,33 +84,19 @@ class AccountCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int originalDefault = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account create " + firm + " Reserves");
                 p.awaitMessageContaining("created account", TIMEOUT);
 
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                int newAccountId = -1;
-                while (System.nanoTime() < deadline) {
-                    if (BusinessLedger.firmAccountCount(firmId) >= 2) {
-                        newAccountId = BusinessLedger.firmAccountIdAt(firmId, 1);
-                        break;
-                    }
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(newAccountId).isNotEqualTo(-1).isNotEqualTo(originalDefault);
+                BusinessLedger.waitForFirmAccountCountAtLeast(firmId, 2, TIMEOUT);
+                int newAccountId = BusinessLedger.firmAccountIdAt(firmId, 1);
+                assertThat(newAccountId).isNotEqualTo(originalDefault);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account setdefault " + firm + " " + newAccountId);
                 p.awaitMessageContaining("default account for " + firm, TIMEOUT);
 
-                long deadline2 = System.nanoTime() + TIMEOUT.toNanos();
-                int last = originalDefault;
-                while (System.nanoTime() < deadline2) {
-                    last = BusinessLedger.firmDefaultAccountId(firmId).orElse(-1);
-                    if (last == newAccountId) break;
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(last).isEqualTo(newAccountId);
+                BusinessLedger.waitForFirmDefaultAccount(firmId, newAccountId, TIMEOUT);
             });
         }
     }
@@ -131,22 +113,14 @@ class AccountCommandsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account create " + firm + " ToArchive");
                 p.awaitMessageContaining("created account", TIMEOUT);
 
-                long deadline = System.nanoTime() + TIMEOUT.toNanos();
-                int newAccountId = -1;
-                while (System.nanoTime() < deadline) {
-                    if (BusinessLedger.firmAccountCount(firmId) >= 2) {
-                        newAccountId = BusinessLedger.firmAccountIdAt(firmId, 1);
-                        break;
-                    }
-                    try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-                }
-                assertThat(newAccountId).isNotEqualTo(-1);
+                BusinessLedger.waitForFirmAccountCountAtLeast(firmId, 2, TIMEOUT);
+                int newAccountId = BusinessLedger.firmAccountIdAt(firmId, 1);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account archive " + firm + " " + newAccountId);
                 p.awaitMessageContaining("archived account", TIMEOUT);
             });
@@ -166,7 +140,7 @@ class AccountCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account sync " + firm + " " + defaultId);
                 p.awaitMessageContaining("synced staff members to account", TIMEOUT);
             });
@@ -186,11 +160,11 @@ class AccountCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account members " + firm + " " + defaultId);
                 p.awaitMessage(m -> m.contains("Members of account") || m.contains("No members found"), TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account authorizers " + firm + " " + defaultId);
                 p.awaitMessage(m -> m.contains("Authorizers of account") || m.contains("No authorizers found"), TIMEOUT);
             });
@@ -210,7 +184,7 @@ class AccountCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account balance " + firm + " " + defaultId);
                 p.awaitMessageContaining("Account " + defaultId + " balance for " + firm, TIMEOUT);
             });
@@ -230,11 +204,11 @@ class AccountCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account deposit " + firm + " " + defaultId + " 75");
                 p.awaitMessageContaining("Deposited", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account withdraw " + firm + " " + defaultId + " 75");
                 p.awaitMessageContaining("Withdrew", TIMEOUT);
             });
@@ -254,11 +228,11 @@ class AccountCommandsTest {
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account deposit " + firm + " " + defaultId + " 25");
                 p.awaitMessageContaining("Deposited", TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business account transactions " + firm + " " + defaultId);
                 p.awaitMessage(m -> m.contains("Transactions for " + firm + " account " + defaultId), TIMEOUT);
             });

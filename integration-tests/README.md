@@ -54,6 +54,7 @@ try (MockPlayer alice = MockPlayer.connectLocal("Alice")) {
 | **Chat (receive)** | `awaitMessage(predicate, timeout)` | Block until a chat line matches. Throws `AssertionError` on timeout. |
 | | `awaitMessageContaining(substring, timeout)` | Convenience — substring match. |
 | | `drainMessages()` | Discard buffered chat lines. |
+| | `awaitMessageAfter(trigger, predicate, timeout)` | Run `trigger` (e.g. send a command) and wait for a matching line, leaving every other buffered line in place. |
 | **Position** | `getPosition()` | Best-known current position (populated by the time `connect()` returns). |
 | | `awaitPositionMatching(predicate, timeout)` | Block until position matches. |
 | | `awaitPositionNear(target, radius, timeout)` | Block until within `radius` of `target`. |
@@ -61,8 +62,10 @@ try (MockPlayer alice = MockPlayer.connectLocal("Alice")) {
 | | `breakBlock(pos)` | START_DIGGING + FINISH_DIGGING. Works for instabreak blocks. |
 | | `updateSign(pos, lines[4], frontText)` | Set sign text. Sign block must already exist. |
 | **Generic** | `awaitClientbound(class, predicate, timeout)` | Wait for any clientbound packet of a given type. Escape hatch when the higher-level helpers don't cover what you need. |
+| | `awaitClientboundAfter(trigger, class, predicate, timeout)` | Same, but listens *before* running `trigger`, so an immediate answer can't be missed. |
+| **Barrier** | `sync(timeout)` | Round trip on the connection: returns once the server has handled every packet sent before it (clicks, digs, moves — and the synchronous plugin code they ran) and the client holds everything the server sent meanwhile. Does not order against slash-commands; see the javadoc. |
 | **Identity** | `getUsername()` / `getUuid()` | UUID is the offline-mode derivation Paper uses (UUID v3 over `OfflinePlayer:<name>`). |
-| **Lifecycle** | `isConnected()` / `close()` | `try-with-resources`-friendly. |
+| **Lifecycle** | `isConnected()` / `close()` / `openPlayers()` | `try-with-resources`-friendly; `openPlayers()` lists the connected players. |
 
 ### Helper types
 
@@ -120,21 +123,61 @@ Live integration tests that exercise the full Treasury / Business / TreasuryAPI 
 | `PositionTrackingTest::rconTeleportIsObservedOnTheClient` | Teleport via RCON → client observes new position via `awaitPositionNear`. Combines RCON + position tracking. |
 | `MultiPlayerTest` | Two concurrent mock players each see the other's join broadcast. Foundation for cross-player tests (firm hires, transfers, auction bids). |
 
-All tests pass in **~3 seconds** total against a healthy dev server.
+Those are the foundations; the suite has grown to 87 classes (~500 tests) across
+`business/`, `chestshop/`, `treasury/`, `restapi/` (including the SERVICE-scoped admin API,
+`AdminApiTest`) and `ingest/`.
+
+**Runtime** (measured October 2026 on a shared 16-core box, `IT_SKIP_BUILD=1`): about
+4 minutes for the `:tests:test` task and 6 minutes for the whole of `run.sh` (stack
+boot, migration, tests, teardown); the tests themselves sum to roughly 230 seconds.
+A cold run adds the plugin build. Most of the remaining time is real waiting — webhook
+delivery and the transaction feed's settlement lag.
 
 ### Test infrastructure
 
 ```
 tests/src/test/java/net/democracycraft/inttests/
-├── FirstJoinSeedsBalanceTest.java
-├── ChatRoundTripTest.java
-├── PositionTrackingTest.java
-├── MultiPlayerTest.java
+├── <area>/…Test.java
 └── support/
-    ├── DevServer.java     — host/port/db connection details, env-var overridable
-    ├── Ledger.java        — JDBC assertion helpers (read account state)
-    └── RconClient.java    — pure-Java RCON client for admin-side seeding
+    ├── Await.java            — the one polling primitive (failure names the last value seen)
+    ├── Barrier.java          — positive barriers before "nothing changed" assertions
+    ├── Perms.java            — LuckPerms grants that are live when the call returns
+    ├── Ops.java              — op + admin grants around an action
+    ├── ChestShopFixture.java — shop placement and self-verifying clicks
+    ├── Ledger.java / BusinessLedger.java / Market.java / Inv.java — state reads and waiters
+    ├── ApiTokens.java / JwtForge.java / RestApi.java / WebhookReceiver.java — REST side
+    ├── DevServer.java        — host/port/db connection details, env-var overridable
+    └── RconClient.java       — pure-Java RCON client for admin-side seeding
 ```
+
+### Waiting for the server
+
+Never `Thread.sleep` for the server: a fixed sleep is too long on a fast machine and too
+short on a loaded one, and before a "nothing happened" assertion it passes vacuously
+whenever the server is slow.
+
+- **State that converges** (a row an async handler writes, a balance a trigger updates):
+  poll it with `Await.until(what, probe, condition, timeout)` or a `waitFor…` helper built
+  on it. A timeout names what was awaited and the last value observed.
+- **Asserting that something did *not* change**: first prove the server has finished
+  processing, then assert once. Polling "still unchanged" proves nothing.
+  - After clicks, digs or moves: `Barrier.sync(player…)` — a protocol round trip that
+    shares Paper's FIFO packet queue with the interaction. `ChestShopFixture.clickBuy` /
+    `clickSell` already end with it, and also check (via DcDiag's `PlayerInteractEvent`
+    counter) that the click reached Bukkit at all, so a dropped packet can't fake a
+    rejection. ChestShop settles a trade synchronously in the click handler, so after the
+    click returns balances and stock are final.
+  - After slash-commands: `Barrier.settle()` — each connected player's `/dcsync` echo
+    proves its commands were dispatched, `/diag asyncidle` proves no economy-plugin
+    scheduler task is still queued or running, and a final `sync` delivers their chat.
+    Use it before `drainMessages()` too, so the next reply can't be a late line.
+- **Permissions:** `lp …` over RCON returns before LuckPerms applies it. Use `Perms.grant`
+  / `Perms.revoke` (or `Ops.run`), which wait until `Player#hasPermission` agrees.
+- **Product rules, not latency:** ChestShop drops a player's trade clicks closer together
+  than `SHOP_INTERACTION_INTERVAL` (250 ms); `ChestShopFixture` spaces them by exactly that.
+
+The test task prints the ten slowest classes and tests at the end and writes every
+duration to `tests/build/reports/test-timings.txt`.
 
 `RconClient.send("...")` returns the server's response string. Used in tests for:
 

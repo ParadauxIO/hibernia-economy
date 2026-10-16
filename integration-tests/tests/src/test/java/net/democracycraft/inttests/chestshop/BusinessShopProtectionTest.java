@@ -1,6 +1,8 @@
 package net.democracycraft.inttests.chestshop;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Ledger;
@@ -42,14 +44,8 @@ class BusinessShopProtectionTest {
 
     /** Retry the (non-destructive when denied) break until it's allowed — absorbs permission-cache lag. */
     private static void awaitBreakAllowed(String player, ChestShopFixture shop, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        String last = "";
-        while (System.nanoTime() < deadline) {
-            last = breakSign(player, shop);
-            if (last.contains("cancelled=false")) return;
-            try { Thread.sleep(300); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-        throw new AssertionError("break never became allowed for " + player + " (last: " + last + ")");
+        Await.until("sign break to become allowed for " + player,
+                () -> breakSign(player, shop), r -> r.contains("cancelled=false"), timeout);
     }
 
     private static int firmAccountShop(MockPlayer p, String proprietor, String firm, ChestShopFixture shop) {
@@ -112,7 +108,7 @@ class BusinessShopProtectionTest {
             // Hire the employee (joins on the default role, which lacks CHESTSHOP).
             Ops.run(proprietor, () -> {
                 p.drainMessages();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business offer " + firm + " " + employee);
                 p.awaitMessageContaining("job offer has sent", TIMEOUT);
             });
@@ -131,10 +127,10 @@ class BusinessShopProtectionTest {
             String role = BusinessLedger.currentEmployeeRoleName(firmId, e.getUuid()).orElseThrow();
             Ops.run(proprietor, () -> {
                 p.drainMessages();
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business staff role permission add " + firm + " " + role + " CHESTSHOP");
                 p.awaitMessageContaining("permission CHESTSHOP has been added", TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
             });
 
             // Now the employee may break it.

@@ -3,6 +3,7 @@ package net.democracycraft.inttests.chestshop;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.DevServer;
 import net.democracycraft.inttests.support.Ops;
+import net.democracycraft.inttests.support.Perms;
 import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.Test;
@@ -45,8 +46,8 @@ class FindCommandTest {
         String user = Usernames.fresh("Fnd");
         try (MockPlayer p = MockPlayer.connectLocal(user)) {
             Ops.run(user, () -> {
-                RconClient.send("lp user " + user + " permission set chestshop.admin true");
-                RconClient.send("lp user " + user + " permission set chestshop.find true");
+                Perms.grant(user, "chestshop.admin");
+                Perms.grant(user, "chestshop.find");
                 p.drainMessages();
                 // Registry maintenance moved off /find onto the /chestshop root (PAR-322).
                 p.chatCommand("/chestshop resync 5");
@@ -63,12 +64,12 @@ class FindCommandTest {
         String user = Usernames.fresh("Dlg");
         try (MockPlayer p = MockPlayer.connectLocal(user)) {
             Ops.run(user, () -> {
-                RconClient.send("lp user " + user + " permission set chestshop.find true");
+                Perms.grant(user, "chestshop.find");
                 p.drainMessages();
                 // /find <itemCode> resolves the item and opens the Usher dialog — proving the
                 // whole open path: command → FindState → DialogManager → render → wire packet.
-                p.chatCommand("/find diamond");
-                var dialog = p.awaitClientbound(
+                // Listen before sending: the dialog can arrive before a post-send await registers.
+                var dialog = p.awaitClientboundAfter(() -> p.chatCommand("/find diamond"),
                         org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundShowDialogGamePacket.class,
                         pkt -> true, TIMEOUT);
                 assertThat(dialog).isNotNull();
@@ -84,7 +85,7 @@ class FindCommandTest {
             deletePreference(uuid);
 
             Ops.run(user, () -> {
-                RconClient.send("lp user " + user + " permission set chestshop.find true");
+                Perms.grant(user, "chestshop.find");
                 p.drainMessages();
                 // Per-player hologram toggle moved off /find onto /chestshop (PAR-322).
                 p.chatCommand("/chestshop toggle preview false");

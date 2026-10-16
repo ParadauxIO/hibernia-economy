@@ -12,6 +12,7 @@ import org.geysermc.mcprotocollib.network.packet.Packet;
 import org.geysermc.mcprotocollib.network.session.ClientNetworkSession;
 import org.geysermc.mcprotocollib.protocol.MinecraftConstants;
 import org.geysermc.mcprotocollib.protocol.MinecraftProtocol;
+import org.geysermc.mcprotocollib.protocol.data.game.ClientCommand;
 import org.geysermc.mcprotocollib.protocol.data.game.entity.player.Hand;
 import org.geysermc.mcprotocollib.protocol.data.game.entity.player.HandPreference;
 import org.geysermc.mcprotocollib.protocol.data.game.entity.player.PlayerAction;
@@ -19,7 +20,9 @@ import org.geysermc.mcprotocollib.protocol.data.game.setting.ChatVisibility;
 import org.geysermc.mcprotocollib.protocol.data.game.setting.ParticleStatus;
 import org.geysermc.mcprotocollib.protocol.data.game.setting.SkinPart;
 import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundClientInformationPacket;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientCommandPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundPlayerLoadedPacket;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundAwardStatsPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundLoginPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundSystemChatPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.entity.player.ClientboundPlayerPositionPacket;
@@ -44,9 +47,11 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -98,6 +103,18 @@ public final class MockPlayer implements AutoCloseable {
     private final CountDownLatch positionReceived = new CountDownLatch(1);
     private final List<PendingAwait<?>> awaiting = new CopyOnWriteArrayList<>();
     private final AtomicInteger sequence = new AtomicInteger(0);
+
+    /**
+     * {@link #sync} round-trip accounting, guarded by {@code syncLock}: requests sent and
+     * responses received. The server answers stats requests one-for-one and in order, so
+     * the n-th response answers the n-th request.
+     */
+    private final Object syncLock = new Object();
+    private long syncRequested;
+    private long syncAnswered;
+
+    /** Every player between a successful {@link #connect} and {@link #close}/disconnect. */
+    private static final Set<MockPlayer> OPEN = ConcurrentHashMap.newKeySet();
 
     private volatile Position currentPosition;
     private volatile boolean connected;
@@ -187,6 +204,7 @@ public final class MockPlayer implements AutoCloseable {
         }
 
         player.connected = true;
+        OPEN.add(player);
         // Periodic position heartbeat — vanilla clients send a movement packet
         // every tick (50 ms). 200 ms is plenty for tests and keeps the player
         // out of Paper's idle-kick path.
@@ -288,6 +306,25 @@ public final class MockPlayer implements AutoCloseable {
     /** Discard any chat messages received so far. */
     public void drainMessages() {
         messages.clear();
+    }
+
+    /**
+     * Run {@code trigger} (typically a {@link #chatCommand}) and wait for a chat line that
+     * arrives after it and matches {@code matcher}. Unlike {@link #awaitMessage}, this
+     * neither consumes nor discards other lines: everything else stays buffered for later
+     * awaits, and only the matched line is removed.
+     *
+     * @return the matched line
+     * @throws AssertionError on timeout
+     */
+    public String awaitMessageAfter(Runnable trigger, Predicate<String> matcher, Duration timeout) {
+        Objects.requireNonNull(matcher, "matcher");
+        ClientboundSystemChatPacket pkt = awaitClientboundAfter(trigger, ClientboundSystemChatPacket.class,
+                p -> p.getContent() != null && matcher.test(PLAIN.serialize(p.getContent())), timeout);
+        String text = PLAIN.serialize(pkt.getContent());
+        // The listener buffers a line before it completes awaits, so it is there to remove.
+        messages.remove(text);
+        return text;
     }
 
     // ------------------------------------------------------------------ position
@@ -465,7 +502,104 @@ public final class MockPlayer implements AutoCloseable {
         }
     }
 
+    /**
+     * Like {@link #awaitClientbound}, but registers the listener <em>before</em> running
+     * {@code trigger}, so a response that arrives immediately cannot be missed. Use it to
+     * send a request and wait for its answer.
+     */
+    public <P extends Packet> P awaitClientboundAfter(Runnable trigger, Class<P> packetType,
+                                                      Predicate<? super P> matcher, Duration timeout) {
+        Objects.requireNonNull(trigger, "trigger");
+        Objects.requireNonNull(packetType, "packetType");
+        Objects.requireNonNull(matcher, "matcher");
+        Objects.requireNonNull(timeout, "timeout");
+
+        PendingAwait<P> pending = new PendingAwait<>(packetType, matcher);
+        awaiting.add(pending);
+        try {
+            trigger.run();
+            return pending.future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            throw new AssertionError(
+                    "Timed out after " + timeout + " waiting for " + packetType.getSimpleName(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting for " + packetType.getSimpleName(), e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e.getCause());
+        } finally {
+            awaiting.remove(pending);
+        }
+    }
+
+    // ------------------------------------------------------------------ barrier
+
+    /**
+     * Round-trip barrier: returns once the server's game thread has handled every packet
+     * this client sent before the call, and the client has received every packet the
+     * server queued for it before handling them.
+     *
+     * <p>Mechanism: a {@code ServerboundClientCommandPacket(STATS)} request, answered with
+     * a {@code ClientboundAwardStatsPacket}. Why that is a sound barrier on Paper 1.21.11:
+     * <ul>
+     *   <li>Netty decodes one connection's packets in order, and game packets that touch the
+     *       world — {@code UseItemOn}, {@code PlayerAction} (dig/left-click), movement, sign
+     *       updates and this client command — are all handed to the main thread through
+     *       {@code PacketUtils.ensureRunningOnSameThread}, i.e. appended to the server's
+     *       single FIFO {@code PacketProcessor} queue. So the stats request is handled only
+     *       after every earlier interaction packet has been handled to completion, including
+     *       the synchronous Bukkit events (and their listeners) it fired.</li>
+     *   <li>The stats reply is written to the connection after anything those handlers
+     *       wrote, and TCP keeps the order, so by the time the reply arrives every earlier
+     *       clientbound packet (chat, inventory, block updates) is already here.</li>
+     *   <li>Vanilla sends {@code AwardStats} only in answer to this request, so replies can
+     *       be counted against requests.</li>
+     * </ul>
+     *
+     * <p>What it does <em>not</em> cover: slash-commands. {@code ServerboundChatCommand}
+     * is executed via {@code MinecraftServer.execute}, a different queue from the packet
+     * processor, so no ordering holds between a command and this barrier. Nor does it cover
+     * work a handler pushes onto another thread (a plugin's async task) — the barrier only
+     * proves the synchronous part ran.
+     *
+     * @throws AssertionError if the reply does not arrive within {@code timeout} or the
+     *                        player disconnects first
+     */
+    public void sync(Duration timeout) {
+        Objects.requireNonNull(timeout, "timeout");
+        long deadline = System.nanoTime() + timeout.toNanos();
+        long ticket;
+        synchronized (syncLock) {
+            // Send under the lock so ticket order is wire order.
+            ticket = ++syncRequested;
+            session.send(new ServerboundClientCommandPacket(ClientCommand.STATS));
+        }
+        synchronized (syncLock) {
+            while (syncAnswered < ticket) {
+                if (!isConnected()) {
+                    throw new AssertionError("[" + username + "] disconnected before the sync barrier completed");
+                }
+                long remainingMs = (deadline - System.nanoTime()) / 1_000_000;
+                if (remainingMs <= 0) {
+                    throw new AssertionError("[" + username + "] sync barrier not answered within " + timeout
+                            + " (requested " + ticket + ", answered " + syncAnswered + ")");
+                }
+                try {
+                    syncLock.wait(remainingMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError("Interrupted during sync barrier", e);
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ misc
+
+    /** Snapshot of the players currently connected through this library. */
+    public static List<MockPlayer> openPlayers() {
+        return List.copyOf(OPEN);
+    }
 
     public boolean isConnected() {
         return connected && session.isConnected();
@@ -490,6 +624,7 @@ public final class MockPlayer implements AutoCloseable {
             heartbeat.cancel(false);
             heartbeat = null;
         }
+        OPEN.remove(this);
         if (session.isConnected()) {
             session.disconnect("MockPlayer closing");
         }
@@ -575,6 +710,14 @@ public final class MockPlayer implements AutoCloseable {
                 session.send(new ServerboundChunkBatchReceivedPacket(16f));
             }
 
+            // sync() barrier replies.
+            if (p instanceof ClientboundAwardStatsPacket) {
+                synchronized (syncLock) {
+                    syncAnswered++;
+                    syncLock.notifyAll();
+                }
+            }
+
             // Chat capture
             if (p instanceof ClientboundSystemChatPacket sys) {
                 Component content = sys.getContent();
@@ -596,6 +739,10 @@ public final class MockPlayer implements AutoCloseable {
         @Override
         public void disconnected(DisconnectedEvent e) {
             connected = false;
+            OPEN.remove(MockPlayer.this);
+            synchronized (syncLock) {
+                syncLock.notifyAll();
+            }
             // Release any latches / awaits so callers don't deadlock.
             playReady.countDown();
             positionReceived.countDown();

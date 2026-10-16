@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.treasury;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
@@ -107,6 +108,7 @@ class BalanceCommandTest {
             // — both are acceptable; the assertion is "denied, not the target's
             // balance".
             String r = a.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+            Barrier.settle();
             assertThat(r).doesNotContain("10,000");
         }
     }

@@ -1,6 +1,7 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
@@ -87,6 +88,7 @@ class FirmCommandsRejectionsTest {
                 p.drainMessages();
                 p.chatCommand("/business list all 0");
                 p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
             });
         }
     }
@@ -105,10 +107,11 @@ class FirmCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business create " + firm);
                 String r = p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
+                Barrier.settle();
                 org.assertj.core.api.Assertions.assertThat(r)
                         .doesNotContainIgnoringCase("successfully created");
             });
@@ -126,7 +129,7 @@ class FirmCommandsRejectionsTest {
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
 
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.drainMessages();
                 p.chatCommand("/business attribute set discord " + firm + " https://example.com/notdiscord");
                 p.awaitMessageContaining("Invalid URL", TIMEOUT);

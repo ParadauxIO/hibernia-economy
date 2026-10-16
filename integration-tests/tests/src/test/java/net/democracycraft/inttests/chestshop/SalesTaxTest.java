@@ -3,6 +3,7 @@ package net.democracycraft.inttests.chestshop;
 import io.paradaux.mockclient.BlockFace;
 import io.paradaux.mockclient.MockPlayer;
 import io.paradaux.mockclient.Position;
+import net.democracycraft.inttests.support.Await;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Inv;
@@ -90,13 +91,7 @@ class SalesTaxTest {
             Ledger.waitForPersonalBalance(s.getUuid(), expectedSellerBalance, TIMEOUT);
             // DCGovernment credited the tax.
             BigDecimal expectedGov = govBefore.add(expectedTax);
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
-            BigDecimal lastGov = govBefore;
-            while (System.nanoTime() < deadline) {
-                lastGov = Ledger.governmentBalance("DCGovernment").orElse(BigDecimal.ZERO);
-                if (lastGov.compareTo(expectedGov) == 0) break;
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
+            BigDecimal lastGov = govBalanceReaching(expectedGov);
             assertThat(lastGov)
                     .as("DCGovernment must receive the sales tax (was %s, expected %s)",
                             govBefore, expectedGov)
@@ -145,24 +140,16 @@ class SalesTaxTest {
             Ledger.waitForPersonalBalance(b.getUuid(),
                     STARTING.subtract(BigDecimal.valueOf(price)), TIMEOUT);
             BigDecimal expectedFirm = firmBefore.add(BigDecimal.valueOf(price)).subtract(expectedTax);
-            long deadline = System.nanoTime() + TIMEOUT.toNanos();
-            BigDecimal lastFirm = firmBefore;
-            while (System.nanoTime() < deadline) {
-                lastFirm = BusinessLedger.firmDefaultBalance(firmId).orElse(BigDecimal.ZERO);
-                if (lastFirm.compareTo(expectedFirm) == 0) break;
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(lastFirm).isEqualByComparingTo(expectedFirm);
+            BusinessLedger.waitForFirmDefaultBalance(firmId, expectedFirm, TIMEOUT);
             // DCGovernment got the tax — same expected delta as personal case.
             BigDecimal expectedGov = govBefore.add(expectedTax);
-            BigDecimal lastGov = govBefore;
-            deadline = System.nanoTime() + TIMEOUT.toNanos();
-            while (System.nanoTime() < deadline) {
-                lastGov = Ledger.governmentBalance("DCGovernment").orElse(BigDecimal.ZERO);
-                if (lastGov.compareTo(expectedGov) == 0) break;
-                try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-            }
-            assertThat(lastGov).isEqualByComparingTo(expectedGov);
+            assertThat(govBalanceReaching(expectedGov)).isEqualByComparingTo(expectedGov);
         }
+    }
+
+    private static BigDecimal govBalanceReaching(BigDecimal expected) {
+        return Await.until("DCGovernment balance to reach " + expected,
+                () -> Ledger.governmentBalance("DCGovernment").orElse(BigDecimal.ZERO),
+                Ledger.sameAmount(expected), TIMEOUT);
     }
 }

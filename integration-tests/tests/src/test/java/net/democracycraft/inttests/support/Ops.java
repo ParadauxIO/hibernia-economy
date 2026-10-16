@@ -25,6 +25,12 @@ package net.democracycraft.inttests.support;
  * });
  * }</pre>
  *
+ * <p>LuckPerms applies grants on its own thread after the RCON command returns, and a
+ * command's permission gate reads the player's permissions at dispatch time — a command
+ * sent too early is silently treated as unknown. So both directions wait for the change to
+ * be visible ({@link Perms}): the action runs only once the grants are live, and cleanup
+ * returns only once they are gone, so a later denial assertion on the same player is sound.
+ *
  * <p>Cleanup happens in a finally block — the player is deop'd and the
  * permission grants unset even if the action throws.
  */
@@ -32,20 +38,13 @@ public final class Ops {
 
     public static void run(String username, Runnable action) {
         RconClient.send("op " + username);
-        RconClient.send("lp user " + username + " permission set treasury.gov.* true");
-        RconClient.send("lp user " + username + " permission set business.* true");
-        // LuckPerms applies grants asynchronously to Bukkit's per-player
-        // permission graph; Brigadier's requires(...) check runs at dispatch
-        // time and reads the cached value. Without a small wait, commands
-        // gated via Hibernia's @Permission annotation can be dispatched
-        // before the cache is populated and silently fall through to
-        // "unknown command".
-        try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+        Perms.grant(username, "treasury.gov.*");
+        Perms.grant(username, "business.*");
         try {
             action.run();
         } finally {
-            RconClient.send("lp user " + username + " permission unset business.*");
-            RconClient.send("lp user " + username + " permission unset treasury.gov.*");
+            Perms.revoke(username, "business.*");
+            Perms.revoke(username, "treasury.gov.*");
             RconClient.send("deop " + username);
         }
     }

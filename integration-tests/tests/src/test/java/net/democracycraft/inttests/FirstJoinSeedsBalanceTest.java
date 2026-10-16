@@ -51,7 +51,7 @@ class FirstJoinSeedsBalanceTest {
             // FirstPlayerJoinEvent fires asynchronously; give Treasury a
             // moment to seed. Polling beats a blind sleep — exit as soon as
             // the row appears, fail if it never does.
-            BigDecimal balance = waitForPersonalBalance(expectedUuid, Duration.ofSeconds(10));
+            BigDecimal balance = Ledger.waitForPersonalBalance(expectedUuid, Duration.ofSeconds(10));
             assertThat(balance)
                     .as("starting balance for newly joined player %s", username)
                     .isEqualByComparingTo(EXPECTED_STARTING_BALANCE);
@@ -61,21 +61,5 @@ class FirstJoinSeedsBalanceTest {
     /** Offline-mode UUID — same derivation Bukkit uses. */
     private static UUID offlinePlayerUuid(String username) {
         return UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes());
-    }
-
-    private static BigDecimal waitForPersonalBalance(UUID uuid, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            BigDecimal bal = Ledger.personalBalance(uuid).orElse(null);
-            if (bal != null) return bal;
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new AssertionError("interrupted", e);
-            }
-        }
-        throw new AssertionError(
-                "Treasury did not seed a PERSONAL balance for " + uuid + " within " + timeout);
     }
 }

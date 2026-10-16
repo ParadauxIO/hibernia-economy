@@ -260,27 +260,13 @@ public final class BusinessLedger {
     }
 
     public static void waitForAccountMemberCount(int accountId, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = accountMemberCount(accountId);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Member count for account " + accountId + " did not reach "
-                + expected + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("member count of account " + accountId, () -> accountMemberCount(accountId),
+                expected, timeout);
     }
 
     public static void waitForAccountAuthorizerCount(int accountId, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = accountAuthorizerCount(accountId);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Authorizer count for account " + accountId + " did not reach "
-                + expected + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("authorizer count of account " + accountId, () -> accountAuthorizerCount(accountId),
+                expected, timeout);
     }
 
     private static int countAccess(int accountId, String activeClause) {
@@ -333,71 +319,49 @@ public final class BusinessLedger {
     // -------------------------------------------------------------- waiters
 
     public static int waitForFirm(String displayName, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            Integer id = firmId(displayName).orElse(null);
-            if (id != null) return id;
-            sleep(150);
-        }
-        throw new AssertionError("Firm '" + displayName + "' not in DB within " + timeout);
+        return Await.until("firm '" + displayName + "' in the DB",
+                () -> firmId(displayName).orElse(null), id -> id != null, timeout);
+    }
+
+    /** Wait until the firm has at least {@code min} accounts; returns the count seen. */
+    public static int waitForFirmAccountCountAtLeast(int firmId, int min, Duration timeout) {
+        return Await.until("firm " + firmId + " to have at least " + min + " accounts",
+                () -> firmAccountCount(firmId), n -> n >= min, timeout);
+    }
+
+    /** Wait until the firm's default account is {@code accountId}. */
+    public static void waitForFirmDefaultAccount(int firmId, int accountId, Duration timeout) {
+        Await.untilEquals("default account of firm " + firmId, () -> firmDefaultAccountId(firmId).orElse(null),
+                accountId, timeout);
+    }
+
+    /** Wait until the firm's default-account balance equals {@code expected} (scale-insensitive). */
+    public static void waitForFirmDefaultBalance(int firmId, BigDecimal expected, Duration timeout) {
+        Await.until("default-account balance of firm " + firmId + " to reach " + expected,
+                () -> firmDefaultBalance(firmId).orElse(null), Ledger.sameAmount(expected), timeout);
     }
 
     public static void waitForEmployeeCount(int firmId, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = currentEmployeeCount(firmId);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Employee count for firm " + firmId + " did not reach "
-                + expected + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("employee count of firm " + firmId, () -> currentEmployeeCount(firmId), expected, timeout);
     }
 
     public static void waitForEmployeeRole(int firmId, UUID playerUuid, String expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        String last = null;
-        while (System.nanoTime() < deadline) {
-            last = currentEmployeeRoleName(firmId, playerUuid).orElse(null);
-            if (expected.equals(last)) return;
-            sleep(150);
-        }
-        throw new AssertionError("Employee " + playerUuid + " in firm " + firmId + " not in role '"
-                + expected + "' within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("role of employee " + playerUuid + " in firm " + firmId,
+                () -> currentEmployeeRoleName(firmId, playerUuid).orElse(null), expected, timeout);
     }
 
     public static void waitForRoleCount(int firmId, int expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        int last = -1;
-        while (System.nanoTime() < deadline) {
-            last = roleCount(firmId);
-            if (last == expected) return;
-            sleep(150);
-        }
-        throw new AssertionError("Role count for firm " + firmId + " did not reach "
-                + expected + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("role count of firm " + firmId, () -> roleCount(firmId), expected, timeout);
     }
 
     public static void waitForFirmProprietor(int firmId, UUID expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        UUID last = null;
-        while (System.nanoTime() < deadline) {
-            last = firmProprietor(firmId).orElse(null);
-            if (expected.equals(last)) return;
-            sleep(150);
-        }
-        throw new AssertionError("Firm " + firmId + " proprietor did not become " + expected
-                + " within " + timeout + " (last seen: " + last + ")");
+        Await.untilEquals("proprietor of firm " + firmId, () -> firmProprietor(firmId).orElse(null),
+                expected, timeout);
     }
 
     public static void waitForActiveTransferToken(int firmId, UUID toUuid, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            if (activeTransferToken(firmId, toUuid).isPresent()) return;
-            sleep(150);
-        }
-        throw new AssertionError("No active transfer token for firm " + firmId + " → " + toUuid
-                + " within " + timeout);
+        Await.until("an active transfer token for firm " + firmId + " → " + toUuid,
+                () -> activeTransferToken(firmId, toUuid).orElse(null), t -> t != null, timeout);
     }
 
     // -------------------------------------------------------------- internals
@@ -428,15 +392,6 @@ public final class BusinessLedger {
 
     private static Connection connect() throws SQLException {
         return DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
-    }
-
-    private static void sleep(long ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted", e);
-        }
     }
 
     private BusinessLedger() {}

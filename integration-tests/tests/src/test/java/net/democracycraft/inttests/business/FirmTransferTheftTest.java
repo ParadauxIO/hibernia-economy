@@ -1,10 +1,11 @@
 package net.democracycraft.inttests.business;
 
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
-import net.democracycraft.inttests.support.RconClient;
+import net.democracycraft.inttests.support.Perms;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.Test;
 
@@ -51,18 +52,19 @@ class FirmTransferTheftTest {
             int firmId = firmIdH[0];
             assertThat(BusinessLedger.firmProprietor(firmId)).contains(o.getUuid());
 
-            RconClient.send("lp user " + attacker + " permission set business.* true");
-            try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            Perms.grant(attacker, "business.*");
             try {
                 // No transfer was ever begun or confirmed.
+                a.drainMessages();
                 a.chatCommand("/business transfer complete " + firm + " " + attacker);
-                Ledger.asyncSettle();
+                Barrier.settle();
+                assertReachedBusiness(a);
 
                 assertThat(BusinessLedger.firmProprietor(firmId))
                         .as("a transfer with no CONFIRMED request must NOT change the proprietor")
                         .contains(o.getUuid());
             } finally {
-                RconClient.send("lp user " + attacker + " permission unset business.*");
+                Perms.revoke(attacker, "business.*");
             }
         }
     }
@@ -89,19 +91,30 @@ class FirmTransferTheftTest {
             });
             int firmId = firmIdH[0];
 
-            RconClient.send("lp user " + attacker + " permission set business.* true");
-            try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            Perms.grant(attacker, "business.*");
             try {
                 // Attacker is NOT the proprietor of `firm`.
+                a.drainMessages();
                 a.chatCommand("/business transfer begin " + firm + " " + victim);
-                Ledger.asyncSettle();
+                Barrier.settle();
+                assertReachedBusiness(a);
 
                 assertThat(BusinessLedger.activeTransferToken(firmId, v.getUuid()))
                         .as("a non-proprietor must not be able to create a transfer request")
                         .isEmpty();
             } finally {
-                RconClient.send("lp user " + attacker + " permission unset business.*");
+                Perms.revoke(attacker, "business.*");
             }
         }
+    }
+
+    /**
+     * The attack must have been judged by Business, not bounced by the permission gate as
+     * an unknown command — otherwise "nothing changed" proves nothing. After
+     * {@link Barrier#settle} the handler's reply is already buffered.
+     */
+    private static void assertReachedBusiness(MockPlayer attacker) {
+        String reply = attacker.awaitMessage(m -> !m.isBlank(), Duration.ofSeconds(1));
+        assertThat(reply).as("the attack command's reply").doesNotContainIgnoringCase("unknown");
     }
 }

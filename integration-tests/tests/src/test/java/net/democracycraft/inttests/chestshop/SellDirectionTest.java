@@ -1,8 +1,8 @@
 package net.democracycraft.inttests.chestshop;
 
-import io.paradaux.mockclient.BlockFace;
 import io.paradaux.mockclient.MockPlayer;
 import io.paradaux.mockclient.Position;
+import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.BusinessLedger;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Inv;
@@ -58,10 +58,9 @@ class SellDirectionTest {
             Inv.waitForPlayerCount(client, "DIRT", qty, TIMEOUT);
 
             RconClient.send("diag warmname " + owner);
-            shop.positionClicker(c, client);
 
             // Left-click the sign — that's "sell to shop" in the default config.
-            c.leftClickBlock(shop.signPos(), BlockFace.SOUTH);
+            shop.clickSell(c, client);
 
             // Money: owner -price, client +price.
             Ledger.waitForPersonalBalance(o.getUuid(), STARTING.subtract(BigDecimal.valueOf(price)), TIMEOUT);
@@ -95,7 +94,7 @@ class SellDirectionTest {
                 p.chatCommand("/business create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Ledger.asyncSettle();
+                Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " " + firmFund);
                 p.awaitMessageContaining("Deposited", TIMEOUT);
             });
@@ -111,12 +110,10 @@ class SellDirectionTest {
             Inv.give(client, "DIRT", qty);
             Inv.waitForPlayerCount(client, "DIRT", qty, TIMEOUT);
 
-            shop.positionClicker(c, client);
-
-            c.leftClickBlock(shop.signPos(), BlockFace.SOUTH);
+            shop.clickSell(c, client);
 
             // Firm account paid out; client got paid; proprietor unchanged.
-            waitForFirmDefaultBalance(firmId, firmFund.subtract(BigDecimal.valueOf(price)), TIMEOUT);
+            BusinessLedger.waitForFirmDefaultBalance(firmId, firmFund.subtract(BigDecimal.valueOf(price)), TIMEOUT);
             Ledger.waitForPersonalBalance(c.getUuid(), STARTING.add(BigDecimal.valueOf(price)), TIMEOUT);
             assertThat(Ledger.personalBalance(p.getUuid()).orElseThrow())
                     .isEqualByComparingTo(proprietorAfterDeposit);
@@ -124,17 +121,5 @@ class SellDirectionTest {
             Inv.waitForChestCount(shop.chestPos(), "DIRT", qty, TIMEOUT);
             Inv.waitForPlayerCount(client, "DIRT", 0, TIMEOUT);
         }
-    }
-
-    private static void waitForFirmDefaultBalance(int firmId, BigDecimal expected, Duration timeout) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        BigDecimal last = null;
-        while (System.nanoTime() < deadline) {
-            last = BusinessLedger.firmDefaultBalance(firmId).orElse(null);
-            if (last != null && last.compareTo(expected) == 0) return;
-            try { Thread.sleep(150); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
-        throw new AssertionError("Firm " + firmId + " default balance did not reach "
-                + expected + " within " + timeout + " (last seen: " + last + ")");
     }
 }
