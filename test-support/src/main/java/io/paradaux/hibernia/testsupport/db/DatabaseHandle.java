@@ -5,10 +5,6 @@ import ch.vorburger.mariadb4j.DBConfiguration;
 import ch.vorburger.mariadb4j.DBConfigurationBuilder;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.output.MigrateResult;
-
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -22,6 +18,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.output.MigrateResult;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * One JVM-wide migrated test database: the (optional) embedded MariaDB4j server,
@@ -42,15 +42,15 @@ final class DatabaseHandle implements AutoCloseable {
 
     private static final String HISTORY_TABLE = "flyway_schema_history";
 
-    private final DB embedded;
+    private final @Nullable DB embedded;
     private final HikariDataSource dataSource;
     /** Every base table except Flyway's history, in information_schema order. */
     private final List<String> tables;
     /** Rows the migrations themselves insert (role definitions, webhook cursor…). */
     private final Map<String, SeedTable> seeds;
 
-    private DatabaseHandle(DB embedded, HikariDataSource dataSource,
-                           List<String> tables, Map<String, SeedTable> seeds) {
+    private DatabaseHandle(
+            @Nullable DB embedded, HikariDataSource dataSource, List<String> tables, Map<String, SeedTable> seeds) {
         this.embedded = embedded;
         this.dataSource = dataSource;
         this.tables = tables;
@@ -70,7 +70,10 @@ final class DatabaseHandle implements AutoCloseable {
             // is skipped — its bundled binary needs system libs newer runners don't ship.
             String user = System.getenv(spec.userEnv());
             String pass = System.getenv(spec.passEnv());
-            ds = pool(externalUrl, user != null ? user : "root", pass != null ? pass : "",
+            ds = pool(
+                    externalUrl,
+                    user != null ? user : "root",
+                    pass != null ? pass : "",
                     spec.databaseName() + "-external");
         } else {
             try {
@@ -92,7 +95,11 @@ final class DatabaseHandle implements AutoCloseable {
         } catch (RuntimeException | SQLException e) {
             ds.close();
             if (embedded != null) {
-                try { embedded.stop(); } catch (Exception suppressed) { e.addSuppressed(suppressed); }
+                try {
+                    embedded.stop();
+                } catch (Exception suppressed) {
+                    e.addSuppressed(suppressed);
+                }
             }
             throw new IllegalStateException("Failed to prepare test database " + spec.databaseName(), e);
         }
@@ -139,10 +146,10 @@ final class DatabaseHandle implements AutoCloseable {
         flyway.migrate();
     }
 
-    private static String currentSchema(DataSource ds) throws SQLException {
+    private static @Nullable String currentSchema(DataSource ds) throws SQLException {
         try (Connection c = ds.getConnection();
-             Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery("SELECT DATABASE()")) {
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery("SELECT DATABASE()")) {
             return rs.next() ? rs.getString(1) : null;
         }
     }
@@ -156,10 +163,9 @@ final class DatabaseHandle implements AutoCloseable {
     private static List<String> listTables(DataSource ds) throws SQLException {
         List<String> tables = new ArrayList<>();
         try (Connection c = ds.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT TABLE_NAME FROM information_schema.TABLES "
-                             + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' "
-                             + "AND TABLE_NAME <> ? ORDER BY TABLE_NAME")) {
+                PreparedStatement ps = c.prepareStatement("SELECT TABLE_NAME FROM information_schema.TABLES "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' "
+                        + "AND TABLE_NAME <> ? ORDER BY TABLE_NAME")) {
             ps.setString(1, HISTORY_TABLE);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) tables.add(rs.getString(1));
@@ -180,7 +186,8 @@ final class DatabaseHandle implements AutoCloseable {
                 List<String> columns = writableColumns(c, table);
                 String select = "SELECT " + String.join(", ", quoted(columns)) + " FROM " + q(table);
                 List<Object[]> rows = new ArrayList<>();
-                try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery(select)) {
+                try (Statement st = c.createStatement();
+                        ResultSet rs = st.executeQuery(select)) {
                     ResultSetMetaData md = rs.getMetaData();
                     while (rs.next()) {
                         Object[] row = new Object[md.getColumnCount()];
@@ -196,10 +203,9 @@ final class DatabaseHandle implements AutoCloseable {
 
     private static List<String> writableColumns(Connection c, String table) throws SQLException {
         List<String> columns = new ArrayList<>();
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
-                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? "
-                        + "AND EXTRA NOT LIKE '%GENERATED%' ORDER BY ORDINAL_POSITION")) {
+        try (PreparedStatement ps = c.prepareStatement("SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? "
+                + "AND EXTRA NOT LIKE '%GENERATED%' ORDER BY ORDINAL_POSITION")) {
             ps.setString(1, table);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) columns.add(rs.getString(1));
@@ -217,12 +223,12 @@ final class DatabaseHandle implements AutoCloseable {
      * edit either. FK checks are off only for the duration of the reset.
      */
     void reset() throws SQLException {
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
             Set<String> dirty = new LinkedHashSet<>(nonEmpty(c, tables));
-            try (ResultSet rs = st.executeQuery(
-                    "SELECT TABLE_NAME FROM information_schema.TABLES "
-                            + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' "
-                            + "AND AUTO_INCREMENT > 1")) {
+            try (ResultSet rs = st.executeQuery("SELECT TABLE_NAME FROM information_schema.TABLES "
+                    + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' "
+                    + "AND AUTO_INCREMENT > 1")) {
                 while (rs.next()) dirty.add(rs.getString(1));
             }
             dirty.remove(HISTORY_TABLE);
@@ -246,9 +252,10 @@ final class DatabaseHandle implements AutoCloseable {
         try (Statement st = c.createStatement()) {
             st.execute("DELETE FROM " + q(table));
         }
-        String placeholders = String.join(", ", java.util.Collections.nCopies(seed.columns().size(), "?"));
-        try (PreparedStatement ps = c.prepareStatement("INSERT INTO " + q(table)
-                + " (" + String.join(", ", quoted(seed.columns())) + ") VALUES (" + placeholders + ")")) {
+        String placeholders =
+                String.join(", ", java.util.Collections.nCopies(seed.columns().size(), "?"));
+        try (PreparedStatement ps = c.prepareStatement("INSERT INTO " + q(table) + " ("
+                + String.join(", ", quoted(seed.columns())) + ") VALUES (" + placeholders + ")")) {
             for (Object[] row : seed.rows()) {
                 for (int i = 0; i < row.length; i++) ps.setObject(i + 1, row[i]);
                 ps.addBatch();
@@ -263,10 +270,15 @@ final class DatabaseHandle implements AutoCloseable {
         StringBuilder sql = new StringBuilder();
         for (String table : tables) {
             if (!sql.isEmpty()) sql.append(" UNION ALL ");
-            sql.append("(SELECT '").append(table).append("' FROM ").append(q(table)).append(" LIMIT 1)");
+            sql.append("(SELECT '")
+                    .append(table)
+                    .append("' FROM ")
+                    .append(q(table))
+                    .append(" LIMIT 1)");
         }
         List<String> out = new ArrayList<>();
-        try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql.toString())) {
+        try (Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery(sql.toString())) {
             while (rs.next()) out.add(rs.getString(1));
         }
         return out;

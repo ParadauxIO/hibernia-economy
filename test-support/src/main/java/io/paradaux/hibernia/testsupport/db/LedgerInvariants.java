@@ -1,6 +1,5 @@
 package io.paradaux.hibernia.testsupport.db;
 
-import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -15,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
 
 /**
  * The production money-invariant check ({@code ops/money-invariants.sql}) used as a
@@ -44,8 +44,8 @@ public final class LedgerInvariants {
     /** Runs the check and returns its single row. */
     public static Result check(DataSource dataSource) {
         try (Connection c = dataSource.getConnection();
-             Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(SQL)) {
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery(SQL)) {
             if (!rs.next()) throw new IllegalStateException("money-invariants.sql returned no row");
             ResultSetMetaData md = rs.getMetaData();
             Map<String, Object> counters = new LinkedHashMap<>();
@@ -74,26 +74,38 @@ public final class LedgerInvariants {
      */
     private static String diagnostics(DataSource dataSource) {
         StringBuilder out = new StringBuilder();
-        sample(dataSource, out, "unbalanced txns",
+        sample(
+                dataSource,
+                out,
+                "unbalanced txns",
                 "SELECT txn_id, SUM(amount) AS sum FROM ledger_postings GROUP BY txn_id HAVING SUM(amount) <> 0 LIMIT 10");
-        sample(dataSource, out, "mat mismatches",
+        sample(
+                dataSource,
+                out,
+                "mat mismatches",
                 "SELECT m.account_id, m.balance AS mat, COALESCE(p.s, 0) AS postings FROM account_balances_mat m "
                         + "LEFT JOIN (SELECT account_id, SUM(amount) s FROM ledger_postings GROUP BY account_id) p "
                         + "ON p.account_id = m.account_id WHERE m.balance <> COALESCE(p.s, 0) LIMIT 10");
-        sample(dataSource, out, "illegal negatives",
+        sample(
+                dataSource,
+                out,
+                "illegal negatives",
                 "SELECT a.account_id, a.account_type, a.allow_overdraft, a.credit_limit, m.balance FROM accounts a "
                         + "JOIN account_balances_mat m ON m.account_id = a.account_id WHERE m.balance < 0 "
                         + "AND a.account_type NOT IN ('GOVERNMENT','SYSTEM') "
                         + "AND (a.allow_overdraft = 0 OR m.balance < -a.credit_limit) LIMIT 10");
-        sample(dataSource, out, "mat rows written without trigger",
+        sample(
+                dataSource,
+                out,
+                "mat rows written without trigger",
                 "SELECT account_id, balance FROM account_balances_mat WHERE version = 0 AND balance <> 0 LIMIT 10");
         return out.toString();
     }
 
     private static void sample(DataSource dataSource, StringBuilder out, String label, String sql) {
         try (Connection c = dataSource.getConnection();
-             Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
+                Statement st = c.createStatement();
+                ResultSet rs = st.executeQuery(sql)) {
             ResultSetMetaData md = rs.getMetaData();
             List<String> rows = new ArrayList<>();
             while (rs.next()) {
@@ -103,7 +115,11 @@ public final class LedgerInvariants {
             }
             if (!rows.isEmpty()) out.append("\n  ").append(label).append(": ").append(rows);
         } catch (SQLException e) {
-            out.append("\n  ").append(label).append(": <diagnostic query failed: ").append(e.getMessage()).append('>');
+            out.append("\n  ")
+                    .append(label)
+                    .append(": <diagnostic query failed: ")
+                    .append(e.getMessage())
+                    .append('>');
         }
     }
 
@@ -128,7 +144,11 @@ public final class LedgerInvariants {
         }
 
         public long count(String counter) {
-            return ((Number) counters.get(counter)).longValue();
+            Object value = counters.get(counter);
+            if (value == null) {
+                throw new IllegalArgumentException("money-invariants.sql has no counter " + counter);
+            }
+            return ((Number) value).longValue();
         }
 
         public BigDecimal globalSum() {

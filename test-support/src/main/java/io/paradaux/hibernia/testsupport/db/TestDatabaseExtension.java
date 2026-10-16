@@ -1,13 +1,13 @@
 package io.paradaux.hibernia.testsupport.db;
 
+import java.lang.reflect.AnnotatedElement;
+import java.util.Optional;
+import javax.sql.DataSource;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.platform.commons.support.AnnotationSupport;
-
-import javax.sql.DataSource;
-import java.lang.reflect.AnnotatedElement;
-import java.util.Optional;
 
 /**
  * The shared MariaDB integration-test harness, parametrised per module by a
@@ -61,8 +61,9 @@ public final class TestDatabaseExtension implements BeforeEachCallback, AfterEac
     @Override
     public void afterEach(ExtensionContext context) {
         if (skipReason(context).isPresent()) return;
-        LedgerInvariants.assertHold(dataSource(), context.getDisplayName()
-                + " (" + context.getRequiredTestClass().getSimpleName() + ")");
+        LedgerInvariants.assertHold(
+                dataSource(),
+                context.getDisplayName() + " (" + context.getRequiredTestClass().getSimpleName() + ")");
     }
 
     private static Optional<String> skipReason(ExtensionContext context) {
@@ -75,14 +76,15 @@ public final class TestDatabaseExtension implements BeforeEachCallback, AfterEac
         return Optional.empty();
     }
 
-    private static Optional<String> reason(AnnotatedElement element) {
+    private static Optional<String> reason(@Nullable AnnotatedElement element) {
         if (element == null) return Optional.empty();
-        return AnnotationSupport.findAnnotation(element, SkipLedgerInvariants.class).map(skip -> {
-            if (skip.value() == null || skip.value().isBlank()) {
-                throw new IllegalStateException("@SkipLedgerInvariants on " + element
-                        + " needs a reason: say why this test leaves the ledger inconsistent");
-            }
-            return skip.value();
-        });
+        return AnnotationSupport.findAnnotation(element, SkipLedgerInvariants.class)
+                .map(skip -> {
+                    if (skip.value() == null || skip.value().isBlank()) {
+                        throw new IllegalStateException("@SkipLedgerInvariants on " + element
+                                + " needs a reason: say why this test leaves the ledger inconsistent");
+                    }
+                    return skip.value();
+                });
     }
 }

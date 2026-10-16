@@ -1,5 +1,8 @@
 package io.paradaux.hibernia.testsupport.contract;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
@@ -7,8 +10,6 @@ import io.paradaux.treasury.model.economy.LedgerPosting;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.model.tax.TaxCollection;
 import io.paradaux.treasury.model.tax.TaxResult;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -17,9 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.jetbrains.annotations.Nullable;
+import org.junit.jupiter.api.Test;
 
 /**
  * Executable specification of the {@link TreasuryApi} behaviour its consumers rely
@@ -66,7 +66,7 @@ public abstract class TreasuryApiContract {
         return account.getAccountId();
     }
 
-    protected static TransferRequest request(int from, int to, BigDecimal amount, byte[] dedupKey) {
+    protected static TransferRequest request(int from, int to, BigDecimal amount, byte @Nullable [] dedupKey) {
         return new TransferRequest(from, to, amount, "contract", INITIATOR, null, "contract", dedupKey);
     }
 
@@ -240,7 +240,8 @@ public abstract class TreasuryApiContract {
         assertThat(balance(from)).isEqualByComparingTo("0");
         assertThat(balance(to)).isEqualByComparingTo("13.34");
 
-        assertThat(api().sweepAll(from, to, "contract sweep", INITIATOR, "contract")).isEmpty();
+        assertThat(api().sweepAll(from, to, "contract sweep", INITIATOR, "contract"))
+                .isEmpty();
         assertThatThrownBy(() -> api().sweepAll(to, to, "self", INITIATOR, "contract"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -252,8 +253,9 @@ public abstract class TreasuryApiContract {
         int payer = accountWith("10.00");
         int government = faucetAccountId();
 
-        TaxResult collected = api().getTaxApi().collectTax(
-                TaxCollection.toAccount(payer, government, new BigDecimal("2.50"), "contract", "tax", INITIATOR, "contract"));
+        TaxResult collected = api().getTaxApi()
+                .collectTax(TaxCollection.toAccount(
+                        payer, government, new BigDecimal("2.50"), "contract", "tax", INITIATOR, "contract"));
         assertThat(collected).isInstanceOfSatisfying(TaxResult.Collected.class, c -> {
             assertThat(c.amountCharged()).isEqualByComparingTo("2.50");
             assertThat(c.destinationAccountId()).isEqualTo(government);
@@ -261,12 +263,14 @@ public abstract class TreasuryApiContract {
         });
         assertThat(balance(payer)).isEqualByComparingTo("7.50");
 
-        TaxResult belowMinimum = api().getTaxApi().collectTax(
-                TaxCollection.toAccount(payer, government, new BigDecimal("0.004"), "contract", "tax", INITIATOR, "contract"));
+        TaxResult belowMinimum = api().getTaxApi()
+                .collectTax(TaxCollection.toAccount(
+                        payer, government, new BigDecimal("0.004"), "contract", "tax", INITIATOR, "contract"));
         assertThat(belowMinimum).isInstanceOf(TaxResult.Skipped.class);
 
-        TaxResult unaffordable = api().getTaxApi().collectTax(
-                TaxCollection.toAccount(payer, government, new BigDecimal("7.51"), "contract", "tax", INITIATOR, "contract"));
+        TaxResult unaffordable = api().getTaxApi()
+                .collectTax(TaxCollection.toAccount(
+                        payer, government, new BigDecimal("7.51"), "contract", "tax", INITIATOR, "contract"));
         assertThat(unaffordable).isInstanceOf(TaxResult.Failed.class);
         assertThat(balance(payer)).isEqualByComparingTo("7.50");
     }
@@ -277,10 +281,14 @@ public abstract class TreasuryApiContract {
         int poor = accountWith("0.50");
         int government = faucetAccountId();
 
-        List<TaxResult> results = api().getTaxApi().collectBatch(List.of(
-                TaxCollection.toAccount(rich, government, new BigDecimal("1.00"), "contract", "tax", INITIATOR, "contract"),
-                TaxCollection.toAccount(poor, government, new BigDecimal("1.00"), "contract", "tax", INITIATOR, "contract"),
-                TaxCollection.toAccount(rich, government, new BigDecimal("2.00"), "contract", "tax", INITIATOR, "contract")));
+        List<TaxResult> results = api().getTaxApi()
+                .collectBatch(List.of(
+                        TaxCollection.toAccount(
+                                rich, government, new BigDecimal("1.00"), "contract", "tax", INITIATOR, "contract"),
+                        TaxCollection.toAccount(
+                                poor, government, new BigDecimal("1.00"), "contract", "tax", INITIATOR, "contract"),
+                        TaxCollection.toAccount(
+                                rich, government, new BigDecimal("2.00"), "contract", "tax", INITIATOR, "contract")));
 
         assertThat(results).hasSize(3);
         assertThat(results.get(0)).isInstanceOf(TaxResult.Collected.class);
