@@ -76,6 +76,20 @@ TAX_AMOUNT: 0
 # Percent of the price that should go to the server's account when buying from an Admin Shop.
 SERVER_TAX_AMOUNT: 0
 
+# Balance-based tax brackets for player shops. When set, they replace TAX_AMOUNT: the balance of
+# the player receiving the money, before the sale, picks a bracket, and that percent of the whole
+# sale is taxed. Each entry is '<balance floor>=<percent>', e.g. ['0=0', '1000=1', '5000=2'] taxes
+# 0% under $1000, 1% from $1000 and 2% from $5000. Leave empty to use TAX_AMOUNT. Admin Shop sales
+# keep using SERVER_TAX_AMOUNT.
+TAX_BRACKETS: []
+
+# Per-item tax multipliers, applied to whichever rate a sale would otherwise pay (capped at 100%).
+# Each entry is '<item>=<multiplier>', e.g. ['NETHERITE_INGOT=2', 'nexo:ruby_sword=3'] taxes
+# netherite ingots at twice the normal rate. <item> is a custom item id as <namespace>:<id> (Nexo
+# items are nexo:<item id>; works for any plugin that stores its item id in the item's persistent
+# data), a ChestShop item code as written on signs, or a material name (plain items only).
+TAX_ITEM_MULTIPLIERS: []
+
 # Amount of money player must pay to create a shop
 SHOP_CREATION_PRICE: 0
 

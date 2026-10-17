@@ -1,17 +1,23 @@
 package io.paradaux.chestshop.model.config;
 
+import io.paradaux.chestshop.model.tax.ItemTaxMultipliers;
+import io.paradaux.chestshop.model.tax.SalesTaxBrackets;
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationComponent;
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationValue;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Material;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * ChestShop's configuration, loaded by HiberniaFramework's Configurator from
@@ -111,6 +117,27 @@ public class ChestShopConfiguration {
 
     @ConfigurationValue(path = "SERVER_TAX_AMOUNT", defaultValue = "0")
     private double serverTaxAmount;
+
+    /** Stored as a string list; exposed as {@link SalesTaxBrackets} via {@link #getTaxBrackets()}. */
+    @ConfigurationValue(path = "TAX_BRACKETS", defaultValue = "")
+    private List<String> taxBracketsRaw;
+
+    /** Stored as a string list; exposed as {@link ItemTaxMultipliers} via {@link #getTaxItemMultipliers()}. */
+    @ConfigurationValue(path = "TAX_ITEM_MULTIPLIERS", defaultValue = "")
+    private List<String> taxItemMultipliersRaw;
+
+    /** Parsed {@link #taxBracketsRaw}, rebuilt only when a reload changes it (so a bad entry warns once). */
+    @Getter(AccessLevel.NONE)
+    private @Nullable List<String> parsedTaxBracketsFrom;
+
+    @Getter(AccessLevel.NONE)
+    private SalesTaxBrackets parsedTaxBrackets = SalesTaxBrackets.parse(null, warning -> {});
+
+    @Getter(AccessLevel.NONE)
+    private @Nullable List<String> parsedTaxItemMultipliersFrom;
+
+    @Getter(AccessLevel.NONE)
+    private ItemTaxMultipliers parsedTaxItemMultipliers = ItemTaxMultipliers.parse(null, warning -> {});
 
     @ConfigurationValue(path = "SHOP_CREATION_PRICE", defaultValue = "0")
     private BigDecimal shopCreationPrice;
@@ -225,6 +252,25 @@ public class ChestShopConfiguration {
             }
         }
         return set;
+    }
+
+    /** Balance-based sales tax brackets; empty when {@code TAX_BRACKETS} is unset, so {@code TAX_AMOUNT} applies. */
+    public synchronized SalesTaxBrackets getTaxBrackets() {
+        if (!Objects.equals(taxBracketsRaw, parsedTaxBracketsFrom)) {
+            parsedTaxBrackets = SalesTaxBrackets.parse(taxBracketsRaw, log::warn);
+            parsedTaxBracketsFrom = taxBracketsRaw == null ? null : new ArrayList<>(taxBracketsRaw);
+        }
+        return parsedTaxBrackets;
+    }
+
+    /** Per-item sales tax multipliers; empty when {@code TAX_ITEM_MULTIPLIERS} is unset. */
+    public synchronized ItemTaxMultipliers getTaxItemMultipliers() {
+        if (!Objects.equals(taxItemMultipliersRaw, parsedTaxItemMultipliersFrom)) {
+            parsedTaxItemMultipliers = ItemTaxMultipliers.parse(taxItemMultipliersRaw, log::warn);
+            parsedTaxItemMultipliersFrom =
+                    taxItemMultipliersRaw == null ? null : new ArrayList<>(taxItemMultipliersRaw);
+        }
+        return parsedTaxItemMultipliers;
     }
 
     /** Worlds in which empty shops are removed (empty = all worlds). */

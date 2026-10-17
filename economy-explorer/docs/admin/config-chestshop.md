@@ -1,7 +1,7 @@
 ---
 title: ChestShop configuration
 order: 13
-description: ChestShop's trade limits and rules — and why its sales tax is actually configured in Treasury.
+description: ChestShop's trade limits and rules, and how its sales tax rates work.
 ---
 
 # ChestShop configuration
@@ -12,12 +12,11 @@ reload the config with **`/chestshop reload`** (alias `/cs reload`) — a full
 restart isn't required.
 
 > [!IMPORTANT]
-> **ChestShop sales tax is NOT configured here.** Because Treasury is installed, ChestShop
-> hands tax off to Treasury's tax API, which collects it into Treasury's default tax
-> account (`DCGovernment`). The legacy `TAX_AMOUNT` and `SERVER_ECONOMY_ACCOUNT` keys are
-> **inert** on this server — leave them at `0` / empty. To change shop sales tax, edit
-> **[Treasury](/docs/admin/config-treasury)**. Tax *exemptions* are by permission:
-> `ChestShop.notax.buy`.
+> **ChestShop decides the sales tax rate; Treasury collects it.** The rate comes from the
+> keys in [Sales tax](#sales-tax) below, and ChestShop hands each charge to Treasury's tax
+> API, which moves it into Treasury's default tax account (`DCGovernment`) as its own ledger
+> entry. `SERVER_ECONOMY_ACCOUNT` is inert on this server — leave it empty. Tax *exemptions*
+> are by permission: `ChestShop.notax.buy`.
 
 ## Trade limits & fees
 
@@ -51,7 +50,48 @@ restart isn't required.
 |---|---|---|
 | `ADMIN_SHOP_NAME` | `Admin Shop` | The owner-line text that marks a sign as an unlimited admin shop. |
 | `FORCE_UNLIMITED_ADMIN_SHOP` | `false` | Makes admin shops unlimited even with a container attached. |
-| `TAX_AMOUNT` / `SERVER_ECONOMY_ACCOUNT` | `0` / *(empty)* | **Inert on DC** — tax is handled by Treasury (see the note above). |
+| `SERVER_ECONOMY_ACCOUNT` | *(empty)* | **Inert on DC** — Treasury owns the accounts (see the note above). |
+
+## Sales tax
+
+Every sale is taxed on the money it pays out, charged to whoever receives it: the shop owner
+when a player buys, the player when they sell to a shop. Sales into an admin shop are not taxed.
+
+| Key | Default | What it does |
+|---|---|---|
+| `TAX_AMOUNT` | `0` | Percent of a player-shop sale taken as tax, when `TAX_BRACKETS` is empty. |
+| `SERVER_TAX_AMOUNT` | `0` | Percent taken when the other side is an admin shop / the server account. |
+| `TAX_BRACKETS` | `[]` | Balance-based brackets for player shops, replacing `TAX_AMOUNT` when set. Entries are `'<balance floor>=<percent>'`. |
+| `TAX_ITEM_MULTIPLIERS` | `[]` | Per-item multipliers on the rate a sale would otherwise pay, capped at 100%. Entries are `'<item>=<multiplier>'`. |
+
+**Brackets** use the receiver's balance *before* the sale and are flat, not marginal — the
+whole sale is taxed at its bracket's percent, like Treasury's balance tax:
+
+```yaml
+TAX_BRACKETS:
+- '0=0'      # under $1,000: no tax
+- '1000=1'   # $1,000 – $4,999.99: 1%
+- '5000=2'   # $5,000 and up: 2%
+```
+
+**Item multipliers** scale that rate for particular items — `2` doubles it, `0.5` halves it,
+`0` makes the item tax-free. An item is matched by, most specific first:
+
+1. its custom item id, `<namespace>:<id>` — Nexo items are `nexo:<item id>`, and any plugin
+   that stores an item id string in the item's persistent data works the same way;
+2. its ChestShop item code, as written on signs (with or without the `#…` metadata suffix);
+3. its material name, e.g. `NETHERITE_INGOT` — **plain items only**, so a Nexo item made
+   from paper is never taxed as `PAPER`.
+
+```yaml
+TAX_ITEM_MULTIPLIERS:
+- 'NETHERITE_INGOT=2'    # netherite ingots: twice the normal rate
+- 'nexo:ruby_sword=3'    # a Nexo item by its id
+```
+
+With both of the examples above, a seller holding $3,000 pays 1% on most sales and 2% on
+netherite ingots. A malformed entry is logged once and skipped; `/chestshop reload` applies
+changes.
 
 ## Protection
 
