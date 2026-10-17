@@ -81,6 +81,11 @@ A manual run uses the migrations of the branch picked under *Use workflow from*
 
 ## Local development
 
+To refresh the local DemocracyCraft clone from production data, follow the
+[staging database refresh runbook](../ops/dev-server/staging-refresh.md).
+It covers the economy, ChestShop and Realty databases, sanitization, writer
+quiescence, migration verification and rollback snapshots.
+
 For running services or full integration tests locally you need a MariaDB. Two
 options:
 
