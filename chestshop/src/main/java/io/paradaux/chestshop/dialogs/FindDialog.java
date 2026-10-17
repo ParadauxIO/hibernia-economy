@@ -3,6 +3,7 @@ package io.paradaux.chestshop.dialogs;
 import com.google.inject.Inject;
 import io.paradaux.chestshop.model.FoundShop;
 import io.paradaux.chestshop.model.ShopAttribute;
+import io.paradaux.chestshop.model.ShopItem;
 import io.paradaux.chestshop.model.ShopType;
 import io.paradaux.chestshop.model.SortDirection;
 import io.paradaux.chestshop.services.ShopDisplayService;
@@ -27,6 +28,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * The {@code /find} shop-search dialog flow — the first Usher consumer in
@@ -237,7 +239,14 @@ public final class FindDialog implements DialogHandler {
                 .canCloseWithEscape(true);
 
         for (int i = 0; i < shops.size(); i++) {
-            b.button(Text.of(shopLabel(shops.get(i), queriedKey)), "select" + i);
+            FoundShop shop = shops.get(i);
+            Component label = shopLabel(shop, queriedKey);
+            ItemStack icon = ShopItem.decode(shop.material(), shop.itemData());
+            if (icon != null) {
+                b.body(Text.of(label));
+                b.bodyItem(icon);
+            }
+            b.button(Text.of(label), "select" + i);
         }
         if (state.page() > 0) {
             b.button(Text.key("find.button.prev"), "prevPage");
