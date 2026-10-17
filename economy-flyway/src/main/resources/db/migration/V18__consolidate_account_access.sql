@@ -15,7 +15,25 @@
 -- account_viewers / account_group_viewers were introduced one migration earlier
 -- (PAR-237) but never reached a persistent environment, so there is nothing to
 -- migrate out of them — they're simply not created.
+--
+-- PROD SHIM: economy-explorer was deployed ahead of this migration and bridged
+-- with a read-only compat VIEW named account_access (PAR-250). Drop it first so
+-- the CREATE TABLE below doesn't collide with an existing object. IF EXISTS makes
+-- this a harmless no-op in any environment where the shim was never applied
+-- (fresh installs, CI, dev), so the migration is self-contained — no manual step.
+--
+-- NOTE ON THE DROP VIEW EDIT: the two DROP VIEW lines were added after V18 was first
+-- committed. That is normally a Flyway immutability violation (editing an applied
+-- migration trips a checksum mismatch), but it is safe here: the live DB is at V15
+-- (verified) so V18 has never been applied to any persistent history, and there is a
+-- single production database. The DROP VIEW must stay *inside* V18, before the CREATE
+-- TABLE — the prod shim is a VIEW named account_access, so the drop has to run ahead
+-- of this table creation. Moving it to a later migration would run it after the table
+-- already failed to create. Do not relocate it.
 -- =====================================================================
+
+DROP VIEW IF EXISTS account_access;
+DROP VIEW IF EXISTS account_group_access;
 
 CREATE TABLE account_access (
     account_id        INT UNSIGNED NOT NULL,

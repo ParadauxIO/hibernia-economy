@@ -1,4 +1,5 @@
 'use server';
+import { randomInt } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { getViewer } from '@/lib/auth/viewer';
 import { insertLinkCode, deleteExpiredLinkCodes } from '@/lib/sql/link';
@@ -49,9 +50,11 @@ export async function linkStart(): Promise<LinkStartResult> {
 }
 
 function generateCode(): string {
+  // CSPRNG: these codes bind a Keycloak identity to a Minecraft UUID, so they're
+  // an auth-adjacent secret — Math.random() is not cryptographically secure.
   let out = '';
   for (let i = 0; i < CODE_LEN; i++) {
-    out += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    out += ALPHABET[randomInt(ALPHABET.length)];
   }
   return out;
 }

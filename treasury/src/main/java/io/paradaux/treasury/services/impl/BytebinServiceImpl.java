@@ -66,13 +66,22 @@ public class BytebinServiceImpl implements BytebinService {
         return baos.toByteArray();
     }
 
+    // Match "key" : "<value>" tolerant of whitespace and key ordering, instead of the
+    // old hand-rolled quote-offset arithmetic that broke on any formatting change and
+    // could throw StringIndexOutOfBounds or return a wrong key (ADT bytebin-key-parsing-fragile).
+    private static final java.util.regex.Pattern KEY_PATTERN =
+            java.util.regex.Pattern.compile("\"key\"\\s*:\\s*\"([^\"]+)\"");
+
     private static String extractKey(String responseBody) {
-        int keyStart = responseBody.indexOf("\"key\"");
-        if (keyStart == -1) {
+        java.util.regex.Matcher m = KEY_PATTERN.matcher(responseBody);
+        if (!m.find()) {
             throw new IllegalStateException("Bytebin response did not contain a key");
         }
-        int valueStart = responseBody.indexOf('"', responseBody.indexOf(':', keyStart) + 1) + 1;
-        int valueEnd   = responseBody.indexOf('"', valueStart);
-        return responseBody.substring(valueStart, valueEnd);
+        String key = m.group(1);
+        // The key is concatenated straight into a URL; reject anything not a valid token.
+        if (key.isBlank() || !key.matches("[A-Za-z0-9._~-]+")) {
+            throw new IllegalStateException("Bytebin response key is not URL-safe: " + key);
+        }
+        return key;
     }
 }

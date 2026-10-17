@@ -1,12 +1,13 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { memo } from '@/lib/cache';
 import { fmtAmtFull, fmtN } from '@/lib/format';
-import { MoneyFlowDiagram } from '@/components/charts/MoneyFlowDiagram';
 import { SectionTabs } from '@/components/SectionTabs';
 import { WindowTabs } from '@/components/WindowTabs';
 import { InfoTip } from '@/components/InfoTip';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(1).max(30).default(30) });
 
@@ -22,7 +23,7 @@ export default async function MoneyFlowPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const raw = await searchParams;
-  const sp = SP_SCHEMA.parse(flat(raw));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(raw));
   // The money-flow self-join is the heaviest aggregate in the explorer (it was
   // effectively inaccessible uncached) — cache it per pod/fleet for 60s, keyed
   // by the day window, via the shared-Redis SWR cache.
@@ -66,19 +67,23 @@ export default async function MoneyFlowPage({
         </div>
       </div>
 
-      <div className="card sankey-card">
-        <div className="card-title">
-          Flow diagram
-          <span className="sub">arrow width = flow magnitude · excludes initial player funding</span>
-        </div>
-        <MoneyFlowDiagram edges={edges} />
-      </div>
+      <section className="flow-summary" aria-label="Net movement by account type">
+        {['PERSONAL', 'BUSINESS', 'GOVERNMENT', 'SYSTEM'].map(type => {
+          const sent = edges.filter(e => e.from_type === type).reduce((n, e) => n + Number(e.amount), 0);
+          const received = edges.filter(e => e.to_type === type).reduce((n, e) => n + Number(e.amount), 0);
+          return <div className="card" key={type}><h2 className="card-title">{type}</h2><dl>
+            <dt>Received</dt><dd>{fmtAmtFull(received)}</dd><dt>Sent</dt><dd>{fmtAmtFull(sent)}</dd>
+            <dt>Net received</dt><dd>{fmtAmtFull(received - sent)}</dd>
+          </dl></div>;
+        })}
+      </section>
+      <p className="page-intro">Positive net means more received than sent. Includes initial player funding; only attributable two-posting transfers between different types are included.</p>
 
       <div className="card">
         <div className="card-title">
           Flows by account-type pair <span className="sub">sorted by total amount</span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Flows by account-type pair">
           <table className="data-table">
             <thead>
               <tr>
@@ -104,16 +109,9 @@ export default async function MoneyFlowPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

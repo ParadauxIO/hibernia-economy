@@ -53,10 +53,9 @@ copy). For a **firm** account, issue a business key instead:
 ```
 
 > [!WARNING]
-> The token is shown **once**, when it's issued. Copy it somewhere safe. You can
-> re-retrieve it later with `/treasuryapi personal export <keyId>` (it gives you a
-> shareable link to the token), or replace it with `/treasuryapi personal reissue
-> <keyId>`.
+> The token is shown **once**, when it's issued, and is never stored — it can't be
+> retrieved later. Copy it somewhere safe. If you lose it, replace it with
+> `/treasuryapi personal reissue <keyId>` (the old token stops working).
 
 Manage your keys any time:
 
@@ -65,7 +64,7 @@ Manage your keys any time:
 /treasuryapi personal revoke <keyId>  # kill a key immediately
 ```
 
-Business keys have the same `list` / `export` / `reissue` / `revoke` subcommands under
+Business keys have the same `list` / `reissue` / `revoke` subcommands under
 `/treasuryapi business`. Firm staff can also run `/treasuryapi business list access` to
 see the keys issued for firms they're employed at.
 
@@ -96,6 +95,14 @@ authoritative list of endpoints and exact request bodies. The core capabilities 
 - **Transfers** — move money to a player or to a firm.
 - **Transactions** — read an account's history.
 - **Balance** — read an account's current balance.
+- **Baltop** — `GET /api/v1/accounts/baltop?page=1&limit=10` lists active personal
+  accounts ranked by balance, as in `/baltop` in-game. Any valid API key can read
+  player UUIDs, names, account IDs and balances. The default rate limit is 10
+  requests per minute per issuer, shared across their keys, including business
+  keys (administrator rate-limit overrides still apply). Pages start at 1; the default
+  page size is 10 and the maximum is 100. Balances are decimal strings. Ties
+  are ordered by account ID, but balance changes between requests can move
+  accounts between pages, so pagination does not provide a fixed snapshot.
 - **Webhooks** — get a signed POST when the account moves money, instead of polling (see
   the [Webhooks guide](/docs/guides/webhooks)).
 - **Token rotation** — refresh your token before it expires.

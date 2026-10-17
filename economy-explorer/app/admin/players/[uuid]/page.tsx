@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -23,6 +24,7 @@ export default async function AdminPlayerDataPage({ params }: { params: Promise<
   // The /admin layout already gated to admin; this is a privileged inspection of
   // another player's private financial dashboard, so audit it against the player.
   const viewer = await getViewer();
+  if (!hasPermission(viewer, 'player.read.all')) return null; // layout renders the access gate
   await auditView(viewer, { path: '/admin/players/[uuid]', targetType: 'player', targetId: uuid });
 
   const name = await findPlayerName(uuid);

@@ -1,6 +1,9 @@
 import 'server-only';
 import { sql } from 'kysely';
-import { db, binToUuid, uuidToBin } from '@/lib/db';
+import { db, binToUuid } from '@/lib/db';
+
+// Read-only over api_rate_limit_override (ADT-14): writes go through the REST
+// admin API (lib/treasury.ts setRateLimitOverride / clearRateLimitOverride).
 
 export interface RateLimitOverride {
   owner_uuid: string;
@@ -28,29 +31,3 @@ export async function listRateLimitOverrides(): Promise<RateLimitOverride[]> {
   }));
 }
 
-/** Mirrors ApiRateLimitOverrideMapper.upsert (line 25-32). */
-export async function upsertRateLimitOverride(args: {
-  ownerUuid: string;
-  multiplier: string;
-  note: string | null;
-  updatedBy: string | null;
-}): Promise<void> {
-  await sql`
-    INSERT INTO api_rate_limit_override (owner_uuid_bin, multiplier, note, updated_by_bin)
-    VALUES (
-      ${uuidToBin(args.ownerUuid)},
-      ${args.multiplier},
-      ${args.note},
-      ${args.updatedBy ? uuidToBin(args.updatedBy) : null}
-    )
-    ON DUPLICATE KEY UPDATE
-      multiplier = VALUES(multiplier),
-      note = VALUES(note),
-      updated_by_bin = VALUES(updated_by_bin)
-  `.execute(db);
-}
-
-/** Mirrors ApiRateLimitOverrideMapper.delete (line 34-35). */
-export async function deleteRateLimitOverride(ownerUuid: string): Promise<void> {
-  await sql`DELETE FROM api_rate_limit_override WHERE owner_uuid_bin = ${uuidToBin(ownerUuid)}`.execute(db);
-}

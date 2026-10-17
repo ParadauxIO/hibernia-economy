@@ -1,11 +1,14 @@
+import { DirectorySort } from '@/components/DirectorySort';
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
 import { listFirms, countFirms, type FirmSortColumn, type SortDir } from '@/lib/sql/ledger';
 import { getFirmStats } from '@/lib/sql/firm';
 import { memo } from '@/lib/cache';
-import { fmtAmt, fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { fmtAmt, fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
 import { Pagination } from '@/components/Pagination';
 import { CsvButton } from '@/components/CsvButton';
@@ -32,7 +35,7 @@ export default async function FirmsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const raw = await searchParams;
-  const sp = SP_SCHEMA.safeParse(flat(raw)).data ?? SP_SCHEMA.parse({});
+  const sp = SP_SCHEMA.safeParse(flattenSearchParams(raw)).data ?? SP_SCHEMA.parse({});
   const dir = sp.dir.toUpperCase() as SortDir;
   const archived = sp.archived === undefined ? null : sp.archived === 'true' ? 1 : 0;
 
@@ -122,15 +125,16 @@ export default async function FirmsPage({
         }
       />
 
-      <div className="table-wrap"><table className="data-table">
+      <DirectorySort basePath="/firms" params={raw} sort={sp.sort} dir={dir} options={[{ label: 'Richest', sort: 'balance', dir: 'DESC' }, { label: 'Newest', sort: 'created', dir: 'DESC' }, { label: 'Name A–Z', sort: 'name', dir: 'ASC' }, { label: 'Largest employers', sort: 'employees', dir: 'DESC' }]} />
+      <div className="table-wrap directory-wrap"><table className="data-table directory-table">
         <thead>
           <tr>
             <th>Firm</th>
-            <th>HQ</th>
-            <th className="amount">Employees</th>
-            <th className="amount">Accounts</th>
+            <th data-secondary="true">HQ</th>
+            <th data-secondary="true" className="amount">Employees</th>
+            <th data-secondary="true" className="amount">Accounts</th>
             <th className="amount">Total balance</th>
-            <th className="ts">Founded</th>
+            <th data-secondary="true" className="ts">Founded</th>
           </tr>
         </thead>
         <tbody>
@@ -144,15 +148,16 @@ export default async function FirmsPage({
               <td>
                 <Link href={`/firms/${encodeURIComponent(f.display_name)}` as Route} className="rowlink" prefetch={false}>
                   <span style={{ fontWeight: 500 }}>{f.display_name}</span>
-                  <span className="mono muted small">{` #${f.firm_id}`}</span>
+                  <span className="mono muted small desktop-only">{` #${f.firm_id}`}</span>
                   {f.archived ? <span className="badge badge-archived" style={{ marginLeft: 8 }}>Archived</span> : null}
                 </Link>
+                <details className="mobile-only directory-details"><summary>Details</summary><p>#{f.firm_id} · HQ: {f.hq_region ?? 'Unknown'}</p><p>{fmtN(f.employee_count)} employees · {fmtN(f.account_count)} accounts</p><p>Founded <LocalTimestamp value={f.created_at} /></p></details>
               </td>
-              <td>{f.hq_region ?? <span className="muted">—</span>}</td>
-              <td className="amount mono">{fmtN(f.employee_count)}</td>
-              <td className="amount mono">{fmtN(f.account_count)}</td>
+              <td data-secondary="true">{f.hq_region ?? <span className="muted">—</span>}</td>
+              <td data-secondary="true" className="amount mono">{fmtN(f.employee_count)}</td>
+              <td data-secondary="true" className="amount mono">{fmtN(f.account_count)}</td>
               <td className="amount neutral">{fmtAmtFull(f.total_balance)}</td>
-              <td className="ts">{fmtTs(f.created_at)}</td>
+              <td data-secondary="true" className="ts"><LocalTimestamp value={f.created_at} /></td>
             </tr>
           ))}
         </tbody>
@@ -169,12 +174,3 @@ export default async function FirmsPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      if (v.length > 0 && v[0] !== undefined) out[k] = v[0];
-    } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

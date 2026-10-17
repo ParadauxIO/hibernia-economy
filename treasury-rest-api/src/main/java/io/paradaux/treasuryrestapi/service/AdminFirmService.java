@@ -3,6 +3,7 @@ package io.paradaux.treasuryrestapi.service;
 import io.paradaux.treasuryrestapi.dto.FirmDisbandResponse;
 import io.paradaux.treasuryrestapi.dto.FirmDisbandResponse.DisbandedAccount;
 import io.paradaux.treasuryrestapi.dto.FirmResponse;
+import io.paradaux.treasuryrestapi.dto.TransferResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.mapper.AccountMapper;
 import io.paradaux.treasuryrestapi.mapper.FirmMapper;
@@ -86,25 +87,35 @@ public class AdminFirmService {
 
         for (FirmAccountSummary account : accounts) {
             long accountId = account.getAccountId();
-            BigDecimal balance = account.getBalance() == null ? BigDecimal.ZERO : account.getBalance();
             String swept = null;
             Long destination = null;
 
-            if (balance.signum() > 0) {
-                if (proprietorPersonal == null) {
-                    throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "PROPRIETOR_NO_PERSONAL_ACCOUNT",
+            if (proprietorPersonal != null) {
+                // Sweep the FRESHLY LOCKED balance, not the listFirmAccounts snapshot: a
+                // concurrent credit/debit landing after the snapshot must not strand a
+                // residual or overdraw. sweepAll reads the amount under SELECT ... FOR
+                // UPDATE and returns null when the locked balance is zero-or-negative.
+                // No per-transfer idempotency key: the whole disband is one DB transaction
+                // (ledger + firm tables share this database), so a partial run can't
+                // persist and a retried disband is a no-op via the already-archived guard.
+                TransferResponse receipt = transferService.sweepAll(
+                        accountId, proprietorPersonal, DISBAND_MEMO, proprietor);
+                if (receipt != null) {
+                    swept = receipt.amount();
+                    destination = proprietorPersonal;
+                }
+            } else {
+                // No destination to receive the money — but the snapshot may be stale, so
+                // read the LOCKED balance before concluding the account is empty. A real
+                // positive balance with nowhere to go is a clean 422 (the whole tx rolls
+                // back). MINT is never exposed via REST, so we cannot conjure a personal
+                // account the way the in-game plugin can.
+                BigDecimal locked = transferService.lockedBalance(accountId);
+                if (locked != null && locked.signum() > 0) {
+                    throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "PROPRIETOR_NO_PERSONAL_ACCOUNT",
                             "Firm account " + accountId + " has a positive balance but the proprietor has no "
                                     + "personal account to receive it.");
                 }
-                // No per-transfer idempotency key needed: the whole disband is one DB
-                // transaction (ledger + firm tables share this database), so a partial
-                // run can't persist, and a retried disband is a no-op via the
-                // already-archived guard above. This is stronger than the plugin's
-                // cross-IPC flow, which needs idempotency keys to avoid double-pay.
-                transferService.executeTransfer(accountId, proprietorPersonal, balance, DISBAND_MEMO,
-                        proprietor, /* idempotencyKey */ null, /* bypassAuthRequired */ true);
-                swept = balance.toPlainString();
-                destination = proprietorPersonal;
             }
 
             accountMapper.archiveAccount(accountId);
@@ -164,19 +175,12 @@ public class AdminFirmService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
                     "At least one of 'discordUrl' or 'hqRegion' must be provided.");
         }
-        if (discordUrl != null && discordUrl.strip().length() > MAX_DISCORD_URL_LENGTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'discordUrl' must be at most " + MAX_DISCORD_URL_LENGTH + " characters.");
-        }
-        if (hqRegion != null && hqRegion.strip().length() > MAX_HQ_REGION_LENGTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'hqRegion' must be at most " + MAX_HQ_REGION_LENGTH + " characters.");
-        }
+        FirmFieldLimits.validate(discordUrl, hqRegion); // ADT-120: shared with FirmService
         Firm firm = firmMapper.findFirmById(firmId);
         if (firm == null) throw new ApiException(HttpStatus.NOT_FOUND, "FIRM_NOT_FOUND", "Firm not found.");
 
-        String newDiscord = discordUrl != null ? emptyToNull(discordUrl) : firm.getDiscordUrl();
-        String newHq = hqRegion != null ? emptyToNull(hqRegion) : firm.getHqRegion();
+        String newDiscord = discordUrl != null ? FirmFieldLimits.emptyToNull(discordUrl) : firm.getDiscordUrl();
+        String newHq = hqRegion != null ? FirmFieldLimits.emptyToNull(hqRegion) : firm.getHqRegion();
         firmMapper.updateFirm(firmId, firm.getDisplayName(), newDiscord, newHq);
         log.info("Admin updated firm details firmId={} by keyId={}", firmId, verified.keyId());
 
@@ -184,13 +188,7 @@ public class AdminFirmService {
     }
 
     // -------------------------------------------------------------------------
-
-    private static final int MAX_DISCORD_URL_LENGTH = 255; // firm.discord_url
-    private static final int MAX_HQ_REGION_LENGTH = 64;    // firm.hq_region
-
-    private static String emptyToNull(String v) {
-        return v.isBlank() ? null : v.strip();
-    }
+    // discord_url / hq_region width limits + emptyToNull live in FirmFieldLimits (ADT-120).
 
     private void requireServiceKey(VerifiedToken verified) {
         if (verified == null || !"SERVICE".equals(verified.keyType())) {

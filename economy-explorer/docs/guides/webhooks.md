@@ -72,12 +72,22 @@ For a normal (non-Discord) endpoint, the body is JSON:
     "message": "siven01 sold x8 Feather to GovInterior",
     "settledAt": "2026-06-14T12:30:57Z",
     "initiatorUuid": "f7e6…",
-    "pluginSystem": "ChestShop"
+    "pluginSystem": "ChestShop",
+    "counterparty": {
+      "accountId": 812,
+      "accountType": "GOVERNMENT",
+      "displayName": "GovInterior",
+      "ownerUuid": "0c4a…"
+    }
   }
 }
 ```
 
 `amount` is the signed change to **your** account (positive = money in, negative = out).
+`counterparty` is the account on the other side of the transaction: its id, type
+(`PERSONAL`, `BUSINESS`, `GOVERNMENT` or `SYSTEM`), display name and owner UUID. It is
+`null` only if the transaction has no other side. The same `counterparty` object appears on
+every item from the transaction history and feed endpoints.
 The request also carries these headers:
 
 | Header | Meaning |

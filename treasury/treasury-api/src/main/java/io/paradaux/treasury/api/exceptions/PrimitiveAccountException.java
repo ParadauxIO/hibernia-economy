@@ -6,6 +6,7 @@ package io.paradaux.treasury.api.exceptions;
  * {@code starting-balances} or {@code GovernmentFines} accounts.
  */
 public class PrimitiveAccountException extends TreasuryException {
+    private static final long serialVersionUID = 1L;
     private final String accountName;
 
     public PrimitiveAccountException(String accountName) {

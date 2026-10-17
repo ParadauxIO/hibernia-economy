@@ -1,10 +1,13 @@
 'use client';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
+import { useHydrated } from '@/components/useHydrated';
+import { useMediaQuery } from '@/components/useMediaQuery';
 import {
   Area, AreaChart, Bar, BarChart,
   CartesianGrid, Cell, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import { TAX_KINDS, TAX_LABELS, type TaxKind } from '@/lib/taxation';
 import { fmtAmt, fmtAmtFull, fmtDate, fmtN } from '@/lib/format';
 
 const GRID_STROKE = 'var(--border-soft)';
@@ -17,14 +20,17 @@ const AXIS_TICK = { fontSize: 11, fill: 'var(--fg-muted)' };
  * mounted keeps SSR and the first client render identical, then swaps in the
  * chart with no layout shift.
  */
-function RC({ height, children }: { height: number; children: ReactElement }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return <div style={{ width: '100%', height }} aria-hidden />;
+function RC({ height, children, daily = false }: { height: number; children: ReactElement; daily?: boolean }) {
+  const mounted = useHydrated();
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      {children}
-    </ResponsiveContainer>
+    <>
+      {daily && <p className="chart-subtitle">Daily buckets in UTC.</p>}
+      {mounted ? (
+        <ResponsiveContainer width="100%" height={height}>
+          {children}
+        </ResponsiveContainer>
+      ) : <div style={{ width: '100%', height }} aria-hidden />}
+    </>
   );
 }
 
@@ -33,11 +39,19 @@ interface VolumeTimelineProps {
 }
 
 export function VolumeTimeline({ data }: VolumeTimelineProps) {
-  if (!data || data.length === 0) {
+  // Phones default to volume only (two axes don't fit); an explicit choice wins.
+  const narrow = useMediaQuery('(max-width: 720px)');
+  const [chosen, setMetric] = useState<string | null>(null);
+  const metric = chosen ?? (narrow ? 'volume' : 'both');
+  if (data.length === 0) {
     return <EmptyChart>No data yet.</EmptyChart>;
   }
   const series = data.map((d) => ({ date: d.date, count: d.txn_count, volume: parseFloat(d.total_volume) }));
   return (
+    <>
+    <label className="chart-series-control">Show <select aria-label="Chart series" value={metric} onChange={e => setMetric(e.target.value)}><option value="both">Volume and transactions</option><option value="volume">Volume</option><option value="count">Transactions</option></select></label>
+    <div className="chart-legend">{metric !== 'count' && <span style={{ color: 'var(--c-1)' }}>● Volume · right axis</span>}{metric !== 'volume' && <span style={{ color: 'var(--c-3)' }}>● Transactions · left axis</span>}</div>
+    <p className="chart-subtitle">Daily buckets in UTC. The first and current day may be partial.</p>
     <RC height={230}>
       <AreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
@@ -52,8 +66,9 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
         </defs>
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis dataKey="date" tickFormatter={fmtDate} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={28} />
-        <YAxis yAxisId="vol" orientation="right" tickFormatter={(v) => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={56} />
+        <YAxis hide={metric === 'count'} yAxisId="vol" orientation="right" tickFormatter={(v) => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={56} />
         <YAxis
+          hide={metric === 'volume'}
           yAxisId="cnt"
           orientation="left"
           domain={[0, 'dataMax']}
@@ -71,10 +86,10 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
           labelFormatter={(d) => fmtDate(String(d))}
           formatter={(v: number, name: string) => name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), 'Txns']}
         />
-        <Area yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill="url(#gVol)" dot={false} isAnimationActive={false} />
-        <Area yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill="url(#gCnt)" dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'count'} yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill="url(#gVol)" dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'volume'} yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill="url(#gCnt)" dot={false} isAnimationActive={false} />
       </AreaChart>
-    </RC>
+    </RC></>
   );
 }
 
@@ -110,7 +125,7 @@ export function WealthDonut({ data }: DonutProps) {
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
             formatter={(value: number, _name, payload) => [
-              `${fmtAmtFull(value)} · ${fmtN((payload as { payload?: { accountCount?: number } })?.payload?.accountCount ?? 0)} accts`,
+              `${fmtAmtFull(value)} · ${fmtN((payload as { payload?: { accountCount?: number } }).payload?.accountCount ?? 0)} accts`,
               'Balance',
             ]}
           />
@@ -195,7 +210,7 @@ interface InOutProps {
 export function InOutChart({ data }: InOutProps) {
   if (data.length === 0) return <EmptyChart>No data.</EmptyChart>;
   return (
-    <RC height={210}>
+    <RC daily height={210}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis
@@ -226,7 +241,7 @@ interface BalanceLineProps {
 export function BalanceLine({ data }: BalanceLineProps) {
   if (data.length === 0) return <EmptyChart>No data.</EmptyChart>;
   return (
-    <RC height={230}>
+    <RC daily height={230}>
       <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="gBalLine" x1="0" y1="0" x2="0" y2="1">
@@ -263,7 +278,7 @@ export function PriceLine({ data }: PriceLineProps) {
   if (data.length === 0) return <EmptyChart>No data.</EmptyChart>;
   const series = data.map((d) => ({ day: d.day, price: parseFloat(d.avg_unit_price), sales: d.sales }));
   return (
-    <RC height={230}>
+    <RC daily height={230}>
       <LineChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis
@@ -289,4 +304,21 @@ export function PriceLine({ data }: PriceLineProps) {
 
 function EmptyChart({ children }: { children: React.ReactNode }) {
   return <div className="state-empty" style={{ height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</div>;
+}
+
+/** Unstacked lines preserve negative fine-refund days without hiding other taxes. */
+export function TaxRevenueTimeline({ data }: { data: ({ date: string } & Record<TaxKind, number>)[] }) {
+  return <>
+    <div className="chart-legend">{TAX_KINDS.map((kind, i) => <span key={kind} style={{ color: PALETTE[i] }}>● {TAX_LABELS[kind]}</span>)}</div>
+    <RC daily height={260}>
+      <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 12 }}>
+        <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
+        <XAxis dataKey="date" tickFormatter={fmtDate} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={28} />
+        <YAxis tickFormatter={v => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={60} />
+        <Tooltip labelFormatter={d => fmtDate(String(d))} formatter={(v: number) => fmtAmtFull(v)}
+          contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }} />
+        {TAX_KINDS.map((kind, i) => <Line key={kind} dataKey={kind} name={TAX_LABELS[kind]} stroke={PALETTE[i]} strokeWidth={2} dot={false} isAnimationActive={false} />)}
+      </LineChart>
+    </RC>
+  </>;
 }

@@ -23,12 +23,7 @@ public final class HmacSha256 {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] digest = mac.doFinal(body);
-            StringBuilder sb = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
-            }
-            return sb.toString();
+            return Hex.encode(mac.doFinal(body));
         } catch (Exception e) {
             throw new IllegalStateException("HMAC-SHA256 unavailable", e);
         }

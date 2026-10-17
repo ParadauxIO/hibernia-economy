@@ -1,25 +1,5 @@
 package io.paradaux.treasury.services.impl;
 
-import io.paradaux.treasury.mappers.AccountMapper;
-import io.paradaux.treasury.mappers.MembershipMapper;
-import io.paradaux.treasury.utils.AccountRedirectCache;
-import io.paradaux.treasury.utils.PersonalAccountCache;
-import io.paradaux.treasury.model.config.EconomyConfiguration;
-import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.economy.AccountBalance;
-import io.paradaux.treasury.model.economy.AccountType;
-import io.paradaux.treasury.testsupport.TestConfigs;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,12 +8,39 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.treasury.mappers.AccountMapper;
+import io.paradaux.treasury.mappers.MembershipMapper;
+import io.paradaux.treasury.model.config.EconomyConfiguration;
+import io.paradaux.treasury.model.economy.Account;
+import io.paradaux.treasury.model.economy.AccountBalance;
+import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.economy.AccountTypeTotal;
+import io.paradaux.treasury.model.economy.EconomySummary;
+import io.paradaux.treasury.services.cache.AccountRedirectCache;
+import io.paradaux.treasury.services.cache.PersonalAccountCache;
+import io.paradaux.treasury.testsupport.TestConfigs;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class AccountServiceImplTest {
 
-    @Mock AccountMapper accountMapper;
-    @Mock MembershipMapper membershipMapper;
-    @Mock AccountRedirectCache redirectCache;
+    @Mock
+    AccountMapper accountMapper;
+
+    @Mock
+    MembershipMapper membershipMapper;
+
+    @Mock
+    AccountRedirectCache redirectCache;
 
     private AccountServiceImpl svc;
 
@@ -41,8 +48,7 @@ class AccountServiceImplTest {
     void setUp() {
         EconomyConfiguration econ = TestConfigs.economy();
         // Real PersonalAccountCache (a plain map) so resolve-then-cache behaviour is exercised.
-        svc = new AccountServiceImpl(accountMapper, membershipMapper,
-                redirectCache, new PersonalAccountCache(), econ);
+        svc = new AccountServiceImpl(accountMapper, membershipMapper, redirectCache, new PersonalAccountCache(), econ);
     }
 
     // ---- Balance reads ----
@@ -59,6 +65,43 @@ class AccountServiceImplTest {
         b.setBalance(new BigDecimal("123.45"));
         when(accountMapper.readBalance(7)).thenReturn(b);
         assertThat(svc.getBalanceReadOnly(7)).isEqualByComparingTo("123.45");
+    }
+
+    @Test
+    void getBalancesByIds_mapsBalancesByAccountId() {
+        AccountBalance b1 = new AccountBalance(10, new BigDecimal("5.00"), 0);
+        AccountBalance b2 = new AccountBalance(11, new BigDecimal("7.50"), 0);
+        when(accountMapper.readBalances(List.of(10, 11))).thenReturn(List.of(b1, b2));
+
+        Map<Integer, BigDecimal> result = svc.getBalancesByIds(List.of(10, 11));
+        assertThat(result.get(10)).isEqualByComparingTo("5.00");
+        assertThat(result.get(11)).isEqualByComparingTo("7.50");
+    }
+
+    @Test
+    void getBalancesByIds_emptyInputShortCircuits() {
+        assertThat(svc.getBalancesByIds(List.of())).isEmpty();
+        verify(accountMapper, never()).readBalances(any());
+    }
+
+    @Test
+    void getAccountsByIds_mapsAccountsByAccountId() {
+        Account a1 = new Account();
+        a1.setAccountId(10);
+        Account a2 = new Account();
+        a2.setAccountId(11);
+        when(accountMapper.findByIds(List.of(10, 11))).thenReturn(List.of(a1, a2));
+
+        Map<Integer, Account> result = svc.getAccountsByIds(List.of(10, 11));
+        assertThat(result).containsOnlyKeys(10, 11);
+        assertThat(result.get(10)).isSameAs(a1);
+        assertThat(result.get(11)).isSameAs(a2);
+    }
+
+    @Test
+    void getAccountsByIds_emptyInputShortCircuits() {
+        assertThat(svc.getAccountsByIds(List.of())).isEmpty();
+        verify(accountMapper, never()).findByIds(any());
     }
 
     @Test
@@ -183,6 +226,35 @@ class AccountServiceImplTest {
     }
 
     @Test
+    void isAccountMember_noMembershipRow_isFalse() {
+        UUID u = UUID.randomUUID();
+        when(membershipMapper.isMember(1, u)).thenReturn(0);
+        assertThat(svc.isAccountMember(u, 1)).isFalse();
+    }
+
+    @Test
+    void canAccessAccount_stranger_isDenied() {
+        // Not the owner, not an authorizer, not a member: no access. This gate fronts
+        // business withdrawals/deposits, so a false positive hands out a firm's money.
+        UUID stranger = UUID.randomUUID();
+        Account a = new Account();
+        a.setOwnerUuid(UUID.randomUUID());
+        when(accountMapper.findById(1)).thenReturn(a);
+        when(membershipMapper.isAuthorizer(1, stranger)).thenReturn(0);
+        when(membershipMapper.isMember(1, stranger)).thenReturn(0);
+        assertThat(svc.canAccessAccount(stranger, 1)).isFalse();
+    }
+
+    @Test
+    void canAccessAccount_plainMember_isAllowed() {
+        UUID member = UUID.randomUUID();
+        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(membershipMapper.isAuthorizer(1, member)).thenReturn(0);
+        when(membershipMapper.isMember(1, member)).thenReturn(1);
+        assertThat(svc.canAccessAccount(member, 1)).isTrue();
+    }
+
+    @Test
     void isOwnerForAccountId_unknownAccountReturnsFalse() {
         when(accountMapper.findById(1)).thenReturn(null);
         assertThat(svc.isOwnerForAccountId(UUID.randomUUID(), 1)).isFalse();
@@ -254,8 +326,7 @@ class AccountServiceImplTest {
     void getPersonalAccountId_missing_throws() {
         UUID u = UUID.randomUUID();
         when(accountMapper.findPersonalAccountId(u)).thenReturn(null);
-        assertThatThrownBy(() -> svc.getPersonalAccountId(u))
-                .isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> svc.getPersonalAccountId(u)).isInstanceOf(NoSuchElementException.class);
     }
 
     @Test
@@ -272,29 +343,25 @@ class AccountServiceImplTest {
         Account a = new Account();
         a.setAccountId(99);
         when(accountMapper.findById(99)).thenReturn(null);
-        assertThatThrownBy(() -> svc.updateAccount(a))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> svc.updateAccount(a)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void archiveAccount_unknown_throws() {
         when(accountMapper.findById(99)).thenReturn(null);
-        assertThatThrownBy(() -> svc.archiveAccount(99))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> svc.archiveAccount(99)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void unarchiveAccount_unknown_throws() {
         when(accountMapper.findById(99)).thenReturn(null);
-        assertThatThrownBy(() -> svc.unarchiveAccount(99))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> svc.unarchiveAccount(99)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void reassignOwner_unknownAccount_throws() {
         when(accountMapper.findById(99)).thenReturn(null);
-        assertThatThrownBy(() -> svc.reassignOwner(99, UUID.randomUUID()))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> svc.reassignOwner(99, UUID.randomUUID())).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -332,7 +399,8 @@ class AccountServiceImplTest {
         Account existing = new Account();
         existing.setAccountId(11);
         when(accountMapper.findSystemAccountForPlugin("MyPlugin")).thenReturn(existing);
-        assertThat(svc.getOrCreateSystemAccountId("MyPlugin", UUID.randomUUID())).isEqualTo(11);
+        assertThat(svc.getOrCreateSystemAccountId("MyPlugin", UUID.randomUUID()))
+                .isEqualTo(11);
         verify(accountMapper, never()).insertAccount(any());
     }
 
@@ -344,10 +412,12 @@ class AccountServiceImplTest {
         org.mockito.ArgumentCaptor<Account> captor = org.mockito.ArgumentCaptor.forClass(Account.class);
         // Simulate the @Options keyProperty assignment that MyBatis would do
         org.mockito.Mockito.doAnswer(inv -> {
-            Account a = inv.getArgument(0);
-            a.setAccountId(99);
-            return 1;
-        }).when(accountMapper).insertAccount(captor.capture());
+                    Account a = inv.getArgument(0);
+                    a.setAccountId(99);
+                    return 1;
+                })
+                .when(accountMapper)
+                .insertAccount(captor.capture());
 
         int id = svc.getOrCreateSystemAccountId("NewPlugin", owner);
 
@@ -358,6 +428,33 @@ class AccountServiceImplTest {
         assertThat(inserted.isAllowOverdraft()).isTrue();
         assertThat(inserted.getCreditLimit()).isEqualByComparingTo("-1");
         verify(accountMapper).seedBalance(99);
+    }
+
+    @Test
+    void getOrCreateSystemAccountId_concurrentInsert_reResolvesToWinner() {
+        UUID owner = UUID.randomUUID();
+        when(accountMapper.findSystemAccountForPlugin("RacyPlugin")).thenReturn(null);
+        // The insert loses the race against uq_one_system_per_plugin (V24, ADT-74).
+        org.mockito.Mockito.doThrow(new org.apache.ibatis.exceptions.PersistenceException("dup"))
+                .when(accountMapper)
+                .insertAccount(org.mockito.ArgumentMatchers.any());
+        when(accountMapper.findSystemAccountIdForPluginLocking("RacyPlugin")).thenReturn(123);
+
+        assertThat(svc.getOrCreateSystemAccountId("RacyPlugin", owner)).isEqualTo(123);
+        verify(accountMapper, org.mockito.Mockito.never()).seedBalance(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void getOrCreateSystemAccountId_insertFailsAndNoWinner_propagates() {
+        UUID owner = UUID.randomUUID();
+        when(accountMapper.findSystemAccountForPlugin("BrokenPlugin")).thenReturn(null);
+        org.mockito.Mockito.doThrow(new org.apache.ibatis.exceptions.PersistenceException("boom"))
+                .when(accountMapper)
+                .insertAccount(org.mockito.ArgumentMatchers.any());
+        when(accountMapper.findSystemAccountIdForPluginLocking("BrokenPlugin")).thenReturn(null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> svc.getOrCreateSystemAccountId("BrokenPlugin", owner))
+                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
     }
 
     @Test
@@ -395,10 +492,12 @@ class AccountServiceImplTest {
         UUID owner = UUID.randomUUID();
         org.mockito.ArgumentCaptor<Account> captor = org.mockito.ArgumentCaptor.forClass(Account.class);
         org.mockito.Mockito.doAnswer(inv -> {
-            Account a = inv.getArgument(0);
-            a.setAccountId(51);
-            return 1;
-        }).when(accountMapper).insertAccount(captor.capture());
+                    Account a = inv.getArgument(0);
+                    a.setAccountId(51);
+                    return 1;
+                })
+                .when(accountMapper)
+                .insertAccount(captor.capture());
 
         Account result = svc.createAccount(AccountType.BUSINESS, owner, "Coffee Shop");
 
@@ -409,8 +508,7 @@ class AccountServiceImplTest {
 
     @Test
     void getTopBalances_returnsPagedResult() {
-        io.paradaux.treasury.model.economy.BalanceEntry entry =
-                new io.paradaux.treasury.model.economy.BalanceEntry();
+        io.paradaux.treasury.model.economy.BalanceEntry entry = new io.paradaux.treasury.model.economy.BalanceEntry();
         when(accountMapper.getTopBalances(eq(10), eq(0))).thenReturn(List.of(entry));
         when(accountMapper.countPersonalAccounts()).thenReturn(42);
 
@@ -446,10 +544,12 @@ class AccountServiceImplTest {
         UUID u = UUID.randomUUID();
         when(accountMapper.findPersonalAccountId(u)).thenReturn(null);
         org.mockito.Mockito.doAnswer(inv -> {
-            Account a = inv.getArgument(0);
-            a.setAccountId(77);
-            return 1;
-        }).when(accountMapper).insertAccount(any(Account.class));
+                    Account a = inv.getArgument(0);
+                    a.setAccountId(77);
+                    return 1;
+                })
+                .when(accountMapper)
+                .insertAccount(any(Account.class));
 
         assertThat(svc.getOrCreatePersonalAccountId(u)).isEqualTo(77);
         verify(accountMapper).seedBalance(77);
@@ -459,6 +559,38 @@ class AccountServiceImplTest {
     void listGovernmentAccounts_delegates() {
         when(accountMapper.findAllGovernmentAccounts()).thenReturn(List.of(new Account(), new Account()));
         assertThat(svc.listGovernmentAccounts()).hasSize(2);
+    }
+
+    // ---- Economy summary ----
+
+    @Test
+    void getEconomySummary_foldsTypeTotalsAndSumsGrandTotal() {
+        when(accountMapper.getEconomyTotalsByType())
+                .thenReturn(List.of(
+                        new AccountTypeTotal(AccountType.PERSONAL, new BigDecimal("106500.00")),
+                        new AccountTypeTotal(AccountType.BUSINESS, new BigDecimal("25000.00")),
+                        new AccountTypeTotal(AccountType.GOVERNMENT, new BigDecimal("8000.00"))));
+
+        EconomySummary s = svc.getEconomySummary();
+
+        assertThat(s.getPersonal()).isEqualByComparingTo("106500.00");
+        assertThat(s.getBusiness()).isEqualByComparingTo("25000.00");
+        assertThat(s.getGovernment()).isEqualByComparingTo("8000.00");
+        assertThat(s.getTotal()).isEqualByComparingTo("139500.00");
+    }
+
+    @Test
+    void getEconomySummary_missingTypesDefaultToZero() {
+        // Only PERSONAL has any balance; BUSINESS/GOVERNMENT rows absent.
+        when(accountMapper.getEconomyTotalsByType())
+                .thenReturn(List.of(new AccountTypeTotal(AccountType.PERSONAL, new BigDecimal("500.00"))));
+
+        EconomySummary s = svc.getEconomySummary();
+
+        assertThat(s.getPersonal()).isEqualByComparingTo("500.00");
+        assertThat(s.getBusiness()).isEqualByComparingTo("0");
+        assertThat(s.getGovernment()).isEqualByComparingTo("0");
+        assertThat(s.getTotal()).isEqualByComparingTo("500.00");
     }
 
     // ---- Formatting ----

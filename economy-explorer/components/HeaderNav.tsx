@@ -5,7 +5,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
-import { useIsAdmin } from '@/components/ViewerContext';
+import { useViewer } from '@/components/ViewerContext';
 
 interface NavLink {
   href: Route;
@@ -15,14 +15,14 @@ interface NavLink {
 
 export function HeaderNav() {
   const path = usePathname();
-  const isAdmin = useIsAdmin();
+  const { isAdmin, canInvestigate } = useViewer();
   const links: NavLink[] = [
     {
       href: '/',
       label: 'Economy',
       match: (p) =>
         p === '/' ||
-        p.startsWith('/economy/health') ||
+        p.startsWith('/economy/') ||
         p.startsWith('/money-flow') ||
         p.startsWith('/government'),
     },
@@ -35,6 +35,9 @@ export function HeaderNav() {
     },
     { href: '/docs', label: 'Docs', match: (p) => p.startsWith('/docs') },
   ];
+  if (canInvestigate && !isAdmin) {
+    links.push({ href: '/transactions', label: 'Investigate', match: (p) => p.startsWith('/transactions') });
+  }
   if (isAdmin) {
     // Single entry → the /admin section, which carries its own sub-navbar
     // (components/AdminNav) for the individual tools. /transactions is an

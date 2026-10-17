@@ -11,16 +11,21 @@ import io.paradaux.hibernia.framework.i18n.Message;
 // server thread doesn't block on JDBC/IPC.
 
 import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.FirmBalanceEntry;
 import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.treasury.model.Page;
 import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.utils.NameValidator;
+import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.services.FirmDisbandConfirmationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.FirmTransactionService;
-import io.paradaux.business.utils.resolvers.FirmName;
-import io.paradaux.business.utils.resolvers.OnlineFirmName;
+import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.OnlineFirmName;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.List;
@@ -37,17 +42,19 @@ public class FirmCommands implements CommandHandler {
     private final FirmService firms;
     private final FirmTransactionService transactions;
     private final FirmDisbandConfirmationService disbandConfirmations;
+    private final FirmChatService firmChat;
     private final Message message;
 
     @Inject
     public FirmCommands(FirmPlayerService players, FirmStaffService staff, FirmService firms,
                         FirmTransactionService transactions, FirmDisbandConfirmationService disbandConfirmations,
-                        Message message) {
+                        FirmChatService firmChat, Message message) {
         this.players = players;
         this.staff = staff;
         this.firms = firms;
         this.transactions = transactions;
         this.disbandConfirmations = disbandConfirmations;
+        this.firmChat = firmChat;
         this.message = message;
     }
 
@@ -74,7 +81,7 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.firm.not-found", "firm", firm);
             return;
         }
-        if (Boolean.TRUE.equals(f.getArchived())) {
+        if (fullyDisbanded(f)) {
             message.send(sender, "business.firm.disband.already", "firm", firm);
             return;
         }
@@ -103,7 +110,7 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.firm.not-found", "firm", firm);
             return;
         }
-        if (Boolean.TRUE.equals(f.getArchived())) {
+        if (fullyDisbanded(f)) {
             message.send(sender, "business.firm.disband.already", "firm", firm);
             return;
         }
@@ -121,10 +128,35 @@ public class FirmCommands implements CommandHandler {
         // an empty list depending on how it filters.
         var onlineEmployees = staff.getOnlineEmployees(firm);
 
-        firms.disbandFirm(firm, sender.getUniqueId());
-        message.send(sender, "business.firm.disband.success", "firm", f.getDisplayName());
-        message.send(onlineEmployees, "business.firm.disband.employee", "firm", f.getDisplayName(), "sender", sender.getName());
-        message.broadcast("business.firm.disband.broadcast", "firm", f.getDisplayName(), "sender", sender.getName());
+        FirmService.DisbandResult result = firms.disbandFirm(firm, sender.getUniqueId());
+        reportDisband(sender, f, result, onlineEmployees, "/firm disband " + f.getDisplayName());
+    }
+
+    /**
+     * Disbanded with nothing left to drain. A firm that is archived but still has
+     * accounts linked is a disband that failed partway; it stays disbandable so
+     * the remaining balances can be returned.
+     */
+    private boolean fullyDisbanded(Firm f) {
+        return Boolean.TRUE.equals(f.getArchived()) && !firms.isDisbandIncomplete(f);
+    }
+
+    private void reportDisband(Player sender, Firm f, FirmService.DisbandResult result,
+                               List<Player> onlineEmployees, String rerunCommand) {
+        if (result.complete()) {
+            message.send(sender, "business.firm.disband.success", "firm", f.getDisplayName());
+        } else {
+            // Some accounts couldn't be emptied: say so rather than claim the funds
+            // were returned, and point at the re-run that finishes the job.
+            message.send(sender, "business.firm.disband.partial", "firm", f.getDisplayName(),
+                    "failed", result.undrainedAccountIds().size(), "command", rerunCommand);
+        }
+        // A re-run only drains what an earlier disband left behind — the firm was
+        // already announced as disbanded then.
+        if (!result.resumed()) {
+            message.send(onlineEmployees, "business.firm.disband.employee", "firm", f.getDisplayName(), "sender", sender.getName());
+            message.broadcast("business.firm.disband.broadcast", "firm", f.getDisplayName(), "sender", sender.getName());
+        }
     }
 
     @Route("list")
@@ -174,6 +206,45 @@ public class FirmCommands implements CommandHandler {
         sendFirms(sender, list);
     }
 
+    @Route("baltop")
+    @Permission("business.baltop")
+    @Async
+    @Description("Top firms by collective account balance")
+    public void baltop(@Sender Player sender) {
+        baltop(sender, 1);
+    }
+
+    @Route("baltop <page>")
+    @Permission("business.baltop")
+    @Async
+    @Description("Page through the top firms by collective account balance")
+    public void baltop(@Sender Player sender, @Arg("page") Integer page) {
+        if (page == null || page < 1) page = 1;
+        int pageSize = FIRM_PAGE_SIZE;
+
+        Page<FirmBalanceEntry> result = transactions.getFirmBalanceTop(page, pageSize);
+
+        if (result.items().isEmpty()) {
+            message.send(sender, "business.firm.baltop.empty");
+            return;
+        }
+
+        message.send(sender, "business.firm.baltop.header",
+                "page", result.pageNumber(), "pages", result.totalPages());
+
+        for (int i = 0; i < result.items().size(); i++) {
+            FirmBalanceEntry entry = result.items().get(i);
+            message.send(sender, "business.firm.baltop.entry",
+                    "rank", result.offset() + i + 1,
+                    "firm", entry.displayName(),
+                    "balance", transactions.formatAmount(entry.balance()));
+        }
+
+        if (result.hasMore()) {
+            message.send(sender, "business.firm.baltop.footer", "next", page + 1);
+        }
+    }
+
     @Route("info <firm>")
     @Permission("business.info")
     @Async
@@ -198,7 +269,7 @@ public class FirmCommands implements CommandHandler {
         String hq = f.getHqRegion() == null ? "N/A" : f.getHqRegion();
         String discord = f.getDiscordUrl() == null ? "N/A" : f.getDiscordUrl();
         String status = f.getArchived() ? "(Defunct)" : "";
-        message.send(sender, "business.firm.info", "firm", f.getDisplayName(), "status", status, "owner", proprietorName, "balance", balanceFmt, "hq", hq, "discord", discord);
+        message.send(sender, "business.firm.info", "id", f.getFirmId(), "firm", f.getDisplayName(), "status", status, "owner", proprietorName, "balance", balanceFmt, "hq", hq, "discord", discord);
     }
 
     @Route("attribute set hq <firm> <plot>")
@@ -237,7 +308,10 @@ public class FirmCommands implements CommandHandler {
             return;
         }
 
-        if (!url.matches("https?://discord\\.gg/\\S+")) {
+        // Strict invite charset (ADT discord-url-minimessage-injection): the old
+        // \S+ permitted '<','>','&', letting a MiniMessage payload ride in the public
+        // /firm info card. Require https + the real discord.gg code charset.
+        if (!url.matches(NameValidator.DISCORD_INVITE_REGEX)) {
             message.send(sender, "business.firm.attribute.set.discord.invalid");
             return;
         }
@@ -263,16 +337,24 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.firm.not-found", "firm", firm);
             return;
         }
-        if (Boolean.TRUE.equals(f.getArchived())) {
+        if (fullyDisbanded(f)) {
             message.send(sender, "business.firm.disband.already", "firm", firm);
             return;
         }
 
         var onlineEmployees = staff.getOnlineEmployees(firm);
-        firms.adminDisbandFirm(firm);
-        message.send(sender, "business.firm.disband.success", "firm", f.getDisplayName());
-        message.send(onlineEmployees, "business.firm.disband.employee", "firm", f.getDisplayName(), "sender", sender.getName());
-        message.broadcast("business.firm.disband.broadcast", "firm", f.getDisplayName(), "sender", sender.getName());
+        FirmService.DisbandResult result = firms.adminDisbandFirm(firm);
+        reportDisband(sender, f, result, onlineEmployees, "/firm admin disband " + f.getDisplayName());
+    }
+
+    @Route("admin releasename <firmId>")
+    @Permission("business.admin.releasename")
+    @Async
+    @Description("Release a disbanded firm's name for reuse (staff override, numeric firm ID)")
+    public void adminReleaseName(@Sender CommandSender sender, @Arg("firmId") int firmId) {
+        Firm firm = firms.adminReleaseFirmName(firmId);
+        message.send(sender, "business.firm.admin.releasename.success",
+                "firm", firm.getDisplayName(), "id", firmId);
     }
 
     @Route("admin rename <firm> <newname>")
@@ -317,7 +399,10 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.firm.not-found", "firm", firm);
             return;
         }
-        if (!url.matches("https?://discord\\.gg/\\S+")) {
+        // Strict invite charset (ADT discord-url-minimessage-injection): the old
+        // \S+ permitted '<','>','&', letting a MiniMessage payload ride in the public
+        // /firm info card. Require https + the real discord.gg code charset.
+        if (!url.matches(NameValidator.DISCORD_INVITE_REGEX)) {
             message.send(sender, "business.firm.attribute.set.discord.invalid");
             return;
         }
@@ -342,9 +427,41 @@ public class FirmCommands implements CommandHandler {
             message.send(sender, "business.general.player-not-found");
             return;
         }
-        firms.adminSetProprietor(firm, target.getUniqueId());
+        firms.adminSetProprietor(firm, target.getUniqueId(), sender.getUniqueId());
         String targetName = target.getName() != null ? target.getName() : target.getUniqueId().toString();
         message.send(sender, "business.firm.admin.proprietor.success", "firm", f.getDisplayName(), "player", targetName);
+    }
+
+    @Route("admin chatspy")
+    @Permission("business.admin.chatspy")
+    @Async
+    @Description("Toggle social spy on ALL firm chat (staff/DOC override)")
+    public void adminChatSpyAll(@Sender Player sender) {
+        if (!firmChat.available()) {
+            message.send(sender, "business.chat.unavailable");
+            return;
+        }
+        boolean on = firmChat.toggleGlobalSpy(sender.getUniqueId());
+        message.send(sender, on ? "business.chat.spy.all-on" : "business.chat.spy.all-off");
+    }
+
+    @Route("admin chatspy <firm>")
+    @Permission("business.admin.chatspy")
+    @Async
+    @Description("Toggle social spy on one firm's chat (staff/DOC override)")
+    public void adminChatSpyFirm(@Sender Player sender, @Arg("firm") OnlineFirmName firmRef) {
+        if (!firmChat.available()) {
+            message.send(sender, "business.chat.unavailable");
+            return;
+        }
+        String firm = firmRef.value();
+        Firm f = firms.getFirmByNameOrId(firm);
+        if (f == null) {
+            message.send(sender, "business.firm.not-found", "firm", firm);
+            return;
+        }
+        boolean on = firmChat.toggleFirmSpy(sender.getUniqueId(), f.getFirmId());
+        message.send(sender, on ? "business.chat.spy.firm-on" : "business.chat.spy.firm-off", "firm", f.getDisplayName());
     }
 
     private void sendFirms(@Sender Player sender, List<Firm> list) {
@@ -352,7 +469,7 @@ public class FirmCommands implements CommandHandler {
             Firm f = list.get(i);
             String name = f.getArchived() ? "<strikethrough>" + f.getDisplayName() + "</strikethrough>" : f.getDisplayName();
             String status = f.getArchived() ? "<red>Defunct</red>" : f.getFirmId().toString();
-            // firm_players is populated lazily on join — proprietors who haven't
+            // economy_players is populated on join (by Treasury) — proprietors who haven't
             // logged in to the new server (e.g. legacy firms imported via
             // TreasuryIngest) have no row yet. Fall back to the raw UUID rather
             // than crashing the entire listing on Optional.get().

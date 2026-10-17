@@ -108,6 +108,7 @@ export interface MarketShopRow {
   sell_price: string | null;
   batch_qty: number;
   current_stock: number | null;
+  current_space: number | null;
   stock_at: Date | null;
   last_seen: Date | null;
   active: number;
@@ -123,8 +124,8 @@ export async function sumVolume(): Promise<string> {
   const r = await sql<{ v: string }>`SELECT COALESCE(SUM(total_price),0.00) AS v FROM chestshop_sale`.execute(db);
   return r.rows[0]?.v ?? '0.00';
 }
-export async function countDistinctItems(): Promise<number> {
-  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale`.execute(db);
+export async function countDistinctItems(days?: number): Promise<number> {
+  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${days == null ? sql`` : sql`WHERE occurred_at >= NOW() - INTERVAL ${days} DAY`}`.execute(db);
   return Number(r.rows[0]?.c ?? 0);
 }
 
@@ -159,27 +160,42 @@ export async function topItems(days: number, limit: number): Promise<MarketItemR
   return r.rows.map(toMarketItemRow);
 }
 
+/** Search one representative metadata row per key, rather than every trade.
+ * idx_cs_item supplies distinct keys and the latest observation for each key.
+ * This bounds name/material matching to the catalogue size, not sale history. */
+function catalogueKeys(search: string | null) {
+  if (!search) return sql`SELECT DISTINCT item_key FROM chestshop_sale`;
+  return sql`
+    SELECT keys_by_item.item_key
+    FROM (SELECT DISTINCT item_key FROM chestshop_sale) keys_by_item
+    JOIN chestshop_sale sample ON sample.sale_id = (
+      SELECT recent.sale_id FROM chestshop_sale recent
+      WHERE recent.item_key = keys_by_item.item_key
+      ORDER BY recent.occurred_at DESC, recent.sale_id DESC LIMIT 1
+    )
+    WHERE sample.item_name LIKE ${'%' + search + '%'}
+       OR sample.material LIKE ${'%' + search + '%'}
+       OR keys_by_item.item_key LIKE ${'%' + search + '%'}
+  `;
+}
+
 export async function listItems(args: { search: string | null; limit: number; offset: number }): Promise<MarketItemRow[]> {
-  const where = args.search
-    ? sql`WHERE (item_name LIKE CONCAT('%', ${args.search}, '%') OR material LIKE CONCAT('%', ${args.search}, '%') OR item_key LIKE CONCAT('%', ${args.search}, '%'))`
-    : sql``;
   const r = await sql<RawMarketItem>`
-    SELECT item_key, MAX(material) AS material, MAX(item_name) AS item_name,
-           MAX(item_custom) AS item_custom, COUNT(*) AS trade_count,
-           COALESCE(SUM(quantity),0) AS total_quantity, COALESCE(SUM(total_price),0.00) AS total_volume
-    FROM chestshop_sale
-    ${where}
-    GROUP BY item_key ORDER BY trade_count DESC, item_name ASC
-    LIMIT ${args.limit} OFFSET ${args.offset}
+    SELECT cs.item_key, MAX(cs.material) AS material, MAX(cs.item_name) AS item_name,
+           MAX(cs.item_custom) AS item_custom, COUNT(*) AS trade_count,
+           COALESCE(SUM(cs.quantity),0) AS total_quantity,
+           COALESCE(SUM(cs.total_price),0.00) AS total_volume
+    FROM (
+      ${catalogueKeys(args.search)} ORDER BY item_key LIMIT ${args.limit} OFFSET ${args.offset}
+    ) page
+    JOIN chestshop_sale cs ON cs.item_key = page.item_key
+    GROUP BY cs.item_key ORDER BY cs.item_key
   `.execute(db);
   return r.rows.map(toMarketItemRow);
 }
 
 export async function countItems(search: string | null): Promise<number> {
-  const where = search
-    ? sql`WHERE (item_name LIKE CONCAT('%', ${search}, '%') OR material LIKE CONCAT('%', ${search}, '%') OR item_key LIKE CONCAT('%', ${search}, '%'))`
-    : sql``;
-  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${where}`.execute(db);
+  const r = await sql<{ c: string | number }>`SELECT COUNT(*) AS c FROM (${catalogueKeys(search)}) catalogue`.execute(db);
   return Number(r.rows[0]?.c ?? 0);
 }
 
@@ -221,8 +237,8 @@ export async function topItemsWithSeries(days: number, limit: number): Promise<I
 
   return items.map((i) => {
     const series = byKey.get(i.item_key) ?? [];
-    const current = series.length ? series[series.length - 1].price : null;
-    const first = series.length ? series[0].price : null;
+    const current = series.at(-1)?.price ?? null;
+    const first = series.at(0)?.price ?? null;
     const change = first && first > 0 && current != null ? (current - first) / first : null;
     return { ...i, series, current_price: current, price_change_pct: change };
   });
@@ -240,7 +256,7 @@ export async function listItemSales(itemKey: string, limit: number, offset: numb
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     WHERE cs.item_key = ${itemKey}
     ORDER BY cs.occurred_at DESC, cs.sale_id DESC LIMIT ${limit} OFFSET ${offset}
   `.execute(db);
@@ -286,7 +302,7 @@ export async function listItemSellers(itemKey: string, limit: number, offset: nu
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     WHERE cs.item_key = ${itemKey}
     GROUP BY cs.is_admin_shop, cs.shop_account_type, cs.shop_firm_id, cs.shop_owner_uuid_bin, cs.shop_account_id
     ORDER BY sale_count DESC LIMIT ${limit} OFFSET ${offset}
@@ -305,7 +321,7 @@ export async function countItemSellers(itemKey: string): Promise<number> {
 }
 
 // NOTE: topSellers/topBuyers expose per-seller money + quantity. They are
-// currently unused. Do NOT wire either into a public page without an isStaff
+// currently unused. Do NOT wire either into a public page without the appropriate market permission
 // gate (see the financial-privacy model) — per-entity figures are staff-only.
 export async function topSellers(days: number, limit: number): Promise<MarketSellerRow[]> {
   const r = await sql<RawSeller>`
@@ -316,7 +332,7 @@ export async function topSellers(days: number, limit: number): Promise<MarketSel
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     WHERE cs.occurred_at >= NOW() - INTERVAL ${days} DAY
     GROUP BY cs.is_admin_shop, cs.shop_account_type, cs.shop_firm_id, cs.shop_owner_uuid_bin, cs.shop_account_id
     ORDER BY total_volume DESC LIMIT ${limit}
@@ -337,7 +353,7 @@ export async function topBuyers(days: number, limit: number): Promise<MarketCust
            COALESCE(SUM(cs.total_price),0.00) AS total_volume
     FROM chestshop_sale cs
     LEFT JOIN accounts ca ON ca.owner_uuid_bin = cs.customer_uuid_bin AND ca.account_type='PERSONAL'
-    LEFT JOIN firm_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
+    LEFT JOIN economy_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
     WHERE cs.occurred_at >= NOW() - INTERVAL ${days} DAY
     GROUP BY cs.customer_uuid_bin ORDER BY total_volume DESC LIMIT ${limit}
   `.execute(db);
@@ -380,7 +396,17 @@ export async function countMarketFirms(): Promise<number> {
   return Number(r.rows[0]?.c ?? 0);
 }
 
-export async function getMarketFirm(firmId: number): Promise<MarketFirmRow | null> {
+/**
+ * One firm's ChestShop totals. `days = null` means all-time; otherwise the
+ * trailing N-day window (the `/firm sales export <firm> <days>` deep link).
+ *
+ * The window only narrows the FIGURES, never the firm's existence: a firm that
+ * has ever sold still resolves (with zero totals) when nothing falls inside the
+ * window, so a windowed link can't 404 a real firm. Returns null only for a firm
+ * with no ChestShop sales at all.
+ */
+export async function getMarketFirm(firmId: number, days: number | null = null): Promise<MarketFirmRow | null> {
+  const inWindow = days != null ? sql`cs.occurred_at >= NOW() - INTERVAL ${days} DAY` : sql`TRUE`;
   const r = await sql<{
     firm_id: number;
     display_name: string | null;
@@ -388,8 +414,10 @@ export async function getMarketFirm(firmId: number): Promise<MarketFirmRow | nul
     total_quantity: string | number;
     total_volume: string;
   }>`
-    SELECT cs.shop_firm_id AS firm_id, MAX(f.display_name) AS display_name, COUNT(*) AS sale_count,
-           COALESCE(SUM(cs.quantity),0) AS total_quantity, COALESCE(SUM(cs.total_price),0.00) AS total_volume
+    SELECT cs.shop_firm_id AS firm_id, MAX(f.display_name) AS display_name,
+           COALESCE(SUM(CASE WHEN ${inWindow} THEN 1 ELSE 0 END),0) AS sale_count,
+           COALESCE(SUM(CASE WHEN ${inWindow} THEN cs.quantity END),0) AS total_quantity,
+           COALESCE(SUM(CASE WHEN ${inWindow} THEN cs.total_price END),0.00) AS total_volume
     FROM chestshop_sale cs JOIN firm f ON f.firm_id = cs.shop_firm_id
     WHERE cs.shop_firm_id = ${firmId} GROUP BY cs.shop_firm_id
   `.execute(db);
@@ -404,12 +432,19 @@ export async function getMarketFirm(firmId: number): Promise<MarketFirmRow | nul
   };
 }
 
-export async function listFirmMarketItems(firmId: number, limit: number, offset: number): Promise<MarketItemRow[]> {
+/** A firm's per-item sales. `days = null` means all-time; otherwise the trailing N-day window. */
+export async function listFirmMarketItems(
+  firmId: number,
+  limit: number,
+  offset: number,
+  days: number | null = null,
+): Promise<MarketItemRow[]> {
+  const windowCond = days != null ? sql`AND occurred_at >= NOW() - INTERVAL ${days} DAY` : sql``;
   const r = await sql<RawMarketItem>`
     SELECT item_key, MAX(material) AS material, MAX(item_name) AS item_name,
            MAX(item_custom) AS item_custom, COUNT(*) AS trade_count,
            COALESCE(SUM(quantity),0) AS total_quantity, COALESCE(SUM(total_price),0.00) AS total_volume
-    FROM chestshop_sale WHERE shop_firm_id = ${firmId}
+    FROM chestshop_sale WHERE shop_firm_id = ${firmId} ${windowCond}
     GROUP BY item_key ORDER BY trade_count DESC, item_name ASC LIMIT ${limit} OFFSET ${offset}
   `.execute(db);
   return r.rows.map(toMarketItemRow);
@@ -494,9 +529,9 @@ export async function listSalesFeed(args: {
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     LEFT JOIN accounts ca ON ca.owner_uuid_bin = cs.customer_uuid_bin AND ca.account_type='PERSONAL'
-    LEFT JOIN firm_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
+    LEFT JOIN economy_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
     ${where}
     ORDER BY cs.occurred_at DESC, cs.sale_id DESC LIMIT ${args.limit} OFFSET ${args.offset}
   `.execute(db);
@@ -524,7 +559,7 @@ export async function countSalesFeed(args: {
     SELECT COUNT(*) AS c FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
     ${where}
   `.execute(db);
   return Number(r.rows[0]?.c ?? 0);
@@ -561,8 +596,8 @@ export async function listPlayerSales(playerUuid: string, days: number | null): 
     FROM chestshop_sale cs
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
-    LEFT JOIN firm_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
+    LEFT JOIN economy_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
     WHERE (cs.customer_uuid_bin = ${bin}
            OR (cs.shop_owner_uuid_bin = ${bin} AND cs.shop_account_type = 'PERSONAL'))
       ${windowCond}
@@ -584,6 +619,7 @@ export async function listShops(args: {
   firmId: number | null;
   ownerUuid: string | null;
   buyable: boolean;
+  direction?: 'buy' | 'sell';
   inStock: boolean;
   search: string | null;
   limit: number;
@@ -594,8 +630,9 @@ export async function listShops(args: {
   if (args.material) conds.push(sql`s.material = ${args.material}`);
   if (args.firmId !== null) conds.push(sql`s.shop_firm_id = ${args.firmId}`);
   if (args.ownerUuid) conds.push(sql`s.shop_owner_uuid_bin = ${uuidToBin(args.ownerUuid)}`);
-  if (args.buyable) conds.push(sql`s.buy_price IS NOT NULL`);
-  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock > 0)`);
+  if (args.direction === 'sell') conds.push(sql`s.sell_price IS NOT NULL`);
+  else if (args.buyable || args.direction === 'buy') conds.push(sql`s.buy_price IS NOT NULL`);
+  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock >= GREATEST(s.batch_qty, 1))`);
   if (args.search) {
     conds.push(sql`(s.item_name LIKE CONCAT('%', ${args.search}, '%') OR s.material LIKE CONCAT('%', ${args.search}, '%'))`);
   }
@@ -606,14 +643,16 @@ export async function listShops(args: {
       s.shop_account_type, s.shop_firm_id, s.shop_owner_uuid_bin,
       COALESCE(f.display_name, fp.current_name, a.display_name) AS owner_name,
       s.material, s.item_key, s.item_name, s.item_custom,
-      s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.stock_at, s.last_seen, s.active
+      s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.estimated_capacity AS current_space, s.stock_at, s.last_seen, s.active
     FROM chestshop_shop s
     LEFT JOIN firm f ON f.firm_id = s.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = s.shop_account_id
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
     ${where}
-    ORDER BY (s.current_stock IS NOT NULL AND s.current_stock = 0), (s.buy_price IS NULL),
-      s.buy_price ASC, s.last_seen DESC
+    ORDER BY ${args.direction === 'sell'
+      ? sql`(s.sell_price / GREATEST(s.batch_qty, 1)) DESC`
+      : sql`(s.current_stock IS NOT NULL AND s.current_stock < GREATEST(s.batch_qty, 1) AND s.is_admin_shop = 0), (s.buy_price IS NULL), (s.buy_price / GREATEST(s.batch_qty, 1)) ASC`},
+      s.last_seen DESC, s.shop_id ASC
     LIMIT ${args.limit} OFFSET ${args.offset}
   `.execute(db);
   return r.rows.map(toShopRow);
@@ -625,6 +664,7 @@ export async function countShops(args: {
   firmId: number | null;
   ownerUuid: string | null;
   buyable: boolean;
+  direction?: 'buy' | 'sell';
   inStock: boolean;
   search: string | null;
 }): Promise<number> {
@@ -633,8 +673,9 @@ export async function countShops(args: {
   if (args.material) conds.push(sql`s.material = ${args.material}`);
   if (args.firmId !== null) conds.push(sql`s.shop_firm_id = ${args.firmId}`);
   if (args.ownerUuid) conds.push(sql`s.shop_owner_uuid_bin = ${uuidToBin(args.ownerUuid)}`);
-  if (args.buyable) conds.push(sql`s.buy_price IS NOT NULL`);
-  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock > 0)`);
+  if (args.direction === 'sell') conds.push(sql`s.sell_price IS NOT NULL`);
+  else if (args.buyable || args.direction === 'buy') conds.push(sql`s.buy_price IS NOT NULL`);
+  if (args.inStock) conds.push(sql`(s.is_admin_shop = 1 OR s.current_stock >= GREATEST(s.batch_qty, 1))`);
   if (args.search) {
     conds.push(sql`(s.item_name LIKE CONCAT('%', ${args.search}, '%') OR s.material LIKE CONCAT('%', ${args.search}, '%'))`);
   }
@@ -761,6 +802,7 @@ interface RawShop {
   sell_price: string | null;
   batch_qty: number;
   current_stock: number | null;
+  current_space: number | null;
   stock_at: Date | null;
   last_seen: Date | null;
   active: number;
@@ -785,6 +827,7 @@ function toShopRow(r: RawShop): MarketShopRow {
     sell_price: r.sell_price,
     batch_qty: r.batch_qty,
     current_stock: r.current_stock,
+    current_space: r.current_space,
     stock_at: r.stock_at,
     last_seen: r.last_seen,
     active: r.active,

@@ -1,3 +1,6 @@
+import { canViewFirmInternals } from '@/lib/auth';
+import { PrivacyGate } from '@/components/PrivacyGate';
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -5,9 +8,11 @@ import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { getFirmHeader, listFirmAccounts, listFirmEmployees } from '@/lib/sql/firm';
-import { fmtAmt, fmtTs } from '@/lib/format';
+import { fmtAmt } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { CsvButton } from '@/components/CsvButton';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,10 +24,11 @@ export async function generateMetadata() {
  *  roster — read-only, audited, with CSV export. */
 export default async function FirmReportPage({ params }: { params: Promise<{ id: string }> }) {
   const viewer = await getViewer();
-  if (viewer.anon || viewer.role !== 'admin') return null; // layout gates
+  if (viewer.anon || !hasPermission(viewer, 'firm.admin.read')) return null; // layout gates
   const firmId = Number((await params).id);
   if (!Number.isInteger(firmId) || firmId <= 0) notFound();
 
+  if (!await canViewFirmInternals(firmId, viewer)) return <PrivacyGate kind="private" title="Firm roster permission required" />;
   const firm = await getFirmHeader(firmId);
   if (!firm) notFound();
   await auditView(viewer, { path: `/admin/firms/${firmId}`, targetType: 'firm', targetId: String(firmId) });
@@ -52,7 +58,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
           <CsvButton filename={`firm-${firmId}-accounts.csv`} headers={['Account', 'Name', 'Type', 'Balance', 'Archived']}
             rows={accounts.map((a) => [a.account_id, a.display_name ?? '', a.account_type, a.balance, a.archived ? 'yes' : 'no'])} />
         </div>
-        <div className="table-wrap"><table className="data-table">
+        <TableWrap label="Firm accounts"><table className="data-table">
           <thead><tr><th>Account</th><th>Name</th><th>Type</th><th className="amount">Balance</th></tr></thead>
           <tbody>
             {accounts.length === 0 && <tr><td colSpan={4} className="empty">No live accounts.</td></tr>}
@@ -65,7 +71,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table></TableWrap>
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
@@ -74,7 +80,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
           <CsvButton filename={`firm-${firmId}-employees.csv`} headers={['Player', 'Role', 'Joined']}
             rows={employees.map((e) => [e.player_name ?? e.player_uuid ?? '', e.role_name, e.joined_at?.toISOString() ?? ''])} />
         </div>
-        <div className="table-wrap"><table className="data-table">
+        <TableWrap label="Firm employees"><table className="data-table">
           <thead><tr><th>Player</th><th>Role</th><th className="ts">Joined</th></tr></thead>
           <tbody>
             {employees.length === 0 && <tr><td colSpan={3} className="empty">No current employees.</td></tr>}
@@ -82,11 +88,11 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
               <tr key={i}>
                 <td><Player name={e.player_name} uuid={e.player_uuid} /></td>
                 <td>{e.role_name}</td>
-                <td className="ts">{fmtTs(e.joined_at)}</td>
+                <td className="ts"><LocalTimestamp value={e.joined_at} /></td>
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table></TableWrap>
       </div>
     </>
   );

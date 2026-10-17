@@ -134,10 +134,10 @@ body { background: var(--bg); }
 }
 .explorer-header .btn.btn-primary {
     color: #fff;
-    background: var(--accent);
+    background: var(--accent-fill);
     border-color: transparent;
 }
-.explorer-header .btn.btn-primary:hover { color: #fff; background: var(--accent); filter: brightness(0.94); }
+.explorer-header .btn.btn-primary:hover { color: #fff; background: var(--accent-fill); filter: brightness(0.94); }
 .explorer-header .header-search input {
     background: var(--bg);
     border-color: var(--border);
@@ -266,6 +266,37 @@ body { background: var(--bg); }
     font-size: 12px;
     border-top: 1px solid var(--border);
     padding-top: 14px;
+}
+
+/* Links inside running text need more than colour to stand out (WCAG 1.4.1;
+   the accent is too close to the muted body text on dark surfaces). */
+p a:not(.btn),
+.footer-meta a,
+.sub a,
+.doc-prose a {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+}
+
+/* Text for screen readers only (e.g. names for icon/action-only columns). */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Scrollable regions (tables, the activity calendar) are tab stops. */
+.table-wrap:focus-visible,
+.scroll-region:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 /* Player name links — subtle hover so the affordance reads but doesn't
@@ -774,7 +805,7 @@ a.result-row:hover { background: var(--bg-soft); color: var(--fg); }
     color: var(--fg-muted);
 }
 .window-tabs a:hover { color: var(--fg); }
-.window-tabs a.active { color: #fff; background: var(--accent); }
+.window-tabs a.active { color: #fff; background: var(--accent-fill); }
 
 /* ─────────────────── market item cards ─────────────────── */
 .item-card-grid {
@@ -1070,12 +1101,12 @@ select option {
 .btn:hover { border-color: var(--accent-line); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.btn-primary {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: #fff;
     border-color: transparent;
 }
 .btn.btn-primary:hover {
-    background: var(--accent);
+    background: var(--accent-fill);
     filter: brightness(0.92);
     color: #fff;
 }
@@ -2153,7 +2184,7 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
 .doc-prose h2 + h3 { margin-top: 14px; }
 .doc-prose p { margin: 0 0 16px; }
 .doc-prose strong { color: var(--fg); font-weight: 600; }
-.doc-prose a { color: var(--accent); text-decoration: none; }
+.doc-prose a { color: var(--accent); }
 .doc-prose a:hover { text-decoration: underline; }
 .doc-prose ul, .doc-prose ol { margin: 0 0 16px; padding-left: 22px; }
 .doc-prose li { margin: 4px 0; }
@@ -2298,6 +2329,11 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     vertical-align: middle;
 }
 
+/* ── Live blocks: server values filled into static docs (LiveDocBlocks) ─── */
+.doc-prose .doc-live { margin: 0 0 16px; }
+.doc-prose .doc-live table { margin-bottom: 6px; }
+.doc-prose .doc-live-status { margin: 0 0 8px; font-size: 13px; color: var(--fg-muted); }
+
 /* ── Mobile: sidebar collapses behind a toggle ─────────────────────────── */
 @media (max-width: 720px) {
     .docs-sidebar-toggle { display: block; }
@@ -2309,3 +2345,57 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     .doc-prose h2 { font-size: 19px; }
 }
 
+
+.chart-legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 12px 0 6px; font-size: 12px; }
+.flow-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.flow-summary dl { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.flow-summary dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.market-search h2 { margin-top: 0; }
+.market-search label { display: block; margin-bottom: 8px; }
+.search-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.search-row input { flex: 1 1 220px; }
+
+.offer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.offer-card { margin-bottom: 0; min-width: 0; overflow-wrap: anywhere; }
+.offer-price { font-size: 24px; font-weight: 600; }
+.offer-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; }
+.offer-card dd { margin: 0; text-align: right; }
+
+.mobile-search-toggle, .mobile-only { display: none; }
+.directory-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.directory-sort > span { margin-right: auto; font-size: 13px; }
+@media (max-width: 720px) {
+  .mobile-search-toggle { display: inline-flex; min-height: 40px; }
+  .mobile-search-open .header-search { display: flex; position: fixed; top: 108px; left: 12px; right: 12px; z-index: 100; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); }
+  .mobile-search-open .header-search input { width: 100%; min-width: 0; font-size: 16px; }
+  .mobile-search-open .header-search-popover { position: fixed; top: 173px; left: 12px; right: 12px; width: auto; max-height: 60vh; overflow-y: auto; z-index: 101; }
+  .mobile-search-open .header-search-kbd { display: none; }
+  .explorer-logo-text { font-size: 13px; }
+  .directory-table { min-width: 0 !important; width: 100%; table-layout: fixed; }
+  .directory-table [data-secondary], .directory-table .desktop-only { display: none; }
+  .directory-table th:first-child, .directory-table td:first-child { width: 58%; }
+  .directory-table td, .directory-table th { white-space: normal; padding: 12px 8px; overflow-wrap: anywhere; }
+  .directory-table .rowlink { white-space: normal; flex-wrap: wrap; }
+  .directory-table .mobile-only { display: block; }
+  .directory-details { font-size: 12px; margin-top: 8px; color: var(--fg-muted); }
+  .directory-details p { margin: 8px 0; }
+  .directory-sort > span { flex-basis: 100%; }
+  .directory-sort .btn { min-height: 40px; }
+  .chart-legend { gap: 8px; }
+}
+
+@media (max-width: 720px) {
+  .pagination { flex-wrap: wrap; gap: 12px; }
+  .pagination-summary { flex-basis: 100%; }
+}
+@media (max-width: 720px) {
+  .explorer-header-top { flex-wrap: wrap; }
+  .explorer-header-top:has(.header-me) .explorer-logo-text { display: none; }
+  .header-me { max-width: 140px; overflow-wrap: anywhere; }
+  .header-me .badge { display: none; }
+}
+
+/* Two-column tax rates stay visible together on phones. */
+.data-table.tax-rates-table { min-width: 0; width: 100%; }
+.tax-rates-table td:first-child { overflow-wrap: anywhere; }

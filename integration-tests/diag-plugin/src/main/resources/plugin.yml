@@ -1,0 +1,21 @@
+name: DcDiag
+version: 2.0.0
+main: net.democracycraft.inttests.diag.DiagPlugin
+api-version: '1.21'
+softdepend: [WorldGuard, WorldEdit, GriefPrevention, ChestShop]
+description: Test-only diagnostic plugin for the integration-tests harness — logs PlayerInteractEvent at MONITOR and exposes /diag commands for synthesizing clicks via the Bukkit API.
+commands:
+  diag:
+    description: Diagnostic commands. Subcommands - click <player> <world> <x> <y> <z>; break <player> <world> <x> <y> <z>; pos <player>; logon, logoff
+    usage: /diag <subcommand> [args...]
+  dcsync:
+    description: Barrier sentinel for the integration tests - echoes "dcsync <nonce>" back to the sender.
+    usage: /dcsync <nonce>
+    permission: dcdiag.sync
+permissions:
+  dcdiag.use:
+    description: Run /diag commands.
+    default: op
+  dcdiag.sync:
+    description: Run /dcsync (every mock player needs it, op or not).
+    default: true

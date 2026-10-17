@@ -2,6 +2,7 @@ import { getDocsTree } from '@/lib/docs';
 import { DocsSidebar } from '@/components/docs/DocsSidebar';
 import { CodeCopyButton } from '@/components/docs/CodeCopyButton';
 import { ApiServerHint } from '@/components/docs/ApiServerHint';
+import { LiveDocBlocks } from '@/components/docs/LiveDocBlocks';
 
 // Three-column docs shell (sidebar · content · on-this-page TOC), nested inside
 // the app's root layout so it keeps the shared header/footer. The page renders
@@ -15,6 +16,7 @@ export default async function DocsLayout({ children }: { children: React.ReactNo
       {children}
       <CodeCopyButton />
       <ApiServerHint />
+      <LiveDocBlocks />
     </div>
   );
 }

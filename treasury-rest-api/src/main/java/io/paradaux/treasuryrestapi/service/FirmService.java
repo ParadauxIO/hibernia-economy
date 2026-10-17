@@ -34,10 +34,7 @@ public class FirmService {
     // over-long value into a clean 400 instead of a driver-level data-truncation 500.
     /** {@code accounts.display_name} / {@code firm.display_name} VARCHAR(255). */
     private static final int MAX_DISPLAY_NAME_LENGTH = 255;
-    /** {@code firm.discord_url} VARCHAR(255). */
-    private static final int MAX_DISCORD_URL_LENGTH = 255;
-    /** {@code firm.hq_region} VARCHAR(64). */
-    private static final int MAX_HQ_REGION_LENGTH = 64;
+    // discord_url / hq_region width limits live in FirmFieldLimits (ADT-120).
 
     private final FirmMapper firmMapper;
 
@@ -58,7 +55,8 @@ public class FirmService {
                 firm.getHqRegion(),
                 firm.getDefaultAccountId(),
                 firm.isArchived(),
-                firm.getCreatedAt().toInstant(ZoneOffset.UTC)
+                // ADT-119: null-guard rather than NPE into a 500 if created_at is ever null.
+                firm.getCreatedAt() != null ? firm.getCreatedAt().toInstant(ZoneOffset.UTC) : null
         );
     }
 
@@ -118,21 +116,15 @@ public class FirmService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
                     "At least one field must be provided: discordUrl, hqRegion.");
         }
-        // Validate against the column widths before touching the DB. emptyToNull()
-        // strips before storing, so validate the stripped length to match what lands.
-        if (request.discordUrl() != null && request.discordUrl().strip().length() > MAX_DISCORD_URL_LENGTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'discordUrl' must be at most " + MAX_DISCORD_URL_LENGTH + " characters.");
-        }
-        if (request.hqRegion() != null && request.hqRegion().strip().length() > MAX_HQ_REGION_LENGTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'hqRegion' must be at most " + MAX_HQ_REGION_LENGTH + " characters.");
-        }
+        // Validate against the column widths before touching the DB (ADT-120: shared
+        // with AdminFirmService). emptyToNull strips before storing, so the validated
+        // stripped length matches what lands.
+        FirmFieldLimits.validate(request.discordUrl(), request.hqRegion());
 
         Firm firm = loadFirm(verified.firmId());
 
-        String newDiscordUrl = request.discordUrl() != null ? emptyToNull(request.discordUrl()) : firm.getDiscordUrl();
-        String newHqRegion   = request.hqRegion()   != null ? emptyToNull(request.hqRegion())   : firm.getHqRegion();
+        String newDiscordUrl = request.discordUrl() != null ? FirmFieldLimits.emptyToNull(request.discordUrl()) : firm.getDiscordUrl();
+        String newHqRegion   = request.hqRegion()   != null ? FirmFieldLimits.emptyToNull(request.hqRegion())   : firm.getHqRegion();
 
         firmMapper.updateFirm(firm.getFirmId(), firm.getDisplayName(), newDiscordUrl, newHqRegion);
 
@@ -218,7 +210,8 @@ public class FirmService {
                 e.getPlayerUuid().toString(),
                 e.getPlayerName(),
                 e.getRoleName(),
-                e.getJoinedAt().toInstant(ZoneOffset.UTC)
+                // ADT-119: null-guard rather than NPE into a 500 if joined_at is ever null.
+                e.getJoinedAt() != null ? e.getJoinedAt().toInstant(ZoneOffset.UTC) : null
         );
     }
 
@@ -230,10 +223,5 @@ public class FirmService {
                 a.getBalance().toPlainString(),
                 a.isArchived()
         );
-    }
-
-    /** Converts a blank string to null so the DB column is set to NULL rather than empty string. */
-    private static String emptyToNull(String value) {
-        return value.isBlank() ? null : value.strip();
     }
 }

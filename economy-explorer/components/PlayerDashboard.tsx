@@ -1,16 +1,19 @@
 import 'server-only';
+import { getViewer, requirePlayerRead, canViewAccount } from '@/lib/auth';
 import Link from 'next/link';
 import type { Route } from 'next';
 import {
   findAccountsForPlayer,
-  getPlayerTrajectory,
+  getPlayerTotals,
   countPlayerTransactions,
   getPlayerCounterparties,
   getPlayerTransactions,
 } from '@/lib/sql/me';
-import { accountLabel, fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
+import { TableWrap } from '@/components/TableWrap';
 
 const DAYS = 90;
 
@@ -21,19 +24,24 @@ const DAYS = 90;
  * The caller renders the page heading + access gate; this is the body only.
  */
 export async function PlayerDashboard({ uuid, name, self = false }: { uuid: string; name: string | null; self?: boolean }) {
-  const accounts = await findAccountsForPlayer(uuid);
+  const viewer = await getViewer();
+  requirePlayerRead(uuid, viewer);
+  const candidates = await findAccountsForPlayer(uuid);
+  const allowed = await Promise.all(candidates.map(a => canViewAccount(a.account_id, viewer)));
+  const accounts = candidates.filter((_, index) => allowed[index]);
   const accountIds = accounts.map((a) => a.account_id);
-  const [trajectory, txnCount, partners, recentTxns] = await Promise.all([
-    getPlayerTrajectory(accountIds, DAYS),
+  const [totals, txnCount, partners, recentTxns] = await Promise.all([
+    getPlayerTotals(accountIds, DAYS),
     countPlayerTransactions(accountIds, DAYS),
     getPlayerCounterparties(accountIds, 12, DAYS),
     getPlayerTransactions(accountIds, 25),
   ]);
 
-  const totalBalance = accounts.reduce((s, a) => s + parseFloat(a.balance), 0);
-  const income = trajectory.reduce((s, t) => s + parseFloat(t.credits), 0);
-  const spend = trajectory.reduce((s, t) => s + parseFloat(t.debits), 0);
-  const net = income - spend;
+  // Money rollups are summed in SQL and carried as exact DECIMAL strings — never
+  // folded through a JS double (behaviour/0001) — so the KPIs match the ledger to
+  // the cent. Only the sign class needs a numeric compare of the net string.
+  const { totalBalance, income, spend, net } = totals;
+  const netNonNegative = !net.trimStart().startsWith('-');
 
   const prefix = (self ? 'my' : (name ?? uuid)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'player';
 
@@ -57,7 +65,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
         </div>
         <div className="kpi">
           <div className="kpi-label">Net / {DAYS}d</div>
-          <div className={`kpi-value ${net >= 0 ? 'pos' : 'neg'}`}>{net >= 0 ? '+' : ''}{fmtAmtFull(net)}</div>
+          <div className={`kpi-value ${netNonNegative ? 'pos' : 'neg'}`}>{netNonNegative ? '+' : ''}{fmtAmtFull(net)}</div>
           <div className="kpi-meta">{fmtN(txnCount)} txns</div>
         </div>
       </div>
@@ -80,7 +88,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
             <JsonButton filename={`${prefix}-accounts.json`} data={accounts} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Accounts">
           <table className="data-table">
             <thead>
               <tr>
@@ -106,12 +114,12 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
                   <td><span className={`badge badge-${a.account_type}`}>{a.account_type}</span></td>
                   <td><span className="badge">{a.owner_uuid === uuid ? 'owner' : 'member'}</span></td>
                   <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
-                  <td className="ts">{fmtTs(a.created_at)}</td>
+                  <td className="ts"><LocalTimestamp value={a.created_at} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       <div className="card">
@@ -133,7 +141,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
             <JsonButton filename={`${prefix}-transactions.json`} data={recentTxns} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Recent transactions">
           <table className="data-table">
             <thead>
               <tr>
@@ -152,7 +160,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
                 const v = parseFloat(t.amount);
                 return (
                   <tr key={t.posting_id}>
-                    <td className="ts">{fmtTs(t.settlement_time)}</td>
+                    <td className="ts"><LocalTimestamp value={t.settlement_time} /></td>
                     <td>
                       <Link href={`/accounts/${t.account_id}` as Route} className="rowlink" prefetch={false}>
                         {t.account_name ?? `#${t.account_id}`}
@@ -169,7 +177,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
               })}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {partners.length > 0 && (
@@ -190,7 +198,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
               <JsonButton filename={`${prefix}-counterparties.json`} data={partners} />
             </span>
           </div>
-          <div className="table-wrap">
+          <TableWrap label="Top counterparties">
             <table className="data-table">
               <thead>
                 <tr>
@@ -218,7 +226,7 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         </div>
       )}
     </>

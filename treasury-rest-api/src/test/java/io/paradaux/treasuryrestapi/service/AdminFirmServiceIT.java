@@ -25,6 +25,9 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
     @Autowired
     private AdminFirmService adminFirmService;
 
+    @Autowired
+    private FirmService firmService;
+
     private static final UUID PROPRIETOR = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private VerifiedToken serviceToken() {
@@ -104,7 +107,7 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
         ApiException ex = catchThrowableOfType(
                 () -> adminFirmService.disband(serviceToken(), 10), ApiException.class);
         assertThat(ex).isNotNull();
-        assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ex.getErrorCode()).isEqualTo("PROPRIETOR_NO_PERSONAL_ACCOUNT");
     }
 
@@ -126,6 +129,30 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
     }
 
     // ── rename ───────────────────────────────────────────────────────────────────
+
+    @Test
+    void disband_reservesNameUntilExplicitRelease_thenAllowsRenameAndCreate() {
+        insertFirm(10, "Acme", PROPRIETOR, null);
+        insertFirm(11, "Beta", PROPRIETOR, null);
+        adminFirmService.disband(serviceToken(), 10);
+        ApiException taken = catchThrowableOfType(
+                () -> adminFirmService.rename(serviceToken(), 11, "ACME"), ApiException.class);
+        assertThat(taken).isNotNull();
+        assertThat(taken.getErrorCode()).isEqualTo("NAME_TAKEN");
+        // Simulate the plugin admin command's persisted release, not an API disband.
+        exec("UPDATE firm SET name_released = 1 WHERE firm_id = ?", ps -> ps.setInt(1, 10));
+
+        assertThat(adminFirmService.rename(serviceToken(), 11, "ACME").displayName()).isEqualTo("ACME");
+        assertThat(firmService.getPublicFirm("acme").firmId()).isEqualTo(11);
+        adminFirmService.disband(serviceToken(), 11);
+        assertThat(firmService.getPublicFirm("Acme").firmId()).isEqualTo(11);
+
+        exec("UPDATE firm SET name_released = 1 WHERE firm_id = ?", ps -> ps.setInt(1, 11));
+        insertFirm(12, "Acme", PROPRIETOR, null);
+        assertThat(firmService.getPublicFirm("ACME").firmId()).isEqualTo(12);
+        assertThat(isFirmArchived(10)).isTrue();
+        assertThat(isFirmArchived(11)).isTrue();
+    }
 
     @Test
     void rename_updatesDisplayName() {

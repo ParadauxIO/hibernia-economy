@@ -1,13 +1,16 @@
 import 'server-only';
-import { Kysely, MysqlDialect } from 'kysely';
+import { Kysely, MysqlDialect, type Generated } from 'kysely';
 import { createPool } from 'mysql2';
+import { withoutUndefined } from '@/lib/util/withoutUndefined';
 
 const pool = createPool({
-  host: process.env.DB_HOST,
+  ...withoutUndefined({
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+  }),
   port: Number(process.env.DB_PORT ?? 3306),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USERNAME,
-  password: process.env.DB_PASSWORD,
   connectionLimit: Number(process.env.DB_POOL ?? 100),
   timezone: 'Z',
   dateStrings: false,
@@ -37,12 +40,15 @@ export const db = new Kysely<DB>({ dialect: new MysqlDialect({ pool: pool as any
 // entry means "no typed columns yet"; queries that use raw sql`` template literals
 // pass their own row interface and don't depend on this registry.
 export interface DB {
+  explorer_role_definition: { role_key: string; name: string; description: string | null; revision: Generated<number> };
+  explorer_role_permission: { role_key: string; permission: string };
   explorer_role: { player_uuid_bin: Buffer; role: string; granted_at: Date; granted_by_uuid_bin: Buffer | null };
   explorer_identity: {
     keycloak_sub: string;
     player_uuid_bin: Buffer;
     minecraft_name: string | null;
-    linked_at: Date;
+    // NOT NULL DEFAULT CURRENT_TIMESTAMP (V3): DB-generated, so optional on insert.
+    linked_at: Generated<Date>;
     linked_by: string | null;
   };
   explorer_link_code: {
@@ -60,11 +66,13 @@ export interface DB {
     created_at: Date;
     created_by_uuid_bin: Buffer | null;
   };
+  explorer_lp_group_member: { lp_group: string; player_uuid_bin: Buffer; synced_at: Date };
   explorer_group_capability: { group_id: number; capability: string };
   explorer_group_member: {
     group_id: number;
     player_uuid_bin: Buffer;
     source: 'manual' | 'luckperms';
+    synced_at: Date | null;
     added_at: Date;
     added_by_uuid_bin: Buffer | null;
   };

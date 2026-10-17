@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -9,7 +10,8 @@ import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { getViewer } from '@/lib/auth/viewer';
-import { isStaff } from '@/lib/auth/access';
+import { hasPermission } from '@/lib/auth/access';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -27,7 +29,7 @@ export default async function ChestShopFirmsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
   const [viewer, firms, total] = await Promise.all([
     getViewer(),
     listMarketFirms(sp.limit, (sp.page - 1) * sp.limit),
@@ -37,7 +39,7 @@ export default async function ChestShopFirmsPage({
   // Per-firm sales/quantity/volume is financial drilldown across many firms;
   // no single firm employee could have access to all of them, so the figures
   // are staff-only. Everyone still gets the firm directory (names + ranking).
-  const showFigures = isStaff(viewer);
+  const showFigures = hasPermission(viewer, 'market.figures.read');
 
   // Sales/quantity/volume are staff-only financial drilldown — whitelist the
   // public fields for the JSON export when the viewer can't see figures.
@@ -69,7 +71,7 @@ export default async function ChestShopFirmsPage({
       </div>
       )}
 
-      <div className="table-wrap">
+      <TableWrap label="Market firms">
         <table className="data-table">
           <thead>
             <tr>
@@ -98,7 +100,7 @@ export default async function ChestShopFirmsPage({
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
 
       <Pagination
         page={sp.page}
@@ -111,10 +113,3 @@ export default async function ChestShopFirmsPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

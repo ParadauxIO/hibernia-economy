@@ -5,9 +5,8 @@ import com.google.inject.Inject;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import com.google.inject.name.Names;
-import io.paradaux.business.guice.providers.DataSourceProvider;
+import io.paradaux.common.DataSourceProvider;
 import io.paradaux.business.mappers.FirmAccountsMapper;
-import io.paradaux.business.mappers.FirmAdminMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmPlayerMapper;
 import io.paradaux.business.mappers.FirmPropertyMapper;
@@ -47,7 +46,6 @@ public final class DatabaseModule extends AbstractModule {
                 addMapperClass(FirmRoleMapper.class);
                 addMapperClass(FirmStaffMapper.class);
                 addMapperClass(FirmPlayerMapper.class);
-                addMapperClass(FirmAdminMapper.class);
                 addMapperClass(FirmPropertyMapper.class);
 
                 // MyBatis settings (sane defaults)
@@ -66,6 +64,23 @@ public final class DatabaseModule extends AbstractModule {
         String db = databaseConfig.getDatabase();
         String user = databaseConfig.getUsername();
         String pass = databaseConfig.getPassword();
-        return new DataSourceProvider(host, port, db, user, pass).get();
+        // Fail fast instead of silently booting against the shared money DB with the
+        // documented default password — the guard treasury-api-plugin already has,
+        // back-ported here so all writers to the shared DB behave the same (ADT-187).
+        if ("password".equals(pass)) {
+            throw new IllegalStateException(
+                    "Refusing to start: the database password is still the insecure default. "
+                    + "Set database.password in config.yml.");
+        }
+        // READ COMMITTED (MariaDB default is REPEATABLE READ). Firm-account creation
+        // reads firm_accounts, then calls treasury.createAccount() — a separate plugin
+        // that commits on its own connection mid-transaction — then writes firm_accounts.
+        // Under REPEATABLE READ that locking write fails with Error 1020 because our read
+        // view is stale after the intervening commit; READ COMMITTED gives each statement
+        // a fresh view.
+        return DataSourceProvider.builder(host, port, db, user, pass)
+                .transactionIsolation("TRANSACTION_READ_COMMITTED")
+                .build()
+                .get();
     }
 }

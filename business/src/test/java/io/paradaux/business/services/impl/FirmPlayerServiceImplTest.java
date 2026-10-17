@@ -1,29 +1,32 @@
 package io.paradaux.business.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.mappers.FirmPlayerMapper;
 import io.paradaux.business.model.FirmPlayer;
+import java.util.List;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FirmPlayerServiceImplTest {
 
-    @Mock FirmPlayerMapper mapper;
+    @Mock
+    FirmPlayerMapper mapper;
 
     private FirmPlayerServiceImpl svc;
     private MockedStatic<Bukkit> bukkit;
@@ -37,29 +40,6 @@ class FirmPlayerServiceImplTest {
     @AfterEach
     void tearDown() {
         bukkit.close();
-    }
-
-    @Test
-    void touch_validatesArgs() {
-        UUID id = UUID.randomUUID();
-        assertThatThrownBy(() -> svc.touch(null, "x")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> svc.touch(id, null)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> svc.touch(id, "  ")).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void touch_zeroRowsThrowsIllegalState() {
-        UUID id = UUID.randomUUID();
-        when(mapper.upsert(id.toString(), "Bob")).thenReturn(0);
-        assertThatThrownBy(() -> svc.touch(id, "Bob"))
-                .isInstanceOf(IllegalStateException.class);
-    }
-
-    @Test
-    void touch_succeeds() {
-        UUID id = UUID.randomUUID();
-        when(mapper.upsert(id.toString(), "Bob")).thenReturn(1);
-        svc.touch(id, "Bob");
     }
 
     @Test
@@ -100,23 +80,37 @@ class FirmPlayerServiceImplTest {
         assertThat(svc.findByName("Alice")).contains(p);
     }
 
-    @Test
-    void searchByPrefix_clampsLimitsAndTrimsPrefix() {
-        when(mapper.searchByPrefix("ali", 20)).thenReturn(List.of(new FirmPlayer()));
-        assertThat(svc.searchByPrefix("  ali  ", 0)).hasSize(1);
-        assertThat(svc.searchByPrefix("  ali  ", 200)).hasSize(1);
-    }
+    @ParameterizedTest
+    @CsvSource({
+        // requested limit -> limit passed to the mapper (1..100 kept, else default 20)
+        "-1, 20",
+        "0, 20",
+        "1, 1",
+        "50, 50",
+        "100, 100",
+        "101, 20",
+        "200, 20",
+    })
+    void searchByPrefix_passesTheClampedLimitAndTrimmedPrefixToTheMapper(int requested, int expected) {
+        List<FirmPlayer> rows = List.of(new FirmPlayer());
+        when(mapper.searchByPrefix("ali", expected)).thenReturn(rows);
 
-    @Test
-    void searchByPrefix_usesGivenLimitWhenInRange() {
-        when(mapper.searchByPrefix("ali", 50)).thenReturn(List.of());
-        svc.searchByPrefix("ali", 50);
+        assertThat(svc.searchByPrefix("  ali  ", requested)).isSameAs(rows);
+
+        ArgumentCaptor<String> prefix = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Integer> limit = ArgumentCaptor.forClass(Integer.class);
+        verify(mapper).searchByPrefix(prefix.capture(), limit.capture());
+        assertThat(prefix.getValue()).isEqualTo("ali");
+        assertThat(limit.getValue()).isEqualTo(expected);
     }
 
     @Test
     void searchByPrefix_nullPrefixBecomesEmpty() {
-        when(mapper.searchByPrefix("", 20)).thenReturn(List.of());
-        svc.searchByPrefix(null, 0);
+        List<FirmPlayer> rows = List.of(new FirmPlayer());
+        when(mapper.searchByPrefix("", 20)).thenReturn(rows);
+
+        assertThat(svc.searchByPrefix(null, 0)).isSameAs(rows);
+        verify(mapper).searchByPrefix("", 20);
     }
 
     @Test

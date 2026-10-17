@@ -38,6 +38,7 @@ public class ChestShopShopRow {
     private BigDecimal sellPrice;
     private int batchQty;
     private Integer currentStock;
+    private Integer currentSpace;
     private LocalDateTime stockAt;
     private LocalDateTime lastSeen;
 }

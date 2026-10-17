@@ -11,9 +11,11 @@ import io.paradaux.treasury.api.exceptions.InsufficientFineFundsException;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.GovernmentFine;
 import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.FineWebhookService;
 import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
+import io.paradaux.treasury.utils.MiniMessageText;
 import io.paradaux.treasury.utils.Money;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -36,6 +38,7 @@ public class FineCommand implements CommandHandler {
     private final GovService govService;
     private final MembershipService membershipService;
     private final PlayerDirectoryService playerDirectory;
+    private final FineWebhookService fineWebhook;
     private final Message message;
 
     @Inject
@@ -43,11 +46,13 @@ public class FineCommand implements CommandHandler {
                        GovService govService,
                        MembershipService membershipService,
                        PlayerDirectoryService playerDirectory,
+                       FineWebhookService fineWebhook,
                        Message message) {
         this.accountService    = accountService;
         this.govService        = govService;
         this.membershipService = membershipService;
         this.playerDirectory   = playerDirectory;
+        this.fineWebhook       = fineWebhook;
         this.message           = message;
     }
 
@@ -132,12 +137,15 @@ public class FineCommand implements CommandHandler {
                 "amount", formattedAmount,
                 "reason", reason);
 
+        // Notify the fined player before the webhook: the Discord POST is a blocking
+        // network call and must not delay (or, if it fails, lose) the in-game notice.
         Player online = Bukkit.getPlayer(targetUuid);
         if (online != null) {
             message.send(online, "treasury.fine.issued.notify",
                     "amount", formattedAmount,
                     "reason", reason);
         }
+        fineWebhook.sendFineIssued(fine);
     }
 
     @Route("firm <account> <firm> <amount> <reason>")
@@ -155,7 +163,9 @@ public class FineCommand implements CommandHandler {
             return;
         }
 
-        Account business = accountService.getBusinessAccountByName(firmAccountName);
+        // Firm accounts are named "<firm> Corporate Account" (FirmServiceImpl), which a
+        // single-word argument can never spell out — resolve the bare firm name too.
+        Account business = accountService.resolveBusinessAccountByToken(firmAccountName);
         if (business == null) {
             message.send(sender, "treasury.fine.firm.not-found", "firm", firmAccountName);
             return;
@@ -184,6 +194,7 @@ public class FineCommand implements CommandHandler {
                 "firm", business.getDisplayName(),
                 "amount", formattedAmount,
                 "reason", reason);
+        fineWebhook.sendFineIssued(fine);
     }
 
     @Route("revoke <id>")
@@ -228,12 +239,17 @@ public class FineCommand implements CommandHandler {
                 "player", playerName,
                 "amount", formattedAmount);
 
-        Player online = Bukkit.getPlayer(fine.getPlayerUuid());
-        if (online != null) {
-            message.send(online, "treasury.fine.revoked.notify",
-                    "amount", formattedAmount,
-                    "reason", fine.getReason());
+        // Firm fines have no player to notify (null playerUuid — Bukkit.getPlayer
+        // rejects a null id, and by now the refund has already committed).
+        if (fine.getPlayerUuid() != null) {
+            Player online = Bukkit.getPlayer(fine.getPlayerUuid());
+            if (online != null) {
+                message.send(online, "treasury.fine.revoked.notify",
+                        "amount", formattedAmount,
+                        "reason", fine.getReason());
+            }
         }
+        fineWebhook.sendFineRevoked(fine);
     }
 
     @Route("list")
@@ -277,7 +293,7 @@ public class FineCommand implements CommandHandler {
                 "player", playerName,
                 "amount", formattedAmount);
         message.send(sender, "treasury.fine.info.detail",
-                "reason", sanitize(fine.getReason()),
+                "reason", MiniMessageText.sanitize(fine.getReason()),
                 "issuer", issuerName,
                 "date", issuedDate);
 
@@ -308,9 +324,11 @@ public class FineCommand implements CommandHandler {
      * same people who can move a department's money can also manage its fines.
      */
     private boolean canFineFrom(Player player, Account account) {
+        // The per-account member/authorizer check now lives in the service
+        // (MembershipService.canSpend), matching GovCommand.canTransferFrom; the
+        // global admin node and the coarse @Permission gate stay at the command layer.
         return player.hasPermission("treasury.gov.admin")
-                || membershipService.isMember(account.getAccountId(), player.getUniqueId())
-                || membershipService.isAuthorizer(account.getAccountId(), player.getUniqueId());
+                || membershipService.canSpend(account.getAccountId(), player.getUniqueId());
     }
 
     private void listFines(Player sender, OfflinePlayer target) {
@@ -327,17 +345,14 @@ public class FineCommand implements CommandHandler {
             message.send(sender, "treasury.fine.list.entry",
                     "id", String.valueOf(fine.getFineId()),
                     "amount", formattedAmount,
-                    "reason", sanitize(fine.getReason()),
+                    "reason", MiniMessageText.sanitize(fine.getReason()),
                     "date", date,
                     "revoked_tag", revokedTag);
         }
     }
 
     private String resolvePlayerName(UUID uuid) {
-        if (uuid == null) return "—";
-        OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
-        String name = op.getName();
-        return name != null ? name : uuid.toString();
+        return CommandSenders.resolvePlayerName(uuid);
     }
 
     /**
@@ -355,9 +370,5 @@ public class FineCommand implements CommandHandler {
             }
         }
         return "—";
-    }
-
-    private static String sanitize(String input) {
-        return input.replace("<", "\\<");
     }
 }

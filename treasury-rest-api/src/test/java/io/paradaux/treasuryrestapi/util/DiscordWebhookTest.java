@@ -73,6 +73,24 @@ class DiscordWebhookTest {
         assertThat(e.fields()).noneMatch(f -> f.name().equals("System") || f.name().equals("Memo"));
     }
 
+    @Test
+    void showsCounterpartyWhenPresent() {
+        DueDelivery d = delivery(new BigDecimal("-25.00"), null, null, null);
+        d.setCounterpartyAccountId(77L);
+        d.setCounterpartyAccountType("BUSINESS");
+        d.setCounterpartyDisplayName("Acme Corporate Account");
+        DiscordWebhook.Embed e = DiscordWebhook.toPayload(d).embeds().get(0);
+        assertThat(e.fields()).anyMatch(f -> f.name().equals("Counterparty")
+                && f.value().equals("#77 Acme Corporate Account (BUSINESS)"));
+    }
+
+    @Test
+    void omitsCounterpartyWhenAbsent() {
+        DueDelivery d = delivery(new BigDecimal("5.00"), null, null, null);
+        DiscordWebhook.Embed e = DiscordWebhook.toPayload(d).embeds().get(0);
+        assertThat(e.fields()).noneMatch(f -> f.name().equals("Counterparty"));
+    }
+
     private static DueDelivery delivery(BigDecimal amount, String message, String memo, String system) {
         DueDelivery d = new DueDelivery();
         d.setDeliveryId(42);

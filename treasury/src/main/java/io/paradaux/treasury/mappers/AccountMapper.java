@@ -3,6 +3,7 @@ package io.paradaux.treasury.mappers;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.economy.AccountTypeTotal;
 import io.paradaux.treasury.model.economy.BalanceEntry;
 import org.apache.ibatis.annotations.*;
 
@@ -41,6 +42,22 @@ public interface AccountMapper {
     @ResultMap("accountMap")
     Account findSystemAccountForPlugin(@Param("pluginName") String pluginName);
 
+    /**
+     * Locking variant used to re-resolve after a concurrent SYSTEM-account insert
+     * trips {@code uq_one_system_per_plugin} (V24). Same REPEATABLE-READ reasoning
+     * as {@link #findPersonalAccountIdLocking}: {@code LOCK IN SHARE MODE} reads the
+     * latest committed row so the loser of the race resolves to the winner's id.
+     */
+    @Select("""
+            SELECT account_id
+              FROM accounts
+             WHERE account_type = 'SYSTEM'
+               AND display_name = #{pluginName}
+             LIMIT 1
+             LOCK IN SHARE MODE
+            """)
+    Integer findSystemAccountIdForPluginLocking(@Param("pluginName") String pluginName);
+
     @Select("""
             SELECT account_id
               FROM accounts
@@ -49,6 +66,41 @@ public interface AccountMapper {
              LIMIT 1
             """)
     Integer findPersonalAccountId(@Param("ownerUuid") UUID ownerUuid);
+
+    /**
+     * Locking variant of {@link #findPersonalAccountId} used to re-resolve after a
+     * concurrent-first-login duplicate-key insert. Under REPEATABLE READ a plain
+     * SELECT keeps the transaction's snapshot and can't see the row the other
+     * transaction just committed; {@code LOCK IN SHARE MODE} reads the latest
+     * committed version so the loser of the race resolves to the winner's id.
+     */
+    @Select("""
+            SELECT account_id
+              FROM accounts
+             WHERE account_type = 'PERSONAL'
+               AND owner_uuid_bin = #{ownerUuid}
+             LIMIT 1
+             LOCK IN SHARE MODE
+            """)
+    Integer findPersonalAccountIdLocking(@Param("ownerUuid") UUID ownerUuid);
+
+    /**
+     * Reads one account's overdraft flags under a shared row lock. Used by the
+     * transfer overdraft gate so a concurrent {@code allow_overdraft}/{@code
+     * credit_limit} flip (which needs the exclusive lock via {@link #updateAccount})
+     * cannot race the gate and let a now-limited account be treated as unlimited
+     * and overdraw (ADT-10). A *shared* lock lets concurrent transfers from the same
+     * faucet still run in parallel — only the rare flag-flip is serialised against.
+     */
+    @Select("""
+            SELECT account_id, account_type, owner_uuid_bin, display_name,
+                   requires_authorization, is_archived, allow_overdraft, credit_limit
+              FROM accounts
+             WHERE account_id = #{accountId}
+             LOCK IN SHARE MODE
+            """)
+    @ResultMap("accountMap")
+    Account lockAccountFlagsForShare(@Param("accountId") int accountId);
 
     @Select("""
             SELECT account_id, account_type, owner_uuid_bin, display_name,
@@ -157,6 +209,18 @@ public interface AccountMapper {
     @ResultMap("balanceMap")
     AccountBalance readBalance(@Param("accountId") int accountId);
 
+    /** Non-locking batch balance read; one round-trip for many accounts (no FOR UPDATE). */
+    @Select("""
+            <script>
+            SELECT account_id, balance, version
+              FROM account_balances_mat
+             WHERE account_id IN
+             <foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach>
+            </script>
+            """)
+    @ResultMap("balanceMap")
+    List<AccountBalance> readBalances(@Param("ids") List<Integer> ids);
+
     /** Loads several accounts in one round-trip (used by transfer for from+to). */
     @Select("""
             <script>
@@ -228,6 +292,27 @@ public interface AccountMapper {
             @Result(column = "balance", property = "balance")
     })
     List<BalanceEntry> getTopBalances(@Param("limit") int limit, @Param("offset") int offset);
+
+    // ---- economy summary ----
+
+    /**
+     * Total balance per account type for the active (non-archived) economy,
+     * excluding SYSTEM. Mirrors the explorer's total-supply scope so the
+     * in-game {@code /economy} figures match the UI.
+     */
+    @Select("""
+            SELECT a.account_type AS account_type, COALESCE(SUM(b.balance), 0) AS total
+              FROM accounts a
+              JOIN account_balances_mat b ON a.account_id = b.account_id
+             WHERE a.is_archived = 0
+               AND a.account_type IN ('PERSONAL', 'BUSINESS', 'GOVERNMENT')
+             GROUP BY a.account_type
+            """)
+    @Results({
+            @Result(column = "account_type", property = "accountType"),
+            @Result(column = "total", property = "total")
+    })
+    List<AccountTypeTotal> getEconomyTotalsByType();
 
     @Select("SELECT COUNT(*) FROM accounts WHERE account_type = 'PERSONAL' AND is_archived = 0")
     int countPersonalAccounts();

@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getAllDocSlugs, getDocBySlug, isAdminDoc } from '@/lib/docs';
@@ -57,7 +58,7 @@ export default async function DocPage({
   // get a gate instead of the content.
   if (isAdminDoc(safeSlug)) {
     const viewer = await getViewer();
-    if (viewer.role !== 'admin') {
+    if (!hasPermission(viewer, 'docs.admin.read')) {
       return (
         <>
           <PrivacyGate

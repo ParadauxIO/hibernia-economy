@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
@@ -9,11 +10,11 @@ import {
   countAccountTransactions,
   getCounterparties,
   getAccountActivityCalendar,
-  canReadAccount,
 } from '@/lib/sql/ledger';
-import { accountLabel, fmtAmt, fmtAmtFull, fmtN, fmtTs, shortenUuid } from '@/lib/format';
+import { accountLabel, fmtAmt, fmtAmtFull, fmtN, shortenUuid } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
-import { isStaff } from '@/lib/auth/access';
+import { hasElevatedRead, canViewAccount } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import { Pagination } from '@/components/Pagination';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -22,8 +23,10 @@ import { BackLink } from '@/components/BackLink';
 import { BalanceLine, InOutChart } from '@/components/charts/AreaTimeline';
 import { ActivityCalendar } from '@/components/charts/ActivityCalendar';
 import { getAccountTrajectory } from '@/lib/sql/ledger';
-import { listPlayerFirmMemberships, getAccountFirmId, hasFirmFinancialAccess } from '@/lib/sql/firm';
+import { getAccountFirmContext } from '@/lib/services/accountContext';
+import { listPlayerFirmMemberships } from '@/lib/sql/firm';
 import { memo } from '@/lib/cache';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -49,33 +52,18 @@ export default async function AccountDetailPage({
   if (!Number.isInteger(id) || id <= 0) notFound();
 
   const viewer = await getViewer();
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
 
   const account = await findAccount(id);
   if (!account) notFound();
 
-  // Anonymous baseline: balance + metadata visible to all (matches /balance
-  // in-game). Per-account history is drilldown — own-data-only: the account
-  // owner sees their own activity; staff (admin / government) see everyone's.
+  // Balances remain public; Auth combines role permissions and relationships
+  // before any private history query or shared-cache read.
   const isOwner = !viewer.anon && !!viewer.minecraftUuid && account.owner_uuid === viewer.minecraftUuid;
-  let canSeeHistory = isStaff(viewer) || isOwner;
-  // A firm account's history is also visible to that firm's finance-role
-  // employees (FINANCIAL/ADMIN), matching the firm-financials access model.
-  if (!canSeeHistory && !viewer.anon && viewer.minecraftUuid) {
-    const firmId = await getAccountFirmId(id);
-    if (firmId) canSeeHistory = await hasFirmFinancialAccess(firmId, viewer.minecraftUuid);
-  }
-  // Explicit account access (Treasury): a member, authorizer, or read-only viewer
-  // of this account — e.g. a government department secretary (PAR-237). Scoped to
-  // the specific account, and the page only ever shows ledger postings, never the
-  // per-trade chestshop_sale breakdown.
-  if (!canSeeHistory && !viewer.anon && viewer.minecraftUuid) {
-    canSeeHistory = await canReadAccount(id, viewer.minecraftUuid);
-  }
+  const canSeeHistory = await canViewAccount(id, viewer);
 
-  // Audit privileged inspection: a staff member using elevated access to view
-  // someone ELSE's account history (their own view needs no elevation).
-  if (!viewer.anon && (viewer.role === 'admin' || viewer.role === 'government') && !isOwner) {
+  // Record global staff inspections of someone else's account.
+  if (hasElevatedRead(viewer) && !isOwner) {
     await auditView(viewer, { path: `/accounts/${id}`, targetType: 'account', targetId: String(id) });
   }
 
@@ -109,6 +97,7 @@ export default async function AccountDetailPage({
   // from any account to the firms its owner is part of. Personal accounts
   // only; the owner_uuid is the natural person for BUSINESS/SYSTEM is null
   // or a system actor.
+  const linkedFirm = account.account_type === 'BUSINESS' && canSeeHistory ? await getAccountFirmContext(id) : null;
   const firmMemberships = account.owner_uuid && account.account_type === 'PERSONAL'
     ? await listPlayerFirmMemberships(account.owner_uuid)
     : [];
@@ -146,9 +135,9 @@ export default async function AccountDetailPage({
         // Walk back from current balance: today's EOD ≈ current; subtract each day's net for prior days.
         let running = currentBalance;
         const eodByDate = new Map<string, number>();
-        for (let i = trajectory.length - 1; i >= 0; i--) {
-          eodByDate.set(trajectory[i].date, running);
-          running -= parseFloat(trajectory[i].net);
+        for (const day of [...trajectory].reverse()) {
+          eodByDate.set(day.date, running);
+          running -= parseFloat(day.net);
         }
         return trajectory.map((r) => ({ date: r.date, balance: eodByDate.get(r.date) ?? 0 }));
       })()
@@ -168,6 +157,7 @@ export default async function AccountDetailPage({
         {account.requires_authorization ? <span className="badge">Authorizer</span> : null}
       </div>
 
+      {linkedFirm && <p>Business account for <Link href={`/firms/${encodeURIComponent(linkedFirm.display_name)}`}>{linkedFirm.display_name}</Link></p>}
       {firmMemberships.length > 0 && (
         <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
           <span className="kpi-label" style={{ marginBottom: 0 }}>Member of</span>
@@ -189,7 +179,7 @@ export default async function AccountDetailPage({
         <div className="kpi">
           <div className="kpi-label">Balance</div>
           <div className="kpi-value">{fmtAmtFull(account.balance)}</div>
-          <div className="kpi-meta">{fmtAmt(account.balance)}</div>
+          <div className="kpi-meta">Current balance</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Owner</div>
@@ -206,7 +196,7 @@ export default async function AccountDetailPage({
           </div>
           <div className="kpi-meta">
             {account.owner_uuid ? (
-              <span className="mono" title={account.owner_uuid}>{account.owner_uuid}</span>
+              <details><summary>Owner UUID</summary><span className="mono">{account.owner_uuid}</span></details>
             ) : (
               <>{account.account_type.toLowerCase()} account</>
             )}
@@ -214,7 +204,7 @@ export default async function AccountDetailPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Created</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>{fmtTs(account.created_at)}</div>
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}><LocalTimestamp value={account.created_at} /></div>
           <div className="kpi-meta">{account.account_type.toLowerCase()} account</div>
         </div>
         <div className="kpi">
@@ -270,7 +260,7 @@ export default async function AccountDetailPage({
           <div className="card-title">
             Top counterparties <span className="sub">accounts this one transacts with most</span>
           </div>
-          <div className="table-wrap"><table className="data-table">
+          <TableWrap label="Top counterparties"><table className="data-table">
             <thead>
               <tr>
                 <th>Counterparty</th>
@@ -303,7 +293,7 @@ export default async function AccountDetailPage({
                 </tr>
               ))}
             </tbody>
-          </table></div>
+          </table></TableWrap>
         </div>
       )}
 
@@ -326,7 +316,7 @@ export default async function AccountDetailPage({
 
       {canSeeHistory && (
         <>
-          <div className="table-wrap"><table className="data-table">
+          <TableWrap label="Recent activity"><table className="data-table">
             <thead>
               <tr>
                 <th>Txn</th>
@@ -359,7 +349,7 @@ export default async function AccountDetailPage({
                     <td>
                       <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.memo ?? '—'}</span>
                     </td>
-                    <td className="ts">{fmtTs(p.settlement_time)}</td>
+                    <td className="ts"><LocalTimestamp value={p.settlement_time} /></td>
                     <td><Player name={p.initiator_name} uuid={p.initiator_uuid} /></td>
                     <td>
                       <span className="mono" style={{ color: 'var(--fg-muted)' }}>{p.plugin_system ?? '—'}</span>
@@ -368,7 +358,7 @@ export default async function AccountDetailPage({
                 );
               })}
             </tbody>
-          </table></div>
+          </table></TableWrap>
 
           {totalTxns > sp.limit && (
             <Pagination
@@ -385,12 +375,3 @@ export default async function AccountDetailPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      if (v.length > 0 && v[0] !== undefined) out[k] = v[0];
-    } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

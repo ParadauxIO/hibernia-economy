@@ -1,22 +1,23 @@
 package io.paradaux.treasuryrestapi.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+
 import io.jsonwebtoken.Jwts;
+import io.paradaux.common.JwtKeys;
 import io.paradaux.treasuryrestapi.mapper.ApiKeyMapper;
 import io.paradaux.treasuryrestapi.model.ApiKey;
-import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
-
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 import java.util.function.Consumer;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import javax.crypto.SecretKey;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 /**
  * Unit tests for the JWT verification pipeline — the security core that gates every
@@ -28,8 +29,10 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class JwtTokenVerifierTest {
 
-    private static final SecretKey KEY = deriveKey("test-jwt-secret-32-or-more-characters-of-deterministic-fixture-data");
-    private static final SecretKey WRONG_KEY = deriveKey("a-totally-different-secret-of-sufficient-length-for-hs256-xx");
+    private static final SecretKey KEY =
+            deriveKey("test-jwt-secret-32-or-more-characters-of-deterministic-fixture-data");
+    private static final SecretKey WRONG_KEY =
+            deriveKey("a-totally-different-secret-of-sufficient-length-for-hs256-xx");
 
     private static final long KID = 7L;
     private static final UUID OWNER = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
@@ -65,20 +68,43 @@ class JwtTokenVerifierTest {
         assertThat(vt.accountId()).isNull();
     }
 
+    @Test
+    void tokenMintedWithJwtKeysBase64Derivation_verifiesEndToEnd() {
+        // Cross-language auth-boundary guard (ADT no-crosslang-token-roundtrip-test):
+        // the mint side (treasury-api-plugin) and this verify side both derive the HMAC
+        // key from the SAME io.paradaux.common.JwtKeys. Exercise the production-recommended
+        // base64: secret end-to-end so a derivation regression can't pass while silently
+        // breaking every API key. (The other tests use the legacy SHA-256 fixture key.)
+        String base64Secret = "base64:"
+                + Base64.getEncoder()
+                        .encodeToString(
+                                "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8)); // 32 bytes
+        SecretKey sharedKey = JwtKeys.deriveHmacKey(base64Secret);
+
+        JwtTokenVerifier verifier = new JwtTokenVerifier(sharedKey, stub(keyId -> keyId == KID ? personalKey() : null));
+        String token = baseBuilder("PERSONAL", b -> b.claim("acc", ACC))
+                .signWith(sharedKey, Jwts.SIG.HS256)
+                .compact();
+
+        VerifiedToken vt = verifier.verify(token);
+        assertThat(vt.keyType()).isEqualTo("PERSONAL");
+        assertThat(vt.accountId()).isEqualTo(ACC);
+    }
+
     // ── F5: scoped-claim must agree with the DB row (defence in depth) ───────────
 
     @Test
     void accClaimNotMatchingDbAccount_rejected() {
-        JwtTokenVerifier verifier = verifierFor(personalKey());           // DB account_id = 42
-        String token = personalToken(b -> b.claim("acc", 99));            // token says 99
+        JwtTokenVerifier verifier = verifierFor(personalKey()); // DB account_id = 42
+        String token = personalToken(b -> b.claim("acc", 99)); // token says 99
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
 
     @Test
     void firmClaimNotMatchingDbFirm_rejected() {
-        JwtTokenVerifier verifier = verifierFor(businessKey());           // DB firm_id = 9
-        String token = businessToken(b -> b.claim("firm", 8));            // token says 8
+        JwtTokenVerifier verifier = verifierFor(businessKey()); // DB firm_id = 9
+        String token = businessToken(b -> b.claim("firm", 8)); // token says 8
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -88,7 +114,9 @@ class JwtTokenVerifierTest {
     @Test
     void badSignature_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
-        String token = baseBuilder("PERSONAL", b -> b.claim("acc", ACC)).signWith(WRONG_KEY, Jwts.SIG.HS256).compact();
+        String token = baseBuilder("PERSONAL", b -> b.claim("acc", ACC))
+                .signWith(WRONG_KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -102,16 +130,32 @@ class JwtTokenVerifierTest {
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
 
+    /** jjwt throws IllegalArgumentException (not JwtException) for these; still a 401. */
+    @Test
+    void blankOrNullToken_rejectedAsInvalidToken() {
+        JwtTokenVerifier verifier = verifierFor(personalKey());
+
+        assertInvalid(verifier, "", "INVALID_TOKEN");
+        assertInvalid(verifier, "   ", "INVALID_TOKEN");
+        assertInvalid(verifier, null, "INVALID_TOKEN");
+    }
+
     @Test
     void expiredToken_rejectedAsTokenExpired() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         Instant past = Instant.now().minus(10, ChronoUnit.DAYS);
         String token = Jwts.builder()
-                .header().add("kid", String.valueOf(KID)).and()
-                .subject(OWNER.toString()).claim("type", "PERSONAL").claim("acc", ACC).id(JTI)
+                .header()
+                .add("kid", String.valueOf(KID))
+                .and()
+                .subject(OWNER.toString())
+                .claim("type", "PERSONAL")
+                .claim("acc", ACC)
+                .id(JTI)
                 .issuedAt(Date.from(past.minus(1, ChronoUnit.DAYS)))
                 .expiration(Date.from(past))
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "TOKEN_EXPIRED");
     }
@@ -122,9 +166,14 @@ class JwtTokenVerifierTest {
     void missingKid_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         String token = Jwts.builder()
-                .subject(OWNER.toString()).claim("type", "PERSONAL").claim("acc", ACC).id(JTI)
-                .issuedAt(Date.from(Instant.now())).expiration(future())
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .subject(OWNER.toString())
+                .claim("type", "PERSONAL")
+                .claim("acc", ACC)
+                .id(JTI)
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(future())
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -133,7 +182,8 @@ class JwtTokenVerifierTest {
     void nonNumericKid_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         String token = baseBuilder("PERSONAL", b -> b.claim("acc", ACC), "not-a-number")
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -142,7 +192,8 @@ class JwtTokenVerifierTest {
     void nonPositiveKid_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         String token = baseBuilder("PERSONAL", b -> b.claim("acc", ACC), "0")
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -170,9 +221,9 @@ class JwtTokenVerifierTest {
     @Test
     void supersededJti_rejectedAsTokenSuperseded() {
         ApiKey key = personalKey();
-        key.setJwtId(UUID.randomUUID().toString());                       // DB jti rotated away
+        key.setJwtId(UUID.randomUUID().toString()); // DB jti rotated away
         JwtTokenVerifier verifier = verifierFor(key);
-        String token = personalToken(t -> {});                           // old jti
+        String token = personalToken(t -> {}); // old jti
 
         assertInvalid(verifier, token, "TOKEN_SUPERSEDED");
     }
@@ -181,8 +232,8 @@ class JwtTokenVerifierTest {
 
     @Test
     void typeClaimNotMatchingDb_rejectedAsInvalidToken() {
-        JwtTokenVerifier verifier = verifierFor(businessKey());          // DB key_type = BUSINESS
-        String token = personalToken(t -> {});                          // token says PERSONAL
+        JwtTokenVerifier verifier = verifierFor(businessKey()); // DB key_type = BUSINESS
+        String token = personalToken(t -> {}); // token says PERSONAL
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -191,10 +242,16 @@ class JwtTokenVerifierTest {
     void missingTypeClaim_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         String token = Jwts.builder()
-                .header().add("kid", String.valueOf(KID)).and()
-                .subject(OWNER.toString()).claim("acc", ACC).id(JTI)     // no type
-                .issuedAt(Date.from(Instant.now())).expiration(future())
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .header()
+                .add("kid", String.valueOf(KID))
+                .and()
+                .subject(OWNER.toString())
+                .claim("acc", ACC)
+                .id(JTI) // no type
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(future())
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -202,10 +259,11 @@ class JwtTokenVerifierTest {
     @Test
     void unrecognisedType_rejectedAsInvalidToken() {
         ApiKey weird = personalKey();
-        weird.setKeyType("WEIRD");                                       // matches token so step 8 passes
+        weird.setKeyType("WEIRD"); // matches token so step 8 passes
         JwtTokenVerifier verifier = verifierFor(weird);
         String token = baseBuilder("WEIRD", b -> b.claim("acc", ACC))
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -216,10 +274,16 @@ class JwtTokenVerifierTest {
     void missingSubject_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         String token = Jwts.builder()
-                .header().add("kid", String.valueOf(KID)).and()
-                .claim("type", "PERSONAL").claim("acc", ACC).id(JTI)     // no subject
-                .issuedAt(Date.from(Instant.now())).expiration(future())
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .header()
+                .add("kid", String.valueOf(KID))
+                .and()
+                .claim("type", "PERSONAL")
+                .claim("acc", ACC)
+                .id(JTI) // no subject
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(future())
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -228,10 +292,17 @@ class JwtTokenVerifierTest {
     void malformedSubjectUuid_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         String token = Jwts.builder()
-                .header().add("kid", String.valueOf(KID)).and()
-                .subject("not-a-uuid").claim("type", "PERSONAL").claim("acc", ACC).id(JTI)
-                .issuedAt(Date.from(Instant.now())).expiration(future())
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .header()
+                .add("kid", String.valueOf(KID))
+                .and()
+                .subject("not-a-uuid")
+                .claim("type", "PERSONAL")
+                .claim("acc", ACC)
+                .id(JTI)
+                .issuedAt(Date.from(Instant.now()))
+                .expiration(future())
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -239,8 +310,9 @@ class JwtTokenVerifierTest {
     @Test
     void personalTokenMissingAcc_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
-        String token = baseBuilder("PERSONAL", b -> {})                  // no acc
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+        String token = baseBuilder("PERSONAL", b -> {}) // no acc
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -249,7 +321,8 @@ class JwtTokenVerifierTest {
     void accClaimNotANumber_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(personalKey());
         String token = baseBuilder("PERSONAL", b -> b.claim("acc", "forty-two"))
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -257,8 +330,9 @@ class JwtTokenVerifierTest {
     @Test
     void businessTokenMissingFirm_rejectedAsInvalidToken() {
         JwtTokenVerifier verifier = verifierFor(businessKey());
-        String token = baseBuilder("BUSINESS", b -> {})                  // no firm
-                .signWith(KEY, Jwts.SIG.HS256).compact();
+        String token = baseBuilder("BUSINESS", b -> {}) // no firm
+                .signWith(KEY, Jwts.SIG.HS256)
+                .compact();
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
     }
@@ -279,23 +353,51 @@ class JwtTokenVerifierTest {
     /** Minimal hand-rolled ApiKeyMapper; only findByKeyId is exercised by the verifier. */
     private static ApiKeyMapper stub(java.util.function.LongFunction<ApiKey> byKeyId) {
         return new ApiKeyMapper() {
-            @Override public ApiKey findByKeyId(long keyId) { return byKeyId.apply(keyId); }
-            @Override public ApiKey findByKeyIdForUpdate(long keyId) { throw new UnsupportedOperationException(); }
-            @Override public int rotateKey(long keyId, String jwtId, String token,
-                                           java.time.LocalDateTime issuedAt, java.time.LocalDateTime expiresAt) {
+            @Override
+            public ApiKey findByKeyId(long keyId) {
+                return byKeyId.apply(keyId);
+            }
+
+            @Override
+            public ApiKey findByKeyIdForUpdate(long keyId) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int rotateKey(
+                    long keyId, String jwtId, java.time.LocalDateTime issuedAt, java.time.LocalDateTime expiresAt) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public int revoke(long keyId) {
                 throw new UnsupportedOperationException();
             }
         };
     }
 
     private static ApiKey personalKey() {
-        return ApiKey.builder().keyId(KID).keyType("PERSONAL").ownerUuid(OWNER)
-                .accountId((int) ACC).firmId(null).jwtId(JTI).revoked(false).build();
+        return ApiKey.builder()
+                .keyId(KID)
+                .keyType("PERSONAL")
+                .ownerUuid(OWNER)
+                .accountId((int) ACC)
+                .firmId(null)
+                .jwtId(JTI)
+                .revoked(false)
+                .build();
     }
 
     private static ApiKey businessKey() {
-        return ApiKey.builder().keyId(KID).keyType("BUSINESS").ownerUuid(OWNER)
-                .accountId(null).firmId((int) FIRM).jwtId(JTI).revoked(false).build();
+        return ApiKey.builder()
+                .keyId(KID)
+                .keyType("BUSINESS")
+                .ownerUuid(OWNER)
+                .accountId(null)
+                .firmId((int) FIRM)
+                .jwtId(JTI)
+                .revoked(false)
+                .build();
     }
 
     private static String personalToken(Consumer<io.jsonwebtoken.JwtBuilder> extra) {
@@ -314,9 +416,12 @@ class JwtTokenVerifierTest {
         return baseBuilder(type, scoped, String.valueOf(KID));
     }
 
-    private static io.jsonwebtoken.JwtBuilder baseBuilder(String type, Consumer<io.jsonwebtoken.JwtBuilder> scoped, String kid) {
+    private static io.jsonwebtoken.JwtBuilder baseBuilder(
+            String type, Consumer<io.jsonwebtoken.JwtBuilder> scoped, String kid) {
         io.jsonwebtoken.JwtBuilder b = Jwts.builder()
-                .header().add("kid", kid).and()
+                .header()
+                .add("kid", kid)
+                .and()
                 .subject(OWNER.toString())
                 .claim("type", type)
                 .id(JTI)

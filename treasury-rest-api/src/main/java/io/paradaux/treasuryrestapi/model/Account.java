@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class Account {
     private long accountId;
+    /** PERSONAL | BUSINESS | GOVERNMENT | SYSTEM. SYSTEM accounts are unlimited faucet/sinks. */
+    private String accountType;
     private boolean archived;
     /** If true, transfers require an in-game authorizer; blocked at the REST API layer (MVP). */
     private boolean requiresAuthorization;

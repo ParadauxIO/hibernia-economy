@@ -20,11 +20,16 @@ export function CodeCopyButton() {
       btn.className = 'doc-copy';
       btn.textContent = 'Copy';
       btn.addEventListener('click', () => {
-        const text = pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
-        navigator.clipboard?.writeText(text).then(() => {
-          btn.textContent = 'Copied';
-          window.setTimeout(() => (btn.textContent = 'Copy'), 1500);
-        });
+        const text = pre.querySelector('code')?.textContent ?? pre.textContent;
+        // navigator.clipboard is absent outside secure contexts (plain-http hosts).
+        if (!('clipboard' in navigator)) return;
+        navigator.clipboard.writeText(text).then(
+          () => {
+            btn.textContent = 'Copied';
+            window.setTimeout(() => (btn.textContent = 'Copy'), 1500);
+          },
+          () => undefined, // permission denied: leave the button as it was
+        );
       });
       pre.appendChild(btn);
       added.push(btn);

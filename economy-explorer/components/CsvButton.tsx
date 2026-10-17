@@ -17,7 +17,14 @@ export function CsvButton({ filename, headers, rows, label = 'CSV' }: CsvButtonP
   if (!loggedIn) return null;
   function escape(v: string | number | null | undefined): string {
     if (v === null || v === undefined) return '';
-    const s = String(v);
+    let s = String(v);
+    // Neutralize CSV/formula injection: a cell starting with one of these is
+    // interpreted as a formula by Excel/Sheets. Exported fields include
+    // attacker-controllable Minecraft strings (display names, txn messages,
+    // item/player names), so prefix with ' to force it to a literal.
+    if (/^[=+\-@\t\r]/.test(s)) {
+      s = `'${s}`;
+    }
     if (s.includes(',') || s.includes('"') || s.includes('\n')) {
       return `"${s.replace(/"/g, '""')}"`;
     }

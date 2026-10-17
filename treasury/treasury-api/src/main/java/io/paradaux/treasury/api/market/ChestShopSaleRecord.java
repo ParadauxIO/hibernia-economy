@@ -13,21 +13,21 @@ import java.util.UUID;
  * links back to it.
  */
 public record ChestShopSaleRecord(
-        Long txnId,                 // ledger_txns id; nullable if unlinkable
-        String direction,           // "BUY" | "SELL" (customer's perspective)
-        UUID customerUuid,          // the player who clicked the sign
+        Long txnId, // ledger_txns id; nullable if unlinkable
+        String direction, // "BUY" | "SELL" (customer's perspective)
+        UUID customerUuid, // the player who clicked the sign
         // shop owner account (already classified by the caller)
-        Integer shopAccountId,      // null for admin shops
-        String shopAccountType,     // PERSONAL|BUSINESS|GOVERNMENT|SYSTEM, or null (admin)
-        Integer shopFirmId,         // set iff BUSINESS
-        UUID shopOwnerUuid,         // set for PERSONAL
+        Integer shopAccountId, // null for admin shops
+        String shopAccountType, // PERSONAL|BUSINESS|GOVERNMENT|SYSTEM, or null (admin)
+        Integer shopFirmId, // set iff BUSINESS
+        UUID shopOwnerUuid, // set for PERSONAL
         boolean adminShop,
         // item
         String material,
         String itemKey,
         String itemName,
         boolean itemCustom,
-        String itemData,            // base64 ItemStack; nullable
+        String itemData, // Bukkit YAML ItemStack under the "item" key; nullable
         // price
         int quantity,
         BigDecimal unitPrice,
@@ -35,7 +35,8 @@ public record ChestShopSaleRecord(
         BigDecimal taxAmount,
         // location
         String world,
-        Integer signX, Integer signY, Integer signZ,
+        Integer signX,
+        Integer signY,
+        Integer signZ,
         // shop stock of the traded item at sale time (post-trade); null for admin
-        Integer shopStock
-) {}
+        Integer shopStock) {}

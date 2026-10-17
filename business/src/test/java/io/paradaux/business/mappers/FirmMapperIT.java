@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FirmMapperIT extends IntegrationTestBase {
 
@@ -195,6 +196,87 @@ class FirmMapperIT extends IntegrationTestBase {
         assertThat(mapper.listOwnedOrMemberFirms(employee.toString()))
                 .extracting(Firm::getDisplayName)
                 .containsExactly("Employer");
+    }
+
+    @Test
+    void updateFirm_advancesUpdatedAt() throws Exception {
+        Firm firm = newFirm("Acme", UUID.randomUUID());
+        mapper.createFirm(firm);
+
+        // Force updated_at into the past so the bump is unambiguous without a sleep.
+        // (updateFirm used to write `updated_at = updated_at`, which self-assigns the
+        // column and suppresses the ON UPDATE CURRENT_TIMESTAMP bump — PAR-315.)
+        java.time.LocalDateTime past = java.time.LocalDateTime.of(2020, 1, 1, 0, 0, 0);
+        try (var conn = dataSource.getConnection();
+             var st = conn.createStatement()) {
+            st.executeUpdate("UPDATE firm SET updated_at = '2020-01-01 00:00:00' WHERE firm_id = "
+                    + firm.getFirmId());
+        }
+        assertThat(mapper.getFirmById(firm.getFirmId()).getUpdatedAt()).isEqualTo(past);
+
+        Firm patch = new Firm();
+        patch.setFirmId(firm.getFirmId());
+        patch.setHqRegion("plot-9");
+        mapper.updateFirm(patch);
+
+        assertThat(mapper.getFirmById(firm.getFirmId()).getUpdatedAt()).isAfter(past);
+    }
+
+    @Test
+    void explicitRelease_allowsRepeatedReuseAndPreservesHistory() {
+        UUID oldOwner = UUID.randomUUID();
+        Firm first = newFirm("Acme", oldOwner);
+        mapper.createFirm(first);
+        assertThat(mapper.releaseFirmName(first.getFirmId())).isZero();
+        mapper.archiveFirm(first.getFirmId());
+        assertThat(mapper.getFirmsByNameCount("ACME")).isEqualTo(1);
+        assertThatThrownBy(() -> mapper.createFirm(newFirm("ACME", UUID.randomUUID())))
+                .hasMessageContaining("uq_firm_reserved_display_name");
+        assertThat(mapper.releaseFirmName(first.getFirmId())).isEqualTo(1);
+        assertThat(mapper.releaseFirmName(first.getFirmId())).isZero();
+        assertThat(mapper.getFirmsByNameCount("ACME")).isZero();
+        assertThat(mapper.isProprietorByFirmName("Acme", oldOwner.toString())).isFalse();
+
+        Firm second = newFirm("ACME", UUID.randomUUID());
+        mapper.createFirm(second);
+        assertThat(mapper.getFirmByName("acme").getFirmId()).isEqualTo(second.getFirmId());
+        assertThat(mapper.getFirmsByNameCount("acme")).isEqualTo(1);
+        assertThat(mapper.isProprietorByFirmName("Acme", oldOwner.toString())).isFalse();
+        assertThat(mapper.getFirmById(first.getFirmId()).getDisplayName()).isEqualTo("Acme");
+        assertThat(mapper.secondsSinceLastCreation(oldOwner.toString())).isNotNull();
+
+        mapper.archiveFirm(second.getFirmId());
+        assertThat(mapper.getFirmsByNameCount("Acme")).isEqualTo(1);
+        assertThat(mapper.releaseFirmName(second.getFirmId())).isEqualTo(1);
+        assertThat(mapper.getFirmByName("acme").getFirmId()).isEqualTo(second.getFirmId());
+        Firm third = newFirm("Acme", UUID.randomUUID());
+        mapper.createFirm(third);
+        assertThat(mapper.getFirmByName("ACME").getFirmId()).isEqualTo(third.getFirmId());
+        assertThat(mapper.getFirmById(first.getFirmId()).getArchived()).isTrue();
+    }
+
+    @Test
+    void database_rejectsDuplicateActiveNamesOnCreateRenameAndRestore() {
+        Firm active = newFirm("Acme", UUID.randomUUID());
+        mapper.createFirm(active);
+        assertThatThrownBy(() -> mapper.createFirm(newFirm("ACME", UUID.randomUUID())))
+                .hasMessageContaining("uq_firm_reserved_display_name");
+
+        Firm other = newFirm("Other", UUID.randomUUID());
+        mapper.createFirm(other);
+        other.setDisplayName("acme");
+        assertThatThrownBy(() -> mapper.updateFirm(other))
+                .hasMessageContaining("uq_firm_reserved_display_name");
+
+        mapper.archiveFirm(active.getFirmId());
+        assertThatThrownBy(() -> mapper.updateFirm(other))
+                .hasMessageContaining("uq_firm_reserved_display_name");
+        mapper.releaseFirmName(active.getFirmId());
+        mapper.updateFirm(other);
+        assertThat(mapper.getFirmByName("Acme").getFirmId()).isEqualTo(other.getFirmId());
+        active.setArchived(false);
+        assertThatThrownBy(() -> mapper.updateFirm(active))
+                .hasMessageContaining("uq_firm_reserved_display_name");
     }
 
     private Firm newFirm(String name, UUID owner) {

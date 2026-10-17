@@ -6,18 +6,14 @@ import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasuryapi.model.economy.ApiKey;
+import io.paradaux.treasuryapi.model.economy.KeyType;
 import io.paradaux.treasuryapi.services.ApiKeyService;
 import org.bukkit.entity.Player;
 
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Singleton
 public class PersonalKeyHandler {
-
-    private static final DateTimeFormatter EXP_FMT =
-            DateTimeFormatter.ofPattern("MM/dd/yy").withZone(ZoneId.systemDefault());
 
     private final ApiKeyService apiKeyService;
     private final TreasuryApi treasuryApi;
@@ -42,7 +38,7 @@ public class PersonalKeyHandler {
     }
 
     public void doList(Player sender) {
-        List<ApiKey> keys = apiKeyService.listKeys(sender.getUniqueId(), "PERSONAL");
+        List<ApiKey> keys = apiKeyService.listKeys(sender.getUniqueId(), KeyType.PERSONAL);
         if (keys.isEmpty()) {
             message.send(sender, "treasuryapi.personal.list.empty");
             return;
@@ -50,35 +46,17 @@ public class PersonalKeyHandler {
         message.send(sender, "treasuryapi.personal.list.header",
                 "count", String.valueOf(keys.size()));
         for (ApiKey key : keys) {
-            String status = key.isRevoked() ? "Revoked" : "Active";
-            String expiry = key.isRevoked() ? "—" : EXP_FMT.format(key.getExpiresAt());
             message.send(sender, "treasuryapi.personal.list.entry",
                     "keyId", String.valueOf(key.getKeyId()),
                     "accountId", String.valueOf(key.getAccountId()),
-                    "status", status,
-                    "expiry", expiry);
+                    "status", ApiKeyView.status(key, message),
+                    "expiry", ApiKeyView.expiry(key, message));
         }
-    }
-
-    public void doExport(Player sender, int keyId) {
-        ApiKey key = apiKeyService.getKey(keyId);
-        if (key == null || !"PERSONAL".equals(key.getKeyType())) {
-            message.send(sender, "treasuryapi.personal.export.not-found");
-            return;
-        }
-        if (!key.getOwnerUuid().equals(sender.getUniqueId())) {
-            message.send(sender, "treasuryapi.personal.export.no-access");
-            return;
-        }
-        String url = apiKeyService.exportToken(keyId);
-        message.send(sender, "treasuryapi.personal.export.success",
-                "keyId", String.valueOf(keyId),
-                "url", url);
     }
 
     public void doReissue(Player sender, int keyId) {
         ApiKey key = apiKeyService.getKey(keyId);
-        if (key == null || !"PERSONAL".equals(key.getKeyType())) {
+        if (key == null || key.getKeyType() != KeyType.PERSONAL) {
             message.send(sender, "treasuryapi.personal.reissue.not-found");
             return;
         }
@@ -86,7 +64,16 @@ public class PersonalKeyHandler {
             message.send(sender, "treasuryapi.personal.reissue.no-access");
             return;
         }
-        ApiKey updated = apiKeyService.reissueKey(keyId);
+        // Revocation is terminal (ADT-110); the service rejects reissue of a
+        // revoked key. Pre-check so the owner gets a clear message rather than an
+        // error from the thrown exception.
+        if (key.isRevoked()) {
+            message.send(sender, "treasuryapi.personal.reissue.revoked");
+            return;
+        }
+        // The service re-checks ownership as the authoritative boundary (pa/0005);
+        // these handler branches are the fast path for a clear, key-specific message.
+        ApiKey updated = apiKeyService.reissueKey(keyId, sender.getUniqueId());
         message.send(sender, "treasuryapi.personal.reissue.success",
                 "keyId", String.valueOf(updated.getKeyId()),
                 "token", updated.getToken());
@@ -94,7 +81,7 @@ public class PersonalKeyHandler {
 
     public void doRevoke(Player sender, int keyId) {
         ApiKey key = apiKeyService.getKey(keyId);
-        if (key == null || !"PERSONAL".equals(key.getKeyType())) {
+        if (key == null || key.getKeyType() != KeyType.PERSONAL) {
             message.send(sender, "treasuryapi.personal.revoke.not-found");
             return;
         }
@@ -102,7 +89,7 @@ public class PersonalKeyHandler {
             message.send(sender, "treasuryapi.personal.revoke.no-access");
             return;
         }
-        apiKeyService.revokeKey(keyId);
+        apiKeyService.revokeKey(keyId, sender.getUniqueId());
         message.send(sender, "treasuryapi.personal.revoke.success",
                 "keyId", String.valueOf(keyId));
     }

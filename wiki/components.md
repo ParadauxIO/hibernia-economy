@@ -46,17 +46,105 @@ types go here, never in the plugin root.**
 Firms/companies: creation, staff with custom roles and permissions, firm accounts,
 sales, and per-firm tax — all money via `TreasuryApi`.
 
+Firm creation takes a per-proprietor row lock in `firm_creation_lock` before any
+validation queries and holds it through transaction commit/rollback. Concurrent
+creates for the same owner (including across servers) therefore re-check the
+ownership limit and cooldown after the previous create finishes. Different owners
+can create concurrently; firm-name uniqueness remains enforced by the existing
+unique index. Lock rows are retained after disband and must not be pruned while
+writers are active. Deploy Flyway V34 before the updated Business plugin.
+
+Firm creation is **not crash-safe across Business and Treasury** (ADT-92).
+The firm, default roles/permissions, account link, and default-account update
+share one Business transaction. Roles/permissions are written before Treasury
+creation to reduce the orphan window, but Treasury commits independently. A
+crash after Treasury commits its account and before Business commits can leave
+an active BUSINESS account (possibly with owner membership/authorization) with
+no firm or account link. Runtime exceptions inside the guarded creation block
+attempt to archive the account; process death and a later transaction-commit
+failure bypass that compensation. An archive failure is logged as requiring
+manual cleanup.
+
+The membership sweep below only visits committed links and **cannot repair these
+creation orphans**. After an interrupted create, an operator must investigate
+Treasury BUSINESS accounts against persisted Business links while firm creation
+is quiescent across servers. An absent link during a running create is not proof
+of an orphan. Verify ownership and balance before cleanup through Treasury's
+supported operations; preserve funds and ledger history. Retrying creation does
+not discover or re-link the earlier account. Durable provisioning/retry support
+or a dedicated orphan reconciliation API remains future work.
+
 - **Stack:** same shape as Treasury (Paper · Guice · MyBatis · HikariCP ·
   `hibernia-framework`). Libs relocated under `io.paradaux.business.libs.*`.
 - **Layering:** `commands/` → `services/`(+`impl/`) → `mappers/`.
 - **Depends on** `treasury-api` (compile/runtime) to move money, and registers its
   own API as a Bukkit service.
+- **PlaceholderAPI** is optional. The bundled `business` expansion resolves
+  `%business_firm_balance_<name>%` through `BusinessApi.firms()` and
+  `FirmApi.getTotalBalance`, without direct mapper access. It persists across PAPI
+  reloads and unregisters on disable. `:business:testWithoutPlaceholderApi` checks
+  startup wiring with the optional API removed from the runtime classpath.
+
+Firm-account membership is derived from the proprietor and current staff roles;
+**Treasury is the access authority**. Business reconciles through Treasury's API,
+whose individual mutations commit independently. The per-firm lock serialises
+reconciliation only within one Business JVM; it provides no cross-process lock or
+cross-plugin transaction.
+
+`ReconcileAccountMembersJob` repairs membership asynchronously at startup and
+every 1,200 ticks (about one minute). Each pass uses persisted live firm-account
+links as its recovery worklist and re-reads roles and Treasury membership. This
+full sweep deliberately replaces an exception-time `needs-resync` marker: it also
+covers crashes before a marker could be saved, and Business transaction rollbacks
+after Treasury has committed. A failed account is logged with its firm/account IDs
+and does not block other accounts; it remains eligible on subsequent passes and
+after restarts. Removed links and archived firms are skipped. Already-correct
+membership produces no writes. Sweep cost scales with linked accounts and staff;
+overlapping scheduled passes are skipped.
+
+Recovery is eventual: stale access can persist until a successful pass, longer
+during an outage. Immediate command-triggered sync still reports failures to the
+caller. No Treasury API or schema upgrade is required for this repair.
 
 ### `business/business-api/` — public Business API (library jar)
 
 `FirmApi`, `StaffApi`, `RolePermission`, and firm model types. Published as
 `io.paradaux:business-api`. Consumed by ChestShop (and anything else that needs to
 route money to a firm or check a staff permission).
+
+Account resolution (PAR-14) stays with the API that owns the relationship:
+
+| Lookup | API |
+|---|---|
+| Player UUID → personal account ID | `treasury.getAccountByUUID(uuid)`, then `getAccountId()` (null if absent) |
+| Player UUID → accounts by type | `treasury.getAccountsByTypeAndOwner(AccountType.BUSINESS, uuid)` |
+| Account ID → player owner UUID | `treasury.getAccountById(id)`, then `getOwnerUuid()` (check for null account) |
+| Firm ID → all linked account IDs | `business.firms().getAccountIds(firmId)` |
+| Firm ID → configured default account ID | `business.firms().getDefaultAccountId(firmId)` |
+| Account ID → firm ID / firm | `business.firms().getFirmIdByAccountId(id)` / `getFirmByAccountId(id)` |
+
+Firm lookups exclude removed links but include archived firms' remaining links
+(e.g. an incomplete disband). The list is empty for unknown/unlinked firms; singular
+lookups return null when absent. Default lookup does not select a fallback account.
+These are relationship reads, not permission or Treasury account-status checks.
+A proprietor can own several firms, so filtering Treasury accounts by owner is not
+a substitute for firm lookup. None of these reads creates an account; use
+`resolveOrCreatePersonal` only when creation and starting-balance funding are intended.
+Upgrade the Business provider with the API: older implementations remain compatible,
+but the default `getAccountIds` implementation throws `UnsupportedOperationException`
+rather than silently reporting an incomplete list. No migration is needed.
+
+`FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's
+shop alias, or null. Business owns alias persistence and proprietor-only management;
+ChestShop resolves `B:@alias` through this API, checks normal shop access, and keeps
+that alias as the account's sign name. Its synthetic UUID still encodes the Treasury
+account ID for payments. Aliases contain 1–12 ASCII letters only. Changing or clearing
+an alias stops old signs from resolving; `firm_shop_alias_reservations` permanently
+reserves each used name to its original account, so old signs cannot be redirected.
+Reservation and current-alias updates share a transaction. Aliases are case-insensitive;
+archived firms/accounts and removed links do not resolve. Apply migration
+`V35__business_shop_aliases.sql` before deploying the updated Business and ChestShop
+plugins together.
 
 ---
 
@@ -106,7 +194,7 @@ Treasury and Business so a sale can pay a player or a firm.
 - **Vendored fork:** DC-specific changes are expected; it's built here, not pulled
   from upstream.
 - **Single Gradle module** (`plugin/`) compiled against the **Paper 1.21.11** API,
-  shaded straight to **`ChestShop.jar`**. (Originally ported from Maven with the
+  shaded straight to **`chestshop-<version>.jar`**. (Originally ported from Maven with the
   upstream multi-version adapter matrix — a 1.13.2-baseline core + seven
   `Spigot_*`/`Paper_*` adapter modules + an `assemble` module — but since DC runs
   one modern version, those were folded into the core and the extra modules removed.)
@@ -158,3 +246,51 @@ locally:
 ```bash
 git submodule update --init --recursive
 ```
+
+### Taxation dashboard
+
+`/economy/taxation` is a public SSR aggregate view (PAR-92). The service caches
+7/30-day results with the explorer's 60-second SWR cache. `lib/sql/taxation.ts`
+counts government posting credits using the actual writer plugin/message pairs:
+`treasury` + `Personal balance tax (` / `Income tax on deposit from `,
+`business` + `Weekly Corporate Balance Tax`, and `ChestShop` + `ChestShop sales tax (`.
+The Tax API's `taxType` is not stored in the ledger. Fine collections and refunds
+are linked through `government_fines.txn_id` and `revoke_txn_id`; each posting is
+counted once even with duplicate historical fine records. Refunds belong to their
+settlement period. The public result has no payer IDs, transaction IDs or reasons.
+
+Live rates use the public PAR-80 REST contract at `/api/v1/config/tax`, via
+`TREASURY_API_BASE_URL` (with or without its `/api/v1` suffix). No admin token is
+sent. Rate reads have a three-second timeout and a separate 60-second SWR cache;
+an absent endpoint, invalid section or failed request renders that section as
+unavailable without breaking ledger aggregates. No migration or PAR-80 merge is
+required for the dashboard; published rates appear when that endpoint is deployed.
+
+### Treasury reload concurrency
+
+The injected salary, balance-tax and source-income-tax configuration objects are
+stable holders of immutable `Snapshot` records. Parse with `prepareReload` before
+publishing; retain `snapshot()` once per operation when reading multiple fields.
+`ConfigReloadServiceImpl` validates YAML and prepares all three candidates before
+publishing any. Invalid manual settings leave all three previous snapshots intact.
+The salary interval remains pinned to the startup timer. `SalaryService.Payroll`
+carries the funding account alongside the payment plan across the async boundary.
+Tax destination caches include the account name so a reload cannot reuse an ID
+resolved for a different configured account.
+
+The annotation-driven framework components still use the existing in-place reload
+for Guice compatibility; their fields are volatile for visibility. They do not
+provide a multi-field snapshot or a transaction spanning messages, logging and all
+configuration components. The snapshot guarantee above is per manual configuration.
+
+### Explorer timestamps (PAR-40)
+
+Render event instants with `components/LocalTimestamp.tsx` in both server and
+client components. It uses a UTC server/hydration snapshot, then detects the
+browser's IANA timezone without a cookie or request-specific layout. Pass a
+`Date` or ISO timestamp with an explicit offset. `fmtTs` defaults to UTC and
+accepts an explicit timezone for pure formatting.
+
+Daily SQL aggregates remain UTC buckets: `fmtDate` and activity calendar date
+arithmetic must stay in UTC, rather than shifting already aggregated dates
+into the browser's zone. Daily charts label this distinction.

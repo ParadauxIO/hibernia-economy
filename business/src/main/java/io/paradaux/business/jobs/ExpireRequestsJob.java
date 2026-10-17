@@ -4,7 +4,7 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import io.paradaux.business.Business;
-import io.paradaux.business.mappers.FirmRequestMapper;
+import io.paradaux.business.services.FirmRequestService;
 import org.bukkit.Bukkit;
 
 @Slf4j
@@ -15,21 +15,22 @@ public class ExpireRequestsJob implements Runnable {
     private static final long JOB_INTERNAL_TICKS = 30L * 60L * 20L;
 
     private final Business business;
-    private final FirmRequestMapper requests;
+    private final FirmRequestService requests;
 
     @Inject
-    public ExpireRequestsJob(Business business, FirmRequestMapper requests) {
+    public ExpireRequestsJob(Business business, FirmRequestService requests) {
         this.business = business;
         this.requests = requests;
     }
 
     @Override
     public void run() {
-        int transfers = requests.expireStaleTransfers();
-        int invites = requests.expireStaleInvites();
+        // Go through the service, not the mapper — only services may touch mappers
+        // (plugin-architecture/0005).
+        FirmRequestService.ExpiryResult result = requests.expireStale();
 
-        if (transfers > 0 || invites > 0) {
-            log.info("[Business] Expired {} transfers and {} invites.", transfers, invites);
+        if (result.transfers() > 0 || result.invites() > 0) {
+            log.info("[Business] Expired {} transfers and {} invites.", result.transfers(), result.invites());
         }
     }
 

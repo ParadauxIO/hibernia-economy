@@ -23,7 +23,11 @@ mybatis:
   type-handlers-package: io.paradaux.treasuryrestapi.mybatis
 
 api:
-  jwt-secret: change-me-please-use-a-long-random-secret-key
+  # Prefer "base64:<openssl rand -base64 48>" (random key material) over a
+  # passphrase, and keep it byte-identical to the plugin's api.jwt-secret. A
+  # plain passphrase uses a deprecated legacy SHA-256 KDF (warns). (ADT-23)
+  # The default is a placeholder the app refuses to start with; set JWT_SECRET.
+  jwt-secret: ${JWT_SECRET:change-me-please-use-a-long-random-secret-key}
 
 # Per-issuer API rate limiting. With redis-host unset (local/dev) the limiter
 # uses an in-memory Caffeine backend; set it to share counters across pods via
@@ -47,10 +51,15 @@ treasury:
     settlement-lag-seconds: ${WEBHOOK_SETTLEMENT_LAG_SECONDS:3}
     ingest-batch: ${WEBHOOK_INGEST_BATCH:500}
     delivery-batch: ${WEBHOOK_DELIVERY_BATCH:100}
+    delivery-concurrency: ${WEBHOOK_DELIVERY_CONCURRENCY:8}
+    connect-timeout-ms: ${WEBHOOK_CONNECT_TIMEOUT_MS:5000}
     http-timeout-ms: ${WEBHOOK_HTTP_TIMEOUT_MS:10000}
     max-attempts: ${WEBHOOK_MAX_ATTEMPTS:5}
+    retry-base-seconds: ${WEBHOOK_RETRY_BASE_SECONDS:30}
+    retry-max-seconds: ${WEBHOOK_RETRY_MAX_SECONDS:3600}
     failure-threshold: ${WEBHOOK_FAILURE_THRESHOLD:15}
     max-per-key: ${WEBHOOK_MAX_PER_KEY:20}
+    lock-ttl-ms: ${WEBHOOK_LOCK_TTL_MS:15000}
 
 management:
   endpoints:

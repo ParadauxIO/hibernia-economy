@@ -1,6 +1,7 @@
 package io.paradaux.treasury.api.exceptions;
 
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Thrown by {@code issueFine} when the targeted player's account doesn't have
@@ -9,8 +10,9 @@ import java.util.UUID;
  * scraping the message text.
  */
 public class InsufficientFineFundsException extends TreasuryException {
-    private final UUID playerUuid;
-    private final Integer debtorAccountId;
+    private static final long serialVersionUID = 1L;
+    private final @Nullable UUID playerUuid;
+    private final @Nullable Integer debtorAccountId;
 
     public InsufficientFineFundsException(UUID playerUuid, Throwable cause) {
         super("Player " + playerUuid + " has insufficient funds to cover the fine", cause);
@@ -26,8 +28,12 @@ public class InsufficientFineFundsException extends TreasuryException {
     }
 
     /** The fined player, or {@code null} if the debtor was an account (firm fine). */
-    public UUID getPlayerUuid() { return playerUuid; }
+    public @Nullable UUID getPlayerUuid() {
+        return playerUuid;
+    }
 
     /** The debited account, or {@code null} if the debtor was a player. */
-    public Integer getDebtorAccountId() { return debtorAccountId; }
+    public @Nullable Integer getDebtorAccountId() {
+        return debtorAccountId;
+    }
 }

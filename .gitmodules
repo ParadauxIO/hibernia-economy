@@ -1,3 +1,6 @@
 [submodule "hibernia-framework"]
 	path = hibernia-framework
 	url = https://github.com/ParadauxIO/hibernia-framework.git
+[submodule "realty"]
+	path = realty
+	url = https://github.com/MCCitiesNetwork/realty.git

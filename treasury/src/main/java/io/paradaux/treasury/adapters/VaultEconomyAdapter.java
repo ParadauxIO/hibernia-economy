@@ -1,8 +1,6 @@
 package io.paradaux.treasury.adapters;
 
 import com.google.inject.Inject;
-import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.tax.TaxResult;
@@ -10,13 +8,6 @@ import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.utils.CallingPluginDetector;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import net.milkbowl.vault.economy.Economy;
-import net.milkbowl.vault.economy.EconomyResponse;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -24,6 +15,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
+import net.milkbowl.vault.economy.Economy;
+import net.milkbowl.vault.economy.EconomyResponse;
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Full Vault Economy implementation that bridges to the domain services.
@@ -52,10 +51,11 @@ public class VaultEconomyAdapter implements Economy {
     private volatile boolean enabled = true;
 
     @Inject
-    public VaultEconomyAdapter(AccountService accountService,
-                               LedgerService ledgerService,
-                               EconomyConfiguration economyConfiguration,
-                               TaxApi taxApi) {
+    public VaultEconomyAdapter(
+            AccountService accountService,
+            LedgerService ledgerService,
+            EconomyConfiguration economyConfiguration,
+            TaxApi taxApi) {
         this.accountService = Objects.requireNonNull(accountService, "accountService");
         this.ledgerService = Objects.requireNonNull(ledgerService, "ledgerService");
         this.economyConfiguration = Objects.requireNonNull(economyConfiguration, "economyConfiguration");
@@ -71,10 +71,25 @@ public class VaultEconomyAdapter implements Economy {
 
     /* ========================= Economy identity / config ========================= */
 
-    @Override public boolean isEnabled() { return enabled; }
-    @Override public @NotNull String getName() { return NAME; }
-    @Override public boolean hasBankSupport() { return false; }
-    @Override public int fractionalDigits() { return FRACTIONAL_DIGITS; }
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    @Override
+    public @NotNull String getName() {
+        return NAME;
+    }
+
+    @Override
+    public boolean hasBankSupport() {
+        return false;
+    }
+
+    @Override
+    public int fractionalDigits() {
+        return FRACTIONAL_DIGITS;
+    }
 
     @Override
     public @NotNull String format(double amount) {
@@ -82,15 +97,37 @@ public class VaultEconomyAdapter implements Economy {
         return formatter.get().format(bd);
     }
 
-    @Override public @NotNull String currencyNamePlural() { return economyConfiguration.getCurrencyNamePlural(); }
-    @Override public @NotNull String currencyNameSingular() { return economyConfiguration.getCurrencyNameSingular(); }
+    @Override
+    public @NotNull String currencyNamePlural() {
+        return economyConfiguration.getCurrencyNamePlural();
+    }
+
+    @Override
+    public @NotNull String currencyNameSingular() {
+        return economyConfiguration.getCurrencyNameSingular();
+    }
 
     /* ========================= Account existence ========================= */
 
-    @Override public boolean hasAccount(@NotNull String playerName) { return hasAccount(resolveUuid(playerName)); }
-    @Override public boolean hasAccount(@NotNull OfflinePlayer player) { return hasAccount(player.getUniqueId()); }
-    @Override public boolean hasAccount(@NotNull String playerName, @NotNull String worldName) { return hasAccount(playerName); }
-    @Override public boolean hasAccount(@NotNull OfflinePlayer player, @NotNull String worldName) { return hasAccount(player); }
+    @Override
+    public boolean hasAccount(@NotNull String playerName) {
+        return hasAccount(resolveUuid(playerName));
+    }
+
+    @Override
+    public boolean hasAccount(@NotNull OfflinePlayer player) {
+        return hasAccount(player.getUniqueId());
+    }
+
+    @Override
+    public boolean hasAccount(@NotNull String playerName, @NotNull String worldName) {
+        return hasAccount(playerName);
+    }
+
+    @Override
+    public boolean hasAccount(@NotNull OfflinePlayer player, @NotNull String worldName) {
+        return hasAccount(player);
+    }
 
     private boolean hasAccount(@Nullable UUID uuid) {
         if (uuid == null) return false;
@@ -104,10 +141,25 @@ public class VaultEconomyAdapter implements Economy {
 
     /* ========================= Balance ========================= */
 
-    @Override public double getBalance(@NotNull String playerName) { return getBalance(resolveUuid(playerName)); }
-    @Override public double getBalance(@NotNull OfflinePlayer player) { return getBalance(player.getUniqueId()); }
-    @Override public double getBalance(@NotNull String playerName, @NotNull String world) { return getBalance(playerName); }
-    @Override public double getBalance(@NotNull OfflinePlayer player, @NotNull String world) { return getBalance(player); }
+    @Override
+    public double getBalance(@NotNull String playerName) {
+        return getBalance(resolveUuid(playerName));
+    }
+
+    @Override
+    public double getBalance(@NotNull OfflinePlayer player) {
+        return getBalance(player.getUniqueId());
+    }
+
+    @Override
+    public double getBalance(@NotNull String playerName, @NotNull String world) {
+        return getBalance(playerName);
+    }
+
+    @Override
+    public double getBalance(@NotNull OfflinePlayer player, @NotNull String world) {
+        return getBalance(player);
+    }
 
     private double getBalance(@Nullable UUID uuid) {
         if (uuid == null) return 0.0D;
@@ -120,95 +172,261 @@ public class VaultEconomyAdapter implements Economy {
             accountId = accountService.findPersonalAccountId(uuid);
             if (accountId == null) return 0.0D;
         }
-        return accountService.getBalanceReadOnly(accountId)
-                .setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN).doubleValue();
+        return accountService
+                .getBalanceReadOnly(accountId)
+                .setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN)
+                .doubleValue();
     }
 
     /* ========================= Has funds ========================= */
 
-    @Override public boolean has(@NotNull String playerName, double amount) { return has(resolveUuid(playerName), amount); }
-    @Override public boolean has(@NotNull OfflinePlayer player, double amount) { return has(player.getUniqueId(), amount); }
-    @Override public boolean has(@NotNull String playerName, @NotNull String worldName, double amount) { return has(playerName, amount); }
-    @Override public boolean has(@NotNull OfflinePlayer player, @NotNull String worldName, double amount) { return has(player, amount); }
+    @Override
+    public boolean has(@NotNull String playerName, double amount) {
+        return has(resolveUuid(playerName), amount);
+    }
+
+    @Override
+    public boolean has(@NotNull OfflinePlayer player, double amount) {
+        return has(player.getUniqueId(), amount);
+    }
+
+    @Override
+    public boolean has(@NotNull String playerName, @NotNull String worldName, double amount) {
+        return has(playerName, amount);
+    }
+
+    @Override
+    public boolean has(@NotNull OfflinePlayer player, @NotNull String worldName, double amount) {
+        return has(player, amount);
+    }
 
     private boolean has(@Nullable UUID uuid, double amount) {
-        if (uuid == null) return false;
+        if (uuid == null || !Double.isFinite(amount)) return false;
         BigDecimal need = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
         return BigDecimal.valueOf(getBalance(uuid)).compareTo(need) >= 0;
     }
 
     /* ========================= Withdraw ========================= */
 
-    @Override public @NotNull EconomyResponse withdrawPlayer(@NotNull String playerName, double amount) { return withdrawPlayer(resolveOffline(playerName), amount); }
-    @Override public @NotNull EconomyResponse withdrawPlayer(@NotNull OfflinePlayer player, double amount) { return withdraw(player.getUniqueId(), amount, null); }
-    @Override public @NotNull EconomyResponse withdrawPlayer(@NotNull String playerName, @NotNull String worldName, double amount) { return withdrawPlayer(playerName, amount); }
-    @Override public @NotNull EconomyResponse withdrawPlayer(@NotNull OfflinePlayer player, @NotNull String worldName, double amount) { return withdrawPlayer(player, amount); }
+    @Override
+    public @NotNull EconomyResponse withdrawPlayer(@NotNull String playerName, double amount) {
+        return withdrawPlayer(resolveOffline(playerName), amount);
+    }
+
+    @Override
+    public @NotNull EconomyResponse withdrawPlayer(@NotNull OfflinePlayer player, double amount) {
+        return withdraw(player.getUniqueId(), amount, null);
+    }
+
+    @Override
+    public @NotNull EconomyResponse withdrawPlayer(
+            @NotNull String playerName, @NotNull String worldName, double amount) {
+        return withdrawPlayer(playerName, amount);
+    }
+
+    @Override
+    public @NotNull EconomyResponse withdrawPlayer(
+            @NotNull OfflinePlayer player, @NotNull String worldName, double amount) {
+        return withdrawPlayer(player, amount);
+    }
 
     private @NotNull EconomyResponse withdraw(@Nullable UUID playerUuid, double amount, @Nullable String memo) {
         if (playerUuid == null) return failure(amount, 0D, "Unknown player");
-        if (amount < 0.01D) return failure(amount, getBalance(playerUuid), "Amount must be at least 0.01");
+        if (!isPayable(amount)) return failure(amount, balanceForResponse(playerUuid), "Amount must be at least 0.01");
         String pluginKey = resolveCallingPluginKey();
         try {
             BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
-            ledgerService.vaultWithdraw(pluginKey, playerUuid, bd,
+            ledgerService.vaultWithdraw(
+                    pluginKey,
+                    playerUuid,
+                    bd,
                     memo != null ? memo : "Vault withdraw (" + pluginKey + ")",
-                    TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, null);
-            return success(amount, getBalance(playerUuid), "OK");
+                    TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                    null,
+                    null);
         } catch (Exception e) {
-            return failure(amount, getBalance(playerUuid), e.getMessage());
+            return failure(amount, balanceForResponse(playerUuid), e.getMessage());
         }
+        // Committed: like a deposit, the outcome must be reported truthfully even if
+        // the follow-up balance read fails.
+        return success(amount, balanceForResponse(playerUuid), "OK");
     }
 
     /* ========================= Deposit ========================= */
 
-    @Override public @NotNull EconomyResponse depositPlayer(@NotNull String playerName, double amount) { return depositPlayer(Objects.requireNonNull(resolveOffline(playerName)), amount); }
-    @Override public @NotNull EconomyResponse depositPlayer(@NotNull OfflinePlayer player, double amount) { return deposit(player.getUniqueId(), amount, null); }
-    @Override public @NotNull EconomyResponse depositPlayer(@NotNull String playerName, @NotNull String worldName, double amount) { return depositPlayer(playerName, amount); }
-    @Override public @NotNull EconomyResponse depositPlayer(@NotNull OfflinePlayer player, @NotNull String worldName, double amount) { return depositPlayer(player, amount); }
+    @Override
+    public @NotNull EconomyResponse depositPlayer(@NotNull String playerName, double amount) {
+        return depositPlayer(Objects.requireNonNull(resolveOffline(playerName)), amount);
+    }
+
+    @Override
+    public @NotNull EconomyResponse depositPlayer(@NotNull OfflinePlayer player, double amount) {
+        return deposit(player.getUniqueId(), amount, null);
+    }
+
+    @Override
+    public @NotNull EconomyResponse depositPlayer(
+            @NotNull String playerName, @NotNull String worldName, double amount) {
+        return depositPlayer(playerName, amount);
+    }
+
+    @Override
+    public @NotNull EconomyResponse depositPlayer(
+            @NotNull OfflinePlayer player, @NotNull String worldName, double amount) {
+        return depositPlayer(player, amount);
+    }
 
     private @NotNull EconomyResponse deposit(@Nullable UUID playerUuid, double amount, @Nullable String memo) {
         if (playerUuid == null) return failure(amount, 0D, "Unknown player");
-        if (amount < 0.01D) return failure(amount, getBalance(playerUuid), "Amount must be at least 0.01");
+        if (!isPayable(amount)) return failure(amount, balanceForResponse(playerUuid), "Amount must be at least 0.01");
         String pluginKey = resolveCallingPluginKey();
-        try {
-            BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
-            ledgerService.vaultDeposit(pluginKey, playerUuid, bd,
-                    memo != null ? memo : "Vault deposit (" + pluginKey + ")",
-                    TreasuryConstants.VIRTUAL_TREASURY_INITIATOR, null, null);
+        BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
 
-            // Apply source income tax after a successful deposit.
+        // The Vault economy API carries no caller-supplied idempotency token, so
+        // deposits are intentionally at-least-once: two identical deposits are a
+        // legitimate pattern, not a duplicate, so we deliberately pass no dedupKey.
+        // The critical invariant is therefore to report the deposit TRUTHFULLY — a
+        // committed deposit must never return FAILURE, or an at-least-once Vault
+        // caller will retry and double-credit (money creation, ADT-8).
+        try {
+            ledgerService.vaultDeposit(
+                    pluginKey,
+                    playerUuid,
+                    bd,
+                    memo != null ? memo : "Vault deposit (" + pluginKey + ")",
+                    TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                    null,
+                    null);
+        } catch (Exception e) {
+            return failure(amount, balanceForResponse(playerUuid), e.getMessage());
+        }
+
+        // Source income tax runs only after the deposit has committed and must not
+        // affect the deposit's reported outcome. It returns its own result and logs
+        // its own failures, so neither a Failed result nor a thrown exception can
+        // turn a successful deposit into a FAILURE (which previously triggered the
+        // double-credit retry above).
+        try {
             TaxResult taxResult = taxApi.applySourceIncomeTax(playerUuid, bd, pluginKey);
             if (taxResult instanceof TaxResult.Failed f) {
-                log.warn("Source income tax failed for player {} (plugin={}, amount={}): {}",
-                        playerUuid, pluginKey, bd, f.errorMessage());
+                log.warn(
+                        "Source income tax failed for player {} (plugin={}, amount={}): {}",
+                        playerUuid,
+                        pluginKey,
+                        bd,
+                        f.errorMessage());
             }
-
-            return success(amount, getBalance(playerUuid), "OK");
         } catch (Exception e) {
-            return failure(amount, getBalance(playerUuid), e.getMessage());
+            log.warn(
+                    "Source income tax threw for player {} (plugin={}, amount={}) after a committed deposit: {}",
+                    playerUuid,
+                    pluginKey,
+                    bd,
+                    e.getMessage());
+        }
+
+        // The balance read is informational. It runs after the commit, so it must not
+        // be able to throw either: an exception here would reach the Vault caller as
+        // a failed deposit and invite the same double-credit retry.
+        return success(amount, balanceForResponse(playerUuid), "OK");
+    }
+
+    /**
+     * The balance to report in an {@link EconomyResponse}. Never throws — the money
+     * movement it accompanies has already committed (or already failed), and a
+     * failed read must not change that reported outcome. Falls back to 0 when the
+     * balance can't be read.
+     */
+    private double balanceForResponse(@NotNull UUID playerUuid) {
+        try {
+            return getBalance(playerUuid);
+        } catch (Exception e) {
+            log.warn(
+                    "Balance read failed for player {} while building a Vault response: {}",
+                    playerUuid,
+                    e.getMessage());
+            return 0.0D;
         }
     }
 
     /* ========================= Bank (not supported) ========================= */
 
-    @Override public @NotNull EconomyResponse createBank(@NotNull String name, @NotNull String player) { return notSupported(); }
-    @Override public @NotNull EconomyResponse createBank(@NotNull String name, @NotNull OfflinePlayer player) { return notSupported(); }
-    @Override public @NotNull EconomyResponse deleteBank(@NotNull String name) { return notSupported(); }
-    @Override public @NotNull EconomyResponse bankBalance(@NotNull String name) { return notSupported(); }
-    @Override public @NotNull EconomyResponse bankHas(@NotNull String name, double amount) { return notSupported(); }
-    @Override public @NotNull EconomyResponse bankWithdraw(@NotNull String name, double amount) { return notSupported(); }
-    @Override public @NotNull EconomyResponse bankDeposit(@NotNull String name, double amount) { return notSupported(); }
-    @Override public @NotNull EconomyResponse isBankOwner(@NotNull String name, @NotNull String playerName) { return notSupported(); }
-    @Override public @NotNull EconomyResponse isBankOwner(@NotNull String name, @NotNull OfflinePlayer player) { return notSupported(); }
-    @Override public @NotNull EconomyResponse isBankMember(@NotNull String name, @NotNull String playerName) { return notSupported(); }
-    @Override public @NotNull EconomyResponse isBankMember(@NotNull String name, @NotNull OfflinePlayer player) { return notSupported(); }
-    @Override public @NotNull List<String> getBanks() { return Collections.emptyList(); }
+    @Override
+    public @NotNull EconomyResponse createBank(@NotNull String name, @NotNull String player) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse createBank(@NotNull String name, @NotNull OfflinePlayer player) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse deleteBank(@NotNull String name) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse bankBalance(@NotNull String name) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse bankHas(@NotNull String name, double amount) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse bankWithdraw(@NotNull String name, double amount) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse bankDeposit(@NotNull String name, double amount) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse isBankOwner(@NotNull String name, @NotNull String playerName) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse isBankOwner(@NotNull String name, @NotNull OfflinePlayer player) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse isBankMember(@NotNull String name, @NotNull String playerName) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull EconomyResponse isBankMember(@NotNull String name, @NotNull OfflinePlayer player) {
+        return notSupported();
+    }
+
+    @Override
+    public @NotNull List<String> getBanks() {
+        return Collections.emptyList();
+    }
 
     /* ========================= Create player accounts ========================= */
 
-    @Override public boolean createPlayerAccount(@NotNull String playerName) { return createPlayerAccount(Objects.requireNonNull(resolveOffline(playerName))); }
-    @Override public boolean createPlayerAccount(@NotNull String playerName, @NotNull String worldName) { return createPlayerAccount(playerName); }
-    @Override public boolean createPlayerAccount(@NotNull OfflinePlayer player, @NotNull String worldName) { return createPlayerAccount(player); }
+    @Override
+    public boolean createPlayerAccount(@NotNull String playerName) {
+        return createPlayerAccount(Objects.requireNonNull(resolveOffline(playerName)));
+    }
+
+    @Override
+    public boolean createPlayerAccount(@NotNull String playerName, @NotNull String worldName) {
+        return createPlayerAccount(playerName);
+    }
+
+    @Override
+    public boolean createPlayerAccount(@NotNull OfflinePlayer player, @NotNull String worldName) {
+        return createPlayerAccount(player);
+    }
 
     @Override
     public boolean createPlayerAccount(@NotNull OfflinePlayer player) {
@@ -239,6 +457,16 @@ public class VaultEconomyAdapter implements Economy {
         }
     }
 
+    /**
+     * At least one cent, and a real number: Vault callers pass doubles, and NaN /
+     * Infinity used to slip past the {@code < 0.01} check (every comparison with
+     * NaN is false) into {@code BigDecimal.valueOf}, which threw straight out of
+     * depositPlayer instead of returning a FAILURE response.
+     */
+    private static boolean isPayable(double amount) {
+        return Double.isFinite(amount) && amount >= 0.01D;
+    }
+
     private static EconomyResponse success(double amount, double balance, String msg) {
         return new EconomyResponse(amount, balance, EconomyResponse.ResponseType.SUCCESS, msg);
     }
@@ -248,7 +476,8 @@ public class VaultEconomyAdapter implements Economy {
     }
 
     private static EconomyResponse notSupported() {
-        return new EconomyResponse(0D, 0D, EconomyResponse.ResponseType.NOT_IMPLEMENTED, "Bank operations are not supported");
+        return new EconomyResponse(
+                0D, 0D, EconomyResponse.ResponseType.NOT_IMPLEMENTED, "Bank operations are not supported");
     }
 
     private static String resolveCallingPluginKey() {

@@ -1,48 +1,43 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    java
     jacoco
     id("com.gradleup.shadow")
+    id("io.paradaux.paper-server-conventions")
+    id("io.paradaux.mutation-testing-conventions")
 }
 
 // group + version are set centrally by the root allprojects block (single
 // mono-repo version, 2.3.0-SNAPSHOT, overridable with -Pversion).
+// The JVM toolchain, repositories, resource expansion, base test setup, shaded-jar
+// defaults, and dev-server staging come from io.paradaux.paper-server-conventions.
 description = "Business"
 
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    }
-}
-
 repositories {
-    mavenLocal()
-    mavenCentral()
-    maven {
-        name = "papermc"
-        url = uri("https://repo.papermc.io/repository/maven-public/")
-    }
-    maven("https://oss.sonatype.org/content/groups/public/")
-    maven("https://jitpack.io")
-    maven {
-        name = "ParadauxReleases"
-        url = uri("https://repo.paradaux.io/releases")
-        mavenContent { releasesOnly() }
-    }
-    maven {
-        name = "ParadauxSnapshots"
-        url = uri("https://repo.paradaux.io/snapshots")
-        mavenContent { snapshotsOnly() }
+    maven("https://repo.extendedclip.com/releases/") {
+        content { includeGroup("me.clip") }
     }
 }
 
 dependencies {
+    // Optional server-provided API; never bundle it in the plugin jar.
+    compileOnly("me.clip:placeholderapi:2.12.3") { isTransitive = false }
+    testImplementation("me.clip:placeholderapi:2.12.3") { isTransitive = false }
+
     // Business API subproject (bundled into shadow JAR)
     implementation(project(":business:business-api"))
 
+    // Shared framework-free utilities (balance-tax bracket model, etc.) — bundled
+    // into the shadow JAR (ADT-22, ADT-186).
+    implementation(project(":common"))
+
     // Paper API (provided by server)
     compileOnly(libs.paper.api)
+
+    // CarbonChat API — the server's chat plugin (provided at runtime). Pinned to a
+    // specific 3.0.0-beta because the API churns across betas (PAR-20). compileOnly:
+    // Carbon ships the impl; we only register a channel against its API.
+    compileOnly("de.hexaoxi:carbonchat-api:3.0.0-beta.32")
 
     // Vault API, exclude Bukkit to avoid capability conflict with Paper
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
@@ -80,8 +75,31 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
 
+    // Property-based tests (jqwik runs as a second JUnit Platform engine).
+    testImplementation(libs.jqwik)
+
+    // Shared startup + message-key test-kit. Brings JUnit, Guice, the framework and
+    // MockBukkit transitively (declared `api` there) so the startup test can boot an
+    // in-memory server and drive the real injector without re-declaring them.
+    testImplementation(project(":test-support"))
+
+    // CarbonChat is a compileOnly soft-dep in production (the server provides it at
+    // runtime). It is on the test classpath only so the Carbon-facing glue
+    // (FirmChatChannel / CarbonFirmChat) can be unit-tested against Carbon's types —
+    // NOT because the injector needs it: nothing Guice reflects over may name a
+    // net.draycia.* type, and the testWithoutCarbon task below re-runs the startup
+    // test with this jar stripped from the classpath to prove it.
+    testImplementation("de.hexaoxi:carbonchat-api:3.0.0-beta.32")
+
     // Treasury API + Paper API are compileOnly in production; tests need them too.
     testImplementation(project(":treasury:treasury-api"))
+    // The REAL Treasury implementation (unshaded "thin" jar + its TestServicesModule
+    // fixtures) for the handful of ITs that run business services against it instead
+    // of a Mockito TreasuryApi. No cycle: treasury depends on nothing in business.
+    testImplementation(testFixtures(project(":treasury")))
+    // Treasury's MembershipServiceImpl has an optional LuckPerms setter that Guice must
+    // be able to load even when unbound (see treasury/build.gradle.kts).
+    testImplementation(libs.luckperms.api)
     testImplementation(libs.paper.api)
 
     // Embedded MariaDB for mapper integration tests; same approach Treasury uses.
@@ -112,44 +130,42 @@ tasks.named<Copy>("processTestResources") {
     }
 }
 
+// CarbonChat is only a softdepend (plugin.yml), so the plugin must enable on a server
+// without it. Re-run the startup-shaped tests with carbonchat-api removed from the
+// runtime classpath: if any class Guice reflects over (fields, methods — including
+// synthetic lambda bodies — or constructors) names a net.draycia.* type, building the
+// real injector fails here with NoClassDefFoundError instead of on a production boot.
+val testWithoutCarbon = tasks.register<Test>("testWithoutCarbon") {
+    description = "Runs the startup tests with carbonchat-api absent from the classpath."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath.filter { !it.name.startsWith("carbonchat-api") }
+    useJUnitPlatform()
+    // Selected by class file, not by tag: JUnit discovery would otherwise introspect
+    // every test class, and the ones that mock Carbon types can't load here.
+    include("**/startup/BusinessStartupTest.class", "**/chat/FirmChatWithoutCarbonTest.class")
+    shouldRunAfter(tasks.test)
+}
+
+val testWithoutPlaceholderApi = tasks.register<Test>("testWithoutPlaceholderApi") {
+    description = "Runs startup and optional-hook tests without PlaceholderAPI."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath.filter { !it.name.startsWith("placeholderapi-") }
+    useJUnitPlatform()
+    include("**/startup/BusinessStartupTest.class", "**/integration/BusinessWithoutPlaceholderApiTest.class")
+    shouldRunAfter(tasks.test)
+}
+
 tasks {
-    // Mirror Maven default goal locally
-    defaultTasks("clean", "shadowJar")
-
-    // Keep resource filtering tight to avoid $ expansion issues in YAML like config.yml
-    processResources {
-        filteringCharset = "UTF-8"
-        // Capture at configuration time so the filesMatching action never touches
-        // `project` at execution time (config-cache safe; Gradle 10 forward-compat).
-        val expansions = mapOf("version" to project.version, "name" to project.name,
-                "description" to (project.description ?: ""))
-        filesMatching(listOf("**/*.properties", "plugin.yml", "paper-plugin.yml", "application*.yml")) {
-            // Expands ${...} from these project properties only in these files
-            expand(expansions)
-        }
-    }
-
-    withType<JavaCompile> {
-        options.encoding = "UTF-8"
-        options.release.set(21)
-    }
-
     test {
-        useJUnitPlatform()
-        // Tag-based filtering: gradle test -PskipIT skips the DB-backed integration suite.
-        if (project.hasProperty("skipIT")) {
-            useJUnitPlatform { excludeTags("integration") }
-        }
-        testLogging {
-            events("failed", "skipped")
-            showStandardStreams = false
-            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-        }
+        // Optional-API absence tests run only in their stripped-classpath tasks.
+        useJUnitPlatform { excludeTags("carbon-absent", "placeholderapi-absent") }
         finalizedBy(jacocoTestReport)
     }
 
     check {
-        dependsOn(jacocoTestCoverageVerification)
+        dependsOn(jacocoTestCoverageVerification, testWithoutCarbon, testWithoutPlaceholderApi)
     }
 
     // Bukkit / I/O glue that can't be exercised without a running server.
@@ -163,7 +179,10 @@ tasks {
         "io/paradaux/business/listeners/**",
         "io/paradaux/business/jobs/**",
         "io/paradaux/business/guice/**",
-        "io/paradaux/business/utils/resolvers/**"
+        "io/paradaux/business/integration/**",
+        // CarbonChat-backed employee chat: Bukkit/Carbon glue that can't be
+        // exercised without a running server (same rationale as commands/listeners).
+        "io/paradaux/business/chat/**",
     )
 
     jacocoTestReport {
@@ -173,45 +192,56 @@ tasks {
             html.required.set(true)
         }
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(coverageExcludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
     }
 
     jacocoTestCoverageVerification {
         dependsOn(jacocoTestReport)
         classDirectories.setFrom(
-            files(classDirectories.files.map {
-                fileTree(it) { exclude(coverageExcludes) }
-            })
+            files(
+                classDirectories.files.map {
+                    fileTree(it) { exclude(coverageExcludes) }
+                },
+            ),
         )
+        // A ratchet, not a target: a few points under the measured coverage so a
+        // change that drops tests fails, without pushing anyone to write tests
+        // that only execute lines. Whether those tests would catch a bug is
+        // measured by mutation testing (`pitest`, see below), not by this gate.
+        // Measured 2026-10: LINE 96.9%, BRANCH 90.7% (was a LINE-only 0.95 gate).
         violationRules {
-            // Mirrors Treasury's gate. Adjust upward over time.
             rule {
                 element = "BUNDLE"
                 limit {
                     counter = "LINE"
                     value = "COVEREDRATIO"
-                    minimum = "0.95".toBigDecimal()
+                    minimum = "0.93".toBigDecimal()
+                }
+                limit {
+                    counter = "BRANCH"
+                    value = "COVEREDRATIO"
+                    minimum = "0.87".toBigDecimal()
                 }
             }
         }
     }
 
-    // Produce a single shaded jar without the "-all" classifier
+    // Project-specific shaded-lib relocations. archiveClassifier + mergeServiceFiles
+    // come from io.paradaux.paper-server-conventions.
     withType<ShadowJar> {
         val root = "io.paradaux.business.libs"
 
         relocate("com.google.inject", "$root.guice")
-        relocate("org.aopalliance",   "$root.org.aopalliance")
-        relocate("org.mybatis",       "$root.mybatis")
+        relocate("org.aopalliance", "$root.org.aopalliance")
+        relocate("org.mybatis", "$root.mybatis")
         relocate("com.zaxxer.hikari", "$root.hikari")
-        relocate("org.mariadb",       "$root.mariadb")
-        relocate("org.reflections",   "$root.reflections")
-
-        mergeServiceFiles()
-        archiveClassifier.set("")
+        relocate("org.mariadb", "$root.mariadb")
+        relocate("org.reflections", "$root.reflections")
     }
 }
 
@@ -219,51 +249,33 @@ jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
 
-val isCi = project.hasProperty("ci")
-
-val copyPlugin = tasks.register<Copy>("copyPlugin") {
-    // Both :jar and :shadowJar write to build/libs/<name>.jar by default;
-    // Gradle 8.11 strict-mode requires declaring deps on every task whose
-    // output we read.
-    dependsOn(tasks.named("shadowJar"), tasks.named("jar"))
-    from(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
-    into(layout.projectDirectory.dir("../../server/plugins"))
-    onlyIf { !isCi } // don’t run on CI
+// Mutation testing (`./gradlew :business:pitest`; not part of `check`). Scoped to
+// the logic layer the jacoco gate measures — services (firm finance, balance tax,
+// roles/staff/requests), the public BusinessApi and the validators — never the
+// command/listener/Guice glue.
+pitest {
+    targetClasses.set(
+        listOf(
+            "io.paradaux.business.services.impl.*",
+            "io.paradaux.business.api.impl.*",
+            "io.paradaux.business.utils.*",
+        ),
+    )
+    // Same exclusion as `test` for the absent-API tags (they only pass on the
+    // stripped classpaths of testWithoutCarbon / testWithoutPlaceholderApi).
+    // DB ITs are left out for now: PIT runs each test in its own launcher
+    // session (a different order than `test`), and the harness's truncate list
+    // misses firm_shop_alias_reservations (V35), so a leftover alias fails
+    // FirmMapperIT in PIT's green-suite precheck. The targeted services are
+    // unit-tested; add the ITs back once the harness truncates every table.
+    excludedGroups.set(listOf("carbon-absent", "placeholderapi-absent", "integration"))
+    // Ratchet a couple of points under the measured scores (2026-10, unit tests:
+    // 86.7% mutation score — 83.1% before the authorization/balance-tax tests —
+    // and 97% line coverage of the mutated classes). Raise as survivors are killed.
+    mutationThreshold.set(84)
+    coverageThreshold.set(94)
 }
 
-tasks.named<ShadowJar>("shadowJar") {
-    finalizedBy(copyPlugin)
-}
-
-// Shadow 9 writes both :jar and :shadowJar to build/libs/<name>.jar; :jar runs
-// after :shadowJar and overwrites the fat jar with a ~120 KB thin one that
-// disables itself on enable for missing classes. Disable :jar so the shaded
-// artifact stays put.
-tasks.jar {
-    enabled = false
-}
-
-subprojects {
-    plugins.withId("maven-publish") {
-        extensions.configure<PublishingExtension>("publishing") {
-            repositories {
-                maven {
-                    val isSnapshot = project.version.toString().endsWith("-SNAPSHOT")
-
-                    name = if (isSnapshot) "Snapshots" else "Releases"
-                    url = uri(
-                        if (isSnapshot)
-                            "https://repo.paradaux.io/snapshots"
-                        else
-                            "https://repo.paradaux.io/releases"
-                    )
-
-                    credentials {
-                        username = System.getenv("REPO_USER")
-                        password = System.getenv("REPO_PASS")
-                    }
-                }
-            }
-        }
-    }
-}
+// The publish repository target (snapshot/release URL + REPO_USER/REPO_PASS creds)
+// for business-api now lives in the io.paradaux.published-library-conventions
+// plugin, applied by business/business-api itself (global/build/0004).

@@ -15,6 +15,14 @@ import java.time.Instant;
  * need to tax during that cycle. Treasury drives the schedule; plugins own their
  * own tax logic and amounts.
  *
+ * <p><b>Threading:</b> this event is dispatched off the main thread (on a Bukkit
+ * async task), so handlers run asynchronously. Handlers MUST NOT touch the Bukkit
+ * API (worlds, entities, inventories, online-player state) directly — doing so off
+ * the main thread risks corrupting server state. The intended work,
+ * {@link TaxApi#collectTax} / {@link TaxApi#collectBatch}, is pure database I/O and
+ * is safe here; for anything Bukkit-touching, hop back to the main thread first
+ * (ADT taxcycle-event-fired-async).
+ *
  * <p>Example — collecting weekly property taxes in Realty:
  * <pre>{@code
  * @EventHandler

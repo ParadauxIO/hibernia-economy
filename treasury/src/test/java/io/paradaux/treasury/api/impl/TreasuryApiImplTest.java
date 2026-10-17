@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -225,6 +226,27 @@ class TreasuryApiImplTest {
         Page<TransactionEntry> page = new Page<>(List.of(), 0, 0, 10);
         when(ledgerService.getTransactionHistory(1, 0, 10)).thenReturn(page);
         assertThat(api.getTransactionHistory(1, 0, 10)).isSameAs(page);
+    }
+
+    @Test
+    void getTransactionHistory_batch_delegates() {
+        Page<TransactionEntry> page = new Page<>(List.of(), 0, 0, 10);
+        when(ledgerService.getTransactionHistory(List.of(1, 2), 0, 10)).thenReturn(page);
+        assertThat(api.getTransactionHistory(List.of(1, 2), 0, 10)).isSameAs(page);
+    }
+
+    @Test
+    void getAccountsByIds_delegates() {
+        Map<Integer, Account> accounts = Map.of(1, new Account());
+        when(accountService.getAccountsByIds(List.of(1))).thenReturn(accounts);
+        assertThat(api.getAccountsByIds(List.of(1))).isSameAs(accounts);
+    }
+
+    @Test
+    void getBalancesByIds_delegates() {
+        Map<Integer, BigDecimal> balances = Map.of(1, BigDecimal.TEN);
+        when(accountService.getBalancesByIds(List.of(1))).thenReturn(balances);
+        assertThat(api.getBalancesByIds(List.of(1))).isSameAs(balances);
     }
 
     @Test

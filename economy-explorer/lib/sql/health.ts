@@ -46,10 +46,10 @@ export async function getDailyDeltaByType(days: number): Promise<DailyDeltaByTyp
 export async function getActivePlayersSummary(): Promise<ActivePlayers> {
   const r = await sql<{ active1d: string | number; active7d: string | number; active30d: string | number; registered: string | number }>`
     SELECT
-      (SELECT COUNT(*) FROM player_login_times WHERE last_login_epoch >= UNIX_TIMESTAMP() - 86400) AS active1d,
-      (SELECT COUNT(*) FROM player_login_times WHERE last_login_epoch >= UNIX_TIMESTAMP() - 7*86400) AS active7d,
-      (SELECT COUNT(*) FROM player_login_times WHERE last_login_epoch >= UNIX_TIMESTAMP() - 30*86400) AS active30d,
-      (SELECT COUNT(*) FROM firm_players) AS registered
+      (SELECT COUNT(*) FROM economy_players WHERE last_login_epoch >= UNIX_TIMESTAMP() - 86400) AS active1d,
+      (SELECT COUNT(*) FROM economy_players WHERE last_login_epoch >= UNIX_TIMESTAMP() - 7*86400) AS active7d,
+      (SELECT COUNT(*) FROM economy_players WHERE last_login_epoch >= UNIX_TIMESTAMP() - 30*86400) AS active30d,
+      (SELECT COUNT(*) FROM economy_players) AS registered
   `.execute(db);
   const row = r.rows[0];
   return {
@@ -64,10 +64,26 @@ export async function getActivePlayersSummary(): Promise<ActivePlayers> {
 export async function getNewPlayersDaily(days: number): Promise<DayCount[]> {
   const r = await sql<{ date: string; count: string | number }>`
     SELECT DATE_FORMAT(DATE(first_seen), '%Y-%m-%d') AS date, COUNT(*) AS count
-    FROM firm_players
+    FROM economy_players
     WHERE first_seen >= NOW() - INTERVAL ${days} DAY
     GROUP BY DATE(first_seen)
     ORDER BY date ASC
   `.execute(db);
   return r.rows.map((row) => ({ date: row.date, count: Number(row.count) }));
+}
+
+/** Equal rolling windows evaluated in one statement, so their boundary agrees. */
+export async function getActivityComparison(days: number) {
+  const r = await sql<{ period: string; transactions: string | number; volume: string }>`
+    SELECT CASE WHEN lt.settlement_time >= NOW() - INTERVAL ${days} DAY THEN 'current' ELSE 'previous' END AS period,
+      COUNT(DISTINCT lt.txn_id) AS transactions,
+      COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0) AS volume
+    FROM ledger_txns lt LEFT JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
+    WHERE lt.settlement_time >= NOW() - INTERVAL ${days * 2} DAY
+    GROUP BY period
+  `.execute(db);
+  const current = r.rows.find(r => r.period === 'current');
+  const previous = r.rows.find(r => r.period === 'previous');
+  return { current: { transactions: Number(current?.transactions ?? 0), volume: Number(current?.volume ?? 0) },
+    previous: { transactions: Number(previous?.transactions ?? 0), volume: Number(previous?.volume ?? 0) } };
 }

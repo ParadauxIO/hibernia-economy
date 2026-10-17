@@ -35,12 +35,13 @@ Every government account has three kinds of access, from lowest to highest:
   secretary) without handing over the chequebook.
 - **Members** can do everything a viewer can **and spend from it** (transfer and
   payout).
-- **Authorizers** can do everything a member can, **plus manage who has access** —
-  adding and removing viewers, members and other authorizers.
+- **Authorizers** can do everything a member can. Managing who has access is possible
+  too, but it's gated by extra permissions rather than authorizer status alone (see
+  [Manage who has access](#manage-who-has-access)).
 
 So if a command says you don't have permission to spend, you're at most a viewer of
-that account. If you can spend but can't add other people, you're a member but not an
-authorizer.
+that account. Being able to spend means you're a member; managing other people's access
+needs the extra rights described below.
 
 A viewer sees only the **ledger transactions** (e.g. "received $500 from ChestShops"),
 never the individual trade-by-trade breakdown.
@@ -69,9 +70,11 @@ member or authorizer of the `from` account.
 
 ## Manage who has access
 
-If you're an **authorizer** on an account, you can add and remove people. Viewers can
-only look; members can view and spend; authorizers can also manage access (and must be
-a member first):
+Being an **authorizer** lets you *spend*, but managing who has access is gated by
+separate permissions, not by your authorizer status alone. Adding or removing **viewers
+and members** needs the `treasury.gov.account.manage` right; adding or removing
+**authorizers** is an operator/admin action (`treasury.gov.admin`). If you hold those
+rights, the commands are:
 
 ```text
 /government account viewer add Treasury Steve
@@ -93,12 +96,15 @@ which you name first:
 
 ```text
 /fine issue Police Steve 500 griefing spawn
+/fine firm Police AcmeCorp 500 zoning breach
 /fine list Steve
 /fine info 42
 /fine revoke 42
 ```
 
-The amount is taken from the player's balance and paid into that account. You can only
+Use `/fine firm <account> <firm> <amount> <reason>` to fine a business/firm account
+instead of a player. The amount is taken from the offender's balance and paid into that
+account. You can only
 **issue or revoke** fines for an account you have access to — a member or authorizer of
 it (revoking refunds out of that same account). Viewing fines uses the fines view
 permission.

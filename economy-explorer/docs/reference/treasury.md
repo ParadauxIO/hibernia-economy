@@ -89,6 +89,19 @@ See the richest players on the server, ten per page.
 |---|---|---|
 | `page` | no | Which page to view (defaults to 1) |
 
+### `/economy`
+
+Show server-wide money statistics — the total money supply and related totals across
+the economy. Read-only; it just reports the numbers, it doesn't move any money.
+
+```text
+/economy
+```
+
+> [!NOTE]
+> This is a **separate** command from the operator-only `/eco`. `/economy` reports
+> economy-wide statistics; `/eco` creates or destroys money.
+
 ### `/transactions [page]`
 
 Your money history — what came in, what went out, and why. Also answers to `/txns`.
@@ -131,14 +144,37 @@ Staff can look up anyone's transaction history, by player or by account ID.
 > [!NOTE]
 > Both require `treasury.transactions.audit` (staff-only).
 
+### `/sales [page|summary [days]]`
+
+Your own **ChestShop** sales — what sold (or what you bought) through shops you own,
+drawn from Treasury's sale tracker. You only ever see your own sales.
+
+```text
+/sales
+/sales 2
+/sales summary
+/sales summary 7
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `page` | no | Which page of your recent sales to view (defaults to 1) |
+| `summary [days]` | no | An aggregated report (totals, sold vs. bought, top items) over the last `days` (defaults to 30) |
+
+Each line shows the time, whether you **Sold** or **Bought**, the quantity and item, the
+customer, and the total and tax. The summary rolls those up into sale counts, units,
+volume, and your top items for the window.
+
 ## Government accounts
 
 Government **departments** share accounts that several people can use. You can only
-see and use an account if you've been added to it. Two levels of access:
+see and use an account if you've been added to it. Three levels of access:
 
+- **Viewers** can view the account — its balance and transaction history — but **cannot
+  spend** or manage access.
 - **Members** can view the account and its history **and spend from it** (pay/payout).
-- **Authorizers** can do the same **and manage who has access** (add/remove members
-  and authorizers).
+- **Authorizers** can do the same **and manage who has access** (add/remove viewers,
+  members, and authorizers).
 
 All of these live under `/government` (also `/gov`).
 
@@ -225,23 +261,29 @@ salaries.
 
 ### Managing who has access
 
-Add or remove the people who can use an account. Members can view and spend;
-authorizers can also manage access. (An authorizer must be a member first.)
+Add or remove the people who can use an account. Viewers can only look; members can
+view and spend; authorizers can also manage access. (An authorizer must be a member
+first.)
 
 ```text
+/government account viewer add Treasury Steve
+/government account viewer list Treasury
 /government account member add Treasury Steve
 /government account member list Treasury
 /government account auth add Treasury Steve
 /government account auth list Treasury
 ```
 
-Use `remove` in place of `add` to revoke access. Managing members needs account
-management rights; managing authorizers is admin-only.
+Use `remove` in place of `add` to revoke access. Managing **viewers** and **members**
+needs account management rights (`treasury.gov.account.manage`); managing **authorizers**
+is operator-level (`treasury.gov.admin`).
 
 You can also grant access to a whole **LuckPerms group** at once, rather than naming
 players one by one:
 
 ```text
+/government account viewer addgroup Treasury treasury-observers
+/government account viewer removegroup Treasury treasury-observers
 /government account member addgroup Treasury treasury-staff
 /government account member removegroup Treasury treasury-staff
 /government account auth addgroup Treasury treasury-admins
@@ -280,6 +322,22 @@ balance and paid into the named account.
 You must have access to that account to fine into it — a **member or authorizer** of
 it, or an admin. (Same access model as `/government pay`.)
 
+### `/fine firm <account> <firm> <amount> <reason>`
+
+The same as `/fine issue`, but fines a **business account** instead of a player. The
+amount is taken from the firm and paid into the named government account.
+
+```text
+/fine firm Police Acme 500 illegal dumping
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `account` | yes | The government account the fine is paid into |
+| `firm` | yes | The business being fined |
+| `amount` | yes | How much (more than 0) |
+| `reason` | yes | Why the fine was issued |
+
 ### `/fine revoke <id>` · `/fine info <id>` · `/fine list [player]`
 
 Look up, list, and reverse fines by their ID. Revoking refunds the fine **out of the
@@ -303,7 +361,7 @@ These are for server operators.
 
 ### `/eco <give|take|set|reset> <target> [amount]`
 
-Adjust a balance directly. Also answers to `/economy`.
+Adjust a balance directly.
 
 ```text
 /eco give Steve 1000
@@ -334,18 +392,16 @@ Inspect and test the automatic tax cycles.
 ```text
 /tax status
 /tax trigger weekly
-/tax trigger balance Steve
 ```
 
 | Argument | Required | What it is |
 |---|---|---|
 | action | yes | `status`, or `trigger` |
-| `cycle` | for trigger | `daily`, `weekly`, `monthly`, or `balance <player>` |
+| `cycle` | for trigger | `daily`, `weekly`, or `monthly` |
 
 > [!NOTE]
 > `/tax status` shows when each cycle next runs. `/tax trigger <cycle>` fires one early
-> for testing; `/tax trigger balance <player>` runs just that player's balance tax.
-> Operators only.
+> for testing. Operators only.
 
 ### `/treasury` (alias `/tr`)
 
@@ -376,8 +432,8 @@ admin.
 
 The LuckPerms nodes that gate each command, with their `plugin.yml` defaults
 (`true` = everyone, `op` = operators only, `false` = nobody until granted). On the
-government accounts, the **member/authorizer** checks apply *in addition* to these —
-see [Two levels of access](#government-accounts).
+government accounts, the **viewer/member/authorizer** checks apply *in addition* to
+these — see [Government accounts](#government-accounts).
 
 ### Everyday
 
@@ -387,6 +443,8 @@ see [Two levels of access](#government-accounts).
 | `/bal` (your own) | `treasury.balance` | `true` |
 | `/bal <player>` (someone else) | `treasury.balance.others` | `op` |
 | `/baltop` | `treasury.baltop` | `true` |
+| `/economy` | `treasury.economy` | `true` |
+| `/sales` | `treasury.sales` | `true` |
 | `/transactions` | `treasury.transactions` | `true` |
 | `/transactions export` | `treasury.transactions.export` | `true` |
 | `/transactions audit` · `auditaccount` | `treasury.transactions.audit` | `op` |

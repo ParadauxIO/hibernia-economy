@@ -22,6 +22,15 @@ public interface MembershipService {
      */
     boolean canView(int accountId, UUID uuid);
 
+    /**
+     * True when {@code uuid} may move money <em>out of</em> the account by virtue of
+     * account membership — i.e. is a member or an authorizer. This is the fine-grained,
+     * per-account spend gate (viewers do not qualify). Global permission nodes
+     * (e.g. {@code treasury.gov.account.transfer}, {@code treasury.gov.admin}) and the
+     * console/RCON bypass are the caller's concern and are checked at the command layer.
+     */
+    boolean canSpend(int accountId, UUID uuid);
+
     // ── Individual UUID CRUD ──
 
     void addMember(int accountId, UUID memberUuid, UUID addedByUuid);
@@ -33,6 +42,14 @@ public interface MembershipService {
     List<AccountMember> getAuthorizers(int accountId);
 
     // ── LP Group CRUD ──
+
+    /**
+     * Whether LuckPerms has a group of this name. Group grants are stored as plain
+     * names and never validated on write, so a typo (or a display name in place of
+     * the internal one) is accepted and simply never matches anyone. Returns
+     * {@code true} when LuckPerms is unavailable, since the name cannot be judged.
+     */
+    boolean isKnownGroup(String lpGroup);
 
     void addGroupMember(int accountId, String lpGroup, UUID addedByUuid);
     void removeGroupMember(int accountId, String lpGroup);

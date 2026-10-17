@@ -8,12 +8,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
 import { pickSubNav } from '@/components/SubNav';
-import { useIsAdmin } from '@/components/ViewerContext';
+import { useViewer } from '@/components/ViewerContext';
 
 export function SectionTabs() {
   const path = usePathname();
-  const isAdmin = useIsAdmin();
-  const items = pickSubNav(path, isAdmin);
+  const { permissions } = useViewer();
+  const items = pickSubNav(path, permissions.includes('market.sales.read'));
   if (!items) return null;
   return (
     <nav className="section-tabs" aria-label="Section">

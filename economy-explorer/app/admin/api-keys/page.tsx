@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
@@ -8,11 +9,13 @@ import { PrivacyGate } from '@/components/PrivacyGate';
 import { listAdminApiKeys } from '@/lib/sql/apiKey';
 import { listRateLimitOverrides } from '@/lib/sql/rateLimitOverride';
 import { queryKeyUsage, type KeyUsage } from '@/lib/prometheus';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { RevokeButton } from './revoke-button';
 import { RotateButton } from './rotate-button';
 import { LimitDialog } from './limit-dialog';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,8 +35,8 @@ export async function generateMetadata() {
 
 export default async function AdminApiKeysPage() {
   const viewer = await getViewer();
-  if (viewer.anon) return <PrivacyGate kind="login" title="Admin API keys" hint="Sign in as admin to manage API keys." />;
-  if (viewer.role !== 'admin') return <PrivacyGate kind="private" title="Admin only" />;
+  if (viewer.anon) return <PrivacyGate kind="login" title="Admin API keys" hint="Sign in to manage API keys." />;
+  if (!hasPermission(viewer, 'api_keys.read')) return <PrivacyGate kind="private" title="Permission required" />;
   await auditView(viewer, { path: '/admin/api-keys', targetType: 'global' });
 
   const [keys, overrides, usageEntries] = await Promise.all([
@@ -57,7 +60,7 @@ export default async function AdminApiKeysPage() {
         <div className="card-title">All keys
           <span className="sub">limit multiplier is per-issuer (applies to every one of their keys)</span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="All keys">
           <table className="data-table">
             <thead>
               <tr>
@@ -111,15 +114,15 @@ export default async function AdminApiKeysPage() {
                       </td>
                     )}
                     <td className={`amount mono ${!isDefault ? 'pos' : ''}`}>×{mult}</td>
-                    <td className="ts">{fmtTs(k.issued_at)}</td>
-                    <td className="ts">{fmtTs(k.expires_at)}</td>
+                    <td className="ts"><LocalTimestamp value={k.issued_at} /></td>
+                    <td className="ts"><LocalTimestamp value={k.expires_at} /></td>
                     <td>
                       {k.revoked
                         ? <span className="badge badge-archived">Revoked</span>
                         : <span className="badge badge-active">Active</span>}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {k.owner_uuid && (
+                      {k.owner_uuid && hasPermission(viewer, 'rate_limits.update') && (
                         <LimitDialog
                           ownerUuid={k.owner_uuid}
                           ownerName={k.owner_name ?? k.owner_uuid.slice(0, 8) + '…'}
@@ -128,8 +131,8 @@ export default async function AdminApiKeysPage() {
                       )}{' '}
                       {!k.revoked && (
                         <>
-                          <RotateButton keyId={k.key_id} />{' '}
-                          <RevokeButton keyId={k.key_id} />
+                          {hasPermission(viewer, 'api_keys.rotate') && <RotateButton keyId={k.key_id} />}{' '}
+                          {hasPermission(viewer, 'api_keys.revoke') && <RevokeButton keyId={k.key_id} />}
                         </>
                       )}
                     </td>
@@ -138,7 +141,7 @@ export default async function AdminApiKeysPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );

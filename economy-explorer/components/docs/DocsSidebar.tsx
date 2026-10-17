@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import type { DocsNavGroup } from '@/lib/docs';
-import { useIsAdmin } from '@/components/ViewerContext';
+import { useViewer } from '@/components/ViewerContext';
 
 // Admin-only section. Kept out of the server-built public tree (so it never
 // reaches non-admins or the sitemap); shown here only when the viewer is an
@@ -18,18 +18,21 @@ const ADMIN_GROUP: DocsNavGroup = {
   items: [
     { title: 'Managing Explorer access', href: '/docs/admin/roles', order: 2 },
     { title: 'Operator commands', href: '/docs/admin/operator-commands', order: 3 },
+    { title: 'Government accounts', href: '/docs/admin/government-accounts', order: 4 },
+    { title: 'Webhooks', href: '/docs/admin/webhooks', order: 6 },
+    { title: 'Configuration', href: '/docs/admin/configuration', order: 10 },
   ],
 };
 
 export function DocsSidebar({ tree }: { tree: DocsNavGroup[] }) {
   const path = usePathname();
-  const isAdmin = useIsAdmin();
+  const isAdmin = useViewer().permissions.includes('docs.admin.read');
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const groups = isAdmin ? [...tree, ADMIN_GROUP] : tree;
 
   return (
-    <aside className={`docs-sidebar${open ? ' open' : ''}`}>
+    <aside className={`docs-sidebar${open ? ' open' : ''}`} aria-label="Documentation">
       <button
         type="button"
         className="docs-sidebar-toggle"

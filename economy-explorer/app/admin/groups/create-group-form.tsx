@@ -14,7 +14,7 @@ export function CreateGroupForm() {
     start(async () => {
       const r = await createGroupAction({ name, description: description || null });
       if (!r.ok) setErr(r.error ?? 'Failed');
-      else { setName(''); setDescription(''); }
+      else window.location.reload();
     });
   }
 

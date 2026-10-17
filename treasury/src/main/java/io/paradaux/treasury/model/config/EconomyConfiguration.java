@@ -4,19 +4,23 @@ import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationComp
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationValue;
 import lombok.Getter;
 
+import java.math.BigDecimal;
+
 @ConfigurationComponent
 @Getter
 public class EconomyConfiguration {
 
+    // Framework reload writes these fields in place; publish each value to async readers.
+
     @ConfigurationValue(path = "economy.format", defaultValue = "$ ")
-    private String economyFormat;
+    private volatile String economyFormat;
 
     @ConfigurationValue(path = "economy.currency-name.singular", defaultValue = "dollar")
-    private String currencyNameSingular;
+    private volatile String currencyNameSingular;
 
     @ConfigurationValue(path = "economy.currency-name.plural", defaultValue = "dollars")
-    private String currencyNamePlural;
+    private volatile String currencyNamePlural;
 
     @ConfigurationValue(path = "economy.starting-balance", defaultValue = "10000")
-    private double startingBalance;
+    private volatile BigDecimal startingBalance;
 }

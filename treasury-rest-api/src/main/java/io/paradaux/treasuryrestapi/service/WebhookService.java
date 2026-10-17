@@ -6,7 +6,7 @@ import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.mapper.WebhookSubscriptionMapper;
 import io.paradaux.treasuryrestapi.model.WebhookSubscription;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
-import io.paradaux.treasuryrestapi.util.SsrfValidator;
+import io.paradaux.treasuryrestapi.util.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,16 +30,19 @@ public class WebhookService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final WebhookSubscriptionMapper mapper;
+    private final WebhookTargetPolicy targetPolicy;
     private final int maxPerKey;
 
     public WebhookService(WebhookSubscriptionMapper mapper,
+                          WebhookTargetPolicy targetPolicy,
                           @Value("${treasury.webhook.max-per-key:20}") int maxPerKey) {
         this.mapper = mapper;
+        this.targetPolicy = targetPolicy;
         this.maxPerKey = maxPerKey;
     }
 
     public CreateWebhookResponse create(VerifiedToken verified, String url) {
-        SsrfValidator.validate(url);
+        targetPolicy.validate(url);
 
         if (mapper.countByApiKey(verified.keyId()) >= maxPerKey) {
             throw new ApiException(HttpStatus.CONFLICT, "WEBHOOK_LIMIT",
@@ -89,7 +92,7 @@ public class WebhookService {
         WebhookSubscription sub = requireOwned(verified, id);
         String newUrl = sub.getTargetUrl();
         if (url != null) {
-            SsrfValidator.validate(url);
+            targetPolicy.validate(url);
             newUrl = url.trim();
         }
         boolean newActive = active != null ? active : sub.isActive();
@@ -129,8 +132,6 @@ public class WebhookService {
     private static String newSecret() {
         byte[] buf = new byte[32];
         RANDOM.nextBytes(buf);
-        StringBuilder sb = new StringBuilder(64);
-        for (byte b : buf) sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
-        return sb.toString();
+        return Hex.encode(buf);
     }
 }

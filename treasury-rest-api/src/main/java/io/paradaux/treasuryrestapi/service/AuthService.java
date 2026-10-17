@@ -57,10 +57,11 @@ public class AuthService {
 
         String newToken = buildJwt(verified, newJti, now, expiresAt);
 
+        // The token is returned to the owner below, never persisted (ADT-6) — the
+        // jti rotation is what invalidates the old token.
         int rows = apiKeyMapper.rotateKey(
                 verified.keyId(),
                 newJti.toString(),
-                newToken,
                 LocalDateTime.ofInstant(now, ZoneOffset.UTC),
                 LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC)
         );
@@ -78,11 +79,11 @@ public class AuthService {
     }
 
     /**
-     * Admin force-rotation by key id. Invalidates the current token (the old
-     * jti no longer matches) so a leaked token stops working; the owner must
-     * re-export in-game to get the new one. The new token is intentionally NOT
-     * returned — an admin must never see another user's secret. Returns the new
-     * expiry for display.
+     * Admin force-rotation by key id. Invalidates the current token by replacing
+     * its jti, so a leaked token stops working immediately. No usable token is
+     * produced — it is neither returned (an admin must never see another user's
+     * secret) nor persisted (ADT-6) — so the owner reissues in-game to get a new
+     * one. Returns the new expiry for display.
      */
     @Transactional
     public Instant adminForceRotate(long keyId) {
@@ -94,17 +95,12 @@ public class AuthService {
             throw new ApiException(HttpStatus.CONFLICT, "TOKEN_REVOKED",
                     "Key is revoked; revoked keys cannot be rotated.");
         }
-        VerifiedToken vt = new VerifiedToken(
-                locked.getKeyId(), locked.getOwnerUuid(), locked.getKeyType(),
-                locked.getAccountId() != null ? locked.getAccountId().longValue() : null,
-                locked.getFirmId() != null ? locked.getFirmId().longValue() : null);
 
         UUID newJti = UUID.randomUUID();
         Instant now = Instant.now();
         Instant expiresAt = now.plus(TOKEN_LIFETIME_DAYS, ChronoUnit.DAYS);
-        String newToken = buildJwt(vt, newJti, now, expiresAt);
 
-        int rows = apiKeyMapper.rotateKey(keyId, newJti.toString(), newToken,
+        int rows = apiKeyMapper.rotateKey(keyId, newJti.toString(),
                 LocalDateTime.ofInstant(now, ZoneOffset.UTC),
                 LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
         if (rows != 1) {

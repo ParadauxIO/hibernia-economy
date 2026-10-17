@@ -34,22 +34,21 @@ the **lower** the rank number, the more senior (rank 1 is the top).
 ## Members vs. authorizers
 
 Shared accounts — both **[business](/docs/concepts/accounts-and-money#business-accounts)**
-and **[government](/docs/concepts/accounts-and-money#government-accounts)** — separate
-two things:
+and **[government](/docs/concepts/accounts-and-money#government-accounts)** — use the same
+three access tiers, **viewer < member < authorizer**. What each tier may do differs a
+little by the kind of account:
 
-- A **member** can *see* the account and its history.
-- An **authorizer** can also *manage who has access*.
+- A **viewer** is always read-only: they can see the account's balance and transactions
+  but never spend or manage it. (The read-only tier is used on government accounts.)
+- On a **firm** account, **members** can *see* the books and **authorizers** can *spend*.
+  Staff are kept in step with their roles automatically — `ADMIN`-role staff become
+  authorizers (view *and* spend), `FINANCIAL`-role staff become members (view only) — and
+  the firm **owner** is the one who adjusts members and authorizers.
+- On a **government** account, **members** can view *and* spend, and **authorizers** can
+  also *manage* who has access.
 
-An authorizer is always a member too. Who can actually **spend** differs by account type:
-
-- On **government** accounts, **members can spend** (and authorizers additionally manage
-  who has access).
-- On **business** accounts, spending is reserved for authorizers — a plain member can
-  only view the books.
-
-This split lets you give lots of people visibility while keeping spending with a trusted
-few. For firm accounts, members and authorizers are kept in step with staff roles
-automatically, and the firm owner can also adjust them by hand.
+The common thread: each tier sees at least as much as the one below it, and the rights to
+*spend* and to *manage access* are kept to a trusted few.
 
 ## Staff and operator commands
 

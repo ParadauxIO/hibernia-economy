@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
-import { canViewFirmFinancials } from '@/lib/auth/access';
+import { canViewFirmFinancials, canViewFirmInternals, hasElevatedRead } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import {
   findFirmByDisplayName,
@@ -13,11 +13,13 @@ import {
   listFirmAccounts,
   isFirmMember,
 } from '@/lib/sql/firm';
-import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { BackLink } from '@/components/BackLink';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,16 +41,9 @@ export default async function FirmDetailPage({
 
   // Public identity (name, HQ, founded, default account, archived flag) is
   // always shown. Employees / roles / accounts are gated to: firm member ∨
-  // government ∨ admin. Mirrors AUTH-SPEC §9.
+  // proprietor ∨ moderator ∨ admin.
   const viewer = await getViewer();
-  let canSeeInternals = false;
-  if (!viewer.anon) {
-    if (viewer.role === 'admin' || viewer.role === 'government') {
-      canSeeInternals = true;
-    } else if (viewer.minecraftUuid) {
-      canSeeInternals = await isFirmMember(firm.firm_id, viewer.minecraftUuid);
-    }
-  }
+  const canSeeInternals = await canViewFirmInternals(firm.firm_id, viewer);
 
   // ChestShop sales/volume is financial drilldown — narrower than internals:
   // only finance-role employees (FINANCIAL/ADMIN) + staff. A plain member can
@@ -57,7 +52,7 @@ export default async function FirmDetailPage({
 
   // Audit privileged inspection: a staff member using elevated access to view a
   // firm's internals/financials when they aren't actually part of that firm.
-  if (!viewer.anon && (viewer.role === 'admin' || viewer.role === 'government')) {
+  if (hasElevatedRead(viewer)) {
     const member = viewer.minecraftUuid ? await isFirmMember(firm.firm_id, viewer.minecraftUuid) : false;
     if (!member) {
       await auditView(viewer, { path: `/firms/${encodeURIComponent(firmName)}`, targetType: 'firm', targetId: String(firm.firm_id) });
@@ -104,6 +99,14 @@ export default async function FirmDetailPage({
 
       <div className="kpi-grid">
         <div className="kpi">
+          <div className="kpi-label">Proprietor</div>
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>
+            {firm.proprietor_uuid
+              ? <Player name={firm.proprietor_name} uuid={firm.proprietor_uuid} />
+              : '—'}
+          </div>
+        </div>
+        <div className="kpi">
           <div className="kpi-label">HQ region</div>
           <div className="kpi-value" style={{ fontSize: 18, paddingTop: 6 }}>
             {firm.hq_region ?? '—'}
@@ -111,7 +114,7 @@ export default async function FirmDetailPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Founded</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>{fmtTs(firm.created_at)}</div>
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}><LocalTimestamp value={firm.created_at} /></div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Default account</div>
@@ -146,7 +149,7 @@ export default async function FirmDetailPage({
               </Link>
             </span>
           </div>
-          <div className="table-wrap">
+          <TableWrap label="ChestShop activity">
             <table className="data-table">
               <thead>
                 <tr>
@@ -173,7 +176,7 @@ export default async function FirmDetailPage({
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         </div>
       )}
 
@@ -181,7 +184,7 @@ export default async function FirmDetailPage({
         <PrivacyGate
           kind={viewer.anon ? 'login' : 'private'}
           title="Firm internals are private"
-          hint="Employees, roles, and accounts are only visible to firm members, government, and admins."
+          hint="Employees, roles, and accounts require firm membership or permission to read all firms."
         />
       )}
 
@@ -192,7 +195,7 @@ export default async function FirmDetailPage({
             <div className="card-title">
               Accounts <span className="sub">{fmtN(accounts.length)} active · total {fmtAmtFull(totalBalance)}</span>
             </div>
-            <div className="table-wrap">
+            <TableWrap label="Accounts">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -225,7 +228,7 @@ export default async function FirmDetailPage({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
 
           {/* Employees */}
@@ -233,7 +236,7 @@ export default async function FirmDetailPage({
             <div className="card-title">
               Employees <span className="sub">{fmtN(employees.length)} active</span>
             </div>
-            <div className="table-wrap">
+            <TableWrap label="Employees">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -250,12 +253,12 @@ export default async function FirmDetailPage({
                     <tr key={`${e.player_uuid}-${e.joined_at?.toString()}`}>
                       <td><Player name={e.player_name} uuid={e.player_uuid} /></td>
                       <td><span className="badge">{e.role_name}</span></td>
-                      <td className="ts">{fmtTs(e.joined_at)}</td>
+                      <td className="ts"><LocalTimestamp value={e.joined_at} /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
 
           {/* Roles + permissions */}
@@ -263,7 +266,7 @@ export default async function FirmDetailPage({
             <div className="card-title">
               Roles <span className="sub">{fmtN(roles.length)} role{roles.length === 1 ? '' : 's'}</span>
             </div>
-            <div className="table-wrap">
+            <TableWrap label="Roles">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -298,7 +301,7 @@ export default async function FirmDetailPage({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
         </>
       )}

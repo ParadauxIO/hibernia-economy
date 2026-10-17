@@ -11,7 +11,7 @@ interface MiniSparkProps {
 }
 
 export function MiniSpark({ values, width = 120, height = 36, stroke = 'var(--accent)', fill = true }: MiniSparkProps) {
-  if (!values || values.length < 2) {
+  if (values.length < 2) {
     return <div style={{ height, display: 'flex', alignItems: 'center' }}><span className="muted small">—</span></div>;
   }
   const min = Math.min(...values);
@@ -25,7 +25,8 @@ export function MiniSpark({ values, width = 120, height = 36, stroke = 'var(--ac
     return [x, y] as const;
   });
   const line = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${height - pad} L${pts[0][0].toFixed(1)},${height - pad} Z`;
+  // values.length >= 2 above, so the first and last x are the padded edges.
+  const area = `${line} L${(pad + (values.length - 1) * stepX).toFixed(1)},${height - pad} L${pad.toFixed(1)},${height - pad} Z`;
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden style={{ display: 'block' }}>

@@ -1,4 +1,6 @@
+import { hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -7,13 +9,15 @@ import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { listSalesFeed, countSalesFeed } from '@/lib/sql/market';
 import { memo } from '@/lib/cache';
-import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import { fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { Pagination } from '@/components/Pagination';
 import { Toolbar } from '@/components/Toolbar';
 import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -43,15 +47,15 @@ export default async function SalesFeedPage({
       <PrivacyGate
         kind="login"
         title="ChestShop sales feed"
-        hint="Sign in with admin or government access to view trade-by-trade detail with customer attribution."
+        hint="Sign in with moderator or admin access to view trade-by-trade detail with customer attribution."
       />
     );
   }
-  if (viewer.role !== 'admin' && viewer.role !== 'government') {
-    return <PrivacyGate kind="private" title="Government / admin only" />;
+  if (!hasPermission(viewer, 'market.sales.read')) {
+    return <PrivacyGate kind="private" title="Moderator / admin only" />;
   }
 
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
 
   // Privileged read: staff browsing trade-by-trade detail with customer
   // attribution. When filtered to one customer, that player is the target.
@@ -125,7 +129,7 @@ export default async function SalesFeedPage({
         </div>
       )}
 
-      <div className="table-wrap">
+      <TableWrap label="Sales">
         <table className="data-table">
           <thead>
             <tr>
@@ -146,7 +150,7 @@ export default async function SalesFeedPage({
             )}
             {rows.map((s) => (
               <tr key={s.sale_id}>
-                <td className="ts">{fmtTs(s.occurred_at)}</td>
+                <td className="ts"><LocalTimestamp value={s.occurred_at} /></td>
                 <td>
                   <span className={`badge ${s.direction === 'BUY' ? 'badge-active' : 'badge-archived'}`}>
                     {s.direction}
@@ -183,7 +187,7 @@ export default async function SalesFeedPage({
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
 
       <Pagination
         page={sp.page}
@@ -196,10 +200,3 @@ export default async function SalesFeedPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

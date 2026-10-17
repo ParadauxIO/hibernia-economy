@@ -26,11 +26,18 @@ Short definitions of the terms used across these docs and in-game.
 
 ## Access
 
-- **Member** — someone added to a shared account; can *view* it and, on government
-  accounts, *spend* from it.
-- **Authorizer** — a member with elevated rights: moving money out and, on government
-  accounts, managing who else has access. See
+A shared account has three access tiers: **Viewer** < **Member** < **Authorizer**.
+
+- **Viewer** — read-only access to a shared account: can see its balance and transactions
+  but cannot spend or manage it. (Used on government accounts.)
+- **Member** — can view the account; on a **government** account, members can also spend.
+- **Authorizer** — can spend from the account; on a **government** account, authorizers
+  can also manage who has access (on a firm account the owner manages access). See
   [Permissions & roles](/docs/concepts/permissions-and-roles).
+
+> **Two "viewers".** This per-account *Viewer* tier is separate from the site-wide
+> Explorer `viewer` role (financial oversight across the whole economy) on
+> [Permissions & roles](/docs/concepts/permissions-and-roles).
 
 ## Firms
 

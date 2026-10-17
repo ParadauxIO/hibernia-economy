@@ -1,11 +1,11 @@
 -- Deterministic fixtures for the integration suite. Designed so each assertion
 -- has an unambiguous expected value. UUIDs are 32-hex; personal accounts store
 -- their display_name as the hyphenated UUID (the real-world "junk name" case)
--- so name resolution via firm_players is actually exercised. DAVE is absent
--- from firm_players to test the short-UUID fallback.
+-- so name resolution via economy_players is actually exercised. DAVE is absent
+-- from economy_players to test the short-UUID fallback.
 
 -- Players (uuid -> name) — everyone except DAVE.
-INSERT INTO firm_players (player_uuid_bin, current_name) VALUES
+INSERT INTO economy_players (player_uuid_bin, current_name) VALUES
   (UNHEX('0000000000000000000000000000A1CE'), 'Alice'),
   (UNHEX('00000000000000000000000000000B0B'), 'Bob'),
   (UNHEX('0000000000000000000000000000CA01'), 'Carol');
@@ -22,8 +22,13 @@ INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name, is
 
 -- Balances. Active personal: 1=5000, 2=100000, 7=1500 → personalSupply 106500.
 -- totalSupply (!=SYSTEM, active) = 5000+100000+25000+8000+1500 = 139500. SYSTEM is negative.
+-- These are OPENING balances (history older than the fixture ledger): V1's
+-- trg_postings_ai adds every ledger_postings row below to account_balances_mat,
+-- exactly as in production. The ledger nets #1 -500, #2 -200, #3 +700 (the Penny
+-- legs net to zero), so #1/#2/#3 open at 5500 / 100200 / 24300 and land on the
+-- figures above.
 INSERT INTO account_balances_mat (account_id, balance) VALUES
-  (1, 5000.00), (2, 100000.00), (3, 25000.00), (4, -3000.00), (5, 8000.00), (6, 200.00), (7, 1500.00);
+  (1, 5500.00), (2, 100200.00), (3, 24300.00), (4, -3000.00), (5, 8000.00), (6, 200.00), (7, 1500.00);
 
 -- Firm "Acme Corp": Alice=Owner(ADMIN), Bob=Finance(FINANCIAL), Carol=Worker(DEFAULT only).
 INSERT INTO firm (firm_id, display_name, proprietor_uuid_bin, hq_region, is_archived) VALUES
@@ -71,14 +76,14 @@ INSERT INTO chestshop_sale (txn_id, occurred_at, direction, customer_uuid_bin, s
   (NULL, NOW(), 'SELL', UNHEX('0000000000000000000000000000CA01'), 3, 'BUSINESS', 1, UNHEX('0000000000000000000000000000A1CE'), 0, 'DIAMOND', 'DIAMOND', 'Diamond', 0, 5, 6.0000, 30.00),
   (NULL, NOW(), 'SELL', UNHEX('00000000000000000000000000000B0B'), 3, 'BUSINESS', 1, UNHEX('0000000000000000000000000000A1CE'), 0, 'IRON_INGOT', 'IRON_INGOT', 'Iron Ingot', 0, 20, 1.0000, 20.00);
 
--- Explorer RBAC groups: "Auditors" grants staff.audit and is LuckPerms-fed (node
--- 'doc'); Bob is a manual member. Used to assert findCapabilities + isStaff.
+-- Post-V30 baseline role via independent manual and fresh LP memberships.
 INSERT INTO explorer_group (group_id, name, description, luckperms_node) VALUES
-  (1, 'Auditors', 'Staff who can audit any entity', 'doc');
+  (1, 'Players', 'Player baseline grants', 'doc');
 INSERT INTO explorer_group_capability (group_id, capability) VALUES
-  (1, 'staff.audit');
+  (1, 'player');
 INSERT INTO explorer_group_member (group_id, player_uuid_bin, source) VALUES
-  (1, UNHEX('00000000000000000000000000000B0B'), 'manual');
+  (1, UNHEX('00000000000000000000000000000B0B'), 'manual'),
+  (1, UNHEX('0000000000000000000000000000CA01'), 'luckperms');
 
 -- Bedrock/Floodgate fixture (PAR-240): a Floodgate-shaped UUID with a
 -- '.'-prefixed name and a completed in-game explorer_identity link. Account #8
@@ -86,7 +91,7 @@ INSERT INTO explorer_group_member (group_id, player_uuid_bin, source) VALUES
 -- distribution / gini assertions above (those count only positive, active
 -- personal balances). Proves a linked Bedrock player's wallet resolves the
 -- dotted name (never a bare UUID) and is searchable by it.
-INSERT INTO firm_players (player_uuid_bin, current_name) VALUES
+INSERT INTO economy_players (player_uuid_bin, current_name) VALUES
   (UNHEX('0000000000000000000000000000BED0'), '.BedrockBob');
 INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name, is_archived) VALUES
   (8, 'PERSONAL', UNHEX('0000000000000000000000000000BED0'), '00000000-0000-0000-0000-00000000bed0', 0);
@@ -100,3 +105,50 @@ INSERT INTO explorer_identity (keycloak_sub, player_uuid_bin, minecraft_name, li
 -- them see the department's ledger history.
 INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES
   (5, UNHEX('00000000000000000000000000005EC0'), 'VIEWER', UNHEX('0000000000000000000000000000A1CE'));
+
+-- Drift fixture (behaviour/0001): "Penny", one personal account (#9) whose
+-- windowed credits are 0.10 + 0.20 + 0.30 and debits are 0.15 + 0.25 + 0.20 — each
+-- summing to an exact DECIMAL(19,2) 0.60 that does NOT round-trip through a JS
+-- double (both reduce to 0.6000000000000001). Net is 0.00 and the balance stays
+-- 0.00 (like the Bedrock fixture), so the supply / gini / distribution assertions
+-- above are untouched — but income and spend prove the KPI rollups MUST be summed
+-- in SQL and carried as exact strings. getPlayerTotals demonstrates that here.
+INSERT INTO economy_players (player_uuid_bin, current_name) VALUES
+  (UNHEX('0000000000000000000000000000BE00'), 'Penny');
+INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name, is_archived) VALUES
+  (9, 'PERSONAL', UNHEX('0000000000000000000000000000BE00'), 'Penny Wallet', 0);
+INSERT INTO account_balances_mat (account_id, balance) VALUES (9, 0.00);
+INSERT INTO ledger_txns (txn_id, settlement_time, message, initiator_uuid_bin, plugin_system) VALUES
+  (10, NOW(), 'penny in a',  UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (11, NOW(), 'penny in b',  UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (12, NOW(), 'penny in c',  UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (13, NOW(), 'penny out a', UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (14, NOW(), 'penny out b', UNHEX('0000000000000000000000000000BE00'), 'treasury'),
+  (15, NOW(), 'penny out c', UNHEX('0000000000000000000000000000BE00'), 'treasury');
+-- Two-leg txns: Bob's personal account (#2) is the counterparty for every leg.
+-- Kept PERSONAL↔PERSONAL on purpose so getMoneyFlow (cross-type only) ignores them
+-- and the money-flow assertion above still sees exactly one edge.
+INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES
+  (10, 2, -0.10), (10, 9,  0.10),
+  (11, 2, -0.20), (11, 9,  0.20),
+  (12, 2, -0.30), (12, 9,  0.30),
+  (13, 9, -0.15), (13, 2,  0.15),
+  (14, 9, -0.25), (14, 2,  0.25),
+  (15, 9, -0.20), (15, 2,  0.20);
+
+UPDATE explorer_group_member SET synced_at = CURRENT_TIMESTAMP WHERE source = 'luckperms';
+
+-- Published tax config as Treasury writes it (PAR-80), plus a non-tax key the
+-- tax reader must not pick up.
+INSERT INTO economy_config (config_key, owner, value_type, config_value, updated_at) VALUES
+  ('tax.balance.enabled', 'treasury', 'BOOLEAN', 'true', '2026-10-01 10:00:00'),
+  ('tax.balance.brackets', 'treasury', 'JSON', '[{"floor":"0.00","rate":"0"},{"floor":"100000.00","rate":"0.01"}]', '2026-10-02 10:00:00'),
+  ('tax.source-income-tax.enabled', 'treasury', 'BOOLEAN', 'true', '2026-10-01 10:00:00'),
+  ('tax.source-income-tax.default-rate', 'treasury', 'DECIMAL', '0.05', '2026-10-01 10:00:00'),
+  ('tax.source-income-tax.plugin-rates', 'treasury', 'JSON', '{"Jobs":"0.1"}', '2026-10-01 10:00:00'),
+  ('salaries.enabled', 'treasury', 'BOOLEAN', 'false', '2026-10-01 10:00:00');
+
+-- Public shop comparison fixtures: prices are for the sign batch.
+INSERT INTO chestshop_shop (world, sign_x, sign_y, sign_z, material, item_key, item_name, buy_price, sell_price, batch_qty, current_stock, stock_at, shop_account_id, shop_account_type, shop_firm_id)
+VALUES ('world', 101, 64, 101, 'DIAMOND', 'DIAMOND', 'Diamond', 64.00, 32.00, 64, 128, NOW(), 3, 'BUSINESS', 1),
+       ('world', 102, 64, 101, 'DIAMOND', 'DIAMOND', 'Diamond', 2.00, 1.50, 1, 10, NOW(), 3, 'BUSINESS', 1);

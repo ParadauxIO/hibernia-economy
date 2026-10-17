@@ -7,8 +7,9 @@ description: ChestShop's trade limits and rules — and why its sales tax is act
 # ChestShop configuration
 
 ChestShop's settings live in `plugins/ChestShop/config.yml`. It's a large upstream file;
-below are the settings a DemocracyCraft operator actually cares about. Stock ChestShop
-reads its config at enable, so changes need a **restart**.
+below are the settings a DemocracyCraft operator actually cares about. After editing,
+reload the config with **`/chestshop reload`** (alias `/cs reload`) — a full
+restart isn't required.
 
 > [!IMPORTANT]
 > **ChestShop sales tax is NOT configured here.** Because Treasury is installed, ChestShop
@@ -69,6 +70,29 @@ related flags are all **off** on the live server (shops can be built anywhere al
 normal build perms). Turn these on if you want to restrict shop creation to claims or
 regions.
 
+## Custom items (Nexo)
+
+Support for **Nexo** custom items is **built into ChestShop** — no companion plugin is
+needed (this was previously a separate `NexoUtilities` plugin). ChestShop hooks Nexo
+automatically when it's present (`Nexo` is a softdepend); the integration classes stay
+dormant when it isn't. ItemsAdder items are also recognised (by their persistent-data id).
+
+Configuration lives in `plugins/ChestShop/nexo.yml`, generated on first run:
+
+| Key | Default | What it does |
+|---|---|---|
+| `aliases.<name>` | *(example)* | Map a short **alias → nexo id** (e.g. `bnug: bunny_nugget`), or an **`ItemName#code` → alias** for a specific variant. Players can then type the alias on the item line. |
+| `display.preferAlias` | `true` | Prefer showing a configured alias over the raw id on signs. |
+| `display.fallbackFormat` | `%s` | Sign text when no alias applies. **Keep `%s`** — it writes the **bare id**. ChestShop's item-line pattern rejects colons, so a `nexo:%s` form would fail sign validation and the shop wouldn't create. |
+| `display.signMaxChars` | `15` | Max characters an alias may use before falling back to the id. |
+| `input.acceptBareIds` | `true` | Accept a bare nexo id on the item line (no `nexo:` prefix). **Keep on** — it's what lets bare ids from `fallbackFormat: %s` round-trip. |
+| `input.supportItemsAdder` | `true` | Also detect ItemsAdder items. |
+
+> [!NOTE]
+> Players don't touch `nexo.yml` — they just hold the item and use `?`, or type its id.
+> Aliases are an admin convenience for nicer/shorter sign text. See
+> [Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
+
 ## DemocracyCraft-specific behaviour (not config)
 
 These are fork behaviours with no config key — worth knowing they exist:
@@ -78,5 +102,56 @@ These are fork behaviours with no config key — worth knowing they exist:
 - **Firm shops** — a `B:<code>` owner line routes a shop to a Treasury business account,
   gated by the firm's `CHESTSHOP` role permission. Legacy `b:<FirmName>` signs self-heal
   to the new format on first trade.
+- **Native custom items** — Nexo/ItemsAdder support is compiled into ChestShop (see
+  [Custom items](#custom-items-nexo)); no separate bridge plugin required.
 - **Market analytics** — every trade is recorded to Treasury's market API, which is what
   feeds this Explorer's Market pages. On whenever the API is present.
+
+## Failed trade recovery evidence
+
+If settlement fails and ChestShop cannot return the goods (including an inventory
+exception), the trade is cancelled and a warning identifies its `tradeId`.
+ChestShop commits a recovery row to `plugins/ChestShop/users.db`, in
+`trade_recovery`, independently of normal sale logging. Keep this database in
+server backups; these rows are retained until an operator archives them.
+
+To inspect outstanding evidence with SQLite:
+
+```sql
+SELECT id, trade_id, recorded_at, evidence FROM trade_recovery ORDER BY id;
+```
+
+`recorded_at` is UTC. The versioned YAML evidence contains the player and owner
+UUIDs/names, buy/sell direction, unlimited-shop flag, exact price, sign world and
+coordinates when available, and Bukkit item snapshots with amounts and metadata.
+A known settlement transaction ID and reversal exception are included when
+available. Rows are evidence of failed attempts, not proof of a specific loss or
+an instruction to refund. Compare the inventories and Treasury ledger before
+manually reconciling; ChestShop does not automatically retry or compensate.
+
+If SQLite cannot save the record, an error includes the trade ID and serialized
+evidence in the server log. Preserve that log for manual investigation.
+
+### WorldEdit, FAWE and WorldGuard
+
+WorldEdit and FastAsyncWorldEdit are optional. Completed edits reconcile affected
+shop signs with Treasury: removed signs disappear from `/find` and lose their
+previews; pasted or restored shop signs are registered again. Cleanup is drained
+on the server thread in batches of at most 256 positions per second. If a chunk
+unloads first, cleanup waits for it to load; it never force-loads chunks. After a
+server restart interrupts pending cleanup, use `/find resync` on loaded chunks.
+
+With WorldGuard installed, `%region-name%` is available in these plain-text
+`config.yml` templates (no PlaceholderAPI required):
+
+```yaml
+FIND_LOCATION_FORMAT: '%region-name% %world%: %x%, %y%, %z%'
+PREVIEW_NAME_FORMAT: '%region-name%'
+```
+
+The defaults keep coordinate-only `/find` labels and unnamed item previews.
+`%region-name%` uses the highest-priority applicable region ID, breaking ties by
+alphabetical ID. It is empty outside regions, for unavailable worlds, or without
+WorldGuard. The global region is excluded. Region names work independently of
+WorldGuard's ChestShop protection settings. Templates also support `%world%`,
+`%x%`, `%y%` and `%z%`; values are literal text, not formatting markup.

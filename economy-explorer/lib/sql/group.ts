@@ -1,5 +1,5 @@
 import 'server-only';
-import { Kysely, sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { db, type DB, uuidToBin, binToUuid } from '@/lib/db';
 
 /**
@@ -56,6 +56,7 @@ export interface GroupMember {
   name: string | null;
   source: 'manual' | 'luckperms';
   addedAt: Date;
+  syncActive: boolean;
 }
 
 /** The capabilities a player has via group membership. */
@@ -65,6 +66,8 @@ export async function findCapabilities(playerUuid: string): Promise<string[]> {
     FROM explorer_group_member gm
     JOIN explorer_group_capability gc ON gc.group_id = gm.group_id
     WHERE gm.player_uuid_bin = ${uuidToBin(playerUuid)}
+      AND (gm.source = 'manual' OR (gm.synced_at > CURRENT_TIMESTAMP - INTERVAL 1 HOUR
+        AND EXISTS (SELECT 1 FROM explorer_group g WHERE g.group_id = gm.group_id AND g.luckperms_node IS NOT NULL)))
   `.execute(db);
   return r.rows.map((row) => row.capability);
 }
@@ -84,7 +87,7 @@ export async function listGroups(): Promise<GroupSummary[]> {
 }
 
 /** Single group by id, or null. Queries by id rather than scanning listGroups(). */
-export async function selectGroupById(groupId: number): Promise<GroupSummary | null> {
+export async function selectGroupById(groupId: number, executor: Executor = db): Promise<GroupSummary | null> {
   const r = await sql<GroupRow>`
     SELECT g.group_id, g.name, g.description, g.luckperms_node,
            (SELECT GROUP_CONCAT(gc.capability ORDER BY gc.capability)
@@ -94,7 +97,7 @@ export async function selectGroupById(groupId: number): Promise<GroupSummary | n
               WHERE gm.group_id = g.group_id AND gm.source = 'luckperms') AS luckperms_count
     FROM explorer_group g
     WHERE g.group_id = ${groupId}
-  `.execute(db);
+  `.execute(executor);
   return r.rows[0] ? mapGroupRow(r.rows[0]) : null;
 }
 
@@ -104,7 +107,7 @@ export async function selectGroupById(groupId: number): Promise<GroupSummary | n
  */
 export async function findPlayerUuidByName(name: string): Promise<string | null> {
   const r = await sql<{ player_uuid_bin: Buffer }>`
-    SELECT player_uuid_bin FROM firm_players
+    SELECT player_uuid_bin FROM economy_players
     WHERE LOWER(current_name) = LOWER(${name})
     ORDER BY player_uuid_bin LIMIT 1
   `.execute(db);
@@ -122,9 +125,9 @@ export async function createGroup(args: {
   `.execute(db);
 }
 
-export async function deleteGroup(groupId: number): Promise<void> {
+export async function deleteGroup(groupId: number, executor: Executor = db): Promise<void> {
   // capabilities + members cascade via FK ON DELETE CASCADE.
-  await sql`DELETE FROM explorer_group WHERE group_id = ${groupId}`.execute(db);
+  await sql`DELETE FROM explorer_group WHERE group_id = ${groupId}`.execute(executor);
 }
 
 /** Deletes every capability row for a group. */
@@ -143,8 +146,8 @@ export async function insertGroupCapability(
   `.execute(executor);
 }
 
-export async function setLuckpermsNode(groupId: number, node: string | null): Promise<void> {
-  await sql`UPDATE explorer_group SET luckperms_node = ${node} WHERE group_id = ${groupId}`.execute(db);
+export async function setLuckpermsNode(groupId: number, node: string | null, executor: Executor = db): Promise<void> {
+  await sql`UPDATE explorer_group SET luckperms_node = ${node} WHERE group_id = ${groupId}`.execute(executor);
 }
 
 export async function listGroupMembers(groupId: number): Promise<GroupMember[]> {
@@ -153,10 +156,12 @@ export async function listGroupMembers(groupId: number): Promise<GroupMember[]> 
     name: string | null;
     source: 'manual' | 'luckperms';
     added_at: Date;
+    sync_active: number;
   }>`
-    SELECT gm.player_uuid_bin, fp.current_name AS name, gm.source, gm.added_at
+    SELECT gm.player_uuid_bin, fp.current_name AS name, gm.source, gm.added_at,
+           (gm.source = 'manual' OR gm.synced_at > CURRENT_TIMESTAMP - INTERVAL 1 HOUR) AS sync_active
     FROM explorer_group_member gm
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
     WHERE gm.group_id = ${groupId}
     ORDER BY gm.source, fp.current_name
   `.execute(db);
@@ -165,20 +170,26 @@ export async function listGroupMembers(groupId: number): Promise<GroupMember[]> 
     name: row.name,
     source: row.source,
     addedAt: row.added_at,
+    syncActive: Number(row.sync_active) === 1,
   }));
 }
 
-export async function addManualMember(groupId: number, playerUuid: string, addedBy: string | null): Promise<void> {
+export async function addManualMember(groupId: number, playerUuid: string, addedBy: string | null, executor: Executor = db): Promise<void> {
   await sql`
     INSERT IGNORE INTO explorer_group_member (group_id, player_uuid_bin, source, added_by_uuid_bin)
     VALUES (${groupId}, ${uuidToBin(playerUuid)}, 'manual', ${addedBy ? uuidToBin(addedBy) : null})
-  `.execute(db);
+  `.execute(executor);
 }
 
 /** Removes a manual grant only — LuckPerms-sourced rows are owned by the cron. */
-export async function removeManualMember(groupId: number, playerUuid: string): Promise<void> {
+export async function removeManualMember(groupId: number, playerUuid: string, executor: Executor = db): Promise<void> {
   await sql`
     DELETE FROM explorer_group_member
     WHERE group_id = ${groupId} AND player_uuid_bin = ${uuidToBin(playerUuid)} AND source = 'manual'
-  `.execute(db);
+  `.execute(executor);
+}
+
+/** Called in the same transaction as a source-node edit. */
+export async function clearSyncedMembers(groupId: number, executor: Executor = db): Promise<void> {
+  await sql`DELETE FROM explorer_group_member WHERE group_id = ${groupId} AND source = 'luckperms'`.execute(executor);
 }

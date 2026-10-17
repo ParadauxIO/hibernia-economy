@@ -1,4 +1,6 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -9,6 +11,7 @@ import { fmtAmtFull, fmtN } from '@/lib/format';
 import { BackLink } from '@/components/BackLink';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +30,7 @@ export default async function MyMarketPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const viewer = await getViewer();
+  if (!viewer.anon && !hasPermission(viewer, 'player.read')) return <PrivacyGate kind="private" title="Permission required" />;
   if (viewer.anon) {
     return (
       <PrivacyGate kind="login" title="My market activity" hint="Sign in to see your own ChestShop trades." />
@@ -38,7 +42,7 @@ export default async function MyMarketPage({
     );
   }
 
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
   const days = sp.window === 'all' ? null : Number(sp.window);
   const windowLabel = sp.window === 'all' ? 'all time' : `last ${sp.window} days`;
   const sales = await listPlayerSales(viewer.minecraftUuid, days);
@@ -181,7 +185,7 @@ export default async function MyMarketPage({
           Items you buy <span className="sub">top {topBought.length} by spend</span>
           <ItemExport items={topBought} basename="my-items-bought" spendLabel="Spent" />
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Items you buy">
           <table className="data-table">
             <thead>
               <tr>
@@ -210,7 +214,7 @@ export default async function MyMarketPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {/* Items you sold */}
@@ -219,7 +223,7 @@ export default async function MyMarketPage({
           Items you sell <span className="sub">top {topSold.length} by earnings</span>
           <ItemExport items={topSold} basename="my-items-sold" spendLabel="Earned" />
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Items you sell">
           <table className="data-table">
             <thead>
               <tr>
@@ -248,7 +252,7 @@ export default async function MyMarketPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {/* Who you buy from */}
@@ -257,7 +261,7 @@ export default async function MyMarketPage({
           Who you buy from <span className="sub">top {topBoughtFrom.length}</span>
           <PartnerExport partners={topBoughtFrom} basename="my-buy-from" who="Seller" amountLabel="Spent" />
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Who you buy from">
           <table className="data-table">
             <thead>
               <tr>
@@ -285,7 +289,7 @@ export default async function MyMarketPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {/* Who buys from you */}
@@ -294,7 +298,7 @@ export default async function MyMarketPage({
           Who buys from you <span className="sub">top {topSoldTo.length}</span>
           <PartnerExport partners={topSoldTo} basename="my-sell-to" who="Customer" amountLabel="Earned" />
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Who buys from you">
           <table className="data-table">
             <thead>
               <tr>
@@ -316,19 +320,12 @@ export default async function MyMarketPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}
 
 // Per-table export controls. Local to this page — the bought/sold and
 // buy-from/sell-to tables share two shapes, so two small wrappers keep the

@@ -48,8 +48,8 @@ export function isBlockedAddress(ip: string): boolean {
 
 function isBlockedV4(ip: string): boolean {
   const o = ip.split('.').map(Number);
-  if (o.length !== 4 || o.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
   const [a, b] = o;
+  if (o.length !== 4 || a === undefined || b === undefined || o.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
   if (a === 0) return true; // 0.0.0.0/8
   if (a === 10) return true; // private
   if (a === 127) return true; // loopback
@@ -68,6 +68,6 @@ function isBlockedV6(ip: string): boolean {
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // unique-local fc00::/7
   if (lower.startsWith('ff')) return true; // multicast
   const mapped = lower.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (mapped) return isBlockedV4(mapped[1]);
+  if (mapped?.[1]) return isBlockedV4(mapped[1]);
   return false;
 }

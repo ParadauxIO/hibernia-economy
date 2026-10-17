@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -6,9 +7,11 @@ import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { findAccountsForPlayer } from '@/lib/sql/me';
 import { listForOwner, listFinanceFirms } from '@/lib/sql/webhook';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CreateWebhookForm } from './create-webhook-form';
 import { WebhookRowActions } from './webhook-row-actions';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +25,7 @@ export async function generateMetadata() {
 
 export default async function WebhooksPage() {
   const viewer = await getViewer();
+  if (!viewer.anon && !hasPermission(viewer, 'webhooks.read')) return <PrivacyGate kind="private" title="Permission required" />;
   if (viewer.anon) {
     return (
       <PrivacyGate
@@ -64,14 +68,16 @@ export default async function WebhooksPage() {
 
       <div className="card">
         <div className="card-title">New webhook</div>
-        {personal || firms.length > 0 ? (
+        {hasPermission(viewer, 'webhooks.manage') && (personal || firms.length > 0) ? (
           <CreateWebhookForm
             hasPersonal={!!personal}
             firms={firms.map((f) => ({ firmId: f.firmId, displayName: f.displayName }))}
           />
         ) : (
           <p className="muted small" style={{ margin: 0 }}>
-            You have no personal account and no firm with financial access, so there is nothing to scope a webhook to.
+            {!hasPermission(viewer, 'webhooks.manage')
+              ? 'Your roles allow viewing webhooks but do not allow managing them.'
+              : 'You have no personal account and no firm with financial access, so there is nothing to scope a webhook to.'}
           </p>
         )}
         <p className="muted small" style={{ marginTop: 10, marginBottom: 0 }}>
@@ -83,7 +89,7 @@ export default async function WebhooksPage() {
 
       <div className="card">
         <div className="card-title">Your webhooks</div>
-        <div className="table-wrap">
+        <TableWrap label="Your webhooks">
           <table className="data-table">
             <thead>
               <tr>
@@ -115,16 +121,16 @@ export default async function WebhooksPage() {
                       : <span className="badge badge-archived">{h.disabledAt ? 'auto-disabled' : 'paused'}</span>}
                   </td>
                   <td className="amount mono">{fmtN(h.consecutiveFailures)}</td>
-                  <td className="ts">{fmtTs(h.createdAt)}</td>
+                  <td className="ts"><LocalTimestamp value={h.createdAt} /></td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <Link href={`/me/webhooks/${h.id}` as Route} className="btn" prefetch={false}>Deliveries</Link>{' '}
-                    <WebhookRowActions id={h.id} active={h.active} url={h.url} />
+                    {hasPermission(viewer, 'webhooks.manage') && <WebhookRowActions id={h.id} active={h.active} url={h.url} />}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );

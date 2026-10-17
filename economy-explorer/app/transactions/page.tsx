@@ -1,9 +1,12 @@
+import { hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
 import { listTransactions, countTransactions, type SortDir } from '@/lib/sql/ledger';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { Pagination } from '@/components/Pagination';
@@ -13,6 +16,7 @@ import { PrivacyGate } from '@/components/PrivacyGate';
 import { AdminNav } from '@/components/AdminNav';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
+import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -45,16 +49,16 @@ export default async function TransactionsPage({
       <PrivacyGate
         kind="login"
         title="Transactions firehose is private"
-        hint="Sign in with admin access to view the whole-economy transaction list."
+        hint="Sign in with moderator or admin access to view the whole-economy transaction list."
       />
     );
   }
-  if (viewer.role !== 'admin') {
-    return <PrivacyGate kind="private" title="Admin only" hint="Only admins can view the whole-economy transactions list." />;
+  if (!hasPermission(viewer, 'transactions.read')) {
+    return <PrivacyGate kind="private" title="Moderator / admin only" hint="Only moderators and admins can view the whole-economy transactions list." />;
   }
 
   const raw = await searchParams;
-  const sp = SP_SCHEMA.safeParse(flat(raw)).data ?? SP_SCHEMA.parse({});
+  const sp = SP_SCHEMA.safeParse(flattenSearchParams(raw)).data ?? SP_SCHEMA.parse({});
   const dir = sp.dir.toUpperCase() as SortDir;
 
   // Privileged read: admin browsing the whole-economy transaction firehose.
@@ -125,7 +129,7 @@ export default async function TransactionsPage({
         }
       />
 
-      <div className="table-wrap"><table className="data-table">
+      <TableWrap label="Transactions"><table className="data-table">
         <thead>
           <tr>
             <th>Txn</th>
@@ -151,7 +155,7 @@ export default async function TransactionsPage({
               </td>
               <td>{r.message}</td>
               <td className="amount mono">{fmtN(r.posting_count)}</td>
-              <td className="ts">{fmtTs(r.settlement_time)}</td>
+              <td className="ts"><LocalTimestamp value={r.settlement_time} /></td>
               <td><Player name={r.initiator_name} uuid={r.initiator_uuid} /></td>
               <td>
                 <span className="mono" style={{ color: 'var(--fg-muted)' }}>{r.plugin_system ?? '—'}</span>
@@ -159,7 +163,7 @@ export default async function TransactionsPage({
             </tr>
           ))}
         </tbody>
-      </table></div>
+      </table></TableWrap>
 
       <Pagination
         page={sp.page}
@@ -178,12 +182,3 @@ export default async function TransactionsPage({
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      if (v.length > 0 && v[0] !== undefined) out[k] = v[0];
-    } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

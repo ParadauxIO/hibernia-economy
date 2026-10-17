@@ -18,18 +18,18 @@ public interface FirmMapper {
 
     /**
      * Resolves a player's UUID from their in-game name (case-insensitive) via the
-     * {@code firm_players} name cache, or null if no player by that name is known.
-     * {@code name_lower} is a generated LOWER(current_name) column with a unique
-     * index, so the match is exact and index-served.
+     * unified {@code economy_players} directory (PAR-35), or null if no player by
+     * that name is known. {@code name_lower} is a generated LOWER(current_name)
+     * column with a unique index, so the match is exact and index-served.
      */
-    @Select("SELECT player_uuid_bin FROM firm_players WHERE name_lower = LOWER(#{name})")
+    @Select("SELECT player_uuid_bin FROM economy_players WHERE name_lower = LOWER(#{name})")
     UUID findPlayerUuidByName(@Param("name") String name);
 
     /**
-     * Returns the last-known IGN cached in {@code firm_players} for the given
-     * UUID, or null if the player hasn't been seen on the server yet.
+     * Returns the last-known IGN from the {@code economy_players} directory for the
+     * given UUID, or null if the player hasn't been seen on the server yet.
      */
-    @Select("SELECT current_name FROM firm_players WHERE player_uuid_bin = #{uuid}")
+    @Select("SELECT current_name FROM economy_players WHERE player_uuid_bin = #{uuid}")
     String findPlayerNameByUuid(@Param("uuid") UUID uuid);
 
     /**
@@ -54,12 +54,13 @@ public interface FirmMapper {
 
     @Select("SELECT firm_id, display_name, proprietor_uuid_bin AS proprietorUuid, " +
             "       discord_url, hq_region, default_account_id, is_archived AS archived, created_at " +
-            "FROM firm WHERE display_name = #{displayName}")
+            "FROM firm WHERE display_name = #{displayName} " +
+            "ORDER BY is_archived ASC, name_released ASC, firm_id DESC LIMIT 1")
     Firm findFirmByDisplayName(@Param("displayName") String displayName);
 
     /**
      * Returns all currently employed staff (left_at IS NULL), ordered by role rank then join date.
-     * LEFT JOINs firm_players for the IGN — null if the player hasn't been seen on the server yet.
+     * LEFT JOINs economy_players for the IGN — null if the player hasn't been seen on the server yet.
      *
      * <p>{@code firm_role} is soft-deleted; filter the join on
      * {@code fr.deleted_at IS NULL} so an employee whose role was deleted
@@ -69,7 +70,7 @@ public interface FirmMapper {
             "       fr.name AS roleName, fe.joined_at AS joinedAt " +
             "FROM firm_employee fe " +
             "JOIN firm_role fr ON fr.role_id = fe.role_id AND fr.deleted_at IS NULL " +
-            "LEFT JOIN firm_players fp ON fp.player_uuid_bin = fe.player_uuid_bin " +
+            "LEFT JOIN economy_players fp ON fp.player_uuid_bin = fe.player_uuid_bin " +
             "WHERE fe.firm_id = #{firmId} AND fe.left_at IS NULL " +
             "ORDER BY fr.rank_order, fe.joined_at")
     List<FirmEmployee> listFirmEmployees(@Param("firmId") long firmId);
@@ -153,10 +154,10 @@ public interface FirmMapper {
     int renameFirm(@Param("firmId") long firmId, @Param("displayName") String displayName);
 
     /**
-     * Counts firms (other than {@code firmId}) sharing the given display name,
+     * Counts firms whose names are still reserved (other than {@code firmId}) sharing the given display name,
      * case-insensitively — the uniqueness guard for rename. Matches the plugin's
-     * case-insensitive collision check and the {@code uq_firm_display_name} constraint.
+     * case-insensitive collision check and the {@code uq_firm_reserved_display_name} constraint.
      */
-    @Select("SELECT COUNT(*) FROM firm WHERE LOWER(display_name) = LOWER(#{displayName}) AND firm_id <> #{firmId}")
+    @Select("SELECT COUNT(*) FROM firm WHERE LOWER(display_name) = LOWER(#{displayName}) AND firm_id <> #{firmId} AND (is_archived = 0 OR name_released = 0)")
     int countOtherFirmsByDisplayName(@Param("firmId") long firmId, @Param("displayName") String displayName);
 }

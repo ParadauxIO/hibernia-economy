@@ -11,7 +11,7 @@ spend, and manage money** in-game — running a business, hiring staff, selling 
 through ChestShops, and buying or renting property — and lists every command you'll
 need along the way.
 
-Everything here is about what you type **in-game**. If you just want to *look at* the
+Everything here is about what you type **in-game**. If you just want to *browse* the
 economy — balances, market prices, money flow — head back to the
 [Economy Explorer](/) instead.
 
@@ -51,6 +51,8 @@ Step-by-step walkthroughs for the things players actually do:
 - **[Government salaries](/docs/guides/salaries)** — automatic pay for official roles.
 - **[Using the economy API](/docs/guides/api)** — for developers: get a key and build
   against the REST API.
+- **[Webhooks](/docs/guides/webhooks)** — get a POST (or Discord message) when your
+  account or firm moves money.
 
 ## Plugin reference
 

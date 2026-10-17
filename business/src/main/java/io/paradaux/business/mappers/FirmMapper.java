@@ -8,6 +8,18 @@ import java.util.List;
 @Mapper
 public interface FirmMapper {
 
+    /**
+     * Serializes creation for one proprietor until the surrounding transaction
+     * commits or rolls back. The upsert also covers players with no firms yet;
+     * locking existing firm rows alone would leave that case unprotected.
+     */
+    @Insert("""
+            INSERT INTO firm_creation_lock (proprietor_uuid_bin)
+            VALUES (uuid_to_bin(#{playerUuid}))
+            ON DUPLICATE KEY UPDATE proprietor_uuid_bin = VALUES(proprietor_uuid_bin)
+            """)
+    void lockCreationForOwner(@Param("playerUuid") String playerUuid);
+
     @Insert("""
             INSERT INTO firm (display_name, proprietor_uuid_bin)
             VALUES (#{displayName}, uuid_to_bin(#{proprietorUuid}))
@@ -26,7 +38,7 @@ public interface FirmMapper {
               <if test="hqRegion != null">hq_region = #{hqRegion},</if>
               <if test="defaultAccountId != null">default_account_id = #{defaultAccountId},</if>
               <if test="archived != null">is_archived = #{archived},</if>
-              updated_at = updated_at
+              updated_at = CURRENT_TIMESTAMP
             </set>
             WHERE firm_id = #{firmId}
             </script>
@@ -38,15 +50,30 @@ public interface FirmMapper {
      * {@code disbandFirm}, where the firm's accounts have just been archived
      * in Treasury and removed from {@code firm_accounts}; leaving the
      * default_account_id set would point at an archived account.
+     *
+     * <p>The {@code AND is_archived = 0} guard makes the transition atomic:
+     * only the first caller to flip the flag sees a non-zero affected-row count,
+     * so two concurrent disbands cannot both proceed to drain the same accounts.
+     * Returns the number of rows updated (1 for the winner, 0 for a loser or an
+     * already-archived firm).
      */
     @Update("""
             UPDATE firm
             SET is_archived = 1,
                 default_account_id = NULL,
-                updated_at = updated_at
+                updated_at = CURRENT_TIMESTAMP
             WHERE firm_id = #{firmId}
+              AND is_archived = 0
             """)
-    void archiveFirm(@Param("firmId") int firmId);
+    int archiveFirm(@Param("firmId") int firmId);
+
+    /** Releases only an archived firm's reservation; active firms cannot be released. */
+    @Update("""
+            UPDATE firm
+            SET name_released = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE firm_id = #{firmId} AND is_archived = 1 AND name_released = 0
+            """)
+    int releaseFirmName(@Param("firmId") int firmId);
 
     @Select("""
             SELECT f.firm_id                     AS firmId,
@@ -94,6 +121,7 @@ public interface FirmMapper {
             SELECT COUNT(*) > 0
             FROM firm
             WHERE display_name = #{firmName}
+              AND is_archived = 0
               AND proprietor_uuid_bin = uuid_to_bin(#{playerUuid})
             """)
     boolean isProprietorByFirmName(@Param("firmName") String firmName,
@@ -120,6 +148,7 @@ public interface FirmMapper {
             SELECT COUNT(1)
             FROM firm
             WHERE display_name = #{name}
+              AND (is_archived = 0 OR name_released = 0)
             """)
     int getFirmsByNameCount(@Param("name") String name);
 
@@ -163,6 +192,7 @@ public interface FirmMapper {
                      updated_at                      AS updatedAt
                 FROM firm
                WHERE display_name = #{name}
+               ORDER BY is_archived ASC, name_released ASC, firm_id DESC
                LIMIT 1
             """)
     Firm getFirmByName(@Param("name") String name);

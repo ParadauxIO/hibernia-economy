@@ -22,7 +22,4 @@ public class DatabaseConfiguration {
 
     @ConfigurationValue(path = "database.password", defaultValue = "password")
     private String password;
-
-    @ConfigurationValue(path = "database.table-prefix", defaultValue = "treasury_")
-    private String tablePrefix;
 }

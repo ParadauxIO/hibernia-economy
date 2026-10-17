@@ -1,4 +1,6 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
@@ -8,6 +10,7 @@ import { searchPlayers } from '@/lib/sql/me';
 import { fmtN } from '@/lib/format';
 import { Player } from '@/components/Player';
 import { Toolbar } from '@/components/Toolbar';
+import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,9 +28,10 @@ export default async function AdminPlayersPage({
 }) {
   // The /admin layout gates the whole section to admins; audit the access here.
   const viewer = await getViewer();
+  if (!hasPermission(viewer, 'player.read.all')) return null; // layout renders the access gate
   await auditView(viewer, { path: '/admin/players', targetType: 'global' });
 
-  const sp = SP_SCHEMA.safeParse(flatten(await searchParams)).data ?? {};
+  const sp = SP_SCHEMA.safeParse(flattenSearchParams(await searchParams)).data ?? {};
   const q = sp.q ?? null;
   const results = q ? await searchPlayers(q, 50) : [];
   const directUuid = q && UUID_RE.test(q) ? q.toLowerCase() : null;
@@ -47,13 +51,13 @@ export default async function AdminPlayersPage({
             Looks like a UUID — <Link href={`/admin/players/${directUuid}` as Route} className="rowlink">view this player&apos;s data →</Link>
           </p>
         )}
-        <div className="table-wrap" style={{ marginTop: 12 }}>
+        <TableWrap label="Players" style={{ marginTop: 12 }}>
           <table className="data-table">
             <thead>
               <tr>
                 <th>Player</th>
                 <th>UUID</th>
-                <th></th>
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -70,18 +74,10 @@ export default async function AdminPlayersPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
         {results.length > 0 && <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>{fmtN(results.length)} match(es) (capped at 50).</p>}
       </div>
     </>
   );
 }
 
-function flatten(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const o: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === 'string') o[k] = v;
-    else if (Array.isArray(v) && v.length) o[k] = v[0];
-  }
-  return o;
-}
