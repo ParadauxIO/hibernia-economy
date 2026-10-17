@@ -1,28 +1,25 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
+import com.google.inject.Provider;
 import io.paradaux.common.OverdraftPolicy;
-import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.LedgerMapper;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.economy.*;
+import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.IncomeTaxService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
+import io.paradaux.treasury.services.cache.PersonalAccountCache;
+import io.paradaux.treasury.services.cache.PluginSystemAccountCache;
 import io.paradaux.treasury.utils.AccountFactory;
 import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.Money;
-import io.paradaux.treasury.services.cache.PersonalAccountCache;
-import io.paradaux.treasury.services.cache.PluginSystemAccountCache;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import org.apache.ibatis.exceptions.PersistenceException;
-import org.jetbrains.annotations.Nullable;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,6 +27,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.jetbrains.annotations.Nullable;
+import org.mybatis.guice.transactional.Transactional;
 
 @Slf4j
 public class LedgerServiceImpl implements LedgerService {
@@ -42,24 +43,29 @@ public class LedgerServiceImpl implements LedgerService {
     private final PersonalAccountCache personalAccountCache;
     private final EconomyConfiguration economyConfig;
     private final GovernmentConfiguration govConfig;
+    /** A provider because the income tax collects through this ledger: a direct dependency would be circular. */
+    private final Provider<IncomeTaxService> incomeTaxService;
 
     @Inject
-    public LedgerServiceImpl(AccountMapper accountMapper,
-                             MembershipService membershipService,
-                             LedgerMapper ledgerMapper,
-                             AccountService accountService,
-                             PluginSystemAccountCache cache,
-                             PersonalAccountCache personalAccountCache,
-                             EconomyConfiguration economyConfig,
-                             GovernmentConfiguration govConfig) {
-        this.accountMapper        = accountMapper;
-        this.membershipService    = membershipService;
-        this.ledgerMapper         = ledgerMapper;
-        this.accountService       = accountService;
-        this.systemAccountCache   = cache;
+    public LedgerServiceImpl(
+            AccountMapper accountMapper,
+            MembershipService membershipService,
+            LedgerMapper ledgerMapper,
+            AccountService accountService,
+            PluginSystemAccountCache cache,
+            PersonalAccountCache personalAccountCache,
+            EconomyConfiguration economyConfig,
+            GovernmentConfiguration govConfig,
+            Provider<IncomeTaxService> incomeTaxService) {
+        this.accountMapper = accountMapper;
+        this.membershipService = membershipService;
+        this.ledgerMapper = ledgerMapper;
+        this.accountService = accountService;
+        this.systemAccountCache = cache;
         this.personalAccountCache = personalAccountCache;
-        this.economyConfig        = economyConfig;
-        this.govConfig            = govConfig;
+        this.economyConfig = economyConfig;
+        this.govConfig = govConfig;
+        this.incomeTaxService = incomeTaxService;
     }
 
     // ---- Startup ----
@@ -79,12 +85,13 @@ public class LedgerServiceImpl implements LedgerService {
      */
     private void ensurePrimitiveGovernmentAccount(String name) {
         Account existing = getOrCreateGovernmentAccount(name);
-        if (existing.getCreditLimit() == null
-                || existing.getCreditLimit().signum() >= 0) {
+        if (existing.getCreditLimit() == null || existing.getCreditLimit().signum() >= 0) {
             existing.setCreditLimit(BigDecimal.valueOf(-1));
             accountMapper.updateAccount(existing);
-            log.info("Migrated GOVERNMENT account '{}' (id={}) to credit_limit=-1 (unlimited)",
-                    name, existing.getAccountId());
+            log.info(
+                    "Migrated GOVERNMENT account '{}' (id={}) to credit_limit=-1 (unlimited)",
+                    name,
+                    existing.getAccountId());
         }
     }
 
@@ -127,8 +134,7 @@ public class LedgerServiceImpl implements LedgerService {
                 TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
                 null,
                 TreasuryConstants.TREASURY_PLUGIN_NAME,
-                dedup
-        );
+                dedup);
         transfer(seedReq);
 
         return personal;
@@ -178,12 +184,12 @@ public class LedgerServiceImpl implements LedgerService {
 
         // Load both account rows in a single round-trip.
         int fromId = req.fromAccountId();
-        int toId   = req.toAccountId();
+        int toId = req.toAccountId();
         Account from = null;
-        Account to   = null;
+        Account to = null;
         for (Account a : accountMapper.findByIds(List.of(fromId, toId))) {
             if (a.getAccountId() == fromId) from = a;
-            if (a.getAccountId() == toId)   to = a;
+            if (a.getAccountId() == toId) to = a;
         }
         if (from == null || to == null) {
             throw new IllegalArgumentException("Account not found (from=" + fromId + ", to=" + toId + ")");
@@ -192,12 +198,10 @@ public class LedgerServiceImpl implements LedgerService {
         if (!bypassAuthorization && (from.isRequiresAuthorization() || to.isRequiresAuthorization())) {
             UUID auth = req.authorizer();
             if (auth == null) throw new SecurityException("Authorizer required");
-            if (from.isRequiresAuthorization()
-                    && !membershipService.isAuthorizer(from.getAccountId(), auth)) {
+            if (from.isRequiresAuthorization() && !membershipService.isAuthorizer(from.getAccountId(), auth)) {
                 throw new SecurityException("Authorizer not permitted on source account");
             }
-            if (to.isRequiresAuthorization()
-                    && !membershipService.isAuthorizer(to.getAccountId(), auth)) {
+            if (to.isRequiresAuthorization() && !membershipService.isAuthorizer(to.getAccountId(), auth)) {
                 throw new SecurityException("Authorizer not permitted on destination account");
             }
         }
@@ -235,21 +239,27 @@ public class LedgerServiceImpl implements LedgerService {
         if (!OverdraftPolicy.isUnlimited(lockedFrom.isAllowOverdraft(), lockedFrom.getCreditLimit(), sourceIsSystem)) {
             AccountBalance fromBal = null;
             for (AccountBalance b : accountMapper.lockBalances(List.of(fromId, toId))) {
-                if (b.getAccountId() == fromId) { fromBal = b; break; }
+                if (b.getAccountId() == fromId) {
+                    fromBal = b;
+                    break;
+                }
             }
             if (fromBal == null) {
                 throw new IllegalStateException("Missing balance row for source account " + fromId);
             }
-            if (!OverdraftPolicy.isWithinFloor(fromBal.getBalance(), Money.normalize(req.amount()),
-                    lockedFrom.isAllowOverdraft(), lockedFrom.getCreditLimit(), sourceIsSystem)) {
+            if (!OverdraftPolicy.isWithinFloor(
+                    fromBal.getBalance(),
+                    Money.normalize(req.amount()),
+                    lockedFrom.isAllowOverdraft(),
+                    lockedFrom.getCreditLimit(),
+                    sourceIsSystem)) {
                 throw new IllegalStateException("Insufficient funds");
             }
         }
 
         final long txnId;
         try {
-            txnId = insertTxn(req.message(), req.initiator(), req.authorizer(),
-                    req.pluginSystem(), req.dedupKey());
+            txnId = insertTxn(req.message(), req.initiator(), req.authorizer(), req.pluginSystem(), req.dedupKey());
         } catch (PersistenceException e) {
             // Concurrent identical-dedup-key transfer: another thread/process inserted
             // a ledger_txn with this client_dedup_key between our findByDedupKey check
@@ -261,7 +271,8 @@ public class LedgerServiceImpl implements LedgerService {
             if (req.dedupKey() != null) {
                 LedgerTxn raced = ledgerMapper.findByDedupKeyLocking(req.dedupKey());
                 if (raced != null) {
-                    log.debug("Transfer deduplicated on concurrent insert: returning existing txn={}", raced.getTxnId());
+                    log.debug(
+                            "Transfer deduplicated on concurrent insert: returning existing txn={}", raced.getTxnId());
                     return new TransferResult(raced.getTxnId(), false);
                 }
             }
@@ -269,14 +280,27 @@ public class LedgerServiceImpl implements LedgerService {
         }
 
         postDoubleEntry(txnId, fromId, toId, req.amount(), req.message());
-        log.debug("Transfer txn={} from={} to={} amount={} plugin={}",
-                txnId, fromId, toId, req.amount(), req.pluginSystem());
+        log.debug(
+                "Transfer txn={} from={} to={} amount={} plugin={}",
+                txnId,
+                fromId,
+                toId,
+                req.amount(),
+                req.pluginSystem());
+
+        // Progressive income tax, in this same transaction so the payment, the
+        // player's running income total and the tax commit or roll back together.
+        // Only reached for a freshly written txn: a dedup collapse returned above.
+        if (to.getAccountType() == AccountType.PERSONAL) {
+            incomeTaxService.get().onIncome(from, to, req.amount(), req.pluginSystem(), txnId);
+        }
         return new TransferResult(txnId, true);
     }
 
     @Override
     @Transactional
-    public java.util.OptionalLong sweepAll(int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin) {
+    public java.util.OptionalLong sweepAll(
+            int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin) {
         Objects.requireNonNull(memo, "memo");
         Objects.requireNonNull(initiator, "initiator");
         if (fromAccountId == toAccountId) {
@@ -289,11 +313,14 @@ public class LedgerServiceImpl implements LedgerService {
         // amount is read from this freshly-locked row, not a stale account_balances_mat
         // snapshot, so a credit landing after the caller's snapshot is included and a
         // debit can't make the sweep overdraw (conservation stays exact).
-        int firstId  = Math.min(fromAccountId, toAccountId);
+        int firstId = Math.min(fromAccountId, toAccountId);
         int secondId = Math.max(fromAccountId, toAccountId);
         AccountBalance sourceBalance = null;
         for (AccountBalance b : accountMapper.lockBalances(List.of(firstId, secondId))) {
-            if (b.getAccountId() == fromAccountId) { sourceBalance = b; break; }
+            if (b.getAccountId() == fromAccountId) {
+                sourceBalance = b;
+                break;
+            }
         }
         if (sourceBalance == null) {
             throw new IllegalStateException("Missing balance row for source account " + fromAccountId);
@@ -307,8 +334,7 @@ public class LedgerServiceImpl implements LedgerService {
 
         long txnId = insertTxn(memo, initiator, null, sourcePlugin, null);
         postDoubleEntry(txnId, fromAccountId, toAccountId, amount, memo);
-        log.debug("Swept locked balance {} from account {} to {} (txn={})",
-                amount, fromAccountId, toAccountId, txnId);
+        log.debug("Swept locked balance {} from account {} to {} (txn={})", amount, fromAccountId, toAccountId, txnId);
         return java.util.OptionalLong.of(txnId);
     }
 
@@ -321,40 +347,46 @@ public class LedgerServiceImpl implements LedgerService {
      */
     private void postDoubleEntry(long txnId, int fromId, int toId, BigDecimal amount, String message) {
         LedgerPosting fromPosting = new LedgerPosting(null, txnId, fromId, amount.negate(), message);
-        LedgerPosting toPosting   = new LedgerPosting(null, txnId, toId,   amount,          message);
-        ledgerMapper.insertPostings(fromId <= toId
-                ? List.of(fromPosting, toPosting)
-                : List.of(toPosting, fromPosting));
+        LedgerPosting toPosting = new LedgerPosting(null, txnId, toId, amount, message);
+        ledgerMapper.insertPostings(fromId <= toId ? List.of(fromPosting, toPosting) : List.of(toPosting, fromPosting));
     }
 
     // ---- Vault compatibility ----
 
     @Override
     @Transactional
-    public long vaultWithdraw(String pluginName, UUID playerUuid, BigDecimal amount, String memo,
-                              UUID initiator, @Nullable UUID authorizer,
-                              @Nullable String idempotencyKey) {
+    public long vaultWithdraw(
+            String pluginName,
+            UUID playerUuid,
+            BigDecimal amount,
+            String memo,
+            UUID initiator,
+            @Nullable UUID authorizer,
+            @Nullable String idempotencyKey) {
         Money.requirePositive(amount, "amount > 0");
         int systemId = systemAccountCache.getOrCreate(pluginName, initiator);
         int playerAccountId = resolveVaultAccountId(playerUuid);
         byte[] dedup = idempotencyKey == null ? null : Idempotency.sha256(idempotencyKey);
-        return transfer(new TransferRequest(
-                playerAccountId, systemId, amount, memo,
-                initiator, authorizer, pluginName, dedup));
+        return transfer(
+                new TransferRequest(playerAccountId, systemId, amount, memo, initiator, authorizer, pluginName, dedup));
     }
 
     @Override
     @Transactional
-    public long vaultDeposit(String pluginName, UUID playerUuid, BigDecimal amount, String memo,
-                             UUID initiator, @Nullable UUID authorizer,
-                             @Nullable String idempotencyKey) {
+    public long vaultDeposit(
+            String pluginName,
+            UUID playerUuid,
+            BigDecimal amount,
+            String memo,
+            UUID initiator,
+            @Nullable UUID authorizer,
+            @Nullable String idempotencyKey) {
         Money.requirePositive(amount, "amount > 0");
         int systemId = systemAccountCache.getOrCreate(pluginName, initiator);
         int playerAccountId = resolveVaultAccountId(playerUuid);
         byte[] dedup = idempotencyKey == null ? null : Idempotency.sha256(idempotencyKey);
-        return transfer(new TransferRequest(
-                systemId, playerAccountId, amount, memo,
-                initiator, authorizer, pluginName, dedup));
+        return transfer(
+                new TransferRequest(systemId, playerAccountId, amount, memo, initiator, authorizer, pluginName, dedup));
     }
 
     /**
@@ -387,8 +419,14 @@ public class LedgerServiceImpl implements LedgerService {
         Account ecoAccount = getOrCreateGovernmentAccount(TreasuryConstants.ECO_ACCOUNT_NAME);
         Account player = resolveOrCreatePersonal(playerUuid);
         long txnId = transfer(new TransferRequest(
-                ecoAccount.getAccountId(), player.getAccountId(),
-                amount, memo, adminUuid, null, TreasuryConstants.ECO_PLUGIN_SYSTEM, null));
+                ecoAccount.getAccountId(),
+                player.getAccountId(),
+                amount,
+                memo,
+                adminUuid,
+                null,
+                TreasuryConstants.ECO_PLUGIN_SYSTEM,
+                null));
         log.info("Admin give: admin={} player={} amount={} txn={}", adminUuid, playerUuid, amount, txnId);
         return txnId;
     }
@@ -400,8 +438,14 @@ public class LedgerServiceImpl implements LedgerService {
         Account ecoAccount = getOrCreateGovernmentAccount(TreasuryConstants.ECO_ACCOUNT_NAME);
         Account player = resolveOrCreatePersonal(playerUuid);
         long txnId = transfer(new TransferRequest(
-                player.getAccountId(), ecoAccount.getAccountId(),
-                amount, memo, adminUuid, null, TreasuryConstants.ECO_PLUGIN_SYSTEM, null));
+                player.getAccountId(),
+                ecoAccount.getAccountId(),
+                amount,
+                memo,
+                adminUuid,
+                null,
+                TreasuryConstants.ECO_PLUGIN_SYSTEM,
+                null));
         log.info("Admin take: admin={} player={} amount={} txn={}", adminUuid, playerUuid, amount, txnId);
         return txnId;
     }
@@ -469,8 +513,12 @@ public class LedgerServiceImpl implements LedgerService {
 
     // ---- Private helpers ----
 
-    private long insertTxn(String message, UUID initiator, @Nullable UUID authorizer,
-                           @Nullable String pluginSystem, byte @Nullable [] dedup) {
+    private long insertTxn(
+            String message,
+            UUID initiator,
+            @Nullable UUID authorizer,
+            @Nullable String pluginSystem,
+            byte @Nullable [] dedup) {
         LedgerTxn txn = new LedgerTxn();
         txn.setMessage(message);
         txn.setInitiatorUuid(initiator);
@@ -486,8 +534,10 @@ public class LedgerServiceImpl implements LedgerService {
         if (existing != null) {
             if (accountMapper.readBalance(existing.getAccountId()) == null) {
                 accountMapper.seedBalance(existing.getAccountId());
-                log.warn("Government account '{}' (id={}) was missing its balance row — re-seeded",
-                        name, existing.getAccountId());
+                log.warn(
+                        "Government account '{}' (id={}) was missing its balance row — re-seeded",
+                        name,
+                        existing.getAccountId());
             }
             return existing;
         }

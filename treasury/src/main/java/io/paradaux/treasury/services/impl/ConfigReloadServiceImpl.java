@@ -5,20 +5,20 @@ import com.google.inject.Singleton;
 import io.paradaux.hibernia.framework.configurator.ConfigurationLoader;
 import io.paradaux.hibernia.framework.configurator.ConfigurationProcessor;
 import io.paradaux.hibernia.framework.i18n.Message;
-import lombok.extern.slf4j.Slf4j;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.configuration.InvalidConfigurationException;
-
-import java.io.File;
-import java.io.IOException;
 import io.paradaux.treasury.Treasury;
 import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.model.config.LoggingConfiguration;
+import io.paradaux.treasury.model.config.ProgressiveIncomeTaxConfiguration;
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.services.ConfigPublishService;
 import io.paradaux.treasury.services.ConfigReloadService;
 import io.paradaux.treasury.utils.LoggingConfigurer;
+import java.io.File;
+import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 /**
  * Default {@link ConfigReloadService}: re-reads the config files and refreshes the
@@ -35,24 +35,28 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
     private final SalaryConfiguration salaryConfiguration;
     private final BalanceTaxConfiguration balanceTaxConfiguration;
     private final SourceIncomeTaxConfiguration sourceIncomeTaxConfiguration;
+    private final ProgressiveIncomeTaxConfiguration progressiveIncomeTaxConfiguration;
     private final LoggingConfiguration loggingConfiguration;
     private final ConfigPublishService configPublishService;
 
     @Inject
-    public ConfigReloadServiceImpl(Treasury plugin,
-                                   Message message,
-                                   ConfigurationLoader configurationLoader,
-                                   SalaryConfiguration salaryConfiguration,
-                                   BalanceTaxConfiguration balanceTaxConfiguration,
-                                   SourceIncomeTaxConfiguration sourceIncomeTaxConfiguration,
-                                   LoggingConfiguration loggingConfiguration,
-                                   ConfigPublishService configPublishService) {
+    public ConfigReloadServiceImpl(
+            Treasury plugin,
+            Message message,
+            ConfigurationLoader configurationLoader,
+            SalaryConfiguration salaryConfiguration,
+            BalanceTaxConfiguration balanceTaxConfiguration,
+            SourceIncomeTaxConfiguration sourceIncomeTaxConfiguration,
+            ProgressiveIncomeTaxConfiguration progressiveIncomeTaxConfiguration,
+            LoggingConfiguration loggingConfiguration,
+            ConfigPublishService configPublishService) {
         this.plugin = plugin;
         this.message = message;
         this.configurationLoader = configurationLoader;
         this.salaryConfiguration = salaryConfiguration;
         this.balanceTaxConfiguration = balanceTaxConfiguration;
         this.sourceIncomeTaxConfiguration = sourceIncomeTaxConfiguration;
+        this.progressiveIncomeTaxConfiguration = progressiveIncomeTaxConfiguration;
         this.loggingConfiguration = loggingConfiguration;
         this.configPublishService = configPublishService;
     }
@@ -70,10 +74,11 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
         var defaults = plugin.getConfig().getDefaults();
         if (defaults != null) candidate.setDefaults(defaults);
         // Parse every manual config before publishing any of them. A parse failure
-        // leaves all three live snapshots intact.
+        // leaves every live snapshot intact.
         var salary = salaryConfiguration.prepareReload(candidate);
         var balanceTax = balanceTaxConfiguration.prepareReload(candidate);
         var sourceIncomeTax = sourceIncomeTaxConfiguration.prepareReload(candidate);
+        var progressiveIncomeTax = progressiveIncomeTaxConfiguration.prepareReload(candidate);
         plugin.reloadConfig();
         message.reload();
 
@@ -95,6 +100,7 @@ public class ConfigReloadServiceImpl implements ConfigReloadService {
         salaryConfiguration.publish(salary);
         balanceTaxConfiguration.publish(balanceTax);
         sourceIncomeTaxConfiguration.publish(sourceIncomeTax);
+        progressiveIncomeTaxConfiguration.publish(progressiveIncomeTax);
 
         // 4) Re-apply startup side effects that are cheap and safe to redo.
         LoggingConfigurer.apply(loggingConfiguration.getLevel());

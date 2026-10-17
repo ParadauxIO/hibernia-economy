@@ -1,5 +1,12 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.LedgerMapper;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
@@ -8,27 +15,19 @@ import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.LedgerPosting;
 import io.paradaux.treasury.model.economy.LedgerTxn;
 import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.IncomeTaxService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.cache.PersonalAccountCache;
 import io.paradaux.treasury.services.cache.PluginSystemAccountCache;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.OptionalLong;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.OptionalLong;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit coverage for {@link LedgerServiceImpl#sweepAll}: the sweep must move the amount
@@ -39,25 +38,53 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class LedgerServiceSweepAllTest {
 
-    @Mock AccountMapper accountMapper;
-    @Mock MembershipService membershipService;
-    @Mock LedgerMapper ledgerMapper;
-    @Mock AccountService accountService;
-    @Mock PluginSystemAccountCache systemAccountCache;
-    @Mock PersonalAccountCache personalAccountCache;
-    @Mock EconomyConfiguration economyConfig;
-    @Mock GovernmentConfiguration govConfig;
+    @Mock
+    AccountMapper accountMapper;
+
+    @Mock
+    MembershipService membershipService;
+
+    @Mock
+    LedgerMapper ledgerMapper;
+
+    @Mock
+    AccountService accountService;
+
+    @Mock
+    PluginSystemAccountCache systemAccountCache;
+
+    @Mock
+    PersonalAccountCache personalAccountCache;
+
+    @Mock
+    EconomyConfiguration economyConfig;
+
+    @Mock
+    GovernmentConfiguration govConfig;
+
+    @Mock
+    IncomeTaxService incomeTaxService;
 
     private LedgerServiceImpl newService() {
-        return new LedgerServiceImpl(accountMapper, membershipService, ledgerMapper,
-                accountService, systemAccountCache, personalAccountCache, economyConfig, govConfig);
+        return new LedgerServiceImpl(
+                accountMapper,
+                membershipService,
+                ledgerMapper,
+                accountService,
+                systemAccountCache,
+                personalAccountCache,
+                economyConfig,
+                govConfig,
+                () -> incomeTaxService);
     }
 
     private void stubTxnInsert(long txnId) {
         doAnswer(inv -> {
-            ((LedgerTxn) inv.getArgument(0)).setTxnId(txnId);
-            return 1;
-        }).when(ledgerMapper).insertTxnEntity(any());
+                    ((LedgerTxn) inv.getArgument(0)).setTxnId(txnId);
+                    return 1;
+                })
+                .when(ledgerMapper)
+                .insertTxnEntity(any());
     }
 
     @Test
@@ -68,11 +95,13 @@ class LedgerServiceSweepAllTest {
         // A stale non-locking snapshot would report 250.00; sweepAll must ignore it
         // entirely and use the locked value. lenient() because "never consulted" is the
         // assertion — the stub exists only to prove it is NOT the source of the amount.
-        org.mockito.Mockito.lenient().when(accountService.getBalanceReadOnly(10))
+        org.mockito.Mockito.lenient()
+                .when(accountService.getBalanceReadOnly(10))
                 .thenReturn(new BigDecimal("250.00"));
         when(accountMapper.lockBalances(List.of(10, 99)))
-                .thenReturn(List.of(new AccountBalance(10, new BigDecimal("300.00"), 7L),
-                                    new AccountBalance(99, new BigDecimal("5.00"), 3L)));
+                .thenReturn(List.of(
+                        new AccountBalance(10, new BigDecimal("300.00"), 7L),
+                        new AccountBalance(99, new BigDecimal("5.00"), 3L)));
         stubTxnInsert(4242L);
 
         UUID initiator = UUID.randomUUID();
@@ -96,8 +125,10 @@ class LedgerServiceSweepAllTest {
         BigDecimal sum = postings.stream().map(LedgerPosting::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(sum).isEqualByComparingTo(BigDecimal.ZERO);
 
-        LedgerPosting debit  = postings.stream().filter(p -> p.accountId() == 10).findFirst().orElseThrow();
-        LedgerPosting credit = postings.stream().filter(p -> p.accountId() == 99).findFirst().orElseThrow();
+        LedgerPosting debit =
+                postings.stream().filter(p -> p.accountId() == 10).findFirst().orElseThrow();
+        LedgerPosting credit =
+                postings.stream().filter(p -> p.accountId() == 99).findFirst().orElseThrow();
         // The moved amount is the LOCKED balance (300.00), never the stale 250.00 snapshot.
         assertThat(debit.amount()).isEqualByComparingTo("-300.00");
         assertThat(credit.amount()).isEqualByComparingTo("300.00");
@@ -108,8 +139,9 @@ class LedgerServiceSweepAllTest {
         // Deadlock-safety: both balance rows are locked in one round-trip, ascending id,
         // identical to the transfer path — regardless of sweep direction.
         when(accountMapper.lockBalances(List.of(10, 99)))
-                .thenReturn(List.of(new AccountBalance(10, BigDecimal.ZERO, 1L),
-                                    new AccountBalance(99, new BigDecimal("40.00"), 1L)));
+                .thenReturn(List.of(
+                        new AccountBalance(10, BigDecimal.ZERO, 1L),
+                        new AccountBalance(99, new BigDecimal("40.00"), 1L)));
         stubTxnInsert(1L);
 
         // Sweep from the HIGHER id (99) to the LOWER id (10): lock order must still be
@@ -122,8 +154,8 @@ class LedgerServiceSweepAllTest {
     @Test
     void sweepAll_zeroLockedBalance_isNoOp_emitsNoLedger() {
         when(accountMapper.lockBalances(List.of(10, 99)))
-                .thenReturn(List.of(new AccountBalance(10, BigDecimal.ZERO, 1L),
-                                    new AccountBalance(99, BigDecimal.ZERO, 1L)));
+                .thenReturn(List.of(
+                        new AccountBalance(10, BigDecimal.ZERO, 1L), new AccountBalance(99, BigDecimal.ZERO, 1L)));
 
         OptionalLong txn = newService().sweepAll(10, 99, "Firm disbanded", UUID.randomUUID(), "BusinessPlugin");
 
@@ -135,10 +167,12 @@ class LedgerServiceSweepAllTest {
     @Test
     void sweepAll_negativeLockedBalance_isNoOp() {
         when(accountMapper.lockBalances(List.of(10, 99)))
-                .thenReturn(List.of(new AccountBalance(10, new BigDecimal("-5.00"), 1L),
-                                    new AccountBalance(99, BigDecimal.ZERO, 1L)));
+                .thenReturn(List.of(
+                        new AccountBalance(10, new BigDecimal("-5.00"), 1L),
+                        new AccountBalance(99, BigDecimal.ZERO, 1L)));
 
-        assertThat(newService().sweepAll(10, 99, "memo", UUID.randomUUID(), "BusinessPlugin")).isEmpty();
+        assertThat(newService().sweepAll(10, 99, "memo", UUID.randomUUID(), "BusinessPlugin"))
+                .isEmpty();
         verify(ledgerMapper, never()).insertPostings(any());
     }
 

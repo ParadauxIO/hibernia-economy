@@ -14,13 +14,14 @@ import io.paradaux.treasury.api.impl.TaxApiImpl;
 import io.paradaux.treasury.events.FirstPlayerJoinEvent;
 import io.paradaux.treasury.events.PlayerLoginListener;
 import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
+import io.paradaux.treasury.model.config.ProgressiveIncomeTaxConfiguration;
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.services.*;
-import io.paradaux.treasury.services.impl.*;
 import io.paradaux.treasury.services.cache.AccountRedirectCache;
 import io.paradaux.treasury.services.cache.PersonalAccountCache;
 import io.paradaux.treasury.services.cache.PluginSystemAccountCache;
+import io.paradaux.treasury.services.impl.*;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.Server;
 
@@ -67,6 +68,8 @@ public class TreasuryModule extends AbstractModule {
 
         // Tax API
         bind(SourceIncomeTaxConfiguration.class).in(Singleton.class);
+        bind(ProgressiveIncomeTaxConfiguration.class).in(Singleton.class);
+        bind(IncomeTaxService.class).to(IncomeTaxServiceImpl.class).in(Singleton.class);
         bind(BalanceTaxConfiguration.class).in(Singleton.class);
         bind(BalanceTaxService.class).to(BalanceTaxServiceImpl.class).in(Singleton.class);
         bind(TaxCycleRegistry.class).to(TaxCycleRegistryImpl.class).in(Singleton.class);

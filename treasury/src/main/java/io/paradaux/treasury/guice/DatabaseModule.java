@@ -5,11 +5,10 @@ import com.google.inject.name.Names;
 import io.paradaux.treasury.mappers.*;
 import io.paradaux.treasury.mappers.typehandlers.Sha256BinaryTypeHandler;
 import io.paradaux.treasury.mappers.typehandlers.UuidBinaryTypeHandler;
+import javax.sql.DataSource;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.mybatis.guice.MyBatisModule;
 import org.mybatis.guice.datasource.helper.JdbcHelper;
-
-import javax.sql.DataSource;
 
 public class DatabaseModule extends AbstractModule {
 
@@ -24,7 +23,8 @@ public class DatabaseModule extends AbstractModule {
         bind(DataSource.class).toInstance(dataSource);
 
         install(new MyBatisModule() {
-            @Override protected void initialize() {
+            @Override
+            protected void initialize() {
                 install(JdbcHelper.MySQL);
 
                 bindTransactionFactoryType(JdbcTransactionFactory.class);
@@ -36,6 +36,7 @@ public class DatabaseModule extends AbstractModule {
 
                 addMapperClass(AccountMapper.class);
                 addMapperClass(LedgerMapper.class);
+                addMapperClass(IncomeTaxMapper.class);
                 addMapperClass(MembershipMapper.class);
                 addMapperClass(GovernmentFineMapper.class);
                 addMapperClass(GroupMembershipMapper.class);
