@@ -11,7 +11,8 @@ Treasury's settings live in `plugins/Treasury/config.yml`.
 > [!CAUTION]
 > Most changes here are picked up by **`/treasury reload`** (permission
 > `treasury.admin.reload`) — it re-reads `config.yml` and `messages.properties` and
-> refreshes salaries, balance-tax brackets/rates, source-income tax, government account
+> refreshes salaries, balance-tax brackets/rates, source-income tax, progressive income
+> tax, government account
 > names, and the log level live. A full **server restart** is only needed for `database.*`,
 > the tax/salary schedule intervals, and `economy.format` (the currency pattern). Treasury
 > is the economy system of record, so a bad `database.*` value or an invalid
@@ -141,6 +142,72 @@ In effect on this server:
 ```live
 income-tax
 ```
+
+## Progressive income tax — `tax.progressive-income-tax`
+
+An optional tax on everything a player **earns in a period**, at **marginal** rates, taken
+from each payment as it arrives rather than in one bill at the end.
+
+Every payment into a player's personal account adds to their income for the current
+period — rent, salaries, `/pay`, Vault deposits. Each payment is taxed at the
+rate(s) of the bracket(s) it moves that running total through, and the total resets to
+zero when the next period starts.
+
+| Key | Default | What it does |
+|---|---|---|
+| `tax.progressive-income-tax.enabled` | `false` | Master switch (off on the shipped config). |
+| `tax.progressive-income-tax.government-account` | `DCGovernment` | Government account that receives the tax (created if missing). |
+| `tax.progressive-income-tax.period` | `30d` | How long a period lasts: a number and unit (`s`, `m`, `h`, `d`, `w`) such as `30d`, `2w`, `12h`, `1d12h`, or ISO-8601 (`P30D`). At least one minute. |
+| `tax.progressive-income-tax.period-anchor` | `2026-01-01T00:00:00Z` | When periods start: they repeat every `period` from this moment, so **every player resets at the same time**. A date (`2026-01-01`, midnight UTC) or an instant. |
+| `tax.progressive-income-tax.brackets` | *(see below)* | Period-income floor → marginal rate in `[0, 1]`. |
+| `tax.progressive-income-tax.exempt-source-accounts` | `[starting-balances, Eco]` | Government/system account names whose payments are not income (case-insensitive). |
+| `tax.progressive-income-tax.exempt-plugins` | `[]` | Plugin names whose transfers are not income (case-insensitive). |
+| `tax.progressive-income-tax.tax-player-payments` | `true` | Whether money players send each other with `/pay` and `/pay-account` counts as income. |
+| `tax.progressive-income-tax.tax-chestshop-sales` | `false` | Whether ChestShop sale proceeds count as income. Off by default because ChestShop charges its own sales tax. |
+
+Brackets are **marginal**: each rate applies only to the income between its floor and the
+next floor, so crossing a floor never raises the tax on income already earned. With the
+shipped brackets:
+
+```yaml
+tax:
+  progressive-income-tax:
+    brackets:
+      0: 0.0       # first $5,000 of the period: 0 %
+      5000: 0.03   # $5,000 – $19,999.99: 3 %
+      20000: 0.05  # above $20,000: 5 %
+```
+
+| Payment | Period income | Tax on this payment |
+|---|---|---|
+| $500 | $500 | $0 — still under $5,000 |
+| $5,000 | $5,500 | $15 — 3% of the $500 above $5,000 |
+| $1,000 | $6,500 | $30 — 3% of all of it |
+
+Not income, so never taxed or counted:
+
+- moves between accounts the player owns (for example out of their own firm);
+- payments from an `exempt-source-accounts` account — by default the new-player
+  `starting-balances` grant and `Eco` (`/eco give` and other admin adjustments);
+- transfers made by an `exempt-plugins` plugin;
+- ChestShop sale proceeds, unless `tax-chestshop-sales: true` (ChestShop taxes sales itself);
+- `/pay` and `/pay-account` transfers, if `tax-player-payments: false`;
+- anything paid into a firm, government or system account.
+
+> [!NOTE]
+> The tax is taken in the **same database transaction** as the payment, so a payment and
+> its tax always succeed or fail together, and a replayed (deduplicated) payment is not
+> taxed twice. Each player's running totals are kept per period in `income_tax_period`.
+
+> [!CAUTION]
+> This stacks with `tax.source-income-tax` if that is on too, and with ChestShop's own
+> sales tax if you turn `tax-chestshop-sales` on. Like the balance tax, bracket floors
+> must be **whole numbers** (no decimal point). Changing `period` or `period-anchor`
+> starts counting in new period rows; income already counted in the old rows no longer
+> applies.
+
+The progressive income tax is not yet published to `economy_config`, so the live tables on
+this site and the REST API do not show it.
 
 ## Published rates — `economy_config`
 

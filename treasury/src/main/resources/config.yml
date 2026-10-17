@@ -97,6 +97,44 @@ tax:
     plugin-rates:
       # Realty: 0.08
       # Business: 0.10
+  # Progressive income tax — taxes money a player receives at marginal rates on their
+  # running income for the current period, collected as each payment arrives.
+  # Every payment into a player's personal account adds to their period income: rent,
+  # salaries, /pay, Vault deposits. Moves between accounts the player owns, payments from
+  # the exempt sources below, and (by default) ChestShop sales are not income.
+  # Brackets are marginal: each rate applies only to the income between its floor and
+  # the next floor. With the brackets below, a player who earns $500 and then $5,000
+  # (period income $5,500) pays 3% of the $500 above $5,000 = $15, taken from the
+  # payment that crossed the floor.
+  # Stacks with source-income-tax if that is enabled too.
+  progressive-income-tax:
+    enabled: false
+    # Name of the GOVERNMENT Treasury account that receives the tax.
+    government-account: "DCGovernment"
+    # How long a period lasts before every player's income counter resets to zero.
+    # A number and unit (s, m, h, d, w), e.g. 30d, 2w, 12h, 1d12h, or ISO-8601 (P30D).
+    period: 30d
+    # When periods start: they repeat every `period` from this moment (UTC).
+    # A date (2026-01-01, read as midnight UTC) or an instant (2026-01-01T03:00:00Z).
+    period-anchor: "2026-01-01T00:00:00Z"
+    # Key = period income floor (inclusive, whole number); value = marginal rate in [0, 1].
+    # IMPORTANT: floors must be whole numbers (no decimal point), as for tax.balance.
+    brackets:
+      0:     0.0     # $0     – $4,999.99  → 0 %
+      5000:  0.03    # $5,000 – $19,999.99 → 3 % of the income in this range
+      20000: 0.05    # $20,000+            → 5 % of the income above $20,000
+    # GOVERNMENT/SYSTEM account names whose payments are not income (case-insensitive).
+    # starting-balances = the new-player grant; Eco = /eco give and other admin adjustments.
+    exempt-source-accounts:
+      - starting-balances
+      - Eco
+    # Plugin names whose transfers are not income (case-insensitive).
+    exempt-plugins: []
+    # Whether money players send each other with /pay and /pay-account counts as income.
+    tax-player-payments: true
+    # Whether ChestShop sale proceeds count as income. Off by default: ChestShop charges
+    # its own sales tax, so taxing the proceeds again would tax every sale twice.
+    tax-chestshop-sales: false
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -116,6 +116,7 @@ dependencies {
 
     // Test fixtures: compile against the same API/Guice the services use.
     testFixturesImplementation(project(":treasury:treasury-api"))
+    testFixturesImplementation(project(":common"))
     testFixturesImplementation(libs.guice)
     testFixturesImplementation(libs.hibernia.framework)
 }
