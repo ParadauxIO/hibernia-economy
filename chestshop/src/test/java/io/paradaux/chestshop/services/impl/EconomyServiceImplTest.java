@@ -34,11 +34,14 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -1036,9 +1039,11 @@ class EconomyServiceImplTest extends ServerTest {
     @Test
     void resolveTaxRate_nullPartner_usesBaseRate() throws Exception {
         // Default base taxAmount is 0 → a null partner short-circuits to ZERO.
-        var m = EconomyServiceImpl.class.getDeclaredMethod("resolveTaxRate", UUID.class);
+        var m = EconomyServiceImpl.class.getDeclaredMethod(
+                "resolveTaxRate", UUID.class, int.class, BigDecimal.class, ItemStack[].class);
         m.setAccessible(true);
-        assertThat((BigDecimal) m.invoke(service, (UUID) null)).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat((BigDecimal) m.invoke(service, (UUID) null, 7, BigDecimal.ONE, new ItemStack[0]))
+                .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
@@ -1057,10 +1062,11 @@ class EconomyServiceImplTest extends ServerTest {
                 UUID.class,
                 Player.class,
                 String.class,
-                UUID.class);
+                UUID.class,
+                ItemStack[].class);
         m.setAccessible(true);
-        BigDecimal charged = (BigDecimal)
-                m.invoke(service, 7, receiver, new BigDecimal("5"), receiver, null, "memo", UUID.randomUUID());
+        BigDecimal charged = (BigDecimal) m.invoke(
+                service, 7, receiver, new BigDecimal("5"), receiver, null, "memo", UUID.randomUUID(), new ItemStack[0]);
 
         assertThat(charged).isEqualByComparingTo("0.25");
         verify(taxApi).collectRateTax(eq(7), any(), any(), anyString(), anyString(), eq(receiver), anyString(), any());
@@ -1074,5 +1080,199 @@ class EconomyServiceImplTest extends ServerTest {
         when(trade.getOwnerAccount()).thenReturn(businessOwner("B:@Acme"));
         service.migrateLegacyBusinessSign(trade);
         assertThat(SignService.getOwner((Sign) sign.getBlock().getState())).isEqualTo("B:@Acme");
+    }
+
+    // ---- sales tax: TAX_BRACKETS / TAX_ITEM_MULTIPLIERS --------------------------
+
+    /** Wires a personal buyer -> personal seller (account 20) sale and returns the seller. */
+    private UUID personalSale(Player buyer) {
+        UUID seller = UUID.randomUUID();
+        when(treasury.resolveOrCreatePersonal(buyer.getUniqueId())).thenReturn(tAccount(10));
+        when(treasury.resolveOrCreatePersonal(seller)).thenReturn(tAccount(20));
+        when(treasury.transfer(any())).thenReturn(555L);
+        collects(777L, new BigDecimal("0.10"));
+        return seller;
+    }
+
+    private void withConfig(String field, Object value) {
+        config = TestConfigs.with(config, field, value);
+        service = new EconomyServiceImpl(accounts, items, config, adminBypass);
+        service.bind(treasury, SYSTEM_ID, taxApi);
+    }
+
+    /** The rate (fraction) the sale's tax was collected at. */
+    private BigDecimal chargedRate() {
+        ArgumentCaptor<BigDecimal> rate = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(taxApi)
+                .collectRateTax(eq(20), any(), rate.capture(), anyString(), anyString(), any(), anyString(), any());
+        return rate.getValue();
+    }
+
+    private ItemStack withData(Material material, String namespace, String id) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(new NamespacedKey(namespace, "id"), PersistentDataType.STRING, id);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    @Test
+    void settle_taxBrackets_rateComesFromTheSellersPreSaleBalance() {
+        withConfig("taxBracketsRaw", List.of("0=0", "1000=1", "5000=2"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        // 6005 after being credited this sale's 5 -> 6000 before it -> the 2% bracket.
+        when(treasury.getBalanceByAccountId(20)).thenReturn(new BigDecimal("6005"));
+
+        service.settle(
+                new BigDecimal("5"),
+                buyer,
+                seller,
+                txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID()));
+
+        assertThat(chargedRate()).isEqualByComparingTo("0.02");
+    }
+
+    @Test
+    void settle_taxBrackets_belowTheLowestFloorChargesNothing() {
+        withConfig("taxBracketsRaw", List.of("1000=1"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        when(treasury.getBalanceByAccountId(20)).thenReturn(new BigDecimal("500"));
+
+        Transaction t = txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID());
+        service.settle(new BigDecimal("5"), buyer, seller, t);
+
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(t).setSalesTax(BigDecimal.ZERO);
+    }
+
+    @Test
+    void settle_withoutBrackets_usesTaxAmountAndNeverReadsTheBalance() {
+        withConfig("taxAmount", 3.0d);
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+
+        service.settle(
+                new BigDecimal("5"),
+                buyer,
+                seller,
+                txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID()));
+
+        assertThat(chargedRate()).isEqualByComparingTo("0.03");
+        verify(treasury, never()).getBalanceByAccountId(anyInt());
+    }
+
+    @Test
+    void settle_itemMultiplier_scalesThePlayerShopRate() {
+        withConfig("taxAmount", 1.0d);
+        withConfig("taxItemMultipliersRaw", List.of("NETHERITE_INGOT=2"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        ItemStack[] stock = {new ItemStack(Material.NETHERITE_INGOT)};
+        when(items.getName(stock[0], 0)).thenReturn("Netherite Ingot");
+
+        service.settle(new BigDecimal("5"), buyer, seller, txn(BUY, stock, "Seller", buyer, null, UUID.randomUUID()));
+
+        assertThat(chargedRate()).isEqualByComparingTo("0.02");
+    }
+
+    @Test
+    void settle_itemMultiplier_matchesCustomItemsByTheirPersistentId() {
+        withConfig("taxAmount", 1.0d);
+        withConfig("taxItemMultipliersRaw", List.of("nexo:ruby_sword=3", "PAPER=5"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        ItemStack[] stock = {withData(Material.PAPER, "nexo", "ruby_sword")};
+        when(items.getName(stock[0], 0)).thenReturn("ruby_sword");
+
+        service.settle(new BigDecimal("5"), buyer, seller, txn(BUY, stock, "Seller", buyer, null, UUID.randomUUID()));
+
+        assertThat(chargedRate()).isEqualByComparingTo("0.03");
+    }
+
+    @Test
+    void settle_itemMultiplier_customItemsAreNotTaxedAsTheirBaseMaterial() {
+        withConfig("taxAmount", 1.0d);
+        withConfig("taxItemMultipliersRaw", List.of("PAPER=5"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        ItemStack[] stock = {withData(Material.PAPER, "nexo", "emerald_coin")};
+        when(items.getName(stock[0], 0)).thenReturn("emerald_coin");
+
+        service.settle(new BigDecimal("5"), buyer, seller, txn(BUY, stock, "Seller", buyer, null, UUID.randomUUID()));
+
+        assertThat(chargedRate()).isEqualByComparingTo("0.01");
+    }
+
+    @Test
+    void settle_itemMultiplier_usesTheHighestOfTheTradedItems() {
+        withConfig("taxAmount", 1.0d);
+        withConfig("taxItemMultipliersRaw", List.of("IRON_INGOT=0.5", "NETHERITE_INGOT=2"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        ItemStack iron = new ItemStack(Material.IRON_INGOT);
+        ItemStack netherite = new ItemStack(Material.NETHERITE_INGOT);
+        // Air in the stock is skipped.
+        ItemStack[] stock = {iron, new ItemStack(Material.AIR), netherite};
+        when(items.getName(iron, 0)).thenReturn("Iron Ingot");
+        when(items.getName(netherite, 0)).thenReturn("Netherite Ingot");
+
+        service.settle(new BigDecimal("5"), buyer, seller, txn(BUY, stock, "Seller", buyer, null, UUID.randomUUID()));
+
+        assertThat(chargedRate()).isEqualByComparingTo("0.02");
+    }
+
+    @Test
+    void settle_itemMultiplier_belowOneLowersTheRate() {
+        withConfig("taxAmount", 2.0d);
+        withConfig("taxItemMultipliersRaw", List.of("IRON_INGOT=0.5"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        ItemStack[] stock = {new ItemStack(Material.IRON_INGOT)};
+        when(items.getName(stock[0], 0)).thenThrow(new IllegalStateException("no code"));
+        // The memo falls back to the sign's item line when the code lookup fails.
+        Sign sign = placeSign("Seller", "Iron Ingot");
+
+        service.settle(new BigDecimal("5"), buyer, seller, txn(BUY, stock, "Seller", buyer, sign, UUID.randomUUID()));
+
+        // The code lookup failed, so the material decides.
+        assertThat(chargedRate()).isEqualByComparingTo("0.01");
+    }
+
+    @Test
+    void settle_itemMultiplier_ignoresNonStringAndEmptyPersistentData() {
+        withConfig("taxAmount", 1.0d);
+        withConfig("taxItemMultipliersRaw", List.of("DIAMOND=4"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+        ItemStack item = new ItemStack(Material.DIAMOND);
+        ItemMeta meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(new NamespacedKey("someplugin", "count"), PersistentDataType.INTEGER, 3);
+        meta.getPersistentDataContainer().set(new NamespacedKey("someplugin", "label"), PersistentDataType.STRING, "");
+        item.setItemMeta(meta);
+        ItemStack[] stock = {item};
+        when(items.getName(item, 0)).thenReturn("Diamond");
+
+        service.settle(new BigDecimal("5"), buyer, seller, txn(BUY, stock, "Seller", buyer, null, UUID.randomUUID()));
+
+        // No string id, so it is a plain diamond.
+        assertThat(chargedRate()).isEqualByComparingTo("0.04");
+    }
+
+    @Test
+    void settle_itemMultiplier_ofZeroMakesTheSaleTaxFree() {
+        withConfig("taxAmount", 5.0d);
+        withConfig("taxItemMultipliersRaw", List.of("DIAMOND=0"));
+        Player buyer = player("Buyer");
+        UUID seller = personalSale(buyer);
+
+        Transaction t = txn(BUY, stockNamed("Diamond"), "Seller", buyer, null, UUID.randomUUID());
+        service.settle(new BigDecimal("5"), buyer, seller, t);
+
+        verify(taxApi, never())
+                .collectRateTax(anyInt(), any(), any(), anyString(), anyString(), any(), anyString(), any());
+        verify(t).setSalesTax(BigDecimal.ZERO);
     }
 }
