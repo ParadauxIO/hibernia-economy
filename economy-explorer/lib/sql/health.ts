@@ -7,16 +7,19 @@ export interface DailyDeltaByType { date: string; account_type: string; balance:
 export interface ActivePlayers { active1d: number; active7d: number; active30d: number; registered: number }
 export interface DayCount { date: string; count: number }
 
-/** Mirrors LedgerExplorerMapper.getDailyVolume (line 368-376). */
+/**
+ * Daily transaction count and volume (sum of positive postings). Reads the
+ * trigger-maintained ledger_txn_volume (V36) so the window is one index range
+ * scan rather than a ledger_txns × ledger_postings join (PAR-407).
+ */
 export async function getDailyVolume(days: number): Promise<DailyVolumePoint[]> {
   const r = await sql<{ txn_date: string; txn_count: string | number; total_volume: string }>`
-    SELECT DATE_FORMAT(DATE(lt.settlement_time), '%Y-%m-%d') AS txn_date,
-           COUNT(DISTINCT lt.txn_id) AS txn_count,
-           COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0.00) AS total_volume
-    FROM ledger_txns lt
-    LEFT JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
-    WHERE lt.settlement_time >= NOW() - INTERVAL ${days} DAY
-    GROUP BY DATE(lt.settlement_time)
+    SELECT DATE_FORMAT(DATE(settlement_time), '%Y-%m-%d') AS txn_date,
+           COUNT(*) AS txn_count,
+           COALESCE(SUM(volume), 0.00) AS total_volume
+    FROM ledger_txn_volume
+    WHERE settlement_time >= NOW() - INTERVAL ${days} DAY
+    GROUP BY DATE(settlement_time)
     ORDER BY txn_date ASC
   `.execute(db);
   return r.rows.map((row) => ({
@@ -72,14 +75,17 @@ export async function getNewPlayersDaily(days: number): Promise<DayCount[]> {
   return r.rows.map((row) => ({ date: row.date, count: Number(row.count) }));
 }
 
-/** Equal rolling windows evaluated in one statement, so their boundary agrees. */
+/**
+ * Equal rolling windows evaluated in one statement, so their boundary agrees.
+ * Reads ledger_txn_volume (V36) like getDailyVolume.
+ */
 export async function getActivityComparison(days: number) {
   const r = await sql<{ period: string; transactions: string | number; volume: string }>`
-    SELECT CASE WHEN lt.settlement_time >= NOW() - INTERVAL ${days} DAY THEN 'current' ELSE 'previous' END AS period,
-      COUNT(DISTINCT lt.txn_id) AS transactions,
-      COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0) AS volume
-    FROM ledger_txns lt LEFT JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
-    WHERE lt.settlement_time >= NOW() - INTERVAL ${days * 2} DAY
+    SELECT CASE WHEN settlement_time >= NOW() - INTERVAL ${days} DAY THEN 'current' ELSE 'previous' END AS period,
+      COUNT(*) AS transactions,
+      COALESCE(SUM(volume), 0) AS volume
+    FROM ledger_txn_volume
+    WHERE settlement_time >= NOW() - INTERVAL ${days * 2} DAY
     GROUP BY period
   `.execute(db);
   const current = r.rows.find(r => r.period === 'current');
