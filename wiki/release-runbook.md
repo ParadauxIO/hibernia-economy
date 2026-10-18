@@ -26,21 +26,25 @@ only way back.**
 
 ## How long it takes
 
-Plan a **two-hour window and expect about one hour**. Nothing here scales with the
-ledger (19.6 M postings, 9.4 M transactions): no pending migration alters those tables.
+Plan a **two-hour window and expect about one hour**. Only V36 scales with the
+ledger (19.7 M postings, 9.9 M transactions): it reads all of it once to backfill
+`ledger_txn_volume`. No pending migration alters the ledger tables themselves.
 
 | Step | Expect |
 |---|---|
 | Stop the game server, REST API and explorer; confirm no connections | 5 min |
 | Back up and verify (7.6 GB of data + indexes on disk) | 10–15 min |
-| Run V16–V29 | 2–10 min |
+| Run V16–V36 | 5–15 min |
 | Swap jars, set the new secret, start everything | 10 min |
 | Re-mint the explorer's SERVICE token | 5 min |
 | Verification (step 6) | 15 min |
 
 The migration figure comes from a synthetic database with production's row counts
 and its 128 MB buffer pool: about 35 s for V20's orphan checks over 3.3 M shop sales,
-and seconds for everything else. (V20 adds its foreign keys with
+and seconds for everything else. A rehearsal on 2026-10-18 on a copy of production's
+economy database (snapshot of 2026-10-17), also with a 128 MB buffer pool, ran
+V16–V36 in 233 s: 191 s for V36's backfill, 23 s for V20. The backfill adds about
+730 MB to the database. (V20 adds its foreign keys with
 `foreign_key_checks = 0`, an in-place change; with checks on, the same step copied
 the table and took 3.5 minutes on fast storage, far longer on slow.) The second
 hour is for a rollback: restoring the dump rebuilds every index, which on a small

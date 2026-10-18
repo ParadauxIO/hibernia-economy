@@ -45,6 +45,14 @@ balances would race. Having MariaDB fold postings into the materialized balance
 keeps it consistent under any mix of writers. Keep this in mind when writing
 migrations that touch ledger tables or their triggers.
 
+`ledger_txn_volume` (V36) is maintained the same way: one row per transaction
+with its settlement time and the sum of its positive postings, so the explorer's
+time-window aggregates scan one covering index instead of joining
+`ledger_txns` to `ledger_postings`. Its triggers only lock the row of the
+transaction being written. Don't replace it with shared rollup rows (per hour or
+per day): every transfer would contend for the same row, and taking it after the
+ascending `FOR UPDATE` balance locks in `LedgerServiceImpl` can deadlock.
+
 ## Deploying a schema change
 
 Schema deploys are **manual and gated** — there is no automatic "migrate on push".

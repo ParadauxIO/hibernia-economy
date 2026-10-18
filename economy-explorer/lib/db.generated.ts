@@ -402,6 +402,12 @@ export interface LedgerTxns {
   txnId: Generated<number>;
 }
 
+export interface LedgerTxnVolume {
+  settlementTime: Generated<Date>;
+  txnId: number;
+  volume: Generated<Decimal>;
+}
+
 export interface WebhookCursor {
   id: Generated<number>;
   lastDispatchedTxnId: Generated<number>;
@@ -497,6 +503,7 @@ export interface DB {
   governmentFines: GovernmentFines;
   ledgerPostings: LedgerPostings;
   ledgerTxns: LedgerTxns;
+  ledgerTxnVolume: LedgerTxnVolume;
   webhookCursor: WebhookCursor;
   webhookDelivery: WebhookDelivery;
   webhookSubscription: WebhookSubscription;
