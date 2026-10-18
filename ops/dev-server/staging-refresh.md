@@ -1,7 +1,9 @@
 # Refresh the DemocracyCraft staging databases
 
 `refresh-staging.py` exports and restores exactly `s80037_economy`,
-`s80037_chestshops`, and `s80037_realty`. It never writes to production.
+`s80037_chestshops`, `s80037_realty`, and `s80037_luckperms`. It never writes
+to production. Snapshots taken before LuckPerms was added (three databases)
+fail validation; take a new export rather than editing their manifest.
 Production credentials are read from plugin configuration files fetched through
 the same SFTP connection as `clone.sh`. Prefer dedicated backup credentials for
 recurring use; the existing plugin accounts may lack routine-export permissions.
@@ -91,7 +93,9 @@ and codes, deletes copied API keys and stored tokens, expires pending business
 transfer requests, and advances the webhook cursor. It preserves the financial
 history and permissions needed for realistic testing. This is **not general
 anonymization**: player identities, transaction descriptions, audit records and
-other private data remain. Keep staging restricted.
+other private data remain. Keep staging restricted. LuckPerms is copied as-is:
+it holds player names, permissions and its action log but no credentials, so
+staff ranks and permission groups match production.
 
 Sanitization runs before and after migration. The existing staging SERVICE token
 is read from `development/economy-dev-server`, validated against the local signing
@@ -126,7 +130,8 @@ On success **and failure**, all writers stay paused. After success:
 4. Restore the recorded API/Explorer replica counts and GitOps/autoscaler state.
    Verify their images are compatible with the migrated schema.
 5. Check plugin startup and exercise a real staging transfer, business lookup,
-   property lookup and shop purchase; verify no production webhook destinations
+   property lookup and shop purchase, and check `lp listgroups` shows the
+   production groups; verify no production webhook destinations
    remain. World files must correspond closely enough to the DB snapshot for
    physical shop/property checks to be meaningful.
 

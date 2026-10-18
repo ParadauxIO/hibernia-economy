@@ -44,11 +44,17 @@ class Guards(unittest.TestCase):
             for schema, name in zip(refresh.SCHEMAS, refresh.CONFIGS):
                 path = root / name
                 path.parent.mkdir()
-                path.write_text(json.dumps({'url': f'mysql://db.example/{schema}',
-                                            'username': 'test', 'password': 'test'}))
+                if name == 'LuckPerms/config.yml':
+                    config = {'data': {'address': 'db.example:3307', 'database': schema,
+                                       'username': 'test', 'password': 'test'}}
+                else:
+                    config = {'url': f'mysql://db.example/{schema}', 'username': 'test', 'password': 'test'}
+                path.write_text(json.dumps(config))
             work = root / 'connections'
             work.mkdir()
-            for connection in refresh.production_connections(root, work).values():
+            connections = refresh.production_connections(root, work)
+            self.assertIn('port="3307"', connections['s80037_luckperms'].read_text())
+            for connection in connections.values():
                 subprocess.run(['mariadb-dump', f'--defaults-file={connection}', '--version'],
                                check=True, capture_output=True)
 
