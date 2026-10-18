@@ -125,7 +125,8 @@ class LedgerTxnVolumeIT extends IntegrationTestBase {
 
         exec("DELETE FROM ledger_txns WHERE txn_id = " + t);
 
-        assertThat(count("SELECT COUNT(*) FROM ledger_txn_volume WHERE txn_id = " + t)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ledger_txn_volume WHERE txn_id = " + t))
+                .isZero();
     }
 
     @Test
@@ -176,7 +177,9 @@ class LedgerTxnVolumeIT extends IntegrationTestBase {
             pool.shutdownNow();
         }
 
-        assertThat(errors).as("no deadlock or failure with the volume triggers in place").isEmpty();
+        assertThat(errors)
+                .as("no deadlock or failure with the volume triggers in place")
+                .isEmpty();
         assertThat(count("SELECT COUNT(*) FROM ledger_txn_volume"))
                 .isEqualTo(count("SELECT COUNT(*) FROM ledger_txns"))
                 .isEqualTo(2 + workers * transfersPerWorker);
@@ -202,7 +205,9 @@ class LedgerTxnVolumeIT extends IntegrationTestBase {
                 WHERE v.txn_id IS NULL
                    OR v.settlement_time <> lt.settlement_time
                    OR v.volume <> COALESCE(p.s, 0)
-                """)).as("txns whose ledger_txn_volume row is missing or wrong").isZero();
+                """))
+                .as("txns whose ledger_txn_volume row is missing or wrong")
+                .isZero();
         assertThat(count("SELECT COUNT(*) FROM ledger_txn_volume"))
                 .isEqualTo(count("SELECT COUNT(*) FROM ledger_txns"));
     }
