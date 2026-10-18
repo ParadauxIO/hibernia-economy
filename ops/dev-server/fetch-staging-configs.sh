@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetch only the three production DB configurations, using clone.sh's connection.
+# Fetch only the four production DB configurations, using clone.sh's connection.
 # These files contain production credentials. Destination must be new/private.
 set -euo pipefail
 umask 077
@@ -19,7 +19,8 @@ export RCLONE_CONFIG_REMOTE_KNOWN_HOSTS_FILE="$HOME/.ssh/known_hosts"
 RCLONE_CONFIG_REMOTE_PASS="$(printf %s "$SFTP_PASS" | "$RCLONE" obscure -)"
 export RCLONE_CONFIG_REMOTE_PASS
 mkdir -m 700 -p "$DESTINATION"
-for file in Treasury/config.yml ChestShopDatabase/database-settings.yml Realty/database.yml; do
+for file in Treasury/config.yml ChestShopDatabase/database-settings.yml Realty/database.yml \
+            LuckPerms/config.yml; do
   "$RCLONE" copyto "remote:/plugins/$file" "$DESTINATION/$file" --config /dev/null
 done
 echo "Fetched database configs into $DESTINATION; remove them after exporting."

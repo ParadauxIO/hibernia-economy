@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Snapshot/restore the three staging databases. See staging-refresh.md."""
+"""Snapshot/restore the four staging databases. See staging-refresh.md."""
 import argparse
 import base64
 import datetime as dt
@@ -16,9 +16,10 @@ import time
 import uuid
 from urllib.parse import urlsplit
 
-SCHEMAS = ("s80037_economy", "s80037_chestshops", "s80037_realty")
+SCHEMAS = ("s80037_economy", "s80037_chestshops", "s80037_realty", "s80037_luckperms")
 REPO = Path(__file__).resolve().parents[2]
-CONFIGS = ("Treasury/config.yml", "ChestShopDatabase/database-settings.yml", "Realty/database.yml")
+CONFIGS = ("Treasury/config.yml", "ChestShopDatabase/database-settings.yml", "Realty/database.yml",
+           "LuckPerms/config.yml")
 
 
 def run(argv, **kw):
@@ -58,6 +59,11 @@ def production_connections(root, work, no_tls=False):
         if "database" in data and isinstance(data["database"], dict):
             d = data["database"]
             host, port, name = d["host"], d.get("port", 3306), d["database"]
+        elif "data" in data and isinstance(data["data"], dict):
+            # LuckPerms: address is "host" or "host:port".
+            d = data["data"]
+            host, _, port = d["address"].partition(":")
+            port, name = int(port or 3306), d["database"]
         else:
             d = data
             url = urlsplit(d["url"].removeprefix("jdbc:"))
