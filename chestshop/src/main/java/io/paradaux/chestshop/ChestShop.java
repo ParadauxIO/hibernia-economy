@@ -83,6 +83,9 @@ public class ChestShop extends JavaPlugin {
     @Override
     public void onEnable() {
 
+        int migratedAliases = io.paradaux.chestshop.services.LegacyConfigurationMigration.mergeAliases(getDataFolder());
+        if (migratedAliases > 0) getLogger().info("Migrated " + migratedAliases + " missing Utilities item aliases.");
+
         // HiberniaFramework DI: loads ChestShopConfiguration from config.yml (and
         // additively reconciles new default keys on upgrade). The framework also
         // owns command registration now (PAR-264): the seven ChestShop commands
@@ -103,6 +106,7 @@ public class ChestShop extends JavaPlugin {
                                 GiveCommand.class,
                                 ToggleCommand.class,
                                 io.paradaux.chestshop.commands.FindCommand.class,
+                                io.paradaux.chestshop.commands.LegacyFindCommand.class,
                                 io.paradaux.chestshop.commands.ShopToggleCommand.class,
                                 io.paradaux.chestshop.commands.ResyncCommand.class,
                                 io.paradaux.chestshop.commands.ImportShopsCommand.class)
@@ -113,6 +117,7 @@ public class ChestShop extends JavaPlugin {
                         // registered in one call via ListenerManager#registerAll (PAR-282).
                         .listeners(
                                 IntegrationRegistrar.class,
+                                io.paradaux.chestshop.integration.LegacyCompatibility.class,
                                 SignBreakListener.class,
                                 io.paradaux.chestshop.listeners.PhysicsBreakListener.class,
                                 io.paradaux.chestshop.listeners.PaperBlockDestroyListener.class,
@@ -120,6 +125,7 @@ public class ChestShop extends JavaPlugin {
                                 SignCreateListener.class,
                                 BlockPlaceListener.class,
                                 io.paradaux.chestshop.listeners.SignBacksideProtectorListener.class,
+                                io.paradaux.chestshop.dialogs.FindResultsMenu.class,
                                 MarketListener.class,
                                 PlayerConnectListener.class,
                                 PlayerInteractListener.class,
@@ -143,6 +149,7 @@ public class ChestShop extends JavaPlugin {
         injector.getInstance(io.paradaux.hibernia.framework.commander.CommandManager.class)
                 .registerAll();
 
+        io.paradaux.chestshop.integration.LegacyCompatibility.install(injector);
         loadConfig();
 
         itemCodes.migrateIfNeeded();
@@ -184,6 +191,9 @@ public class ChestShop extends JavaPlugin {
         configurationLoader.reload();
         config = configurationLoader.getComponent(ChestShopConfiguration.class);
 
+        io.paradaux.chestshop.integration.LegacyCompatibility.refresh(config);
+        injector.getInstance(io.paradaux.chestshop.services.FindPresentation.class)
+                .reload();
         accounts.load();
     }
 
@@ -210,6 +220,7 @@ public class ChestShop extends JavaPlugin {
     }
 
     public void onDisable() {
+        io.paradaux.chestshop.integration.LegacyCompatibility.clear();
         executorService.shutdown();
         try {
             executorService.awaitTermination(15, TimeUnit.SECONDS);

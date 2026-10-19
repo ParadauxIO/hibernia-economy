@@ -1,30 +1,28 @@
 package io.paradaux.chestshop.services.impl;
-import io.paradaux.chestshop.utils.StringUtil;
 
-import io.paradaux.chestshop.services.MaterialService;
-import io.paradaux.chestshop.services.ItemCodeService;
-import io.paradaux.chestshop.services.InventoryService;
-import io.paradaux.chestshop.services.CustomItemResolver;
-import io.paradaux.chestshop.services.ItemService;
+import static io.paradaux.chestshop.utils.MaterialUtil.MAXIMUM_SIGN_WIDTH;
+import static io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth;
+
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.chestshop.services.CustomItemResolver;
+import io.paradaux.chestshop.services.InventoryService;
+import io.paradaux.chestshop.services.ItemCodeService;
+import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.MaterialService;
 import io.paradaux.chestshop.utils.MaterialUtil;
-import lombok.extern.slf4j.Slf4j;
-import org.bukkit.Material;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.inventory.ItemStack;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
-import static io.paradaux.chestshop.utils.MaterialUtil.MAXIMUM_SIGN_WIDTH;
-import static io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.Material;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * Resolves the item/sign strings ChestShop puts on signs. Replaces the
@@ -59,7 +57,11 @@ public class ItemServiceImpl implements ItemService {
     private BiMap<String, String> aliases;
 
     @Inject
-    public ItemServiceImpl(ItemCodeService itemCodes, MaterialService materialService, InventoryService inventoryService, @com.google.inject.name.Named("dataFolder") java.io.File dataFolder) {
+    public ItemServiceImpl(
+            ItemCodeService itemCodes,
+            MaterialService materialService,
+            InventoryService inventoryService,
+            @com.google.inject.name.Named("dataFolder") java.io.File dataFolder) {
         this.itemCodes = itemCodes;
         this.materialService = materialService;
         this.inventoryService = inventoryService;
@@ -88,6 +90,9 @@ public class ItemServiceImpl implements ItemService {
     public ItemStack parse(String itemString) {
         CustomItemResolver resolver = customItems;
         ItemStack item = resolver != null ? resolver.parseItem(itemString) : null;
+        com.Acrobot.ChestShop.Events.ItemParseEvent event = new com.Acrobot.ChestShop.Events.ItemParseEvent(itemString);
+        io.paradaux.chestshop.integration.LegacyCompatibility.fire(event);
+        if (event.getItem() != null) item = event.getItem();
         ItemStack alias = resolveAlias(itemString); // a configured alias overrides a custom-item match
         if (alias != null) {
             item = alias;
@@ -106,6 +111,12 @@ public class ItemServiceImpl implements ItemService {
         if (result == null) {
             result = itemCodes.encode(item, maxWidth); // vanilla name
         }
+        com.Acrobot.ChestShop.Events.ItemStringQueryEvent event =
+                new com.Acrobot.ChestShop.Events.ItemStringQueryEvent(item);
+        io.paradaux.chestshop.integration.LegacyCompatibility.fire(event);
+        if (event.getItemString() != null
+                && (maxWidth <= 0 || getMinecraftStringWidth(event.getItemString()) <= maxWidth))
+            result = event.getItemString();
         return applyAlias(result, maxWidth); // configured alias override
     }
 
@@ -156,7 +167,8 @@ public class ItemServiceImpl implements ItemService {
                         material = code.substring(0, colonIndex);
                         rest = code.substring(colonIndex);
                     }
-                    code = MaterialUtil.getShortenedName(material, getMinecraftStringWidth(material) - exceeding) + rest;
+                    code = MaterialUtil.getShortenedName(material, getMinecraftStringWidth(material) - exceeding)
+                            + rest;
                 }
             }
 
@@ -182,9 +194,11 @@ public class ItemServiceImpl implements ItemService {
     private void loadAliases() {
         File file = new File(dataFolder, "itemAliases.yml");
         YamlConfiguration configuration = YamlConfiguration.loadConfiguration(file);
-        configuration.options().header(
-                "This file specified optional aliases for certain item codes. (Use the full name from /iteminfo)"
-                        + "\nPlease note that these aliases should fit on a sign for it to work properly!");
+        configuration
+                .options()
+                .header(
+                        "This file specified optional aliases for certain item codes. (Use the full name from /iteminfo)"
+                                + "\nPlease note that these aliases should fit on a sign for it to work properly!");
 
         if (!file.exists()) {
             configuration.addDefault("Item String#3d", "My Cool Item");
@@ -197,7 +211,8 @@ public class ItemServiceImpl implements ItemService {
             }
         }
 
-        BiMap<String, String> loaded = HashBiMap.create(configuration.getKeys(false).size());
+        BiMap<String, String> loaded =
+                HashBiMap.create(configuration.getKeys(false).size());
         for (String key : configuration.getKeys(false)) {
             if (configuration.isString(key)) {
                 loaded.put(key, configuration.getString(key));
@@ -210,14 +225,19 @@ public class ItemServiceImpl implements ItemService {
     private ItemStack resolveAlias(String itemString) {
         String code = aliases.inverse().get(itemString);
         if (code == null) {
-            String[] typeParts = itemString.replaceAll("(?<!^)([A-Z1-9])", "_$1").toUpperCase(Locale.ROOT).split("[ _\\-]");
+            String[] typeParts = itemString
+                    .replaceAll("(?<!^)([A-Z1-9])", "_$1")
+                    .toUpperCase(Locale.ROOT)
+                    .split("[ _\\-]");
             int length = Short.MAX_VALUE;
             for (Map.Entry<String, String> entry : aliases.entrySet()) {
-                if (entry.getValue().length() < length && entry.getValue().toUpperCase(Locale.ROOT).startsWith(itemString.toUpperCase(Locale.ROOT))) {
+                if (entry.getValue().length() < length
+                        && entry.getValue().toUpperCase(Locale.ROOT).startsWith(itemString.toUpperCase(Locale.ROOT))) {
                     length = (short) entry.getValue().length();
                     code = entry.getKey();
                 } else if (typeParts.length > 1) {
-                    String[] nameParts = entry.getValue().toUpperCase(Locale.ROOT).split("[ _\\-]");
+                    String[] nameParts =
+                            entry.getValue().toUpperCase(Locale.ROOT).split("[ _\\-]");
                     if (typeParts.length == nameParts.length) {
                         boolean matched = true;
                         for (int i = 0; i < nameParts.length; i++) {
@@ -259,7 +279,8 @@ public class ItemServiceImpl implements ItemService {
         if (maxWidth > 0) {
             int width = getMinecraftStringWidth(newCode);
             if (width > maxWidth) {
-                log.warn("Can't use configured alias " + newCode + " as its width (" + width + ") was wider than the allowed max width of " + maxWidth);
+                log.warn("Can't use configured alias " + newCode + " as its width (" + width
+                        + ") was wider than the allowed max width of " + maxWidth);
                 return itemString;
             }
         }

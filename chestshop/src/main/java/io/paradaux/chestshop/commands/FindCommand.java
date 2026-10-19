@@ -36,9 +36,16 @@ public final class FindCommand implements CommandHandler {
     private final ItemService items;
     private final ItemCodeService itemCodes;
     private final Message message;
+    private final ShopToggleCommand toggles;
 
     @Inject
-    public FindCommand(DialogManager dialogs, ItemService items, ItemCodeService itemCodes, Message message) {
+    public FindCommand(
+            DialogManager dialogs,
+            ItemService items,
+            ItemCodeService itemCodes,
+            Message message,
+            ShopToggleCommand toggles) {
+        this.toggles = toggles;
         this.dialogs = dialogs;
         this.items = items;
         this.itemCodes = itemCodes;
@@ -59,8 +66,7 @@ public final class FindCommand implements CommandHandler {
     }
 
     @Route("<item>")
-    public void byCode(@Sender CommandSender sender,
-                       @GreedyArg(value = "item", sanitize = false) String code) {
+    public void byCode(@Sender CommandSender sender, @GreedyArg(value = "item", sanitize = false) String code) {
         if (!(sender instanceof Player player)) {
             return;
         }
@@ -72,10 +78,38 @@ public final class FindCommand implements CommandHandler {
         openFind(player, item, canonicalKey(item), code);
     }
 
+    @Route("toggle visibility <visible>")
+    public void visibility(
+            @Sender CommandSender sender,
+            @io.paradaux.hibernia.framework.commander.annotations.Arg("visible") boolean visible) {
+        toggles.toggleVisibility(sender, visible);
+    }
+
+    @Route("toggle hologram <visible>")
+    public void hologram(
+            @Sender CommandSender sender,
+            @io.paradaux.hibernia.framework.commander.annotations.Arg("visible") boolean visible) {
+        toggles.toggleHologram(sender, visible);
+    }
+
+    @Route("toggle preview <visible>")
+    public void preview(
+            @Sender CommandSender sender,
+            @io.paradaux.hibernia.framework.commander.annotations.Arg("visible") boolean visible) {
+        toggles.togglePreview(sender, visible);
+    }
+
     private void openFind(Player player, ItemStack item, String itemKey, String displayName) {
         Location loc = player.getLocation();
-        FindState state = new FindState(item, itemKey, displayName,
-                player.getWorld().getName(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(), true);
+        FindState state = new FindState(
+                item,
+                itemKey,
+                displayName,
+                player.getWorld().getName(),
+                loc.getBlockX(),
+                loc.getBlockY(),
+                loc.getBlockZ(),
+                true);
         dialogs.open(player, FindDialog.class, state);
     }
 
@@ -96,10 +130,12 @@ public final class FindCommand implements CommandHandler {
     }
 
     private String displayName(ItemStack item) {
-        net.kyori.adventure.text.Component display =
-                item.hasItemMeta() && item.getItemMeta() != null ? item.getItemMeta().displayName() : null;
+        net.kyori.adventure.text.Component display = item.hasItemMeta() && item.getItemMeta() != null
+                ? item.getItemMeta().displayName()
+                : null;
         if (display != null) {
-            String name = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(display);
+            String name = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                    .serialize(display);
             if (!name.isBlank()) {
                 return name.trim();
             }

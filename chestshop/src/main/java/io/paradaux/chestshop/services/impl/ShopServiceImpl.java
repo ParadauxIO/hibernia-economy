@@ -491,6 +491,7 @@ public class ShopServiceImpl implements ShopService {
         stickSignToChest(event); // was @NORMAL SignSticker
         sendCreatedMessage(event); // was @MONITOR MessageSender
         logCreation(event); // was @MONITOR ShopCreationLogger
+        io.paradaux.chestshop.integration.LegacyCompatibility.created(event);
         market.onShopCreated(event); // genuine market-DB sync — stays
     }
 
@@ -498,6 +499,7 @@ public class ShopServiceImpl implements ShopService {
     public void onDestroyed(DestroyedShop event) {
         refundOnRemoval(event.getDestroyer(), event.getSign());
         logRemoval(event); // was @MONITOR ShopRemovalLogger
+        io.paradaux.chestshop.integration.LegacyCompatibility.destroyed(event);
         market.onShopDestroyed(event); // genuine market-DB sync — stays
     }
 

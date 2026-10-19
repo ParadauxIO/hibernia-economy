@@ -42,12 +42,33 @@ public final class FindDialog implements DialogHandler {
 
     private static final DecimalFormat MONEY = new DecimalFormat("$#,##0.00");
 
+    private final io.paradaux.chestshop.services.FindPresentation presentation;
+    private final io.paradaux.chestshop.dialogs.FindResultsMenu menus;
     private final ShopFinderService finder;
     private final Message message;
     private final ShopDisplayService displays;
 
-    @Inject
     public FindDialog(ShopFinderService finder, Message message, ShopDisplayService displays) {
+        this(finder, message, displays, new io.paradaux.chestshop.services.FindPresentation());
+    }
+
+    public FindDialog(
+            ShopFinderService finder,
+            Message message,
+            ShopDisplayService displays,
+            io.paradaux.chestshop.services.FindPresentation presentation) {
+        this(finder, message, displays, presentation, null);
+    }
+
+    @Inject
+    public FindDialog(
+            ShopFinderService finder,
+            Message message,
+            ShopDisplayService displays,
+            io.paradaux.chestshop.services.FindPresentation presentation,
+            io.paradaux.chestshop.dialogs.FindResultsMenu menus) {
+        this.menus = menus;
+        this.presentation = presentation;
         this.displays = displays;
         this.finder = finder;
         this.message = message;
@@ -114,7 +135,12 @@ public final class FindDialog implements DialogHandler {
                 f.close();
                 return;
             }
-            f.open("results");
+            if (f.isBedrockViewer() && menus != null) {
+                f.close();
+                menus.open(f.player(), state);
+            } else {
+                f.open("results");
+            }
         });
     }
 
@@ -241,12 +267,15 @@ public final class FindDialog implements DialogHandler {
         for (int i = 0; i < shops.size(); i++) {
             FoundShop shop = shops.get(i);
             Component label = shopLabel(shop, queriedKey);
-            ItemStack icon = ShopItem.decode(shop.material(), shop.itemData());
+            b.body(Text.of(presentation.details(shop, displays)));
+            ItemStack icon = presentation.icon(shop);
+            if (icon == null) icon = ShopItem.decode(shop.material(), shop.itemData());
             if (icon != null) {
                 b.body(Text.of(label));
                 b.bodyItem(icon);
             }
             b.button(Text.of(label), "select" + i);
+            b.button(Text.key("find.button.gps"), "gps" + i);
         }
         if (state.page() > 0) {
             b.button(Text.key("find.button.prev"), "prevPage");
@@ -326,6 +355,48 @@ public final class FindDialog implements DialogHandler {
                 shop.y(),
                 "z",
                 shop.z());
+        presentation.navigate(player, shop, true);
+        flow.close();
+    }
+
+    @Action("gps0")
+    public void gps0(@Model FindState s, DialogFlow f) {
+        gps(s, f, 0);
+    }
+
+    @Action("gps1")
+    public void gps1(@Model FindState s, DialogFlow f) {
+        gps(s, f, 1);
+    }
+
+    @Action("gps2")
+    public void gps2(@Model FindState s, DialogFlow f) {
+        gps(s, f, 2);
+    }
+
+    @Action("gps3")
+    public void gps3(@Model FindState s, DialogFlow f) {
+        gps(s, f, 3);
+    }
+
+    @Action("gps4")
+    public void gps4(@Model FindState s, DialogFlow f) {
+        gps(s, f, 4);
+    }
+
+    @Action("gps5")
+    public void gps5(@Model FindState s, DialogFlow f) {
+        gps(s, f, 5);
+    }
+
+    @Action("gps6")
+    public void gps6(@Model FindState s, DialogFlow f) {
+        gps(s, f, 6);
+    }
+
+    private void gps(FindState state, DialogFlow flow, int slot) {
+        if (slot >= state.pageShops().size()) return;
+        presentation.navigate(flow.player(), state.pageShops().get(slot), false);
         flow.close();
     }
 
@@ -341,7 +412,10 @@ public final class FindDialog implements DialogHandler {
         b.append(sep());
         b.append(priceSummary(shop));
         b.append(sep());
-        b.append(Component.text(stockText(shop), NamedTextColor.GRAY));
+        b.append(Component.text(
+                stockText(shop) + " · qty " + shop.batchQty() + " · capacity "
+                        + (shop.capacity() == null ? "∞" : shop.capacity()),
+                NamedTextColor.GRAY));
         if (shop.distanceBlocks() >= 0) {
             b.append(sep());
             b.append(Component.text(shop.distanceBlocks() + "m", NamedTextColor.GRAY));

@@ -68,4 +68,7 @@ public interface MarketApi {
      * whether this player sees shop holograms at all. Upserted. (PAR-168)
      */
     void setPreviewPreference(UUID playerUuid, boolean visible);
+
+    /** Import a missing legacy preference, preserving existing choices; write failures propagate. */
+    void importPreviewPreference(UUID playerUuid, boolean visible);
 }

@@ -40,6 +40,22 @@ public class ChestShopConfiguration {
     @ConfigurationValue(path = "PREVIEW_NAME_FORMAT", defaultValue = "")
     private String previewNameFormat = "";
 
+    // Historical LWC-named options are also consumed by BoltChestShop.
+    @ConfigurationValue(path = "PROTECT_CHEST_WITH_LWC", defaultValue = "false")
+    private boolean protectChestWithLwc;
+
+    @ConfigurationValue(path = "PROTECT_SIGN_WITH_LWC", defaultValue = "false")
+    private boolean protectSignWithLwc;
+
+    @ConfigurationValue(path = "REMOVE_LWC_PROTECTION_AUTOMATICALLY", defaultValue = "false")
+    private boolean removeLwcProtectionAutomatically;
+
+    @ConfigurationValue(path = "LWC_CHEST_PROTECTION_TYPE", defaultValue = "PRIVATE")
+    private String lwcChestProtectionType = "PRIVATE";
+
+    @ConfigurationValue(path = "LWC_SIGN_PROTECTION_TYPE", defaultValue = "PRIVATE")
+    private String lwcSignProtectionType = "PRIVATE";
+
     @ConfigurationValue(path = "DEBUG", defaultValue = "false")
     private boolean debug;
 

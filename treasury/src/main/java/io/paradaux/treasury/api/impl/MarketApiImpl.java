@@ -6,13 +6,12 @@ import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.ChestShopShopRecord;
 import io.paradaux.treasury.event.ChestShopSaleEvent;
 import io.paradaux.treasury.mappers.ChestShopMarketMapper;
+import java.util.HashMap;
+import java.util.Map;
 import org.bukkit.Bukkit;
 import org.mybatis.guice.transactional.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Persists the ChestShop sales tracker + live shop registry on behalf of
@@ -88,8 +87,7 @@ public class MarketApiImpl implements MarketApi {
 
     @Override
     @Transactional
-    public void importShop(ChestShopShopRecord sh, boolean visible, boolean hologram,
-                           java.time.Instant observedAt) {
+    public void importShop(ChestShopShopRecord sh, boolean visible, boolean hologram, java.time.Instant observedAt) {
         Map<String, Object> p = shopParameters(sh);
         p.put("visible", visible);
         p.put("hologram", hologram);
@@ -170,5 +168,11 @@ public class MarketApiImpl implements MarketApi {
         } catch (RuntimeException e) {
             log.warn("setPreviewPreference failed (ignored): {}", e.toString());
         }
+    }
+
+    @Override
+    @Transactional
+    public void importPreviewPreference(java.util.UUID playerUuid, boolean visible) {
+        mapper.importPreviewPreference(java.util.Objects.requireNonNull(playerUuid), visible);
     }
 }
