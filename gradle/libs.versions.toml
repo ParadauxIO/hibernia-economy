@@ -13,24 +13,24 @@
 # Server / framework
 paper = "1.21.11-R0.1-SNAPSHOT"
 hibernia = "1.3.0"
-luckperms = "5.4"
-log4j = "2.26.0"
+luckperms = "5.5"
+log4j = "2.26.1"
 annotations = "26.1.0"
 
 # Runtime libraries
 guice = "7.0.0"
 hikari = "7.1.0"
-mariadb = "3.5.9"
+mariadb = "3.5.10"
 mybatis = "3.5.19"
-mybatis-guice = "4.1.0"
+mybatis-guice = "4.1.1"
 reflections = "0.10.2"
 jjwt = "0.13.0"
-lombok = "1.18.46"
-slf4j = "2.0.18"
+lombok = "1.18.48"
+slf4j = "2.0.20"
 
 # Gradle plugins (referenced from the root build via `alias(libs.plugins.*)` and,
 # for the shadow classpath dep, from build-logic — see [plugins] below).
-shadow = "9.0.2"
+shadow = "9.6.1"
 
 # Static analysis (io.paradaux.static-analysis-conventions). The Gradle plugins are
 # build-logic classpath deps (like shadow); the analysers themselves are resolved
@@ -43,9 +43,9 @@ palantir-java-format = "2.102.0"
 ktlint = "1.8.0"
 
 # Test
-junit = "6.1.0"
+junit = "6.1.3"
 assertj = "3.27.7"
-mockito = "5.23.0"
+mockito = "5.24.0"
 mariadb4j = "3.3.1"
 # Property-based testing. 1.10.x runs on JUnit Platform 6 (its engine is built
 # against Platform 1.14 but resolves to the BOM's 6.x without API breaks — see
