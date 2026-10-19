@@ -1,9 +1,10 @@
 package io.paradaux.chestshop.listeners;
 
-import io.paradaux.chestshop.services.PreviewService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.PreviewService;
+import java.util.UUID;
 import org.bukkit.Chunk;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -12,8 +13,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.UUID;
 
 /**
  * Loads and unloads shop hologram previews with their chunk, and applies a
@@ -24,15 +23,24 @@ import java.util.UUID;
 public final class PreviewListener implements Listener {
 
     /** Default: players see previews unless they've turned them off. */
-    private static final boolean DEFAULT_PREVIEW_VISIBLE = true;
+    private final io.paradaux.chestshop.services.FindPresentation presentation;
 
     private final JavaPlugin plugin;
     private final PreviewService previews;
 
     private final io.paradaux.chestshop.services.MarketService marketService;
 
-    @Inject
     public PreviewListener(JavaPlugin plugin, PreviewService previews, MarketService marketService) {
+        this(plugin, previews, marketService, new io.paradaux.chestshop.services.FindPresentation());
+    }
+
+    @Inject
+    public PreviewListener(
+            JavaPlugin plugin,
+            PreviewService previews,
+            MarketService marketService,
+            io.paradaux.chestshop.services.FindPresentation presentation) {
+        this.presentation = presentation;
         this.marketService = marketService;
         this.plugin = plugin;
         this.previews = previews;
@@ -60,7 +68,7 @@ public final class PreviewListener implements Listener {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             boolean visible;
             try {
-                visible = marketService.shopQuery().previewVisible(id, DEFAULT_PREVIEW_VISIBLE);
+                visible = marketService.shopQuery().previewVisible(id, presentation.defaultVisible());
             } catch (RuntimeException e) {
                 return;
             }

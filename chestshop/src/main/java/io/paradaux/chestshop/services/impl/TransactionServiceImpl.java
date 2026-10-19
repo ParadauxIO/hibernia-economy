@@ -13,12 +13,11 @@ import io.paradaux.chestshop.services.TradeContextFactory;
 import io.paradaux.chestshop.services.TradeSettlement;
 import io.paradaux.chestshop.services.TradeValidator;
 import io.paradaux.chestshop.services.TransactionService;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
-
-import java.util.UUID;
 
 /**
  * Thin orchestrator for a shop trade: it delegates the four lifecycle phases to focused
@@ -43,9 +42,15 @@ public class TransactionServiceImpl implements TransactionService {
     private final MetricsService metrics;
 
     @Inject
-    public TransactionServiceImpl(TradeContextFactory contextFactory, TradeValidator validator, TradeSettlement settlement,
-                                  PostTradeReactions postTrade, EconomyService economy, StockCounterService stockCounter,
-                                  MarketSyncService market, MetricsService metrics) {
+    public TransactionServiceImpl(
+            TradeContextFactory contextFactory,
+            TradeValidator validator,
+            TradeSettlement settlement,
+            PostTradeReactions postTrade,
+            EconomyService economy,
+            StockCounterService stockCounter,
+            MarketSyncService market,
+            MetricsService metrics) {
         this.contextFactory = contextFactory;
         this.validator = validator;
         this.settlement = settlement;
@@ -90,10 +95,11 @@ public class TransactionServiceImpl implements TransactionService {
 
         // MONITOR reactions, in registration order.
         economy.migrateLegacyBusinessSign(event);
-        market.onTransaction(event);         // genuine market-DB sync — stays
-        postTrade.logTransaction(event);     // was @MONITOR TransactionLogger
+        market.onTransaction(event); // genuine market-DB sync — stays
+        postTrade.logTransaction(event); // was @MONITOR TransactionLogger
         postTrade.sendTransactionMessages(event); // was @MONITOR TransactionMessageSender
-        metrics.onTransaction(event);        // updates the /csmetrics transaction counters
+        io.paradaux.chestshop.integration.LegacyCompatibility.afterTrade(event);
+        metrics.onTransaction(event); // updates the /csmetrics transaction counters
     }
 
     @Override

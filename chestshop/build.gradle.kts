@@ -208,6 +208,8 @@ tasks.test {
 // listener entrypoints, Usher dialog UI, the soft-depend integrations (WorldGuard/GriefPrevention/
 // Nexo), the Guice module, and the MyBatis mappers.
 val jacocoExcludes = listOf(
+    // The legacy ABI adapters are event/facade glue, like native integrations.
+    "com/Acrobot/ChestShop/**",
     "io/paradaux/chestshop/ChestShop.class",
     "io/paradaux/chestshop/ChestShop\$*.class",
     "io/paradaux/chestshop/listeners/**",
@@ -290,7 +292,12 @@ pitest {
     // FaweShopCleanupTest only runs in faweTest, on FAWE's own WorldEdit API (the
     // plain test classpath has stock WorldEdit, so it fails there); none of the
     // mutated classes depend on it.
-    excludedTestClasses.set(listOf("io.paradaux.chestshop.listeners.FaweShopCleanupTest"))
+    excludedTestClasses.set(
+        listOf(
+            "io.paradaux.chestshop.listeners.FaweShopCleanupTest",
+            "io.paradaux.chestshop.integration.InstalledAddonCompatibilityTest",
+        ),
+    )
 }
 
 // =====================================================================
@@ -388,3 +395,17 @@ val testWithoutWorldEditingApis = tasks.register<Test>("testWithoutWorldEditingA
     jvmArgs("-XX:+EnableDynamicAgentLoading")
 }
 tasks.named("check") { dependsOn(testWithoutWorldEditingApis) }
+
+// Optional acceptance probe against an operator's real add-on jars. They are never bundled.
+// ./gradlew :chestshop:installedAddonTest -PlegacyAddonDir=/path/to/server/plugins
+val installedAddonTest = tasks.register<Test>("installedAddonTest") {
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    include("**/InstalledAddonCompatibilityTest*")
+    useJUnitPlatform()
+    val addonDir = providers.gradleProperty("legacyAddonDir")
+    onlyIf { addonDir.isPresent }
+    if (addonDir.isPresent) systemProperty("legacyAddonDir", addonDir.get())
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
+}
+tasks.test { exclude("**/InstalledAddonCompatibilityTest*") }

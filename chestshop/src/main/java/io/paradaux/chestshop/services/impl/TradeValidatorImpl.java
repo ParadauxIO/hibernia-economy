@@ -146,6 +146,9 @@ public class TradeValidatorImpl implements TradeValidator {
         rejectMissingPrice(ctx);
         rejectInvalidShop(ctx);
 
+        // External item normalization and trade gates run before stock/funds checks and settlement.
+        io.paradaux.chestshop.integration.LegacyCompatibility.beforeTrade(ctx);
+
         if (config.isAllowPartialTransactions()) {
             partialFill.adjustBuy(ctx);
             partialFill.adjustSell(ctx);

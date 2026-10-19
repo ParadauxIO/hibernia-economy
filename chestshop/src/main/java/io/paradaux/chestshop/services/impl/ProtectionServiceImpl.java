@@ -1,28 +1,27 @@
 package io.paradaux.chestshop.services.impl;
 
+import static io.paradaux.chestshop.utils.BlockUtil.getState;
+import static io.paradaux.chestshop.utils.BlockUtil.isSign;
+
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.BuildPermission;
 import io.paradaux.chestshop.model.ProtectionCheck;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.ProtectionService;
 import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.BlockUtil;
 import io.paradaux.chestshop.utils.Permissions;
+import java.util.function.Consumer;
+import javax.annotation.Nullable;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
-
-import javax.annotation.Nullable;
-import java.util.function.Consumer;
-
-import static io.paradaux.chestshop.utils.BlockUtil.getState;
-import static io.paradaux.chestshop.utils.BlockUtil.isSign;
 
 /**
  * Owns all shop/chest protection checks: the vanilla shop-member check (absorbed from the former
@@ -33,21 +32,33 @@ import static io.paradaux.chestshop.utils.BlockUtil.isSign;
 @Singleton
 public class ProtectionServiceImpl implements ProtectionService {
 
-    private static final BlockFace[] SIGN_CONNECTION_FACES = {BlockFace.UP, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH};
-    private static final BlockFace[] BLOCKS_AROUND = {BlockFace.UP, BlockFace.DOWN, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH};
+    private static final BlockFace[] SIGN_CONNECTION_FACES = {
+        BlockFace.UP, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH
+    };
+    private static final BlockFace[] BLOCKS_AROUND = {
+        BlockFace.UP, BlockFace.DOWN, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH
+    };
 
     private final AccountService accounts;
     private final ChestShopConfiguration config;
     private final SignService signService;
     private final ShopBlockService shopBlockService;
 
-    @Nullable private volatile Consumer<ProtectionCheck> worldGuardProtection;
-    @Nullable private volatile Consumer<BuildPermission> worldGuardBuilding;
-    @Nullable private volatile Consumer<BuildPermission> griefPreventionBuilding;
+    @Nullable
+    private volatile Consumer<ProtectionCheck> worldGuardProtection;
+
+    @Nullable
+    private volatile Consumer<BuildPermission> worldGuardBuilding;
+
+    @Nullable
+    private volatile Consumer<BuildPermission> griefPreventionBuilding;
 
     @Inject
-    public ProtectionServiceImpl(AccountService accounts, ChestShopConfiguration config,
-                                 SignService signService, ShopBlockService shopBlockService) {
+    public ProtectionServiceImpl(
+            AccountService accounts,
+            ChestShopConfiguration config,
+            SignService signService,
+            ShopBlockService shopBlockService) {
         this.accounts = accounts;
         this.config = config;
         this.signService = signService;
@@ -91,6 +102,12 @@ public class ProtectionServiceImpl implements ProtectionService {
         Consumer<ProtectionCheck> wg = worldGuardProtection;
         if (wg != null) {
             wg.accept(event);
+        }
+        // Bolt may replace built-in protection only when explicitly configured.
+        Event.Result nativeResult = event.getResult();
+        io.paradaux.chestshop.integration.LegacyCompatibility.checkProtection(event);
+        if (nativeResult == Event.Result.DENY && !config.isTurnOffDefaultProtectionWhenProtectedExternally()) {
+            event.setResult(Event.Result.DENY);
         }
         return event.getResult() != Event.Result.DENY;
     }

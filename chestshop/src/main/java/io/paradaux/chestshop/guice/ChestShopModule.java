@@ -11,7 +11,6 @@ import io.paradaux.chestshop.integration.WorldGuardIntegration;
 import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.AdminBypassService;
 import io.paradaux.chestshop.services.BusinessAccountService;
-import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.EconomyService;
 import io.paradaux.chestshop.services.GiveService;
 import io.paradaux.chestshop.services.GoodsTransfer;
@@ -33,6 +32,7 @@ import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.ShopFinderService;
 import io.paradaux.chestshop.services.ShopService;
 import io.paradaux.chestshop.services.SignBreakService;
+import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.StockCounterService;
 import io.paradaux.chestshop.services.TradeContextFactory;
 import io.paradaux.chestshop.services.TradeSettlement;
@@ -79,7 +79,9 @@ public class ChestShopModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(java.io.File.class).annotatedWith(com.google.inject.name.Names.named("dataFolder")).toInstance(dataFolder);
+        bind(java.io.File.class)
+                .annotatedWith(com.google.inject.name.Names.named("dataFolder"))
+                .toInstance(dataFolder);
         bind(AccountService.class).to(AccountServiceImpl.class).in(Singleton.class);
         bind(AdminBypassService.class).to(AdminBypassServiceImpl.class).in(Singleton.class);
         bind(BusinessAccountService.class).to(BusinessAccountServiceImpl.class).in(Singleton.class);
@@ -90,7 +92,8 @@ public class ChestShopModule extends AbstractModule {
         bind(ItemCodeService.class).to(ItemCodeServiceImpl.class).in(Singleton.class);
         bind(ItemService.class).to(ItemServiceImpl.class).in(Singleton.class);
         bind(io.paradaux.chestshop.services.LegacyShopImportService.class)
-                .to(io.paradaux.chestshop.services.impl.LegacyShopImportServiceImpl.class).in(Singleton.class);
+                .to(io.paradaux.chestshop.services.impl.LegacyShopImportServiceImpl.class)
+                .in(Singleton.class);
         bind(MarketResyncService.class).to(MarketResyncServiceImpl.class).in(Singleton.class);
         bind(MaterialService.class).to(MaterialServiceImpl.class).in(Singleton.class);
         bind(PreviewService.class).to(PreviewServiceImpl.class).in(Singleton.class);
@@ -100,21 +103,39 @@ public class ChestShopModule extends AbstractModule {
         bind(ShopService.class).to(ShopServiceImpl.class).in(Singleton.class);
         bind(TransactionService.class).to(TransactionServiceImpl.class).in(Singleton.class);
         // The trade-pipeline collaborators the orchestrator sequences (chestshop/plugin-architecture/0008).
-        bind(TradeContextFactory.class).to(io.paradaux.chestshop.services.impl.TradeContextFactoryImpl.class).in(Singleton.class);
-        bind(TradeValidator.class).to(io.paradaux.chestshop.services.impl.TradeValidatorImpl.class).in(Singleton.class);
-        bind(PartialFillCalculator.class).to(io.paradaux.chestshop.services.impl.PartialFillCalculatorImpl.class).in(Singleton.class);
-        bind(TradeSettlement.class).to(io.paradaux.chestshop.services.impl.TradeSettlementImpl.class).in(Singleton.class);
-        bind(GoodsTransfer.class).to(io.paradaux.chestshop.services.impl.GoodsTransferImpl.class).in(Singleton.class);
-        bind(PostTradeReactions.class).to(io.paradaux.chestshop.services.impl.PostTradeReactionsImpl.class).in(Singleton.class);
-        bind(MarketService.class).to(io.paradaux.chestshop.services.impl.MarketServiceImpl.class).in(Singleton.class);
+        bind(TradeContextFactory.class)
+                .to(io.paradaux.chestshop.services.impl.TradeContextFactoryImpl.class)
+                .in(Singleton.class);
+        bind(TradeValidator.class)
+                .to(io.paradaux.chestshop.services.impl.TradeValidatorImpl.class)
+                .in(Singleton.class);
+        bind(PartialFillCalculator.class)
+                .to(io.paradaux.chestshop.services.impl.PartialFillCalculatorImpl.class)
+                .in(Singleton.class);
+        bind(TradeSettlement.class)
+                .to(io.paradaux.chestshop.services.impl.TradeSettlementImpl.class)
+                .in(Singleton.class);
+        bind(GoodsTransfer.class)
+                .to(io.paradaux.chestshop.services.impl.GoodsTransferImpl.class)
+                .in(Singleton.class);
+        bind(PostTradeReactions.class)
+                .to(io.paradaux.chestshop.services.impl.PostTradeReactionsImpl.class)
+                .in(Singleton.class);
+        bind(MarketService.class)
+                .to(io.paradaux.chestshop.services.impl.MarketServiceImpl.class)
+                .in(Singleton.class);
         bind(MarketSyncService.class).to(MarketSyncServiceImpl.class).in(Singleton.class);
-        bind(MetricsService.class).to(io.paradaux.chestshop.services.impl.MetricsServiceImpl.class).in(Singleton.class);
+        bind(MetricsService.class)
+                .to(io.paradaux.chestshop.services.impl.MetricsServiceImpl.class)
+                .in(Singleton.class);
         bind(RestrictedSignService.class).to(RestrictedSignServiceImpl.class).in(Singleton.class);
         bind(SignBreakService.class).to(SignBreakServiceImpl.class).in(Singleton.class);
         bind(StockCounterService.class).to(StockCounterServiceImpl.class).in(Singleton.class);
 
         // SignService is a static-heavy sign-format util with a small instance surface,
         // not an interface/impl service — bound concrete.
+        bind(io.paradaux.hibernia.framework.usher.spi.BedrockSupport.class)
+                .to(io.paradaux.chestshop.integration.BedrockIntegration.class);
         bind(SignService.class).in(Singleton.class);
 
         // Soft-dependency integrations — each detected + hooked by the IntegrationRegistrar

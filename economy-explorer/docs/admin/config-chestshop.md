@@ -155,3 +155,24 @@ alphabetical ID. It is empty outside regions, for unavailable worlds, or without
 WorldGuard. The global region is excluded. Region names work independently of
 WorldGuard's ChestShop protection settings. Templates also support `%world%`,
 `%x%`, `%y%` and `%z%`; values are literal text, not formatting markup.
+
+## Legacy add-ons and finder settings
+
+The fork exposes the legacy entry points used by BoltChestShop, Utilities,
+VaultStorage, BreweryX and WorldGuardExtraFlags. Keep Utilities installed if
+you rely on its `shop.buy.<id>` / `shop.sell.<id>` policy and traded-item refresh.
+
+`plugins/ChestShop/find.yml` imports the old ChestShopDatabase presentation
+settings on first use: buy/sell/both result materials and MiniMessage templates,
+transit/GPS commands, preview scale and default preview visibility. Existing
+native settings win. `/chestshop reload` reloads the file. Navigation commands
+run with the player's permissions. Java results expose both actions; Bedrock
+results use left/right clicks in an inventory menu. Quantity and remaining
+capacity appear in results.
+
+At startup, missing nonblank Utilities aliases merge into `ChestShop/nexo.yml`
+without replacing native aliases. Keep both original item databases and Nexo
+definitions during cutover. `/chestshop importpreferences` imports missing player
+preview choices from `legacy-preferences.jsonl`, preserving native choices.
+See the repository's [cutover guide](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/chestshop-add-on-compatibility.md)
+for exports, plugin ordering and acceptance checks.

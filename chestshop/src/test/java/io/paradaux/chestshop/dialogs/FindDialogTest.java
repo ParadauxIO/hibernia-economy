@@ -40,7 +40,7 @@ class FindDialogTest extends ServerTest {
                         .map(DialogView.Body.Item::item)
                         .toList())
                 .containsExactly(new ItemStack(Material.STONE), stored, new ItemStack(Material.DIRT));
-        assertThat(view.buttons()).hasSize(4);
+        assertThat(view.buttons()).hasSize(8);
     }
 
     private FoundShop row(String material, String data) {

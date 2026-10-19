@@ -53,6 +53,56 @@ class MarketApiImplIT extends IntegrationTestBase {
         seedMarketReferences(new long[] {42L}, new int[] {100, 200}, new int[] {7});
     }
 
+    @Test
+    void importPreviewPreference_isInsertOnlyAndPreservesNewerChoices() throws Exception {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
+            st.execute(
+                    "CREATE TABLE IF NOT EXISTS chestshop_preview_preference (player_uuid_bin BINARY(16) PRIMARY KEY, visible BOOLEAN NOT NULL)");
+            st.execute("TRUNCATE TABLE chestshop_preview_preference");
+        }
+        UUID player = UUID.randomUUID();
+        market.importPreviewPreference(player, false);
+        assertEquals(
+                0,
+                ((Number) query("SELECT visible FROM chestshop_preview_preference")
+                                .getFirst()
+                                .get("visible"))
+                        .intValue());
+        market.setPreviewPreference(player, true);
+        market.importPreviewPreference(player, false);
+        market.importPreviewPreference(player, false);
+        var rows = query("SELECT visible FROM chestshop_preview_preference");
+        assertEquals(1, rows.size());
+        assertEquals(1, ((Number) rows.getFirst().get("visible")).intValue());
+    }
+
+    @Test
+    void legacyPreferenceExportProducesStrictJsonBooleansAndSkipsUnsetChoices() throws Exception {
+        java.nio.file.Path export = java.nio.file.Path.of("ops/export-legacy-preferences.sql");
+        if (!java.nio.file.Files.exists(export)) export = java.nio.file.Path.of("../ops/export-legacy-preferences.sql");
+        String sql = java.nio.file.Files.readString(export)
+                .lines()
+                .filter(line -> !line.startsWith("--"))
+                .collect(java.util.stream.Collectors.joining("\n"));
+        try (Connection c = dataSource.getConnection();
+                Statement statement = c.createStatement()) {
+            statement.execute("CREATE TEMPORARY TABLE PreviewPreference (player_id UUID PRIMARY KEY, visible BOOLEAN)");
+            statement.execute(
+                    "INSERT INTO PreviewPreference VALUES ('00000000-0000-0000-0000-000000000001',false), ('00000000-0000-0000-0000-000000000002',true), ('00000000-0000-0000-0000-000000000003',NULL)");
+            try (ResultSet rows = statement.executeQuery(sql)) {
+                int count = 0;
+                while (rows.next()) {
+                    var json = com.google.gson.JsonParser.parseString(rows.getString(1))
+                            .getAsJsonObject();
+                    assertTrue(json.getAsJsonPrimitive("visible").isBoolean());
+                    count++;
+                }
+                assertEquals(2, count);
+            }
+        }
+    }
+
     // ── recordSale ──────────────────────────────────────────────────────────────
 
     @Test

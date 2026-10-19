@@ -46,6 +46,9 @@ credentials or direct connection to another plugin's database.
    the export after verification. Run `/chestshop resync <chunks>` as needed for
    subsequent live observations; this scans loaded chunks only.
 
+For player preview preferences and the remaining add-on upgrade steps, see
+[ChestShop add-on compatibility and cutover](chestshop-add-on-compatibility.md).
+
 ## Existing destination rows
 
 The importer inserts missing locations through `MarketApi.importShop`; it never

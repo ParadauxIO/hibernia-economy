@@ -190,6 +190,9 @@ public class NexoIntegration implements Integration, CustomItemResolver {
                         // ItemName#metadataCode -> short_alias
                         newAliasToFullCode.put(value.toLowerCase(Locale.ROOT), key);
                         newFullCodeToAlias.put(key, value);
+                    } else if (value.indexOf('#') > -1) {
+                        newAliasToFullCode.put(key.toLowerCase(Locale.ROOT), value);
+                        newFullCodeToAlias.put(value, key);
                     } else {
                         // short_name -> nexo_id
                         newAliasToId.put(key.toLowerCase(Locale.ROOT), value);
@@ -220,6 +223,8 @@ public class NexoIntegration implements Integration, CustomItemResolver {
             // A full-code alias (ItemName#meta -> short) expands to its underlying code first.
             String fullCode = aliasToFullCode.get(raw.toLowerCase(Locale.ROOT));
             if (fullCode != null) {
+                ItemStack vanilla = itemCodes.decode(fullCode);
+                if (vanilla != null) return vanilla;
                 raw = fullCode;
             }
 

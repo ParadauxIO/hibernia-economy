@@ -42,7 +42,7 @@ import org.joml.Vector3f;
 @Singleton
 public class PreviewServiceImpl implements PreviewService {
 
-    private static final float SCALE = 0.5f;
+    private final io.paradaux.chestshop.services.FindPresentation presentation;
 
     /** One queued registry lookup: a whole chunk, or (when {@code pos} is set) one sign in it. */
     private record Lookup(String world, int chunkX, int chunkZ, String pos) {}
@@ -59,8 +59,17 @@ public class PreviewServiceImpl implements PreviewService {
     private final Deque<Lookup> pending = new ArrayDeque<>();
     private boolean lookupInFlight;
 
-    @Inject
     public PreviewServiceImpl(JavaPlugin plugin, MarketService marketService, ShopDisplayService displays) {
+        this(plugin, marketService, displays, new io.paradaux.chestshop.services.FindPresentation());
+    }
+
+    @Inject
+    public PreviewServiceImpl(
+            JavaPlugin plugin,
+            MarketService marketService,
+            ShopDisplayService displays,
+            io.paradaux.chestshop.services.FindPresentation presentation) {
+        this.presentation = presentation;
         this.displays = displays;
         this.plugin = plugin;
         this.marketService = marketService;
@@ -97,7 +106,7 @@ public class PreviewServiceImpl implements PreviewService {
             d.setTransformation(new Transformation(
                     tr.getTranslation(),
                     tr.getLeftRotation(),
-                    new Vector3f(SCALE, SCALE, SCALE),
+                    new Vector3f(presentation.previewScale()),
                     tr.getRightRotation()));
             d.setPersistent(false);
             d.setVisibleByDefault(true);

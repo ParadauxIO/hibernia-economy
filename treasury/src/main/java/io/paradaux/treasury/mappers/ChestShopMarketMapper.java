@@ -1,12 +1,11 @@
 package io.paradaux.treasury.mappers;
 
+import java.util.Map;
+import java.util.UUID;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
-
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Writes the ChestShop sales tracker + live shop registry (V6:
@@ -98,8 +97,7 @@ public interface ChestShopMarketMapper {
             UPDATE chestshop_shop SET active = 0
              WHERE world = #{world} AND sign_x = #{x} AND sign_y = #{y} AND sign_z = #{z}
             """)
-    void deactivateShop(@Param("world") String world, @Param("x") int x,
-                        @Param("y") int y, @Param("z") int z);
+    void deactivateShop(@Param("world") String world, @Param("x") int x, @Param("y") int y, @Param("z") int z);
 
     @Update("""
             UPDATE chestshop_shop
@@ -109,23 +107,35 @@ public interface ChestShopMarketMapper {
                    last_seen = NOW()
              WHERE world = #{world} AND sign_x = #{x} AND sign_y = #{y} AND sign_z = #{z}
             """)
-    void updateShopStock(@Param("world") String world, @Param("x") int x, @Param("y") int y,
-                         @Param("z") int z, @Param("stock") Integer stock,
-                         @Param("capacity") Integer capacity);
+    void updateShopStock(
+            @Param("world") String world,
+            @Param("x") int x,
+            @Param("y") int y,
+            @Param("z") int z,
+            @Param("stock") Integer stock,
+            @Param("capacity") Integer capacity);
 
     @Update("""
             UPDATE chestshop_shop SET visible = #{visible}
              WHERE world = #{world} AND sign_x = #{x} AND sign_y = #{y} AND sign_z = #{z}
             """)
-    void setShopVisibility(@Param("world") String world, @Param("x") int x, @Param("y") int y,
-                           @Param("z") int z, @Param("visible") boolean visible);
+    void setShopVisibility(
+            @Param("world") String world,
+            @Param("x") int x,
+            @Param("y") int y,
+            @Param("z") int z,
+            @Param("visible") boolean visible);
 
     @Update("""
             UPDATE chestshop_shop SET hologram = #{hologram}
              WHERE world = #{world} AND sign_x = #{x} AND sign_y = #{y} AND sign_z = #{z}
             """)
-    void setShopHologram(@Param("world") String world, @Param("x") int x, @Param("y") int y,
-                         @Param("z") int z, @Param("hologram") boolean hologram);
+    void setShopHologram(
+            @Param("world") String world,
+            @Param("x") int x,
+            @Param("y") int y,
+            @Param("z") int z,
+            @Param("hologram") boolean hologram);
 
     @Insert("""
             INSERT INTO chestshop_preview_preference (player_uuid_bin, visible)
@@ -133,4 +143,11 @@ public interface ChestShopMarketMapper {
             ON DUPLICATE KEY UPDATE visible = VALUES(visible)
             """)
     void upsertPreviewPreference(@Param("playerUuid") UUID playerUuid, @Param("visible") boolean visible);
+
+    @Insert("""
+            INSERT INTO chestshop_preview_preference (player_uuid_bin, visible)
+            VALUES (#{playerUuid,jdbcType=BINARY}, #{visible})
+            ON DUPLICATE KEY UPDATE player_uuid_bin = player_uuid_bin
+            """)
+    void importPreviewPreference(@Param("playerUuid") UUID playerUuid, @Param("visible") boolean visible);
 }

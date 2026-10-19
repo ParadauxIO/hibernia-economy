@@ -174,3 +174,13 @@ USE_STOCK_COUNTER: false
 
 # Exclude these item meta attributes from the similarity check when comparing items
 EXCLUDED_ITEM_ATTRIBUTES: []
+
+# Native result locations and optional preview names (plain text).
+FIND_LOCATION_FORMAT: '%x%, %y%, %z%'
+PREVIEW_NAME_FORMAT: ''
+# Historical names retained for BoltChestShop's lock lifecycle integration.
+PROTECT_CHEST_WITH_LWC: false
+PROTECT_SIGN_WITH_LWC: false
+LWC_CHEST_PROTECTION_TYPE: PRIVATE
+LWC_SIGN_PROTECTION_TYPE: PRIVATE
+REMOVE_LWC_PROTECTION_AUTOMATICALLY: false

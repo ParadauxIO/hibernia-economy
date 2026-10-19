@@ -23,6 +23,8 @@ the code.
 - **[Release runbook](release-runbook.md)** — the order of operations for a
   release that changes the schema: backup, stop, migrate, deploy, verify, rollback.
 - **[Shop registry backfill](shop-registry-backfill.md)** — importing legacy shops at cutover.
+- **[ChestShop staging parity](chestshop-staging-parity.md)** — feature comparison, add-on compatibility gaps, and acceptance checks.
+- **[ChestShop add-on compatibility](chestshop-add-on-compatibility.md)** — restored hooks, finder settings and preference cutover.
 - **[Conventions](conventions.md)** — the rules that keep the monorepo coherent.
 
 ## Quick links

@@ -109,6 +109,7 @@ See [Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
 | `/chestshop reload` | Admin: reload the ChestShop configuration. |
 | `/chestshop metrics` | Admin: show server-wide shop metrics. |
 | `/chestshop give <item code> [amount] [player]` | Admin: give an item by its shop code. |
+| `/chestshop importpreferences` | Admin/console: import missing player preview preferences from `plugins/ChestShop/legacy-preferences.jsonl`, preserving newer native choices. |
 | `/chestshop importlegacy` | Admin/console: import missing shops from `plugins/ChestShop/legacy-shops.jsonl`; preserves existing rows. See the repository [cutover runbook](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/shop-registry-backfill.md). |
 | `/chestshop resync <chunks>` | Admin: rebuild the `/find` shop registry from the loaded world around you. |
 
