@@ -1,5 +1,7 @@
 # ChestShop add-on compatibility and cutover
 
+Tracked in [PAR-496](https://app.taskl.ie/w/paradaux/issues/PAR-496).
+
 The native fork retains the legacy `com.Acrobot.ChestShop` entry points used by
 ChestShopDatabase 1.2-SNAPSHOT, BoltChestShop 1.0.0, Utilities 3.0.0,
 VaultStorage 1.2.0, BreweryX 3.7.0 and WorldGuardExtraFlags 4.2.5-SNAPSHOT.
