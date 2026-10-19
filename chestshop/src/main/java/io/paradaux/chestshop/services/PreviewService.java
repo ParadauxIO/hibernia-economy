@@ -44,6 +44,9 @@ public interface PreviewService {
      */
     void refresh(String worldName, int x, int y, int z);
 
+    /** Apply the configured scale to existing displays. Main thread. */
+    void resize();
+
     /** Set whether a player sees previews, updating live displays (does not persist). */
     void applyPreference(Player player, boolean visible);
 }

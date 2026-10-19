@@ -60,6 +60,27 @@ class ShopQueryApiImplIT extends IntegrationTestBase {
     }
 
     @Test
+    void completeSearchIncludesMatchesBeyondTheDefault500RowCap() throws Exception {
+        for (int i = 0; i < 501; i++) {
+            insertShop("world", i, 64, 0, "DIAMOND", "Diamond", bd("5.00"), null, 1, 1, 1, 1);
+        }
+        assertEquals(
+                500,
+                shopQuery
+                        .searchShops(
+                                ShopSearchQuery.builder().itemKey("DIAMOND").build())
+                        .size());
+        assertEquals(
+                501,
+                shopQuery
+                        .searchShops(ShopSearchQuery.builder()
+                                .itemKey("DIAMOND")
+                                .allMatches(true)
+                                .build())
+                        .size());
+    }
+
+    @Test
     void searchShops_fuzzy_matchesSubstring() {
         insertShop("world", 10, 64, 10, "DIAMOND", "Diamond", bd("5.00"), null, 64, 0, 1, 1);
         insertShop("world", 11, 64, 10, "DIAMOND_BLOCK", "Diamond Block", bd("9.00"), null, 8, 0, 1, 1);

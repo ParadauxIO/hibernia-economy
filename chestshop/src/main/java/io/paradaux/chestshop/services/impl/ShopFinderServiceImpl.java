@@ -1,18 +1,17 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.chestshop.services.ShopFinderService;
-import io.paradaux.chestshop.dialogs.FindState;
-import io.paradaux.chestshop.model.FoundShop;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.chestshop.dialogs.FindState;
+import io.paradaux.chestshop.model.FoundShop;
+import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.ShopFinderService;
 import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.market.ShopResult;
 import io.paradaux.treasury.api.market.ShopSearchQuery;
-import org.bukkit.plugin.java.JavaPlugin;
-
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * Runs a {@code /find} search off the main thread and returns the sorted,
@@ -60,12 +59,13 @@ public class ShopFinderServiceImpl implements ShopFinderService {
         }
         List<ShopResult> rows = api.searchShops(ShopSearchQuery.builder()
                 .itemKey(state.itemKey())
+                .allMatches(true)
                 .fuzzy(state.fuzzy())
-                .world(state.queryWorld())   // /find is scoped to the player's world (legacy behaviour)
+                .world(state.queryWorld()) // /find is scoped to the player's world (legacy behaviour)
                 .build());
         List<FoundShop> found = rows.stream()
-                .map(r -> FoundShop.from(r, state.queryWorld(), state.qx(), state.qy(), state.qz(),
-                        state.hasPosition()))
+                .map(r ->
+                        FoundShop.from(r, state.queryWorld(), state.qx(), state.qy(), state.qz(), state.hasPosition()))
                 .toList();
         return state.pipeline(found);
     }

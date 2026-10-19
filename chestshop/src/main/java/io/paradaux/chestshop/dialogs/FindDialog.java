@@ -275,7 +275,8 @@ public final class FindDialog implements DialogHandler {
                 b.bodyItem(icon);
             }
             b.button(Text.of(label), "select" + i);
-            b.button(Text.key("find.button.gps"), "gps" + i);
+            if (!presentation.command(shop, false).isBlank()) b.button(Text.key("find.button.gps"), "gps" + i);
+            b.button(Text.key("find.button.inspect"), "inspect" + i);
         }
         if (state.page() > 0) {
             b.button(Text.key("find.button.prev"), "prevPage");
@@ -396,8 +397,71 @@ public final class FindDialog implements DialogHandler {
 
     private void gps(FindState state, DialogFlow flow, int slot) {
         if (slot >= state.pageShops().size()) return;
-        presentation.navigate(flow.player(), state.pageShops().get(slot), false);
-        flow.close();
+        FoundShop shop = state.pageShops().get(slot);
+        if (presentation.command(shop, false).isBlank()) {
+            inspect(state, flow, slot);
+        } else {
+            presentation.navigate(flow.player(), shop, false);
+            flow.close();
+        }
+    }
+
+    @Screen("inspect")
+    public DialogView inspection(@Model FindState state) {
+        FoundShop shop = state.inspectedShop();
+        DialogView.Builder view = DialogView.multiAction(Text.key("find.inspect.title", "item", shop.itemKey()))
+                .body(Text.of(presentation.details(shop, displays)))
+                .canCloseWithEscape(true);
+        ItemStack item = ShopItem.decode(shop.material(), shop.itemData());
+        if (item != null) view.bodyItem(item);
+        return view.button(Text.key("find.button.back"), "inspectionBack").build();
+    }
+
+    private void inspect(FindState state, DialogFlow flow, int slot) {
+        if (slot < state.pageShops().size()) {
+            state.inspect(slot);
+            flow.open("inspect");
+        }
+    }
+
+    @Action("inspectionBack")
+    public void inspectionBack(DialogFlow flow) {
+        flow.back();
+    }
+
+    @Action("inspect0")
+    public void inspect0(@Model FindState state, DialogFlow flow) {
+        inspect(state, flow, 0);
+    }
+
+    @Action("inspect1")
+    public void inspect1(@Model FindState state, DialogFlow flow) {
+        inspect(state, flow, 1);
+    }
+
+    @Action("inspect2")
+    public void inspect2(@Model FindState state, DialogFlow flow) {
+        inspect(state, flow, 2);
+    }
+
+    @Action("inspect3")
+    public void inspect3(@Model FindState state, DialogFlow flow) {
+        inspect(state, flow, 3);
+    }
+
+    @Action("inspect4")
+    public void inspect4(@Model FindState state, DialogFlow flow) {
+        inspect(state, flow, 4);
+    }
+
+    @Action("inspect5")
+    public void inspect5(@Model FindState state, DialogFlow flow) {
+        inspect(state, flow, 5);
+    }
+
+    @Action("inspect6")
+    public void inspect6(@Model FindState state, DialogFlow flow) {
+        inspect(state, flow, 6);
     }
 
     // ── rendering helpers ───────────────────────────────────────────────────────

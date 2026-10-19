@@ -6,12 +6,11 @@ import io.paradaux.treasury.api.market.ShopLocation;
 import io.paradaux.treasury.api.market.ShopResult;
 import io.paradaux.treasury.api.market.ShopSearchQuery;
 import io.paradaux.treasury.mappers.ShopQueryMapper;
+import java.util.List;
+import java.util.UUID;
 import org.mybatis.guice.transactional.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Reads the live shop registry ({@code chestshop_shop}) for the in-ChestShop
@@ -36,14 +35,17 @@ public class ShopQueryApiImpl implements ShopQueryApi {
         if (query.getItemKey() == null || query.getItemKey().isBlank()) {
             throw new IllegalArgumentException("ShopSearchQuery requires an itemKey");
         }
-        int limit = Math.max(1, query.getLimit());
-        List<ShopResult> results = mapper.searchShops(
-                query.getItemKey(), query.isFuzzy(), query.getWorld(), limit);
-        if (results.size() >= limit) {
+        Integer limit = query.isAllMatches() ? null : Math.max(1, query.getLimit());
+        List<ShopResult> results = mapper.searchShops(query.getItemKey(), query.isFuzzy(), query.getWorld(), limit);
+        if (limit != null && results.size() >= limit) {
             // Don't silently truncate — a popular item hitting the cap is worth a line.
-            log.warn("searchShops hit the {}-row cap for itemKey={} (fuzzy={}, world={}); "
-                            + "results may be incomplete", limit, query.getItemKey(),
-                    query.isFuzzy(), query.getWorld());
+            log.warn(
+                    "searchShops hit the {}-row cap for itemKey={} (fuzzy={}, world={}); "
+                            + "results may be incomplete",
+                    limit,
+                    query.getItemKey(),
+                    query.isFuzzy(),
+                    query.getWorld());
         }
         return results;
     }

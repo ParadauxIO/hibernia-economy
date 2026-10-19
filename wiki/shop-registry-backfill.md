@@ -44,7 +44,7 @@ credentials or direct connection to another plugin's database.
 6. Run the same import again and compare a sorted dump of `chestshop_shop` with the
    previous one. IDs, flags, data and timestamps must be unchanged. Archive/remove
    the export after verification. Run `/chestshop resync <chunks>` as needed for
-   subsequent live observations; this scans loaded chunks only.
+   subsequent live observations; this works from console or in-game and scans loaded chunks only.
 
 For player preview preferences and the remaining add-on upgrade steps, see
 [ChestShop add-on compatibility and cutover](chestshop-add-on-compatibility.md).

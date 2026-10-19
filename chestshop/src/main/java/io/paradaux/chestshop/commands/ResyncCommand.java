@@ -10,7 +10,6 @@ import io.paradaux.hibernia.framework.commander.annotations.Route;
 import io.paradaux.hibernia.framework.commander.annotations.Sender;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 
 /**
  * {@code /chestshop resync <chunksPerTick>} — rebuild the live shop registry from
@@ -34,9 +33,6 @@ public final class ResyncCommand implements CommandHandler {
     @Route("resync <chunks>")
     @Description("Rebuild the /find shop registry from the loaded world")
     public void resync(@Sender CommandSender sender, @Arg("chunks") int chunks) {
-        if (!(sender instanceof Player player)) {
-            return;
-        }
-        resync.resync(player, chunks);
+        resync.resync(sender, chunks);
     }
 }

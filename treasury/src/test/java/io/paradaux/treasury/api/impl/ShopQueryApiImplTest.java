@@ -1,28 +1,26 @@
 package io.paradaux.treasury.api.impl;
 
-import io.paradaux.treasury.api.market.ShopResult;
-import io.paradaux.treasury.api.market.ShopSearchQuery;
-import io.paradaux.treasury.mappers.ShopQueryMapper;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.IntStream;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.treasury.api.market.ShopResult;
+import io.paradaux.treasury.api.market.ShopSearchQuery;
+import io.paradaux.treasury.mappers.ShopQueryMapper;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.IntStream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link ShopQueryApiImpl}'s logic — argument validation, the
@@ -36,17 +34,39 @@ class ShopQueryApiImplTest {
     ShopQueryMapper mapper;
 
     private static ShopResult row() {
-        return new ShopResult("world", null, 0, 0, 0, false, null, null, null, "Steve",
-                "DIAMOND", "DIAMOND", "Diamond", false, null,
-                new BigDecimal("5.00"), null, 1, 10, 10, true, true);
+        return new ShopResult(
+                "world",
+                null,
+                0,
+                0,
+                0,
+                false,
+                null,
+                null,
+                null,
+                "Steve",
+                "DIAMOND",
+                "DIAMOND",
+                "Diamond",
+                false,
+                null,
+                new BigDecimal("5.00"),
+                null,
+                1,
+                10,
+                10,
+                true,
+                true);
     }
 
     @Test
     void searchShops_blankItemKey_throws() {
         ShopQueryApiImpl api = new ShopQueryApiImpl(mapper);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> api.searchShops(ShopSearchQuery.builder().itemKey("  ").build()));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> api.searchShops(ShopSearchQuery.builder().build()));
     }
 
@@ -57,7 +77,11 @@ class ShopQueryApiImplTest {
         when(mapper.searchShops(eq("DIAMOND"), eq(true), eq("world"), eq(50))).thenReturn(expected);
 
         List<ShopResult> result = api.searchShops(ShopSearchQuery.builder()
-                .itemKey("DIAMOND").fuzzy(true).world("world").limit(50).build());
+                .itemKey("DIAMOND")
+                .fuzzy(true)
+                .world("world")
+                .limit(50)
+                .build());
 
         assertSame(expected, result);
     }
@@ -69,10 +93,27 @@ class ShopQueryApiImplTest {
         List<ShopResult> full = IntStream.range(0, 3).mapToObj(i -> row()).toList();
         when(mapper.searchShops(any(), any(Boolean.class), any(), eq(3))).thenReturn(full);
 
-        List<ShopResult> result = api.searchShops(ShopSearchQuery.builder()
-                .itemKey("DIAMOND").limit(3).build());
+        List<ShopResult> result = api.searchShops(
+                ShopSearchQuery.builder().itemKey("DIAMOND").limit(3).build());
 
         assertEquals(3, result.size());
+    }
+
+    @Test
+    void allMatchesDisablesTheSqlLimitForGlobalRanking() {
+        ShopQueryApiImpl api = new ShopQueryApiImpl(mapper);
+        when(mapper.searchShops("DIAMOND", true, "world", null)).thenReturn(List.of(row()));
+        assertEquals(
+                1,
+                api.searchShops(ShopSearchQuery.builder()
+                                .itemKey("DIAMOND")
+                                .fuzzy(true)
+                                .world("world")
+                                .allMatches(true)
+                                .limit(1)
+                                .build())
+                        .size());
+        verify(mapper).searchShops("DIAMOND", true, "world", null);
     }
 
     @Test

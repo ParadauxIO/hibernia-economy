@@ -1,23 +1,14 @@
 package io.paradaux.chestshop.services.impl;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.services.MarketService;
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.MarketResyncService;
-import io.paradaux.chestshop.services.MarketSyncService;
-import io.paradaux.chestshop.services.PreviewService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.chestshop.services.MarketResyncService;
+import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.MarketSyncService;
+import io.paradaux.chestshop.services.PreviewService;
+import io.paradaux.chestshop.services.SignService;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.market.ShopLocation;
-import org.bukkit.Chunk;
-import org.bukkit.World;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Sign;
-import org.bukkit.entity.Player;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -26,6 +17,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.Chunk;
+import org.bukkit.World;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Sign;
+import org.bukkit.command.CommandSender;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
 /**
  * Rebuilds the live shop registry by scanning the world: for each scanned chunk
@@ -57,8 +56,13 @@ public class MarketResyncServiceImpl implements MarketResyncService {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Inject
-    public MarketResyncServiceImpl(JavaPlugin plugin, MarketService marketService, SignService signService,
-                               MarketSyncService marketSync, PreviewService previews, Message message) {
+    public MarketResyncServiceImpl(
+            JavaPlugin plugin,
+            MarketService marketService,
+            SignService signService,
+            MarketSyncService marketSync,
+            PreviewService previews,
+            Message message) {
         this.plugin = plugin;
         this.marketService = marketService;
         this.signService = signService;
@@ -68,7 +72,7 @@ public class MarketResyncServiceImpl implements MarketResyncService {
     }
 
     @Override
-    public void resync(Player initiator, int chunksPerTick) {
+    public void resync(CommandSender initiator, int chunksPerTick) {
         if (!marketService.enabled() || !marketService.searchEnabled()) {
             message.send(initiator, "find.no-search");
             return;
@@ -86,16 +90,16 @@ public class MarketResyncServiceImpl implements MarketResyncService {
                 knownByChunk = groupKnownByChunk(marketService.shopQuery().activeShopLocations(null));
             } catch (RuntimeException e) {
                 running.set(false);
-                plugin.getServer().getScheduler().runTask(plugin,
-                        () -> message.send(initiator, "chestshop.resync.failed"));
+                plugin.getServer()
+                        .getScheduler()
+                        .runTask(plugin, () -> message.send(initiator, "chestshop.resync.failed"));
                 return;
             }
-            plugin.getServer().getScheduler().runTask(plugin,
-                    () -> startScan(initiator, perTick, knownByChunk));
+            plugin.getServer().getScheduler().runTask(plugin, () -> startScan(initiator, perTick, knownByChunk));
         });
     }
 
-    private void startScan(Player initiator, int perTick, Map<String, Set<String>> knownByChunk) {
+    private void startScan(CommandSender initiator, int perTick, Map<String, Set<String>> knownByChunk) {
         Deque<Chunk> queue = new ArrayDeque<>();
         for (World world : plugin.getServer().getWorlds()) {
             for (Chunk chunk : world.getLoadedChunks()) {
@@ -124,11 +128,10 @@ public class MarketResyncServiceImpl implements MarketResyncService {
                 if (queue.isEmpty()) {
                     cancel();
                     running.set(false);
-                    message.send(initiator, "chestshop.resync.complete",
-                            "upserted", upserted, "deactivated", deactivated);
+                    message.send(
+                            initiator, "chestshop.resync.complete", "upserted", upserted, "deactivated", deactivated);
                 } else if (total > 0 && processed % (perTick * 200) == 0) {
-                    message.send(initiator, "chestshop.resync.progress",
-                            "done", processed, "total", total);
+                    message.send(initiator, "chestshop.resync.progress", "done", processed, "total", total);
                 }
             }
         }.runTaskTimer(plugin, 1L, 1L);
@@ -164,15 +167,14 @@ public class MarketResyncServiceImpl implements MarketResyncService {
         if (upserted > 0) {
             previews.loadChunk(world, chunk.getX(), chunk.getZ()); // previews for newly discovered shops
         }
-        return new int[]{upserted, deactivated};
+        return new int[] {upserted, deactivated};
     }
 
     private static Map<String, Set<String>> groupKnownByChunk(List<ShopLocation> locations) {
         Map<String, Set<String>> byChunk = new HashMap<>();
         for (ShopLocation l : locations) {
             String key = chunkKey(l.world(), l.signX() >> 4, l.signZ() >> 4);
-            byChunk.computeIfAbsent(key, k -> new HashSet<>())
-                    .add(posKey(l.signX(), l.signY(), l.signZ()));
+            byChunk.computeIfAbsent(key, k -> new HashSet<>()).add(posKey(l.signX(), l.signY(), l.signZ()));
         }
         return byChunk;
     }
@@ -187,6 +189,6 @@ public class MarketResyncServiceImpl implements MarketResyncService {
 
     private static int[] parsePos(String pos) {
         String[] parts = pos.split(":");
-        return new int[]{Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2])};
+        return new int[] {Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2])};
     }
 }

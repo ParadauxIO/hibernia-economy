@@ -31,10 +31,15 @@ public class ShopSearchQuery {
     /** Restrict to one world by name; null = all worlds. */
     private final String world;
 
+    /** Fetch every match before caller-side filtering and ranking (the native finder). */
+    @Builder.Default
+    private final boolean allMatches = false;
+
     /**
-     * Safety cap on rows returned (the Java pipeline filters/sorts these). A
+     * Default cap on rows returned. Callers ranking across all shops must use
+     * allMatches so the cap cannot discard their best results. A
      * single item rarely has more than a few hundred shops; if the cap is hit
-     * the caller logs it rather than silently truncating.
+     * the caller logs it rather than silently truncating. Ignored when allMatches is true.
      */
     @Builder.Default
     private final int limit = 500;
