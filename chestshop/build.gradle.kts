@@ -292,10 +292,12 @@ pitest {
     // FaweShopCleanupTest only runs in faweTest, on FAWE's own WorldEdit API (the
     // plain test classpath has stock WorldEdit, so it fails there); none of the
     // mutated classes depend on it.
-    excludedTestClasses.set(listOf(
-        "io.paradaux.chestshop.listeners.FaweShopCleanupTest",
-        "io.paradaux.chestshop.integration.InstalledAddonCompatibilityTest",
-    ))
+    excludedTestClasses.set(
+        listOf(
+            "io.paradaux.chestshop.listeners.FaweShopCleanupTest",
+            "io.paradaux.chestshop.integration.InstalledAddonCompatibilityTest",
+        ),
+    )
 }
 
 // =====================================================================
