@@ -121,6 +121,27 @@ class PreviewServiceImplTest {
     // ── render(worldName,...) ─────────────────────────────────────────────────
 
     @Test
+    void reloadResizesExistingDisplaysWithoutRespawningOrChangingTheirVisibility() {
+        var presentation = mock(io.paradaux.chestshop.services.FindPresentation.class);
+        when(presentation.previewScale()).thenReturn(0.5f, 0.85f);
+        preview = new PreviewServiceImpl(
+                plugin,
+                marketService,
+                new io.paradaux.chestshop.services.ShopDisplayService(
+                        plugin, new io.paradaux.chestshop.model.config.ChestShopConfiguration()),
+                presentation);
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        org.mockito.Mockito.clearInvocations(display, world);
+        preview.resize();
+        var transformation = org.mockito.ArgumentCaptor.forClass(Transformation.class);
+        verify(display).setTransformation(transformation.capture());
+        assertThat(transformation.getValue().getScale()).isEqualTo(new Vector3f(0.85f));
+        verify(display, never()).remove();
+        verify(display, never()).setVisibleByDefault(org.mockito.ArgumentMatchers.anyBoolean());
+        verify(world, never()).spawn(any(Location.class), any(), any(Consumer.class));
+    }
+
+    @Test
     void render_noSuchWorld_isNoOp() {
         preview.render("nope", 0, 0, 0, new ItemStack(Material.DIAMOND));
         verify(world, never()).spawn(any(Location.class), any(), any(Consumer.class));

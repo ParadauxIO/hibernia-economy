@@ -101,6 +101,26 @@ class ShopFinderServiceImplTest extends ServerTest {
         assertThat(result).allMatch(s -> s.itemKey().equals("Diamond"));
     }
 
+    @Test
+    void ranksTheBestShopEvenWhenItFallsBeyondTheFirst500Matches() {
+        ShopQueryApi api = mock(ShopQueryApi.class);
+        when(market.shopQuery()).thenReturn(api);
+        var rows = java.util.stream.IntStream.rangeClosed(0, 500)
+                .mapToObj(i -> row("world", 500 - i))
+                .toList();
+        when(api.searchShops(any(ShopSearchQuery.class))).thenAnswer(inv -> {
+            ShopSearchQuery query = inv.getArgument(0);
+            return query.isAllMatches() ? rows : rows.subList(0, query.getLimit());
+        });
+        FindState search = state("world");
+        search.presetBuyNearby();
+
+        var results = finder.query(search);
+
+        assertThat(results).hasSize(501);
+        assertThat(results.getFirst().x()).isZero();
+    }
+
     // ---- find (async) -----------------------------------------------------------
 
     @Test

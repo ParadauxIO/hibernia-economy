@@ -2,12 +2,11 @@ package io.paradaux.treasury.mappers;
 
 import io.paradaux.treasury.api.market.ShopLocation;
 import io.paradaux.treasury.api.market.ShopResult;
+import java.util.List;
+import java.util.UUID;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Read side of the live shop registry ({@code chestshop_shop}), backing the
@@ -65,11 +64,14 @@ public interface ShopQueryMapper {
               </choose>
               <if test="world != null">AND s.world = #{world}</if>
             ORDER BY s.last_seen DESC
-            LIMIT #{limit}
+            <if test="limit != null">LIMIT #{limit}</if>
             </script>
             """)
-    List<ShopResult> searchShops(@Param("itemKey") String itemKey, @Param("fuzzy") boolean fuzzy,
-                                 @Param("world") String world, @Param("limit") int limit);
+    List<ShopResult> searchShops(
+            @Param("itemKey") String itemKey,
+            @Param("fuzzy") boolean fuzzy,
+            @Param("world") String world,
+            @Param("limit") Integer limit);
 
     /**
      * Active shops whose sign sits in a chunk's block range. Includes hidden shops
@@ -84,9 +86,12 @@ public interface ShopQueryMapper {
               AND s.sign_x BETWEEN #{minX} AND #{maxX}
               AND s.sign_z BETWEEN #{minZ} AND #{maxZ}
             """)
-    List<ShopResult> shopsInChunk(@Param("world") String world,
-                                  @Param("minX") int minX, @Param("maxX") int maxX,
-                                  @Param("minZ") int minZ, @Param("maxZ") int maxZ);
+    List<ShopResult> shopsInChunk(
+            @Param("world") String world,
+            @Param("minX") int minX,
+            @Param("maxX") int maxX,
+            @Param("minZ") int minZ,
+            @Param("maxZ") int maxZ);
 
     /** Locations of all active shop signs, optionally scoped to one world. */
     @Select("""

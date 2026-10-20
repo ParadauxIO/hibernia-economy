@@ -37,6 +37,7 @@ public final class FindCommand implements CommandHandler {
     private final ItemCodeService itemCodes;
     private final Message message;
     private final ShopToggleCommand toggles;
+    private final io.paradaux.chestshop.services.FindAliases aliases;
 
     @Inject
     public FindCommand(
@@ -44,7 +45,9 @@ public final class FindCommand implements CommandHandler {
             ItemService items,
             ItemCodeService itemCodes,
             Message message,
-            ShopToggleCommand toggles) {
+            ShopToggleCommand toggles,
+            io.paradaux.chestshop.services.FindAliases aliases) {
+        this.aliases = aliases;
         this.toggles = toggles;
         this.dialogs = dialogs;
         this.items = items;
@@ -66,7 +69,10 @@ public final class FindCommand implements CommandHandler {
     }
 
     @Route("<item>")
-    public void byCode(@Sender CommandSender sender, @GreedyArg(value = "item", sanitize = false) String code) {
+    public void byCode(
+            @Sender CommandSender sender,
+            @GreedyArg(value = "item", sanitize = false) io.paradaux.chestshop.commands.resolvers.FindItem itemCode) {
+        String code = aliases.normalize(itemCode.code());
         if (!(sender instanceof Player player)) {
             return;
         }

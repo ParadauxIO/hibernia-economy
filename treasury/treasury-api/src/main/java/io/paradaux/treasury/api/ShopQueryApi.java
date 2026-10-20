@@ -3,7 +3,6 @@ package io.paradaux.treasury.api;
 import io.paradaux.treasury.api.market.ShopLocation;
 import io.paradaux.treasury.api.market.ShopResult;
 import io.paradaux.treasury.api.market.ShopSearchQuery;
-
 import java.util.List;
 import java.util.UUID;
 
@@ -21,7 +20,7 @@ public interface ShopQueryApi {
     /**
      * Active, owner-visible shops matching the query's item (exact or fuzzy) and
      * optional world. Returns lean rows for the caller to filter/sort/distance
-     * client-side; capped at {@link ShopSearchQuery#getLimit()}.
+     * client-side; capped at {@link ShopSearchQuery#getLimit()} unless allMatches is requested.
      */
     List<ShopResult> searchShops(ShopSearchQuery query);
 

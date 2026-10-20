@@ -228,6 +228,18 @@ public class PreviewServiceImpl implements PreviewService {
     }
 
     @Override
+    public void resize() {
+        forEachDisplay(display -> {
+            Transformation tr = display.getTransformation();
+            display.setTransformation(new Transformation(
+                    tr.getTranslation(),
+                    tr.getLeftRotation(),
+                    new Vector3f(presentation.previewScale()),
+                    tr.getRightRotation()));
+        });
+    }
+
+    @Override
     public void applyPreference(Player player, boolean visible) {
         if (visible) {
             previewHidden.remove(player.getUniqueId());

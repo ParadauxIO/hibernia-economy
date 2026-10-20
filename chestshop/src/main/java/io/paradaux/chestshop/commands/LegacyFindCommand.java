@@ -29,7 +29,9 @@ public final class LegacyFindCommand implements CommandHandler {
     }
 
     @Route("find <item>")
-    public void code(@Sender CommandSender sender, @GreedyArg(value = "item", sanitize = false) String item) {
+    public void code(
+            @Sender CommandSender sender,
+            @GreedyArg(value = "item", sanitize = false) io.paradaux.chestshop.commands.resolvers.FindItem item) {
         find.byCode(sender, item);
     }
 
