@@ -1,13 +1,13 @@
 import { permissionsFor } from '../role-fixtures';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import type { Viewer } from '@/lib/auth/viewer';
-import { canViewAccount, canViewFirmFinancials, canViewFirmInternals, isStaff, hasElevatedRead, auditRole, requirePermission } from '@/lib/auth/access';
+import { canViewAccount, canViewTransaction, canViewFirmFinancials, canViewFirmInternals, isStaff, hasElevatedRead, auditRole, requirePermission } from '@/lib/auth/access';
 import { hasPermission, PERMISSIONS } from '@/lib/auth/policy';
 import { requireRole } from '@/lib/auth/requireRole';
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
-import { findAccount, canReadAccount } from '@/lib/sql/ledger';
+import { findAccount, canReadAccount, findTransactionAccountIds } from '@/lib/sql/ledger';
 import { getAccountFirmId, hasFirmFinancialAccess, isFirmMember } from '@/lib/sql/firm';
-vi.mock('@/lib/sql/ledger', () => ({ findAccount: vi.fn(), canReadAccount: vi.fn() }));
+vi.mock('@/lib/sql/ledger', () => ({ findAccount: vi.fn(), canReadAccount: vi.fn(), findTransactionAccountIds: vi.fn() }));
 vi.mock('@/lib/sql/firm', () => ({ getAccountFirmId: vi.fn(), hasFirmFinancialAccess: vi.fn(), isFirmMember: vi.fn() }));
 const anon: Viewer = { anon: true, role: null, capabilities: [], permissions: [], keycloakSub: null, minecraftUuid: null, minecraftName: null, linked: false };
 const base = { anon: false as const, keycloakSub: 's', minecraftUuid: 'u', minecraftName: 'n', linked: true };
@@ -63,6 +63,45 @@ describe('account RBAC + ReBAC', () => {
   });
   it.each([admin, moderator])('allows global investigation for $role', async v => {
     expect(await canViewAccount(12, v)).toBe(true);
+  });
+});
+describe('transaction relationships', () => {
+  beforeEach(() => {
+    vi.mocked(findTransactionAccountIds).mockResolvedValue([12, 13]);
+  });
+  it.each([player, government])('allows a readable participant for $role without granting unrelated history', async v => {
+    vi.mocked(canReadAccount).mockImplementation(async id => id === 13);
+    expect(await canViewTransaction(1, v)).toBe(true);
+    expect(await canViewAccount(12, v)).toBe(false);
+    vi.mocked(findTransactionAccountIds).mockResolvedValue([12]);
+    expect(await canViewTransaction(2, v)).toBe(false);
+  });
+  it('allows account ownership', async () => {
+    vi.mocked(findAccount).mockResolvedValue({ owner_uuid: 'u' } as Awaited<ReturnType<typeof findAccount>>);
+    expect(await canViewTransaction(1, player)).toBe(true);
+  });
+  it('rechecks relationships when access is revoked', async () => {
+    vi.mocked(canReadAccount).mockResolvedValue(true);
+    expect(await canViewTransaction(1, government)).toBe(true);
+    vi.mocked(canReadAccount).mockResolvedValue(false);
+    expect(await canViewTransaction(1, government)).toBe(false);
+  });
+  it.each([anon, { ...player, permissions: [] }, { ...player, minecraftUuid: null }])('rejects missing authentication, permission or identity', async v => {
+    expect(await canViewTransaction(1, v)).toBe(false);
+    expect(findTransactionAccountIds).not.toHaveBeenCalled();
+  });
+  it('allows transaction investigators without account grants or a linked identity', async () => {
+    expect(await canViewTransaction(1, { ...player, minecraftUuid: null, permissions: ['transactions.read'] })).toBe(true);
+    expect(findTransactionAccountIds).not.toHaveBeenCalled();
+  });
+  it('allows global account readers but does not grant the global ledger permission', async () => {
+    const viewer: Viewer = { ...player, minecraftUuid: null, permissions: ['account.read.all'] };
+    expect(await canViewTransaction(1, viewer)).toBe(true);
+    expect(hasPermission(viewer, 'transactions.read')).toBe(false);
+  });
+  it('denies transactions with no participating accounts', async () => {
+    vi.mocked(findTransactionAccountIds).mockResolvedValue([]);
+    expect(await canViewTransaction(99, player)).toBe(false);
   });
 });
 describe('firm relationships', () => {

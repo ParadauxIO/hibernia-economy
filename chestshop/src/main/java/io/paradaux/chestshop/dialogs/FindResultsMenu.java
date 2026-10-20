@@ -3,6 +3,7 @@ package io.paradaux.chestshop.dialogs;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.FoundShop;
+import io.paradaux.chestshop.model.ShopItem;
 import io.paradaux.chestshop.services.FindPresentation;
 import io.paradaux.chestshop.services.ShopDisplayService;
 import net.kyori.adventure.text.Component;
@@ -46,6 +47,30 @@ public final class FindResultsMenu implements Listener {
         }
     }
 
+    private static final class Inspection implements InventoryHolder {
+        private final FindState state;
+        private Inventory inventory;
+
+        Inspection(FindState state) {
+            this.state = state;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return inventory;
+        }
+    }
+
+    private void inspect(Player player, FindState state, FoundShop shop) {
+        Inspection inspection = new Inspection(state);
+        inspection.inventory =
+                Bukkit.createInventory(inspection, 27, Component.text("Item preview · " + shop.itemKey()));
+        ItemStack item = ShopItem.decode(shop.material(), shop.itemData());
+        if (item != null) inspection.inventory.setItem(13, item);
+        inspection.inventory.setItem(22, button(Material.ARROW, "Back"));
+        player.openInventory(inspection.inventory);
+    }
+
     public void open(Player player, FindState state) {
         Page page = new Page(state);
         page.inventory = Bukkit.createInventory(
@@ -58,7 +83,10 @@ public final class FindResultsMenu implements Listener {
             icon.editMeta(meta -> {
                 meta.displayName(presentation.title(shop, displays));
                 var lore = new java.util.ArrayList<>(presentation.lore(shop, displays));
-                lore.add(Component.text("Left: transit · Right: GPS"));
+                lore.add(Component.text(
+                        presentation.command(shop, false).isBlank()
+                                ? "Left: transit · Right: inspect item"
+                                : "Left: transit · Right: GPS · Shift-right: inspect item"));
                 meta.lore(lore);
             });
             page.inventory.setItem(10 + i, icon);
@@ -77,23 +105,40 @@ public final class FindResultsMenu implements Listener {
 
     @EventHandler
     public void click(InventoryClickEvent event) {
+        if (event.getView().getTopInventory().getHolder() instanceof Inspection inspection) {
+            event.setCancelled(true);
+            if (event.getWhoClicked() instanceof Player player
+                    && event.getRawSlot() == 22
+                    && (event.isLeftClick() || event.isRightClick())) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (player.isOnline() && player.getOpenInventory().getTopInventory() == inspection.inventory)
+                        open(player, inspection.state);
+                });
+            }
+            return;
+        }
         if (!(event.getView().getTopInventory().getHolder() instanceof Page page)) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player player)) return;
         int slot = event.getRawSlot();
-        boolean left = event.isLeftClick(), right = event.isRightClick();
+        boolean left = event.isLeftClick(), right = event.isRightClick(), shift = event.isShiftClick();
         // Bukkit inventory callbacks must defer view changes to the next tick.
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (player.isOnline() && player.getOpenInventory().getTopInventory() == page.inventory)
-                select(player, page, slot, left, right);
+                select(player, page, slot, left, right, shift);
         });
     }
 
-    private void select(Player player, Page page, int slot, boolean left, boolean right) {
+    private void select(Player player, Page page, int slot, boolean left, boolean right, boolean shift) {
         if (slot >= 10 && slot < 10 + page.state.pageShops().size()) {
             if (!left && !right) return;
-            presentation.navigate(player, page.state.pageShops().get(slot - 10), left);
-            player.closeInventory();
+            FoundShop shop = page.state.pageShops().get(slot - 10);
+            if (right && (shift || presentation.command(shop, false).isBlank())) {
+                inspect(player, page.state, shop);
+            } else {
+                presentation.navigate(player, shop, left);
+                player.closeInventory();
+            }
         } else if (slot == 45 || slot == 53) {
             if (slot == 45) page.state.previousPage();
             else page.state.nextPage();
@@ -103,6 +148,7 @@ public final class FindResultsMenu implements Listener {
 
     @EventHandler
     public void drag(InventoryDragEvent event) {
-        if (event.getView().getTopInventory().getHolder() instanceof Page) event.setCancelled(true);
+        InventoryHolder holder = event.getView().getTopInventory().getHolder();
+        if (holder instanceof Page || holder instanceof Inspection) event.setCancelled(true);
     }
 }

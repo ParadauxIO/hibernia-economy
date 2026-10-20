@@ -60,14 +60,50 @@ transit selection. Bedrock players are detected through Floodgate or Geyser;
 results use an inventory menu with left-click transit and right-click GPS,
 paging and canceled inventory moves. Commands execute as the player, with the
 player's permissions, and only while the player remains in the result's world.
-An empty command disables that action. Reload presentation settings with
-`/chestshop reload`.
+An empty left-click command disables transit. An empty right-click command opens
+the item inspector instead. Reload presentation settings with `/chestshop reload`;
+existing floating previews immediately receive the new scale.
 
 Native `/find toggle preview|visibility|hologram <true|false>` and
 `/csdb find ...` aliases remain available after the old database add-on is removed.
 Administrative `/csdb reload` and `/csdb resync <chunks>` require
 `ChestShop.admin`. Finder access uses `ChestShop.find`; migrate effective
 LuckPerms grants/denials from `csdb.find` explicitly.
+
+## Native finder parity
+
+The native finder now covers the remaining ChestShopDatabase search and maintenance
+features:
+
+- `/find <item>` and `/csdb find <item>` suggest registry item codes using
+  case-insensitive substring matching. Suggestions use an immutable snapshot
+  refreshed off-thread every 30 seconds, plus the current search aliases; no
+  database query runs on each keystroke. Codes containing spaces remain supported.
+- `ChestShop/find-aliases.yml` imports the add-on's `item-code-groupings.yml`
+  once. It uses the same `groupings` list with `item-code` and `aliases` entries.
+  These aliases affect typed searches only; they do not rewrite item identities,
+  signs or stock. Existing native files win. Reloading replaces the alias map;
+  malformed or conflicting entries fail without replacing the last working map.
+- Search ranking considers every matching shop before applying empty/full/type
+  filters, distance or weighted sorting. Treasury's query API retains its normal
+  500-row default for other callers; the native finder explicitly requests all
+  matches in one database read.
+- Java result dialogs offer **Inspect item**, displaying the stored ItemStack
+  including its name, enchantments and other metadata, with a back action.
+  Inventory results offer the same inspector on shift-right-click, or ordinary
+  right-click when no right-click navigation command is configured. The inspector
+  cancels inventory movement and returns to the same results page.
+- `/chestshop resync <chunks>` and `/csdb resync <chunks>` also work from console.
+  Both scan loaded chunks across worlds and report progress to the initiating
+  sender; neither forces unloaded chunks to load.
+- `/chestshop reload` updates the scale of existing preview entities without
+  respawning them or changing player visibility, and publishes the legacy reload
+  event for add-ons retained during cutover.
+
+Native permission nodes remain authoritative: migrate effective `csdb.*` grants
+and denials to the corresponding native permissions before switching command
+ownership. Source-level parity and automated checks do not replace a real Java
+and Bedrock client acceptance pass or the registry/preference cutover below.
 
 ## Upgrade and migration
 

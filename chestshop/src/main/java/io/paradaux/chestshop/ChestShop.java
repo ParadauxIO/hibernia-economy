@@ -110,6 +110,7 @@ public class ChestShop extends JavaPlugin {
                                 io.paradaux.chestshop.commands.ShopToggleCommand.class,
                                 io.paradaux.chestshop.commands.ResyncCommand.class,
                                 io.paradaux.chestshop.commands.ImportShopsCommand.class)
+                        .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
                         // Usher dialog handlers — the /find search flow (first Usher use).
                         .dialogs(io.paradaux.chestshop.dialogs.FindDialog.class)
                         // Bukkit entrypoints — Guice-constructed so each injects the
@@ -163,6 +164,8 @@ public class ChestShop extends JavaPlugin {
         injector.getInstance(io.paradaux.hibernia.framework.events.ListenerManager.class)
                 .registerAll();
         injector.getInstance(MarketService.class).init();
+        injector.getInstance(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
+                .start();
         // Chunks already loaded at enable never fire a ChunkLoadEvent for us — give them their previews.
         injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)
                 .loadAll();
@@ -194,7 +197,12 @@ public class ChestShop extends JavaPlugin {
         io.paradaux.chestshop.integration.LegacyCompatibility.refresh(config);
         injector.getInstance(io.paradaux.chestshop.services.FindPresentation.class)
                 .reload();
+        injector.getInstance(io.paradaux.chestshop.services.FindAliases.class).reload();
+        injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)
+                .resize();
         accounts.load();
+        io.paradaux.chestshop.integration.LegacyCompatibility.fire(
+                new com.Acrobot.ChestShop.Events.ChestShopReloadEvent());
     }
 
     public static File loadFile(String string) {

@@ -4,7 +4,7 @@ import type { Capability, Role } from './capabilities';
 import { hasPermission, hasAnyPermission, type Permission } from './policy';
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
 import { hasFirmFinancialAccess, isFirmMember } from '@/lib/sql/firm';
-import { findAccount, canReadAccount } from '@/lib/sql/ledger';
+import { findAccount, canReadAccount, findTransactionAccountIds } from '@/lib/sql/ledger';
 export { hasPermission } from './policy';
 
 export function hasCapability(v: Viewer, cap: Capability): boolean {
@@ -34,6 +34,16 @@ export async function canViewAccount(accountId: number, v: Viewer): Promise<bool
 export async function requireAccountRead(accountId: number, v: Viewer): Promise<void> {
   if (v.anon) throw new UnauthorizedError();
   if (!await canViewAccount(accountId, v)) throw new ForbiddenError();
+}
+/** One readable participating account exposes this transaction, not other account histories. */
+export async function canViewTransaction(txnId: number, v: Viewer): Promise<boolean> {
+  if (hasPermission(v, 'transactions.read')) return true;
+  if (!hasAnyPermission(v, ['account.read', 'account.read.all'])) return false;
+  if (!hasPermission(v, 'account.read.all') && !v.minecraftUuid) return false;
+  for (const accountId of await findTransactionAccountIds(txnId)) {
+    if (await canViewAccount(accountId, v)) return true;
+  }
+  return false;
 }
 export async function canViewFirmInternals(firmId: number, v: Viewer): Promise<boolean> {
   if (hasPermission(v, 'firm.read.all')) return true;

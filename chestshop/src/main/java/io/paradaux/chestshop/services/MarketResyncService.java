@@ -1,6 +1,6 @@
 package io.paradaux.chestshop.services;
 
-import org.bukkit.entity.Player;
+import org.bukkit.command.CommandSender;
 
 /**
  * Rebuilds the live shop registry by scanning the world: for each scanned chunk
@@ -21,5 +21,5 @@ public interface MarketResyncService {
      * Kick off a resync, reporting progress to {@code initiator}. One at a time.
      * {@code chunksPerTick} is clamped to a sane range — the scan runs on the main thread.
      */
-    void resync(Player initiator, int chunksPerTick);
+    void resync(CommandSender initiator, int chunksPerTick);
 }

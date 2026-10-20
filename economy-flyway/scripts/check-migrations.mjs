@@ -22,8 +22,9 @@
 //     always a renumbering mistake or a collision with another branch).
 // Repeatable migrations (R__*.sql) may change freely — Flyway re-runs them.
 //
-// History is irrelevant: only base vs head is compared, so migrations edited
-// before this guard existed (V17, V18, V20) don't trip it.
+// The pre-cutover release baseline has one narrowly pinned exception below.
+// --upgrade-target prints only its applied version (or nothing for normal bases),
+// after all checks pass, for upgrade-test.sh.
 // =============================================================================
 
 import { execFileSync } from 'node:child_process';
@@ -35,8 +36,9 @@ const VERSIONED = /^V([1-9]\d*)__([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/;
 const REPEATABLE = /^R__([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/;
 
 const baseRef = process.argv[2];
-if (!baseRef || process.argv.length > 3) {
-  console.error('usage: check-migrations.mjs <base-ref>');
+const upgradeTarget = process.argv[3] === '--upgrade-target';
+if (!baseRef || process.argv.length > (upgradeTarget ? 4 : 3)) {
+  console.error('usage: check-migrations.mjs <base-ref> [--upgrade-target]');
   process.exit(2);
 }
 
@@ -63,6 +65,19 @@ for (const line of lsTree.split('\n').filter(Boolean)) {
   base.set(path.slice(migrationDir.length + 1), meta.split(' ')[2]);
 }
 
+// main at 36d7d90 contains V16–V18, but the release runbook's production
+// baseline is V15. V17/V18 were corrected before deployment (PAR-35, PAR-249,
+// PAR-250). Pin the entire old migration tree AND both exact blob transitions:
+// this must not exempt another base, a later edit, rename, or deletion.
+// Databases that applied the old V17/V18 still require manual reconciliation;
+// this exception is not permission to repair their Flyway history automatically.
+const preCutover = base.size > 0 &&
+  git('-C', root, 'rev-parse', `${baseRef}:${migrationDir}`) === '9066f0c2cac4917ee0de67474243019ba3a60bdd';
+const pendingCorrections = new Map([
+  ['V17__economy_players.sql', '0aa41c0b0b708cf1cec7c6255c6ba5c36c7dc2ca:36c4cb858875bc5a917f2de78462df5ed31f25bb'],
+  ['V18__consolidate_account_access.sql', 'dbab43188ee05aad197a5757570dbc7ebdfce4ea:ffa37fd6eae5ef75fd7649b575a4944769e9d63c'],
+]);
+
 // ── Head side: the working tree ──────────────────────────────────────────────
 const absDir = join(root, migrationDir);
 const head = existsSync(absDir) ? readdirSync(absDir).sort() : [];
@@ -79,7 +94,9 @@ for (const [name, blob] of base) {
       ? `renamed to ${renamedTo}. Flyway tracks applied migrations by version and description; keep the original name.`
       : 'deleted. It is already applied on databases migrated from the base ref; restore it.');
   } else if (headBlobs.get(name) !== blob) {
-    fail(where, 'modified after it was merged. Its checksum is recorded on every database that ran it, so flywayValidate would fail there. Revert it and put the change in a new migration.');
+    if (!preCutover || pendingCorrections.get(name) !== `${blob}:${headBlobs.get(name)}`) {
+      fail(where, 'modified after it was merged. Its checksum is recorded on every database that ran it, so flywayValidate would fail there. Revert it and put the change in a new migration.');
+    }
   }
 }
 
@@ -127,6 +144,13 @@ for (const { file, msg } of errors) {
 if (errors.length) {
   console.error(`\ncheck-migrations: ${errors.length} problem(s) against ${baseRef}.`);
   process.exit(1);
+}
+if (upgradeTarget) {
+  if (preCutover) console.log('15');
+  process.exit(0);
+}
+if (preCutover) {
+  console.log('Pre-cutover release baseline: V15 applied; only the pinned V17/V18 corrections are permitted. See wiki/release-runbook.md.');
 }
 const repeatables = head.filter((n) => REPEATABLE.test(n)).length;
 console.log(

@@ -1,11 +1,9 @@
 package io.paradaux.chestshop.dialogs;
 
 import io.paradaux.chestshop.model.FoundShop;
-import io.paradaux.chestshop.model.SortDirection;
-import io.paradaux.chestshop.model.ShopType;
 import io.paradaux.chestshop.model.ShopAttribute;
-import org.bukkit.inventory.ItemStack;
-
+import io.paradaux.chestshop.model.ShopType;
+import io.paradaux.chestshop.model.SortDirection;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -16,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * The {@code /find} query model — the Usher {@code @Model} shared across the find
@@ -41,16 +40,27 @@ public final class FindState {
             this.weight = weight;
         }
 
-        public SortDirection direction() { return direction; }
-        public int weight() { return weight; }
-        void direction(SortDirection d) { this.direction = d; }
-        void weight(int w) { this.weight = w; }
+        public SortDirection direction() {
+            return direction;
+        }
+
+        public int weight() {
+            return weight;
+        }
+
+        void direction(SortDirection d) {
+            this.direction = d;
+        }
+
+        void weight(int w) {
+            this.weight = w;
+        }
     }
 
-    private final ItemStack itemStack;          // for the dialog item body; may be null
-    private final String itemKey;               // the search key (canonical sign code)
+    private final ItemStack itemStack; // for the dialog item body; may be null
+    private final String itemKey; // the search key (canonical sign code)
     private final String itemDisplayName;
-    private final String queryWorld;            // player's world name, or null
+    private final String queryWorld; // player's world name, or null
     private final int qx, qy, qz;
     private final boolean hasPosition;
 
@@ -62,9 +72,17 @@ public final class FindState {
 
     private List<FoundShop> results = List.of();
     private int page = 0;
+    private int inspectionSlot;
 
-    public FindState(ItemStack itemStack, String itemKey, String itemDisplayName,
-                     String queryWorld, int qx, int qy, int qz, boolean hasPosition) {
+    public FindState(
+            ItemStack itemStack,
+            String itemKey,
+            String itemDisplayName,
+            String queryWorld,
+            int qx,
+            int qy,
+            int qz,
+            boolean hasPosition) {
         this.itemStack = itemStack;
         this.itemKey = itemKey;
         this.itemDisplayName = itemDisplayName;
@@ -90,36 +108,82 @@ public final class FindState {
 
     // ── identity / position ────────────────────────────────────────────────────
 
-    public ItemStack itemStack() { return itemStack; }
-    public String itemKey() { return itemKey; }
-    public String itemDisplayName() { return itemDisplayName; }
-    public String queryWorld() { return queryWorld; }
-    public boolean hasPosition() { return hasPosition; }
-    public int qx() { return qx; }
-    public int qy() { return qy; }
-    public int qz() { return qz; }
+    public ItemStack itemStack() {
+        return itemStack;
+    }
+
+    public String itemKey() {
+        return itemKey;
+    }
+
+    public String itemDisplayName() {
+        return itemDisplayName;
+    }
+
+    public String queryWorld() {
+        return queryWorld;
+    }
+
+    public boolean hasPosition() {
+        return hasPosition;
+    }
+
+    public int qx() {
+        return qx;
+    }
+
+    public int qy() {
+        return qy;
+    }
+
+    public int qz() {
+        return qz;
+    }
 
     // ── query / filters ────────────────────────────────────────────────────────
 
-    public boolean fuzzy() { return fuzzy; }
-    public void setFuzzy(boolean fuzzy) { this.fuzzy = fuzzy; }
+    public boolean fuzzy() {
+        return fuzzy;
+    }
 
-    public Set<ShopType> shopTypes() { return Collections.unmodifiableSet(shopTypes); }
+    public void setFuzzy(boolean fuzzy) {
+        this.fuzzy = fuzzy;
+    }
+
+    public Set<ShopType> shopTypes() {
+        return Collections.unmodifiableSet(shopTypes);
+    }
+
     public void setShopTypes(Collection<ShopType> types) {
         shopTypes.clear();
         shopTypes.addAll(types);
     }
 
-    public boolean hideEmpty() { return hideEmpty; }
-    public void setHideEmpty(boolean v) { this.hideEmpty = v; }
-    public boolean hideFull() { return hideFull; }
-    public void setHideFull(boolean v) { this.hideFull = v; }
+    public boolean hideEmpty() {
+        return hideEmpty;
+    }
+
+    public void setHideEmpty(boolean v) {
+        this.hideEmpty = v;
+    }
+
+    public boolean hideFull() {
+        return hideFull;
+    }
+
+    public void setHideFull(boolean v) {
+        this.hideFull = v;
+    }
 
     // ── sorting ────────────────────────────────────────────────────────────────
 
-    public Map<ShopAttribute, SortMeta> sort() { return Collections.unmodifiableMap(sort); }
+    public Map<ShopAttribute, SortMeta> sort() {
+        return Collections.unmodifiableMap(sort);
+    }
 
-    public SortMeta sortMeta(ShopAttribute attribute) { return sort.get(attribute); }
+    public SortMeta sortMeta(ShopAttribute attribute) {
+        return sort.get(attribute);
+    }
 
     /** Select (or update) an attribute for sorting. */
     public void select(ShopAttribute attribute, SortDirection direction, int weight) {
@@ -136,9 +200,13 @@ public final class FindState {
         if (meta != null) meta.weight(clampWeight(weight));
     }
 
-    public void deselect(ShopAttribute attribute) { sort.remove(attribute); }
+    public void deselect(ShopAttribute attribute) {
+        sort.remove(attribute);
+    }
 
-    private static int clampWeight(int w) { return Math.max(0, Math.min(100, w)); }
+    private static int clampWeight(int w) {
+        return Math.max(0, Math.min(100, w));
+    }
 
     // ── quick-action presets (ported from the legacy FindDialog) ────────────────
 
@@ -172,10 +240,7 @@ public final class FindState {
      * order as the legacy {@code applyToStream}.
      */
     public List<FoundShop> pipeline(List<FoundShop> shops) {
-        return applyShopTypeFilter(
-                applySort(
-                        applyHideEmpty(
-                                applyHideFull(shops.stream()))))
+        return applyShopTypeFilter(applySort(applyHideEmpty(applyHideFull(shops.stream()))))
                 .toList();
     }
 
@@ -207,7 +272,8 @@ public final class FindState {
     /** Compose the selected attributes' comparators by descending weight (stable in enum order). */
     private Comparator<FoundShop> buildComparator() {
         List<Map.Entry<ShopAttribute, SortMeta>> entries = new ArrayList<>(sort.entrySet());
-        entries.sort(Comparator.comparingInt((Map.Entry<ShopAttribute, SortMeta> e) -> e.getValue().weight())
+        entries.sort(Comparator.comparingInt(
+                        (Map.Entry<ShopAttribute, SortMeta> e) -> e.getValue().weight())
                 .reversed());
         Comparator<FoundShop> comparator = null;
         for (Map.Entry<ShopAttribute, SortMeta> e : entries) {
@@ -224,9 +290,25 @@ public final class FindState {
         this.page = 0;
     }
 
-    public List<FoundShop> results() { return results; }
-    public boolean isEmpty() { return results.isEmpty(); }
-    public int page() { return page; }
+    public List<FoundShop> results() {
+        return results;
+    }
+
+    public boolean isEmpty() {
+        return results.isEmpty();
+    }
+
+    public int page() {
+        return page;
+    }
+
+    public void inspect(int slot) {
+        inspectionSlot = slot;
+    }
+
+    public FoundShop inspectedShop() {
+        return pageShops().get(inspectionSlot);
+    }
 
     public int pageCount() {
         return Math.max(1, (results.size() + PAGE_SIZE - 1) / PAGE_SIZE);

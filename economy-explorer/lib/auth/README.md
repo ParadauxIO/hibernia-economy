@@ -39,6 +39,12 @@ insufficient for account or firm reads. `requireRole` is a compatibility wrapper
 new gates should name the action, not a role. The displayed `viewer.role` is only
 the highest-priority label; `capabilities` contains every effective role grant.
 
+`canViewTransaction` permits global `transactions.read` or read access to at
+least one participating account through `canViewAccount`. Authorized readers
+see the complete transaction, including counterparty postings; other transactions
+and account histories remain independently gated. The global transaction list
+still requires `transactions.read`. Every successful detail view is audited.
+
 `policy.ts` is pure and edge-compatible. Middleware verifies the signed session
 before admin routes. Pages, route handlers and server actions perform live role
 checks at the request boundary. Government, role and group mutation services enforce

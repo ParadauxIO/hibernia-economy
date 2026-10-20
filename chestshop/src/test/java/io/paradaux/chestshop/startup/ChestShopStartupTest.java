@@ -1,7 +1,7 @@
 package io.paradaux.chestshop.startup;
 
-import com.google.inject.Injector;
 import com.google.inject.Guice;
+import com.google.inject.Injector;
 import com.google.inject.Module;
 import io.paradaux.chestshop.ChestShop;
 import io.paradaux.chestshop.commands.BypassCommand;
@@ -38,16 +38,15 @@ import io.paradaux.chestshop.listeners.SignCreateListener;
 import io.paradaux.chestshop.listeners.StockCounterListener;
 import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.hibernia.testsupport.HiberniaStartupAssertion;
+import java.io.File;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.util.List;
 
 /**
  * Startup-shaped test: builds ChestShop's <em>real</em> Guice module graph over a live
@@ -96,11 +95,16 @@ class ChestShopStartupTest {
                         GiveCommand.class,
                         ToggleCommand.class,
                         FindCommand.class,
+                        io.paradaux.chestshop.commands.LegacyFindCommand.class,
+                        io.paradaux.chestshop.commands.ImportShopsCommand.class,
                         ShopToggleCommand.class,
                         ResyncCommand.class)
+                .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
                 .dialogs(FindDialog.class)
                 .listeners(
                         IntegrationRegistrar.class,
+                        io.paradaux.chestshop.integration.LegacyCompatibility.class,
+                        io.paradaux.chestshop.dialogs.FindResultsMenu.class,
                         SignBreakListener.class,
                         PhysicsBreakListener.class,
                         PaperBlockDestroyListener.class,
@@ -124,10 +128,8 @@ class ChestShopStartupTest {
         File usersDb = dbDir.resolve("users.db").toFile();
         File itemsDb = dbDir.resolve("items.db").toFile();
 
-        List<Module> modules = List.of(
-                hibernia,
-                new ChestShopModule(plugin.getDataFolder()),
-                new DatabaseModule(usersDb, itemsDb));
+        List<Module> modules =
+                List.of(hibernia, new ChestShopModule(plugin.getDataFolder()), new DatabaseModule(usersDb, itemsDb));
 
         Injector injector = Guice.createInjector(modules);
         HiberniaStartupAssertion.assertRegisters(injector);

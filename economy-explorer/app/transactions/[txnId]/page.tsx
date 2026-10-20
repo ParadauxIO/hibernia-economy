@@ -1,4 +1,4 @@
-import { hasPermission } from '@/lib/auth';
+import { canViewTransaction, hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -31,27 +31,28 @@ export default async function TransactionDetailPage({
       <PrivacyGate
         kind="login"
         title="Transaction detail is private"
-        hint="Sign in with moderator or admin access to view transaction detail."
+        hint="Sign in to view transactions involving accounts you can access."
       />
     );
   }
-  if (!hasPermission(viewer, 'transactions.read')) {
-    return <PrivacyGate kind="private" title="Moderator / admin only" hint="Only moderators and admins can view individual transactions." />;
-  }
-
   const { txnId: idStr } = await params;
   const id = Number(idStr);
-  if (!Number.isInteger(id) || id <= 0) notFound();
+  if (!Number.isSafeInteger(id) || id <= 0) notFound();
+  if (!await canViewTransaction(id, viewer)) {
+    return <PrivacyGate kind="private" title="Transaction access required" hint="You need read access to an account involved in this transaction, or permission to investigate all transactions." />;
+  }
 
   const [txn, postings] = await Promise.all([findTransaction(id), findPostingsByTxnId(id)]);
   if (!txn) notFound();
 
-  // Privileged read: admin inspecting an individual transaction's postings.
+  // Record both global investigations and relationship-based transaction reads.
   await auditView(viewer, { path: `/transactions/${id}`, targetType: 'transaction', targetId: String(id) });
 
   return (
     <>
-      <BackLink href="/transactions" label="Transactions" />
+      {hasPermission(viewer, 'transactions.read')
+        ? <BackLink href="/transactions" label="Transactions" />
+        : <BackLink href="/me" label="My data" />}
 
       <div className="page-heading">
         <h1>

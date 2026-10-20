@@ -61,3 +61,4 @@
 10	com/Acrobot/ChestShop/Utils/uBlock	findConnectedContainer	(Lorg/bukkit/block/Sign;)Lorg/bukkit/block/Container;
 10	com/Acrobot/ChestShop/Utils/uBlock	findConnectedShopSigns	(Lorg/bukkit/block/Block;)Ljava/util/List;
 10	com/Acrobot/ChestShop/Utils/uBlock	findConnectedShopSigns	(Lorg/bukkit/inventory/InventoryHolder;)Ljava/util/List;
+10	com/Acrobot/ChestShop/Events/ChestShopReloadEvent	<init>	()V

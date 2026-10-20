@@ -23,6 +23,27 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 /** Optional acceptance probe using the unmodified installed Utilities bytecode. */
 class InstalledAddonCompatibilityTest extends ServerTest {
     @Test
+    void realDatabaseListenerResolvesEveryEventParameterIncludingReload() throws Exception {
+        File folder = new File(System.getProperty("legacyAddonDir"));
+        File jar = Arrays.stream(folder.listFiles())
+                .filter(file -> file.getName().startsWith("chestshop-database-")
+                        && file.getName().endsWith(".jar"))
+                .findFirst()
+                .orElseThrow();
+        try (var loader = new URLClassLoader(
+                new java.net.URL[] {jar.toURI().toURL()}, getClass().getClassLoader())) {
+            Class<?> listener = loader.loadClass("io.github.md5sha256.chestshopdatabase.listener.ChestShopListener");
+            var handlers = Arrays.stream(listener.getDeclaredMethods())
+                    .filter(method -> method.isAnnotationPresent(org.bukkit.event.EventHandler.class))
+                    .toList();
+            assertThat(handlers).hasSize(5);
+            assertThat(handlers.stream().map(method -> method.getParameterTypes()[0]))
+                    .allMatch(org.bukkit.event.Event.class::isAssignableFrom)
+                    .contains(com.Acrobot.ChestShop.Events.ChestShopReloadEvent.class);
+        }
+    }
+
+    @Test
     void realUtilitiesListenerEnforcesEveryConfiguredItemInBothTradeDirections() throws Exception {
         File folder = new File(System.getProperty("legacyAddonDir"));
         var urls = Arrays.stream(folder.listFiles(file -> file.getName().endsWith(".jar")))
