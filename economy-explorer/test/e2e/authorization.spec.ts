@@ -1,7 +1,7 @@
 import { test as base, expect, type BrowserContext } from '@playwright/test';
 import { encode } from 'next-auth/jwt';
 import { randomUUID } from 'node:crypto';
-import mysql, { type Connection, type RowDataPacket } from 'mysql2/promise';
+import mysql, { type Connection, type RowDataPacket, type ResultSetHeader } from 'mysql2/promise';
 import { visit, submitReload } from './helpers';
 import { testDbOptions } from '../integration/db';
 
@@ -195,6 +195,52 @@ test('direct and LP account relationships are scoped and revocable; government r
   await expect(page.getByRole('link', { name: 'City Hall #5', exact: true })).toHaveCount(0);
   await visit(page, '/accounts/5');
   await expect(page.locator('.privacy-gate')).toBeVisible();
+});
+
+test('government account members can open related transactions from My data; revoked access is denied', async ({ context, page, policy }) => {
+  // Each run owns its account so shared history caches cannot retain another run's postings.
+  const [account] = await policy.conn.query<ResultSetHeader>("INSERT INTO accounts (account_type, owner_uuid_bin, display_name) VALUES ('GOVERNMENT', ?, ?)", [bin(policy.admin), policy.key]);
+  const accountId = account.insertId;
+  const accountName = `${policy.key} #${accountId}`;
+  const [txn] = await policy.conn.query<ResultSetHeader>("INSERT INTO ledger_txns (message, initiator_uuid_bin, plugin_system) VALUES (?, ?, 'treasury')", [policy.key, bin(policy.admin)]);
+  const txnId = txn.insertId;
+  try {
+    await policy.conn.query('INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES (?, ?, -1.00), (?, 2, 1.00)', [txnId, accountId, txnId]);
+    await signIn(context, policy.player);
+    await visit(page, `/transactions/${txnId}`);
+    await expect(page.getByText('Transaction access required', { exact: true })).toBeVisible();
+    await policy.conn.query("INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES (?, ?, 'MEMBER', ?)", [accountId, bin(policy.player), bin(policy.admin)]);
+    await visit(page, '/me');
+    await page.getByRole('link', { name: accountName, exact: true }).click();
+    await page.getByRole('link', { name: `#${txnId}`, exact: true }).click();
+    await expect(page.getByRole('heading', { name: `Txn #${txnId}` })).toBeVisible();
+    await expect(page.getByRole('link', { name: accountName, exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Bob #2', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: '← My data', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Bob #2', exact: true }).click();
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await visit(page, '/transactions/2');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await visit(page, '/transactions');
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await policy.conn.query('UPDATE account_access SET removed_at = NOW() WHERE subject_uuid_bin = ?', [bin(policy.player)]);
+    await visit(page, `/transactions/${txnId}`);
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await policy.conn.query("INSERT INTO account_group_access (account_id, lp_group, level, added_by_uuid_bin) VALUES (?, ?, 'VIEWER', ?)", [accountId, policy.key, bin(policy.admin)]);
+    await policy.conn.query('INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin, synced_at) VALUES (?, ?, NOW())', [policy.key, bin(policy.player)]);
+    await visit(page, `/transactions/${txnId}`);
+    await expect(page.getByRole('heading', { name: `Txn #${txnId}` })).toBeVisible();
+    await policy.conn.query('UPDATE explorer_lp_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE player_uuid_bin = ?', [bin(policy.player)]);
+    await visit(page, `/transactions/${txnId}`);
+    await expect(page.locator('.privacy-gate')).toBeVisible();
+  } finally {
+    await policy.conn.query('DELETE FROM ledger_postings WHERE txn_id = ?', [txnId]);
+    await policy.conn.query('DELETE FROM ledger_txns WHERE txn_id = ?', [txnId]);
+    await policy.conn.query('DELETE FROM account_access WHERE account_id = ?', [accountId]);
+    await policy.conn.query('DELETE FROM account_group_access WHERE account_id = ?', [accountId]);
+    await policy.conn.query('DELETE FROM account_balances_mat WHERE account_id = ?', [accountId]);
+    await policy.conn.query('DELETE FROM accounts WHERE account_id = ?', [accountId]);
+  }
 });
 
 test('firm roster membership does not grant finances until the member has a finance role', async ({ context, page, policy }) => {

@@ -25,6 +25,12 @@ remain public. Account membership grants read access on the explorer, regardless
 whether the in-game relationship is VIEWER, MEMBER or AUTHORIZER; it does not grant
 website administration or access to unrelated accounts.
 
+Account read access also allows opening individual transactions involving that
+account, including government accounts. Transaction details show all postings
+and counterparties so readers can trace where money went. This does not grant
+access to the counterparty's other transactions or private account history.
+The whole-economy transaction list still requires `transactions.read`.
+
 The former `viewer` role (including its older `staff.audit` spelling) now means
 `player`. Assign `moderator` explicitly to staff who need global investigation.
 Government no longer grants global player or firm oversight.

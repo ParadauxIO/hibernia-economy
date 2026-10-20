@@ -374,6 +374,15 @@ export async function countTransactions(args: TxnFilters): Promise<number> {
   return Number(result.rows[0]?.c ?? 0);
 }
 
+/** Minimal resource identifiers for authorization before loading transaction details. */
+export async function findTransactionAccountIds(txnId: number): Promise<number[]> {
+  const result = await sql<{ account_id: number }>`
+    SELECT DISTINCT account_id FROM ledger_postings WHERE txn_id = ${txnId}
+    ORDER BY account_id
+  `.execute(db);
+  return result.rows.map(row => row.account_id);
+}
+
 /** Mirrors LedgerExplorerMapper.findTransaction (line 167-173). */
 export async function findTransaction(txnId: number): Promise<ExplorerTxnRow | null> {
   const result = await sql<RawTxnSummary>`
