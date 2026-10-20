@@ -7,15 +7,15 @@ import com.google.inject.Singleton;
 import com.google.inject.name.Names;
 import io.paradaux.common.DataSourceProvider;
 import io.paradaux.treasuryapi.mappers.ApiKeyMapper;
+import io.paradaux.treasuryapi.mappers.DerivedGroupMapper;
 import io.paradaux.treasuryapi.mappers.ExplorerGroupMapper;
 import io.paradaux.treasuryapi.mappers.ExplorerUiMapper;
 import io.paradaux.treasuryapi.mappers.typehandlers.UuidBinaryTypeHandler;
 import io.paradaux.treasuryapi.model.config.DatabaseConfiguration;
+import javax.sql.DataSource;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.mybatis.guice.MyBatisModule;
 import org.mybatis.guice.datasource.helper.JdbcHelper;
-
-import javax.sql.DataSource;
 
 public final class DatabaseModule extends AbstractModule {
 
@@ -39,11 +39,13 @@ public final class DatabaseModule extends AbstractModule {
                 addMapperClass(ApiKeyMapper.class);
                 addMapperClass(ExplorerUiMapper.class);
                 addMapperClass(ExplorerGroupMapper.class);
+                addMapperClass(DerivedGroupMapper.class);
 
                 addTypeHandlerClass(UuidBinaryTypeHandler.class);
 
                 environmentId("paper-mybatis");
-                bindConstant().annotatedWith(Names.named("mybatis.configuration.mapUnderscoreToCamelCase"))
+                bindConstant()
+                        .annotatedWith(Names.named("mybatis.configuration.mapUnderscoreToCamelCase"))
                         .to(true);
             }
         });
@@ -61,8 +63,7 @@ public final class DatabaseModule extends AbstractModule {
         String pass = env("TREASURYAPI_DB_PASSWORD", databaseConfig.getPassword());
         // Fail fast instead of silently shipping the documented default password.
         if ("password".equals(pass)) {
-            throw new IllegalStateException(
-                    "Refusing to start: the database password is still the insecure default. "
+            throw new IllegalStateException("Refusing to start: the database password is still the insecure default. "
                     + "Set database.password in config.yml or the TREASURYAPI_DB_PASSWORD env var.");
         }
         return DataSourceProvider.builder(host, port, db, user, pass).build().get();

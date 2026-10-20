@@ -294,3 +294,9 @@ accepts an explicit timezone for pure formatting.
 Daily SQL aggregates remain UTC buckets: `fmtDate` and activity calendar date
 arithmetic must stay in UTC, rather than shifting already aggregated dates
 into the browser's zone. Daily charts label this distinction.
+
+### Business and Realty Explorer membership sources
+
+TreasuryAPI reconciles optional per-group Business and Realty bindings independently
+of LuckPerms. See [group reconciliation](group-reconciliation.md) for configuration,
+lease expiry, provider contracts and deployment order (PAR-101).

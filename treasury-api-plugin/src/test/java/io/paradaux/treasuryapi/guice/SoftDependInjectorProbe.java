@@ -1,5 +1,8 @@
 package io.paradaux.treasuryapi.guice;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -16,12 +19,8 @@ import io.paradaux.treasuryapi.mappers.ExplorerUiMapper;
 import io.paradaux.treasuryapi.model.config.ApiConfiguration;
 import io.paradaux.treasuryapi.model.config.KeycloakConfiguration;
 import io.paradaux.treasuryapi.services.ExplorerUiService;
-
 import java.util.UUID;
 import java.util.logging.Logger;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Builds the injector from the REAL {@link TreasuryAPIModule} plus stand-ins for
@@ -43,13 +42,14 @@ public final class SoftDependInjectorProbe {
         when(plugin.getLogger()).thenReturn(Logger.getLogger("soft-depend-probe"));
 
         Injector injector = Guice.createInjector(
-                new TreasuryAPIModule(plugin, mock(TreasuryApi.class), mock(BusinessApi.class)),
-                new AbstractModule() {
+                new TreasuryAPIModule(plugin, mock(TreasuryApi.class), mock(BusinessApi.class)), new AbstractModule() {
                     @Override
                     protected void configure() {
                         bind(ApiKeyMapper.class).toInstance(mock(ApiKeyMapper.class));
                         bind(ExplorerUiMapper.class).toInstance(mock(ExplorerUiMapper.class));
                         bind(ExplorerGroupMapper.class).toInstance(mock(ExplorerGroupMapper.class));
+                        bind(io.paradaux.treasuryapi.mappers.DerivedGroupMapper.class)
+                                .toInstance(mock(io.paradaux.treasuryapi.mappers.DerivedGroupMapper.class));
                         bind(ApiConfiguration.class).toInstance(mock(ApiConfiguration.class));
                         bind(KeycloakConfiguration.class).toInstance(mock(KeycloakConfiguration.class));
                         bind(Message.class).toInstance(mock(Message.class));
@@ -59,6 +59,7 @@ public final class SoftDependInjectorProbe {
         injector.getInstance(PersonalKeyHandler.class);
         injector.getInstance(BusinessKeyHandler.class);
         injector.getInstance(UiAccessHandler.class);
+        injector.getInstance(io.paradaux.treasuryapi.tasks.DerivedGroupReconciliationTask.class);
         return injector;
     }
 
