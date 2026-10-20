@@ -9,7 +9,7 @@ import { findForOwner, listRecentDeliveries } from '@/lib/sql/webhook';
 import { fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { RotateSecretButton } from './rotate-secret-button';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
+  transpilePackages: ['@democracycraft/design-system'],
   // Multi-stage Docker build copies .next/standalone — trims node_modules to
   // only what server.js actually imports.
   output: 'standalone',

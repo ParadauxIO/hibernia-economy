@@ -1,10 +1,11 @@
+import { WindowTabs, TableWrap } from '@democracycraft/design-system';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { getGovernmentDashboard } from '@/lib/services/government';
 import { getViewer, hasPermission } from '@/lib/auth';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -12,8 +13,6 @@ import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { SectionTabs } from '@/components/SectionTabs';
-import { WindowTabs } from '@/components/WindowTabs';
-import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(7).max(30).default(30), view: z.enum(['accounts', 'fines']).catch('accounts'), page: z.coerce.number().int().min(1).catch(1), q: z.string().optional(), status: z.enum(['active', 'revoked']).optional().catch(undefined) });
 
@@ -34,7 +33,6 @@ export default async function GovernmentPage({
   }
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
   const { fines, govAccounts, totals, total } = await getGovernmentDashboard(sp.days, sp.view === 'fines' ? sp : undefined);
-
 
   return (
     <>

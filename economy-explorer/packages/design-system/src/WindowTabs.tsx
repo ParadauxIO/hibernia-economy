@@ -12,12 +12,12 @@ export function WindowTabs({
   params?: Record<string, string | undefined>;
 }) {
   return (
-    <span className="window-tabs">
+    <nav className="window-tabs" aria-label="Time period">
       {windows.map((w) => (
-        <a key={w} href={`${basePath}?${new URLSearchParams({ ...Object.fromEntries(Object.entries(params).filter((entry): entry is [string, string] => entry[1] !== undefined)), days: String(w) })}`} className={w === days ? 'active' : ''}>
-          {w}d
+        <a key={w} href={`${basePath}?${new URLSearchParams({ ...Object.fromEntries(Object.entries(params).filter((entry): entry is [string, string] => entry[1] !== undefined)), days: String(w) })}`} className={w === days ? 'active' : ''} aria-current={w === days ? 'true' : undefined}>
+          {w} days
         </a>
       ))}
-    </span>
+    </nav>
   );
 }

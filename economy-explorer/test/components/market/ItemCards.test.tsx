@@ -34,7 +34,7 @@ describe('ItemCards', () => {
     render(<ItemCards items={[]} days={30} />);
     expect(screen.getByText('price trend · last 30 days')).toBeInTheDocument();
     expect(screen.getByText(/No trades in this window/)).toBeInTheDocument();
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Browse the full catalogue' })).toHaveAttribute('href', '/chestshop');
   });
 
   it('renders the current price and volume with full precision and grouping', () => {
@@ -101,6 +101,6 @@ describe('ItemCards', () => {
     render(<ItemCards items={[item(), item({ item_key: 'minecraft:dirt', item_name: 'Dirt', series: [{ day: '2026-03-01', price: 1 }] })]} days={7} />);
     expect(card('Diamond').querySelector('.item-card-spark svg')).not.toBeNull();
     expect(card('Dirt').querySelector('.item-card-spark svg')).toBeNull();
-    expect(text(card('Dirt'), '.item-card-spark')).toBe('—');
+    expect(text(card('Dirt'), '.item-card-spark')).toBe('More trading days will reveal a trend.');
   });
 });

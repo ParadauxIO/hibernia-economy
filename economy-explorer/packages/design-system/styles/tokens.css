@@ -1,9 +1,8 @@
 /* ──────────────────────────────────────────────────────────────────────────
  * Economy Explorer — global tokens, reset, type stack
  *
- * Two axes, both explicit attributes on <html>, resolved server-side in the
- * layout from cookies (no media query / inline script — avoids a hydration
- * flash; mode defaults to dark, the ModeToggle persists an override cookie):
+ * Two axes, both explicit attributes on <html>, set by the host application before
+ * first paint (mode defaults to dark; the host persists user preferences):
  *   1. data-mode = "dark" | "light"  — surface mode.
  *   2. data-theme = "blue" | "red"    — brand. blue = DemocracyCraft,
  *      red = StateCraft. Set server-side from the THEME env (cookie override).
@@ -18,11 +17,11 @@
 :root {
     /* Type / scale — mode-agnostic. Geist (self-hosted via next/font) is the
        primary face; --font-geist-* are set on <html> by the layout. */
-    --mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    --sans: var(--font-geist-sans), ui-sans-serif, -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: var(--font-geist-mono, ui-monospace), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: var(--font-geist-sans, system-ui), ui-sans-serif, -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
     --radius:    8px;
     --radius-md: 10px;
-    --radius-lg: 14px;
+    --radius-lg: 16px;
     --t-fast: 120ms ease;
     --t-med:  200ms ease;
     /* Single vertical rhythm between stacked top-level sections (headings, KPI
@@ -46,7 +45,7 @@
     --border-soft: #1a1e28;
     --fg:        #edeff5;
     --fg-soft:   #b3b9c8;
-    --fg-muted:  #848b9c;
+    --fg-muted:  #9aa5b6;
     --fg-faint:  #5a6173;
     --good:      #34d399;
     --warn:      #fbbf24;
@@ -111,11 +110,11 @@
     --border:      #e3e6ee;
     --border-soft: #ecedf3;
     --fg:          #15171d;
-    --fg-soft:     #5a6072;
-    --fg-muted:    #8c92a3;
+    --fg-soft:     #48556a;
+    --fg-muted:    #59667b;
     --fg-faint:    #b7bcc9;
-    --good:        #16a34a;
-    --warn:        #d97706;
+    --good:        #116b34;
+    --warn:        #945300;
     --bad:         #dc2626;
     --info:        #0891b2;
 }
@@ -123,20 +122,20 @@
 /* Light · Blue */
 :root[data-mode="light"],
 :root[data-mode="light"][data-theme="blue"] {
-    --accent:      #3a6dcc;
-    --accent-2:    #2a8aa1;
+    --accent:      #315fb5;
+    --accent-2:    #216c7e;
     --accent-soft: rgba(58, 109, 204, 0.07);
     --accent-line: rgba(58, 109, 204, 0.22);
-    --accent-fill: var(--accent); /* already 4.97:1 with white */
+    --accent-fill: var(--accent); /* accessible filled surface behind white text */
     --brand-bg:    #e6eeff;
     --brand-bg-2:  #d7e2fb;
     --brand-fg:    #1f3a6b;
     --brand-fg-muted: #5d6f96;
     --brand-edge:  rgba(58, 109, 204, 0.05);
-    --c-1: #3a6dcc;
-    --c-2: #2a8aa1;
-    --c-3: #2f9d65;
-    --c-4: #c08218;
+    --c-1: #315fb5;
+    --c-2: #216c7e;
+    --c-3: #217548;
+    --c-4: #875a0c;
     --c-5: #c44a4a;
     --c-6: #4a55b3;
     --c-7: #aa3b87;
@@ -145,7 +144,7 @@
 /* Light · Red */
 :root[data-mode="light"][data-theme="red"] {
     --accent:      #b34d4d;
-    --accent-2:    #b97142;
+    --accent-2:    #89512d;
     --accent-soft: rgba(179, 77, 77, 0.07);
     --accent-line: rgba(179, 77, 77, 0.22);
     --accent-fill: var(--accent); /* 5.2:1 with white */
@@ -155,43 +154,11 @@
     --brand-fg-muted: #8a5a55;
     --brand-edge:  rgba(179, 77, 77, 0.05);
     --c-1: #b34d4d;
-    --c-2: #b97142;
-    --c-3: #2a8a85;
-    --c-4: #c08218;
+    --c-2: #89512d;
+    --c-3: #226f6b;
+    --c-4: #875a0c;
     --c-5: #7a2e2e;
     --c-6: #4068a5;
     --c-7: #a44774;
 }
 
-* { box-sizing: border-box; }
-html { height: 100%; }
-body {
-    margin: 0;
-    min-height: 100%;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: var(--sans);
-    font-size: 14px;
-    line-height: 1.55;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "ss01", "cv02", "cv11";
-}
-/* main grows to fill so the footer pins to the bottom on short pages. */
-.explorer-main { flex: 1 0 auto; }
-
-a { color: var(--accent); text-decoration: none; transition: color var(--t-fast); }
-a:hover { color: var(--fg); }
-
-button { font-family: inherit; }
-input, select, textarea { font-family: inherit; }
-
-code, pre, .mono { font-family: var(--mono); }
-
-/* Text utilities — muted colour and a smaller size, used together (`muted
-   small`) for secondary metadata sitting next to a primary label. */
-.muted { color: var(--fg-muted); }
-.small { font-size: 12px; }
-::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--fg); }

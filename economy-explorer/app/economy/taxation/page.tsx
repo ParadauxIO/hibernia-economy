@@ -1,3 +1,4 @@
+import { WindowTabs, TableWrap } from '@democracycraft/design-system';
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/metadata';
 import { getTaxationDashboard } from '@/lib/services/taxation';
@@ -5,10 +6,9 @@ import { getTaxationRates } from '@/lib/services/taxationRates';
 import { taxationDays } from '@/lib/taxation';
 import { fmtAmtFull } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
-import { WindowTabs } from '@/components/WindowTabs';
+
 import { SectionTabs } from '@/components/SectionTabs';
 import { TaxRevenueTimeline } from '@/components/charts/AreaTimeline';
-import { TableWrap } from '@/components/TableWrap';
 
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() {

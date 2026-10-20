@@ -1,6 +1,7 @@
 'use client';
-import { useState, type ReactElement } from 'react';
-import { useHydrated } from '@/components/useHydrated';
+import { useId, useState, type ReactElement } from 'react';
+import { TableWrap } from '@democracycraft/design-system';
+import { useHydrated } from '@democracycraft/design-system/use-hydrated';
 import { useMediaQuery } from '@/components/useMediaQuery';
 import {
   Area, AreaChart, Bar, BarChart,
@@ -35,31 +36,33 @@ function RC({ height, children, daily = false }: { height: number; children: Rea
 }
 
 interface VolumeTimelineProps {
+  countLabel?: 'Transactions' | 'Sales';
   data: { date: string; txn_count: number; total_volume: string }[];
 }
 
-export function VolumeTimeline({ data }: VolumeTimelineProps) {
+export function VolumeTimeline({ data, countLabel = 'Transactions' }: VolumeTimelineProps) {
   // Phones default to volume only (two axes don't fit); an explicit choice wins.
+  const chartId = useId().replaceAll(':', '');
   const narrow = useMediaQuery('(max-width: 720px)');
   const [chosen, setMetric] = useState<string | null>(null);
   const metric = chosen ?? (narrow ? 'volume' : 'both');
   if (data.length === 0) {
-    return <EmptyChart>No data yet.</EmptyChart>;
+    return <EmptyChart>No recorded activity in this period. Try another time window.</EmptyChart>;
   }
   const series = data.map((d) => ({ date: d.date, count: d.txn_count, volume: parseFloat(d.total_volume) }));
   return (
     <>
-    <label className="chart-series-control">Show <select aria-label="Chart series" value={metric} onChange={e => setMetric(e.target.value)}><option value="both">Volume and transactions</option><option value="volume">Volume</option><option value="count">Transactions</option></select></label>
-    <div className="chart-legend">{metric !== 'count' && <span style={{ color: 'var(--c-1)' }}>● Volume · right axis</span>}{metric !== 'volume' && <span style={{ color: 'var(--c-3)' }}>● Transactions · left axis</span>}</div>
+    <label className="chart-series-control">Show <select aria-label="Chart series" value={metric} onChange={e => setMetric(e.target.value)}><option value="both">Volume and {countLabel.toLowerCase()}</option><option value="volume">Volume</option><option value="count">{countLabel}</option></select></label>
+    <div className="chart-legend">{metric !== 'count' && <span><span aria-hidden style={{ color: 'var(--c-1)' }}>●</span> Volume · right axis</span>}{metric !== 'volume' && <span><span aria-hidden style={{ color: 'var(--c-3)' }}>●</span> {countLabel} · left axis</span>}</div>
     <p className="chart-subtitle">Daily buckets in UTC. The first and current day may be partial.</p>
     <RC height={230}>
       <AreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
-          <linearGradient id="gVol" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`${chartId}-volume`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--c-1)" stopOpacity={0.35} />
             <stop offset="100%" stopColor="var(--c-1)" stopOpacity={0} />
           </linearGradient>
-          <linearGradient id="gCnt" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`${chartId}-count`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--c-3)" stopOpacity={0.18} />
             <stop offset="100%" stopColor="var(--c-3)" stopOpacity={0} />
           </linearGradient>
@@ -84,12 +87,14 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
           labelFormatter={(d) => fmtDate(String(d))}
-          formatter={(v: number, name: string) => name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), 'Txns']}
+          formatter={(v: number, name: string) => name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), countLabel]}
         />
-        <Area hide={metric === 'count'} yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill="url(#gVol)" dot={false} isAnimationActive={false} />
-        <Area hide={metric === 'volume'} yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill="url(#gCnt)" dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'count'} yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill={`url(#${chartId}-volume)`} dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'volume'} yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill={`url(#${chartId}-count)`} dot={false} isAnimationActive={false} />
       </AreaChart>
-    </RC></>
+    </RC>
+    <details className="chart-data"><summary>View chart data</summary><TableWrap label={`${countLabel} and volume by day`}><table className="data-table" aria-label={`${countLabel} and volume by day`}><thead><tr><th scope="col">Date (UTC)</th><th scope="col" className="amount">{countLabel}</th><th scope="col" className="amount">Volume</th></tr></thead><tbody>{data.map(row => <tr key={row.date}><th scope="row">{fmtDate(row.date)}</th><td className="amount">{fmtN(row.txn_count)}</td><td className="amount">{fmtAmtFull(row.total_volume)}</td></tr>)}</tbody></table></TableWrap></details>
+    </>
   );
 }
 

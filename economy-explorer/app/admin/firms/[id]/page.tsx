@@ -12,7 +12,7 @@ import { fmtAmt } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { CsvButton } from '@/components/CsvButton';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

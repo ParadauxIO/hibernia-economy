@@ -5,13 +5,13 @@ import type { Route } from 'next';
 import { z } from 'zod';
 import { listMarketFirms, countMarketFirms } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { getViewer } from '@/lib/auth/viewer';
 import { hasPermission } from '@/lib/auth/access';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),

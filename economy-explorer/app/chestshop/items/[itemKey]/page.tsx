@@ -1,3 +1,5 @@
+import { BackLink, Pagination } from '@democracycraft/design-system/next';
+import { marketReturnPath } from '@/lib/marketNavigation';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
@@ -8,8 +10,7 @@ import { listItemSales, countItemSales, listItemSellers, countItemSellers, itemP
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { bucketSamples, type CandleInterval } from '@/lib/derived';
-import { BackLink } from '@/components/BackLink';
-import { Pagination } from '@/components/Pagination';
+
 import { PriceLine } from '@/components/charts/AreaTimeline';
 import { Candlestick } from '@/components/charts/Candlestick';
 import { SectionTabs } from '@/components/SectionTabs';
@@ -21,13 +22,14 @@ import { resolveTheme } from '@/lib/theme';
 import { serverIdentity, blueMapUrl } from '@/lib/serverIdentity';
 import { getViewer } from '@/lib/auth/viewer';
 import { hasPermission } from '@/lib/auth/access';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   // Default to 1h: with only a few weeks of data, daily buckets give ~4 sparse
   // candles that read as broken; hourly is dense and readable.
+  from: z.string().optional(),
   direction: z.enum(['buy', 'sell']).catch('buy'),
   advanced: z.enum(['true', 'false']).catch('false'),
   interval: z.enum(['1h', '4h', '1d']).default('1h'),
@@ -52,6 +54,8 @@ export default async function ItemDetailPage({
   const { itemKey: raw } = await params;
   const itemKey = decodeURIComponent(raw);
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
+  const returnTo = marketReturnPath(sp.from);
+  const itemQuery = (changes: Record<string, string>) => `?${new URLSearchParams({ direction: sp.direction, advanced: sp.advanced, interval: sp.interval, from: returnTo, ...changes })}`;
 
   // Windows capped at 30 days (there isn't more data yet, and tighter windows
   // give denser, readable candles).
@@ -112,7 +116,7 @@ export default async function ItemDetailPage({
 
   return (
     <>
-      <BackLink href="/chestshop" label="Browse items" />
+      <BackLink href={returnTo} label={returnTo.startsWith('/chestshop/shops') ? 'Back to shop results' : returnTo.startsWith('/market') ? 'Back to Market' : 'Back to item results'} />
 
       <div className="page-heading item-heading">
         <ItemIcon icon={icon} name={headerName} size={44} />
@@ -130,12 +134,12 @@ export default async function ItemDetailPage({
 
       <section aria-label="Observed shop offers">
         <div className="page-heading"><h2>Where to trade</h2><nav className="window-tabs" aria-label="Trade direction">
-          <Link href="?direction=buy" className={sp.direction === 'buy' ? 'active' : ''}>I want to buy</Link>
-          <Link href="?direction=sell" className={sp.direction === 'sell' ? 'active' : ''}>I want to sell</Link>
+          <Link href={itemQuery({ direction: 'buy' })} aria-current={sp.direction === 'buy' ? 'true' : undefined} className={sp.direction === 'buy' ? 'active' : ''}>I want to buy</Link>
+          <Link href={itemQuery({ direction: 'sell' })} aria-current={sp.direction === 'sell' ? 'true' : undefined} className={sp.direction === 'sell' ? 'active' : ''}>I want to sell</Link>
         </nav></div>
         <p className="page-intro">Observed offers, ordered by unit price. Stock and prices can change in-game.</p>
-        <ShopOffers shops={offers} direction={sp.direction} mapBase={mapBase} />
-        <p><Link href={`/chestshop/shops?item=${encodeURIComponent(itemKey)}&direction=${sp.direction}`}>Compare all {fmtN(offerCount)} offers →</Link></p>
+        <ShopOffers shops={offers} direction={sp.direction} mapBase={mapBase} returnTo={returnTo} resetHref={`/chestshop/shops?direction=${sp.direction}`} />
+        <p className="offer-compare"><Link className="btn" href={`/chestshop/shops?item=${encodeURIComponent(itemKey)}&direction=${sp.direction}`}>Compare all {fmtN(offerCount)} offers →</Link></p>
       </section>
       <h2>Trading history</h2>
       <p className="page-intro">Historical averages are not current shop quotes. Price movement compares the first and latest trading day; daily buckets use UTC and today may be partial.</p>
@@ -168,7 +172,7 @@ export default async function ItemDetailPage({
           <PriceLine data={byDay} />
         </div>
       )}
-      <p><Link href={`?direction=${sp.direction}&advanced=${sp.advanced === 'true' ? 'false' : 'true'}&interval=${sp.interval}`}>{sp.advanced === 'true' ? 'Hide' : 'Show'} advanced candlesticks</Link></p>
+      <p><Link href={itemQuery({ advanced: sp.advanced === 'true' ? 'false' : 'true' })}>{sp.advanced === 'true' ? 'Hide' : 'Show'} advanced candlesticks</Link></p>
       {sp.advanced === 'true' && <>
       {/* Candlestick (OHLC) */}
       <div className="card">
@@ -178,7 +182,7 @@ export default async function ItemDetailPage({
             {(['1h', '4h', '1d'] as const).map((iv) => (
               <a
                 key={iv}
-                href={`?direction=${sp.direction}&advanced=true&interval=${iv}`}
+                href={itemQuery({ advanced: 'true', interval: iv })}
                 className={`btn ${sp.interval === iv ? 'btn-primary' : ''}`}
                 style={{ padding: '2px 9px', fontSize: 11 }}
               >
@@ -320,7 +324,7 @@ export default async function ItemDetailPage({
           totalPages={totalPages}
           totalItems={totalSales}
           basePath={`/chestshop/items/${encodeURIComponent(itemKey)}`}
-          searchParams={{ limit: String(sp.limit) }}
+          searchParams={{ from: returnTo, limit: String(sp.limit) }}
         />
       </div>
       )}

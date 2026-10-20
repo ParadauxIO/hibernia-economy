@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { addGroupMemberAction, removeGroupMemberAction } from '@/lib/actions/admin';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 interface Member {
   uuid: string;

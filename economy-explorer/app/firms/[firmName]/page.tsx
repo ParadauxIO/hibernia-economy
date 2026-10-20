@@ -16,10 +16,10 @@ import {
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

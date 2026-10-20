@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 import { getGroup, listGroupMembers } from '@/lib/services/group';
 import { listRoleDefinitions } from '@/lib/sql/role';
 import { CapabilitiesForm } from './capabilities-form';

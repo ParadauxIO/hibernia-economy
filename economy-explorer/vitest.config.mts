@@ -39,7 +39,7 @@ export default defineConfig({
       reporter: ['text', 'text-summary', 'html', 'lcov'],
       // Every module vitest can meaningfully reach: lib, shared components, and
       // the client/server modules that live beside routes (forms, panels).
-      include: ['lib/**/*.ts', 'components/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}', 'proxy.ts'],
+      include: ['lib/**/*.ts', 'components/**/*.{ts,tsx}', 'packages/design-system/src/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}', 'proxy.ts'],
       exclude: [
         '**/*.d.ts',
         'lib/db.generated.ts', // kysely types only

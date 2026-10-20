@@ -12,12 +12,12 @@ import { memo } from '@/lib/cache';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { Toolbar } from '@/components/Toolbar';
 import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),

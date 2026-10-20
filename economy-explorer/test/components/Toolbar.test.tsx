@@ -24,6 +24,30 @@ function replacedWith(): { path: string; params: Record<string, string> } {
 beforeEach(() => resetNavigation('/accounts', 'type=BUSINESS&page=4&sort=balance'));
 
 describe('Toolbar search', () => {
+  it('removes one filter while preserving sorting and the other filters', async () => {
+    navigation.search = new URLSearchParams('q=acme&type=BUSINESS&page=4&sort=balance');
+    const user = userEvent.setup();
+    render(<Toolbar filterLabels={{ type: 'Account type' }} />);
+    await user.click(screen.getByRole('button', { name: 'Remove Account type: BUSINESS filter' }));
+    expect(replacedWith()).toEqual({ path: '/accounts', params: { q: 'acme', sort: 'balance' } });
+  });
+
+  it('clears search and declared filters without discarding sort or page size', async () => {
+    navigation.search = new URLSearchParams('q=acme&type=BUSINESS&page=4&sort=balance&limit=25');
+    const user = userEvent.setup();
+    render(<Toolbar filterLabels={{ type: 'Account type' }} />);
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(replacedWith()).toEqual({ path: '/accounts', params: { sort: 'balance', limit: '25' } });
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+  });
+
+  it('submits with the visible search action exactly once', async () => {
+    const user = userEvent.setup();
+    render(<Toolbar />);
+    await user.type(screen.getByRole('searchbox'), 'acme');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    expect(replacedWith().params).toEqual({ type: 'BUSINESS', sort: 'balance', q: 'acme' });
+  });
   it('seeds the box from ?q and labels it by the placeholder', () => {
     navigation.search = new URLSearchParams('q=acme');
     render(<Toolbar searchPlaceholder="Search accounts" />);

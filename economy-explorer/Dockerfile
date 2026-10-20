@@ -5,6 +5,7 @@
 FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY packages/design-system/package.json ./packages/design-system/package.json
 RUN npm ci --ignore-scripts
 
 FROM node:26-alpine AS builder

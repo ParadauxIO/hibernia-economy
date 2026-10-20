@@ -1,5 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ShopOffers } from '@/components/market/ShopOffers';
 import type { MarketShopRow } from '@/lib/sql/market';
 
@@ -50,6 +50,24 @@ function price(card: HTMLElement): string {
 }
 
 describe('ShopOffers', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    [128, 128, 'buy', 1, 'Stock observed'],
+    [128, 32, 'sell', 1, 'Limited space'],
+    [0, 128, 'buy', 1, 'Below one batch'],
+    [128, 128, 'sell', 1, 'Space observed'],
+    [128, 128, 'buy', 25, 'Recheck availability'],
+    [null, 128, 'buy', 1, 'Availability unknown'],
+    [128, 128, 'buy', -1, 'Availability unknown'],
+  ] as const)('qualifies observed availability for stock=%s, space=%s, %s, age=%sh', (stock, space, direction, hours, label) => {
+    const now = Date.parse('2026-03-09T12:00:00Z');
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    render(<ShopOffers shops={[shop({ current_stock: stock, current_space: space, stock_at: new Date(now - hours * 3_600_000) })]} direction={direction} mapBase={MAP} />);
+    expect(screen.getByText(label)).toBeVisible();
+    if (label !== 'Stock observed') expect(screen.queryByText('Stock observed')).toBeNull();
+  });
+
   it('shows the empty state when nothing matches', () => {
     render(<ShopOffers shops={[]} direction="buy" mapBase={MAP} />);
     expect(screen.getByText(/No observed offers match/)).toBeInTheDocument();
