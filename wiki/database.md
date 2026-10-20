@@ -182,3 +182,15 @@ The public REST shop DTO exposes it as `currentSpace` (including item-detail
 shop offers), and the explorer as `current_space`. Both use `stock_at` as the
 observation timestamp. PAR-17 reuses V25 and the existing MarketApi capture path;
 no duplicate `current_space` database column or new migration is needed.
+
+## Progressive income tax totals
+
+V36 added `income_tax_period`: one row per player per accounting period, holding
+the income counted so far and the tax taken on it. `period_start` is the period's
+start in epoch milliseconds, computed by Treasury from the configured period length
+and anchor, so it doesn't depend on the connection time zone. The ledger calls
+`IncomeTaxService` from `transferInternal` inside the payment's transaction; it
+upserts the row (which locks it), reads the running total, and records the payment
+and its tax before collecting, so concurrent payments to one player are taxed in turn
+and the payment, total and tax commit or roll back together. A new period writes a
+new row; old rows are history and can be pruned.

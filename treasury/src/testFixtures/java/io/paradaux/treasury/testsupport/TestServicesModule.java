@@ -3,11 +3,14 @@ package io.paradaux.treasury.testsupport;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
+import io.paradaux.common.ProgressiveTaxBrackets;
+import io.paradaux.common.TaxPeriod;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.impl.TaxApiImpl;
 import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
+import io.paradaux.treasury.model.config.ProgressiveIncomeTaxConfiguration;
 import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
 import io.paradaux.treasury.services.AccountService;
@@ -16,6 +19,7 @@ import io.paradaux.treasury.services.BytebinService;
 import io.paradaux.treasury.services.DataExportService;
 import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.GovService;
+import io.paradaux.treasury.services.IncomeTaxService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
@@ -27,13 +31,17 @@ import io.paradaux.treasury.services.impl.AccountServiceImpl;
 import io.paradaux.treasury.services.impl.BalanceTaxServiceImpl;
 import io.paradaux.treasury.services.impl.DataExportServiceImpl;
 import io.paradaux.treasury.services.impl.GovServiceImpl;
+import io.paradaux.treasury.services.impl.IncomeTaxServiceImpl;
 import io.paradaux.treasury.services.impl.LedgerServiceImpl;
 import io.paradaux.treasury.services.impl.MembershipServiceImpl;
 import io.paradaux.treasury.services.impl.PlayerDirectoryServiceImpl;
 import io.paradaux.treasury.services.impl.TaxCycleRegistryImpl;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -75,6 +83,7 @@ public class TestServicesModule extends AbstractModule {
         bind(BalanceTaxService.class).to(BalanceTaxServiceImpl.class).in(Singleton.class);
         bind(TaxApiImpl.class).in(Singleton.class);
         bind(TaxApi.class).to(TaxApiImpl.class).in(Singleton.class);
+        bind(IncomeTaxService.class).to(IncomeTaxServiceImpl.class).in(Singleton.class);
 
         bind(BytebinService.class).toInstance((content, contentType) -> "test://upload/" + contentType);
     }
@@ -113,5 +122,18 @@ public class TestServicesModule extends AbstractModule {
     SourceIncomeTaxConfiguration sourceIncomeTaxConfig() {
         // Disabled by default — tests that need it on should override this binding.
         return SourceIncomeTaxConfiguration.forTesting(false, BigDecimal.ZERO, "DCGovernment", Map.of());
+    }
+
+    @Provides
+    @Singleton
+    ProgressiveIncomeTaxConfiguration progressiveIncomeTaxConfig() {
+        // Disabled by default — tests that need it on should override this binding.
+        return ProgressiveIncomeTaxConfiguration.forTesting(new ProgressiveIncomeTaxConfiguration.Snapshot(
+                false,
+                "DCGovernment",
+                TaxPeriod.of(Duration.ofDays(30), Instant.parse("2026-01-01T00:00:00Z")),
+                ProgressiveTaxBrackets.fromRawEntries(Map.of(), warning -> {}),
+                Set.of(),
+                Set.of()));
     }
 }

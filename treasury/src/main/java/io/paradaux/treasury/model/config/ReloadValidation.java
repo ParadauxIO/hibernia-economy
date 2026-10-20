@@ -1,9 +1,8 @@
 package io.paradaux.treasury.model.config;
 
+import java.math.BigDecimal;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
-
-import java.math.BigDecimal;
 
 /** Reload is strict; startup retains the existing defaults and warning-based recovery. */
 final class ReloadValidation {
@@ -31,7 +30,16 @@ final class ReloadValidation {
         } catch (NumberFormatException ignored) {
             // Report the key, without leaking arbitrary config values into command output.
         }
-        throw new IllegalArgumentException(path + (rate ? " must be a number in [0,1]" : " must be a non-negative number"));
+        throw new IllegalArgumentException(
+                path + (rate ? " must be a number in [0,1]" : " must be a non-negative number"));
+    }
+
+    static void stringList(FileConfiguration config, String path) {
+        Object value = config.get(path);
+        if (value == null) return;
+        if (!(value instanceof java.util.List<?> list) || list.stream().anyMatch(e -> !(e instanceof String))) {
+            throw new IllegalArgumentException(path + " must be a list of names");
+        }
     }
 
     static void entries(FileConfiguration config, String path, boolean rate, boolean thresholds) {
