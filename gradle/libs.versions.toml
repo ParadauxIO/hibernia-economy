@@ -51,7 +51,7 @@ mariadb4j = "3.3.1"
 # against Platform 1.14 but resolves to the BOM's 6.x without API breaks — see
 # MoneyProperties et al.).
 jqwik = "1.10.2"
-flyway = "12.9.0"
+flyway = "13.10.0"
 jacoco = "0.8.15"
 # Mutation testing (io.paradaux.mutation-testing-conventions). The Gradle plugin
 # is a build-logic classpath dep; PIT itself and its JUnit Platform test plugin
