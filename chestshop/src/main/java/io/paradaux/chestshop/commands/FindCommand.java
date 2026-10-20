@@ -112,6 +112,7 @@ public final class FindCommand implements CommandHandler {
                 itemKey,
                 displayName,
                 player.getWorld().getName(),
+                player.getWorld().getUID(),
                 loc.getBlockX(),
                 loc.getBlockY(),
                 loc.getBlockZ(),

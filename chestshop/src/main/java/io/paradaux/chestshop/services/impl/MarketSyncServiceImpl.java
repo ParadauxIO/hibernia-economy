@@ -13,6 +13,7 @@ import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.utils.PriceUtil;
 import io.paradaux.treasury.api.MarketApi;
 import java.util.List;
 import java.util.UUID;
@@ -121,7 +122,18 @@ public class MarketSyncServiceImpl implements MarketSyncService {
                     : null;
             Integer stock = container != null ? marketService.stockOf(item, container) : null;
             Integer capacity = container != null ? marketService.capacityOf(item, container) : null;
-            marketService.market().upsertShop(marketService.shop(sign, item, owner, stock, capacity));
+            String[] lines = event.getSignLines();
+            marketService
+                    .market()
+                    .upsertShop(marketService.shop(
+                            sign.getLocation(),
+                            item,
+                            owner,
+                            PriceUtil.getExactBuyPrice(SignService.getPrice(lines)),
+                            PriceUtil.getExactSellPrice(SignService.getPrice(lines)),
+                            SignService.getQuantity(lines),
+                            stock,
+                            capacity));
             Location l = sign.getLocation();
             previews.refresh(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
         } catch (Throwable t) {
@@ -149,19 +161,12 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             if (holder == null) return;
             List<Sign> signs = shopBlockService.findConnectedShopSigns(holder);
             if (signs.isEmpty()) return;
-            MarketApi market = marketService.market();
             for (Sign sign : signs) {
                 if (signService.isAdminShop(sign)) continue;
-                ItemStack item = items.parse(SignService.getItem(sign));
-                if (item == null) continue;
-                Location l = sign.getLocation();
-                market.updateShopStock(
-                        worldName(l),
-                        l.getBlockX(),
-                        l.getBlockY(),
-                        l.getBlockZ(),
-                        marketService.stockOf(item, inv),
-                        marketService.capacityOf(item, inv));
+                if (registerShop(sign, inv)) {
+                    Location l = sign.getLocation();
+                    previews.refresh(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
+                }
             }
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
@@ -171,6 +176,16 @@ public class MarketSyncServiceImpl implements MarketSyncService {
     @Override
     public boolean registerShop(Sign sign) {
         if (!marketService.enabled()) return false;
+        try {
+            Container container = signService.isAdminShop(sign) ? null : shopBlockService.findConnectedContainer(sign);
+            return registerShop(sign, container == null ? null : container.getInventory());
+        } catch (Throwable t) {
+            log.debug("market analytics hook failed (non-fatal)", t);
+            return false;
+        }
+    }
+
+    private boolean registerShop(Sign sign, Inventory inventory) {
         try {
             ItemStack item = items.parse(SignService.getItem(sign));
             if (item == null) return false;
@@ -185,9 +200,8 @@ public class MarketSyncServiceImpl implements MarketSyncService {
                 }
                 owner = marketService.ownerFromUuid(account.getUuid(), false);
             }
-            Container container = admin ? null : shopBlockService.findConnectedContainer(sign);
-            Integer stock = container != null ? marketService.stockOf(item, container.getInventory()) : null;
-            Integer capacity = container != null ? marketService.capacityOf(item, container.getInventory()) : null;
+            Integer stock = inventory != null ? marketService.stockOf(item, inventory) : null;
+            Integer capacity = inventory != null ? marketService.capacityOf(item, inventory) : null;
             marketService.market().upsertShop(marketService.shop(sign, item, owner, stock, capacity));
             return true;
         } catch (Throwable t) {

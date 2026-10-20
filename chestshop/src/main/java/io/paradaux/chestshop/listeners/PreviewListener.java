@@ -25,21 +25,20 @@ public final class PreviewListener implements Listener {
     /** Default: players see previews unless they've turned them off. */
     private final io.paradaux.chestshop.services.FindPresentation presentation;
 
+    private final io.paradaux.chestshop.services.MarketResyncService resync;
     private final JavaPlugin plugin;
     private final PreviewService previews;
 
     private final io.paradaux.chestshop.services.MarketService marketService;
-
-    public PreviewListener(JavaPlugin plugin, PreviewService previews, MarketService marketService) {
-        this(plugin, previews, marketService, new io.paradaux.chestshop.services.FindPresentation());
-    }
 
     @Inject
     public PreviewListener(
             JavaPlugin plugin,
             PreviewService previews,
             MarketService marketService,
-            io.paradaux.chestshop.services.FindPresentation presentation) {
+            io.paradaux.chestshop.services.FindPresentation presentation,
+            io.paradaux.chestshop.services.MarketResyncService resync) {
+        this.resync = resync;
         this.presentation = presentation;
         this.marketService = marketService;
         this.plugin = plugin;
@@ -50,6 +49,7 @@ public final class PreviewListener implements Listener {
     public void onChunkLoad(ChunkLoadEvent event) {
         Chunk chunk = event.getChunk();
         previews.loadChunk(chunk.getWorld().getName(), chunk.getX(), chunk.getZ());
+        resync.discoverChunk(chunk);
     }
 
     @EventHandler

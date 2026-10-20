@@ -13,9 +13,11 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Chunk;
@@ -53,6 +55,12 @@ public class MarketResyncServiceImpl implements MarketResyncService {
     private final PreviewService previews;
     private final Message message;
 
+    private record ChunkKey(UUID worldUuid, int x, int z) {}
+
+    // Main-thread queue; one registry lookup/scan in flight, with a tick between chunks.
+    private final Map<ChunkKey, Chunk> discovery = new LinkedHashMap<>();
+    private boolean discoveryInFlight;
+
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Inject
@@ -69,6 +77,62 @@ public class MarketResyncServiceImpl implements MarketResyncService {
         this.marketSync = marketSync;
         this.previews = previews;
         this.message = message;
+    }
+
+    @Override
+    public void discoverLoadedChunks() {
+        if (!marketService.enabled() || !marketService.searchEnabled()) return;
+        for (World world : plugin.getServer().getWorlds()) {
+            for (Chunk chunk : world.getLoadedChunks()) discoverChunk(chunk);
+        }
+    }
+
+    @Override
+    public void discoverChunk(Chunk chunk) {
+        if (!marketService.enabled() || !marketService.searchEnabled()) return;
+        discovery.putIfAbsent(new ChunkKey(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ()), chunk);
+        if (!discoveryInFlight) pumpDiscovery();
+    }
+
+    private void pumpDiscovery() {
+        if (discovery.isEmpty()) return;
+        discoveryInFlight = true;
+        var entry = discovery.entrySet().iterator().next();
+        ChunkKey key = entry.getKey();
+        Chunk chunk = entry.getValue();
+        // Keep the in-flight key queued so duplicate load events cannot enqueue it again.
+        String worldName = chunk.getWorld().getName();
+        var scheduler = plugin.getServer().getScheduler();
+        scheduler.runTaskAsynchronously(plugin, () -> {
+            Map<String, Set<String>> known = null;
+            try {
+                known = groupKnownByChunk(marketService.shopQuery().shopsInChunk(worldName, key.x(), key.z()).stream()
+                        .map(s -> new ShopLocation(s.world(), s.worldUuid(), s.signX(), s.signY(), s.signZ()))
+                        .toList());
+            } catch (RuntimeException e) {
+                log.warn("Could not reconcile loaded shop chunk {} ({}, {})", worldName, key.x(), key.z(), e);
+            }
+            Map<String, Set<String>> snapshot = known;
+            scheduler.runTask(plugin, () -> {
+                try {
+                    World current = plugin.getServer().getWorld(worldName);
+                    if (snapshot != null
+                            && current != null
+                            && key.worldUuid().equals(current.getUID())
+                            && chunk.isLoaded()) scanChunk(chunk, snapshot);
+                } finally {
+                    discovery.remove(key);
+                    // Keep the in-flight flag set across the delay so newly queued chunks also wait.
+                    scheduler.runTaskLater(
+                            plugin,
+                            () -> {
+                                discoveryInFlight = false;
+                                if (!discovery.isEmpty()) pumpDiscovery();
+                            },
+                            1L);
+                }
+            });
+        });
     }
 
     @Override
