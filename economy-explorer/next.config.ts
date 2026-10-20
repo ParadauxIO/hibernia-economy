@@ -8,12 +8,13 @@ const config: NextConfig = {
 
   // Bot mitigation: never let an intermediate cache hold rendered HTML, and
   // keep the app out of search. The /docs documentation site is the deliberate
-  // exception — it's public and indexable, so it's excluded from this rule
-  // (negative lookahead) and given its own cacheable + indexable headers below.
+  // exception — it's public and indexable. Build-hashed assets must also be
+  // excluded: overriding their immutable cache headers forces every visit to
+  // download the same JavaScript, CSS and fonts again.
   async headers() {
     return [
       {
-        source: '/((?!docs).*)',
+        source: '/((?!docs|_next/static).*)',
         headers: [
           { key: 'Cache-Control', value: 'no-store' },
           { key: 'X-Robots-Tag', value: 'noindex, nofollow' },

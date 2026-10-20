@@ -4,9 +4,9 @@ import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
 import Link from 'next/link';
-import { getShopOffers } from '@/lib/services/market';
+import { getShopOffers, getItemHistory } from '@/lib/services/market';
 import { ShopOffers } from '@/components/market/ShopOffers';
-import { listItemSales, countItemSales, listItemSellers, countItemSellers, itemPriceByDay, listSamplesInRange } from '@/lib/sql/market';
+import { listItemSales, listSamplesInRange } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { bucketSamples, type CandleInterval } from '@/lib/derived';
@@ -63,13 +63,12 @@ export default async function ItemDetailPage({
   const candlesTo = new Date();
   const candlesFrom = new Date(candlesTo.getTime() - candleWindowDays * 24 * 60 * 60 * 1000);
 
-  const [viewer, sales, totalSales, sellers, totalSellers, byDay, samples, theme, [offers, offerCount]] = await Promise.all([
-    getViewer(),
-    listItemSales(itemKey, sp.limit, (sp.page - 1) * sp.limit),
-    countItemSales(itemKey),
-    listItemSellers(itemKey, 10, 0),
-    countItemSellers(itemKey),
-    itemPriceByDay(itemKey, 30),
+  const viewerPromise = getViewer();
+  const [viewer, sales, { identity, totalSales, sellers, totalSellers, byDay }, samples, theme, [offers, offerCount]] = await Promise.all([
+    viewerPromise,
+    viewerPromise.then(viewer => hasPermission(viewer, 'market.figures.read')
+      ? listItemSales(itemKey, sp.limit, (sp.page - 1) * sp.limit) : []),
+    getItemHistory(itemKey),
     sp.advanced === 'true' ? listSamplesInRange({ itemKey, from: candlesFrom, to: candlesTo, maxRows: 5000 }) : Promise.resolve([]),
     resolveTheme(),
     getShopOffers({ itemKey, material: null, firmId: null, ownerUuid: null, buyable: false, direction: sp.direction, inStock: false, search: null, limit: 4, offset: 0 }),
@@ -82,9 +81,9 @@ export default async function ItemDetailPage({
   const showSaleFigures = hasPermission(viewer, 'market.figures.read');
 
   const totalPages = Math.max(1, Math.ceil(totalSales / sp.limit));
-  const headerName = sales[0]?.item_name ?? offers[0]?.item_name ?? itemKey;
-  const material = sales[0]?.material ?? offers[0]?.material ?? null;
-  const icon = itemIconUrl(material, sales[0]?.item_custom ?? offers[0]?.item_custom);
+  const headerName = identity?.item_name ?? offers[0]?.item_name ?? itemKey;
+  const material = identity?.material ?? offers[0]?.material ?? null;
+  const icon = itemIconUrl(material, identity?.item_custom ?? offers[0]?.item_custom);
   // Item keys carry ':' / '#' (e.g. nexo:ruby_sword#02) — unsafe in filenames.
   const fileKey = itemKey.replace(/[^a-z0-9]+/gi, '_');
 
