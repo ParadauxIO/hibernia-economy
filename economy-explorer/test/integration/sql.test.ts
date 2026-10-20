@@ -185,6 +185,21 @@ d('money flow counts only clean cross-type transfers', () => {
     expect(edges[0]).toMatchObject({ from_type: 'PERSONAL', to_type: 'BUSINESS', txn_count: 1 });
     expect(edges[0]?.amount).toBe('500.00');
   });
+
+  it('filters by settlement time even when transaction IDs are out of time order', async () => {
+    try {
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 10 DAY WHERE txn_id = 1`.execute(db);
+      expect(await getMoneyFlow(7)).toEqual([]);
+      expect(await getMoneyFlow(30)).toEqual([
+        { from_type: 'PERSONAL', to_type: 'BUSINESS', amount: '500.00', amount_ex_seed: '500.00', txn_count: 1 },
+      ]);
+      // The oldest ID now settles after the other fixture transactions.
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() + INTERVAL 1 HOUR WHERE txn_id = 1`.execute(db);
+      expect((await getMoneyFlow(7))[0]?.amount).toBe('500.00');
+    } finally {
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() WHERE txn_id = 1`.execute(db);
+    }
+  });
 });
 
 d('group capabilities', () => {
