@@ -30,15 +30,14 @@ export async function getMoneyFlow(days: number): Promise<MoneyFlowEdge[]> {
            COUNT(*) AS txnCount
     FROM (
       -- Pivot the debit and credit; three or more postings are ambiguous.
-      -- The ID cutoff is only a superset optimization. Settlement time below
-      -- remains authoritative, including for out-of-order transaction IDs.
+      -- The outer settlement range drives the lateral aggregate; an additional
+      -- transaction-ID cutoff adds work without narrowing these lookups.
       SELECT lp.txn_id,
              MAX(CASE WHEN lp.amount < 0 THEN lp.account_id END) AS src_acct,
              MAX(CASE WHEN lp.amount > 0 THEN lp.account_id END) AS dst_acct,
              MAX(CASE WHEN lp.amount > 0 THEN lp.amount END) AS amt,
              COUNT(*) AS n
       FROM ledger_postings lp
-      WHERE lp.txn_id >= (SELECT MIN(txn_id) FROM ledger_txns WHERE settlement_time >= NOW() - INTERVAL ${days} DAY)
       GROUP BY lp.txn_id
       HAVING n = 2 AND src_acct IS NOT NULL AND dst_acct IS NOT NULL
     ) d

@@ -125,7 +125,8 @@ export async function sumVolume(): Promise<string> {
   return r.rows[0]?.v ?? '0.00';
 }
 export async function countDistinctItems(days?: number): Promise<number> {
-  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${days == null ? sql`` : sql`WHERE occurred_at >= NOW() - INTERVAL ${days} DAY`}`.execute(db);
+  // The window needs the time range, not a scan of the entire item index.
+  const r = await sql<{ c: string | number }>`SELECT COUNT(DISTINCT item_key) AS c FROM chestshop_sale ${days == null ? sql`` : sql`FORCE INDEX (idx_cs_time) WHERE occurred_at >= NOW() - INTERVAL ${days} DAY`}`.execute(db);
   return Number(r.rows[0]?.c ?? 0);
 }
 
@@ -134,7 +135,7 @@ export async function volumeByDay(days: number): Promise<VolumeDayPoint[]> {
     SELECT DATE_FORMAT(DATE(occurred_at),'%Y-%m-%d') AS txn_date,
            COUNT(*) AS txn_count,
            COALESCE(SUM(total_price),0.00) AS total_volume
-    FROM chestshop_sale
+    FROM chestshop_sale FORCE INDEX (idx_cs_time)
     WHERE occurred_at >= NOW() - INTERVAL ${days} DAY
     GROUP BY DATE(occurred_at)
     ORDER BY txn_date ASC
