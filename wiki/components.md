@@ -294,3 +294,15 @@ accepts an explicit timezone for pure formatting.
 Daily SQL aggregates remain UTC buckets: `fmtDate` and activity calendar date
 arithmetic must stay in UTC, rather than shifting already aggregated dates
 into the browser's zone. Daily charts label this distinction.
+
+### Business API-key account scope (PAR-448)
+
+`/treasuryapi business issue <firmName> <accountId>` stores both `firm_id` and
+`account_id` and signs both `firm` and `acc` claims. A null business `account_id`
+retains legacy firm-wide access. The verifier requires an exact match between the
+optional account claim and the persisted scope. Rotation retains both claims.
+Transfers, history/feed, account listing and renaming enforce the account restriction
+and current firm linkage. Firm-wide management requires a key without an account
+restriction. Account-scoped webhooks store only the selected account as their
+subscription scope so they cannot match sibling accounts. No schema migration is
+required; the existing nullable columns support both scopes.

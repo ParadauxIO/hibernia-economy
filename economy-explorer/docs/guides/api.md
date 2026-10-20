@@ -37,9 +37,8 @@ The base URL for requests is the same prefix:
 ## Step 1 — Get an API key in-game
 
 Keys are issued **in Minecraft**, not on the website. Each key is a token scoped to a
-personal account or an entire firm. A personal key is account-scoped; a business
-key grants access across that firm's live linked accounts and requires the proprietor
-to issue it.
+personal account, an entire firm, or one account under a firm. Business keys require
+the proprietor to issue them.
 
 For your **personal** account:
 
@@ -53,6 +52,21 @@ copy). For a **firm** account, issue a business key instead:
 ```text
 /treasuryapi business issue Acme
 ```
+
+To restrict the key to a specific linked account, including a subaccount, append
+its Treasury account ID:
+
+```text
+/treasuryapi business issue Acme 42
+```
+
+This key can debit account #42, read its transaction history/feed, rename it, and
+subscribe to its webhooks. Transfers still require `fromAccountId: 42`.
+`GET /api/v1/firms/me/accounts` returns only that linked account. Sibling accounts
+are forbidden even if they belong to the same firm. Firm updates and employee/role
+lists require a firm-wide key. Public reads (including balances and firm profiles)
+remain available. Reissuing or rotating a key preserves its account scope; issue a
+new key to select a different scope. Omitting the account ID retains firm-wide access.
 
 > [!WARNING]
 > The token is shown **once**, when it's issued, and is never stored — it can't be

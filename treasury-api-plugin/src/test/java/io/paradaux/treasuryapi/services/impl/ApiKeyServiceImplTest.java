@@ -96,6 +96,64 @@ class ApiKeyServiceImplTest {
     }
 
     @Test
+    void scopedBusinessKey_persistsAndRotatesBothScopes() {
+        UUID owner = UUID.randomUUID();
+        FirmApi firms = mock(FirmApi.class);
+        when(businessApi.firms()).thenReturn(firms);
+        when(firms.isProprietor(3, owner)).thenReturn(true);
+        var firm = new io.paradaux.business.model.Firm();
+        firm.setFirmId(3);
+        firm.setDefaultAccountId(6);
+        when(firms.getFirmByAccountId(7)).thenReturn(firm);
+        ApiKeyMapper mapper = mock(ApiKeyMapper.class);
+        var service = service(mapper);
+        ApiKey key = service.issueBusinessKey(3, 7, owner);
+        verify(mapper).insert(key);
+        assertEquals(7, key.getAccountId());
+        assertEquals(3, key.getFirmId());
+        when(mapper.findById(key.getKeyId())).thenReturn(key);
+        when(mapper.reissue(
+                        org.mockito.ArgumentMatchers.anyInt(),
+                        org.mockito.ArgumentMatchers.eq(owner),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(1);
+        for (String token : List.of(
+                key.getToken(), service.reissueKey(key.getKeyId(), owner).getToken())) {
+            Claims claims = Jwts.parser()
+                    .verifyWith(deriveKey(SECRET))
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            assertEquals(7, claims.get("acc", Integer.class));
+            assertEquals(3, claims.get("firm", Integer.class));
+        }
+        when(firms.getFirmByAccountId(7)).thenReturn(null);
+        assertThrows(NoPermissionException.class, () -> service.reissueKey(key.getKeyId(), owner));
+    }
+
+    @Test
+    void scopedBusinessKey_rejectsOutsidersAndUnlinkedAccountsWithoutIssuing() {
+        UUID owner = UUID.randomUUID();
+        FirmApi firms = mock(FirmApi.class);
+        when(businessApi.firms()).thenReturn(firms);
+        ApiKeyMapper mapper = mock(ApiKeyMapper.class);
+        var service = service(mapper);
+        assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
+        when(firms.isProprietor(3, owner)).thenReturn(true);
+        assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
+        var otherFirm = new io.paradaux.business.model.Firm();
+        otherFirm.setFirmId(4);
+        when(firms.getFirmByAccountId(7)).thenReturn(otherFirm);
+        assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
+        otherFirm.setFirmId(3);
+        otherFirm.setArchived(true);
+        assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
+        verifyNoMoreInteractions(mapper);
+    }
+
+    @Test
     void issuePersonalKey_mintsTokenVerifiableWithDerivedKey_carryingClaims() {
         UUID owner = UUID.randomUUID();
         ApiKey key = service(mapper(42)).issuePersonalKey(7, owner);
