@@ -444,42 +444,7 @@ p a:not(.btn),
 .explorer-error p { margin: 0 0 10px; color: var(--fg-muted); font-size: 14px; max-width: 460px; line-height: 1.5; }
 .page-intro strong { color: var(--fg); font-weight: 600; }
 
-/* ─────────────────── market item cards ─────────────────── */
-.item-card-grid {
-    display: grid;
-    /* Fixed column counts (not auto-fill) so a 12-item set always forms a full
-       rectangle — 6×2 / 4×3 / 3×4 — with no orphan card on a half-empty row. */
-    /* minmax(0, 1fr) (not bare 1fr) lets a track shrink below its content's
-       intrinsic width — without it the 240px-viewBox sparkline pins each column
-       wide and the grid overflows the viewport on narrow phones. */
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-}
-@media (min-width: 640px)  { .item-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 1024px) { .item-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.item-card {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--bg);
-    text-decoration: none;
-    color: var(--fg);
-    transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
-}
-.item-card:hover {
-    border-color: var(--accent-line);
-    background: var(--bg-soft);
-    transform: translateY(-1px);
-}
-.item-card-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-}
+/* Item identity in market tables. */
 .item-icon {
     width: 36px;
     height: 36px;
@@ -500,35 +465,6 @@ p a:not(.btn),
     color: var(--fg-muted);
     border: 1px solid var(--border);
 }
-.item-card-titles { display: flex; flex-direction: column; min-width: 0; }
-.item-card-name {
-    font-weight: 600;
-    font-size: 13.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.item-card-mat {
-    font-size: 10.5px;
-    color: var(--fg-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.item-card-spark { margin: 2px -2px; min-width: 0; }
-/* The sparkline keeps its 240-wide viewBox (preserveAspectRatio="none") but
-   scales to fill the card so it never forces horizontal overflow. */
-.item-card-spark svg { width: 100%; }
-.item-card-stats { display: flex; flex-direction: column; gap: 3px; }
-.item-card-price { display: flex; align-items: baseline; gap: 8px; }
-.item-card-price-val {
-    font-family: var(--mono);
-    font-feature-settings: "tnum";
-    font-size: 15px;
-    font-weight: 600;
-}
-.item-card-meta { color: var(--fg-muted); font-size: 12px; }
-
 /* Item icon inside a table cell (catalogue / shops). */
 .cell-with-icon {
     display: flex;
@@ -1600,10 +1536,9 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
 .flow-summary dl { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
 .flow-summary dd { margin: 0; font-variant-numeric: tabular-nums; }
 
-.market-search h2 { margin-top: 0; }
 .market-search label { display: block; margin-bottom: 8px; }
-.search-row { display: flex; gap: 10px; flex-wrap: wrap; }
-.search-row input { flex: 1 1 220px; }
+.market-search-controls { display: flex; gap: 8px; }
+.market-search-controls input { flex: 1; min-width: 0; }
 
 .offer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
 .offer-card { margin-bottom: 0; min-width: 0; overflow-wrap: anywhere; }
