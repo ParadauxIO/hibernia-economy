@@ -34,6 +34,7 @@ answers to `/firm`, `/company`, `/db`, and `/democracybusiness`.
 | `/business list` | List the firms you're part of. |
 | `/business list <player>` | List a player's firms. |
 | `/business list all [page]` | List every firm on the server. |
+| `/business baltop [page]` | Rank firms by their collective live account balances (`business.baltop`, default everyone). |
 | `/business disband <firm>` | Ask to close a firm you own — prompts for confirmation first. |
 | `/business disband <firm> confirm` | Confirm and actually close the firm. Its money returns to you and the firm is archived. |
 | `/business attribute set hq <firm> <plot>` | Set the firm's headquarters to a plot you own. |
@@ -64,6 +65,7 @@ moderation — see [Permission nodes](#permission-nodes).
 | `/business admin set hq <firm> <plot>` | Set any firm's HQ plot. |
 | `/business admin set discord <firm> <url>` | Set any firm's Discord invite. |
 | `/business admin set proprietor <firm> <player>` | Reassign a firm's proprietor. |
+| `/business admin chatspy [firm]` | Toggle chat oversight for all firms or the named firm; requires CarbonChat and `business.admin.chatspy` (operator default). |
 
 ## Staff
 
@@ -103,7 +105,8 @@ roles, each seeded with a permission:
 New hires join as **Employee**, and a **lower** rank number is more senior. The four
 permissions are:
 
-- **`ADMIN`** — full control: manage staff, roles, accounts, and money.
+- **`ADMIN`** — manage staff/roles and authorized spending. Creating/archiving
+  accounts, selecting the default and changing account access remain proprietor-only.
 - **`FINANCIAL`** — spend from accounts they're an authorizer on (withdraw and pay out).
 - **`CHESTSHOP`** — create and manage the firm's ChestShops (enforced by the ChestShop
   plugin).
@@ -228,7 +231,8 @@ firm's books, not public.
 
 ## Chat
 
-A private, employee-only chat channel for a firm (like Factions' `/f chat`). Requires
+A firm-member chat channel (like Factions' `/f chat`); authorized staff can monitor
+it through `admin chatspy`. Requires
 CarbonChat; messages route through the firm's channel once selected.
 
 | Command | What it does |

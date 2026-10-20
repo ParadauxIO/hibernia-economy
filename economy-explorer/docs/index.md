@@ -11,9 +11,9 @@ spend, and manage money** in-game — running a business, hiring staff, selling 
 through ChestShops, and buying or renting property — and lists every command you'll
 need along the way.
 
-Everything here is about what you type **in-game**. If you just want to *browse* the
-economy — balances, market prices, money flow — head back to the
-[Economy Explorer](/) instead.
+These docs cover in-game commands, the website, and integrations. See
+[Using the Explorer](/docs/guides/using-the-explorer) to browse balances, markets,
+and money flow, or return to the [Economy Explorer](/).
 
 ## New here? Start with the basics
 
@@ -79,3 +79,5 @@ What each plugin is, who made it, and every command it provides:
 > [!NOTE]
 > Some commands need a permission or a role — those are called out where they apply.
 > If a command says "nothing happens", you probably don't have access to it yet.
+
+- **[TreasuryAPI](/docs/reference/treasury-api)** — API keys, linking, password recovery and access commands.

@@ -16,8 +16,8 @@ The money you're holding is taxed a small amount each week. A few things to know
 
 - It's **based on your balance** — the more you're sitting on, the more tax applies,
   and higher balances are taxed at a higher rate.
-- It's applied when you **log in**, catching up for the time since you last played, so
-  you're not charged for time you were away unfairly.
+- It's applied when you **log in**, prorated by elapsed time since your previous
+  login, including time offline. A longer absence can therefore mean a larger charge.
 - Spending and using your money normally is the point — parking a huge balance and
   never touching it is what the tax gently discourages.
 

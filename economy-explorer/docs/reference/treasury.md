@@ -173,8 +173,8 @@ see and use an account if you've been added to it. Three levels of access:
 - **Viewers** can view the account — its balance and transaction history — but **cannot
   spend** or manage access.
 - **Members** can view the account and its history **and spend from it** (pay/payout).
-- **Authorizers** can do the same **and manage who has access** (add/remove viewers,
-  members, and authorizers).
+- **Authorizers** can spend and, with `treasury.gov.account.manage`, manage
+  viewers/members. Adding/removing authorizers requires `treasury.gov.admin`.
 
 All of these live under `/government` (also `/gov`).
 
@@ -262,7 +262,7 @@ salaries.
 ### Managing who has access
 
 Add or remove the people who can use an account. Viewers can only look; members can
-view and spend; authorizers can also manage access. (An authorizer must be a member
+view and spend; authorizers need additional command permissions to manage access. (An authorizer must be a member
 first.)
 
 ```text
@@ -401,7 +401,8 @@ Inspect and test the automatic tax cycles.
 
 > [!NOTE]
 > `/tax status` shows when each cycle next runs. `/tax trigger <cycle>` fires one early
-> for testing. Operators only.
+> for testing, using a new period timestamp each time. It can charge again even
+> within the same day/week; it is not a dry run. Operators only.
 
 ### `/treasury` (alias `/tr`)
 

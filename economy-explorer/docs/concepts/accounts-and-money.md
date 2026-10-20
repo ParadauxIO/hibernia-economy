@@ -13,7 +13,9 @@ move from one account to another. You'll come across three kinds in normal play
 ## Personal accounts
 
 Your own money. This is the balance `/bal` shows, and the one `/pay` sends from. You
-always have exactly one, and it's just yours — nobody else can spend from it.
+normally have one live personal account. Other players cannot spend it through
+ordinary player commands; your API credentials and authorized staff operations
+can move its funds.
 
 ## Business accounts
 
@@ -32,7 +34,8 @@ directly.
 
 Shared accounts that government **departments** run together. **Viewers** get read-only
 access — they see the balance and history but can't spend; **members** can view and
-spend from them; **authorizers** can do that *and* manage who else has access. They
+spend from them; **authorizers** can also manage viewers/members when granted the command
+permissions. Managing authorizers remains an administrator action. They
 belong to a department rather than a company. See
 **[Government accounts](/docs/guides/government-accounts)**.
 
@@ -40,8 +43,7 @@ belong to a department rather than a company. See
 
 There's also a fourth, behind-the-scenes type: **system** accounts. You won't create or
 see these in normal play — they're used internally by the server and plugins (for
-example, the bridge that lets other plugins move money, and the accounts that seed
-starting balances or hold collected tax). They're listed here only for completeness.
+example, the Vault bridge and ChestShop settlement account). They're listed here only for completeness.
 
 ## How money moves
 

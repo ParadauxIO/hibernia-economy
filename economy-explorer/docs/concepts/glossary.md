@@ -14,11 +14,11 @@ Short definitions of the terms used across these docs and in-game.
   `/bal`.
 - **Account** — where money lives. Every transfer moves money from one account to
   another. See [Accounts & money](/docs/concepts/accounts-and-money).
-- **Personal account** — your own money; nobody else can spend from it.
+- **Personal account** — your own player balance; ordinary players cannot spend it on your behalf.
 - **Business account** — money owned by a [firm](#firms), shared by its staff.
 - **Government account** — a shared account run by a government department.
 - **System account** — an internal account used by the server and plugins (e.g. the
-  Vault bridge, starting-balance and tax-collection accounts). Not something players
+  Vault bridge and ChestShop settlement account). Not something players
   create or see in normal play.
 - **Transaction** — a single recorded movement of money. Your history is
   `/transactions`.
@@ -32,12 +32,14 @@ A shared account has three access tiers: **Viewer** < **Member** < **Authorizer*
   but cannot spend or manage it. (Used on government accounts.)
 - **Member** — can view the account; on a **government** account, members can also spend.
 - **Authorizer** — can spend from the account; on a **government** account, authorizers
-  can also manage who has access (on a firm account the owner manages access). See
+  can manage viewers/members with additional command permissions (authorizer grants
+  remain admin-only; on a firm account the owner manages access). See
   [Permissions & roles](/docs/concepts/permissions-and-roles).
 
 > **Two "viewers".** This per-account *Viewer* tier is separate from the site-wide
-> Explorer `viewer` role (financial oversight across the whole economy) on
-> [Permissions & roles](/docs/concepts/permissions-and-roles).
+> legacy Explorer `viewer` role, which now maps to the ordinary `player` baseline.
+> Global financial investigation belongs to configured permissions such as those
+> in the initial `moderator` role; see [Permissions & roles](/docs/concepts/permissions-and-roles).
 
 ## Firms
 
