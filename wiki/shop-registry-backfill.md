@@ -112,7 +112,10 @@ visibility/hologram choices on an existing live shop in the same world.
 
 ChestShop also queues chunks already loaded at enable and each subsequent chunk
 load for reconciliation. There is one database lookup/scan in flight, with at
-least one tick between chunks. It reads the registry asynchronously, then scans
+least one tick between chunks. A repeating background dispatcher consumes query
+results on the server thread; it does not chain one-shot scheduler continuations
+that keep unrelated command-completion barriers permanently busy. It reads the
+registry asynchronously, then scans
 only that still-loaded chunk on the server thread. Valid signs are upserted;
 previously indexed locations without a valid sign become inactive. A failed
 lookup, unloaded chunk, or replaced world does not establish deletion. A valid

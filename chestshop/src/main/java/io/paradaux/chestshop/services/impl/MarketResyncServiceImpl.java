@@ -60,6 +60,11 @@ public class MarketResyncServiceImpl implements MarketResyncService {
     // Main-thread queue; one registry lookup/scan in flight, with a tick between chunks.
     private final Map<ChunkKey, Chunk> discovery = new LinkedHashMap<>();
     private boolean discoveryInFlight;
+    private boolean discoveryTimerRunning;
+
+    private record DiscoveryScan(ChunkKey key, Chunk chunk, String worldName, Map<String, Set<String>> known) {}
+
+    private volatile DiscoveryScan completedDiscovery;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -91,7 +96,36 @@ public class MarketResyncServiceImpl implements MarketResyncService {
     public void discoverChunk(Chunk chunk) {
         if (!marketService.enabled() || !marketService.searchEnabled()) return;
         discovery.putIfAbsent(new ChunkKey(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ()), chunk);
-        if (!discoveryInFlight) pumpDiscovery();
+        if (!discoveryTimerRunning) {
+            discoveryTimerRunning = true;
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    DiscoveryScan completed = completedDiscovery;
+                    if (completed != null) {
+                        completedDiscovery = null;
+                        try {
+                            World current = plugin.getServer().getWorld(completed.worldName());
+                            if (completed.known() != null
+                                    && current != null
+                                    && completed.key().worldUuid().equals(current.getUID())
+                                    && completed.chunk().isLoaded()) scanChunk(completed.chunk(), completed.known());
+                        } finally {
+                            discovery.remove(completed.key());
+                            discoveryInFlight = false;
+                        }
+                        // Leave a full tick between background jobs. Do not chain one-shot
+                        // continuations that make unrelated command barriers permanently busy.
+                    } else if (!discoveryInFlight && !discovery.isEmpty()) {
+                        pumpDiscovery();
+                    }
+                    if (!discoveryInFlight && discovery.isEmpty()) {
+                        discoveryTimerRunning = false;
+                        cancel();
+                    }
+                }
+            }.runTaskTimer(plugin, 1L, 1L);
+        }
     }
 
     private void pumpDiscovery() {
@@ -112,26 +146,7 @@ public class MarketResyncServiceImpl implements MarketResyncService {
             } catch (RuntimeException e) {
                 log.warn("Could not reconcile loaded shop chunk {} ({}, {})", worldName, key.x(), key.z(), e);
             }
-            Map<String, Set<String>> snapshot = known;
-            scheduler.runTask(plugin, () -> {
-                try {
-                    World current = plugin.getServer().getWorld(worldName);
-                    if (snapshot != null
-                            && current != null
-                            && key.worldUuid().equals(current.getUID())
-                            && chunk.isLoaded()) scanChunk(chunk, snapshot);
-                } finally {
-                    discovery.remove(key);
-                    // Keep the in-flight flag set across the delay so newly queued chunks also wait.
-                    scheduler.runTaskLater(
-                            plugin,
-                            () -> {
-                                discoveryInFlight = false;
-                                if (!discovery.isEmpty()) pumpDiscovery();
-                            },
-                            1L);
-                }
-            });
+            completedDiscovery = new DiscoveryScan(key, chunk, worldName, known);
         });
     }
 

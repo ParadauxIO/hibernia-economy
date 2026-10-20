@@ -335,31 +335,33 @@ class MarketResyncServiceImplTest {
         when(vanished.signZ()).thenReturn(2);
         when(shopQueryApi.shopsInChunk("world", 0, 0)).thenReturn(List.of(vanished));
         java.util.Deque<Runnable> async = new java.util.ArrayDeque<>();
-        java.util.Deque<Runnable> delayed = new java.util.ArrayDeque<>();
         when(scheduler.runTaskAsynchronously(eq(plugin), any(Runnable.class))).thenAnswer(inv -> {
             async.add(inv.getArgument(1));
-            return mock(BukkitTask.class);
-        });
-        when(scheduler.runTaskLater(eq(plugin), any(Runnable.class), eq(1L))).thenAnswer(inv -> {
-            delayed.add(inv.getArgument(1));
             return mock(BukkitTask.class);
         });
         service.discoverChunk(first);
         service.discoverChunk(first);
         service.discoverChunk(second);
+        org.assertj.core.api.Assertions.assertThat(async).isEmpty();
+        capturedTimer.run(); // start the first background read
         org.assertj.core.api.Assertions.assertThat(async).hasSize(1);
         async.remove().run();
+        verify(marketSync, never()).registerShop(any()); // no async world access
+        capturedTimer.run(); // apply its result, but do not start the next read this tick
         verify(marketSync).registerShop(live);
         verify(marketApi).deactivateShop("world", 2, 64, 2);
         verify(previews).destroy("world", 2, 64, 2);
         org.assertj.core.api.Assertions.assertThat(async).isEmpty();
-        delayed.remove().run();
+        verify(scheduler, never()).runTaskLater(eq(plugin), any(Runnable.class), anyLong());
+        verify(scheduler, never()).runTask(eq(plugin), any(Runnable.class));
+        capturedTimer.run();
         org.assertj.core.api.Assertions.assertThat(async).hasSize(1);
         async.remove().run();
-        delayed.remove().run();
+        capturedTimer.run();
         verify(shopQueryApi).shopsInChunk("world", 0, 0);
         verify(shopQueryApi).shopsInChunk("world", 1, 0);
         org.assertj.core.api.Assertions.assertThat(async).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(cancelled).isTrue();
     }
 
     @Test
@@ -373,7 +375,9 @@ class MarketResyncServiceImplTest {
             when(server.getWorld("world")).thenReturn(current);
             Chunk chunk = chunk(original, 0, 0, replacement);
             service = new MarketResyncServiceImpl(plugin, marketService, signService, marketSync, previews, message);
+            cancelled = false;
             service.discoverChunk(chunk);
+            driveScan();
             verify(chunk, never()).getTileEntities(false);
         }
         verify(marketSync, never()).registerShop(any());
@@ -389,6 +393,7 @@ class MarketResyncServiceImplTest {
         when(server.getWorld("world")).thenReturn(world);
         when(shopQueryApi.shopsInChunk("world", 0, 0)).thenThrow(new IllegalStateException("offline"));
         service.discoverChunk(chunk);
+        driveScan();
         verify(chunk, never()).getTileEntities(false);
         verify(marketApi, never()).deactivateShop(any(), anyInt(), anyInt(), anyInt());
     }
@@ -403,6 +408,7 @@ class MarketResyncServiceImplTest {
         when(server.getWorlds()).thenReturn(List.of(world));
         when(world.getLoadedChunks()).thenReturn(new Chunk[] {chunk});
         service.discoverLoadedChunks();
+        driveScan();
         verify(shopQueryApi).shopsInChunk("world", 0, 0);
         verify(chunk).getTileEntities(false);
     }
