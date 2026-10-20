@@ -12,10 +12,10 @@ import { fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { CreateAdminWebhookForm } from './create-admin-webhook-form';
 import { AdminWebhookRowActions } from './admin-webhook-row-actions';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

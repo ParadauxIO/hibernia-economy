@@ -1,3 +1,4 @@
+import { WindowTabs, InfoTip, TableWrap } from '@democracycraft/design-system';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
@@ -5,9 +6,6 @@ import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { memo } from '@/lib/cache';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { SectionTabs } from '@/components/SectionTabs';
-import { WindowTabs } from '@/components/WindowTabs';
-import { InfoTip } from '@/components/InfoTip';
-import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(1).max(30).default(30) });
 

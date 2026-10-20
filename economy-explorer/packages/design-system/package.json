@@ -1,0 +1,21 @@
+{
+  "name": "@democracycraft/design-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./next": "./src/next/index.ts",
+    "./use-hydrated": "./src/useHydrated.ts",
+    "./styles.css": "./styles/index.css",
+    "./tokens.css": "./styles/tokens.css"
+  },
+  "sideEffects": ["**/*.css"],
+  "peerDependencies": {
+    "next": "^16.0.0",
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "next": { "optional": true }
+  }
+}

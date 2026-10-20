@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { setDirectRoleMemberAction } from '@/lib/actions/roles';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 export function RoleMembers({ roleKey, members, canAssign }: { roleKey: string; members: { uuid: string; name: string | null }[]; canAssign: boolean }) {
   const [identifier, setIdentifier] = useState('');
   const [error, setError] = useState<string | null>(null);

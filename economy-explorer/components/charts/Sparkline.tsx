@@ -1,6 +1,6 @@
 'use client';
 import { useId } from 'react';
-import { useHydrated } from '@/components/useHydrated';
+import { useHydrated } from '@democracycraft/design-system/use-hydrated';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 
 interface SparklineProps {

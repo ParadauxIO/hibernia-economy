@@ -15,7 +15,7 @@ import { Player } from '@/components/Player';
 import { RevokeButton } from './revoke-button';
 import { RotateButton } from './rotate-button';
 import { LimitDialog } from './limit-dialog';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

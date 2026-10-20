@@ -9,14 +9,14 @@ import { fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { Toolbar, FilterSelect, FilterInput } from '@/components/Toolbar';
 import { Player } from '@/components/Player';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { AdminNav } from '@/components/AdminNav';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),

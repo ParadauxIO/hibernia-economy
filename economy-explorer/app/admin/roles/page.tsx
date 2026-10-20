@@ -3,7 +3,7 @@ import { getViewer, hasPermission } from '@/lib/auth';
 import { listRolesForAdmin } from '@/lib/services/role';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { RoleEditor } from './role-editor';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 export const dynamic = 'force-dynamic';
 export default async function RolesPage() {
   const viewer = await getViewer();

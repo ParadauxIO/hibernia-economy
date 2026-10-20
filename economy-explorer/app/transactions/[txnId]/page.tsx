@@ -8,10 +8,10 @@ import { accountLabel, fmtAmtFull } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 import { Player } from '@/components/Player';
 import { PrivacyGate } from '@/components/PrivacyGate';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

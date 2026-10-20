@@ -51,6 +51,7 @@ export function HeaderNav() {
           key={l.href}
           href={l.href}
           className={l.match(path) ? 'active' : ''}
+          aria-current={l.match(path) ? 'page' : undefined}
           // Default prefetch (prop omitted): Next prefetches only the static shell
           // up to each route's loading.tsx, not the dynamic DB data — top-level nav
           // feels instant without prefetch hammering the ledger. Content links

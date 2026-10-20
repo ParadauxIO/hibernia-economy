@@ -1,3 +1,4 @@
+import { WindowTabs } from '@democracycraft/design-system';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import { getMarketActivity } from '@/lib/services/market';
@@ -14,7 +15,6 @@ export const dynamic = 'force-dynamic';
 
 // Only short windows for now — there isn't yet 30 days of data, so 90/365 are
 // misleading.
-const WINDOWS = [7, 30];
 
 export async function generateMetadata() {
   return buildMetadata({ title: "Market", description: "ChestShop market overview for {server} — prices, volume and top-traded items.", path: "/market/activity" });
@@ -36,11 +36,7 @@ export default async function MarketPage({
       <div className="page-heading">
         <h1>Market activity</h1>
         <span className="sub">ChestShop activity · last {sp.days} days</span>
-        <span className="window-tabs">
-          {WINDOWS.map((w) => (
-            <a key={w} href={`/market/activity?days=${w}`} className={w === sp.days ? 'active' : ''}>{w}d</a>
-          ))}
-        </span>
+        <WindowTabs basePath="/market/activity" days={sp.days} />
         <SectionTabs />
       </div>
 
@@ -85,7 +81,7 @@ export default async function MarketPage({
             </span>
           </span>
         </div>
-        <VolumeTimeline data={volume.map((v) => ({ date: v.date, txn_count: v.sales, total_volume: v.total_volume }))} />
+        <VolumeTimeline countLabel="Sales" data={volume.map((v) => ({ date: v.date, txn_count: v.sales, total_volume: v.total_volume }))} />
       </div>
 
     </>

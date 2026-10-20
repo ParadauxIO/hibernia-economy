@@ -6,7 +6,7 @@ import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
@@ -15,7 +15,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { canViewFirmFinancials, hasPermission } from '@/lib/auth/access';
 import { hasFirmFinancialAccess } from '@/lib/sql/firm';
 import { auditView } from '@/lib/audit';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

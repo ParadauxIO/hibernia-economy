@@ -9,7 +9,7 @@ import { memo } from '@/lib/cache';
 import { accountLabel, fmtAmtFull, shortenUuid, looksLikeUuid } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 
@@ -67,7 +67,7 @@ export default async function AccountsPage({
         <span className="sub">{total.toLocaleString()} total</span>
       </div>
 
-      <Toolbar
+      <Toolbar filterLabels={{ type: 'Account type' }}
         searchPlaceholder="Search by name, display name, or UUID…"
         filters={
           <FilterSelect
@@ -161,7 +161,6 @@ export default async function AccountsPage({
     </>
   );
 }
-
 
 function sortHeader(
   label: string,

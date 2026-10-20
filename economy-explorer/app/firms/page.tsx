@@ -10,7 +10,7 @@ import { memo } from '@/lib/cache';
 import { fmtAmt, fmtAmtFull, fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 
@@ -91,7 +91,7 @@ export default async function FirmsPage({
         </div>
       </div>
 
-      <Toolbar
+      <Toolbar filterLabels={{ status: 'Status' }}
         searchPlaceholder="Search by firm name or HQ region…"
         filters={
           <FilterSelect
