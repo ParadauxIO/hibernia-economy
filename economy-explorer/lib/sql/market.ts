@@ -246,6 +246,16 @@ export async function topItemsWithSeries(days: number, limit: number): Promise<I
 
 // ── Per-item ────────────────────────────────────────────────────────────
 
+/** Header identity without loading the permission-gated sale feed and joins. */
+export async function findItemIdentity(itemKey: string) {
+  const r = await sql<{ item_name: string | null; material: string | null; item_custom: number }>`
+    SELECT item_name, material, item_custom FROM chestshop_sale
+    WHERE item_key = ${itemKey}
+    ORDER BY occurred_at DESC, sale_id DESC LIMIT 1
+  `.execute(db);
+  return r.rows[0] ?? null;
+}
+
 export async function listItemSales(itemKey: string, limit: number, offset: number): Promise<MarketSaleRow[]> {
   const r = await sql<RawSale>`
     SELECT cs.sale_id, cs.txn_id, cs.occurred_at, cs.direction, cs.quantity, cs.unit_price,
