@@ -119,7 +119,7 @@ jobs:
       - name: Treasury coverage comment
         if: steps.xml.outcome == 'success'
         continue-on-error: true   # advisory; never fails the run
-        uses: madrapps/jacoco-report@7c362aca34caf958e7b1c03464bd8781db9f8da7 # v1.7.1
+        uses: madrapps/jacoco-report@e51ce1f46f7f8b5331593f935e59cbaf44b84920 # v1.8.0
         with:
           paths: ${{ github.workspace }}/treasury/build/reports/jacoco/test/jacocoTestReport.xml
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -133,7 +133,7 @@ jobs:
       - name: Business coverage comment
         if: steps.xml.outcome == 'success'
         continue-on-error: true   # advisory; never fails the run
-        uses: madrapps/jacoco-report@7c362aca34caf958e7b1c03464bd8781db9f8da7 # v1.7.1
+        uses: madrapps/jacoco-report@e51ce1f46f7f8b5331593f935e59cbaf44b84920 # v1.8.0
         with:
           paths: ${{ github.workspace }}/business/build/reports/jacoco/test/jacocoTestReport.xml
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -184,7 +184,7 @@ jobs:
       # can see (a PR sees its own and its base branch's). Skipped nightly.
       - name: Restore PIT history
         if: github.event_name != 'schedule'
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: '*/build/pitest-history/'
           key: pitest-${{ runner.os }}-${{ github.sha }}
@@ -311,6 +311,9 @@ jobs:
           cache: npm
           cache-dependency-path: economy-explorer/package-lock.json
 
+      - name: Test migration guard
+        run: node --test economy-flyway/scripts/check-migrations.test.mjs
+
       - name: Migration guard
         env:
           BASE: ${{ steps.base.outputs.ref }}
@@ -382,7 +385,7 @@ jobs:
         uses: ./.github/actions/setup-jvm
 
       - name: Cache server downloads
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/hibernia-it
           key: hibernia-it-${{ hashFiles('ops/integration/run.sh') }}
