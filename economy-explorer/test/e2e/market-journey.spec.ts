@@ -3,7 +3,7 @@ import { visit } from './helpers';
 
 test('search, compare and return keeps the item results and page size', async ({ page }) => {
   await visit(page, '/chestshop?q=Diamond&limit=25');
-  await page.locator('.catalogue-card').first().click();
+  await page.locator('.catalogue-table tbody .rowlink').first().click();
   await expect(page.getByRole('heading', { name: 'Where to trade' })).toBeVisible();
   await page.getByRole('link', { name: 'I want to sell', exact: true }).click();
   await expect(page.locator('.offer-price').first()).toContainText('$1.50');
@@ -16,7 +16,7 @@ test('search, compare and return keeps the item results and page size', async ({
   const url = new URL(page.url());
   expect(url.searchParams.get('limit')).toBe('25');
   expect(url.searchParams.get('page')).toBe('1');
-  await expect(page.locator('.catalogue-card')).not.toHaveCount(0);
+  await expect(page.locator('.catalogue-table tbody .rowlink')).not.toHaveCount(0);
 });
 
 test('empty search offers a working fresh start', async ({ page }) => {
@@ -24,7 +24,7 @@ test('empty search offers a working fresh start', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'No items found' })).toBeVisible();
   await page.getByRole('link', { name: 'Browse all items' }).click();
   await expect(page.getByRole('searchbox', { name: 'Search items, materials, keys…' })).toHaveValue('');
-  await expect(page.locator('.catalogue-card')).not.toHaveCount(0);
+  await expect(page.locator('.catalogue-table tbody .rowlink')).not.toHaveCount(0);
 });
 
 test('clearing shop filters preserves trade direction and comparison units', async ({ page }) => {
@@ -72,4 +72,28 @@ test('keyboard help survives focus scrolling and stays inside a narrow viewport'
   await trigger.press('Escape');
   await expect(tooltip).toBeHidden();
   await expect(trigger).toBeFocused();
+});
+
+// A public dashboard must expose data without scrolling past introductions.
+for (const width of [390, 1280]) {
+  test(`dashboard data is visible on arrival at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [path, selector] of [['/', '.overview-metrics'], ['/market', '.market-table tbody tr'], ['/chestshop', '.catalogue-table tbody tr']] as const) {
+      await visit(page, path);
+      await expect(page.locator(selector).first()).toBeInViewport({ ratio: 1 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    }
+  });
+}
+
+test('phone market rows retain secondary trading data', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await visit(page, '/market');
+  const row = page.getByRole('table', { name: 'Most traded items' }).locator('tbody tr').first();
+  await row.getByText('Trading details', { exact: true }).click();
+  await expect(row.locator('details')).toContainText('trades');
+  await expect(row.locator('details').getByText(/Volume:/)).toBeVisible();
+  await row.getByRole('link').click();
+  await page.getByRole('link', { name: 'Back to Market' }).click();
+  await expect(page.getByRole('table', { name: 'Most traded items' })).toBeVisible();
 });

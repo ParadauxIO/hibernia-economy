@@ -13,7 +13,7 @@ import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { ItemIcon } from '@/components/market/ItemIcon';
 import { itemIconUrl } from '@/lib/itemIcon';
-import { EmptyState } from '@democracycraft/design-system';
+import { EmptyState, TableWrap } from '@democracycraft/design-system';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).catch(1),
@@ -42,7 +42,7 @@ export default async function ChestShopPage({
     <>
       <div className="page-heading">
         <h1>Browse items</h1>
-        <span className="sub">{fmtN(total)} items to explore</span>
+        <span className="sub">{fmtN(total)} items</span>
         <SectionTabs />
       </div>
 
@@ -67,18 +67,23 @@ export default async function ChestShopPage({
         }
       />
 
-      <div className="section-heading"><div><h2>{sp.q ? `Results for “${sp.q}”` : 'The item catalogue'}</h2><p>Choose an item to compare shops and explore its price history.</p></div><span className="muted small">{fmtN(total)} results · A–Z by item key</span></div>
       {items.length === 0 ? <EmptyState>
-        <span className="empty-symbol" aria-hidden>⌕</span>
-        <h2>No items found</h2><p>Try a shorter name or a material such as diamond. You can also start fresh.</p>
+        <h2>No items found</h2><p>Try a different item name or material.</p>
         <Link href="/chestshop" className="btn btn-primary">Browse all items</Link>
-      </EmptyState> : <div className="catalogue-grid">
-        {items.map(i => <Link key={i.item_key} href={marketItemHref(i.item_key, returnTo) as Route} className="catalogue-card" prefetch={false}>
-          <div className="catalogue-identity"><span className="item-tile"><ItemIcon icon={itemIconUrl(i.material, i.item_custom)} name={i.item_name ?? i.item_key} size={40} /></span><div><h2>{i.item_name ?? i.item_key}</h2><span className="muted small">{i.item_custom ? 'Custom item' : (i.material ?? 'Item').replaceAll('_', ' ').toLowerCase()}</span></div></div>
-          <div className="catalogue-stats"><span><strong>{fmtN(i.trade_count)}</strong> recorded trades</span><span title="All-time traded volume">{fmtAmtFull(i.total_volume)} volume</span></div>
-          <span className="item-card-action">View prices &amp; shops <span aria-hidden>→</span></span>
-        </Link>)}
-      </div>}
+      </EmptyState> : <TableWrap label="Item catalogue">
+        <table className="data-table directory-table catalogue-table" aria-label="Item catalogue">
+          <thead><tr><th scope="col">Item</th><th scope="col" data-secondary>Material</th><th scope="col" className="amount" data-secondary>Trades</th><th scope="col" className="amount" data-secondary>Quantity</th><th scope="col" className="amount">All-time volume</th></tr></thead>
+          <tbody>{items.map(i => <tr key={i.item_key}>
+            <td><Link href={marketItemHref(i.item_key, returnTo) as Route} className="rowlink cell-with-icon" prefetch={false}><ItemIcon icon={itemIconUrl(i.material, i.item_custom)} name={i.item_name ?? i.item_key} size={26} /><span>{i.item_name ?? i.item_key}</span>{i.item_custom ? <span className="badge">Custom</span> : null}</Link>
+              <details className="mobile-only directory-details"><summary>Trading details</summary><p>Material: {i.material ?? '—'}</p><p>{fmtN(i.trade_count)} trades · {fmtN(i.total_quantity)} items</p></details>
+            </td>
+            <td className="mono small" data-secondary>{i.material ?? '—'}</td>
+            <td className="amount mono" data-secondary>{fmtN(i.trade_count)}</td>
+            <td className="amount mono" data-secondary>{fmtN(i.total_quantity)}</td>
+            <td className="amount mono">{fmtAmtFull(i.total_volume)}</td>
+          </tr>)}</tbody>
+        </table>
+      </TableWrap>}
 
       <Pagination
         page={sp.page}

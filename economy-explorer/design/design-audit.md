@@ -7,47 +7,42 @@ the checkout. Observations below distinguish live behavior, existing local
 improvements, and proposed work. No authenticated production journeys were
 tested; administrative and personal screens were reviewed in source only.
 
-## Design direction
+## Current direction: public dashboard
 
-Keep the restrained explorer identity: neutral surfaces, a small brand accent,
-tabular money, compact data views, and blue/red plus light/dark support. The main
-opportunity is hierarchy and task completion, rather than another visual theme.
-The landing page should answer "What changed?"; Market should answer "Where can
-I buy or sell this?"; directories should answer "Which account or firm is this?"
-Every screen needs a useful next action and a recoverable empty/error state.
+The first implementation added oversized introductions, instructional steps,
+promotional links and catalogue cards. The user rejected this direction: this
+is a public data dashboard. Those additions have been removed.
 
-The new `@democracycraft/design-system` package centralizes the foundations and
-reusable presentation. `/design-system` is its interactive review surface. The
-initial extraction was followed by the implementation below after the user
-accepted the design direction. Live observations remain the initial review;
-local verification uses a disposable database, not production data.
+The overview starts with period controls and four metrics, followed by factual
+chart headings. Market starts with a compact search form and a table of traded
+items. The catalogue uses comparable rows for item, material, trades, quantity
+and volume. On phones, item and price/volume stay visible; secondary figures
+are available in each row's disclosure. No hero, slogan or promotional card
+is needed to introduce these screens.
 
-## Implemented experience changes
+The `@democracycraft/design-system` package, visible filter labels, removable
+filters, preserved return context, chart data tables, keyboard navigation and
+qualified shop availability remain. Price history remains explicitly distinct
+from current shop quotes. Existing export permissions and numeric calculations
+are unchanged.
 
-- **Market discovery:** a search-led introduction, a compact mobile guide,
-  catalogue cards with item art and a clear comparison action, and historical
-  prices explicitly distinguished from current offers. Sparse trends explain
-  that more trading days are needed.
-- **Shop comparison:** price, owner, observed availability and location have
-  separate visual positions. A recent observation is qualified, unknown stock
-  stays unknown, and observations older than 24 hours ask the player to recheck.
-  Sign details remain available on demand; map and copy-location actions are
-  prominent. Existing unit-price calculation and export permissions are retained.
-- **Return journeys:** catalogue search/page/limit and shop search/direction/
-  units/stock context survive item detail navigation. Return paths accept only
-  known public Market routes and parameters. No-results screens offer recovery.
-- **Economy overview:** one period/context bar, four primary metrics, labeled
-  chart series, an accessible chart data table, a heatmap reading guide with the
-  busiest observed weekday/hour, and clear exploration links.
-- **Shared interactions:** visible search/filter labels, removable active filters,
-  reset without losing sort or comparison units, pending feedback, active-link
-  semantics, keyboard skip navigation, viewport-contained keyboard/touch help,
-  larger mobile controls, stronger contrast and reduced-motion support.
+## Dashboard correction verification
 
-The remaining personal/admin screen work below is a separate design opportunity.
-This implementation checks role-gated journeys but does not redesign every
-administrative form. The catalogue failure observed on the live deployment has
-not been diagnosed or changed by local UI work.
+The correction passed the production build, TypeScript, ESLint, all 437
+unit/component/database tests and coverage thresholds. The final 58-check browser
+run passed on desktop and phone, covering market journeys and blue/red ×
+light/dark accessibility checks. The 40 public browsing checks also passed.
+The new viewport regression checks require the overview metrics and first item
+row to be visible at 390px and 1280px without scrolling. Manual 320px checks of
+the overview, Market and catalogue found no document overflow or page errors.
+Screenshots use disposable test data. Evidence is in `.context/dashboard-*`.
+
+## Earlier review
+
+The observations and references below document the original investigation.
+Catalogue-card and exploratory-copy proposals are superseded by the dashboard
+direction above. Shop comparison, navigation and accessibility findings remain
+relevant. Personal/admin screens were not visually redesigned.
 
 ## Initial inspection: live versus checkout
 
