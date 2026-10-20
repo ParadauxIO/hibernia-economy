@@ -85,6 +85,17 @@ Both scripts run locally the same way, e.g.
 `DB_PORT=3306 DB_PASSWORD=… economy-flyway/scripts/upgrade-test.sh origin/develop`
 (it drops and recreates `DB_NAME`, default `economy_upgrade`).
 
+The pre-cutover `main` migration tree at `36d7d90` is a pinned exception:
+production's release baseline is **V15**, although that tree contains pending
+V16–V18. The guard permits only the exact V17/V18 corrections documented in the
+[release runbook](release-runbook.md#0-before-the-window), and the upgrade test
+applies that base through V15 before migrating to HEAD. Both the old tree and
+the old/new migration blobs are pinned; later edits, deletions and renames still
+fail. Other bases upgrade through their full migration history. No validation
+is disabled and no Flyway repair is performed. A database that applied the old
+V17/V18 is **not** covered by this rehearsal; the runbook's stop condition still
+applies. Guard regression tests run in the Migrations job.
+
 ## Other workflows
 
 | Workflow | Trigger | Purpose |

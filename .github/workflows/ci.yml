@@ -311,6 +311,9 @@ jobs:
           cache: npm
           cache-dependency-path: economy-explorer/package-lock.json
 
+      - name: Test migration guard
+        run: node --test economy-flyway/scripts/check-migrations.test.mjs
+
       - name: Migration guard
         env:
           BASE: ${{ steps.base.outputs.ref }}
