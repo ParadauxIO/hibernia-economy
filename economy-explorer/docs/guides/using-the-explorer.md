@@ -34,9 +34,9 @@ calendar date from its chart bucket.
 
 ## What signing in unlocks
 
-Your **own** detailed data is private to you — your accounts, your income and spending
-over time, and your personal ChestShop activity. To see it, you sign in and link your
-in-game identity.
+Signing in and linking your in-game identity unlocks your detailed account,
+income/spending and personal ChestShop data. Shared-account users and authorized
+staff may also read records according to their permissions.
 
 ## Step 1 — Sign in
 
@@ -76,8 +76,18 @@ From there, the **ChestShop activity** link opens a separate page breaking down 
 buy and sell, who you trade with, and a 7/30/90-day or all-time window.
 
 > [!TIP]
-> Only you can see your private data — linking ties it to your login. Public pages
-> (balances, firms, market) stay visible to everyone whether you're signed in or not.
+> Linking identifies your own data. Authorized investigators and administrators
+> can also read private data according to their configured permissions. Shared
+> account relationships grant access to those accounts. Public balances, firm
+> profiles and aggregate market pages remain public.
+
+## Opening a transaction
+
+You can open a transaction involving an account you have permission to read,
+including shared government accounts. Its detail page shows every posting and
+counterparty for that transaction, so you can trace the payment. This does not
+expose the counterparty's other transactions or private account history. The
+whole-economy transaction list still requires staff investigation permission.
 
 ## Exporting data
 
@@ -170,3 +180,24 @@ Sort presets include Richest, Newest, Name A–Z and Largest employers (firms).
 The selected sort is shown above the table and stays in the URL with your filters.
 Account details show a single current balance; owner UUIDs are expandable.
 Authorised viewers can follow a business account back to its firm.
+
+## Recover your website password
+
+If you already linked your Minecraft account, the server can let you reset the
+website password without email:
+
+```text
+/treasuryapi ui resetpassword
+/treasuryapi ui resetpassword confirm
+```
+
+Run both yourself in-game. Copy the temporary password from the private response,
+sign in with your existing website username, then choose a permanent password
+when prompted. The temporary password must be replaced at login; it has no
+separate timed expiry. Keep it private, including your client chat log.
+
+This requires server support and an existing, unambiguous link. Missing/multiple
+links or a disabled integration need staff assistance; you cannot select another
+person's username. Confirmed attempts are limited to one per minute. Resetting
+the password does not explicitly sign out existing sessions or revoke API keys;
+report a suspected compromise to staff as well.

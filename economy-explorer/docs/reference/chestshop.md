@@ -56,7 +56,7 @@ view:
 | `100 : 90` | Both — the **first** number is the buy price (100), the **second** is the sell price (90). |
 
 > [!NOTE]
-> Free shops are **disabled** on this server (`ALLOW_FREE_SHOPS` is off). A `0`/`free`
+> Free shops are **disabled by default** (`ALLOW_FREE_SHOPS` is off). A `0`/`free`
 > price is rejected at creation, and any pre-existing free shop is removed when next used.
 
 The letter can go before or after the number (`B 100`, `100 B`, and `100B` all work). A
@@ -111,7 +111,7 @@ See [Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
 | `/chestshop give <item code> [amount] [player]` | Admin: give an item by its shop code. |
 | `/chestshop importpreferences` | Admin/console: import missing player preview preferences from `plugins/ChestShop/legacy-preferences.jsonl`, preserving newer native choices. |
 | `/chestshop importlegacy` | Admin/console: import missing shops from `plugins/ChestShop/legacy-shops.jsonl`; preserves existing rows. See the repository [cutover runbook](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/shop-registry-backfill.md). |
-| `/chestshop resync <chunks>` | Admin: rebuild the `/find` shop registry from the loaded world around you. |
+| `/chestshop resync <chunks>` | Admin/console: rebuild the `/find` registry from loaded chunks in all loaded worlds; argument is chunks per tick (1–64), not a radius. |
 
 ## Shops and firms
 
@@ -136,7 +136,7 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 | `/chestshop notify` | `ChestShop.toggle` | `true` |
 | `/chestshop toggle visibility` · `toggle hologram` | shop owner, or `ChestShop.admin` | — |
 | `/chestshop toggle preview` | none | everyone |
-| `/chestshop bypass` · `version` · `reload` · `metrics` · `give` · `resync` · `importlegacy` | `ChestShop.admin` | `op` |
+| `/chestshop bypass` · `version` · `reload` · `metrics` · `give` · `resync` · `importlegacy` · `importpreferences` | `ChestShop.admin` | `op` |
 
 ### Using and building shops
 
@@ -150,8 +150,9 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 | `ChestShop.adminshop` | Create/destroy **Admin Shops** | inherits from `ChestShop.admin` |
 | `ChestShop.mod` | View other players' shop chests (no destroy/admin powers) | `op` |
 | `ChestShop.nofee` | Skip the shop-creation fee | `op` |
-| `ChestShop.notax.buy` · `ChestShop.notax.sell` | Skip transaction tax | `op` |
-| `ChestShop.nolimit.buy.min` · `.buy.max` · `.sell.min` · `.sell.max` | Bypass configured price limits | `op` |
+| `ChestShop.notax.buy` | Treasury adapter: exempt the initiating player from trade tax, for either direction | `op` |
+| `ChestShop.notax.sell` | Declared compatibility node; not independently checked by the current Treasury adapter | `op` |
+| `ChestShop.nolimit.buy.min` · `.buy.max` · `.sell.min` · `.sell.max` | Legacy declarations; the upstream price-limit system was removed | `op` |
 
 > [!NOTE]
 > Most of these have per-item and per-category variants — e.g.
@@ -159,3 +160,27 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 > groups like `ChestShop.shop.create.food` — for restricting which items a player may
 > trade. There are also per-name nodes (`ChestShop.name.*`, `ChestShop.othername.*`)
 > for shared/town shops. See the upstream ChestShop `plugin.yml` for the full list.
+
+## Finder controls and compatibility aliases
+
+`/find toggle visibility <true|false>` and `/find toggle hologram <true|false>`
+act on the shop you are looking at with the same owner/admin checks as the
+ChestShop forms; `/find toggle preview <true|false>` changes your own preference.
+The compatibility `/csdb find [item]` and `/csdb find toggle ...` forms forward
+to the native finder; `/csdb reload` and `/csdb resync <chunks>` require admin.
+Use `/chestshop resync <chunks>` as the canonical repair command.
+
+Finder results include batch quantity, stock/capacity observations and configurable
+location labels. Java results expose transit and GPS actions; Bedrock uses an
+inventory menu with left/right actions. Navigation runs with your own permissions;
+a displayed result is not a guarantee that stock or travel access is still valid.
+
+Typed searches accept staff-configured search aliases and suggest item codes using
+case-insensitive substring matching. Suggestions can take up to 30 seconds to
+reflect newly registered items; codes containing spaces are supported. These
+search aliases do not change the item code on a shop sign.
+
+Java results provide **Inspect item** to check the stored item's name,
+enchantments and metadata. In inventory results, shift-right-click opens the
+inspector; ordinary right-click also does so when GPS/navigation is unconfigured.
+Use **Back** to return to the same page. Inspection does not transfer the item.

@@ -27,6 +27,8 @@ the code.
 - **[ChestShop add-on compatibility](chestshop-add-on-compatibility.md)** — restored hooks, finder settings and preference cutover.
 - **[Conventions](conventions.md)** — the rules that keep the monorepo coherent.
 
+- **[Documentation coverage](documentation-coverage.md)** — PAR-498 audit baseline, feature map and maintenance checks.
+
 ## Quick links
 
 - [Repository README](../README.md)

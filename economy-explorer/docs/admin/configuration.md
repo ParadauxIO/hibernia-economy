@@ -1,7 +1,7 @@
 ---
 title: Plugin configuration
 order: 10
-description: Where each economy plugin's config lives, how reloads work, and what every setting does.
+description: Where each economy plugin's config lives, how reloads work, and how to apply changes.
 ---
 
 # Plugin configuration
@@ -22,9 +22,9 @@ server-side files (`plugins/<Plugin>/…`), edited on the host, not from the web
 - **[Business configuration](/docs/admin/config-business)** — firm ownership limit and the
   weekly firm balance tax.
 - **[ChestShop configuration](/docs/admin/config-chestshop)** — trade limits and rules
-  (note: ChestShop **sales tax is configured in Treasury**, not here).
+  and sales-tax percentages (Treasury collects the resulting tax).
 - **[Realty configuration](/docs/admin/config-realty)** — property **tax** (the formula,
-  brackets, and exemption), plus leases, signs, and tags.
+  ordered rules and per-rule exemptions), plus leases, signs, and tags.
 
 ## When changes take effect
 
@@ -48,3 +48,8 @@ edit is live:
   `DCGovernment`).
 - **ChestShop** stores no money — every trade moves funds through Treasury, and ChestShop
   sales tax is collected by Treasury's tax API into Treasury's default tax account.
+
+## Website and API services
+
+[TreasuryAPI and service configuration](/docs/admin/config-services) covers the
+key issuer, Keycloak, REST API, Explorer, Redis and monitoring.

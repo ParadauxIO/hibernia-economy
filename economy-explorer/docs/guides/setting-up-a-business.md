@@ -96,9 +96,9 @@ firm starts with five roles, from most senior (rank 1) to most junior (rank 5):
 
 | Role | Rank | Default permission | Can do |
 |---|---|---|---|
-| **Proprietor** | 1 | `ADMIN` | Everything: money, accounts, roles, and staff |
-| **Co-Proprietor** | 2 | `ADMIN` | Everything: money, accounts, roles, and staff |
-| **Manager** | 3 | `FINANCIAL` | Move the firm's money |
+| **Proprietor** | 1 | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
+| **Co-Proprietor** | 2 | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
+| **Manager** | 3 | `FINANCIAL` | Read finances; spending also needs account authorization |
 | **Supervisor** | 4 | `CHESTSHOP` | Run the firm's ChestShops |
 | **Employee** | 5 | `DEFAULT` | Basic membership — no special powers |
 
@@ -110,7 +110,7 @@ The four permissions a role can hold:
 
 | Permission | What it lets the holder do |
 |---|---|
-| `ADMIN` | Manage the firm — roles, accounts, hiring and firing (and money) |
+| `ADMIN` | Manage staff/roles and authorized spending; not proprietor-only account controls |
 | `FINANCIAL` | Move the firm's money — deposit, withdraw, and pay |
 | `CHESTSHOP` | Create and use ChestShops that belong to the firm |
 | `DEFAULT` | Basic membership only |
@@ -146,7 +146,10 @@ Pay a wage straight from a firm account to a player:
 ```
 
 Find the `<accountId>` with `/business account list Acme` (see next section). Paying
-out requires the **FINANCIAL** or **ADMIN** permission (or being the proprietor).
+out requires the **FINANCIAL** or **ADMIN** permission (or being the proprietor),
+and account authorization. ADMIN staff are synchronized as authorizers; FINANCIAL
+staff need the proprietor to grant authorization. Account creation, default-account
+selection and access management are proprietor-only.
 
 ## Using more than one account
 
@@ -203,8 +206,9 @@ build firm shops, an employee needs the **CHESTSHOP** permission — the **Super
 role has it by default, and the firm owner can always build firm shops.
 
 > [!TIP]
-> A full walkthrough of ChestShop signs — quantities, buy/sell prices, and admin
-> shops — is coming in its own guide.
+> See [Selling with ChestShops](/docs/guides/chestshop-basics) for the complete
+> sign walkthrough and [firm shop aliases](/docs/guides/chestshop-business#shop-aliases)
+> for memorable `B:@alias` signs.
 
 ## Hand the firm to someone else
 

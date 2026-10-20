@@ -44,11 +44,13 @@ Inspect and test the automatic tax cycles.
 | Argument | What it is |
 |---|---|
 | action | `status`, or `trigger` |
-| `cycle` | `daily`, `weekly`, `monthly`, or `balance <player>` (for `trigger`) |
+| `cycle` | `daily`, `weekly`, or `monthly` (for `trigger`) |
 
 `/tax status` is the quickest way to confirm the cycles are scheduled and which plugins
 are registered with each. `/tax trigger` runs one early without waiting for the
-schedule.
+schedule. Each manual trigger uses the current instant as a new period identifier,
+so repeating it can collect tax again. It is a real charge, not a dry run or a safe
+retry of a missed scheduled cycle. There is no `/tax trigger balance` command.
 
 ## Salaries
 
@@ -76,11 +78,12 @@ Notes for whoever maintains this:
   is paid the **highest** amount, never the sum.
 - Payments come from the configured **GOVERNMENT account**, so make sure it can cover
   payroll (the default `DCGovernment` is an unlimited faucet).
-- It relies on LuckPerms to know each player's groups, and players are only paid while
-  **online**.
+- It relies on LuckPerms to know each player's groups, pays **online** players,
+  and skips AFK players by default (the configured LP context must be available).
 
 > [!NOTE]
-> Salary table changes take effect on a config reload or server restart.
+> Salary amounts and funding-account changes apply on `/treasury reload`; the
+> payout interval needs a restart. See [Treasury configuration](/docs/admin/config-treasury).
 
 The player-facing behaviour (who gets paid, the chat notification) is in
 [Government salaries](/docs/guides/salaries).
@@ -96,7 +99,9 @@ any two accounts and inspects balances directly.
 /treasury admin info <type> <id>
 ```
 
-`<type>` is the account kind (e.g. `PERSONAL`, `BUSINESS`, `GOVERNMENT`). Unlike `/eco`,
+`<type>` is `player`, `business`, `government`, or `account` (a numeric ID).
+For example: `/treasury admin balance account 42` or
+`/treasury admin transfer business Acme player Steve 100 correction`. Unlike `/eco`,
 `transfer` moves existing money rather than minting or destroying it, so the totals stay
 balanced. Operators only.
 

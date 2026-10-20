@@ -51,5 +51,45 @@ else.
 
 > [!CAUTION]
 > Creating, pausing, and deleting webhooks here are privileged actions and are written to
-> the [audit log](/docs/admin/roles). Prefer pointing a player at their own
+> the [audit log](/docs/admin/explorer-administration#audit-evidence). Prefer pointing a player at their own
 > [My data → Webhooks](/me/webhooks) page when they can self-serve.
+
+## Delivery incident procedure
+
+Access needs `webhooks.read.all`; creation, update and deletion separately require
+`webhooks.create.all`, `webhooks.update.all` and `webhooks.delete.all`. Admin API
+configuration and its SERVICE token must also work. The fleet console does not
+have every owner self-service control; use the owner's detail page for their
+secret rotation and delivery history.
+
+1. Record subscription ID, account/firm, active/auto-disabled state and the last
+   successful delivery. Keep the endpoint URL/secret private. Check that the
+   expected ledger transaction actually settled after the subscription existed.
+2. Inspect recent attempts: distinguish receiver HTTP errors, timeout/DNS/TLS,
+   signature rejection and an inactive subscription. Receiver URLs must remain
+   public HTTPS; the dispatcher revalidates destinations. Redirects are not a way
+   to reach an internal endpoint.
+3. Verify REST `WEBHOOK_ENABLED`, DB connectivity, ingest cursor, pending delivery
+   state and dispatcher logs. With multiple REST replicas, configure shared
+   rate-limit Redis so the dispatcher lease has one holder. Do not reset the
+   cursor or enable independent dispatchers to force delivery.
+4. Fix the receiver/configuration before clicking Enable. Enable resets the
+   subscription failure counter and auto-disabled flag; it does not guarantee
+   replay of events skipped while paused or deliveries whose attempts ran out.
+5. Verify a new controlled transaction reaches the intended receiver once in its
+   business processing, even if delivery is retried. Reconcile the missed interval
+   with the authorized transaction history/feed. No manual replay-all button is
+   provided.
+
+Shipped defaults: 2-second polling, 3-second settlement lag, ingest batch 500,
+delivery batch 100, concurrency 8, connect/request timeouts 5/10 seconds, at most
+5 attempts per delivery, exponential backoff from 30 seconds capped at 3600,
+and auto-disable after 15 consecutive subscription failures. Redis lease TTL
+defaults to 15 seconds; API-key subscription limit is 20. Overrides are listed in
+[service configuration](/docs/admin/config-services).
+
+For a leaked secret, pause the subscription, rotate through owner self-service,
+update the receiver and verify signatures before resuming. Deleting a subscription
+also removes delivery history: preserve needed evidence first. Generic receivers
+must reject missing/malformed signatures and deduplicate by `deliveryId`, not only
+`txnId` (a firm transfer can have multiple account postings).
