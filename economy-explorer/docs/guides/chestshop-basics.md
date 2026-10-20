@@ -53,8 +53,8 @@ before or after the number. Note that the sell price can't be set higher than th
 price.
 
 > [!NOTE]
-> Free shops are turned off on this server, so a `0` or `free` price won't work — every
-> shop must charge or pay something.
+> Free shops are disabled in the shipped configuration (`ALLOW_FREE_SHOPS: false`),
+> so `0` or `free` prices are normally rejected. Staff can configure this per server.
 
 You can shorten big numbers with `K` and `M` — `1.5K` is 1,500 and `2M` is 2,000,000.
 

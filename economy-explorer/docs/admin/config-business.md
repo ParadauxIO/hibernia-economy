@@ -128,8 +128,10 @@ Shipped brackets (flat, applied to the firm's **whole** balance — not marginal
 > ```
 
 How it's charged: the tax is `total firm balance × rate`, split proportionally across the
-firm's accounts (rounding drift folded into the largest account), with a dedup key so a
-re-fired cycle can't double-charge. A firm whose total balance is zero or negative is
+firm's positive-balance accounts in whole cents. Shares are rounded down first;
+remaining cents go to the largest fractional remainders (ties use larger balances,
+then account order). Deduplication protects replay of the **same period**, not a
+new manual `/tax trigger weekly`, which supplies a new timestamp and can charge again. A firm whose total balance is zero or negative is
 skipped.
 
 > [!NOTE]

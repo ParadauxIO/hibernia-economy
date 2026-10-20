@@ -1,7 +1,7 @@
 # Release runbook — `develop` → `main` (schema V16+)
 
 How to ship the release that takes a production database from **V15** to the
-current head (`V16`…`V29` at the time of writing). It is a **full-stop release**:
+audited release (`V16`…`V36`). It is a **full-stop release**:
 there is no order in which old and new code can both run against the same schema.
 
 For the general mechanics see [database.md](database.md) (Flyway workflows) and
