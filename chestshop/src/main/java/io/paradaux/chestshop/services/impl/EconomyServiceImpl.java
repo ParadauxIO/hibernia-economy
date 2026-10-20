@@ -1,42 +1,43 @@
 package io.paradaux.chestshop.services.impl;
-import io.paradaux.chestshop.utils.StringUtil;
-import io.paradaux.chestshop.utils.SignText;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.services.ItemService;
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.BusinessAccountService;
-import io.paradaux.chestshop.services.AdminBypassService;
-import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.EconomyService;
-import io.paradaux.chestshop.utils.BusinessAccountUtil;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.api.BusinessApi;
-import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.utils.Permissions;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.Transaction;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.model.tax.ItemTaxMultipliers;
+import io.paradaux.chestshop.model.tax.SalesTaxBrackets;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.AdminBypassService;
+import io.paradaux.chestshop.services.EconomyService;
+import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.utils.BusinessAccountUtil;
+import io.paradaux.chestshop.utils.Permissions;
+import io.paradaux.chestshop.utils.SignText;
+import io.paradaux.chestshop.utils.StringUtil;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.model.tax.TaxResult;
 import io.paradaux.treasury.utils.Idempotency;
-import org.bukkit.World;
-import org.bukkit.block.Sign;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-
-import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
+import org.bukkit.block.Sign;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 
 /**
  * The internal economy API: ChestShop's single point of contact with the Treasury
@@ -70,7 +71,8 @@ public class EconomyServiceImpl implements EconomyService {
     private final AdminBypassService adminBypass;
 
     @Inject
-    public EconomyServiceImpl(AccountService accounts, ItemService items, ChestShopConfiguration config, AdminBypassService adminBypass) {
+    public EconomyServiceImpl(
+            AccountService accounts, ItemService items, ChestShopConfiguration config, AdminBypassService adminBypass) {
         this.adminBypass = adminBypass;
         this.accounts = accounts;
         this.items = items;
@@ -122,11 +124,16 @@ public class EconomyServiceImpl implements EconomyService {
         }
         try {
             int targetAccountId = resolveAccountId(resolved);
-            byte[] dedupKey = Idempotency.sha256(
-                    "chestshop:add:" + resolved + ":" + amount + ":" + System.nanoTime());
+            byte[] dedupKey = Idempotency.sha256("chestshop:add:" + resolved + ":" + amount + ":" + System.nanoTime());
             treasury.transfer(new TransferRequest(
-                    systemAccountId, targetAccountId, amount, "ChestShop deposit",
-                    BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID, null, "ChestShop", dedupKey));
+                    systemAccountId,
+                    targetAccountId,
+                    amount,
+                    "ChestShop deposit",
+                    BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID,
+                    null,
+                    "ChestShop",
+                    dedupKey));
             return true;
         } catch (Exception e) {
             log.warn("Treasury: Could not add " + amount + " to " + resolved, e);
@@ -142,13 +149,19 @@ public class EconomyServiceImpl implements EconomyService {
         }
         try {
             int targetAccountId = resolveAccountId(resolved);
-            byte[] dedupKey = Idempotency.sha256(
-                    "chestshop:sub:" + resolved + ":" + amount + ":" + System.nanoTime());
+            byte[] dedupKey = Idempotency.sha256("chestshop:sub:" + resolved + ":" + amount + ":" + System.nanoTime());
             // The account owner authorises the withdrawal for personal accounts.
-            UUID initiator = BusinessAccountUtil.isBusinessUuid(resolved) ? BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID : resolved;
+            UUID initiator =
+                    BusinessAccountUtil.isBusinessUuid(resolved) ? BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID : resolved;
             treasury.transfer(new TransferRequest(
-                    targetAccountId, systemAccountId, amount, "ChestShop withdrawal",
-                    initiator, null, "ChestShop", dedupKey));
+                    targetAccountId,
+                    systemAccountId,
+                    amount,
+                    "ChestShop withdrawal",
+                    initiator,
+                    null,
+                    "ChestShop",
+                    dedupKey));
             return true;
         } catch (Exception e) {
             log.warn("Treasury: Could not subtract " + amount + " from " + resolved, e);
@@ -239,15 +252,23 @@ public class EconomyServiceImpl implements EconomyService {
                 // Direct buyer → seller transfer — atomic, no SYSTEM hop, no rollback.
                 int senderAccountId = resolveAccountId(sender);
                 receiverAccountId = resolveAccountId(receiver);
-                settlementTxnId = transfer(senderAccountId, receiverAccountId, amount, memo, transferInitiator(sender), tradeId);
+                settlementTxnId =
+                        transfer(senderAccountId, receiverAccountId, amount, memo, transferInitiator(sender), tradeId);
             } else if (receiverIsAdmin && !senderIsAdmin) {
                 // Paying into an admin shop with no server account → money sink (→ SYSTEM).
                 int senderAccountId = resolveAccountId(sender);
-                settlementTxnId = transfer(senderAccountId, systemAccountId, amount, memo, transferInitiator(sender), tradeId);
+                settlementTxnId =
+                        transfer(senderAccountId, systemAccountId, amount, memo, transferInitiator(sender), tradeId);
             } else if (senderIsAdmin && !receiverIsAdmin) {
                 // An admin shop with no server account pays out → money source (SYSTEM →).
                 receiverAccountId = resolveAccountId(receiver);
-                settlementTxnId = transfer(systemAccountId, receiverAccountId, amount, memo, BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID, tradeId);
+                settlementTxnId = transfer(
+                        systemAccountId,
+                        receiverAccountId,
+                        amount,
+                        memo,
+                        BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID,
+                        tradeId);
             }
             // both admin → no real accounts, nothing moves
         } catch (Exception e) {
@@ -265,7 +286,8 @@ public class EconomyServiceImpl implements EconomyService {
         if (taxApi != null && !receiverIsAdmin && receiverAccountId > 0) {
             // Record the tax actually collected on the event so the market-analytics
             // recorder logs the real figure instead of zero (ADT-130).
-            txn.setSalesTax(collectSalesTax(receiverAccountId, receiver, amount, resolvedPartner, initiator, memo, tradeId));
+            txn.setSalesTax(collectSalesTax(
+                    receiverAccountId, receiver, amount, resolvedPartner, initiator, memo, tradeId, txn.getStock()));
         }
         return true;
     }
@@ -285,8 +307,16 @@ public class EconomyServiceImpl implements EconomyService {
     }
 
     /** @return the tax actually collected (ADT-130), or {@code ZERO} if none was charged. */
-    private BigDecimal collectSalesTax(int receiverAccountId, UUID receiver, BigDecimal amount, UUID partner, Player initiator, String memo, UUID tradeId) {
-        BigDecimal rate = resolveTaxRate(partner);
+    private BigDecimal collectSalesTax(
+            int receiverAccountId,
+            UUID receiver,
+            BigDecimal amount,
+            UUID partner,
+            Player initiator,
+            String memo,
+            UUID tradeId,
+            ItemStack[] stock) {
+        BigDecimal rate = resolveTaxRate(partner, receiverAccountId, amount, stock);
         if (rate.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
         }
@@ -294,22 +324,29 @@ public class EconomyServiceImpl implements EconomyService {
             return BigDecimal.ZERO;
         }
         try {
-            UUID initiatorUuid = BusinessAccountUtil.isBusinessUuid(receiver) ? BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID : receiver;
+            UUID initiatorUuid =
+                    BusinessAccountUtil.isBusinessUuid(receiver) ? BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID : receiver;
             // ADT-129: deterministic, anchored on the per-trade nonce (distinct
             // prefix from the transfer leg so the trade's two money movements don't
             // collide while a replay of the same trade still dedups).
             byte[] dedupKey = Idempotency.sha256("chestshop:tax:" + tradeId);
             TaxResult result = taxApi.collectRateTax(
-                    receiverAccountId, amount, rate, "chestshop-sales-tax",
-                    "ChestShop sales tax (" + rate.movePointRight(2).stripTrailingZeros().toPlainString()
-                            + "% of " + amount + ") — " + memo,
-                    initiatorUuid, "ChestShop", dedupKey);
+                    receiverAccountId,
+                    amount,
+                    rate,
+                    "chestshop-sales-tax",
+                    "ChestShop sales tax ("
+                            + rate.movePointRight(2).stripTrailingZeros().toPlainString() + "% of " + amount + ") — "
+                            + memo,
+                    initiatorUuid,
+                    "ChestShop",
+                    dedupKey);
             if (result instanceof TaxResult.Collected c) {
                 return c.amountCharged();
             }
             if (result instanceof TaxResult.Failed f) {
-                log.warn(
-                        "Treasury: sales-tax collection failed for accountId=" + receiverAccountId + ": " + f.errorMessage());
+                log.warn("Treasury: sales-tax collection failed for accountId=" + receiverAccountId + ": "
+                        + f.errorMessage());
             }
         } catch (Exception e) {
             log.warn("Treasury: sales-tax collection threw for receiver " + receiver, e);
@@ -317,20 +354,86 @@ public class EconomyServiceImpl implements EconomyService {
         return BigDecimal.ZERO;
     }
 
-    /** Tax rate as a fraction: {@code SERVER_TAX_AMOUNT} for admin/server counterparties, else {@code TAX_AMOUNT}. */
-    private BigDecimal resolveTaxRate(UUID partner) {
-        double pct = (partner != null
-                && (accounts.isAdminShop(partner) || accounts.isServerEconomyAccount(partner)))
-                ? config.getServerTaxAmount()
-                : config.getTaxAmount();
+    /**
+     * Tax rate as a fraction: {@code SERVER_TAX_AMOUNT} for admin/server counterparties;
+     * otherwise the {@code TAX_BRACKETS} bracket for the receiver's pre-sale balance when
+     * brackets are configured, else {@code TAX_AMOUNT}. Then scaled by the traded item's
+     * {@code TAX_ITEM_MULTIPLIERS} entry, capped at 100%.
+     */
+    private BigDecimal resolveTaxRate(UUID partner, int receiverAccountId, BigDecimal amount, ItemStack[] stock) {
+        double pct;
+        if (partner != null && (accounts.isAdminShop(partner) || accounts.isServerEconomyAccount(partner))) {
+            pct = config.getServerTaxAmount();
+        } else {
+            SalesTaxBrackets brackets = config.getTaxBrackets();
+            // The receiver was credited by the settlement above, so their balance before
+            // the sale is the current balance less this sale's amount.
+            pct = brackets.isEmpty()
+                    ? config.getTaxAmount()
+                    : brackets.percentFor(treasury.getBalanceByAccountId(receiverAccountId)
+                                    .subtract(amount))
+                            .doubleValue();
+        }
+        pct = ItemTaxMultipliers.apply(pct, itemTaxMultiplier(stock));
         if (pct == 0) {
             return BigDecimal.ZERO;
         }
         return BigDecimal.valueOf(pct).divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP);
     }
 
+    /** The highest {@code TAX_ITEM_MULTIPLIERS} multiplier among the traded items, or 1. */
+    private BigDecimal itemTaxMultiplier(ItemStack[] stock) {
+        ItemTaxMultipliers multipliers = config.getTaxItemMultipliers();
+        if (multipliers.isEmpty()) {
+            return BigDecimal.ONE;
+        }
+        BigDecimal highest = BigDecimal.ONE;
+        boolean first = true;
+        for (ItemStack item : stock) {
+            if (item.getType().isAir()) {
+                continue;
+            }
+            BigDecimal m = multipliers.multiplierFor(
+                    customItemIds(item), itemCode(item), item.getType().name());
+            if (first || m.compareTo(highest) > 0) {
+                highest = m;
+                first = false;
+            }
+        }
+        return highest;
+    }
+
+    /**
+     * {@code namespace:value} for every string in the item's persistent data - how Nexo
+     * ({@code nexo:id}) and most custom item plugins tag their items.
+     */
+    private static Set<String> customItemIds(ItemStack item) {
+        Set<String> ids = new LinkedHashSet<>();
+        if (!item.hasItemMeta()) {
+            return ids;
+        }
+        PersistentDataContainer data = item.getItemMeta().getPersistentDataContainer();
+        for (NamespacedKey key : data.getKeys()) {
+            String value = data.get(key, PersistentDataType.STRING);
+            if (value != null && !value.isEmpty()) {
+                ids.add(key.getNamespace() + ":" + value);
+            }
+        }
+        return ids;
+    }
+
+    /** ChestShop's item code for the item (custom-aware through the item resolvers), or {@code null}. */
+    private String itemCode(ItemStack item) {
+        try {
+            return items.getName(item, 0);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     private String buildTransferMessage(Transaction txn) {
-        int totalItems = Arrays.stream(txn.getStock()).mapToInt(ItemStack::getAmount).sum();
+        int totalItems =
+                Arrays.stream(txn.getStock()).mapToInt(ItemStack::getAmount).sum();
         String itemName = transferItemName(txn);
         String ownerName = txn.getOwnerAccount().getName();
         String clientName = txn.getClient().getName();
@@ -387,7 +490,10 @@ public class EconomyServiceImpl implements EconomyService {
     public void migrateLegacyBusinessSign(Transaction event) {
         Sign sign = event.getSign();
         Account owner = event.getOwnerAccount();
-        if (sign == null || owner == null || owner.getUuid() == null || !BusinessAccountUtil.isBusinessUuid(owner.getUuid())) {
+        if (sign == null
+                || owner == null
+                || owner.getUuid() == null
+                || !BusinessAccountUtil.isBusinessUuid(owner.getUuid())) {
             return;
         }
 
@@ -398,8 +504,7 @@ public class EconomyServiceImpl implements EconomyService {
 
         SignText.setLine(sign, SignService.NAME_LINE, canonical);
         sign.update(true);
-        log.info("Migrated legacy business shop sign to " + canonical
-                + " at " + sign.getLocation());
+        log.info("Migrated legacy business shop sign to " + canonical + " at " + sign.getLocation());
     }
 
     private int resolveAccountId(UUID uuid) {
