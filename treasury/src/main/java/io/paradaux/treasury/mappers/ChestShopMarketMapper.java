@@ -38,11 +38,11 @@ public interface ChestShopMarketMapper {
     // reset an owner's choices. On INSERT they take the schema DEFAULT 1; on UPDATE the
     // ON DUPLICATE KEY clause leaves them untouched for a live shop.
     //
-    // The one exception is a row being revived (active = 0 -> 1): that is a NEW shop on
-    // a destroyed shop's tombstone, and it must not inherit the previous shop's flags, so
+    // A revived tombstone or an explicitly different world UUID denotes a new shop,
+    // which must not inherit the previous shop/world generation's flags, so
     // they go back to the default. MariaDB applies the assignments left to right and a
     // bare column name reads the row's current value — so both resets must stay ABOVE
-    // `active = 1`, where `active` is still the pre-update value.
+    // `world_uuid` and `active = 1`, while both still hold their pre-update values.
     @Insert("""
             INSERT INTO chestshop_shop
               (world, world_uuid, sign_x, sign_y, sign_z, is_admin_shop, shop_account_id, shop_account_type,
@@ -56,7 +56,11 @@ public interface ChestShopMarketMapper {
                #{batchQty}, #{currentStock,jdbcType=INTEGER}, #{estimatedCapacity,jdbcType=INTEGER},
                CASE WHEN #{currentStock,jdbcType=INTEGER} IS NULL THEN NULL ELSE NOW() END, 1)
             ON DUPLICATE KEY UPDATE
-               world_uuid = VALUES(world_uuid),
+               visible = IF(active = 0 OR (world_uuid IS NOT NULL AND VALUES(world_uuid) IS NOT NULL
+                   AND world_uuid <> VALUES(world_uuid)), 1, visible),
+               hologram = IF(active = 0 OR (world_uuid IS NOT NULL AND VALUES(world_uuid) IS NOT NULL
+                   AND world_uuid <> VALUES(world_uuid)), 1, hologram),
+               world_uuid = COALESCE(VALUES(world_uuid), world_uuid),
                is_admin_shop = VALUES(is_admin_shop),
                shop_account_id = VALUES(shop_account_id),
                shop_account_type = VALUES(shop_account_type),
@@ -68,8 +72,6 @@ public interface ChestShopMarketMapper {
                current_stock = VALUES(current_stock), estimated_capacity = VALUES(estimated_capacity),
                stock_at = VALUES(stock_at),
                last_seen = NOW(),
-               visible = IF(active = 0, 1, visible),
-               hologram = IF(active = 0, 1, hologram),
                active = 1
             """)
     void upsertShop(Map<String, Object> p);

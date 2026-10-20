@@ -258,9 +258,22 @@ for plugin in Treasury Business TreasuryAPI ChestShop LuckPerms DcDiag; do
   fi
 done
 
+# A local `build` also creates Spring Boot's non-executable *-plain.jar. Never
+# let the launch glob select it (or silently choose between stale versions).
+REST_JARS=()
+for candidate in "$ROOT"/treasury-rest-api/build/libs/treasury-rest-api-*.jar; do
+  if [[ -f "$candidate" && "$candidate" != *-plain.jar ]]; then
+    REST_JARS+=("$candidate")
+  fi
+done
+if [ "${#REST_JARS[@]}" -ne 1 ]; then
+  echo "Expected exactly one executable treasury-rest-api jar, found ${#REST_JARS[@]}" >&2
+  exit 1
+fi
+
 log "Starting the REST API on :$REST_PORT"
 DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \
-    java -jar "$ROOT"/treasury-rest-api/build/libs/treasury-rest-api-*.jar \
+    java -jar "${REST_JARS[0]}" \
     --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" \
     --treasury.webhook.insecure-test-targets="127.0.0.1:$WEBHOOK_PORT" >"$WORK/rest-api.log" 2>&1 &
 PIDS+=($!)

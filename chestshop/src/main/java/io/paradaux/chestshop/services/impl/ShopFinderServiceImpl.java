@@ -64,6 +64,9 @@ public class ShopFinderServiceImpl implements ShopFinderService {
                 .world(state.queryWorld()) // /find is scoped to the player's world (legacy behaviour)
                 .build());
         List<FoundShop> found = rows.stream()
+                .filter(r -> state.queryWorldUuid() == null
+                        || r.worldUuid() == null
+                        || state.queryWorldUuid().equals(r.worldUuid()))
                 .map(r ->
                         FoundShop.from(r, state.queryWorld(), state.qx(), state.qy(), state.qz(), state.hasPosition()))
                 .toList();

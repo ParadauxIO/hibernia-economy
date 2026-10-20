@@ -1,5 +1,16 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.PreviewService;
@@ -8,6 +19,10 @@ import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.market.ShopLocation;
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Server;
@@ -21,23 +36,6 @@ import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * The {@code /find resync} world scanner. MockBukkit implements neither the scheduler nor chunk
@@ -87,15 +85,18 @@ class MarketResyncServiceImplTest {
         lenient().when(marketService.searchEnabled()).thenReturn(true);
 
         // Run the async enumeration and the main-thread hand-off synchronously.
-        lenient().when(scheduler.runTaskAsynchronously(eq(plugin), any(Runnable.class))).thenAnswer(inv -> {
-            ((Runnable) inv.getArgument(1)).run();
-            return mock(BukkitTask.class);
-        });
+        lenient()
+                .when(scheduler.runTaskAsynchronously(eq(plugin), any(Runnable.class)))
+                .thenAnswer(inv -> {
+                    ((Runnable) inv.getArgument(1)).run();
+                    return mock(BukkitTask.class);
+                });
         lenient().when(scheduler.runTask(eq(plugin), any(Runnable.class))).thenAnswer(inv -> {
             ((Runnable) inv.getArgument(1)).run();
             return mock(BukkitTask.class);
         });
-        lenient().when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), anyLong(), anyLong()))
+        lenient()
+                .when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), anyLong(), anyLong()))
                 .thenAnswer(inv -> {
                     capturedTimer = inv.getArgument(1);
                     BukkitTask task = mock(BukkitTask.class);
@@ -103,9 +104,11 @@ class MarketResyncServiceImplTest {
                     return task;
                 });
         doAnswer(inv -> {
-            cancelled = true;
-            return null;
-        }).when(scheduler).cancelTask(anyInt());
+                    cancelled = true;
+                    return null;
+                })
+                .when(scheduler)
+                .cancelTask(anyInt());
 
         // BukkitRunnable.runTaskTimer/cancel resolve the scheduler via the static Bukkit server.
         bukkitServer = Bukkit.class.getDeclaredField("server");
@@ -167,14 +170,15 @@ class MarketResyncServiceImplTest {
         // The running lock was released, so a subsequent resync can start again.
         Field running = MarketResyncServiceImpl.class.getDeclaredField("running");
         running.setAccessible(true);
-        org.assertj.core.api.Assertions.assertThat(((AtomicBoolean) running.get(service)).get()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(((AtomicBoolean) running.get(service)).get())
+                .isFalse();
     }
 
     // ── full scan ─────────────────────────────────────────────────────────────
 
     private Sign sign(int x, int y, int z, String owner, String item) {
         Sign s = mock(Sign.class);
-        lenient().when(s.getLines()).thenReturn(new String[]{owner, "1", "B 10", item});
+        lenient().when(s.getLines()).thenReturn(new String[] {owner, "1", "B 10", item});
         lenient().when(s.getX()).thenReturn(x);
         lenient().when(s.getY()).thenReturn(y);
         lenient().when(s.getZ()).thenReturn(z);
@@ -211,15 +215,17 @@ class MarketResyncServiceImplTest {
         when(marketSync.registerShop(alsoRegistered)).thenReturn(true);
         when(marketSync.registerShop(unresolvable)).thenReturn(false);
 
-        when(shopQueryApi.activeShopLocations(null)).thenReturn(List.of(
-                new ShopLocation("world", UUID.randomUUID(), 5, 64, 5),   // registered -> kept
-                new ShopLocation("world", UUID.randomUUID(), 7, 64, 7),   // sign present, upsert failed -> kept
-                new ShopLocation("world", UUID.randomUUID(), 8, 64, 8),   // no longer a valid shop sign -> deactivate
-                new ShopLocation("world", UUID.randomUUID(), 9, 64, 9))); // no sign at all -> deactivate
+        when(shopQueryApi.activeShopLocations(null))
+                .thenReturn(List.of(
+                        new ShopLocation("world", UUID.randomUUID(), 5, 64, 5), // registered -> kept
+                        new ShopLocation("world", UUID.randomUUID(), 7, 64, 7), // sign present, upsert failed -> kept
+                        new ShopLocation(
+                                "world", UUID.randomUUID(), 8, 64, 8), // no longer a valid shop sign -> deactivate
+                        new ShopLocation("world", UUID.randomUUID(), 9, 64, 9))); // no sign at all -> deactivate
 
         Chunk c1 = chunk(world, 0, 0, true, registered, alsoRegistered, unresolvable, invalid, nonSign);
         Chunk c2 = chunk(world, 1, 0, false); // enqueued but unloaded before processing -> skipped
-        when(world.getLoadedChunks()).thenReturn(new Chunk[]{c1, c2});
+        when(world.getLoadedChunks()).thenReturn(new Chunk[] {c1, c2});
 
         service.resync(initiator, 3);
         driveScan();
@@ -230,9 +236,9 @@ class MarketResyncServiceImplTest {
         verify(previews, never()).destroy("world", 7, 64, 7);
         verify(marketApi).deactivateShop("world", 8, 64, 8);
         verify(marketApi).deactivateShop("world", 9, 64, 9);
-        verify(previews).destroy("world", 8, 64, 8);   // the vanished shops' holograms go with them
+        verify(previews).destroy("world", 8, 64, 8); // the vanished shops' holograms go with them
         verify(previews).destroy("world", 9, 64, 9);
-        verify(previews).loadChunk("world", 0, 0);     // previews for the shops just (re)discovered
+        verify(previews).loadChunk("world", 0, 0); // previews for the shops just (re)discovered
         verify(message).send(initiator, "chestshop.resync.started", "chunks", 2);
         verify(message).send(initiator, "chestshop.resync.complete", "upserted", 2, "deactivated", 2);
     }
@@ -244,7 +250,7 @@ class MarketResyncServiceImplTest {
         when(server.getWorlds()).thenReturn(List.of(world));
         when(shopQueryApi.activeShopLocations(null)).thenReturn(List.of());
         Chunk empty = chunk(world, 0, 0, true);
-        when(world.getLoadedChunks()).thenReturn(new Chunk[]{empty});
+        when(world.getLoadedChunks()).thenReturn(new Chunk[] {empty});
 
         service.resync(initiator, 1);
         driveScan();
@@ -309,5 +315,101 @@ class MarketResyncServiceImplTest {
         verify(message).send(initiator, "chestshop.resync.started", "chunks", 0);
         verify(message).send(initiator, "chestshop.resync.complete", "upserted", 0, "deactivated", 0);
         verify(message, never()).send(eq(initiator), eq("chestshop.resync.progress"), any(), any(), any(), any());
+    }
+
+    @Test
+    void discovery_deduplicatesChunksAndWaitsBetweenScans() {
+        World world = mock(World.class);
+        when(world.getName()).thenReturn("world");
+        when(world.getUID()).thenReturn(UUID.randomUUID());
+        when(server.getWorld("world")).thenReturn(world);
+        Sign live = sign(1, 64, 1, "Owner", "STONE");
+        when(signService.isValid(live)).thenReturn(true);
+        when(marketSync.registerShop(live)).thenReturn(true);
+        Chunk first = chunk(world, 0, 0, true, live);
+        Chunk second = chunk(world, 1, 0, true);
+        var vanished = mock(io.paradaux.treasury.api.market.ShopResult.class);
+        when(vanished.world()).thenReturn("world");
+        when(vanished.signX()).thenReturn(2);
+        when(vanished.signY()).thenReturn(64);
+        when(vanished.signZ()).thenReturn(2);
+        when(shopQueryApi.shopsInChunk("world", 0, 0)).thenReturn(List.of(vanished));
+        java.util.Deque<Runnable> async = new java.util.ArrayDeque<>();
+        when(scheduler.runTaskAsynchronously(eq(plugin), any(Runnable.class))).thenAnswer(inv -> {
+            async.add(inv.getArgument(1));
+            return mock(BukkitTask.class);
+        });
+        service.discoverChunk(first);
+        service.discoverChunk(first);
+        service.discoverChunk(second);
+        org.assertj.core.api.Assertions.assertThat(async).isEmpty();
+        capturedTimer.run(); // start the first background read
+        org.assertj.core.api.Assertions.assertThat(async).hasSize(1);
+        async.remove().run();
+        verify(marketSync, never()).registerShop(any()); // no async world access
+        capturedTimer.run(); // apply its result, but do not start the next read this tick
+        verify(marketSync).registerShop(live);
+        verify(marketApi).deactivateShop("world", 2, 64, 2);
+        verify(previews).destroy("world", 2, 64, 2);
+        org.assertj.core.api.Assertions.assertThat(async).isEmpty();
+        verify(scheduler, never()).runTaskLater(eq(plugin), any(Runnable.class), anyLong());
+        verify(scheduler, never()).runTask(eq(plugin), any(Runnable.class));
+        capturedTimer.run();
+        org.assertj.core.api.Assertions.assertThat(async).hasSize(1);
+        async.remove().run();
+        capturedTimer.run();
+        verify(shopQueryApi).shopsInChunk("world", 0, 0);
+        verify(shopQueryApi).shopsInChunk("world", 1, 0);
+        org.assertj.core.api.Assertions.assertThat(async).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(cancelled).isTrue();
+    }
+
+    @Test
+    void discovery_doesNotInspectUnloadedChunksOrReplacedWorlds() {
+        for (boolean replacement : List.of(false, true)) {
+            World original = mock(World.class);
+            when(original.getName()).thenReturn("world");
+            when(original.getUID()).thenReturn(UUID.randomUUID());
+            World current = replacement ? mock(World.class) : original;
+            if (replacement) when(current.getUID()).thenReturn(UUID.randomUUID());
+            when(server.getWorld("world")).thenReturn(current);
+            Chunk chunk = chunk(original, 0, 0, replacement);
+            service = new MarketResyncServiceImpl(plugin, marketService, signService, marketSync, previews, message);
+            cancelled = false;
+            service.discoverChunk(chunk);
+            driveScan();
+            verify(chunk, never()).getTileEntities(false);
+        }
+        verify(marketSync, never()).registerShop(any());
+        verify(marketApi, never()).deactivateShop(any(), anyInt(), anyInt(), anyInt());
+    }
+
+    @Test
+    void discovery_databaseFailureDoesNotTreatEveryShopAsMissing() {
+        World world = mock(World.class);
+        when(world.getName()).thenReturn("world");
+        when(world.getUID()).thenReturn(UUID.randomUUID());
+        Chunk chunk = chunk(world, 0, 0, true);
+        when(server.getWorld("world")).thenReturn(world);
+        when(shopQueryApi.shopsInChunk("world", 0, 0)).thenThrow(new IllegalStateException("offline"));
+        service.discoverChunk(chunk);
+        driveScan();
+        verify(chunk, never()).getTileEntities(false);
+        verify(marketApi, never()).deactivateShop(any(), anyInt(), anyInt(), anyInt());
+    }
+
+    @Test
+    void discovery_atEnableQueuesAlreadyLoadedChunks() {
+        World world = mock(World.class);
+        when(world.getName()).thenReturn("world");
+        when(world.getUID()).thenReturn(UUID.randomUUID());
+        when(server.getWorld("world")).thenReturn(world);
+        Chunk chunk = chunk(world, 0, 0, true);
+        when(server.getWorlds()).thenReturn(List.of(world));
+        when(world.getLoadedChunks()).thenReturn(new Chunk[] {chunk});
+        service.discoverLoadedChunks();
+        driveScan();
+        verify(shopQueryApi).shopsInChunk("world", 0, 0);
+        verify(chunk).getTileEntities(false);
     }
 }

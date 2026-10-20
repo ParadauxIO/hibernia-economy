@@ -477,6 +477,57 @@ class MarketApiImplIT extends IntegrationTestBase {
         assertEquals(0, query("SELECT * FROM chestshop_shop").size());
     }
 
+    private ChestShopShopRecord shopWithWorldUuid(UUID uuid) {
+        return new ChestShopShopRecord(
+                "world",
+                8,
+                8,
+                8,
+                false,
+                null,
+                "PERSONAL",
+                null,
+                UUID.randomUUID(),
+                "STONE",
+                "STONE",
+                "Stone",
+                false,
+                null,
+                new BigDecimal("5.00"),
+                null,
+                1,
+                10,
+                20,
+                uuid);
+    }
+
+    @Test
+    void upsertShop_newWorldGeneration_resetsOldWorldOwnerFlags() {
+        market.upsertShop(shopWithWorldUuid(UUID.randomUUID()));
+        market.setShopVisibility("world", 8, 8, 8, false);
+        market.setShopHologram("world", 8, 8, 8, false);
+        market.upsertShop(shopWithWorldUuid(UUID.randomUUID()));
+        assertEquals(1, flag("visible", "world", 8, 8, 8));
+        assertEquals(1, flag("hologram", "world", 8, 8, 8));
+    }
+
+    @Test
+    void upsertShop_sameWorldGeneration_preservesFlagsAndKnownUuid() {
+        UUID uuid = UUID.randomUUID();
+        market.upsertShop(shopWithWorldUuid(uuid));
+        market.setShopVisibility("world", 8, 8, 8, false);
+        market.setShopHologram("world", 8, 8, 8, false);
+        market.upsertShop(shopWithWorldUuid(uuid));
+        market.upsertShop(shopWithWorldUuid(null));
+        assertEquals(0, flag("visible", "world", 8, 8, 8));
+        assertEquals(0, flag("hologram", "world", 8, 8, 8));
+        assertEquals(
+                uuid.toString().replace("-", "").toUpperCase(java.util.Locale.ROOT),
+                query("SELECT HEX(world_uuid) AS uuid FROM chestshop_shop")
+                        .getFirst()
+                        .get("uuid"));
+    }
+
     // ── deactivate / updateStock ─────────────────────────────────────────────────
 
     @Test

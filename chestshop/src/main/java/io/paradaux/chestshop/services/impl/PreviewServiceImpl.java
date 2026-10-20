@@ -45,7 +45,7 @@ public class PreviewServiceImpl implements PreviewService {
     private final io.paradaux.chestshop.services.FindPresentation presentation;
 
     /** One queued registry lookup: a whole chunk, or (when {@code pos} is set) one sign in it. */
-    private record Lookup(String world, int chunkX, int chunkZ, String pos) {}
+    private record Lookup(String world, UUID worldUuid, int chunkX, int chunkZ, String pos) {}
 
     private final JavaPlugin plugin;
     private final MarketService marketService;
@@ -77,7 +77,10 @@ public class PreviewServiceImpl implements PreviewService {
 
     @Override
     public void render(ShopResult shop) {
-        if (!shop.hologram()) {
+        World world = plugin.getServer().getWorld(shop.world());
+        if (!shop.hologram()
+                || world == null
+                || (shop.worldUuid() != null && !shop.worldUuid().equals(world.getUID()))) {
             return;
         }
         ItemStack item = toItemStack(shop);
@@ -155,7 +158,7 @@ public class PreviewServiceImpl implements PreviewService {
 
     @Override
     public void loadChunk(String worldName, int chunkX, int chunkZ) {
-        enqueue(new Lookup(worldName, chunkX, chunkZ, null));
+        enqueue(worldName, chunkX, chunkZ, null);
     }
 
     @Override
@@ -169,14 +172,15 @@ public class PreviewServiceImpl implements PreviewService {
 
     @Override
     public void refresh(String worldName, int x, int y, int z) {
-        enqueue(new Lookup(worldName, x >> 4, z >> 4, posKey(x, y, z)));
+        enqueue(worldName, x >> 4, z >> 4, posKey(x, y, z));
     }
 
-    private void enqueue(Lookup lookup) {
-        if (!marketService.searchEnabled()) {
+    private void enqueue(String worldName, int chunkX, int chunkZ, String pos) {
+        World world = plugin.getServer().getWorld(worldName);
+        if (!marketService.searchEnabled() || world == null) {
             return;
         }
-        pending.add(lookup);
+        pending.add(new Lookup(worldName, world.getUID(), chunkX, chunkZ, pos));
         if (!lookupInFlight) {
             pump();
         }
@@ -211,7 +215,9 @@ public class PreviewServiceImpl implements PreviewService {
 
     private void apply(Lookup lookup, List<ShopResult> shops) {
         World world = plugin.getServer().getWorld(lookup.world());
-        if (world == null || !world.isChunkLoaded(lookup.chunkX(), lookup.chunkZ())) {
+        if (world == null
+                || !java.util.Objects.equals(lookup.worldUuid(), world.getUID())
+                || !world.isChunkLoaded(lookup.chunkX(), lookup.chunkZ())) {
             return; // unloaded again before we got back
         }
         String chunkKey = chunkKey(lookup.world(), lookup.chunkX(), lookup.chunkZ());

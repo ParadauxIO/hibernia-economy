@@ -20,7 +20,7 @@ public interface ShopQueryApi {
     /**
      * Active, owner-visible shops matching the query's item (exact or fuzzy) and
      * optional world. Returns lean rows for the caller to filter/sort/distance
-     * client-side; capped at {@link ShopSearchQuery#getLimit()} unless allMatches is requested.
+     * client-side; capped at the query’s {@code limit} unless allMatches is requested.
      */
     List<ShopResult> searchShops(ShopSearchQuery query);
 

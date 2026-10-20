@@ -169,6 +169,8 @@ public class ChestShop extends JavaPlugin {
         // Chunks already loaded at enable never fire a ChunkLoadEvent for us — give them their previews.
         injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)
                 .loadAll();
+        injector.getInstance(io.paradaux.chestshop.services.MarketResyncService.class)
+                .discoverLoadedChunks();
 
         // Optional: keep the shop registry clean when WorldEdit/FAWE bulk-removes
         // shops (WE bypasses Bukkit block events). Only touched when WE is present,

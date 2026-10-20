@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -275,7 +276,16 @@ class MarketSyncServiceImplTest {
         when(marketService.ownerFromUuid(ownerUuid, false)).thenReturn(owner);
         when(marketService.stockOf(item, inv)).thenReturn(20);
         when(marketService.capacityOf(item, inv)).thenReturn(30);
-        when(marketService.shop(sign, item, owner, 20, 30)).thenReturn(shopRec);
+        when(marketService.shop(
+                        any(Location.class),
+                        eq(item),
+                        eq(owner),
+                        eq(new BigDecimal("10")),
+                        eq(io.paradaux.chestshop.utils.PriceUtil.NO_PRICE),
+                        eq(1),
+                        eq(20),
+                        eq(30)))
+                .thenReturn(shopRec);
         Location l = location(world("world"), 1, 2, 3);
         when(sign.getLocation()).thenReturn(l);
 
@@ -301,7 +311,16 @@ class MarketSyncServiceImplTest {
         when(items.parse("Diamond")).thenReturn(item);
         when(signService.isAdminShop(lines)).thenReturn(true);
         when(marketService.ownerFromUuid(null, true)).thenReturn(owner);
-        when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
+        when(marketService.shop(
+                        any(Location.class),
+                        eq(item),
+                        eq(owner),
+                        eq(new BigDecimal("10")),
+                        eq(io.paradaux.chestshop.utils.PriceUtil.NO_PRICE),
+                        eq(1),
+                        eq(null),
+                        eq(null)))
+                .thenReturn(shopRec);
         Location l = location(null, 1, 2, 3);
         when(sign.getLocation()).thenReturn(l);
 
@@ -330,7 +349,16 @@ class MarketSyncServiceImplTest {
         when(items.parse("Diamond")).thenReturn(item);
         when(signService.isAdminShop(lines)).thenReturn(false);
         when(marketService.ownerFromUuid(null, false)).thenReturn(owner);
-        when(marketService.shop(sign, item, owner, null, null)).thenReturn(shopRec);
+        when(marketService.shop(
+                        any(Location.class),
+                        eq(item),
+                        eq(owner),
+                        eq(new BigDecimal("10")),
+                        eq(io.paradaux.chestshop.utils.PriceUtil.NO_PRICE),
+                        eq(1),
+                        eq(null),
+                        eq(null)))
+                .thenReturn(shopRec);
         Location l = location(null, 1, 2, 3);
         when(sign.getLocation()).thenReturn(l);
 
@@ -468,7 +496,7 @@ class MarketSyncServiceImplTest {
     }
 
     @Test
-    void onInventoryClose_namedWorld_updatesShopStock() {
+    void onInventoryClose_namedWorld_upsertsCompleteShop() {
         InventoryHolder holder = mock(InventoryHolder.class);
         Inventory inv = mock(Inventory.class);
         Sign sign = mock(Sign.class);
@@ -477,19 +505,31 @@ class MarketSyncServiceImplTest {
         when(sign.getLocation()).thenReturn(l);
         when(shopBlockService.findConnectedShopSigns(holder)).thenReturn(List.of(sign));
         when(signService.isAdminShop(sign)).thenReturn(false);
+        Account account = mock(Account.class);
+        UUID uuid = UUID.randomUUID();
+        when(account.getUuid()).thenReturn(uuid);
+        when(accounts.resolveAccount("Owner")).thenReturn(account);
+        MarketService.Owner owner = anOwner();
+        when(marketService.ownerFromUuid(uuid, false)).thenReturn(owner);
+        ChestShopShopRecord record = mock(ChestShopShopRecord.class);
         when(items.parse("Diamond")).thenReturn(item);
         when(marketService.stockOf(item, inv)).thenReturn(11);
         when(marketService.capacityOf(item, inv)).thenReturn(22);
 
         try (MockedStatic<SignService> statics = mockStatic(SignService.class)) {
             statics.when(() -> SignService.getItem(sign)).thenReturn("Diamond");
+            statics.when(() -> SignService.getOwner(sign)).thenReturn("Owner");
+            when(marketService.shop(eq(sign), eq(item), eq(owner), any(), any()))
+                    .thenReturn(record);
             sync.onInventoryClose(holder, inv);
         }
-        verify(market).updateShopStock("world", 7, 8, 9, 11, 22);
+        verify(market).upsertShop(record);
+        verify(marketService).shop(sign, item, owner, 11, 22);
+        verify(previews).refresh("world", 7, 8, 9);
     }
 
     @Test
-    void onInventoryClose_nullWorld_updatesWithNullWorldName() {
+    void onInventoryClose_nullWorld_upsertsCompleteShop() {
         InventoryHolder holder = mock(InventoryHolder.class);
         Inventory inv = mock(Inventory.class);
         Sign sign = mock(Sign.class);
@@ -498,15 +538,26 @@ class MarketSyncServiceImplTest {
         when(sign.getLocation()).thenReturn(l);
         when(shopBlockService.findConnectedShopSigns(holder)).thenReturn(List.of(sign));
         when(signService.isAdminShop(sign)).thenReturn(false);
+        Account account = mock(Account.class);
+        UUID uuid = UUID.randomUUID();
+        when(account.getUuid()).thenReturn(uuid);
+        when(accounts.resolveAccount("Owner")).thenReturn(account);
+        MarketService.Owner owner = anOwner();
+        when(marketService.ownerFromUuid(uuid, false)).thenReturn(owner);
+        ChestShopShopRecord record = mock(ChestShopShopRecord.class);
         when(items.parse("Diamond")).thenReturn(item);
         when(marketService.stockOf(item, inv)).thenReturn(0);
         when(marketService.capacityOf(item, inv)).thenReturn(5);
 
         try (MockedStatic<SignService> statics = mockStatic(SignService.class)) {
             statics.when(() -> SignService.getItem(sign)).thenReturn("Diamond");
+            statics.when(() -> SignService.getOwner(sign)).thenReturn("Owner");
+            when(marketService.shop(eq(sign), eq(item), eq(owner), any(), any()))
+                    .thenReturn(record);
             sync.onInventoryClose(holder, inv);
         }
-        verify(market).updateShopStock(null, 1, 2, 3, 0, 5);
+        verify(market).upsertShop(record);
+        verify(marketService).shop(sign, item, owner, 0, 5);
     }
 
     @Test
@@ -538,7 +589,16 @@ class MarketSyncServiceImplTest {
         when(event.getSignLines()).thenReturn(lines);
         when(items.parse("ruby_sword")).thenReturn(ruby);
         when(marketService.ownerFromUuid(null, false)).thenReturn(owner);
-        when(marketService.shop(sign, ruby, owner, null, null)).thenReturn(shopRec);
+        when(marketService.shop(
+                        any(Location.class),
+                        eq(ruby),
+                        eq(owner),
+                        eq(new BigDecimal("10")),
+                        eq(io.paradaux.chestshop.utils.PriceUtil.NO_PRICE),
+                        eq(1),
+                        eq(null),
+                        eq(null)))
+                .thenReturn(shopRec);
 
         sync.onShopCreated(event);
         verify(market).upsertShop(shopRec);

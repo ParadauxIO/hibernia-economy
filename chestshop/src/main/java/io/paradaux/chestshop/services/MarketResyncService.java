@@ -22,4 +22,10 @@ public interface MarketResyncService {
      * {@code chunksPerTick} is clamped to a sane range — the scan runs on the main thread.
      */
     void resync(CommandSender initiator, int chunksPerTick);
+
+    /** Queue a loaded chunk for bounded discovery and reconciliation without loading any chunks. */
+    void discoverChunk(org.bukkit.Chunk chunk);
+
+    /** Queue chunks already loaded when ChestShop enables. */
+    void discoverLoadedChunks();
 }

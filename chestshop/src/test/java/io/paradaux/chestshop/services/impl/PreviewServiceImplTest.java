@@ -342,8 +342,9 @@ class PreviewServiceImplTest {
 
     @Test
     void loadChunk_worldGoneBeforeTheAnswer_rendersNothing() {
-        registry("nope", 1, 2, shopAt(16, 64, 32, true));
-        preview.loadChunk("nope", 1, 2);
+        registry("world", 1, 2, shopAt(16, 64, 32, true));
+        preview.loadChunk("world", 1, 2);
+        when(server.getWorld("world")).thenReturn(null);
         completeLookup();
         verifySpawns(0);
     }
@@ -500,5 +501,35 @@ class PreviewServiceImplTest {
         ShopResult shop = mock(ShopResult.class);
         when(shop.material()).thenReturn("NOPE");
         assertThat(PreviewServiceImpl.toItemStack(shop)).isNull();
+    }
+
+    @Test
+    void render_previousWorldGeneration_doesNotSpawnDisplay() {
+        ShopResult shop = shopAt(16, 64, 32, true);
+        when(world.getUID()).thenReturn(java.util.UUID.randomUUID());
+        when(shop.worldUuid()).thenReturn(java.util.UUID.randomUUID());
+        preview.render(shop);
+        verify(world, never()).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
+    }
+
+    @Test
+    void render_matchingWorldGeneration_spawnsDisplay() {
+        ShopResult shop = shopAt(16, 64, 32, true);
+        java.util.UUID id = java.util.UUID.randomUUID();
+        when(world.getUID()).thenReturn(id);
+        when(shop.worldUuid()).thenReturn(id);
+        preview.render(shop);
+        verify(world).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
+    }
+
+    @Test
+    void loadChunk_worldReplacedDuringQuery_dropsEvenRowsWithoutUuid() {
+        when(world.getUID()).thenReturn(java.util.UUID.randomUUID());
+        registry("world", 1, 2, shopAt(16, 64, 32, true));
+        preview.loadChunk("world", 1, 2);
+        asyncTasks.remove().run();
+        when(world.getUID()).thenReturn(java.util.UUID.randomUUID());
+        mainTasks.remove().run();
+        verify(world, never()).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
     }
 }

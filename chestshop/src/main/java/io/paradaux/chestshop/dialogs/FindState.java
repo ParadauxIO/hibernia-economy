@@ -60,6 +60,7 @@ public final class FindState {
     private final ItemStack itemStack; // for the dialog item body; may be null
     private final String itemKey; // the search key (canonical sign code)
     private final String itemDisplayName;
+    private final java.util.UUID queryWorldUuid;
     private final String queryWorld; // player's world name, or null
     private final int qx, qy, qz;
     private final boolean hasPosition;
@@ -83,6 +84,20 @@ public final class FindState {
             int qy,
             int qz,
             boolean hasPosition) {
+        this(itemStack, itemKey, itemDisplayName, queryWorld, null, qx, qy, qz, hasPosition);
+    }
+
+    public FindState(
+            ItemStack itemStack,
+            String itemKey,
+            String itemDisplayName,
+            String queryWorld,
+            java.util.UUID queryWorldUuid,
+            int qx,
+            int qy,
+            int qz,
+            boolean hasPosition) {
+        this.queryWorldUuid = queryWorldUuid;
         this.itemStack = itemStack;
         this.itemKey = itemKey;
         this.itemDisplayName = itemDisplayName;
@@ -118,6 +133,10 @@ public final class FindState {
 
     public String itemDisplayName() {
         return itemDisplayName;
+    }
+
+    public java.util.UUID queryWorldUuid() {
+        return queryWorldUuid;
     }
 
     public String queryWorld() {
