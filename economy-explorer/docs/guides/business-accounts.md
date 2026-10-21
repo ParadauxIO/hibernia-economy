@@ -42,6 +42,12 @@ Open another account, and switch the default if you like:
 
 Use the account ID from `account list` wherever a command asks for `<accountId>`.
 
+Choose an account name that is free across accounts, businesses, player names and
+shop aliases. For example, use `AcmeWages` if `Wages` is already reserved elsewhere.
+Case/accent changes and surrounding spaces do not bypass reservations. Clearing
+an old shop alias keeps it reserved to the same account so old signs cannot be
+redirected to someone else's wallet.
+
 ## Move money to and from a specific account
 
 ```text

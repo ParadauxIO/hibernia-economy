@@ -143,6 +143,18 @@ class AccountServiceImplTest {
         assertThat(svc.hasFunds(1, BigDecimal.TEN)).isTrue();
     }
 
+    @Test
+    void createAccountPreservesNamespaceCauseForApiConsumers() {
+        var sql = new java.sql.SQLException("GLOBAL_NAME_CONFLICT: private detail", "45000", 1644);
+        var failure = new org.apache.ibatis.exceptions.PersistenceException(sql);
+        org.mockito.Mockito.doThrow(failure).when(accountMapper).insertAccount(any());
+        assertThatThrownBy(() -> svc.createAccount(AccountType.BUSINESS, UUID.randomUUID(), "Reserved"))
+                .isInstanceOf(io.paradaux.hibernia.framework.exceptions.ConflictException.class)
+                .hasCause(failure)
+                .hasMessage("That name is reserved by another identity. Choose another name or ask an administrator.");
+        verify(accountMapper, never()).seedBalance(org.mockito.ArgumentMatchers.anyInt());
+    }
+
     // ---- Lookups ----
 
     @Test

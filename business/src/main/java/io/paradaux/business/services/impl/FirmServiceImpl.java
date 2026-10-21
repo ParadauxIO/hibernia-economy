@@ -20,6 +20,7 @@ import io.paradaux.business.services.FirmAreaShopService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.utils.NameValidator;
+import io.paradaux.common.NameReservationErrors;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
@@ -112,6 +113,7 @@ public class FirmServiceImpl implements FirmService {
     @Transactional
     @Override
     public Firm createFirm(String name, UUID actorId) {
+        name = name == null ? null : name.replaceAll("^ +| +$", "");
         validateFirmName(name);
 
         // Acquire before any reads so a waiting create sees the previous
@@ -145,7 +147,14 @@ public class FirmServiceImpl implements FirmService {
         }
 
         // Put it into the DB to get an ID
-        firms.createFirm(firm);
+        try {
+            firms.createFirm(firm);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                throw new BadCommandException(message);
+            });
+            throw e;
+        }
 
         // Finish writes that do not need the account ID before external IPC.
         // Failure here rolls back locally without creating a Treasury orphan.
@@ -467,6 +476,7 @@ public class FirmServiceImpl implements FirmService {
     @Transactional
     @Override
     public Firm renameFirm(String firmName, String newName) {
+        newName = newName == null ? null : newName.replaceAll("^ +| +$", "");
         Firm firm = getFirmByNameOrId(firmName);
         if (firm == null) {
             throw new BadCommandException("Firm not found: " + firmName);
@@ -479,7 +489,14 @@ public class FirmServiceImpl implements FirmService {
         Firm update = new Firm();
         update.setFirmId(firm.getFirmId());
         update.setDisplayName(newName);
-        firms.updateFirm(update);
+        try {
+            firms.updateFirm(update);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                throw new BadCommandException(message);
+            });
+            throw e;
+        }
         firm.setDisplayName(newName);
         return firm;
     }

@@ -126,7 +126,7 @@ class SoftDeleteAuthTest {
                 int baseline = BusinessLedger.firmAccountCount(firmIdHolder[0]);
 
                 Barrier.settle();
-                p.chatCommand("/business account create " + firm + " Savings");
+                p.chatCommand("/business account create " + firm + " Savings" + firm);
                 p.awaitMessageContaining("created account", TIMEOUT);
                 BusinessLedger.waitForFirmAccountCountAtLeast(firmIdHolder[0], baseline + 1, TIMEOUT);
                 secondAccountHolder[0] = BusinessLedger.firmAccountIdAt(firmIdHolder[0], 1);
