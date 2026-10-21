@@ -27,9 +27,6 @@ import org.bukkit.inventory.ItemStack;
  */
 public final class FindState {
 
-    /** Results shown per page in the dialog list. */
-    public static final int PAGE_SIZE = 7;
-
     /** Direction + weight for one selected sort attribute. */
     public static final class SortMeta {
         private SortDirection direction;
@@ -72,8 +69,6 @@ public final class FindState {
     private final EnumMap<ShopAttribute, SortMeta> sort = new EnumMap<>(ShopAttribute.class);
 
     private List<FoundShop> results = List.of();
-    private int page = 0;
-    private int inspectionSlot;
 
     public FindState(
             ItemStack itemStack,
@@ -302,11 +297,10 @@ public final class FindState {
         return comparator;
     }
 
-    // ── results / paging ────────────────────────────────────────────────────────
+    // ── results ────────────────────────────────────────────────────────
 
     public void setResults(List<FoundShop> results) {
         this.results = List.copyOf(results);
-        this.page = 0;
     }
 
     public List<FoundShop> results() {
@@ -315,37 +309,5 @@ public final class FindState {
 
     public boolean isEmpty() {
         return results.isEmpty();
-    }
-
-    public int page() {
-        return page;
-    }
-
-    public void inspect(int slot) {
-        inspectionSlot = slot;
-    }
-
-    public FoundShop inspectedShop() {
-        return pageShops().get(inspectionSlot);
-    }
-
-    public int pageCount() {
-        return Math.max(1, (results.size() + PAGE_SIZE - 1) / PAGE_SIZE);
-    }
-
-    public void nextPage() {
-        if (page < pageCount() - 1) page++;
-    }
-
-    public void previousPage() {
-        if (page > 0) page--;
-    }
-
-    /** The shops shown on the current page. */
-    public List<FoundShop> pageShops() {
-        int from = page * PAGE_SIZE;
-        if (from >= results.size()) return List.of();
-        int to = Math.min(from + PAGE_SIZE, results.size());
-        return results.subList(from, to);
     }
 }

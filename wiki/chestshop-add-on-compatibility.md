@@ -55,10 +55,14 @@ Player/world names are inserted as text rather than MiniMessage markup.
 The plain-text `FIND_LOCATION_FORMAT` and `PREVIEW_NAME_FORMAT` settings remain
 in the main `config.yml`.
 
-Java dialog results show quantity/capacity and a GPS button alongside each
-transit selection. Bedrock players are detected through Floodgate or Geyser;
-results use an inventory menu with left-click transit and right-click GPS,
-paging and canceled inventory moves. Commands execute as the player, with the
+Java and Bedrock results use Hibernia Framework 1.3.0 Curator chest menus,
+matching `MCCitiesNetwork/chestshop-database`: 45 shops per page, a gray footer,
+back at slot 45, previous at 48, the queried item at 49, and next at 50.
+The title is a fixed “Shop results”; the queried item’s tooltip carries the result
+count and page number so long item names cannot overflow the chest.
+Search/filter/sort options remain dialogs. Similar fuzzy matches glow.
+Left/shift-left clicks use transit; right/shift-right clicks use GPS.
+All inventory transfers are blocked. Commands execute as the player, with the
 player's permissions, and only while the player remains in the result's world.
 An empty left-click command disables transit. An empty right-click command opens
 the item inspector instead. Reload presentation settings with `/chestshop reload`;
@@ -88,11 +92,10 @@ features:
   filters, distance or weighted sorting. Treasury's query API retains its normal
   500-row default for other callers; the native finder explicitly requests all
   matches in one database read.
-- Java result dialogs offer **Inspect item**, displaying the stored ItemStack
-  including its name, enchantments and other metadata, with a back action.
-  Inventory results offer the same inspector on shift-right-click, or ordinary
-  right-click when no right-click navigation command is configured. The inspector
-  cancels inventory movement and returns to the same results page.
+- When the right-click command is empty, right/shift-right opens the stored item
+  preview with its name, enchantments and other metadata. The three-row preview
+  has the item at slot 13 and back at 18. Back or Escape restores the same results
+  page; opening an unrelated inventory ends the journey.
 - `/chestshop resync <chunks>` and `/csdb resync <chunks>` also work from console.
   Both scan loaded chunks across worlds and report progress to the initiating
   sender; neither forces unloaded chunks to load.

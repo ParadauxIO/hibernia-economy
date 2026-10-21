@@ -78,7 +78,7 @@ try (MockPlayer alice = MockPlayer.connectLocal("Alice")) {
 ### What this client does NOT do
 
 - **No login authentication.** The server must be in offline-mode (`server.properties: online-mode=false`). The mock client validates usernames against Mojang's regex (`[A-Za-z0-9_]{3,16}`) on `connect()` to fail fast.
-- **No inventory tracking, no chunk handling, no rendering.** If a test needs to assert "alice received an emerald in slot 0," extend the client by listening for `ClientboundContainerSetSlotPacket` via `awaitClientbound`.
+- **No client-side inventory prediction, chunk handling, or rendering.** `containerContent(id)` exposes the latest server-sent container contents/state ID, including slot updates. `sendPacket(packet)` drives inventory interactions and stale/forged packet cases; live tests assert authoritative state through DcDiag rather than trusting client predictions.
 - **No movement (yet).** The client *receives* position updates but doesn't *send* them. To move a player, use `RconClient.send("teleport <player> x y z")` from the test side. Active movement (`ServerboundMovePlayerPosPacket`) can be added when needed.
 - **No auto-reconnect.** A disconnect is final; create a new `MockPlayer` if you need a fresh session.
 
@@ -236,3 +236,23 @@ Tests use unique mock-player usernames (e.g. `Mock_<epoch-millis>`) so each run 
 - **Java 21 toolchain.** Tests JVM-fork at runtime — they'll use whatever JDK is in `JAVA_HOME`. Java 21 is fine; Java 25 also works.
 - **Online mode must be disabled** on the target server. The mock client does no authentication.
 - **RCON must be enabled** on the target server. Used by `RconClient` for admin-side seeding from inside tests.
+
+### Finder menu regression tests
+
+`FindMenuE2ETest` drives `/find` through its real dialog callback into Curator, using
+46 isolated registry rows. It checks the compact title, footer summary, page boundary,
+preview item, Back/Escape return, and stale container IDs. Inventory attacks use actual
+container packets (click, shift, hotbar/offhand, drop, double-click, drag, creative grab,
+and forged carried/changed-slot hashes). DcDiag observes the final server-side
+inventory/cursor/menu hashes and dropped-item count at MONITOR priority. Each valid
+attack must reach a cancelled Bukkit event; a real transfer from an ordinary chest
+is the positive control. Shift-left/right navigation is checked with commands that
+target the clicking player. The fixture disables navigation for preview/protection
+tests and restores the default navigation commands afterward.
+
+```bash
+bash ops/integration/run.sh -- --tests '*FindMenuE2ETest' --tests '*FindCommandTest'
+```
+
+These are Java protocol tests on the harness's pinned Paper 1.21.11 build. They do
+not render screenshots or simulate a Bedrock/Geyser client.
