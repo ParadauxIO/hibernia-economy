@@ -22,7 +22,7 @@ export async function getTaxRevenue(days: number): Promise<TaxRevenueRow[]> {
     FROM (
       SELECT lt.settlement_time, lp.amount, a.account_id, a.display_name,
         CASE
-          -- V39 indexes the existing writer/message classification. Posting
+          -- V38 indexes the existing writer/message classification. Posting
           -- sign still matters, and a tax-tagged debit may be a fine refund.
           WHEN lp.amount > 0 AND lt.tax_kind IS NOT NULL THEN lt.tax_kind
           -- Link actual fines and their reversals, not user-supplied reason text.

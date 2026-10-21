@@ -405,6 +405,7 @@ export interface LedgerTxns {
   message: string;
   pluginSystem: Generated<string | null>;
   settlementTime: Generated<Date>;
+  taxKind: Generated<string | null>;
   tradeTime: Generated<Date>;
   txnId: Generated<number>;
 }
