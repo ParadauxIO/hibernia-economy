@@ -30,6 +30,7 @@ MIGRATIONS="economy-flyway/src/main/resources/db/migration"
 # Check before touching the database. The guard owns the exact historical
 # exception and fails closed if any migration differs from the permitted blobs.
 BASE_TARGET="$(node "$ROOT/economy-flyway/scripts/check-migrations.mjs" "$BASE_REF" --upgrade-target)"
+BASE_EXCLUDES="$(node "$ROOT/economy-flyway/scripts/check-migrations.mjs" "$BASE_REF" --upgrade-excludes)"
 BASE_TARGET_ARGS=()
 if [ -n "$BASE_TARGET" ]; then
   echo "==> Pre-cutover release baseline: migrate base through V$BASE_TARGET"
@@ -57,6 +58,12 @@ sql -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\`;"
 
 if git -C "$ROOT" cat-file -e "$BASE_REF:$MIGRATIONS" 2>/dev/null; then
   git -C "$ROOT" archive "$BASE_REF" "$MIGRATIONS" | tar -x -C "$BASE_DIR"
+  # The guard emits filenames only for the exact known broken V38 tree, after
+  # validating byte-identical renames. Remove pending collisions in this scratch
+  # archive only; the real database and its Flyway history are never repaired.
+  while IFS= read -r migration; do
+    if [ -n "$migration" ]; then rm -- "$BASE_DIR/$MIGRATIONS/$migration"; fi
+  done <<<"$BASE_EXCLUDES"
   echo "==> Migrating with $BASE_REF's migrations ($(find "$BASE_DIR/$MIGRATIONS" -name "*.sql" | wc -l) files)"
   flyway flywayMigrate -PflywayLocations="filesystem:$BASE_DIR/$MIGRATIONS" "${BASE_TARGET_ARGS[@]}"
 else

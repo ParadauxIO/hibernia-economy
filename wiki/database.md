@@ -38,7 +38,7 @@ older application versions assume names identify a single row even across archiv
 
 ## Shared name namespace (PAR-501)
 
-V38 enforces cross-kind reservations through database triggers. See
+V40 enforces cross-kind reservations through database triggers. See
 [comparison, projection, lifecycle and rollout rules](name-namespace.md) before
 applying it to an existing dataset.
 
@@ -54,7 +54,7 @@ projection decisions rather than hide them behind implicit exemptions.
 Each pair includes IDs, original spelling, owner UUIDs and lifecycle flags. The
 `comparison_basis` column distinguishes existing `utf8mb4_unicode_ci` equality
 from additional candidates that match only after trimming surrounding ASCII
-spaces, as required by V38. Existing whitespace cleanup still requires review. Punctuation
+spaces, as required by V40. Existing whitespace cleanup still requires review. Punctuation
 is significant; blocked-term filtering is not used as a uniqueness rule. Null
 account display names are omitted because they do not identify a name claim.
 
