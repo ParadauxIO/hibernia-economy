@@ -1,12 +1,12 @@
 package io.paradaux.business.commands;
 
 import com.google.inject.Inject;
-import io.paradaux.hibernia.framework.commander.annotations.*;
-import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.business.Business;
 import io.paradaux.business.model.config.BalanceTaxConfiguration;
 import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.hibernia.framework.commander.annotations.*;
+import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
+import io.paradaux.hibernia.framework.i18n.Message;
 import org.bukkit.command.CommandSender;
 
 @Command({"db", "democracybusiness", "business", "firm", "company"})
@@ -18,8 +18,11 @@ public class ReloadCommand implements CommandHandler {
     private final BalanceTaxConfiguration balanceTaxConfig;
 
     @Inject
-    public ReloadCommand(Business business, Message message,
-                         FirmConfiguration firmConfig, BalanceTaxConfiguration balanceTaxConfig) {
+    public ReloadCommand(
+            Business business,
+            Message message,
+            FirmConfiguration firmConfig,
+            BalanceTaxConfiguration balanceTaxConfig) {
         this.business = business;
         this.message = message;
         this.firmConfig = firmConfig;
@@ -42,13 +45,13 @@ public class ReloadCommand implements CommandHandler {
     @Description("Admin: Reload messages.properties and config.yml (firm limits, balance-tax brackets).")
     public void reload(@Sender CommandSender sender) {
         try {
-            business.reloadConfig();      // re-read config.yml from disk
-            message.reload();             // re-read messages.properties
-            firmConfig.reload();          // refresh firm.owned-limit / create-cooldown
-            balanceTaxConfig.reload();    // refresh tax.balance.* brackets
+            business.reloadConfig(); // re-read config.yml from disk
+            message.reload(); // re-read messages.properties
+            firmConfig.reload(); // refresh firm.owned-limit / create-cooldown
+            balanceTaxConfig.reload(); // refresh tax.balance.* brackets
         } catch (RuntimeException e) {
-            business.getLogger().warning("Config reload failed: " + e);
-            message.send(sender, "business.admin.reload.failed", "error", e.getMessage());
+            business.getLogger().log(java.util.logging.Level.WARNING, "Config reload failed", e);
+            message.send(sender, "business.admin.reload.failed", "error", "Could not reload configuration");
             return;
         }
         message.send(sender, "business.admin.reload.success");
