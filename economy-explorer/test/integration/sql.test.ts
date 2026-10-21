@@ -761,3 +761,35 @@ d('public taxation ledger aggregates', () => {
     }
   });
 });
+
+d('Business/Realty group leases (PAR-101)', () => {
+  it('accepts each configured source independently, rejects changed/expired leases, and preserves manual access', async () => {
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (901, 'PAR-101')`.execute(db);
+    await sql`INSERT INTO explorer_role_definition (role_key, name) VALUES ('par101_reader', 'PAR-101 reader')`.execute(db);
+    try {
+      await sql`INSERT INTO explorer_group_capability VALUES (901, 'par101_reader')`.execute(db);
+      await sql`INSERT INTO explorer_group_sync VALUES (901, 'business', '7'), (901, 'realty', 'world/Plot')`.execute(db);
+      for (const [source, selector] of [['business', '7'], ['realty', 'world/Plot']]) {
+        await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at, sync_selector)
+          VALUES (901, ${uuidToBin(BOB)}, ${source}, NOW(), ${selector})`.execute(db);
+        expect((await resolveAuthorization(BOB)).roles).toContain('par101_reader');
+        expect(await findCapabilities(BOB)).toContain('par101_reader');
+        await sql`UPDATE explorer_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE group_id = 901`.execute(db);
+        expect((await resolveAuthorization(BOB)).roles).not.toContain('par101_reader');
+        await sql`DELETE FROM explorer_group_member WHERE group_id = 901`.execute(db);
+      }
+      await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at, sync_selector)
+        VALUES (901, ${uuidToBin(BOB)}, 'realty', NOW(), 'world/plot')`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).not.toContain('par101_reader');
+      await sql`UPDATE explorer_group_member SET sync_selector = 'world/Plot' WHERE group_id = 901`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).toContain('par101_reader');
+      await sql`DELETE FROM explorer_group_sync WHERE group_id = 901`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).not.toContain('par101_reader');
+      await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source) VALUES (901, ${uuidToBin(BOB)}, 'manual')`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).toContain('par101_reader');
+    } finally {
+      await sql`DELETE FROM explorer_group WHERE group_id = 901`.execute(db);
+      await sql`DELETE FROM explorer_role_definition WHERE role_key = 'par101_reader'`.execute(db);
+    }
+  });
+});

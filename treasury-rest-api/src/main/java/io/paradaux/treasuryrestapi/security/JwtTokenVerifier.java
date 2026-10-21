@@ -150,6 +150,26 @@ public class JwtTokenVerifier {
                     throw new TokenException(
                             HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token claim 'firm' must be a number.");
                 }
+                Object accClaim = claims.get("acc");
+                if (accClaim != null) {
+                    if (!(accClaim instanceof Integer || accClaim instanceof Long)
+                            || ((Number) accClaim).longValue() <= 0) {
+                        throw new TokenException(
+                                HttpStatus.UNAUTHORIZED,
+                                "INVALID_TOKEN",
+                                "Token claim 'acc' must be a positive integer.");
+                    }
+                    accountId = ((Number) accClaim).longValue();
+                }
+                Long storedAccountId = apiKey.getAccountId() == null
+                        ? null
+                        : apiKey.getAccountId().longValue();
+                if (!java.util.Objects.equals(accountId, storedAccountId)) {
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED,
+                            "INVALID_TOKEN",
+                            "Token account claim does not match the issued key.");
+                }
                 firmId = n.longValue();
                 // Defence in depth: pin the signed firm claim to api_keys.firm_id.
                 if (apiKey.getFirmId() != null && apiKey.getFirmId().longValue() != firmId) {

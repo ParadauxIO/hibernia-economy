@@ -8,7 +8,7 @@ import java.util.UUID;
  *
  * <ul>
  *   <li>PERSONAL / GOVERNMENT keys: {@code accountId} is set, {@code firmId} is null.</li>
- *   <li>BUSINESS keys: {@code firmId} is set, {@code accountId} is null.</li>
+ *   <li>BUSINESS keys: {@code firmId} is set; optional {@code accountId} restricts access to one account.</li>
  * </ul>
  */
 public record VerifiedToken(long keyId, UUID ownerUuid, String keyType, Long accountId, Long firmId) {}

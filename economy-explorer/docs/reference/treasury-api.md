@@ -20,13 +20,14 @@ library used by plugins. The base command is `/treasuryapi`; use
 | `/treasuryapi personal reissue <keyId>` | Replace the token for your key; the old token stops working. |
 | `/treasuryapi personal revoke <keyId>` | Permanently revoke your key. |
 | `/treasuryapi business issue <firmName>` | Proprietor: issue a token scoped to the whole firm, including its live linked accounts. |
+| `/treasuryapi business issue <firmName> <accountId>` | Proprietor: issue a token restricted to one linked Treasury account, including subaccounts. |
 | `/treasuryapi business list` | List business keys you issued. |
 | `/treasuryapi business list access` | List keys for firms you are employed at; listing does not reveal tokens or grant management rights. |
 | `/treasuryapi business reissue <keyId>` | Reissue a business token after ownership/management checks. |
 | `/treasuryapi business revoke <keyId>` | Revoke a business key after ownership/management checks. |
 
 These commands require a player sender. Tokens are shown once, valid for 180 days,
-and never stored for retrieval. Personal/account and business/firm scope still
+and never stored for retrieval. Personal/account and business/firm or business/account scope still
 apply even if the issuer has website staff permissions. Follow
 [Using the economy API](/docs/guides/api) for requests and safe retries.
 

@@ -30,13 +30,15 @@ keycloak:
   client-id: treasury-api-plugin
   client-secret: ""
 
-# Reconciliation cron: syncs LuckPerms membership into explorer access groups.
+# Reconciliation crons: sync LuckPerms, Business and Realty into Explorer groups.
 # Each explorer_group with a luckperms_node set has its 'luckperms'-sourced
 # members reconciled to match that node. The node is interpreted as a LuckPerms
 # group name by default ("doc" or "group.doc"); a node containing a dot that is
 # not "group.*" is treated as a permission node (e.g. "explorer.audit").
-# Also syncs account_group_access relationships. Requires LuckPerms.
-# Runs at startup, then at most every 1800s; LP snapshots expire after one hour.
+# LP also syncs account_group_access relationships and requires LuckPerms.
+# Business/Realty mappings use explorer_group_sync (see wiki/group-reconciliation.md).
+# These run independently of LP; Realty is optional.
+# Runs at startup, then at most every 1800s; derived snapshots expire after one hour.
 reconciliation:
   enabled: true
   interval-seconds: 1800

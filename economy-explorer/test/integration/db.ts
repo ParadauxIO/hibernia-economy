@@ -51,6 +51,9 @@ export async function resetDb(): Promise<void> {
     flags: ['-IGNORE_SPACE'],
   });
   try {
+    // Match CI even on servers whose default is unicode_ci. Migrations must set
+    // compatible table collations explicitly (PAR-101 source joins depend on it).
+    await conn.query('ALTER DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci');
     await conn.query('SET FOREIGN_KEY_CHECKS=0');
     // Drop views first — DROP TABLE can't remove them (V22 added the
     // account_read_access_* views).
