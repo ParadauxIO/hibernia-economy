@@ -711,6 +711,47 @@ d('reused firm names', () => {
 });
 
 d('public taxation ledger aggregates', () => {
+  it('bounds ledger reads to tax candidates, excluding old taxes and unrelated recent transfers', async () => {
+    const { getTaxRevenue } = await import('@/lib/sql/taxation');
+    await sql`INSERT INTO accounts (account_id, account_type, display_name, owner_uuid_bin)
+      VALUES (9301, 'GOVERNMENT', 'Tax performance fixture', UNHEX(REPEAT('00',16)))`.execute(db);
+    try {
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        SELECT 930000 + seq, IF(seq <= 5000 OR seq = 10001, 'Personal balance tax (fixture)', 'Ordinary transfer'),
+          'treasury', UNHEX(REPEAT('00',16)),
+          IF(seq <= 5000, UTC_TIMESTAMP() - INTERVAL 60 DAY, UTC_TIMESTAMP() - INTERVAL 1 DAY)
+        FROM seq_1_to_10001`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT 930000 + seq, 9301, 1.00 FROM seq_1_to_10001`.execute(db);
+      for (const days of [7, 30]) {
+        // Capture the actual production query, then measure rows visited rather
+        // than wall time (which varies with CI load and the buffer pool).
+        const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
+        let query;
+        try {
+          expect((await getTaxRevenue(days)).filter(row => row.account_id === 9301))
+            .toEqual([expect.objectContaining({ kind: 'personal', collected: '1.00', refunded: '0.00' })]);
+          query = executed.mock.calls[0]![0];
+        } finally {
+          executed.mockRestore();
+        }
+        const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
+        const plan: unknown = JSON.parse(analyzed.rows[0]!.ANALYZE);
+        const visited = (node: unknown): number => {
+          if (!node || typeof node !== 'object') return 0;
+          const entry = node as Record<string, unknown>;
+          const reads = 'table_name' in entry ? Number(entry.r_loops ?? 0) * Number(entry.r_rows ?? 0) : 0;
+          return reads + Object.values(entry).reduce<number>((sum, child) => sum + visited(child), 0);
+        };
+        expect(visited(plan)).toBeLessThan(500);
+      }
+    } finally {
+      await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 930001 AND 940001`.execute(db);
+      await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 930001 AND 940001`.execute(db);
+      await sql`DELETE FROM accounts WHERE account_id = 9301`.execute(db);
+    }
+  });
+
   it('counts government credits once, identifies writer tags, and dates fine refunds by settlement', async () => {
     const { getTaxRevenue } = await import('@/lib/sql/taxation');
     const { summarizeTaxRevenue } = await import('@/lib/taxation');

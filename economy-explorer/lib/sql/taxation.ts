@@ -22,17 +22,9 @@ export async function getTaxRevenue(days: number): Promise<TaxRevenueRow[]> {
     FROM (
       SELECT lt.settlement_time, lp.amount, a.account_id, a.display_name,
         CASE
-          -- TaxCollection.taxType is NOT persisted. These plugin/message pairs
-          -- are emitted by BalanceTaxServiceImpl, FirmBalanceTaxServiceImpl,
-          -- TaxApiImpl.collectSourceIncomeTax and ChestShop EconomyServiceImpl.
-          WHEN lp.amount > 0 AND lt.plugin_system = 'treasury'
-            AND lt.message LIKE 'Personal balance tax (%' THEN 'personal'
-          WHEN lp.amount > 0 AND lt.plugin_system = 'business'
-            AND lt.message = 'Weekly Corporate Balance Tax' THEN 'corporate'
-          WHEN lp.amount > 0 AND lt.plugin_system = 'treasury'
-            AND lt.message LIKE 'Income tax on deposit from %' THEN 'income'
-          WHEN lp.amount > 0 AND lt.plugin_system = 'ChestShop'
-            AND lt.message LIKE 'ChestShop sales tax (%' THEN 'sales'
+          -- V39 indexes the existing writer/message classification. Posting
+          -- sign still matters, and a tax-tagged debit may be a fine refund.
+          WHEN lp.amount > 0 AND lt.tax_kind IS NOT NULL THEN lt.tax_kind
           -- Link actual fines and their reversals, not user-supplied reason text.
           -- EXISTS avoids multiplying postings if historical fine rows duplicate.
           WHEN lp.amount > 0 AND EXISTS (
@@ -44,9 +36,27 @@ export async function getTaxRevenue(days: number): Promise<TaxRevenueRow[]> {
             WHERE gf.revoke_txn_id = lt.txn_id AND gf.gov_account_id = lp.account_id
           ) THEN 'fines'
         END AS kind
-      FROM ledger_txns lt
-      JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
-      JOIN accounts a ON a.account_id = lp.account_id
+      FROM (
+        SELECT txn_id FROM ledger_txns FORCE INDEX (idx_ledger_tax_kind_time)
+        WHERE tax_kind IN ('personal', 'corporate', 'income', 'sales')
+          AND settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
+          AND settlement_time <= UTC_TIMESTAMP()
+        UNION
+        SELECT lt.txn_id FROM government_fines gf
+        JOIN ledger_txns lt ON lt.txn_id = gf.txn_id
+        WHERE lt.settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
+          AND lt.settlement_time <= UTC_TIMESTAMP()
+        UNION
+        SELECT lt.txn_id FROM government_fines gf
+        JOIN ledger_txns lt ON lt.txn_id = gf.revoke_txn_id
+        WHERE lt.settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
+          AND lt.settlement_time <= UTC_TIMESTAMP()
+      ) candidates
+      -- UNION deduplicates shared refunds and tax-tagged fines. Start with the
+      -- bounded candidates: starting at accounts walks all government history.
+      STRAIGHT_JOIN ledger_txns lt ON lt.txn_id = candidates.txn_id
+      STRAIGHT_JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
+      STRAIGHT_JOIN accounts a ON a.account_id = lp.account_id
       WHERE lt.settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
         AND lt.settlement_time <= UTC_TIMESTAMP()
         AND a.account_type = 'GOVERNMENT'
