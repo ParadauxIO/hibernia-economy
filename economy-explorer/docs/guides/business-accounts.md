@@ -30,7 +30,7 @@ See all of the firm's accounts:
 ```
 
 Each row shows the account's **ID**, whether it's the default, and a short **shop
-code** (you'll use that to point a ChestShop at the account — see
+code** highlighted in light blue (you'll use that to point a ChestShop at the account — see
 [ChestShops for your firm](/docs/guides/chestshop-business)).
 
 Open another account, and switch the default if you like:
