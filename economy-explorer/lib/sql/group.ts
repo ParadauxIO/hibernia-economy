@@ -1,3 +1,4 @@
+import { activeGroupMembership } from '@/lib/sql/group-membership';
 import 'server-only';
 import { type Kysely, sql } from 'kysely';
 import { db, type DB, uuidToBin, binToUuid } from '@/lib/db';
@@ -54,7 +55,7 @@ export interface GroupSummary {
 export interface GroupMember {
   uuid: string;
   name: string | null;
-  source: 'manual' | 'luckperms';
+  source: 'manual' | 'luckperms' | 'business' | 'realty';
   addedAt: Date;
   syncActive: boolean;
 }
@@ -66,8 +67,7 @@ export async function findCapabilities(playerUuid: string): Promise<string[]> {
     FROM explorer_group_member gm
     JOIN explorer_group_capability gc ON gc.group_id = gm.group_id
     WHERE gm.player_uuid_bin = ${uuidToBin(playerUuid)}
-      AND (gm.source = 'manual' OR (gm.synced_at > CURRENT_TIMESTAMP - INTERVAL 1 HOUR
-        AND EXISTS (SELECT 1 FROM explorer_group g WHERE g.group_id = gm.group_id AND g.luckperms_node IS NOT NULL)))
+      AND ${activeGroupMembership}
   `.execute(db);
   return r.rows.map((row) => row.capability);
 }
@@ -154,12 +154,12 @@ export async function listGroupMembers(groupId: number): Promise<GroupMember[]> 
   const r = await sql<{
     player_uuid_bin: Buffer;
     name: string | null;
-    source: 'manual' | 'luckperms';
+    source: 'manual' | 'luckperms' | 'business' | 'realty';
     added_at: Date;
     sync_active: number;
   }>`
     SELECT gm.player_uuid_bin, fp.current_name AS name, gm.source, gm.added_at,
-           (gm.source = 'manual' OR gm.synced_at > CURRENT_TIMESTAMP - INTERVAL 1 HOUR) AS sync_active
+           ${activeGroupMembership} AS sync_active
     FROM explorer_group_member gm
     LEFT JOIN economy_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
     WHERE gm.group_id = ${groupId}

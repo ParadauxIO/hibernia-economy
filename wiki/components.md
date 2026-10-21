@@ -295,6 +295,12 @@ Daily SQL aggregates remain UTC buckets: `fmtDate` and activity calendar date
 arithmetic must stay in UTC, rather than shifting already aggregated dates
 into the browser's zone. Daily charts label this distinction.
 
+### Business and Realty Explorer membership sources
+
+TreasuryAPI reconciles optional per-group Business and Realty bindings independently
+of LuckPerms. See [group reconciliation](group-reconciliation.md) for configuration,
+lease expiry, provider contracts and deployment order (PAR-101).
+
 ### Business API-key account scope (PAR-448)
 
 `/treasuryapi business issue <firmName> <accountId>` stores both `firm_id` and

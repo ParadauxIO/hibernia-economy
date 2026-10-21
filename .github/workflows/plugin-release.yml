@@ -1,0 +1,84 @@
+name: Economy · Release plugins and APIs
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Every main push gets a release. No shared concurrency group: GitHub would
+# replace pending runs. Unique versions let builds finish independently; releases
+# never update a mutable latest pointer or trigger server deployment.
+jobs:
+  test:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/jvm-check.yml
+    with:
+      check-name: Economy release tests
+    permissions:
+      contents: read
+      checks: write
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
+
+      # Compute inside the publishing job so rerunning failed jobs gets a new
+      # attempt suffix, even when the test job is reused.
+      - name: Compute release version
+        id: release
+        run: node .github/scripts/release-metadata.mjs version
+
+      - name: Check release metadata tooling
+        run: node --test .github/scripts/release-metadata.test.mjs
+
+      - name: Build plugin bundle and API jars
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: >-
+          sh ./gradlew release :treasury:treasury-api:assemble :business:business-api:assemble
+          -Pci=true -Pversion="$RELEASE_VERSION"
+
+      - name: Write plugin manifest
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: node .github/scripts/release-metadata.mjs manifest
+
+      - name: Publish API libraries
+        env:
+          REPO_USER: ${{ secrets.REPO_USER }}
+          REPO_PASS: ${{ secrets.REPO_PASS }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: >-
+          sh ./gradlew :treasury:treasury-api:publish :business:business-api:publish
+          -Pci=true -Pversion="$RELEASE_VERSION"
+
+      # Upload everything before making the release visible. Never replace an
+      # existing release or retag it. Consumers must select an explicit tag.
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          TAG="economy-v$RELEASE_VERSION"
+          gh release create "$TAG" \
+            release/*.jar release/manifest.json \
+            treasury/treasury-api/build/libs/*.jar \
+            business/business-api/build/libs/*.jar \
+            --draft --latest=false --target "$GITHUB_SHA" \
+            --title "Economy $RELEASE_VERSION" --generate-notes
+          gh release edit "$TAG" --draft=false --latest=false

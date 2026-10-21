@@ -17,6 +17,12 @@ and money flow, or return to the [Economy Explorer](/).
 
 ## New here? Start with the basics
 
+Business, Treasury, ChestShop, and TreasuryAPI use light blue for plugin names,
+headings, commands, and highlighted values, with light grey labels and metadata.
+Green marks money and success, soft red marks errors and deductions, and yellow
+draws attention to warnings. Chat background opacity and resource packs can affect
+how these colours appear.
+
 You already have a balance the moment you join. The three commands you'll use most:
 
 ```text
