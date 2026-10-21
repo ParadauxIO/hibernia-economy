@@ -5,8 +5,8 @@ import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationValu
 import lombok.Getter;
 
 /**
- * Settings for the LuckPerms → explorer-group reconciliation cron. Enabled by
- * default; the task is only scheduled when enabled and LuckPerms is present.
+ * Settings for Explorer membership reconciliation. Enabled by default. Business and
+ * Realty bindings run independently; LuckPerms reconciliation requires its provider.
  */
 @ConfigurationComponent
 @Getter

@@ -214,8 +214,15 @@ export interface ExplorerGroupMember {
   addedByUuidBin: Generated<Buffer | null>;
   groupId: number;
   playerUuidBin: Buffer;
-  source: Generated<"luckperms" | "manual">;
+  source: Generated<"business" | "luckperms" | "manual" | "realty">;
   syncedAt: Generated<Date | null>;
+  syncSelector: Generated<string | null>;
+}
+
+export interface ExplorerGroupSync {
+  groupId: number;
+  selector: string;
+  source: "business" | "realty";
 }
 
 export interface ExplorerIdentity {
@@ -482,6 +489,7 @@ export interface DB {
   explorerGroup: ExplorerGroup;
   explorerGroupCapability: ExplorerGroupCapability;
   explorerGroupMember: ExplorerGroupMember;
+  explorerGroupSync: ExplorerGroupSync;
   explorerIdentity: ExplorerIdentity;
   explorerLinkCode: ExplorerLinkCode;
   explorerLpGroupMember: ExplorerLpGroupMember;

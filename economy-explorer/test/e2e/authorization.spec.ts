@@ -272,3 +272,29 @@ test('an open role editor cannot save after the operator’s assignment is revok
   const [rows] = await policy.conn.query<RowDataPacket[]>('SELECT name, revision FROM explorer_role_definition WHERE role_key = ?', [policy.key]);
   expect(rows[0]).toMatchObject({ name: policy.key, revision: 1 });
 });
+
+test('Business and Realty group memberships show their sources and revoke access independently', async ({ context, page, browser, policy }) => {
+  await createRole(policy.conn, policy.key, ['account.read.all']);
+  const [insert] = await policy.conn.query<ResultSetHeader>('INSERT INTO explorer_group (name) VALUES (?)', [policy.groupName]);
+  const groupId = insert.insertId;
+  await policy.conn.query('INSERT INTO explorer_group_capability VALUES (?, ?)', [groupId, policy.key]);
+  await policy.conn.query("INSERT INTO explorer_group_sync VALUES (?, 'business', '7'), (?, 'realty', 'world/plot')", [groupId, groupId]);
+  await policy.conn.query("INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at, sync_selector) VALUES (?, ?, 'business', NOW(), '7'), (?, ?, 'realty', NOW(), 'world/plot')", [groupId, bin(policy.player), groupId, bin(policy.player)]);
+  const recipient = await browser.newContext();
+  try {
+    await signIn(context, policy.admin);
+    await signIn(recipient, policy.player);
+    await visit(page, `/admin/groups/${groupId}`);
+    await expect(page.getByText('business: synced', { exact: true })).toBeVisible();
+    await expect(page.getByText('realty: synced', { exact: true })).toBeVisible();
+    expect(await permission(recipient, 'account.read.all')).toBe(true);
+    await policy.conn.query("UPDATE explorer_group_sync SET selector = '8' WHERE group_id = ? AND source = 'business'", [groupId]);
+    await page.reload();
+    await expect(page.getByText('business: sync expired', { exact: true })).toBeVisible();
+    expect(await permission(recipient, 'account.read.all')).toBe(true);
+    await policy.conn.query("DELETE FROM explorer_group_sync WHERE group_id = ? AND source = 'realty'", [groupId]);
+    expect(await permission(recipient, 'account.read.all')).toBe(false);
+    await page.reload();
+    await expect(page.getByText('realty: sync expired', { exact: true })).toBeVisible();
+  } finally { await recipient.close(); }
+});

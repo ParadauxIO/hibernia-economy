@@ -1,3 +1,4 @@
+import { activeGroupMembership } from '@/lib/sql/group-membership';
 import 'server-only';
 import { sql, type Kysely } from 'kysely';
 import { db, uuidToBin, type DB } from '@/lib/db';
@@ -13,7 +14,7 @@ export async function findRoles(uuid: string): Promise<string[]> {
   return result.rows.map(r => r.role);
 }
 
-/** Baseline plus direct and fresh LP/manual group roles, resolved per request. */
+/** Baseline plus direct and active source-scoped group roles, resolved per request. */
 export async function resolveAuthorization(uuid: string | null, executor: Executor = db) {
   const result = await sql<{ role_key: string; permission: string | null }>`
     SELECT DISTINCT d.role_key, p.permission FROM explorer_role_definition d
@@ -24,7 +25,7 @@ export async function resolveAuthorization(uuid: string | null, executor: Execut
         JOIN explorer_group_member gm ON gm.group_id = gc.group_id
         JOIN explorer_group g ON g.group_id = gm.group_id
         WHERE gc.capability = d.role_key AND gm.player_uuid_bin = ${uuidToBin(uuid)}
-          AND (gm.source = 'manual' OR (g.luckperms_node IS NOT NULL AND gm.synced_at > CURRENT_TIMESTAMP - INTERVAL 1 HOUR)))
+          AND ${activeGroupMembership})
     )` : sql`FALSE`}
   `.execute(executor);
   return {

@@ -66,13 +66,15 @@ export interface DB {
     created_at: Date;
     created_by_uuid_bin: Buffer | null;
   };
+  explorer_group_sync: { group_id: number; source: 'business' | 'realty'; selector: string };
   explorer_lp_group_member: { lp_group: string; player_uuid_bin: Buffer; synced_at: Date };
   explorer_group_capability: { group_id: number; capability: string };
   explorer_group_member: {
     group_id: number;
     player_uuid_bin: Buffer;
-    source: 'manual' | 'luckperms';
+    source: 'manual' | 'luckperms' | 'business' | 'realty';
     synced_at: Date | null;
+    sync_selector: string | null;
     added_at: Date;
     added_by_uuid_bin: Buffer | null;
   };

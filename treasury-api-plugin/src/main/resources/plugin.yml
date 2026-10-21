@@ -3,7 +3,7 @@ version: '${version}'
 main: io.paradaux.treasuryapi.TreasuryAPI
 api-version: '1.21'
 depend: [ Treasury, Business ]
-softdepend: [ LuckPerms ]
+softdepend: [ LuckPerms, Realty ]
 
 commands:
     treasuryapi:
