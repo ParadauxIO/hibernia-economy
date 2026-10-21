@@ -12,7 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ChestShop's built-in shop protection (USE_BUILT_IN_PROTECTION, default on) — the
  * default guard on a live server, independent of WorldGuard/GriefPrevention (both
  * opt-in and default off). A non-owner can't break another player's shop sign or
- * chest, the owner can, and a hopper can't siphon a shop chest.
+ * chest, and the owner can. Real hopper-minecart transfers are covered separately
+ * by HopperMinecartProtectionTest.
  *
  * <p>Breaks are driven through a real {@code BlockBreakEvent} (via {@code diag
  * break}) — the same event ChestShop's SignBreak/ChestBreak listeners (and WG/GP)

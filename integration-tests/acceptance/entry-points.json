@@ -1,0 +1,4731 @@
+{
+  "review": "Unreviewed source index; see matrix.md for behavioral evidence",
+  "entries": [
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BalanceCommand.java",
+      "line": 18,
+      "value": "\"treasury.balance\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BalanceCommand.java",
+      "line": 51,
+      "value": "\"treasury.balance.others\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BalanceCommand.java",
+      "line": 34,
+      "roots": [
+        "bal",
+        "balance",
+        "money"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BalanceCommand.java",
+      "line": 40,
+      "roots": [
+        "bal",
+        "balance",
+        "money"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BalanceCommand.java",
+      "line": 50,
+      "roots": [
+        "bal",
+        "balance",
+        "money"
+      ],
+      "route": "<target>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BaltopCommand.java",
+      "line": 17,
+      "value": "\"treasury.baltop\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BaltopCommand.java",
+      "line": 31,
+      "roots": [
+        "baltop"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BaltopCommand.java",
+      "line": 37,
+      "roots": [
+        "baltop"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/BaltopCommand.java",
+      "line": 44,
+      "roots": [
+        "baltop"
+      ],
+      "route": "<page>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 19,
+      "value": "\"treasury.eco\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 52,
+      "value": "\"treasury.eco.give\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 89,
+      "value": "\"treasury.eco.take\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 144,
+      "value": "\"treasury.eco.set\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 177,
+      "value": "\"treasury.eco.reset\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 39,
+      "roots": [
+        "eco"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 45,
+      "roots": [
+        "eco"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 51,
+      "roots": [
+        "eco"
+      ],
+      "route": "give <target> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 88,
+      "roots": [
+        "eco"
+      ],
+      "route": "take <target> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 143,
+      "roots": [
+        "eco"
+      ],
+      "route": "set <target> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EcoCommand.java",
+      "line": 176,
+      "roots": [
+        "eco"
+      ],
+      "route": "reset <target>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EconomyCommand.java",
+      "line": 17,
+      "value": "\"treasury.economy\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EconomyCommand.java",
+      "line": 29,
+      "roots": [
+        "economy"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/EconomyCommand.java",
+      "line": 35,
+      "roots": [
+        "economy"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 31,
+      "value": "\"treasury.gov.fine\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 256,
+      "value": "\"treasury.gov.fine.view\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 264,
+      "value": "\"treasury.gov.fine.view\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 276,
+      "value": "\"treasury.gov.fine.view\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 59,
+      "roots": [
+        "fine"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 65,
+      "roots": [
+        "fine"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 71,
+      "roots": [
+        "fine"
+      ],
+      "route": "issue <account> <player> <amount> <reason>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 151,
+      "roots": [
+        "fine"
+      ],
+      "route": "firm <account> <firm> <amount> <reason>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 200,
+      "roots": [
+        "fine"
+      ],
+      "route": "revoke <id>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 255,
+      "roots": [
+        "fine"
+      ],
+      "route": "list"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 263,
+      "roots": [
+        "fine"
+      ],
+      "route": "list <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
+      "line": 275,
+      "roots": [
+        "fine"
+      ],
+      "route": "info <id>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 32,
+      "value": "\"treasury.gov\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 71,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 77,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 83,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "help <page>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 94,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account create <name>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 110,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account archive <name>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 128,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account list"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 156,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account balance <name>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 180,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account history <name>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 187,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account history <name> <page>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 194,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account transfer <from> <to> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 205,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account transfer <from> <to> <amount> <reason>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 217,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "pay <from> <to> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 228,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "pay <from> <to> <amount> <reason>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 240,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "payout <from> <to> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 251,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "payout <from> <to> <amount> <reason>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 267,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account member add <account> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 291,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account member remove <account> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 315,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account member addgroup <account> <group>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 335,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account member removegroup <account> <group>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 354,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account member list <account>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 391,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account viewer add <account> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 415,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account viewer remove <account> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 439,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account viewer addgroup <account> <group>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 459,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account viewer removegroup <account> <group>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 478,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account viewer list <account>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 515,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account auth add <account> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 551,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account auth remove <account> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 571,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account auth addgroup <account> <group>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 602,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account auth removegroup <account> <group>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
+      "line": 617,
+      "roots": [
+        "government",
+        "gov"
+      ],
+      "route": "account auth list <account>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayAccountCommand.java",
+      "line": 26,
+      "value": "\"treasury.pay\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayAccountCommand.java",
+      "line": 46,
+      "roots": [
+        "pay-account",
+        "paya"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayAccountCommand.java",
+      "line": 52,
+      "roots": [
+        "pay-account",
+        "paya"
+      ],
+      "route": "<type> <account> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayAccountCommand.java",
+      "line": 63,
+      "roots": [
+        "pay-account",
+        "paya"
+      ],
+      "route": "<type> <account> <amount> <memo>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayCommand.java",
+      "line": 22,
+      "value": "\"treasury.pay\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayCommand.java",
+      "line": 42,
+      "roots": [
+        "pay"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayCommand.java",
+      "line": 48,
+      "roots": [
+        "pay"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayCommand.java",
+      "line": 54,
+      "roots": [
+        "pay"
+      ],
+      "route": "<target> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/PayCommand.java",
+      "line": 61,
+      "roots": [
+        "pay"
+      ],
+      "route": "<target> <amount> <memo>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/SalesCommand.java",
+      "line": 25,
+      "value": "\"treasury.sales\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/SalesCommand.java",
+      "line": 48,
+      "roots": [
+        "sales"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/SalesCommand.java",
+      "line": 54,
+      "roots": [
+        "sales"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/SalesCommand.java",
+      "line": 61,
+      "roots": [
+        "sales"
+      ],
+      "route": "<page>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/SalesCommand.java",
+      "line": 68,
+      "roots": [
+        "sales"
+      ],
+      "route": "summary"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/SalesCommand.java",
+      "line": 75,
+      "roots": [
+        "sales"
+      ],
+      "route": "summary <days>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TaxCommand.java",
+      "line": 38,
+      "value": "\"treasury.admin.tax\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TaxCommand.java",
+      "line": 66,
+      "roots": [
+        "tax"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TaxCommand.java",
+      "line": 72,
+      "roots": [
+        "tax"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TaxCommand.java",
+      "line": 80,
+      "roots": [
+        "tax"
+      ],
+      "route": "status"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TaxCommand.java",
+      "line": 147,
+      "roots": [
+        "tax"
+      ],
+      "route": "trigger <cycle>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 20,
+      "value": "\"treasury.transactions\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 66,
+      "value": "\"treasury.transactions.audit\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 74,
+      "value": "\"treasury.transactions.audit\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 84,
+      "value": "\"treasury.transactions.audit\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 92,
+      "value": "\"treasury.transactions.audit\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 102,
+      "value": "\"treasury.transactions.export\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 112,
+      "value": "\"treasury.transactions.export\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 44,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 50,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 57,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "<page>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 65,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "audit <target>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 73,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "audit <target> <page>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 83,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "auditaccount <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 91,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "auditaccount <accountId> <page>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 101,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "export"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TransactionsCommand.java",
+      "line": 111,
+      "roots": [
+        "transactions",
+        "txns"
+      ],
+      "route": "export <accountId>"
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 33,
+      "value": "\"treasury.command\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 75,
+      "value": "\"treasury.admin.reload\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 108,
+      "value": "\"treasury.admin.ingest\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 169,
+      "value": "\"treasury.admin.transfer\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 183,
+      "value": "\"treasury.admin.transfer\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 198,
+      "value": "\"treasury.admin.inspect\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 210,
+      "value": "\"treasury.admin.inspect\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 74,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "reload"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 88,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 94,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 100,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "help <page>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 107,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "admin ingest <source>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 168,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "admin transfer <fromType> <from> <toType> <to> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 182,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "admin transfer <fromType> <from> <toType> <to> <amount> <reason>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 197,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "admin balance <type> <id>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury/src/main/java/io/paradaux/treasury/commands/TreasuryCommand.java",
+      "line": 209,
+      "roots": [
+        "treasury",
+        "tr"
+      ],
+      "route": "admin info <type> <id>"
+    },
+    {
+      "kind": "event",
+      "source": "treasury/src/main/java/io/paradaux/treasury/events/FirstPlayerJoinEvent.java",
+      "line": 25,
+      "trigger": "@EventHandler",
+      "handler": "onJoin"
+    },
+    {
+      "kind": "event",
+      "source": "treasury/src/main/java/io/paradaux/treasury/events/OnlinePlayerRosterListener.java",
+      "line": 30,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR)",
+      "handler": "onJoin"
+    },
+    {
+      "kind": "event",
+      "source": "treasury/src/main/java/io/paradaux/treasury/events/OnlinePlayerRosterListener.java",
+      "line": 36,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR)",
+      "handler": "onQuit"
+    },
+    {
+      "kind": "event",
+      "source": "treasury/src/main/java/io/paradaux/treasury/events/PlayerLoginListener.java",
+      "line": 54,
+      "trigger": "@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)",
+      "handler": "onJoin"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/BytebinConfiguration.java",
+      "line": 13,
+      "value": "bytebin.post-url"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/BytebinConfiguration.java",
+      "line": 16,
+      "value": "bytebin.base-url"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 13,
+      "value": "database.host"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 16,
+      "value": "database.port"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 19,
+      "value": "database.database"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 22,
+      "value": "database.username"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 27,
+      "value": "database.password"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 34,
+      "value": "database.pool.maximum-size"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 37,
+      "value": "database.pool.minimum-idle"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 40,
+      "value": "database.pool.connection-timeout-ms"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 43,
+      "value": "database.pool.max-lifetime-ms"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "line": 46,
+      "value": "database.pool.keepalive-ms"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DiscordWebhookConfiguration.java",
+      "line": 13,
+      "value": "tax.webhook.enabled"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DiscordWebhookConfiguration.java",
+      "line": 17,
+      "value": "tax.webhook.url"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
+      "line": 15,
+      "value": "economy.format"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
+      "line": 18,
+      "value": "economy.currency-name.singular"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
+      "line": 21,
+      "value": "economy.currency-name.plural"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
+      "line": 24,
+      "value": "economy.starting-balance"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/FineWebhookConfiguration.java",
+      "line": 13,
+      "value": "fines.webhook.enabled"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/FineWebhookConfiguration.java",
+      "line": 17,
+      "value": "fines.webhook.url"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/GovernmentConfiguration.java",
+      "line": 13,
+      "value": "government.starting-balances-account"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/GovernmentConfiguration.java",
+      "line": 16,
+      "value": "government.tax-income-account"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/GovernmentConfiguration.java",
+      "line": 19,
+      "value": "government.fines-account"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/LoggingConfiguration.java",
+      "line": 13,
+      "value": "logging.level"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 25,
+      "value": "tax.cycles.daily.enabled"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 29,
+      "value": "tax.cycles.daily.hour"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 34,
+      "value": "tax.cycles.weekly.enabled"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 38,
+      "value": "tax.cycles.weekly.hour"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 45,
+      "value": "tax.cycles.weekly.day-of-week"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 50,
+      "value": "tax.cycles.monthly.enabled"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 54,
+      "value": "tax.cycles.monthly.hour"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "line": 58,
+      "value": "tax.cycles.monthly.day-of-month"
+    },
+    {
+      "kind": "scheduled",
+      "source": "treasury/src/main/java/io/paradaux/treasury/tasks/SalaryTask.java",
+      "line": 42,
+      "trigger": "runTaskTimer("
+    },
+    {
+      "kind": "scheduled",
+      "source": "business/src/main/java/io/paradaux/business/Business.java",
+      "line": 159,
+      "trigger": "runTaskTimerAsynchronously("
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 78,
+      "value": "\"business.account.create\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 102,
+      "value": "\"business.account.alias\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 114,
+      "value": "\"business.account.alias\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 137,
+      "value": "\"business.account.list\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 184,
+      "value": "\"business.account.setdefault\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 202,
+      "value": "\"business.account.archive\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 219,
+      "value": "\"business.account.sync\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 235,
+      "value": "\"business.account.addmember\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 263,
+      "value": "\"business.account.removemember\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 291,
+      "value": "\"business.account.addauthorizer\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 319,
+      "value": "\"business.account.removeauthorizer\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 347,
+      "value": "\"business.account.members\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 384,
+      "value": "\"business.account.authorizers\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 434,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 466,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 504,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 540,
+      "value": "\"business.pay\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 571,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 610,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 671,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 680,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 77,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account create <firm> <name>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 101,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account alias <firm> <accountId> <alias>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 113,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account clearalias <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 136,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account list <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 183,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account setdefault <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 201,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account archive <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 218,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account sync <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 234,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account addmember <firm> <accountId> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 262,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account removemember <firm> <accountId> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 290,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account addauthorizer <firm> <accountId> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 318,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account removeauthorizer <firm> <accountId> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 346,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account members <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 383,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account authorizers <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 433,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account balance <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 465,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account deposit <firm> <accountId> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 503,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account withdraw <firm> <accountId> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 539,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account pay into <firm> <accountId> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 570,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account pay player <firm> <accountId> <player> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 609,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account pay business <firm> <accountId> <target> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 670,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account transactions <firm> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 679,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account transactions <firm> <accountId> <page>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
+      "line": 39,
+      "value": "\"business.chat\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
+      "line": 47,
+      "value": "\"business.chat\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
+      "line": 56,
+      "value": "\"business.chat\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
+      "line": 38,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "chat"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
+      "line": 46,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "chat off"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
+      "line": 55,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "chat <firm>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 62,
+      "value": "\"business.create\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 73,
+      "value": "\"business.disband\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 103,
+      "value": "\"business.disband\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 163,
+      "value": "\"business.list\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 171,
+      "value": "\"business.list.other\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 186,
+      "value": "\"business.list.all\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 194,
+      "value": "\"business.list.all\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 210,
+      "value": "\"business.baltop\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 218,
+      "value": "\"business.baltop\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 249,
+      "value": "\"business.info\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 276,
+      "value": "\"business.attribute.hq\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 296,
+      "value": "\"business.attribute.discord\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 330,
+      "value": "\"business.admin.disband\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 351,
+      "value": "\"business.admin.releasename\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 361,
+      "value": "\"business.admin.rename\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 377,
+      "value": "\"business.admin.attribute\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 392,
+      "value": "\"business.admin.attribute\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 414,
+      "value": "\"business.admin.proprietor\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 436,
+      "value": "\"business.admin.chatspy\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 449,
+      "value": "\"business.admin.chatspy\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 61,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "create <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 72,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "disband <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 102,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "disband <firm> confirm"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 162,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "list"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 170,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "list <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 185,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "list all"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 193,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "list all <page>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 209,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "baltop"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 217,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "baltop <page>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 248,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "info <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 275,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "attribute set hq <firm> <plot>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 295,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "attribute set discord <firm> <url>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 329,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin disband <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 350,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin releasename <firmId>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 360,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin rename <firm> <newname>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 376,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin set hq <firm> <plot>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 391,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin set discord <firm> <url>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 413,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin set proprietor <firm> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 435,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin chatspy"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
+      "line": 448,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "admin chatspy <firm>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/HelpCommands.java",
+      "line": 44,
+      "value": "\"business.help\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/HelpCommands.java",
+      "line": 51,
+      "value": "\"business.help\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/HelpCommands.java",
+      "line": 58,
+      "value": "\"business.help\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/HelpCommands.java",
+      "line": 42,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/HelpCommands.java",
+      "line": 49,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "help"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/HelpCommands.java",
+      "line": 56,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "help <page>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 51,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 69,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 77,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 113,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 137,
+      "value": "\"business.pay\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 166,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 202,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 260,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 278,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 290,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 351,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 359,
+      "value": "\"business.finance\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 50,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "balance <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 68,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "deposit <firm> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 76,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "deposit <firm> <amount> <memo>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 112,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "withdraw <firm> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 136,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "pay into <firm> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 165,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "pay player <firm> <player> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 201,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "pay business <firm> <target> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 259,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "send"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 277,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "send <source> <target> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 289,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "send <source> <target> <amount> <memo>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 350,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "transactions <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
+      "line": 358,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "transactions <firm> <page>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/ReloadCommand.java",
+      "line": 40,
+      "value": "\"business.admin.reload\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/ReloadCommand.java",
+      "line": 39,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "reload"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 42,
+      "value": "\"business.staff.offer\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 58,
+      "value": "\"business.staff.offer.rescind\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 82,
+      "value": "\"business.staff.offer.accept\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 99,
+      "value": "\"business.staff.offer.reject\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 112,
+      "value": "\"business.transfer.begin\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 122,
+      "value": "\"business.transfer.confirm\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 140,
+      "value": "\"business.transfer.cancel\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 154,
+      "value": "\"business.transfer.complete\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 166,
+      "value": "\"business.transfer.reject\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 40,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "offer <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 41,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "hire <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 57,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "offer rescind <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 81,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "offer accept <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 98,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "offer reject <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 111,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "transfer begin <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 121,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "transfer confirm <firm> <user> <code>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 139,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "transfer cancel <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 153,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "transfer complete <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
+      "line": 165,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "transfer reject <firm> <user>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 32,
+      "value": "\"business.staff.role.create\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 44,
+      "value": "\"business.staff.role.rename\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 55,
+      "value": "\"business.staff.role.delete\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 66,
+      "value": "\"business.staff.role.permission.add\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 77,
+      "value": "\"business.staff.role.permission.remove\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 88,
+      "value": "\"business.staff.role.list\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 101,
+      "value": "\"business.staff.role.permission.list\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 31,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff role create <firm> <role> <order>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 43,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff role rename <firm> <role> <newname>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 54,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff role delete <firm> <role>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 65,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff role permission add <firm> <role> <permission>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 76,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff role permission remove <firm> <role> <permission>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 87,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff role list <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
+      "line": 100,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff role permission list <firm> <role>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 70,
+      "value": "\"business.sales\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 78,
+      "value": "\"business.sales\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 88,
+      "value": "\"business.sales\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 96,
+      "value": "\"business.sales\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 106,
+      "value": "\"business.sales.export\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 135,
+      "value": "\"business.sales.toggle\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 69,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "sales <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 77,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "sales <firm> <page>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 87,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "sales summary <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 95,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "sales summary <firm> <days>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 105,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "sales export <firm> <days>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
+      "line": 134,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "sales toggle <firm>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 45,
+      "value": "\"business.staff.fire\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 65,
+      "value": "\"business.staff.resign\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 81,
+      "value": "\"business.staff.promote\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 103,
+      "value": "\"business.staff.demote\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 124,
+      "value": "\"business.staff.list\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 44,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "fire <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 64,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "resign <firm>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 80,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff promote <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 102,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff demote <firm> <user>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
+      "line": 123,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "staff list <firm>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/TaxCommands.java",
+      "line": 45,
+      "value": "\"business.tax.exempt\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/TaxCommands.java",
+      "line": 73,
+      "value": "\"business.tax.info\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/TaxCommands.java",
+      "line": 44,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "tax exempt <firm> <exempt>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/TaxCommands.java",
+      "line": 72,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "tax info <firm>"
+    },
+    {
+      "kind": "scheduled",
+      "source": "business/src/main/java/io/paradaux/business/jobs/ExpireRequestsJob.java",
+      "line": 41,
+      "trigger": "runTaskTimerAsynchronously("
+    },
+    {
+      "kind": "scheduled",
+      "source": "business/src/main/java/io/paradaux/business/jobs/ReconcileAccountMembersJob.java",
+      "line": 46,
+      "trigger": "runTaskTimerAsynchronously("
+    },
+    {
+      "kind": "event",
+      "source": "business/src/main/java/io/paradaux/business/listeners/ChestShopSaleListener.java",
+      "line": 25,
+      "trigger": "@EventHandler",
+      "handler": "onSale"
+    },
+    {
+      "kind": "event",
+      "source": "business/src/main/java/io/paradaux/business/listeners/FirmBalanceTaxListener.java",
+      "line": 31,
+      "trigger": "@EventHandler",
+      "handler": "onTaxCycle"
+    },
+    {
+      "kind": "event",
+      "source": "business/src/main/java/io/paradaux/business/listeners/OnlineRosterListener.java",
+      "line": 27,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR)",
+      "handler": "onJoin"
+    },
+    {
+      "kind": "event",
+      "source": "business/src/main/java/io/paradaux/business/listeners/OnlineRosterListener.java",
+      "line": 32,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR)",
+      "handler": "onQuit"
+    },
+    {
+      "kind": "configuration",
+      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
+      "line": 12,
+      "value": "database.host"
+    },
+    {
+      "kind": "configuration",
+      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
+      "line": 15,
+      "value": "database.port"
+    },
+    {
+      "kind": "configuration",
+      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
+      "line": 18,
+      "value": "database.database"
+    },
+    {
+      "kind": "configuration",
+      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
+      "line": 21,
+      "value": "database.username"
+    },
+    {
+      "kind": "configuration",
+      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
+      "line": 26,
+      "value": "database.password"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/BypassCommand.java",
+      "line": 21,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/BypassCommand.java",
+      "line": 33,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "bypass"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ChestShopCommand.java",
+      "line": 26,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ChestShopCommand.java",
+      "line": 32,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "help [page]"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/FindCommand.java",
+      "line": 32,
+      "value": "\"ChestShop.find\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/FindCommand.java",
+      "line": 58,
+      "roots": [
+        "find"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/FindCommand.java",
+      "line": 71,
+      "roots": [
+        "find"
+      ],
+      "route": "<item>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/FindCommand.java",
+      "line": 87,
+      "roots": [
+        "find"
+      ],
+      "route": "toggle visibility <visible>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/FindCommand.java",
+      "line": 94,
+      "roots": [
+        "find"
+      ],
+      "route": "toggle hologram <visible>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/FindCommand.java",
+      "line": 101,
+      "roots": [
+        "find"
+      ],
+      "route": "toggle preview <visible>"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/GiveCommand.java",
+      "line": 39,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/GiveCommand.java",
+      "line": 55,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "give <code> [quantity] [player]"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ImportShopsCommand.java",
+      "line": 14,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ImportShopsCommand.java",
+      "line": 27,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "importlegacy"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ImportShopsCommand.java",
+      "line": 33,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "importpreferences"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ItemInfoCommand.java",
+      "line": 27,
+      "value": "\"ChestShop.iteminfo\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ItemInfoCommand.java",
+      "line": 42,
+      "roots": [
+        "iteminfo",
+        "iinfo"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ItemInfoCommand.java",
+      "line": 52,
+      "roots": [
+        "iteminfo",
+        "iinfo"
+      ],
+      "route": "<item>"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 10,
+      "value": "\"ChestShop.find\""
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 54,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 60,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 26,
+      "roots": [
+        "csdb"
+      ],
+      "route": "find"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 31,
+      "roots": [
+        "csdb"
+      ],
+      "route": "find <item>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 38,
+      "roots": [
+        "csdb"
+      ],
+      "route": "find toggle preview <visible>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 43,
+      "roots": [
+        "csdb"
+      ],
+      "route": "find toggle visibility <visible>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 48,
+      "roots": [
+        "csdb"
+      ],
+      "route": "find toggle hologram <visible>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 53,
+      "roots": [
+        "csdb"
+      ],
+      "route": "reload"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/LegacyFindCommand.java",
+      "line": 59,
+      "roots": [
+        "csdb"
+      ],
+      "route": "resync <chunks>"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/MetricsCommand.java",
+      "line": 18,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/MetricsCommand.java",
+      "line": 33,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "metrics"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ResyncCommand.java",
+      "line": 23,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ResyncCommand.java",
+      "line": 33,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "resync <chunks>"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ShopInfoCommand.java",
+      "line": 21,
+      "value": "\"ChestShop.shopinfo\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ShopInfoCommand.java",
+      "line": 37,
+      "roots": [
+        "shopinfo",
+        "sinfo",
+        "shop"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ShopToggleCommand.java",
+      "line": 65,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "toggle visibility <visible>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ShopToggleCommand.java",
+      "line": 88,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "toggle hologram <visible>"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ShopToggleCommand.java",
+      "line": 119,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "toggle preview <visible>"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ToggleCommand.java",
+      "line": 25,
+      "value": "\"ChestShop.toggle\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/ToggleCommand.java",
+      "line": 38,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "notify"
+    },
+    {
+      "kind": "permission",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/VersionCommand.java",
+      "line": 18,
+      "value": "\"ChestShop.admin\""
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/VersionCommand.java",
+      "line": 30,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "version"
+    },
+    {
+      "kind": "command",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/VersionCommand.java",
+      "line": 36,
+      "roots": [
+        "chestshop",
+        "cs"
+      ],
+      "route": "reload"
+    },
+    {
+      "kind": "scheduled",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/resolvers/FindItemResolver.java",
+      "line": 32,
+      "trigger": "runTaskTimerAsynchronously("
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/dialogs/FindResultsMenu.java",
+      "line": 106,
+      "trigger": "@EventHandler",
+      "handler": "click"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/dialogs/FindResultsMenu.java",
+      "line": 149,
+      "trigger": "@EventHandler",
+      "handler": "drag"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/integration/IntegrationRegistrar.java",
+      "line": 78,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR)",
+      "handler": "onPluginEnable"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/integration/LegacyCompatibility.java",
+      "line": 101,
+      "trigger": "@EventHandler(priority = EventPriority.LOWEST)",
+      "handler": "externalRemoval"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/integration/NexoIntegration.java",
+      "line": 145,
+      "trigger": "@EventHandler",
+      "handler": "onItemsLoaded"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/BlockPlaceListener.java",
+      "line": 44,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onContainerPlace"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/BlockPlaceListener.java",
+      "line": 73,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onPlaceAgainstSign"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/BlockPlaceListener.java",
+      "line": 84,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onHopperDropperPlace"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/ChestBreakListener.java",
+      "line": 36,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onChestBreak"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/ChestBreakListener.java",
+      "line": 44,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onExplosion"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/ChestBreakListener.java",
+      "line": 58,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onEntityChangeBlock"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/GarbageTextListener.java",
+      "line": 16,
+      "trigger": "@EventHandler(priority = EventPriority.LOWEST)",
+      "handler": "filterGarbage"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/ItemMoveListener.java",
+      "line": 32,
+      "trigger": "@EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)",
+      "handler": "onItemMove"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/MarketListener.java",
+      "line": 28,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR)",
+      "handler": "onInventoryClose"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PaperBlockDestroyListener.java",
+      "line": 25,
+      "trigger": "@EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)",
+      "handler": "onSign"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PhysicsBreakListener.java",
+      "line": 33,
+      "trigger": "@EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)",
+      "handler": "onSign"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PlayerConnectListener.java",
+      "line": 29,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)",
+      "handler": "onPlayerConnect"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PlayerConnectListener.java",
+      "line": 45,
+      "trigger": "@EventHandler(priority = EventPriority.MONITOR)",
+      "handler": "onPlayerQuit"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PlayerInteractListener.java",
+      "line": 90,
+      "trigger": "@EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)",
+      "handler": "onInteract"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PlayerInventoryListener.java",
+      "line": 56,
+      "trigger": "@EventHandler",
+      "handler": "onInventoryOpen"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PlayerTeleportListener.java",
+      "line": 30,
+      "trigger": "@EventHandler",
+      "handler": "onPlayerTeleport"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PreviewListener.java",
+      "line": 48,
+      "trigger": "@EventHandler",
+      "handler": "onChunkLoad"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PreviewListener.java",
+      "line": 55,
+      "trigger": "@EventHandler",
+      "handler": "onChunkUnload"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/PreviewListener.java",
+      "line": 61,
+      "trigger": "@EventHandler",
+      "handler": "onJoin"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/RestrictedSignListener.java",
+      "line": 49,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onBlockDestroy"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/RestrictedSignListener.java",
+      "line": 63,
+      "trigger": "@EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)",
+      "handler": "onSignChange"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBacksideProtectorListener.java",
+      "line": 31,
+      "trigger": "@EventHandler(ignoreCancelled = true, priority = EventPriority.LOW)",
+      "handler": "onSignChange"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBreakListener.java",
+      "line": 44,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onSignBreak"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBreakListener.java",
+      "line": 55,
+      "trigger": "@EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)",
+      "handler": "onBrokenSign"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBreakListener.java",
+      "line": 62,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onBlockPistonExtend"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBreakListener.java",
+      "line": 72,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onBlockPistonRetract"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBreakListener.java",
+      "line": 82,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onExplosion"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBreakListener.java",
+      "line": 96,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onIgnite"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignBreakListener.java",
+      "line": 103,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onEntityChangeBlock"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/SignCreateListener.java",
+      "line": 48,
+      "trigger": "@EventHandler(ignoreCancelled = true)",
+      "handler": "onSignChange"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/StockCounterListener.java",
+      "line": 45,
+      "trigger": "@EventHandler",
+      "handler": "onInventoryClose"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/WorldEditShopCleanupListener.java",
+      "line": 95,
+      "trigger": "@EventHandler",
+      "handler": "onChunkLoad"
+    },
+    {
+      "kind": "event",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/WorldEditShopCleanupListener.java",
+      "line": 123,
+      "trigger": "@EventHandler",
+      "handler": "onPluginDisable"
+    },
+    {
+      "kind": "scheduled",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/listeners/WorldEditShopCleanupListener.java",
+      "line": 72,
+      "trigger": "runTaskTimer("
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 37,
+      "value": "FIND_LOCATION_FORMAT"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 40,
+      "value": "PREVIEW_NAME_FORMAT"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 44,
+      "value": "PROTECT_CHEST_WITH_LWC"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 47,
+      "value": "PROTECT_SIGN_WITH_LWC"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 50,
+      "value": "REMOVE_LWC_PROTECTION_AUTOMATICALLY"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 53,
+      "value": "LWC_CHEST_PROTECTION_TYPE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 56,
+      "value": "LWC_SIGN_PROTECTION_TYPE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 59,
+      "value": "DEBUG"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 62,
+      "value": "CACHE_SIZE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 65,
+      "value": "STRIP_PRICE_COLORS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 69,
+      "value": "SHOP_CONTAINERS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 72,
+      "value": "SHOP_INTERACTION_INTERVAL"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 75,
+      "value": "IGNORE_CREATIVE_MODE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 78,
+      "value": "IGNORE_ACCESS_PERMS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 81,
+      "value": "REVERSE_BUTTONS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 84,
+      "value": "SHIFT_SELLS_IN_STACKS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 87,
+      "value": "SHIFT_SELLS_EVERYTHING"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 90,
+      "value": "SHIFT_ALLOWS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 93,
+      "value": "ALLOW_SIGN_CHEST_OPEN"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 96,
+      "value": "SIGN_DYING"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 99,
+      "value": "ALLOW_LEFT_CLICK_DESTROYING"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 102,
+      "value": "REMOVE_EMPTY_SHOPS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 105,
+      "value": "REMOVE_EMPTY_CHESTS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 109,
+      "value": "REMOVE_EMPTY_WORLDS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 112,
+      "value": "ADMIN_SHOP_NAME"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 115,
+      "value": "FORCE_UNLIMITED_ADMIN_SHOP"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 118,
+      "value": "SERVER_ECONOMY_ACCOUNT"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 122,
+      "value": "SERVER_ECONOMY_ACCOUNT_UUID"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 125,
+      "value": "TAX_AMOUNT"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 128,
+      "value": "SERVER_TAX_AMOUNT"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 131,
+      "value": "SHOP_CREATION_PRICE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 134,
+      "value": "SHOP_REFUND_PRICE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 137,
+      "value": "PRICE_PRECISION"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 140,
+      "value": "ENSURE_CORRECT_PLAYERID"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 143,
+      "value": "VALID_PLAYERNAME_REGEXP"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 146,
+      "value": "BLOCK_SHOPS_WITH_SELL_PRICE_HIGHER_THAN_BUY_PRICE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 149,
+      "value": "ALLOW_FREE_SHOPS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 152,
+      "value": "MAX_SHOP_AMOUNT"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 155,
+      "value": "ALLOW_MULTIPLE_SHOPS_AT_ONE_BLOCK"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 158,
+      "value": "ALLOW_PARTIAL_TRANSACTIONS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 161,
+      "value": "ALLOW_AUTO_ITEM_FILL"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 164,
+      "value": "SHOW_MESSAGE_OUT_OF_STOCK"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 167,
+      "value": "SHOW_MESSAGE_FULL_SHOP"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 170,
+      "value": "NOTIFICATION_MESSAGE_COOLDOWN"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 173,
+      "value": "CSTOGGLE_TOGGLES_OUT_OF_STOCK"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 176,
+      "value": "CSTOGGLE_TOGGLES_FULL_SHOP"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 179,
+      "value": "SHOW_TRANSACTION_INFORMATION_CLIENT"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 182,
+      "value": "SHOW_TRANSACTION_INFORMATION_OWNER"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 185,
+      "value": "LOG_ALL_SHOP_REMOVALS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 188,
+      "value": "STACK_TO_64"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 191,
+      "value": "USE_BUILT_IN_PROTECTION"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 194,
+      "value": "STICK_SIGNS_TO_CHESTS"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 197,
+      "value": "TURN_OFF_DEFAULT_PROTECTION_WHEN_PROTECTED_EXTERNALLY"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 200,
+      "value": "TURN_OFF_SIGN_PROTECTION"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 203,
+      "value": "TURN_OFF_HOPPER_PROTECTION"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 206,
+      "value": "CHECK_ACCESS_FOR_SHOP_USE"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 209,
+      "value": "WORLDGUARD_INTEGRATION"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 212,
+      "value": "WORLDGUARD_USE_FLAG"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 215,
+      "value": "WORLDGUARD_USE_PROTECTION"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 218,
+      "value": "GRIEFPREVENTION_INTEGRATION"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 221,
+      "value": "USE_STOCK_COUNTER"
+    },
+    {
+      "kind": "configuration",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/model/config/ChestShopConfiguration.java",
+      "line": 225,
+      "value": "EXCLUDED_ITEM_ATTRIBUTES"
+    },
+    {
+      "kind": "scheduled",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/services/impl/MarketResyncServiceImpl.java",
+      "line": 127,
+      "trigger": "runTaskTimer("
+    },
+    {
+      "kind": "scheduled",
+      "source": "chestshop/src/main/java/io/paradaux/chestshop/services/impl/MarketResyncServiceImpl.java",
+      "line": 216,
+      "trigger": "runTaskTimer("
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 15,
+      "value": "\"treasuryapi.command\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 59,
+      "value": "\"treasuryapi.personal.issue\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 67,
+      "value": "\"treasuryapi.personal.list\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 75,
+      "value": "\"treasuryapi.personal.reissue\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 83,
+      "value": "\"treasuryapi.personal.revoke\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 93,
+      "value": "\"treasuryapi.business.issue\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 101,
+      "value": "\"treasuryapi.business.issue\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 110,
+      "value": "\"treasuryapi.business.list\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 118,
+      "value": "\"treasuryapi.business.list\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 126,
+      "value": "\"treasuryapi.business.reissue\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 134,
+      "value": "\"treasuryapi.business.revoke\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 144,
+      "value": "\"treasuryapi.ui.user\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 152,
+      "value": "\"treasuryapi.ui.user\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 160,
+      "value": "\"treasuryapi.ui.user\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 168,
+      "value": "\"treasuryapi.ui.link\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 176,
+      "value": "\"treasuryapi.ui.resetpassword\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 183,
+      "value": "\"treasuryapi.ui.resetpassword\""
+    },
+    {
+      "kind": "permission",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 191,
+      "value": "\"treasuryapi.ui.sync\""
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 40,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": ""
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 50,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "help [page]"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 58,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "personal issue"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 66,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "personal list"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 74,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "personal reissue <keyId>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 82,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "personal revoke <keyId>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 92,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "business issue <firmName>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 100,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "business issue <firmName> <accountId>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 109,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "business list"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 117,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "business list access"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 125,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "business reissue <keyId>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 133,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "business revoke <keyId>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 143,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "ui user add <role> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 151,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "ui user remove <role> <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 159,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "ui user list <player>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 167,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "ui link <code>"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 175,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "ui resetpassword"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 182,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "ui resetpassword confirm"
+    },
+    {
+      "kind": "command",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/commands/TreasuryAPICommand.java",
+      "line": 190,
+      "roots": [
+        "treasuryapi"
+      ],
+      "route": "ui sync"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/ApiConfiguration.java",
+      "line": 11,
+      "value": "api.jwt-secret"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/DatabaseConfiguration.java",
+      "line": 11,
+      "value": "database.host"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/DatabaseConfiguration.java",
+      "line": 14,
+      "value": "database.port"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/DatabaseConfiguration.java",
+      "line": 17,
+      "value": "database.database"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/DatabaseConfiguration.java",
+      "line": 20,
+      "value": "database.username"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/DatabaseConfiguration.java",
+      "line": 23,
+      "value": "database.password"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/KeycloakConfiguration.java",
+      "line": 17,
+      "value": "keycloak.enabled"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/KeycloakConfiguration.java",
+      "line": 20,
+      "value": "keycloak.base-url"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/KeycloakConfiguration.java",
+      "line": 23,
+      "value": "keycloak.realm"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/KeycloakConfiguration.java",
+      "line": 26,
+      "value": "keycloak.client-id"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/KeycloakConfiguration.java",
+      "line": 29,
+      "value": "keycloak.client-secret"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/ReconciliationConfiguration.java",
+      "line": 15,
+      "value": "reconciliation.enabled"
+    },
+    {
+      "kind": "configuration",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/model/config/ReconciliationConfiguration.java",
+      "line": 18,
+      "value": "reconciliation.interval-seconds"
+    },
+    {
+      "kind": "scheduled",
+      "source": "treasury-api-plugin/src/main/java/io/paradaux/treasuryapi/tasks/GroupReconciliationTask.java",
+      "line": 155,
+      "trigger": "runTaskTimerAsynchronously("
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AccountController.java",
+      "line": 41,
+      "method": "GET",
+      "path": "/api/v1/accounts/{accountId}/balance"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AccountController.java",
+      "line": 59,
+      "method": "GET",
+      "path": "/api/v1/accounts/by-player"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AccountController.java",
+      "line": 82,
+      "method": "GET",
+      "path": "/api/v1/accounts/baltop"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AccountController.java",
+      "line": 99,
+      "method": "GET",
+      "path": "/api/v1/accounts/{accountId}/transactions"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AccountController.java",
+      "line": 136,
+      "method": "GET",
+      "path": "/api/v1/accounts/{accountId}/transactions/feed"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminAccountController.java",
+      "line": 38,
+      "method": "PATCH",
+      "path": "/api/v1/admin/accounts/{id}/display-name"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminAccountController.java",
+      "line": 46,
+      "method": "PATCH",
+      "path": "/api/v1/admin/accounts/{id}/owner"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminAccountController.java",
+      "line": 54,
+      "method": "POST",
+      "path": "/api/v1/admin/accounts/{id}/archive"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminAccountController.java",
+      "line": 61,
+      "method": "POST",
+      "path": "/api/v1/admin/accounts/{id}/unarchive"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminApiKeyController.java",
+      "line": 31,
+      "method": "POST",
+      "path": "/api/v1/admin/api-keys/{keyId}/revoke"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminApiKeyController.java",
+      "line": 38,
+      "method": "POST",
+      "path": "/api/v1/admin/api-keys/{keyId}/rotate"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminFirmController.java",
+      "line": 44,
+      "method": "POST",
+      "path": "/api/v1/admin/firms/{firmId}/disband"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminFirmController.java",
+      "line": 53,
+      "method": "POST",
+      "path": "/api/v1/admin/firms/{firmId}/rename"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminFirmController.java",
+      "line": 63,
+      "method": "PATCH",
+      "path": "/api/v1/admin/firms/{firmId}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminRateLimitController.java",
+      "line": 34,
+      "method": "PUT",
+      "path": "/api/v1/admin/rate-limit-overrides/{ownerUuid}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminRateLimitController.java",
+      "line": 42,
+      "method": "DELETE",
+      "path": "/api/v1/admin/rate-limit-overrides/{ownerUuid}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminTransferController.java",
+      "line": 44,
+      "method": "POST",
+      "path": "/api/v1/admin/transfers"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminWebhookController.java",
+      "line": 42,
+      "method": "POST",
+      "path": "/api/v1/admin/webhooks"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminWebhookController.java",
+      "line": 48,
+      "method": "PATCH",
+      "path": "/api/v1/admin/webhooks/{id}/active"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminWebhookController.java",
+      "line": 56,
+      "method": "PATCH",
+      "path": "/api/v1/admin/webhooks/{id}/url"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminWebhookController.java",
+      "line": 64,
+      "method": "PATCH",
+      "path": "/api/v1/admin/webhooks/{id}/secret"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AdminWebhookController.java",
+      "line": 72,
+      "method": "DELETE",
+      "path": "/api/v1/admin/webhooks/{id}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AuthController.java",
+      "line": 33,
+      "method": "POST",
+      "path": "/api/v1/auth/rotate"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/AuthController.java",
+      "line": 50,
+      "method": "GET",
+      "path": "/api/v1/auth/me"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/ChestShopController.java",
+      "line": 53,
+      "method": "GET",
+      "path": "/api/v1/chestshop/shops"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/ChestShopController.java",
+      "line": 78,
+      "method": "GET",
+      "path": "/api/v1/chestshop/items"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/ChestShopController.java",
+      "line": 96,
+      "method": "GET",
+      "path": "/api/v1/chestshop/items/{itemKey}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/ChestShopController.java",
+      "line": 112,
+      "method": "GET",
+      "path": "/api/v1/chestshop/stats"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/ConfigController.java",
+      "line": 33,
+      "method": "GET",
+      "path": "/api/v1/config/tax"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 45,
+      "method": "GET",
+      "path": "/api/v1/firms/{firmName}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 64,
+      "method": "GET",
+      "path": "/api/v1/firms/{firmName}/balance"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 82,
+      "method": "GET",
+      "path": "/api/v1/firms/me"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 98,
+      "method": "PATCH",
+      "path": "/api/v1/firms/me"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 116,
+      "method": "GET",
+      "path": "/api/v1/firms/me/accounts"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 133,
+      "method": "GET",
+      "path": "/api/v1/firms/me/employees"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 150,
+      "method": "GET",
+      "path": "/api/v1/firms/me/roles"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/FirmController.java",
+      "line": 167,
+      "method": "PATCH",
+      "path": "/api/v1/firms/me/accounts/{accountId}/display-name"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/TransferController.java",
+      "line": 39,
+      "method": "POST",
+      "path": "/api/v1/transfers"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/TransferController.java",
+      "line": 66,
+      "method": "POST",
+      "path": "/api/v1/transfers/to-firm"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/TransferController.java",
+      "line": 95,
+      "method": "POST",
+      "path": "/api/v1/transfers/to-player"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/WebhookController.java",
+      "line": 44,
+      "method": "POST",
+      "path": "/api/v1/webhooks"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/WebhookController.java",
+      "line": 54,
+      "method": "GET",
+      "path": "/api/v1/webhooks"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/WebhookController.java",
+      "line": 60,
+      "method": "GET",
+      "path": "/api/v1/webhooks/{id}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/WebhookController.java",
+      "line": 67,
+      "method": "PATCH",
+      "path": "/api/v1/webhooks/{id}"
+    },
+    {
+      "kind": "http",
+      "source": "treasury-rest-api/src/main/java/io/paradaux/treasuryrestapi/controller/WebhookController.java",
+      "line": 77,
+      "method": "DELETE",
+      "path": "/api/v1/webhooks/{id}"
+    }
+  ]
+}

@@ -8,6 +8,7 @@
 #
 #   ops/integration/run.sh
 #   ops/integration/run.sh -- --tests '*PayCommandTest'
+#   bash ops/integration/run.sh --profile protection
 #
 # What it does: builds the plugin jars + REST API from this checkout and the
 # DcDiag / Nexo-stub plugins from integration-tests/; downloads Paper, LuckPerms
@@ -27,16 +28,52 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 TESTS_DIR="${IT_TESTS_DIR:-$ROOT/integration-tests}"
 KEEP=0
+PROFILE=core
+RESTART_ENABLED=false
+TAX_PROFILE=false
+WEBHOOK_FAILURE_PROFILE=false
+REST_PROFILE_ARGS=()
+GRADLE_TASKS=(:tests:preflight :tests:test)
 TEST_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --tests-dir) TESTS_DIR="$2"; shift 2 ;;   # a different copy of the suite
     --keep) KEEP=1; shift ;;          # leave the stack running after the tests
+    --profile) PROFILE="$2"; shift 2 ;; # core or protection (startup-only shop hooks)
     --) shift; TEST_ARGS=("$@"); break ;;
-    -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+case "$PROFILE" in
+  core) PROFILE_ARGS=() ;;
+  explorer)
+    PROFILE_ARGS=()
+    GRADLE_TASKS=(:tests:preflight :tests:explorerFixture)
+    if [ "${#TEST_ARGS[@]}" -ne 0 ]; then echo "explorer profile does not accept Gradle test filters" >&2; exit 2; fi
+    ;;
+  webhook-failure)
+    PROFILE_ARGS=()
+    WEBHOOK_FAILURE_PROFILE=true
+    REST_PROFILE_ARGS=(--treasury.webhook.max-attempts=3 --treasury.webhook.failure-threshold=2 --treasury.webhook.retry-base-seconds=1 --treasury.webhook.retry-max-seconds=2)
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*WebhookExhaustionTest'); fi
+    ;;
+  tax)
+    PROFILE_ARGS=()
+    TAX_PROFILE=true
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*TaxCycleLifecycleTest' --tests '*TaxConfigPublicationTest'); fi
+    ;;
+  restart)
+    PROFILE_ARGS=()
+    RESTART_ENABLED=true
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ServerRestartTest'); fi
+    ;;
+  protection)
+    PROFILE_ARGS=(-Dchestshop.integrations=true)
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ProtectionIntegrationCreationTest'); fi
+    ;;
+  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, tax, webhook-failure or explorer)" >&2; exit 2 ;;
+esac
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
 WORK="${IT_WORK_DIR:-$ROOT/build/integration}"
@@ -50,6 +87,7 @@ REST_PORT="${IT_REST_PORT:-8080}"
 # The tests run a local HTTP receiver here; the REST API is told it may deliver
 # webhooks to it despite the SSRF guard (treasury.webhook.insecure-test-targets).
 WEBHOOK_PORT="${IT_WEBHOOK_PORT:-8099}"
+BYTEBIN_PORT="${IT_BYTEBIN_PORT:-8098}"
 DB_EXTERNAL="${IT_DB_EXTERNAL:-0}"
 DB_HOST="${IT_DB_HOST:-127.0.0.1}"
 DB_PORT="${IT_DB_PORT:-33306}"
@@ -58,6 +96,26 @@ DB_USER="${IT_DB_USER:-root}"
 DB_PASSWORD="${IT_DB_PASSWORD:-dev}"
 # The tests forge tokens with this exact secret (support/JwtForge.java).
 JWT_SECRET="${IT_JWT_SECRET:-dev-jwt-secret-change-in-production-please-use-32-plus-random-bytes}"
+
+# Never mistake another stack's listener for this run's successful startup.
+# External databases are intentionally shared; every other listener is owned here.
+CHECK_PORTS=("$MC_PORT" "$RCON_PORT" "$REST_PORT" "$WEBHOOK_PORT" "$BYTEBIN_PORT")
+if [ "$DB_EXTERNAL" != 1 ]; then CHECK_PORTS+=("$DB_PORT"); fi
+python3 - "${CHECK_PORTS[@]}" <<'PY'
+import socket
+import sys
+
+ports = [int(value) for value in sys.argv[1:]]
+if len(set(ports)) != len(ports):
+    raise SystemExit("integration listener ports must be distinct")
+for port in ports:
+    with socket.socket() as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            listener.bind(("127.0.0.1", port))
+        except OSError as error:
+            raise SystemExit(f"integration port {port} unavailable: {error}") from error
+PY
 
 # Pinned downloads. Paper is addressed by content hash; bump them together
 # with the server version the plugins target.
@@ -197,19 +255,25 @@ simulation-distance=4
 enforce-secure-profile=false
 EOF
 
-# Each plugin's shipped config.yml with only the database block (and the JWT
-# secret) pointed at this run's stack, so every other default is the real one.
+# Shipped configuration with database/JWT settings and the external Bytebin
+# boundary pointed at this disposable stack; other defaults remain real.
 render_config() { # render_config <module dir> <plugin data folder>
   mkdir -p "$SERVER/plugins/$2"
   CFG_HOST="$DB_HOST" CFG_PORT="$DB_PORT" CFG_DATABASE="$DB_NAME" CFG_USERNAME="$DB_USER" \
-  CFG_PASSWORD="$DB_PASSWORD" CFG_SECRET="$JWT_SECRET" awk '
+  CFG_PASSWORD="$DB_PASSWORD" CFG_SECRET="$JWT_SECRET" CFG_BYTEBIN="http://127.0.0.1:$BYTEBIN_PORT/" awk '
     function quoted(v) { gsub(/\\/, "\\\\", v); gsub(/"/, "\\\"", v); return "\"" v "\"" }
-    /^[^ \t#]/ { in_db = ($0 ~ /^database:/) }
+    /^[^ \t#]/ { in_db = ($0 ~ /^database:/); in_bytebin = ($0 ~ /^bytebin:/) }
     in_db && /^[ \t]+(host|port|database|username|password):/ {
       indent = $0; sub(/[^ \t].*/, "", indent)
       key = $0; sub(/^[ \t]+/, "", key); sub(/:.*/, "", key)
       if (key == "port") print indent "port: " ENVIRON["CFG_PORT"]
       else print indent key ": " quoted(ENVIRON["CFG_" toupper(key)])
+      next
+    }
+    in_bytebin && /^[ \t]+(post-url|base-url):/ {
+      indent = $0; sub(/[^ \t].*/, "", indent)
+      key = $0; sub(/^[ \t]+/, "", key); sub(/:.*/, "", key)
+      print indent key ": " quoted(ENVIRON["CFG_BYTEBIN"] (key == "post-url" ? "post" : ""))
       next
     }
     /^[ \t]+jwt-secret:/ {
@@ -223,6 +287,20 @@ render_config() { # render_config <module dir> <plugin data folder>
 render_config treasury Treasury
 render_config business Business
 render_config treasury-api-plugin TreasuryAPI
+
+log "Starting the local Bytebin capture service on :$BYTEBIN_PORT"
+python3 "$ROOT/ops/integration/bytebin.py" --port "$BYTEBIN_PORT" \
+    --evidence "$WORK/bytebin-captures.jsonl" >"$WORK/bytebin.log" 2>&1 &
+PIDS+=($!)
+wait_for_port "$BYTEBIN_PORT" 15 Bytebin "${PIDS[-1]}"
+
+# These hooks are installed only at startup. A dedicated profile exercises the
+# existing gated creation checks without changing the core suite's wilderness fixtures.
+if [ "$PROFILE" = protection ]; then
+  mkdir -p "$SERVER/plugins/ChestShop"
+  printf 'WORLDGUARD_INTEGRATION: true\nGRIEFPREVENTION_INTEGRATION: true\n' \
+    >"$SERVER/plugins/ChestShop/config.yml"
+fi
 
 # Every mock player connects from 127.0.0.1; GriefPrevention's default of three
 # logins per address kicks the fourth. Fresh-spawn PvP protection is off because it
@@ -248,7 +326,8 @@ log "Starting Paper on :$MC_PORT (RCON :$RCON_PORT)"
 (cd "$SERVER" && exec java -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \
     -jar "$CACHE/$PAPER_JAR" --nogui >"$WORK/server.log" 2>&1) &
 PIDS+=($!)
-wait_for_port "$RCON_PORT" 300 Paper "${PIDS[-1]}"
+PAPER_PID="${PIDS[-1]}"
+wait_for_port "$RCON_PORT" 300 Paper "$PAPER_PID"
 
 # A plugin that failed to enable leaves the server up but the suite meaningless.
 for plugin in Treasury Business TreasuryAPI ChestShop LuckPerms DcDiag; do
@@ -274,7 +353,7 @@ fi
 log "Starting the REST API on :$REST_PORT"
 DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \
     java -jar "${REST_JARS[0]}" \
-    --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" \
+    --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" "${REST_PROFILE_ARGS[@]}" \
     --treasury.webhook.insecure-test-targets="127.0.0.1:$WEBHOOK_PORT" >"$WORK/rest-api.log" 2>&1 &
 PIDS+=($!)
 wait_for_port "$REST_PORT" 120 "REST API" "${PIDS[-1]}"
@@ -284,12 +363,18 @@ log "Running the integration tests"
 # The REST settings go by env var: tests/build.gradle.kts only forwards the
 # connection -D properties listed there to the forked test JVM.
 (cd "$ROOT" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
-    WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" \
-    sh ./gradlew -p "$TESTS_DIR" --console=plain :tests:test \
+    BYTEBIN_URL="http://127.0.0.1:$BYTEBIN_PORT/" WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" IT_SERVER_DIR="$SERVER" IT_EXPLORER_FIXTURE="$WORK/explorer-fixture.json" \
+    IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
+    sh ./gradlew -p "$TESTS_DIR" --console=plain "${GRADLE_TASKS[@]}" \
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \
     -Ddevserver.host=127.0.0.1 -Ddevserver.port="$MC_PORT" \
     -Ddevserver.db.url="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" \
     -Ddevserver.db.user="$DB_USER" -Ddevserver.db.password="$DB_PASSWORD" \
     -Drcon.host=127.0.0.1 -Drcon.port="$RCON_PORT" -Drcon.password="$RCON_PASSWORD" \
+    "${PROFILE_ARGS[@]}" \
     "${TEST_ARGS[@]}")
+
+if [ "$PROFILE" = explorer ]; then
+  source "$ROOT/ops/integration/explorer.sh"
+fi

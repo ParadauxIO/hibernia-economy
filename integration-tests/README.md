@@ -2,12 +2,14 @@
 
 End-to-end integration tests for Paper plugins, plus the standalone mock-player library that drives them.
 
-Two Gradle modules:
+Four Gradle modules:
 
 | Module | Purpose | Reusable? |
 |---|---|---|
 | **`mock-client`** | A minimal Minecraft Java-edition client. Connects in offline mode, sends slash-commands and chat, places blocks, edits signs, captures responses. No domain dependencies. | **Yes** — designed to be published to Maven and consumed by anyone integration-testing a Paper plugin. |
 | **`tests`** | DemocracyCraft economy tests built on top of `mock-client`. Asserts via direct MariaDB queries against the live ledger and via captured chat. Uses RCON for admin-side seeding. | No — tied to this workspace's plugins. |
+| **`diag-plugin`** | Disposable-server diagnostics, fixture setup and completion barriers. | Test support only. |
+| **`nexo-stub`** | Minimal custom-item substitute for tests. | Does not certify licensed Nexo behavior. |
 
 ## `mock-client` — the library
 
@@ -51,18 +53,22 @@ try (MockPlayer alice = MockPlayer.connectLocal("Alice")) {
 | | `connect(username, host, port, loginTimeout)` | Connect to an arbitrary host. |
 | **Chat (send)** | `chatCommand(cmd)` | Send a slash-command. Leading `/` optional. |
 | | `chat(message)` | Send a regular chat message (offline-mode only — no signature). |
-| **Chat (receive)** | `awaitMessage(predicate, timeout)` | Block until a chat line matches. Throws `AssertionError` on timeout. |
+| **Chat (receive)** | `awaitMessage(predicate, timeout)` | Block until a chat line matches, preserving unrelated replies. Throws `AssertionError` on timeout. |
 | | `awaitMessageContaining(substring, timeout)` | Convenience — substring match. |
 | | `drainMessages()` | Discard buffered chat lines. |
 | | `awaitMessageAfter(trigger, predicate, timeout)` | Run `trigger` (e.g. send a command) and wait for a matching line, leaving every other buffered line in place. |
 | **Position** | `getPosition()` | Best-known current position (populated by the time `connect()` returns). |
 | | `awaitPositionMatching(predicate, timeout)` | Block until position matches. |
 | | `awaitPositionNear(target, radius, timeout)` | Block until within `radius` of `target`. |
-| **Blocks / signs** | `useBlock(pos, face)` | Right-click a block face. Triggers `PlayerInteractEvent`. |
+| **Blocks / signs** | `selectHotbarSlot(0..8)` / `setSneaking(boolean)` | Select the held item and shift-place against containers. |
+| | `useBlock(pos, face)` | Right-click a block face. Triggers `PlayerInteractEvent`. |
 | | `breakBlock(pos)` | START_DIGGING + FINISH_DIGGING. Works for instabreak blocks. |
 | | `updateSign(pos, lines[4], frontText)` | Set sign text. Sign block must already exist. |
+| **Containers** | `quickMoveContainerSlot(containerId, stateId, slot, changedSlots)` | Shift-click using IDs from actual server contents and explicit predicted slot changes; vanilla `HashedStack` values are supplied by the test. |
+| | `closeContainer(containerId)` | Close the actual window and trigger normal inventory-close handling. |
 | **Generic** | `awaitClientbound(class, predicate, timeout)` | Wait for any clientbound packet of a given type. Escape hatch when the higher-level helpers don't cover what you need. |
 | | `awaitClientboundAfter(trigger, class, predicate, timeout)` | Same, but listens *before* running `trigger`, so an immediate answer can't be missed. |
+| | `collectClientboundDuring(action, class, timeout)` | Capture packets from synchronous gameplay through a packet barrier, including an empty result for denied window opening. Does not cover async commands. |
 | **Barrier** | `sync(timeout)` | Round trip on the connection: returns once the server has handled every packet sent before it (clicks, digs, moves — and the synchronous plugin code they ran) and the client holds everything the server sent meanwhile. Does not order against slash-commands; see the javadoc. |
 | **Identity** | `getUsername()` / `getUuid()` | UUID is the offline-mode derivation Paper uses (UUID v3 over `OfflinePlayer:<name>`). |
 | **Lifecycle** | `isConnected()` / `close()` / `openPlayers()` | `try-with-resources`-friendly; `openPlayers()` lists the connected players. |
@@ -79,7 +85,7 @@ try (MockPlayer alice = MockPlayer.connectLocal("Alice")) {
 
 - **No login authentication.** The server must be in offline-mode (`server.properties: online-mode=false`). The mock client validates usernames against Mojang's regex (`[A-Za-z0-9_]{3,16}`) on `connect()` to fail fast.
 - **No inventory tracking, no chunk handling, no rendering.** If a test needs to assert "alice received an emerald in slot 0," extend the client by listening for `ClientboundContainerSetSlotPacket` via `awaitClientbound`.
-- **No movement (yet).** The client *receives* position updates but doesn't *send* them. To move a player, use `RconClient.send("teleport <player> x y z")` from the test side. Active movement (`ServerboundMovePlayerPosPacket`) can be added when needed.
+- **No pathfinding or physics simulation.** `sendPosition(Position)` sends position/rotation packets; fixtures use RCON teleportation for setup.
 - **No auto-reconnect.** A disconnect is final; create a new `MockPlayer` if you need a fresh session.
 
 ### Using it in your own tests
@@ -111,7 +117,22 @@ The mock-client module has `withSourcesJar()` / `withJavadocJar()` enabled. No p
 
 ## `tests` — DemocracyCraft economy tests
 
-Live integration tests that exercise the full Treasury / Business / TreasuryAPI / Realty / ChestShop stack against a throwaway server that `ops/integration/run.sh` builds and boots (see [wiki/build-and-test.md](../wiki/build-and-test.md#live-integration-tests)).
+Live integration tests that exercise the Treasury / Business / TreasuryAPI / ChestShop stack against a throwaway server that `ops/integration/run.sh` builds and boots (see [wiki/build-and-test.md](../wiki/build-and-test.md#live-integration-tests)).
+
+### Acceptance scope
+
+[PAR-499's source index and matrix](acceptance/matrix.md) track verified journeys,
+remaining reviews, disabled tests and unavailable integrations. Refresh the index
+with `python3 integration-tests/acceptance/inventory.py`; use `--check` to detect drift.
+
+The runner executes `:tests:preflight` before selected tests. It requires offline
+Paper 1.21.11, enabled economy/protection plugins, a real login and starting balance,
+and an authenticated REST boundary. It prints plugin versions. The protection
+profile also checks that both startup integration flags are enabled. The Nexo runtime is
+**a stub**; Realty, CarbonChat, Bedrock and same-stack Explorer acceptance are absent.
+Paper 26.3 staging (ADT-193) needs a separate matching client/profile and is not
+certified by this run. Live tests always execute, even with unchanged class files,
+because Gradle cannot fingerprint external server/database state.
 
 ### Test catalogue
 
@@ -123,7 +144,7 @@ Live integration tests that exercise the full Treasury / Business / TreasuryAPI 
 | `PositionTrackingTest::rconTeleportIsObservedOnTheClient` | Teleport via RCON → client observes new position via `awaitPositionNear`. Combines RCON + position tracking. |
 | `MultiPlayerTest` | Two concurrent mock players each see the other's join broadcast. Foundation for cross-player tests (firm hires, transfers, auction bids). |
 
-Those are the foundations; the suite has grown to 87 classes (~500 tests) across
+Those are the foundations; the last full acceptance covered 94 classes (532 cases, including parameterized invocations and explicit skips) across
 `business/`, `chestshop/`, `treasury/`, `restapi/` (including the SERVICE-scoped admin API,
 `AdminApiTest`) and `ingest/`.
 
@@ -192,10 +213,26 @@ duration to `tests/build/reports/test-timings.txt`.
 From the repository root:
 
 ```bash
-ops/integration/run.sh                               # everything
-ops/integration/run.sh -- --tests '*PayCommandTest'  # a subset
-ops/integration/run.sh --keep                        # leave the stack running afterwards
+bash ops/integration/run.sh                               # everything
+bash ops/integration/run.sh -- --tests '*PayCommandTest'  # a subset
+bash ops/integration/run.sh --keep                        # leave the stack running afterwards
+bash ops/integration/run.sh --profile protection          # WorldGuard + GriefPrevention startup hooks
 ```
+
+For repeated clean acceptance with retained, JWT-redacted reports:
+
+```bash
+python3 ops/integration/acceptance.py                      # two core runs
+python3 ops/integration/acceptance.py --profile protection  # two protection runs
+```
+
+Each run records commit/working-tree state, Java/plugin versions, test and skip counts,
+wall time, JUnit XML, timing report and server/API/DB logs under
+`build/integration-acceptance/<timestamp>/run-N/`. A failed run stops the sequence;
+there are no test retries. `IT_*` settings work as with `run.sh`. `IT_SKIP_BUILD=1`
+reuses the existing plugin jars and is recorded in the summary; use it only after
+building the checkout. `python3 ops/integration/test_acceptance.py` checks evidence
+counting and redaction without starting a server.
 
 The script builds the plugins from the checkout, boots Paper (offline mode, RCON), a
 migrated MariaDB and the REST API, runs `:tests:test` and tears it all down.
@@ -228,7 +265,7 @@ Chat assertions still happen for **command response correctness** ("did the user
 
 ### Per-test isolation
 
-Tests use unique mock-player usernames (e.g. `Mock_<epoch-millis>`) so each run hits the first-join code path even against a non-empty DB. There's no global teardown today; if test data leaks become a problem, wrap each test in a `flywayClean + flywayMigrate` cycle (the `economy-flyway` module supports this) — but that's heavy and shouldn't be the default.
+`Usernames.fresh` uses an atomic monotonic timestamp suffix, so rapid and concurrent calls remain distinct within a test JVM. The integration runner recreates its disposable database for each clean run. Direct Gradle runs against an existing server can leave fixture rows; usernames are not a substitute for test isolation.
 
 ## Compatibility notes
 
@@ -236,3 +273,99 @@ Tests use unique mock-player usernames (e.g. `Mock_<epoch-millis>`) so each run 
 - **Java 21 toolchain.** Tests JVM-fork at runtime — they'll use whatever JDK is in `JAVA_HOME`. Java 21 is fine; Java 25 also works.
 - **Online mode must be disabled** on the target server. The mock client does no authentication.
 - **RCON must be enabled** on the target server. Used by `RconClient` for admin-side seeding from inside tests.
+
+Focused clean evidence can be retained without claiming a full suite run:
+`python3 ops/integration/acceptance.py --test '*FindDialogTest' --test '*InformationCommandsTest'`.
+The per-run summary records the exact filters. `Dialogs` submits the callback IDs
+from real server packets and waits for observed world ticks before clicking, since
+Paper registers newly created dialog callbacks on its tick queue. It supports
+plain-text component inspection and string/float dialog inputs.
+
+The runner exports `IT_SERVER_DIR` for file-backed integration fixtures. Import
+tests write and restore files only under that disposable server, and are explicitly
+skipped when running against an external server without that capability. Core runs
+through `run.sh` provide it automatically. `MockPlayer.collectedMessages()` is a
+buffer snapshot for negative chat assertions after a processing barrier.
+
+The dedicated lifecycle profile is `bash ops/integration/run.sh --profile restart`
+(or `python3 ops/integration/acceptance.py --profile restart` for two clean runs).
+It selects `ServerRestartTest`, which gracefully terminates only the runner-owned
+Paper PID, relaunches the pinned Paper jar in the same disposable directory, and
+keeps MariaDB/REST running. It checks saved money, posting counts, account IDs,
+player inventory, shop state and a subsequent trade. The restarted process is
+terminated in a finally block; `server-restart.log` is retained with other evidence.
+The test is disabled outside this explicit profile. This covers graceful Paper
+restart, not crash recovery, database outage, or REST-process restart.
+
+`bash ops/integration/run.sh --profile tax` runs the isolated corporate tax-cycle
+journey. It changes Business's real config file and reloads it, then checks daily/
+monthly non-collection, exact weekly debits/credits and posting counts, subsequent
+manual cycles, exemption changes, and disabling collection by reload. It restores
+configuration afterward. Manual triggers use distinct period starts; this is not
+same-period deduplication or wall-clock schedule acceptance. The test is disabled
+outside this profile to avoid taxing unrelated fixtures.
+
+The tax profile also runs real weekly Bukkit tasks at explicit accelerated due
+periods via DcDiag. It verifies same-period no-op, distinct-period collection and
+next-run registration. Natural calendar boundaries and catch-up remain untested.
+
+### Same-stack Explorer browser profile
+
+Run `bash ops/integration/run.sh --profile explorer`, or retain two clean runs with
+`python3 ops/integration/acceptance.py --profile explorer`. This profile starts the
+same disposable Paper/MariaDB/REST stack, uses real mock players to make a payment,
+and launches Explorer against that database. It does not run the standalone
+Explorer global setup or reset/reseed the database. `ExplorerFixture` checks exact
+ledger outcomes and writes only disposable IDs/memo to `explorer-fixture.json`.
+
+Explorer dependencies are installed from the lockfile when absent. A matching
+Playwright Chromium must be installed (from `economy-explorer`, run
+`npx playwright install chromium`). The profile builds Explorer by default;
+`IT_SKIP_EXPLORER_BUILD=1` reuses an existing verified build. `IT_EXPLORER_PORT`
+defaults to 3100, bound to loopback. Browser counts/logs are retained separately;
+stale Java JUnit reports cannot inflate an Explorer result.
+
+The browser journey uses signed Auth.js test sessions for the actual game UUIDs,
+not the legacy `e2e_viewer` role shim. External OAuth is the substituted seam.
+It asserts public balances, owner/recipient history, private history/direct
+transaction denial for anonymous and unrelated viewers, and persistence on reload.
+It also checks page errors and same-origin HTTP 5xx responses. This is not yet a
+complete Explorer page/role/browser matrix or a real Keycloak login test.
+
+### Local export capture
+
+The runner substitutes a loopback Bytebin HTTP service for Treasury's external
+paste endpoint. `IT_BYTEBIN_PORT` defaults to 8098; `BYTEBIN_URL` is passed to
+tests. Real export code gzips and uploads CSV over HTTP, and tests fetch the
+returned link, inspect headers/rows, and force HTTP 503 before recovery. The
+runner owns service cleanup; acceptance retains `bytebin.log` and
+`bytebin-captures.jsonl`. Captures contain only the disposable test ledger.
+This does not certify hosted Bytebin availability, expiry or one-read enforcement.
+
+### Scoped database failures
+
+`PartialDisbandRecoveryTest` uses `LedgerFaults.rejectDebits(accountId)` to inject
+a real SQL failure into one fixture account's debit posting. The helper requires
+the disposable runner's `IT_SERVER_DIR` marker and a loopback MariaDB URL. Its
+AutoCloseable scope drops the uniquely named trigger even when assertions fail.
+Expected `PAR499 injected debit failure` warnings are retained in the server log.
+The tests distinguish successful admin recovery from the currently failing
+proprietor retry; see `acceptance/known-defects.md`.
+
+### Webhook failure profile
+
+`python3 ops/integration/acceptance.py --profile webhook-failure` runs
+`WebhookExhaustionTest` twice on disposable stacks. It sets REST webhook
+max-attempts=3, failure-threshold=2, retry-base-seconds=1 and retry-max-seconds=2.
+The profile covers actual repeated HTTP failures, terminal delivery state,
+automatic subscription disabling and admin reactivation followed by successful
+health reset. It does not certify the default five-attempt/15-failure thresholds
+or default backoff duration. Core-profile retry tests retain default settings.
+The test is gated by `IT_WEBHOOK_FAILURE_PROFILE=true`, set by this runner only;
+selecting it in another profile reports a skip, not a pass.
+
+The `tax` profile now also selects `TaxConfigPublicationTest` by default. It
+changes Treasury's tax configuration on the disposable server, exercises console
+reload and reads exact public `/config/tax` snapshots, then restores the original
+file. It covers publication and rejected-reload preservation, separately from
+Business tax collection in `TaxCycleLifecycleTest`.
