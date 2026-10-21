@@ -24,6 +24,7 @@ on:
       - 'settings.gradle.kts'
       - '.github/workflows/dev-server-publish.yml'
       - '.github/actions/setup-jvm/**'
+      - '.github/scripts/release-metadata*'
   workflow_dispatch:
 
 permissions:
@@ -37,6 +38,7 @@ concurrency:
 
 jobs:
   publish:
+    if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -47,22 +49,22 @@ jobs:
       - name: Set up JVM build
         uses: ./.github/actions/setup-jvm
 
+      - name: Compute development version
+        id: release
+        run: node .github/scripts/release-metadata.mjs version
+
+      - name: Check release metadata tooling
+        run: node --test .github/scripts/release-metadata.test.mjs
+
       - name: Build plugin bundle
-        run: sh ./gradlew release -Pci=true
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: sh ./gradlew release -Pci=true -Pversion="$RELEASE_VERSION"
 
       - name: Write manifest
-        run: |
-          node -e '
-            const fs = require("fs");
-            const jars = fs.readdirSync("release").filter(f => f.endsWith(".jar")).sort();
-            fs.writeFileSync("release/manifest.json", JSON.stringify({
-              sha: process.env.GITHUB_SHA,
-              run: Number(process.env.GITHUB_RUN_ID),
-              builtAt: new Date().toISOString(),
-              jars,
-            }, null, 2) + "\n");
-          '
-          cat release/manifest.json
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: node .github/scripts/release-metadata.mjs manifest
 
       - name: Replace dev-latest release
         env:

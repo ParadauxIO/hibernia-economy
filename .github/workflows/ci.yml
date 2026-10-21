@@ -47,6 +47,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  release-metadata:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Check release metadata tooling
+        run: node --test .github/scripts/release-metadata.test.mjs
+
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
@@ -420,7 +430,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [ changes, jvm, coverage, mutation, api-contract, explorer, migrations, integration ]
+    needs: [ release-metadata, changes, jvm, coverage, mutation, api-contract, explorer, migrations, integration ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
