@@ -41,7 +41,9 @@ That's it. The next settled transaction on that account/firm will arrive at your
 > [!TIP]
 > Prefer to manage webhooks programmatically? You can also create them through the REST
 > API (`/api/v1/webhooks`, scoped to an API key) — see
-> [Using the economy API](/docs/guides/api) and the Swagger reference.
+> [Using the economy API](/docs/guides/api) and the Swagger reference. A business key
+> restricted to one account subscribes only to that account; a firm-wide key
+> subscribes to all live linked accounts.
 
 ## Send it to Discord (the easy way)
 

@@ -2,13 +2,16 @@ package io.paradaux.treasuryapi.services;
 
 import io.paradaux.treasuryapi.model.economy.ApiKey;
 import io.paradaux.treasuryapi.model.economy.KeyType;
-
 import java.util.List;
 import java.util.UUID;
 
 public interface ApiKeyService {
     ApiKey issuePersonalKey(int accountId, UUID ownerUuid);
+
     ApiKey issueBusinessKey(int firmId, UUID ownerUuid);
+
+    /** Issues a key restricted to one currently linked account of the firm. */
+    ApiKey issueBusinessKey(int firmId, int accountId, UUID ownerUuid);
 
     /**
      * Reissues (rotates) the key on behalf of {@code actingUuid}. The service is the

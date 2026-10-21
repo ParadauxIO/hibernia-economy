@@ -13,14 +13,13 @@ import io.paradaux.treasuryapi.model.config.ApiConfiguration;
 import io.paradaux.treasuryapi.model.economy.ApiKey;
 import io.paradaux.treasuryapi.model.economy.KeyType;
 import io.paradaux.treasuryapi.services.ApiKeyService;
-import org.mybatis.guice.transactional.Transactional;
-
-import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import javax.crypto.SecretKey;
+import org.mybatis.guice.transactional.Transactional;
 
 @Singleton
 public class ApiKeyServiceImpl implements ApiKeyService {
@@ -48,6 +47,23 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     @Transactional
     public ApiKey issueBusinessKey(int firmId, UUID ownerUuid) {
         return issue(KeyType.BUSINESS, null, firmId, ownerUuid);
+    }
+
+    @Override
+    @Transactional
+    public ApiKey issueBusinessKey(int firmId, int accountId, UUID ownerUuid) {
+        if (!businessApi.firms().isProprietor(firmId, ownerUuid)) {
+            throw new NoPermissionException("treasuryapi.business.issue.no-access");
+        }
+        requireFirmAccount(firmId, accountId);
+        return issue(KeyType.BUSINESS, accountId, firmId, ownerUuid);
+    }
+
+    private void requireFirmAccount(int firmId, int accountId) {
+        var firm = businessApi.firms().getFirmByAccountId(accountId);
+        if (firm == null || firm.getFirmId() != firmId || Boolean.TRUE.equals(firm.getArchived())) {
+            throw new NoPermissionException("treasuryapi.business.issue.invalid-account");
+        }
     }
 
     private ApiKey issue(KeyType keyType, Integer accountId, Integer firmId, UUID ownerUuid) {
@@ -95,6 +111,10 @@ public class ApiKeyServiceImpl implements ApiKeyService {
             throw new ConflictException("treasuryapi.key.revoked");
         }
 
+        if (existing.getKeyType() == KeyType.BUSINESS && existing.getAccountId() != null) {
+            requireFirmAccount(existing.getFirmId(), existing.getAccountId());
+        }
+
         String newJwtId = UUID.randomUUID().toString();
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plus(KEY_LIFETIME_DAYS, ChronoUnit.DAYS);
@@ -105,9 +125,15 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         // account-membership access to the JWT subject. Carrying the previous
         // proprietor's UUID forward would keep acting as them, so both the token and
         // the row move to the acting proprietor.
-        String token = buildJwt(keyId, newJwtId, existing.getKeyType(),
-                existing.getAccountId(), existing.getFirmId(),
-                actingUuid, issuedAt, expiresAt);
+        String token = buildJwt(
+                keyId,
+                newJwtId,
+                existing.getKeyType(),
+                existing.getAccountId(),
+                existing.getFirmId(),
+                actingUuid,
+                issuedAt,
+                expiresAt);
 
         // The mapper's UPDATE is guarded by `AND revoked = 0`, so a key revoked
         // between the read above and this write affects 0 rows — treat that as a
@@ -146,10 +172,9 @@ public class ApiKeyServiceImpl implements ApiKeyService {
      */
     private void requireCanManage(ApiKey key, UUID actingUuid) {
         boolean allowed = switch (key.getKeyType()) {
-            case BUSINESS -> key.getFirmId() != null
-                    && businessApi.firms().isProprietor(key.getFirmId(), actingUuid);
-            case PERSONAL, GOVERNMENT -> key.getOwnerUuid() != null
-                    && key.getOwnerUuid().equals(actingUuid);
+            case BUSINESS -> key.getFirmId() != null && businessApi.firms().isProprietor(key.getFirmId(), actingUuid);
+            case PERSONAL, GOVERNMENT ->
+                key.getOwnerUuid() != null && key.getOwnerUuid().equals(actingUuid);
             case SERVICE -> false;
         };
         if (!allowed) {
@@ -172,12 +197,20 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         return apiKeyMapper.findBusinessAccessibleByEmployee(employeeUuid);
     }
 
-    private String buildJwt(int keyId, String jwtId, KeyType keyType,
-                             Integer accountId, Integer firmId, UUID ownerUuid,
-                             Instant issuedAt, Instant expiresAt) {
+    private String buildJwt(
+            int keyId,
+            String jwtId,
+            KeyType keyType,
+            Integer accountId,
+            Integer firmId,
+            UUID ownerUuid,
+            Instant issuedAt,
+            Instant expiresAt) {
         SecretKey key = JwtKeys.deriveHmacKey(apiConfig.getJwtSecret());
         var builder = Jwts.builder()
-                .header().add("kid", String.valueOf(keyId)).and()
+                .header()
+                .add("kid", String.valueOf(keyId))
+                .and()
                 .subject(ownerUuid.toString())
                 .claim("type", keyType.name())
                 .id(jwtId)
@@ -185,9 +218,8 @@ public class ApiKeyServiceImpl implements ApiKeyService {
                 .expiration(Date.from(expiresAt));
 
         if (accountId != null) builder.claim("acc", accountId);
-        if (firmId != null)    builder.claim("firm", firmId);
+        if (firmId != null) builder.claim("firm", firmId);
 
         return builder.signWith(key, Jwts.SIG.HS256).compact();
     }
-
 }

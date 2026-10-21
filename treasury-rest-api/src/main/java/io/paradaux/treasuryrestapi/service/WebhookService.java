@@ -7,20 +7,20 @@ import io.paradaux.treasuryrestapi.mapper.WebhookSubscriptionMapper;
 import io.paradaux.treasuryrestapi.model.WebhookSubscription;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.util.Hex;
+import java.security.SecureRandom;
+import java.time.ZoneOffset;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.security.SecureRandom;
-import java.time.ZoneOffset;
-import java.util.List;
-
 /**
  * Self-service management of webhook subscriptions, scoped to the calling API
  * key ({@link VerifiedToken#keyId()}). PERSONAL/GOVERNMENT keys subscribe their
- * own account; BUSINESS keys subscribe their firm (all its accounts). Players
+ * own account; BUSINESS keys subscribe their selected account or, for firm-wide keys,
+ * all the firm's accounts. Players
  * supply the URL, so it is SSRF-validated on create/update.
  */
 @Service
@@ -33,9 +33,10 @@ public class WebhookService {
     private final WebhookTargetPolicy targetPolicy;
     private final int maxPerKey;
 
-    public WebhookService(WebhookSubscriptionMapper mapper,
-                          WebhookTargetPolicy targetPolicy,
-                          @Value("${treasury.webhook.max-per-key:20}") int maxPerKey) {
+    public WebhookService(
+            WebhookSubscriptionMapper mapper,
+            WebhookTargetPolicy targetPolicy,
+            @Value("${treasury.webhook.max-per-key:20}") int maxPerKey) {
         this.mapper = mapper;
         this.targetPolicy = targetPolicy;
         this.maxPerKey = maxPerKey;
@@ -45,7 +46,9 @@ public class WebhookService {
         targetPolicy.validate(url);
 
         if (mapper.countByApiKey(verified.keyId()) >= maxPerKey) {
-            throw new ApiException(HttpStatus.CONFLICT, "WEBHOOK_LIMIT",
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "WEBHOOK_LIMIT",
                     "This API key already has the maximum of " + maxPerKey + " webhooks.");
         }
 
@@ -53,7 +56,7 @@ public class WebhookService {
         sub.setApiKeyId(verified.keyId());
         sub.setOwnerUuid(verified.ownerUuid());
         sub.setKeyType(verified.keyType());
-        if ("BUSINESS".equals(verified.keyType())) {
+        if ("BUSINESS".equals(verified.keyType()) && verified.accountId() == null) {
             if (verified.firmId() == null) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_KEY", "BUSINESS key has no firm scope.");
             }
@@ -69,19 +72,27 @@ public class WebhookService {
         sub.setSecret(secret);
 
         mapper.insert(sub);
-        log.info("Webhook created id={} keyId={} scope={} url={}",
-                sub.getSubscriptionId(), verified.keyId(),
-                sub.getFirmId() != null ? "firm:" + sub.getFirmId() : "account:" + sub.getAccountId(), url);
+        log.info(
+                "Webhook created id={} keyId={} scope={} url={}",
+                sub.getSubscriptionId(),
+                verified.keyId(),
+                sub.getFirmId() != null ? "firm:" + sub.getFirmId() : "account:" + sub.getAccountId(),
+                url);
 
-        return new CreateWebhookResponse(sub.getSubscriptionId(),
+        return new CreateWebhookResponse(
+                sub.getSubscriptionId(),
                 sub.getFirmId() != null ? "firm" : "account",
                 sub.getAccountId() != null ? sub.getAccountId().longValue() : null,
                 sub.getFirmId() != null ? sub.getFirmId().longValue() : null,
-                sub.getTargetUrl(), true, secret);
+                sub.getTargetUrl(),
+                true,
+                secret);
     }
 
     public List<WebhookResponse> list(VerifiedToken verified) {
-        return mapper.listByApiKey(verified.keyId()).stream().map(WebhookService::toResponse).toList();
+        return mapper.listByApiKey(verified.keyId()).stream()
+                .map(WebhookService::toResponse)
+                .toList();
     }
 
     public WebhookResponse get(VerifiedToken verified, long id) {
@@ -97,7 +108,8 @@ public class WebhookService {
         }
         boolean newActive = active != null ? active : sub.isActive();
         mapper.update(id, newUrl, newActive);
-        log.info("Webhook updated id={} keyId={} active={} urlChanged={}", id, verified.keyId(), newActive, url != null);
+        log.info(
+                "Webhook updated id={} keyId={} active={} urlChanged={}", id, verified.keyId(), newActive, url != null);
         return toResponse(mapper.findById(id));
     }
 
@@ -121,11 +133,14 @@ public class WebhookService {
     }
 
     private static WebhookResponse toResponse(WebhookSubscription s) {
-        return new WebhookResponse(s.getSubscriptionId(),
+        return new WebhookResponse(
+                s.getSubscriptionId(),
                 s.getFirmId() != null ? "firm" : "account",
                 s.getAccountId() != null ? s.getAccountId().longValue() : null,
                 s.getFirmId() != null ? s.getFirmId().longValue() : null,
-                s.getTargetUrl(), s.isActive(), s.getConsecutiveFailures(),
+                s.getTargetUrl(),
+                s.isActive(),
+                s.getConsecutiveFailures(),
                 s.getCreatedAt() != null ? s.getCreatedAt().toInstant(ZoneOffset.UTC) : null);
     }
 
