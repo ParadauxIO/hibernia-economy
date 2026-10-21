@@ -170,7 +170,16 @@ public class FirmAccountServiceImpl implements FirmAccountService {
             }
 
             // Create Treasury account
-            Account account = treasury.createAccount(AccountType.BUSINESS, actorId, accountName);
+            Account account;
+            try {
+                account = treasury.createAccount(AccountType.BUSINESS, actorId, accountName);
+            } catch (RuntimeException e) {
+                // Treasury has its own framework exception classes; render through Business's handler.
+                NameReservationErrors.userMessage(e).ifPresent(message -> {
+                    throw new BadCommandException(message);
+                });
+                throw e;
+            }
 
             // Register it with the firm
             firmAccounts.insertFirmAccount(firmId, account.getAccountId());

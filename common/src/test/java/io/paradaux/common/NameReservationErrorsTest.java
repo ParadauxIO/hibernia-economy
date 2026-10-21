@@ -28,4 +28,32 @@ class NameReservationErrorsTest {
                 .orElseThrow()
                 .contains("nonblank"));
     }
+
+    @Test
+    void recognizesShopAliasConstraintButRequiresDuplicateKeyErrorCode() {
+        assertTrue(
+                NameReservationErrors.userMessage(new SQLException("Duplicate key uq_firm_shop_alias", "23000", 1062))
+                        .isPresent());
+        for (String constraint : new String[] {"uq_firm_shop_alias", "uq_firm_reserved_display_name"}) {
+            assertTrue(NameReservationErrors.userMessage(new SQLException(constraint, "23000", 1048))
+                    .isEmpty());
+        }
+    }
+
+    @Test
+    void ignoresSqlErrorsWithoutMessages() {
+        assertTrue(NameReservationErrors.userMessage(new SQLException(null, "23000", 1062))
+                .isEmpty());
+        assertTrue(NameReservationErrors.userMessage(new SQLException(null, "45000", 1644))
+                .isEmpty());
+    }
+
+    @Test
+    void boundsCauseTraversalWithoutMissingTheLastAllowedCause() {
+        Throwable withinLimit = new SQLException("GLOBAL_NAME_CONFLICT:", "45000", 1644);
+        for (int i = 0; i < 31; i++) withinLimit = new RuntimeException(withinLimit);
+        assertTrue(NameReservationErrors.userMessage(withinLimit).isPresent());
+        assertTrue(NameReservationErrors.userMessage(new RuntimeException(withinLimit))
+                .isEmpty());
+    }
 }

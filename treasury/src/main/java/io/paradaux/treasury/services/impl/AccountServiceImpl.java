@@ -316,7 +316,8 @@ public class AccountServiceImpl implements AccountService {
             accountMapper.insertAccount(account);
         } catch (RuntimeException e) {
             NameReservationErrors.userMessage(e).ifPresent(message -> {
-                throw new ConflictException(message);
+                // Preserve the JDBC cause so other plugin classloaders can classify the signal.
+                throw new ConflictException(message, e);
             });
             throw e;
         }
@@ -344,7 +345,8 @@ public class AccountServiceImpl implements AccountService {
             accountMapper.updateAccount(account);
         } catch (RuntimeException e) {
             NameReservationErrors.userMessage(e).ifPresent(message -> {
-                throw new ConflictException(message);
+                // Preserve the JDBC cause so other plugin classloaders can classify the signal.
+                throw new ConflictException(message, e);
             });
             throw e;
         }
