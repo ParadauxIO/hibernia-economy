@@ -47,8 +47,8 @@ public class ReloadCommand implements CommandHandler {
             firmConfig.reload();          // refresh firm.owned-limit / create-cooldown
             balanceTaxConfig.reload();    // refresh tax.balance.* brackets
         } catch (RuntimeException e) {
-            business.getLogger().warning("Config reload failed: " + e);
-            message.send(sender, "business.admin.reload.failed", "error", e.getMessage());
+            business.getLogger().log(java.util.logging.Level.WARNING, "Config reload failed", e);
+            message.send(sender, "business.admin.reload.failed", "error", "Could not reload configuration");
             return;
         }
         message.send(sender, "business.admin.reload.success");

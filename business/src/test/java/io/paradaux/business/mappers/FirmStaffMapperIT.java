@@ -1,6 +1,7 @@
 package io.paradaux.business.mappers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmEmployee;
@@ -70,6 +71,44 @@ class FirmStaffMapperIT extends IntegrationTestBase {
         int rows = staff.endCurrentEmployment(firmId, employee.toString(), actor.toString());
         assertThat(rows).isEqualTo(1);
         assertThat(staff.isEmployedBy(firmId, employee.toString())).isFalse();
+    }
+
+    @Test
+    void repeatedDeparturesPreserveHistoryAndStillRejectDuplicateCurrentEmployment() throws Exception {
+        staff.insertEmployment(firmId, employee.toString(), "Worker", actor.toString());
+        staff.endCurrentEmployment(firmId, employee.toString(), actor.toString());
+        // Separate historical start times without sleeps: joined_at is part of the primary key.
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(
+                     "UPDATE firm_employee SET joined_at = joined_at - INTERVAL 1 DAY WHERE firm_id = ?")) {
+            statement.setInt(1, firmId);
+            statement.executeUpdate();
+        }
+        staff.insertEmployment(firmId, employee.toString(), "Worker", actor.toString());
+        assertThat(staff.endCurrentEmployment(firmId, employee.toString(), actor.toString())).isEqualTo(1);
+        assertThat(staff.isEmployedBy(firmId, employee.toString())).isFalse();
+        try (var connection = dataSource.getConnection();
+             var statement = connection.prepareStatement(
+                     "SELECT COUNT(*) FROM firm_employee WHERE firm_id = ? AND left_at IS NOT NULL")) {
+            statement.setInt(1, firmId);
+            try (var rows = statement.executeQuery()) {
+                rows.next();
+                assertThat(rows.getInt(1)).isEqualTo(2);
+            }
+        }
+        // A different start time avoids the primary key, exercising the current-job unique index.
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            statement.executeUpdate("INSERT INTO firm_employee "
+                    + "(firm_id, player_uuid_bin, role_id, joined_at, added_by_uuid_bin) "
+                    + "SELECT firm_id, player_uuid_bin, role_id, joined_at + INTERVAL 2 DAY, added_by_uuid_bin "
+                    + "FROM firm_employee WHERE firm_id = " + firmId + " ORDER BY joined_at DESC LIMIT 1");
+            assertThatThrownBy(() -> statement.executeUpdate("INSERT INTO firm_employee "
+                    + "(firm_id, player_uuid_bin, role_id, joined_at, added_by_uuid_bin) "
+                    + "SELECT firm_id, player_uuid_bin, role_id, joined_at + INTERVAL 1 DAY, added_by_uuid_bin "
+                    + "FROM firm_employee WHERE firm_id = " + firmId + " AND left_at IS NULL"))
+                    .isInstanceOf(java.sql.SQLIntegrityConstraintViolationException.class)
+                    .hasMessageContaining("uq_emp_one_current");
+        }
     }
 
     @Test
