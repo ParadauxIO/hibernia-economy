@@ -1,25 +1,24 @@
 package io.paradaux.treasuryapi.commands;
 
-import io.paradaux.business.api.BusinessApi;
-import io.paradaux.business.api.FirmApi;
-import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.treasuryapi.model.economy.ApiKey;
-import io.paradaux.treasuryapi.model.economy.KeyType;
-import io.paradaux.treasuryapi.services.ApiKeyService;
-import org.bukkit.entity.Player;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.business.api.BusinessApi;
+import io.paradaux.business.api.FirmApi;
+import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.treasuryapi.model.economy.ApiKey;
+import io.paradaux.treasuryapi.model.economy.KeyType;
+import io.paradaux.treasuryapi.services.ApiKeyService;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+import org.bukkit.entity.Player;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Pins the ADT-111 {@code canManage} authorization on {@link BusinessKeyHandler}:
@@ -68,6 +67,39 @@ class BusinessKeyHandlerTest {
     }
 
     @Test
+    void issueAccount_preservesSelectedSubaccountAndDisplaysScope() {
+        var firm = new io.paradaux.business.model.Firm();
+        firm.setFirmId(7);
+        firm.setDisplayName("Acme");
+        firm.setDefaultAccountId(40);
+        when(firms.getFirm("Acme")).thenReturn(firm);
+        when(firms.isProprietor(7, proprietorId)).thenReturn(true);
+        ApiKey key = businessKey(7, false);
+        key.setAccountId(42);
+        key.setToken("scoped-token");
+        when(apiKeyService.issueBusinessKey(7, 42, proprietorId)).thenReturn(key);
+        when(message.format("treasuryapi.business.scope.account", "accountId", "42"))
+                .thenReturn("account #42");
+        handler.doIssue(proprietor, "Acme", 42);
+        verify(apiKeyService).issueBusinessKey(7, 42, proprietorId);
+        verify(apiKeyService, never()).issueBusinessKey(anyInt(), any());
+        verify(message)
+                .send(
+                        proprietor,
+                        "treasuryapi.business.issue.success",
+                        "keyId",
+                        "21",
+                        "firmId",
+                        "7",
+                        "firmName",
+                        "Acme",
+                        "scope",
+                        "account #42",
+                        "token",
+                        "scoped-token");
+    }
+
+    @Test
     void doReissue_nonProprietor_isRejected_andNeverReissues() {
         when(apiKeyService.getKey(21)).thenReturn(businessKey(7, false));
         when(firms.isProprietor(7, outsiderId)).thenReturn(false);
@@ -89,8 +121,7 @@ class BusinessKeyHandlerTest {
         handler.doReissue(proprietor, 21);
 
         verify(apiKeyService).reissueKey(21, proprietorId);
-        verify(message).send(proprietor, "treasuryapi.business.reissue.success",
-                "keyId", "21", "token", "biz-token");
+        verify(message).send(proprietor, "treasuryapi.business.reissue.success", "keyId", "21", "token", "biz-token");
     }
 
     @Test
