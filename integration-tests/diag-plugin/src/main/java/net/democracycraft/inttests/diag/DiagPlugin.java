@@ -103,6 +103,102 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 b.getX(), b.getY(), b.getZ(), e.isCancelled()));
     }
 
+    private final java.util.Map<UUID, long[]> menuEvents = new java.util.HashMap<>();
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void onMenuClick(org.bukkit.event.inventory.InventoryClickEvent event) {
+        long[] counts = menuEvents.computeIfAbsent(event.getWhoClicked().getUniqueId(), ignored -> new long[3]);
+        counts[0]++;
+        if (event.isCancelled()) counts[2]++;
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void onMenuDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
+        long[] counts = menuEvents.computeIfAbsent(event.getWhoClicked().getUniqueId(), ignored -> new long[3]);
+        counts[1]++;
+        if (event.isCancelled()) counts[2]++;
+    }
+
+    /** Test-only inventory observation and fixture setup. Clicks themselves always arrive over the wire. */
+    private boolean doMenuDiagnostic(CommandSender sender, String[] args) {
+        try {
+            if (args[0].equals("menusetting")) {
+                var cs = java.util.Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("ChestShop"));
+                var file = new java.io.File(cs.getDataFolder(), "find.yml");
+                var yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file);
+                if (!java.util.Set.of("shop-icon-left-click-command", "shop-icon-right-click-command").contains(args[1])) {
+                    throw new IllegalArgumentException("Unsupported finder setting");
+                }
+                yaml.set(args[1], args.length < 3 ? "" : String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
+                yaml.save(file);
+                var field = cs.getClass().getDeclaredField("injector");
+                field.setAccessible(true);
+                var loader = cs.getClass().getClassLoader();
+                var type = loader.loadClass("io.paradaux.chestshop.services.FindPresentation");
+                var service = loader.loadClass("io.paradaux.chestshop.Libs.guice.Injector")
+                        .getMethod("getInstance", Class.class).invoke(field.get(cs), type);
+                type.getMethod("reload").invoke(service);
+                sender.sendMessage("updated");
+                return true;
+            }
+            Player player = java.util.Objects.requireNonNull(Bukkit.getPlayerExact(args[1]), "player");
+            if (args[0].equals("menucursor")) {
+                player.setItemOnCursor(new ItemStack(Material.valueOf(args[2]), Integer.parseInt(args[3])));
+                sender.sendMessage("updated");
+            } else if (args[0].equals("menuplain")) {
+                var inventory = Bukkit.createInventory(null, 27, net.kyori.adventure.text.Component.text("Unrelated"));
+                inventory.setItem(0, new ItemStack(Material.DIAMOND, 7));
+                player.openInventory(inventory);
+                sender.sendMessage("opened");
+            } else {
+                var json = new com.google.gson.JsonObject();
+                var view = player.getOpenInventory();
+                if (args[0].equals("menuslot")) {
+                    ItemStack item = view.getTopInventory().getItem(Integer.parseInt(args[2]));
+                    json.addProperty("material", item == null ? "AIR" : item.getType().name());
+                    if (item != null) {
+                        json.addProperty("name", plain(item.effectiveName()));
+                        json.addProperty("lore", item.lore() == null ? "" : item.lore().stream()
+                                .map(DiagPlugin::plain).collect(java.util.stream.Collectors.joining(" | ")));
+                    }
+                } else {
+                    long[] events = menuEvents.getOrDefault(player.getUniqueId(), new long[3]);
+                    json.addProperty("clicks", events[0]);
+                    json.addProperty("drags", events[1]);
+                    json.addProperty("denied", events[2]);
+                    json.addProperty("tick", Bukkit.getCurrentTick());
+                    json.addProperty("title", plain(view.title()));
+                    json.addProperty("size", view.getTopInventory().getSize());
+                    json.addProperty("inventory", inventoryHash(player.getInventory().getContents()));
+                    json.addProperty("cursor", inventoryHash(new ItemStack[]{player.getItemOnCursor()}));
+                    json.addProperty("top", inventoryHash(view.getTopInventory().getContents()));
+                    json.addProperty("drops", player.getWorld().getEntitiesByClass(org.bukkit.entity.Item.class).size());
+                }
+                sender.sendMessage(json.toString());
+            }
+        } catch (Exception e) {
+            sender.sendMessage("menu diagnostic failed: " + e);
+        }
+        return true;
+    }
+
+    private static String plain(net.kyori.adventure.text.Component component) {
+        return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(component);
+    }
+
+    private static String inventoryHash(ItemStack[] items) throws java.security.NoSuchAlgorithmException {
+        var digest = java.security.MessageDigest.getInstance("SHA-256");
+        for (ItemStack item : items) {
+            if (item == null || item.getType().isAir()) digest.update((byte) 0);
+            else {
+                byte[] bytes = item.serializeAsBytes();
+                digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.length).array());
+                digest.update(bytes);
+            }
+        }
+        return java.util.HexFormat.of().formatHex(digest.digest());
+    }
+
     // ---------------------------------------------------------------- commands
 
     @Override
@@ -199,6 +295,12 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doInteractions(sender, args);
             case "perm":
                 return doPerm(sender, args);
+            case "menustate":
+            case "menucursor":
+            case "menuslot":
+            case "menuplain":
+            case "menusetting":
+                return doMenuDiagnostic(sender, args);
             case "asyncidle":
                 return doAsyncIdle(sender, args);
             case "ingeststub":

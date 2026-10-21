@@ -113,6 +113,7 @@ public class ChestShop extends JavaPlugin {
                         .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
                         // Usher dialog handlers — the /find search flow (first Usher use).
                         .dialogs(io.paradaux.chestshop.dialogs.FindDialog.class)
+                        .menus(io.paradaux.chestshop.dialogs.FindResultsMenu.class)
                         // Bukkit entrypoints — Guice-constructed so each injects the
                         // services it needs (listener → service → persistence), and
                         // registered in one call via ListenerManager#registerAll (PAR-282).
@@ -126,7 +127,6 @@ public class ChestShop extends JavaPlugin {
                                 SignCreateListener.class,
                                 BlockPlaceListener.class,
                                 io.paradaux.chestshop.listeners.SignBacksideProtectorListener.class,
-                                io.paradaux.chestshop.dialogs.FindResultsMenu.class,
                                 MarketListener.class,
                                 PlayerConnectListener.class,
                                 PlayerInteractListener.class,
@@ -151,6 +151,9 @@ public class ChestShop extends JavaPlugin {
                 .registerAll();
 
         io.paradaux.chestshop.integration.LegacyCompatibility.install(injector);
+        injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                .registerAll();
+
         loadConfig();
 
         itemCodes.migrateIfNeeded();
@@ -238,6 +241,8 @@ public class ChestShop extends JavaPlugin {
         }
 
         if (injector != null) {
+            injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                    .shutdown();
             // The preview displays are live entities; untracked, they'd float on until chunk unload.
             injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)
                     .destroyAll();

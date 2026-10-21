@@ -67,7 +67,7 @@ import java.util.function.Predicate;
  * on arbitrary clientbound packets.
  *
  * <p>Designed for end-to-end integration testing of Paper plugins. Not a full
- * client — no rendering, no chunk handling, no inventory tracking. Only the
+ * client — no rendering, no chunk handling, no client-side inventory prediction. Only the
  * protocol surface needed to drive plugin commands and capture their output.
  *
  * <p>Usage:
@@ -515,6 +515,21 @@ public final class MockPlayer implements AutoCloseable {
         LOG.debug("[{}] sign-update at {} frontText={} lines={}", username, pos, frontText, List.of(lines));
     }
 
+    /** Send a protocol packet, including deliberately stale/forged packets in adversarial tests. */
+    public void sendPacket(Packet packet) {
+        session.send(Objects.requireNonNull(packet, "packet"));
+    }
+
+    private final java.util.Map<Integer, org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerSetContentPacket>
+            containers = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Latest complete server inventory snapshot; never predicts client-side transfers. */
+    public Optional<org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerSetContentPacket>
+            containerContent(int id) {
+        var content = containers.get(id);
+        return content == null ? Optional.empty() : Optional.of(content.withItems(content.getItems().clone()));
+    }
+
     // ------------------------------------------------------------------ generic packet observation
 
     /**
@@ -727,6 +742,17 @@ public final class MockPlayer implements AutoCloseable {
     private final class SessionListener extends SessionAdapter {
         @Override
         public void packetReceived(Session s, Packet p) {
+            if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerSetContentPacket content) {
+                containers.put(content.getContainerId(), content);
+            }
+            if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerSetSlotPacket slot) {
+                containers.computeIfPresent(slot.getContainerId(), (id, previous) -> {
+                    var items = previous.getItems().clone();
+                    if (slot.getSlot() >= 0 && slot.getSlot() < items.length) items[slot.getSlot()] = slot.getItem();
+                    return previous.withItems(items).withStateId(slot.getStateId());
+                });
+            }
+
             // Play-state ready signal. We also send ClientInformation here:
             // without it the server has no render distance for this client and
             // sends zero chunks, which means the player's server-side chunk
