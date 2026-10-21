@@ -65,7 +65,7 @@ d('account name resolution', () => {
 
   it('keeps a real business display name', async () => {
     const a = await findAccount(3);
-    expect(accountLabel(a!)).toBe('Acme Corp');
+    expect(accountLabel(a!)).toBe('Acme Corporate Account');
   });
 
   it('falls back to a short UUID for a player not in economy_players (Dave)', async () => {
@@ -82,7 +82,7 @@ d('transaction postings resolve names (the HIGH bug fix)', () => {
     expect(postings).toHaveLength(2);
     const labels = postings.map((p) => accountLabel(p));
     expect(labels).toContain('Alice');
-    expect(labels).toContain('Acme Corp');
+    expect(labels).toContain('Acme Corporate Account');
     for (const l of labels) expect(looksLikeUuid(l)).toBe(false);
   });
 });

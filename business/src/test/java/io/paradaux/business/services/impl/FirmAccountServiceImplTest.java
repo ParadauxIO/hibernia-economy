@@ -125,6 +125,20 @@ class FirmAccountServiceImplTest {
         verify(treasury).addAuthorizer(99, owner, owner);
     }
 
+    @Test
+    void createAccountTranslatesForeignPluginNamespaceFailureWithoutLinkingAccount() {
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        // A foreign plugin's exception need not share Business's exception classloader.
+        var failure =
+                new RuntimeException(new java.sql.SQLException("GLOBAL_NAME_CONFLICT: private detail", "45000", 1644));
+        when(treasury.createAccount(AccountType.BUSINESS, actor, "Reserved")).thenThrow(failure);
+        assertThatThrownBy(() -> svc.createAccount(1, "Reserved", actor))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessage("That name is reserved by another identity. Choose another name or ask an administrator.");
+        verify(firmAccounts, never()).insertFirmAccount(anyInt(), anyInt());
+    }
+
     // ---------- listAccounts ----------
 
     @Test

@@ -374,6 +374,19 @@ export interface FlywaySchemaHistory {
   version: Generated<string | null>;
 }
 
+export interface GlobalNameClaims {
+  entityKey: Generated<string | null>;
+  nameKey: Generated<string | null>;
+  sourceKind: string;
+  subjectId: string;
+}
+
+export interface GlobalNameReservations {
+  claimCount: number;
+  entityKey: string;
+  nameKey: string;
+}
+
 export interface GovernmentFines {
   amount: Decimal;
   debtorAccountId: Generated<number | null>;
@@ -509,6 +522,8 @@ export interface DB {
   firmShopAliasReservations: FirmShopAliasReservations;
   firmTransferRequests: FirmTransferRequests;
   flywaySchemaHistory: FlywaySchemaHistory;
+  globalNameClaims: GlobalNameClaims;
+  globalNameReservations: GlobalNameReservations;
   governmentFines: GovernmentFines;
   ledgerPostings: LedgerPostings;
   ledgerTxns: LedgerTxns;

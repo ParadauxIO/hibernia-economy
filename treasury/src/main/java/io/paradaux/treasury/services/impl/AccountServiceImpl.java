@@ -1,7 +1,8 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
+import io.paradaux.common.NameReservationErrors;
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.MembershipMapper;
 import io.paradaux.treasury.model.Page;
@@ -15,9 +16,6 @@ import io.paradaux.treasury.model.economy.EconomySummary;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.cache.AccountRedirectCache;
 import io.paradaux.treasury.services.cache.PersonalAccountCache;
-import org.apache.ibatis.exceptions.PersistenceException;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -29,6 +27,9 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.mybatis.guice.transactional.Transactional;
 
 @Slf4j
 public class AccountServiceImpl implements AccountService {
@@ -45,11 +46,12 @@ public class AccountServiceImpl implements AccountService {
     private volatile String formatterPattern;
 
     @Inject
-    public AccountServiceImpl(AccountMapper accountMapper,
-                              MembershipMapper membershipMapper,
-                              AccountRedirectCache redirectCache,
-                              PersonalAccountCache personalAccountCache,
-                              EconomyConfiguration economyConfig) {
+    public AccountServiceImpl(
+            AccountMapper accountMapper,
+            MembershipMapper membershipMapper,
+            AccountRedirectCache redirectCache,
+            PersonalAccountCache personalAccountCache,
+            EconomyConfiguration economyConfig) {
         this.accountMapper = accountMapper;
         this.membershipMapper = membershipMapper;
         this.redirectCache = redirectCache;
@@ -262,8 +264,7 @@ public class AccountServiceImpl implements AccountService {
         if (existing != null) return existing.getAccountId();
         // Vault bridge SYSTEM accounts are faucets/sinks. credit_limit = -1
         // disables the credit-limit check — the account can mint and burn freely.
-        Account acc = new Account(0, AccountType.SYSTEM, owner, pluginName,
-                false, false, true, BigDecimal.valueOf(-1));
+        Account acc = new Account(0, AccountType.SYSTEM, owner, pluginName, false, false, true, BigDecimal.valueOf(-1));
         try {
             accountMapper.insertAccount(acc);
             accountMapper.seedBalance(acc.getAccountId());
@@ -291,6 +292,7 @@ public class AccountServiceImpl implements AccountService {
         Objects.requireNonNull(accountType, "accountType");
         Objects.requireNonNull(ownerUuid, "ownerUuid");
         Objects.requireNonNull(displayName, "displayName");
+        displayName = displayName.replaceAll("^ +| +$", "");
 
         Account account = new Account();
         account.setAccountType(accountType);
@@ -310,10 +312,22 @@ public class AccountServiceImpl implements AccountService {
             account.setCreditLimit(BigDecimal.ZERO);
         }
 
-        accountMapper.insertAccount(account);
+        try {
+            accountMapper.insertAccount(account);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                // Preserve the JDBC cause so other plugin classloaders can classify the signal.
+                throw new ConflictException(message, e);
+            });
+            throw e;
+        }
         accountMapper.seedBalance(account.getAccountId());
-        log.debug("Created {} account '{}' (id={}, owner={})",
-                accountType, displayName, account.getAccountId(), ownerUuid);
+        log.debug(
+                "Created {} account '{}' (id={}, owner={})",
+                accountType,
+                displayName,
+                account.getAccountId(),
+                ownerUuid);
         return account;
     }
 
@@ -321,10 +335,21 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public void updateAccount(Account account) {
         Objects.requireNonNull(account, "account");
+        if (account.getDisplayName() != null) {
+            account.setDisplayName(account.getDisplayName().replaceAll("^ +| +$", ""));
+        }
         if (accountMapper.findById(account.getAccountId()) == null) {
             throw new IllegalArgumentException("Account not found: " + account.getAccountId());
         }
-        accountMapper.updateAccount(account);
+        try {
+            accountMapper.updateAccount(account);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                // Preserve the JDBC cause so other plugin classloaders can classify the signal.
+                throw new ConflictException(message, e);
+            });
+            throw e;
+        }
     }
 
     @Override
@@ -418,7 +443,9 @@ public class AccountServiceImpl implements AccountService {
                 case PERSONAL -> personal = total;
                 case BUSINESS -> business = total;
                 case GOVERNMENT -> government = total;
-                default -> { /* SYSTEM is excluded by the query */ }
+                default -> {
+                    /* SYSTEM is excluded by the query */
+                }
             }
         }
         return new EconomySummary(personal, business, government);
