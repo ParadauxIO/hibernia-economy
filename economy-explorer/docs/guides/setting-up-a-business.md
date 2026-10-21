@@ -19,6 +19,18 @@ Everything below uses the `/business` command. It also answers to `/firm` and
 > Spaces and other symbols won't work; they're stripped automatically. The name is 2–32
 > characters and **can't start with a digit**.
 
+## Choose an available name
+
+Business names, account names, player names and shop aliases share one namespace.
+Changing case or accents does not make a taken name available; surrounding spaces
+are ignored, while punctuation remains significant. Owning another entity does
+not let you reuse its name. Your personal wallet can share your own player name.
+
+Disbanding a firm keeps its name reserved until an administrator explicitly
+releases it. Archived account names and old shop aliases also remain reserved.
+A Minecraft name-change conflict requires administrator help; it never transfers
+another player's wallet or changes your UUID.
+
 ## Create your firm
 
 ```text

@@ -115,26 +115,30 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         int second = insertStubAccount("Second");
         firmAccounts.insertFirmAccount(firmId, first);
         firmAccounts.insertFirmAccount(firmId, second);
-        assertThat(firmAccounts.setShopAlias(firmId, first, "Acme")).isEqualTo(1);
-        assertThat(firmAccounts.getShopAlias(firmId, first)).isEqualTo("Acme");
-        assertThat(firmAccounts.resolveShopAlias("ACME")).isEqualTo(first);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "acme"))
+        assertThat(firmAccounts.setShopAlias(firmId, first, "ShopName")).isEqualTo(1);
+        assertThat(firmAccounts.getShopAlias(firmId, first)).isEqualTo("ShopName");
+        assertThat(firmAccounts.resolveShopAlias("SHOPNAME")).isEqualTo(first);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "shopname"))
                 .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
         firmAccounts.setShopAlias(firmId, first, null);
-        firmAccounts.setShopAlias(firmId, second, "acme");
-        assertThat(firmAccounts.resolveShopAlias("ACME")).isEqualTo(second);
-        firmAccounts.removeFirmAccount(firmId, second);
-        assertThat(firmAccounts.resolveShopAlias("acme")).isNull();
-        assertThat(firmAccounts.setShopAlias(firmId, second, "other")).isZero();
+        // Clearing an alias does not release historical sign ownership, even
+        // when a writer uses the mapper directly instead of the service.
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "shopname"))
+                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
+        firmAccounts.setShopAlias(firmId, first, "shopname");
+        assertThat(firmAccounts.resolveShopAlias("SHOPNAME")).isEqualTo(first);
+        firmAccounts.removeFirmAccount(firmId, first);
+        assertThat(firmAccounts.resolveShopAlias("shopname")).isNull();
+        assertThat(firmAccounts.setShopAlias(firmId, first, "other")).isZero();
     }
 
     @Test
     void shopAliases_disbandedFirmDoesNotResolve() throws Exception {
         int account = insertStubAccount("Shop");
         firmAccounts.insertFirmAccount(firmId, account);
-        firmAccounts.setShopAlias(firmId, account, "acme");
+        firmAccounts.setShopAlias(firmId, account, "shopname");
         firms.archiveFirm(firmId);
-        assertThat(firmAccounts.resolveShopAlias("acme")).isNull();
+        assertThat(firmAccounts.resolveShopAlias("shopname")).isNull();
         assertThat(firmAccounts.setShopAlias(firmId, account, "other")).isZero();
     }
 
@@ -144,14 +148,14 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         int other = insertStubAccount("Other");
         firmAccounts.insertFirmAccount(firmId, original);
         firmAccounts.insertFirmAccount(firmId, other);
-        firmAccounts.reserveShopAlias("Acme", original);
-        firmAccounts.setShopAlias(firmId, original, "Acme");
+        firmAccounts.reserveShopAlias("ShopName", original);
+        firmAccounts.setShopAlias(firmId, original, "ShopName");
         firmAccounts.setShopAlias(firmId, original, null);
-        assertThat(firmAccounts.resolveShopAlias("Acme")).isNull();
-        firmAccounts.reserveShopAlias("ACME", other);
-        assertThat(firmAccounts.getShopAliasReservation("acme")).isEqualTo(original);
-        firmAccounts.reserveShopAlias("Acme", original);
-        firmAccounts.setShopAlias(firmId, original, "Acme");
-        assertThat(firmAccounts.resolveShopAlias("acme")).isEqualTo(original);
+        assertThat(firmAccounts.resolveShopAlias("ShopName")).isNull();
+        firmAccounts.reserveShopAlias("SHOPNAME", other);
+        assertThat(firmAccounts.getShopAliasReservation("shopname")).isEqualTo(original);
+        firmAccounts.reserveShopAlias("ShopName", original);
+        firmAccounts.setShopAlias(firmId, original, "ShopName");
+        assertThat(firmAccounts.resolveShopAlias("shopname")).isEqualTo(original);
     }
 }

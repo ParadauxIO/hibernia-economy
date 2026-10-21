@@ -36,6 +36,34 @@ disband. Release changes no account links, balances or ownership.
 Deploy V33 together with the Business plugin, REST API and Explorer changes:
 older application versions assume names identify a single row even across archives.
 
+## Shared name namespace (PAR-501)
+
+V38 enforces cross-kind reservations through database triggers. See
+[comparison, projection, lifecycle and rollout rules](name-namespace.md) before
+applying it to an existing dataset.
+
+## Cross-kind name collision inventory (PAR-501)
+
+[`ops/name-collision-inventory.sql`](../ops/name-collision-inventory.sql) is a
+read-only candidate inventory for a consistent restored database snapshot migrated
+through V35 or later. It compares accounts, firms, the unified player directory,
+and current/historical shop alias reservations. It includes archived accounts,
+released firms and same-owner pairs so a reviewer can make explicit lifecycle and
+projection decisions rather than hide them behind implicit exemptions.
+
+Each pair includes IDs, original spelling, owner UUIDs and lifecycle flags. The
+`comparison_basis` column distinguishes existing `utf8mb4_unicode_ci` equality
+from additional candidates that match only after trimming surrounding ASCII
+spaces, as required by V38. Existing whitespace cleanup still requires review. Punctuation
+is significant; blocked-term filtering is not used as a uniqueness rule. Null
+account display names are omitted because they do not identify a name claim.
+
+The script neither enforces uniqueness nor selects remediation winners. It can
+produce a large result and compare many pairs: run it on a restored snapshot,
+not as a frequent live check. A clean result does not by itself approve remediation or remove the
+[projection and lifecycle rules](name-namespace.md). Review collisions by immutable IDs before
+any enforcement migration; do not merge, rename or reroute balances automatically.
+
 ## Why the database owns balances
 
 Balances live in a **materialized table maintained by database triggers**, not by

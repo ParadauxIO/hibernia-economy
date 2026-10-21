@@ -2,8 +2,6 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
@@ -12,12 +10,13 @@ import io.paradaux.business.model.*;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.utils.NameValidator;
+import io.paradaux.common.NameReservationErrors;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
 import io.paradaux.treasury.model.economy.AccountType;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -27,6 +26,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.mybatis.guice.transactional.Transactional;
 
 @Singleton
 public class FirmAccountServiceImpl implements FirmAccountService {
@@ -61,8 +61,7 @@ public class FirmAccountServiceImpl implements FirmAccountService {
             FirmMapper firms,
             FirmStaffMapper staff,
             FirmRoleMapper roles,
-            FirmService firmService
-    ) {
+            FirmService firmService) {
         this.treasury = treasury;
         this.firmAccounts = firmAccounts;
         this.firms = firms;
@@ -117,6 +116,9 @@ public class FirmAccountServiceImpl implements FirmAccountService {
                 throw new BadCommandException("Firm account is no longer active");
             }
         } catch (org.apache.ibatis.exceptions.PersistenceException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                throw new BadCommandException(message);
+            });
             for (Throwable cause = e; cause != null; cause = cause.getCause()) {
                 if (cause instanceof java.sql.SQLException sql && sql.getErrorCode() == 1062) {
                     throw new BadCommandException("That shop alias is already reserved by another account");
@@ -130,7 +132,8 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     @Override
     public Account createAccount(Integer firmId, String accountName, UUID actorId) {
         if (!NameValidator.isValidAccountName(accountName)) {
-            throw new BadCommandException("Account name must be 2–40 characters of letters, digits, space, underscore, hyphen, ampersand, or period.");
+            throw new BadCommandException(
+                    "Account name must be 2–40 characters of letters, digits, space, underscore, hyphen, ampersand, or period.");
         }
 
         Firm firm = firms.getFirmById(firmId);
@@ -160,10 +163,9 @@ public class FirmAccountServiceImpl implements FirmAccountService {
                     .map(FirmAccount::getAccountId)
                     .toList();
             for (Account a : treasury.getAccountsByIds(existingIds).values()) {
-                if (a.getDisplayName() != null
-                        && a.getDisplayName().equalsIgnoreCase(accountName)) {
-                    throw new BadCommandException("An account named '" + accountName
-                            + "' already exists for this firm.");
+                if (a.getDisplayName() != null && a.getDisplayName().equalsIgnoreCase(accountName)) {
+                    throw new BadCommandException(
+                            "An account named '" + accountName + "' already exists for this firm.");
                 }
             }
 
@@ -189,10 +191,7 @@ public class FirmAccountServiceImpl implements FirmAccountService {
                 .map(FirmAccount::getAccountId)
                 .toList();
         Map<Integer, Account> byId = treasury.getAccountsByIds(accountIds);
-        return accountIds.stream()
-                .map(byId::get)
-                .filter(Objects::nonNull)
-                .toList();
+        return accountIds.stream().map(byId::get).filter(Objects::nonNull).toList();
     }
 
     @Override
@@ -302,9 +301,8 @@ public class FirmAccountServiceImpl implements FirmAccountService {
 
         // Reconcile members: add missing, remove stale
         List<AccountMember> currentMembers = treasury.getMembers(accountId);
-        java.util.Set<UUID> currentMemberUuids = currentMembers.stream()
-                .map(AccountMember::getMemberUuid)
-                .collect(java.util.stream.Collectors.toSet());
+        java.util.Set<UUID> currentMemberUuids =
+                currentMembers.stream().map(AccountMember::getMemberUuid).collect(java.util.stream.Collectors.toSet());
 
         for (UUID toAdd : expectedMembers) {
             if (!currentMemberUuids.contains(toAdd)) {
@@ -357,14 +355,18 @@ public class FirmAccountServiceImpl implements FirmAccountService {
             try {
                 Firm firm = firms.getFirmById(firmId);
                 // A disband/archive may have happened since the worklist read.
-                if (firm == null || Boolean.TRUE.equals(firm.getArchived())
+                if (firm == null
+                        || Boolean.TRUE.equals(firm.getArchived())
                         || !firmAccounts.isFirmAccount(firmId, accountId)) {
                     continue;
                 }
                 reconcileAccountMembers(firmId, accountId);
             } catch (RuntimeException e) {
-                LOG.log(Level.WARNING, "Failed to reconcile membership for firm " + firmId
-                        + ", account " + accountId + "; will retry on the next pass.", e);
+                LOG.log(
+                        Level.WARNING,
+                        "Failed to reconcile membership for firm " + firmId + ", account " + accountId
+                                + "; will retry on the next pass.",
+                        e);
             } finally {
                 lock.unlock();
             }
@@ -416,7 +418,8 @@ public class FirmAccountServiceImpl implements FirmAccountService {
             treasury.addAuthorizer(accountId, authorizerUuid, actorId);
         } catch (IllegalStateException e) {
             // Treasury only promotes existing members; say so instead of an internal error.
-            throw new BadCommandException("That player must be a member of the account before they can be made an authorizer.");
+            throw new BadCommandException(
+                    "That player must be a member of the account before they can be made an authorizer.");
         }
         // Access is role-derived (PAR-77): reconcile immediately so the account
         // always reflects firm roles and never drifts until a manual resync.
