@@ -2,7 +2,11 @@
 
 Tracking: [PAR-499](https://app.taskl.ie/w/paradaux/issues/PAR-499).
 Baseline checkout: `b7dfa4a` (develop merge #68, including PAR-448). This is an **in-progress review**,
-not a claim of complete acceptance. The source index contains every syntactically
+not a claim of complete acceptance.
+Current status: the twelve defect areas recorded in earlier rows below are now
+fixed and passed two focused rebuilt runs (47 cases each); see `known-defects.md`
+and `results.md`. Full updated-core verification is pending. Historical failure
+labels below refer to the discovery evidence. The source index contains every syntactically
 found `@Route`, permission/configuration annotation, HTTP mapping, event handler and repeating-task registration in the
 five in-repository runtime modules. `python3 integration-tests/acceptance/inventory.py
 --check` detects index drift. Entries remain unreviewed until their assertions are
@@ -377,3 +381,9 @@ Full core interaction audit: `20261021T230029Z-121106/run-1` completed with
 skips and zero errors in 819.71s. Every failed assertion was classified; no new
 failure category appeared. See `results.md` for skip accounting and build limits.
 The review queue and unavailable-runtime limitations above remain open.
+
+
+Upstream integration: develop through `303135e` adds the PAR-101 derived Business/
+Realty group-reconciliation task. The refreshed source index contains 589 entries.
+That scheduled cross-plugin journey still needs live-stack review; upstream unit
+and SQL tests are not counted as live acceptance here.

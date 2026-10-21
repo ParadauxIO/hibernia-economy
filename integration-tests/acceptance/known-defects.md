@@ -1,10 +1,25 @@
-# Live defects found while expanding PAR-499 coverage
+# Defects found and repaired through PAR-499 live coverage
 
-These are unresolved product defects demonstrated on the disposable live stack.
-Their regression tests remain enabled and failing. Earlier clean full runs predate
-these additions; passing focused selections do not establish full acceptance.
-Production code has not been changed. The question of including narrow product
-fixes in this coverage work remains pending.
+The sections below retain the original pre-fix observations and evidence. They
+were pre-existing product defects discovered by added live tests, not product
+regressions introduced by the coverage commit `33c759d`.
+
+## Current verification status
+
+All twelve defect areas now have production fixes on this branch. The enabled
+regressions and selected authorization/custom-item controls passed twice from clean
+rebuilt stacks: `20261021T234424Z-1362229/run-{1,2}`, **47 passed each**, zero failures,
+errors or skips; 123.11s / 126.12s. Full updated-suite verification remains pending.
+The earlier wording below about enabled failures and unchanged production describes
+the original discovery runs, not the current branch.
+
+Fixes use overflow-safe offsets; resolved firm IDs for disband authorization;
+message-template styling; archived-target rejection; a Business-supplied Treasury
+API lookup for active firm defaults; REST Discord/duplicate-name validation;
+retained-link recovery during disband; transactional revocation of former-owner
+personal keys; and full-width vanilla item codes for custom-item classification.
+Overflow tests now also cover 214748366 and 429496731, alongside Integer.MAX_VALUE.
+No regressions were disabled or converted into expected failures.
 
 ## Balance leaderboard page overflow
 

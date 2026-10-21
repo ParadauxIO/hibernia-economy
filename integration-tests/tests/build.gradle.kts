@@ -100,7 +100,6 @@ tasks.register<JavaExec>("preflight") {
     doFirst { systemProperties(tasks.test.get().systemProperties) }
 }
 
-
 tasks.register<JavaExec>("explorerFixture") {
     group = "verification"
     description = "Create a real player payment for same-stack Explorer browser assertions."

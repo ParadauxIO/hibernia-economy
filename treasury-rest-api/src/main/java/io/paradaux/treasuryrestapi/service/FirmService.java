@@ -169,7 +169,17 @@ public class FirmService {
                     "Account does not belong to the firm associated with this API key.");
         }
 
-        firmMapper.updateAccountDisplayName(accountId, displayName.strip());
+        String normalized = displayName.strip();
+        boolean duplicate = firmMapper.listFirmAccounts(verified.firmId()).stream()
+                .anyMatch(account ->
+                        account.getAccountId() != accountId && normalized.equalsIgnoreCase(account.getDisplayName()));
+        if (duplicate) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "ACCOUNT_NAME_EXISTS",
+                    "Another account in this firm already has that display name.");
+        }
+        firmMapper.updateAccountDisplayName(accountId, normalized);
         log.info(
                 "Account display name updated: accountId={} firmId={} by keyId={}",
                 accountId,

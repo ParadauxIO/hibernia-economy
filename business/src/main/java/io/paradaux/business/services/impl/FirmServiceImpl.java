@@ -375,7 +375,9 @@ public class FirmServiceImpl implements FirmService {
     public List<Firm> listAllFirms(int page, int pageSize) {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 25; // sane default
-        int offset = (page - 1) * pageSize;
+        long requestedOffset = (long) (page - 1) * pageSize;
+        if (requestedOffset > Integer.MAX_VALUE) return List.of();
+        int offset = (int) requestedOffset;
         return firms.listAllFiltered(pageSize, offset, false);
     }
 

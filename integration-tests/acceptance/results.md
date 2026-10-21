@@ -1886,3 +1886,23 @@ occupied or duplicate listener ports before stack startup; a controlled occupied
 socket verified the rejection. It leaves explicitly external database ports alone.
 The 588-entry inventory, shell syntax, three evidence-runner tests and diff checks
 pass. No product behavior was changed for this coverage.
+
+
+## Repair and verify defects exposed by the new coverage
+
+After coverage commit `33c759d`, current develop (`303135e`) was merged at `f4885f2`.
+Production fixes now address all twelve defect areas documented in known-defects.md.
+`./gradlew build --parallel --continue` passes, including DB-backed tests and
+coverage gates. An earlier `-PskipIT` build exposed formatting, incomplete coverage
+and an overly broad draft ownership filter; those are corrected, with ownership
+revocation scoped transactionally to the admin owner-change operation.
+
+`20261021T234424Z-1362229/run-{1,2}`: **47 passed each**, zero failures/errors/skips;
+123.11s / 126.12s. Production jars were rebuilt (IT_SKIP_BUILD unset). Selection:
+all original defect classes, three boundary values for each overflow test,
+DisbandAuthorizationTest and NexoCustomItemTest. This includes real old-key denial,
+replacement-firm payment routing, proprietor and REST partial-disband recovery,
+all five list aliases, invalid Discord rejection, duplicate-name rejection and
+ordinary-item classification. Nexo remains a stub control, not licensed acceptance.
+No live retries or weakened assertions were used. Full updated-core runs remain
+pending. Source inventory now includes 589 entries after upstream group changes.
