@@ -9,4 +9,4 @@ CREATE TABLE explorer_group_sync (
     selector VARCHAR(255) NOT NULL,
     PRIMARY KEY (group_id, source),
     CONSTRAINT fk_group_sync_group FOREIGN KEY (group_id) REFERENCES explorer_group(group_id) ON DELETE CASCADE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
