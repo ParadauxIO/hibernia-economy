@@ -305,7 +305,10 @@ public class TreasuryCommand implements CommandHandler {
             return;
         } catch (RuntimeException e) {
             log.warn("Admin transfer failed ({} -> {}, {})", from.label(), to.label(), normalized, e);
-            message.send(sender, "treasury.admin.transfer.failed", "error",
+            message.send(
+                    sender,
+                    "treasury.admin.transfer.failed",
+                    "error",
                     "An unexpected error occurred. Check the server logs before retrying.");
             return;
         }

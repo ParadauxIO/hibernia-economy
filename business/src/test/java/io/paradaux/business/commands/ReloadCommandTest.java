@@ -1,13 +1,12 @@
 package io.paradaux.business.commands;
 
+import static org.mockito.Mockito.*;
+
 import io.paradaux.business.Business;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.util.logging.Logger;
 import org.bukkit.command.CommandSender;
 import org.junit.jupiter.api.Test;
-
-import java.util.logging.Logger;
-
-import static org.mockito.Mockito.*;
 
 class ReloadCommandTest {
     @Test
@@ -16,7 +15,9 @@ class ReloadCommandTest {
         Message message = mock(Message.class);
         CommandSender sender = mock(CommandSender.class);
         when(business.getLogger()).thenReturn(mock(Logger.class));
-        doThrow(new RuntimeException("private configuration details")).when(business).reloadConfig();
+        doThrow(new RuntimeException("private configuration details"))
+                .when(business)
+                .reloadConfig();
         var command = new ReloadCommand(business, message, null, null);
 
         command.reload(sender);
