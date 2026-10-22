@@ -69,6 +69,7 @@ export interface Accounts {
   isArchived: Generated<number>;
   ownerUuidBin: Buffer;
   requiresAuthorization: Generated<number>;
+  systemPluginKey: Generated<string | null>;
 }
 
 export interface ApiKeys {

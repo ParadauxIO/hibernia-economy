@@ -5,10 +5,9 @@ import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.AccountTypeTotal;
 import io.paradaux.treasury.model.economy.BalanceEntry;
-import org.apache.ibatis.annotations.*;
-
 import java.util.List;
 import java.util.UUID;
+import org.apache.ibatis.annotations.*;
 
 @Mapper
 public interface AccountMapper {
@@ -20,23 +19,25 @@ public interface AccountMapper {
               FROM accounts
              WHERE account_id = #{accountId}
             """)
-    @Results(id = "accountMap", value = {
-            @Result(column = "account_id", property = "accountId", id = true),
-            @Result(column = "account_type", property = "accountType"),
-            @Result(column = "owner_uuid_bin", property = "ownerUuid"),
-            @Result(column = "display_name", property = "displayName"),
-            @Result(column = "requires_authorization", property = "requiresAuthorization"),
-            @Result(column = "is_archived", property = "isArchived"),
-            @Result(column = "allow_overdraft", property = "allowOverdraft"),
-            @Result(column = "credit_limit", property = "creditLimit")
-    })
+    @Results(
+            id = "accountMap",
+            value = {
+                @Result(column = "account_id", property = "accountId", id = true),
+                @Result(column = "account_type", property = "accountType"),
+                @Result(column = "owner_uuid_bin", property = "ownerUuid"),
+                @Result(column = "display_name", property = "displayName"),
+                @Result(column = "requires_authorization", property = "requiresAuthorization"),
+                @Result(column = "is_archived", property = "isArchived"),
+                @Result(column = "allow_overdraft", property = "allowOverdraft"),
+                @Result(column = "credit_limit", property = "creditLimit")
+            })
     Account findById(@Param("accountId") int accountId);
 
     @Select("""
       SELECT a.account_id, a.account_type, a.owner_uuid_bin, a.display_name,
              a.requires_authorization, a.is_archived, a.allow_overdraft, a.credit_limit
         FROM accounts a
-       WHERE a.account_type = 'SYSTEM' AND a.display_name = #{pluginName}
+       WHERE a.account_type = 'SYSTEM' AND a.system_plugin_key = #{pluginName}
        LIMIT 1
       """)
     @ResultMap("accountMap")
@@ -52,7 +53,7 @@ public interface AccountMapper {
             SELECT account_id
               FROM accounts
              WHERE account_type = 'SYSTEM'
-               AND display_name = #{pluginName}
+               AND system_plugin_key = #{pluginName}
              LIMIT 1
              LOCK IN SHARE MODE
             """)
@@ -139,8 +140,8 @@ public interface AccountMapper {
            AND owner_uuid_bin = #{ownerUuid}
         """)
     @ResultMap("accountMap")
-    List<Account> findAccountsByTypeAndOwner(@Param("accountType") AccountType accountType,
-                                            @Param("ownerUuid") UUID ownerUuid);
+    List<Account> findAccountsByTypeAndOwner(
+            @Param("accountType") AccountType accountType, @Param("ownerUuid") UUID ownerUuid);
 
     @Select("""
         SELECT DISTINCT a.account_id, a.account_type, a.owner_uuid_bin, a.display_name,
@@ -155,12 +156,14 @@ public interface AccountMapper {
 
     // ---- inserts ----
 
-    // generic insert (one param -> MyBatis can set generated key)
+    // Capture the plugin key only on creation; updateAccount never changes routing identity.
+    // The DB insert trigger also captures it for legacy/direct SQL writers.
     @Insert("""
             INSERT INTO accounts(
                 account_type,
                 owner_uuid_bin,
                 display_name,
+                system_plugin_key,
                 requires_authorization,
                 is_archived,
                 allow_overdraft,
@@ -170,15 +173,14 @@ public interface AccountMapper {
                 #{accountType},
                 #{ownerUuid},
                 #{displayName},
+                CASE WHEN #{accountType} = 'SYSTEM' THEN #{displayName} END,
                 #{requiresAuthorization},
                 #{isArchived},
                 #{allowOverdraft},
                 #{creditLimit}
             )
             """)
-    @Options(useGeneratedKeys = true,
-            keyProperty = "accountId",
-            keyColumn = "account_id")
+    @Options(useGeneratedKeys = true, keyProperty = "accountId", keyColumn = "account_id")
     int insertAccount(Account account);
 
     @Insert("""
@@ -193,11 +195,13 @@ public interface AccountMapper {
              WHERE account_id = #{accountId}
              FOR UPDATE
             """)
-    @Results(id = "balanceMap", value = {
-            @Result(column = "account_id", property = "accountId", id = true),
-            @Result(column = "balance", property = "balance"),
-            @Result(column = "version", property = "version")
-    })
+    @Results(
+            id = "balanceMap",
+            value = {
+                @Result(column = "account_id", property = "accountId", id = true),
+                @Result(column = "balance", property = "balance"),
+                @Result(column = "version", property = "version")
+            })
     AccountBalance lockBalance(@Param("accountId") int accountId);
 
     /** Non-locking balance read for read-only API calls. */
@@ -285,12 +289,14 @@ public interface AccountMapper {
              ORDER BY b.balance DESC
              LIMIT #{limit} OFFSET #{offset}
             """)
-    @Results(id = "balanceEntryMap", value = {
-            @Result(column = "account_id", property = "accountId", id = true),
-            @Result(column = "owner_uuid_bin", property = "ownerUuid"),
-            @Result(column = "display_name", property = "displayName"),
-            @Result(column = "balance", property = "balance")
-    })
+    @Results(
+            id = "balanceEntryMap",
+            value = {
+                @Result(column = "account_id", property = "accountId", id = true),
+                @Result(column = "owner_uuid_bin", property = "ownerUuid"),
+                @Result(column = "display_name", property = "displayName"),
+                @Result(column = "balance", property = "balance")
+            })
     List<BalanceEntry> getTopBalances(@Param("limit") int limit, @Param("offset") int offset);
 
     // ---- economy summary ----
@@ -308,9 +314,7 @@ public interface AccountMapper {
                AND a.account_type IN ('PERSONAL', 'BUSINESS', 'GOVERNMENT')
              GROUP BY a.account_type
             """)
-    @Results({
-            @Result(column = "account_type", property = "accountType"),
-            @Result(column = "total", property = "total")
+    @Results({@Result(column = "account_type", property = "accountType"), @Result(column = "total", property = "total")
     })
     List<AccountTypeTotal> getEconomyTotalsByType();
 
@@ -338,5 +342,4 @@ public interface AccountMapper {
         """)
     @ResultMap("accountMap")
     Account findBusinessAccountByName(@Param("name") String name);
-
 }

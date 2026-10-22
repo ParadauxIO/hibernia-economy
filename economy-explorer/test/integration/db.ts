@@ -10,9 +10,8 @@ import { withoutUndefined } from '../../lib/util/withoutUndefined';
 // The schema is the AUTHORITATIVE one: every economy-flyway migration, applied in
 // version order — the same files Flyway runs in production, including the balance
 // triggers (trg_postings_*), stored functions, generated columns and views. No JVM
-// is needed: the migrations carry no client-side DELIMITER directives and MariaDB
-// parses stored-program bodies itself, so each file goes over as one
-// multi-statement query.
+// is needed: MariaDB parses stored-program bodies itself. Translate any CLI
+// delimiter directives before sending each file as one multi-statement query.
 export const HAS_DB = process.env.RUN_INTEGRATION === '1';
 
 // Resolved from the package root (vitest and Playwright both run there) rather than
@@ -26,6 +25,24 @@ export function migrationFiles(dir: string = MIGRATIONS): string[] {
   const files = readdirSync(dir).filter((f) => /^V\d+__.+\.sql$/.test(f));
   if (files.length === 0) throw new Error(`no Flyway migrations found in ${dir}`);
   return files.sort((a, b) => version(a) - version(b)).map((f) => resolve(dir, f));
+}
+
+/** Translate the standalone DELIMITER directives and line-ending terminators
+ * used by our migrations. Leave stored-program bodies and SQL strings intact. */
+export function migrationSql(script: string): string {
+  let delimiter = ';';
+  return script.split('\n').map((line) => {
+    const directive = /^\s*DELIMITER\s+(\S+)\s*$/i.exec(line);
+    if (directive) {
+      delimiter = directive[1]!;
+      return '';
+    }
+    const trimmed = line.trimEnd();
+    if (delimiter !== ';' && !trimmed.trimStart().startsWith('--') && trimmed.endsWith(delimiter)) {
+      return trimmed.slice(0, -delimiter.length) + ';';
+    }
+    return line;
+  }).join('\n');
 }
 
 /** Connection options for the disposable test DB named by DB_*. */
@@ -72,7 +89,7 @@ export async function resetDb(): Promise<void> {
     await conn.query('SET FOREIGN_KEY_CHECKS=1');
     for (const migration of migrationFiles()) {
       try {
-        await conn.query(readFileSync(migration, 'utf8'));
+        await conn.query(migrationSql(readFileSync(migration, 'utf8')));
       } catch (e) {
         throw new Error(`applying ${migration}: ${(e as Error).message}`, { cause: e });
       }
