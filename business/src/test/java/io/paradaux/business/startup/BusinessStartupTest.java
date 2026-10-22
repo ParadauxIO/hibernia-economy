@@ -1,5 +1,7 @@
 package io.paradaux.business.startup;
 
+import static org.mockito.Mockito.mock;
+
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -30,15 +32,12 @@ import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.hibernia.testsupport.HiberniaStartupAssertion;
 import io.paradaux.treasury.api.SalesQueryApi;
 import io.paradaux.treasury.api.TreasuryApi;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
-
-import javax.sql.DataSource;
-
-import static org.mockito.Mockito.mock;
 
 /**
  * Startup-shaped test: builds Business's <em>real</em> Guice module graph over a live
@@ -83,6 +82,7 @@ class BusinessStartupTest {
                 .scanConfiguration("io.paradaux.business.model.config")
                 .handlers(
                         AccountCommands.class,
+                        io.paradaux.business.commands.MenuCommands.class,
                         FirmCommands.class,
                         HelpCommands.class,
                         MiscCommands.class,
@@ -93,13 +93,9 @@ class BusinessStartupTest {
                         TaxCommands.class,
                         SalesCommands.class,
                         ChatCommands.class)
-                .resolvers(
-                        FirmPlayerResolver.class,
-                        FirmNameResolver.class,
-                        OnlineFirmNameResolver.class)
-                .listeners(
-                        FirmBalanceTaxListener.class,
-                        ChestShopSaleListener.class)
+                .dialogs(io.paradaux.business.dialogs.FirmMenu.class)
+                .resolvers(FirmPlayerResolver.class, FirmNameResolver.class, OnlineFirmNameResolver.class)
+                .listeners(FirmBalanceTaxListener.class, ChestShopSaleListener.class)
                 .build();
 
         DatabaseConfiguration dbCfg = hibernia.configuration(DatabaseConfiguration.class);
@@ -117,10 +113,8 @@ class BusinessStartupTest {
             }
         });
 
-        Injector injector = Guice.createInjector(
-                hibernia,
-                new BusinessModule(plugin, treasuryApi, salesQueryApi),
-                database);
+        Injector injector =
+                Guice.createInjector(hibernia, new BusinessModule(plugin, treasuryApi, salesQueryApi), database);
 
         HiberniaStartupAssertion.assertRegisters(injector);
         injector.getInstance(ReconcileAccountMembersJob.class);

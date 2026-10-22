@@ -59,6 +59,7 @@ public class Business extends JavaPlugin {
                 .scanConfiguration("io.paradaux.business.model.config")
                 .handlers(
                         AccountCommands.class,
+                        io.paradaux.business.commands.MenuCommands.class,
                         FirmCommands.class,
                         HelpCommands.class,
                         MiscCommands.class,
@@ -69,6 +70,7 @@ public class Business extends JavaPlugin {
                         TaxCommands.class,
                         SalesCommands.class,
                         ChatCommands.class)
+                .dialogs(io.paradaux.business.dialogs.FirmMenu.class)
                 .resolvers(FirmPlayerResolver.class, FirmNameResolver.class, OnlineFirmNameResolver.class)
                 .listeners(FirmBalanceTaxListener.class, ChestShopSaleListener.class, OnlineRosterListener.class)
                 .build();

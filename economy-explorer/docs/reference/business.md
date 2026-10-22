@@ -307,3 +307,19 @@ in-firm role.
 > accounts and their access, regardless of LuckPerms nodes or in-firm role. The
 > `business.admin.*` overrides go the other way: they let operators act on any firm,
 > ignoring proprietorship and firm roles entirely.
+
+## Firm menu
+
+Use `/firm menu` to choose a firm you own or work for, or `/firm menu <firm>`
+(with a name or numeric ID) to open a firm's overview. The native dialog shows
+its aggregate balance and provides staff, account and money forms. Staff forms
+send employment offers or fire employees; account forms create accounts or change
+the default account. Money forms support deposits, withdrawals and payments to a
+player, another firm, or the selected firm from your personal account.
+
+Choose an action, fill its required fields and press **Submit action**. Recipient
+names/IDs and new account names use one word per field. Actions run the existing
+commands with current server and firm-role permissions. An open menu does not
+retain permissions after they are revoked. Each menu session submits once; reopen
+`/firm menu` after an action to see updated data. **Refresh overview** reloads the
+selected firm; **Back** and **Close** leave forms without submitting them.
