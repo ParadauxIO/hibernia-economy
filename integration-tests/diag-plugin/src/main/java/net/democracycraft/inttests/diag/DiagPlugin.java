@@ -201,6 +201,27 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
 
     // ---------------------------------------------------------------- commands
 
+    private boolean doVault(CommandSender sender, String[] args) {
+        if (args.length != 4 || !(args[1].equals("withdraw") || args[1].equals("deposit"))) {
+            sender.sendMessage("usage: diag vault <withdraw|deposit> <player-uuid> <amount>");
+            return true;
+        }
+        try {
+            var vault = java.util.Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("Vault"));
+            Class<?> economy = vault.getClass().getClassLoader().loadClass("net.milkbowl.vault.economy.Economy");
+            Object provider = java.util.Objects.requireNonNull(Bukkit.getServicesManager().load(economy));
+            Object response = economy.getMethod(args[1] + "Player", org.bukkit.OfflinePlayer.class, double.class)
+                    .invoke(provider, Bukkit.getOfflinePlayer(UUID.fromString(args[2])), Double.parseDouble(args[3]));
+            sender.sendMessage("provider=" + economy.getMethod("getName").invoke(provider)
+                    + " success=" + response.getClass().getMethod("transactionSuccess").invoke(response)
+                    + " balance=" + response.getClass().getField("balance").get(response)
+                    + " error=" + response.getClass().getField("errorMessage").get(response));
+        } catch (ReflectiveOperationException e) {
+            sender.sendMessage("Vault diagnostic failed: " + e);
+        }
+        return true;
+    }
+
     private boolean doRealNexo(CommandSender sender, String[] args) {
         if ((args[0].equals("nexostock") && args.length != 7)
                 || (args[0].equals("nexocount") && args.length != 3)) {
@@ -319,6 +340,15 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doCreateShop(sender, args);
             case "wgregion":
                 return doWgRegion(sender, args);
+            case "vault":
+                return doVault(sender, args);
+            case "wgowners":
+                if (args.length != 3) { sender.sendMessage("usage: diag wgowners <world> <region>"); return true; }
+                var manager = com.sk89q.worldguard.WorldGuard.getInstance().getPlatform().getRegionContainer()
+                        .get(com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(java.util.Objects.requireNonNull(Bukkit.getWorld(args[1]))));
+                var region = java.util.Objects.requireNonNull(java.util.Objects.requireNonNull(manager).getRegion(args[2]));
+                sender.sendMessage("owners=" + region.getOwners().getUniqueIds().stream().map(UUID::toString).sorted().toList());
+                return true;
             case "gpclaim":
                 return doGpClaim(sender, args);
             case "protclear":

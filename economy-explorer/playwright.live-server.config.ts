@@ -16,7 +16,7 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL,
     screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
+    trace: process.env.IT_KEYCLOAK_PROFILE === 'true' ? 'off' : 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

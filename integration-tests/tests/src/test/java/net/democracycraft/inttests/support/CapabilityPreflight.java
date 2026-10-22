@@ -17,6 +17,20 @@ public final class CapabilityPreflight {
             System.out.println(name + ": " + capability);
         }
         boolean realNexo = "true".equals(System.getenv("IT_NEXO_PROFILE"));
+        if ("true".equals(System.getenv("IT_REALTY_PROFILE"))) {
+            for (String name : new String[]{"Realty", "Vault"}) {
+                String capability = RconClient.send("diag plugin " + name).trim();
+                require(capability.startsWith("enabled=true version="), name + ": " + capability);
+                System.out.println(name + ": " + capability);
+            }
+        }
+        if ("true".equals(System.getenv("IT_PROVIDERS_PROFILE"))) {
+            for (String name : new String[]{"Utilities", "Bolt", "BoltChestShop", "BreweryX"}) {
+                String capability = RconClient.send("diag plugin " + name).trim();
+                require(capability.startsWith("enabled=true version="), name + ": " + capability);
+                System.out.println(name + ": " + capability);
+            }
+        }
         String nexo = RconClient.send("diag plugin Nexo");
         require(realNexo != nexo.contains("-stub"),
                 "Nexo runtime does not match selected real/stub profile: " + nexo);
@@ -35,7 +49,7 @@ public final class CapabilityPreflight {
         require(RestApi.postRotateNoAuth().status() == 401,
                 "REST API must be ready and reject unauthenticated token rotation");
         System.out.println("Capabilities ready. Nexo is " + (realNexo ? "the supplied real plugin" : "a test stub")
-                + "; Realty, CarbonChat, Bedrock and Explorer are not certified by this profile.");
+                + "; only the selected profile's assertions establish acceptance. CarbonChat and Bedrock remain unverified.");
     }
 
     private static void require(boolean condition, String message) {

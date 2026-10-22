@@ -426,8 +426,63 @@ a player click and checks exact balances, posting increments and remaining stock
 Item setup/identity observation uses the installed plugin's API; it does not
 replace ChestShop's parsing or trading path. Default core tests retain their stub.
 
-Verified runtime is recorded in `acceptance/results.md`. This narrow purchase and
-identity-rejection journey does not certify custom-item selling, metadata/dyes,
-resource-pack rendering, reloads, other providers or staging runtime parity.
+Verified runtime is recorded in `acceptance/results.md`. The profile also covers
+native-item selling, failed-payment inventory restoration and paired postings.
+Metadata/dye variants, resource-pack rendering, reloads, other providers and
+deployment acceptance require separate evidence.
 Missing `IT_NEXO_JAR` fails this profile; the real test is explicitly skipped in
 core and is not advertised as covered by ordinary CI.
+
+## PAR-502 acceptance additions
+
+PAR-502 adds same-stack browser checks for scheduled Business access, expired
+leases, firm finances, market trades and fine revenue. The browser profile uses
+signed Auth.js test sessions, not a real Keycloak login. Lease expiry is modeled
+by backdating the disposable membership row; other Business grants come from the
+production scheduler. The groups profile also exercises binding retarget/removal,
+provider-input failure and a scoped database write failure with recovery.
+
+The opt-in Realty profile requires `IT_REALTY_JAR` and `IT_VAULT_JAR` pointing to
+real supplied plugin JARs: `python3 ops/integration/acceptance.py --profile realty`.
+It uses the pinned Java 25/Paper runtime, creates a separate `realty_acceptance`
+schema in the runner-owned MariaDB, and generates fresh settings. External database
+mode is rejected for this profile. It exercises Realty registration/purchase through
+commands and the registered Vault economy service, including denial, payment
+failure and scheduled title-holder publication checks. Supplying an artifact does not imply that it passed startup or tests;
+consult the retained run evidence. Clone configuration and assets are never needed.
+
+The `rest-restart` profile stops and restarts only the runner-owned REST process,
+then checks that superseded tokens stay rejected, a committed idempotency key
+replays the original transaction without another debit, and a new payment settles.
+The `crash` profile uses the restart journey with SIGKILL after an explicit world
+save and committed trade. It verifies recovery from a durable checkpoint, not
+atomic recovery during an in-flight trade. The existing `restart` profile retains
+its graceful shutdown path. Both processes are cleaned up by their test and runner.
+
+`BalanceAccessTest` covers all three balance aliases with funded offline accounts,
+exact displayed amounts and a live world-context permission override. It checks
+that reads and denied queries leave balances, postings and transaction IDs unchanged.
+
+Acceptance summaries now include a fingerprint of HEAD, the tracked diff and
+untracked source contents. Changing the checkout during or between repeated runs
+fails certification; keep it fixed until the command finishes. Runtime Java
+evidence follows `JAVA_HOME`, as the runner does.
+
+### Combined real providers (PAR-502)
+
+`python3 ops/integration/acceptance.py --profile providers --runs 2` requires
+`IT_NEXO_JAR`, `IT_UTILITIES_JAR`, `IT_BOLT_JAR`, `IT_BOLT_CHESTSHOP_JAR`, and
+`IT_BREWERY_JAR`. It runs native buying/selling, failed-payment recovery and
+startup Utilities permission denial/grant with fresh configuration.
+Utilities 3.0.0 omits item permission refresh on reload; that failing probe is
+retained with an explicit PAR-496 skip. See [evidence and limits](acceptance/par-502.md#real-combined-provider-profile).
+
+### Real Minecraft-realm browser login
+
+`python3 ops/integration/acceptance.py --profile explorer-keycloak --runs 2`
+uses the existing public `treasury-explorer` client and localhost port 5173.
+Supply `IT_KEYCLOAK_CREDENTIALS` as a private JSON file for two disposable
+realm users. This profile drives real login and an in-game ownership transfer,
+checking old/new proprietor access in unchanged sessions. It does not inject
+signed cookies. Browser traces are disabled to avoid retaining credentials.
+See the [identity fixture requirements and evidence](acceptance/par-502.md#real-minecraft-realm-login-and-proprietorship-transfer).
