@@ -1970,3 +1970,17 @@ waiting for its first proprietor membership (78 observations, membership empty).
 The fault wrapper restored the original config in `finally`. Final consecutive
 clean runs are required after restoration; this intentional failure is not retried
 or counted as a passing acceptance result.
+
+Reconciled combined run on `e3148b73`: 51 cases, 47 passes and four ownership
+failures, zero skips/errors, in 111.8s. Finder menus, all five firm-release aliases,
+retained-fund recovery, typed payments, Discord validation and scheduled groups
+passed. The ownership failures exposed a further PAR-501 defect: even a renamed
+personal account's sole reservation could not follow its new owner because the
+procedure attempted to claim it before moving its own previous claim.
+
+Additive V41 fixes only that sole-claim transition under a reservation-row lock;
+shared player/account names remain rejected. Existing V40 SQL is unchanged.
+`GlobalNameNamespaceIT` passes with both sole-claim transfer and shared-name denial.
+The first V41 draft used a procedure syntax the Flyway parser split incorrectly;
+that setup attempt was stopped and corrected to its supported DROP/CREATE form.
+No clone database was modified. Full build and live reruns are pending.

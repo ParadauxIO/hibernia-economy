@@ -126,10 +126,13 @@ function collisionFixture(t, { differentBase = false } = {}) {
     ['V38__global_name_namespace.sql', 'V40__global_name_namespace.sql'],
   ];
   for (const [oldName, newName] of renames) renameSync(join(f.migrations, newName), join(f.migrations, oldName));
+  const later = readdirSync(source).filter(name => Number(/^V(\d+)__/.exec(name)?.[1]) > 40);
+  for (const name of later) rmSync(join(f.migrations, name));
   if (differentBase) appendFileSync(join(f.migrations, 'V38__taxation_read_index.sql'), '\n-- different base\n');
   execFileSync('git', ['-C', f.migrations, 'add', '.']);
   execFileSync('git', ['-C', f.migrations, '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Combined V38 collision']);
   for (const [oldName, newName] of renames) renameSync(join(f.migrations, oldName), join(f.migrations, newName));
+  for (const name of later) copyFileSync(join(source, name), join(f.migrations, name));
   return f;
 }
 
