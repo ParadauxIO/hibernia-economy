@@ -67,6 +67,11 @@ Removed bindings' rows are cleaned up by the cron. The source selector compariso
 is case-sensitive. As with LuckPerms, changes within a provider have up to one
 interval of propagation delay, or up to the remaining lease during an outage.
 
+Publication and removal both check that the resolved binding is still current
+(PAR-502). A delayed pass for the previous selector cannot delete memberships
+published after retargeting. The current pass can still remove old-selector rows;
+this check does not serialize separate publishers resolving the same selector.
+
 `/treasuryapi ui sync` remains the existing LuckPerms self-sync operation. The new
 sources use the scheduled reconciliation; they do not alter account relationships,
 Treasury balances, or the roles assigned to Explorer groups.

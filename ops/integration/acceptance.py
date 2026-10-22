@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -48,10 +49,22 @@ def collect_reports(test_dir, output, browser_report=None):
     return dict(**totals, skipped_cases=skipped)
 
 
+def source_state():
+    """Identify the tested checkout, including edits and new source files."""
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    patch = subprocess.check_output(['git', 'diff', '--binary', 'HEAD'], cwd=ROOT)
+    untracked = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard', '-z'], cwd=ROOT)
+    digest = hashlib.sha256(commit.encode() + b'\0' + patch)
+    for name in sorted(filter(None, untracked.split(b'\0'))):
+        path = ROOT / os.fsdecode(name)
+        digest.update(name + b'\0' + path.read_bytes())
+    return commit, digest.hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runs', type=int, default=2)
-    parser.add_argument('--profile', choices=('core', 'protection', 'restart', 'tax', 'groups', 'nexo', 'explorer', 'webhook-failure'), default='core')
+    parser.add_argument('--profile', choices=('core', 'protection', 'restart', 'crash', 'rest-restart', 'tax', 'groups', 'nexo', 'providers', 'realty', 'explorer', 'explorer-keycloak', 'webhook-failure'), default='core')
     parser.add_argument('--test', action='append', default=[], help='Gradle test filter; repeat for a focused run')
     args = parser.parse_args()
     if args.runs < 1:
@@ -60,15 +73,19 @@ def main():
     output = ROOT / 'build/integration-acceptance' / f'{stamp}-{os.getpid()}'
     test_dir = Path(os.environ.get('IT_TESTS_DIR', ROOT / 'integration-tests')).resolve()
     work = Path(os.environ.get('IT_WORK_DIR', ROOT / 'build/integration')).resolve()
-    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    dirty = subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True)
+    expected_source = source_state()
     for number in range(1, args.runs + 1):
+        commit, source_digest = source_state()
+        if (commit, source_digest) != expected_source:
+            print('Source changed between acceptance runs; start a new clean pair.', flush=True)
+            return 1
+        dirty = subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True)
         target = output / f'run-{number}'
         target.mkdir(parents=True)
         # Prevent build/preflight failure from collecting stale JUnit success.
         for report in (test_dir / 'tests/build/test-results/test').glob('TEST-*.xml'):
             report.unlink()
-        browser_report = ROOT / 'economy-explorer/test-results/live-server.xml' if args.profile == 'explorer' else None
+        browser_report = ROOT / 'economy-explorer/test-results/live-server.xml' if args.profile in ('explorer', 'explorer-keycloak') else None
         if browser_report:
             browser_report.unlink(missing_ok=True)
         started = time.monotonic()
@@ -88,10 +105,13 @@ def main():
                     print(clean, end='', flush=True)
                 status = process.wait()
         report = collect_reports(test_dir, target, browser_report)
-        for name in ('bytebin.log', 'bytebin-captures.jsonl', 'server.log', 'server-restart.log', 'rest-api.log', 'mariadb.log', 'explorer.log', 'explorer-build.log', 'explorer-fixture.json'):
+        for name in ('bytebin.log', 'bytebin-captures.jsonl', 'server.log', 'server-restart.log', 'rest-api.log', 'rest-api-restart.log', 'mariadb.log', 'explorer.log', 'explorer-build.log', 'explorer-fixture.json'):
             retain(work / name, target / name)
-        java = subprocess.run(['java', '-version'], capture_output=True, text=True)
+        java_bin = str(Path(os.environ['JAVA_HOME']) / 'bin/java') if os.environ.get('JAVA_HOME') else 'java'
+        java = subprocess.run([java_bin, '-version'], capture_output=True, text=True)
+        source_changed = source_state() != (commit, source_digest)
         report.update(commit=commit, working_tree=dirty, profile=args.profile, test_filters=args.test,
+                      source_sha256=source_digest, source_changed=source_changed,
                       seconds=round(time.monotonic() - started, 2), exit_code=status,
                       java=java.stderr.strip(), command=command,
                       skip_build=os.environ.get('IT_SKIP_BUILD', '0'),
@@ -99,7 +119,9 @@ def main():
         (target / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
         print(json.dumps(report), flush=True)
         # Fail closed if no tests ran, including a failed build or broken selection.
-        if status or report['failures'] or report['errors'] or report['tests'] == report['skipped']:
+        if source_changed:
+            print('Source changed during acceptance; this run cannot certify a single checkout.', flush=True)
+        if status or source_changed or report['failures'] or report['errors'] or report['tests'] == report['skipped']:
             return status or 1
     print(f'Acceptance evidence: {output}', flush=True)
     return 0

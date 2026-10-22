@@ -56,21 +56,45 @@ while [ $# -gt 0 ]; do
 done
 case "$PROFILE" in
   core) PROFILE_ARGS=() ;;
-  nexo)
+  realty)
+    PROFILE_ARGS=()
+    for artifact in IT_REALTY_JAR IT_VAULT_JAR; do
+      if [ -z "${!artifact:-}" ] || [ ! -f "${!artifact}" ]; then
+        echo "realty profile requires $artifact pointing to a supplied real plugin JAR" >&2
+        exit 2
+      fi
+    done
+    IT_REALTY_JAR="$(realpath "$IT_REALTY_JAR")"
+    IT_VAULT_JAR="$(realpath "$IT_VAULT_JAR")"
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*RealtyEconomyTest'); fi
+    ;;
+  nexo|providers)
     PROFILE_ARGS=()
     if [ -z "${IT_NEXO_JAR:-}" ] || [ ! -f "$IT_NEXO_JAR" ]; then
       echo "nexo profile requires IT_NEXO_JAR pointing to a locally supplied real Nexo JAR" >&2
       exit 2
     fi
     IT_NEXO_JAR="$(realpath "$IT_NEXO_JAR")"
-    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*RealNexoCustomItemTest'); fi
+    if [ "$PROFILE" = providers ]; then
+      for artifact in IT_UTILITIES_JAR IT_BOLT_JAR IT_BOLT_CHESTSHOP_JAR IT_BREWERY_JAR; do
+        if [ -z "${!artifact:-}" ] || [ ! -f "${!artifact}" ]; then
+          echo "providers profile requires $artifact pointing to a supplied plugin JAR" >&2
+          exit 2
+        fi
+        printf -v "$artifact" '%s' "$(realpath "${!artifact}")"
+      done
+    fi
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then
+      TEST_ARGS=(--tests '*RealNexoCustomItemTest')
+      if [ "$PROFILE" = providers ]; then TEST_ARGS+=(--tests '*RealUtilitiesPermissionTest' --tests '*UtilitiesReloadTest'); fi
+    fi
     ;;
   groups)
     PROFILE_ARGS=()
     GROUPS_PROFILE=true
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*DerivedGroupLifecycleTest'); fi
     ;;
-  explorer)
+  explorer|explorer-keycloak)
     PROFILE_ARGS=()
     GRADLE_TASKS=(:tests:preflight :tests:explorerFixture)
     if [ "${#TEST_ARGS[@]}" -ne 0 ]; then echo "explorer profile does not accept Gradle test filters" >&2; exit 2; fi
@@ -86,7 +110,11 @@ case "$PROFILE" in
     TAX_PROFILE=true
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*TaxCycleLifecycleTest' --tests '*TaxConfigPublicationTest'); fi
     ;;
-  restart)
+  rest-restart)
+    PROFILE_ARGS=()
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*RestRestartTest'); fi
+    ;;
+  restart|crash)
     PROFILE_ARGS=()
     RESTART_ENABLED=true
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ServerRestartTest'); fi
@@ -95,7 +123,7 @@ case "$PROFILE" in
     PROFILE_ARGS=(-Dchestshop.integrations=true)
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ProtectionIntegrationCreationTest'); fi
     ;;
-  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, tax, groups, nexo, webhook-failure or explorer)" >&2; exit 2 ;;
+  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, crash, rest-restart, tax, groups, nexo, providers, realty, webhook-failure or explorer)" >&2; exit 2 ;;
 esac
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
@@ -112,6 +140,10 @@ REST_PORT="${IT_REST_PORT:-8080}"
 WEBHOOK_PORT="${IT_WEBHOOK_PORT:-8099}"
 BYTEBIN_PORT="${IT_BYTEBIN_PORT:-8098}"
 DB_EXTERNAL="${IT_DB_EXTERNAL:-0}"
+if [ "$PROFILE" = realty ] && [ "$DB_EXTERNAL" = 1 ]; then
+  echo "realty profile requires the runner-owned MariaDB instance for its separate schema" >&2
+  exit 2
+fi
 DB_HOST="${IT_DB_HOST:-127.0.0.1}"
 DB_PORT="${IT_DB_PORT:-33306}"
 DB_NAME="${IT_DB_NAME:-economy}"
@@ -272,7 +304,23 @@ log "Assembling the Paper server in $SERVER"
 cp "$ROOT"/release/*.jar "$SERVER/plugins/"
 cp "$CACHE/$LUCKPERMS_JAR" "$CACHE/$GP_JAR" "$CACHE/$WE_JAR" "$CACHE/$WG_JAR" "$SERVER/plugins/"
 cp "$TESTS_DIR/diag-plugin/build/libs/DcDiag.jar" "$SERVER/plugins/"
-if [ "$PROFILE" = nexo ]; then
+if [ "$PROFILE" = realty ]; then
+  sql -e 'CREATE DATABASE realty_acceptance;'
+  cp "$IT_REALTY_JAR" "$SERVER/plugins/Realty.jar"
+  cp "$IT_VAULT_JAR" "$SERVER/plugins/Vault.jar"
+  log "Realty/Vault artifact SHA-256: $(sha256sum "$SERVER/plugins/Realty.jar" "$SERVER/plugins/Vault.jar")"
+  mkdir -p "$SERVER/plugins/Realty"
+  cat > "$SERVER/plugins/Realty/database.yml" <<EOF
+url: 'mariadb://$DB_HOST:$DB_PORT/realty_acceptance'
+username: '$DB_USER'
+password: '$DB_PASSWORD'
+EOF
+  cat > "$SERVER/plugins/Realty/settings.yml" <<'EOF'
+default-freehold-authority: { name: GovernmentFines, type: government }
+default-leasehold-landlord: { name: GovernmentFines, type: government }
+EOF
+fi
+if [ "$PROFILE" = nexo ] || [ "$PROFILE" = providers ]; then
   cp "$IT_NEXO_JAR" "$SERVER/plugins/Nexo.jar"
   log "Real Nexo artifact SHA-256: $(sha256sum "$SERVER/plugins/Nexo.jar" | cut -d ' ' -f 1)"
 mkdir -p "$SERVER/plugins/Nexo/items"
@@ -296,11 +344,33 @@ cat > "$SERVER/plugins/Nexo/items/acceptance.yml" <<'NEXOITEM'
 test_ruby:
   material: DIAMOND
   itemname: "<red>Acceptance Ruby"
+test_restricted:
+  material: DIAMOND
+  itemname: "<red>Restricted Ruby"
 NEXOITEM
 else
   cp "$TESTS_DIR/nexo-stub/build/libs/Nexo.jar" "$SERVER/plugins/"
 fi
 
+if [ "$PROFILE" = providers ]; then
+  cp "$IT_UTILITIES_JAR" "$SERVER/plugins/Utilities.jar"
+  cp "$IT_BOLT_JAR" "$SERVER/plugins/Bolt.jar"
+  cp "$IT_BOLT_CHESTSHOP_JAR" "$SERVER/plugins/BoltChestShop.jar"
+  cp "$IT_BREWERY_JAR" "$SERVER/plugins/BreweryX.jar"
+  log "Provider artifact SHA-256: $(sha256sum "$SERVER/plugins/Utilities.jar" "$SERVER/plugins/Bolt.jar" "$SERVER/plugins/BoltChestShop.jar" "$SERVER/plugins/BreweryX.jar")"
+  mkdir -p "$SERVER/plugins/Utilities"
+  cat > "$SERVER/plugins/Utilities/config.yml" <<'UTILITIES'
+aliases: { ruby: test_ruby, lockedruby: test_restricted }
+input: { acceptBareIds: true }
+display: { preferAlias: true, fallbackFormat: '%s', signMaxChars: 15 }
+furnace: { enabled: false }
+helmet: { enabled: false }
+bindCommands: { enabled: false }
+inventoryCombine: { enabled: false }
+furnitureHarvest: { enabled: false }
+shopPermissions: { enabled: true, items: [test_restricted] }
+UTILITIES
+fi
 
 echo "eula=true" >"$SERVER/eula.txt"
 cat >"$SERVER/server.properties" <<EOF
@@ -358,7 +428,7 @@ render_config() { # render_config <module dir> <plugin data folder>
 render_config treasury Treasury
 render_config business Business
 render_config treasury-api-plugin TreasuryAPI
-if [ "$PROFILE" = groups ]; then
+if [ "$PROFILE" = groups ] || [ "$PROFILE" = explorer ] || [ "$PROFILE" = explorer-keycloak ] || [ "$PROFILE" = realty ]; then
   sed -i 's/interval-seconds: 1800/interval-seconds: 1/' "$SERVER/plugins/TreasuryAPI/config.yml"
 fi
 
@@ -430,7 +500,8 @@ DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PAS
     --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" "${REST_PROFILE_ARGS[@]}" \
     --treasury.webhook.insecure-test-targets="127.0.0.1:$WEBHOOK_PORT" >"$WORK/rest-api.log" 2>&1 &
 PIDS+=($!)
-wait_for_port "$REST_PORT" 120 "REST API" "${PIDS[-1]}"
+REST_PID="${PIDS[-1]}"
+wait_for_port "$REST_PORT" 120 "REST API" "$REST_PID"
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 log "Running the integration tests"
@@ -438,7 +509,8 @@ log "Running the integration tests"
 # connection -D properties listed there to the forked test JVM.
 (cd "$ROOT" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
     BYTEBIN_URL="http://127.0.0.1:$BYTEBIN_PORT/" WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" IT_SERVER_DIR="$SERVER" IT_EXPLORER_FIXTURE="$WORK/explorer-fixture.json" \
-    IT_NEXO_PROFILE="$([ "$PROFILE" = nexo ] && echo true || echo false)" IT_GROUPS_PROFILE="$GROUPS_PROFILE" IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
+    IT_REST_RESTART_ENABLED="$([ "$PROFILE" = rest-restart ] && echo true || echo false)" IT_REST_PID="$REST_PID" IT_REST_JAR="${REST_JARS[0]}" IT_CRASH_RECOVERY="$([ "$PROFILE" = crash ] && echo true || echo false)" \
+    IT_KEYCLOAK_PROFILE="$([ "$PROFILE" = explorer-keycloak ] && echo true || echo false)" IT_REALTY_PROFILE="$([ "$PROFILE" = realty ] && echo true || echo false)" IT_PROVIDERS_PROFILE="$([ "$PROFILE" = providers ] && echo true || echo false)" IT_NEXO_PROFILE="$([ "$PROFILE" = nexo ] || [ "$PROFILE" = providers ] && echo true || echo false)" IT_GROUPS_PROFILE="$GROUPS_PROFILE" IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
     sh ./gradlew -p "$TESTS_DIR" --console=plain "${GRADLE_TASKS[@]}" \
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \
@@ -449,6 +521,6 @@ log "Running the integration tests"
     "${PROFILE_ARGS[@]}" \
     "${TEST_ARGS[@]}")
 
-if [ "$PROFILE" = explorer ]; then
+if [ "$PROFILE" = explorer ] || [ "$PROFILE" = explorer-keycloak ]; then
   source "$ROOT/ops/integration/explorer.sh"
 fi

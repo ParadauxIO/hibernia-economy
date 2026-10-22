@@ -11,8 +11,8 @@ import { withoutUndefined } from '../../lib/util/withoutUndefined';
 // The schema is the AUTHORITATIVE one: every economy-flyway migration, applied in
 // version order — the same files Flyway runs in production, including the balance
 // triggers (trg_postings_*), stored functions, generated columns and views. No JVM
-// is needed: client-side DELIMITER directives are translated before MariaDB
-// parses stored-program bodies itself in each multi-statement query.
+// is needed: MariaDB parses stored-program bodies itself. Translate any CLI
+// delimiter directives before sending each file as one multi-statement query.
 export const HAS_DB = process.env.RUN_INTEGRATION === '1';
 
 // Resolved from the package root (vitest and Playwright both run there) rather than

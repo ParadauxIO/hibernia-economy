@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +10,27 @@ import acceptance
 
 
 class AcceptanceEvidenceTest(unittest.TestCase):
+    def test_source_fingerprint_detects_tracked_and_untracked_edits(self):
+        scratch = acceptance.ROOT / '.context/par-502'
+        scratch.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as directory:
+            root = Path(directory)
+            def git(*args):
+                subprocess.run(['git', *args], cwd=root, check=True, capture_output=True)
+            git('init')
+            (root / 'source.txt').write_text('baseline')
+            git('add', 'source.txt')
+            git('-c', 'user.name=Acceptance Test', '-c', 'user.email=test@example.invalid',
+                'commit', '-m', 'fixture')
+            with patch.object(acceptance, 'ROOT', root):
+                baseline = acceptance.source_state()
+                (root / 'source.txt').write_text('changed')
+                self.assertNotEqual(acceptance.source_state(), baseline)
+                (root / 'source.txt').write_text('baseline')
+                self.assertEqual(acceptance.source_state(), baseline)
+                (root / 'new-test.txt').write_text('new test')
+                self.assertNotEqual(acceptance.source_state(), baseline)
+
     def test_redacts_jwt_and_configured_secrets_without_removing_failure_context(self):
         with patch.dict(os.environ, {'IT_DB_PASSWORD': 'unique-database-secret'}):
             text = acceptance.redact('HTTP 403 token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature DB=unique-database-secret')

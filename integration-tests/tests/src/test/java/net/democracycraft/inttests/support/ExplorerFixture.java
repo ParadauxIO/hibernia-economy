@@ -9,11 +9,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Same-stack browser fixture: all account creation and payment use real players. */
 public final class ExplorerFixture {
+    private static String browserName(String prefix, String fixed) {
+        return "true".equals(System.getenv("IT_KEYCLOAK_PROFILE")) ? fixed : Usernames.fresh(prefix);
+    }
+
     public static void main(String[] args) throws Exception {
         Duration timeout = Duration.ofSeconds(10);
         try (MockPlayer sender = MockPlayer.connectLocal(Usernames.fresh("WebS"));
-             MockPlayer recipient = MockPlayer.connectLocal(Usernames.fresh("WebR"));
-             MockPlayer outsider = MockPlayer.connectLocal(Usernames.fresh("WebO"))) {
+             MockPlayer recipient = MockPlayer.connectLocal(browserName("WebR", "WebAuthNew502"));
+             MockPlayer outsider = MockPlayer.connectLocal(browserName("WebO", "WebAuthOld502"))) {
             for (MockPlayer player : new MockPlayer[]{sender, recipient, outsider}) {
                 Ledger.waitForPersonalBalance(player.getUuid(), timeout);
             }
@@ -38,6 +42,45 @@ public final class ExplorerFixture {
             fixture.put("outsiderName", outsider.getUsername());
             fixture.put("transactionId", postings.get(0).transactionId());
             fixture.put("memo", memo);
+            // A real Business proprietor supplies the scheduled browser role fixture.
+            String firm = Usernames.fresh("WebF");
+            Ops.run(outsider.getUsername(), () -> {
+                outsider.chatCommand("/business create " + firm);
+                outsider.awaitMessageContaining("Successfully created", timeout);
+                Barrier.settle();
+            });
+            int firmId = BusinessLedger.waitForFirm(firm, timeout);
+            fixture.put("outsiderFirm", firmId);
+            fixture.put("outsiderFirmName", firm);
+            Ops.run(outsider.getUsername(), () -> {
+                outsider.chatCommand("/business deposit " + firm + " 123.45");
+                outsider.awaitMessageContaining("Deposited", timeout);
+                Barrier.settle();
+            });
+            int firmAccount = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
+            fixture.put("firmAccount", firmAccount);
+            try (var customer = MockPlayer.connectLocal(Usernames.fresh("WBuy"));
+                 var shop = ChestShopFixture.create()) {
+                Ledger.waitForPersonalBalance(customer.getUuid(), timeout);
+                shop.setupSellShop("B:" + Integer.toString(firmAccount, 36).toUpperCase(java.util.Locale.ROOT), 2, 17, "diamond");
+                shop.clickBuy(customer, customer.getUsername());
+                var sale = Market.waitForSaleForCustomer(customer.getUuid(), timeout);
+                assertThat(sale.shopFirmId()).isEqualTo(firmId);
+                assertThat(sale.quantity()).isEqualTo(2);
+                assertThat(sale.totalPrice()).isEqualByComparingTo("17");
+                assertThat(Inv.playerCount(customer.getUsername(), "DIAMOND")).isEqualTo(2);
+                assertThat(Inv.chestCount(shop.chestPos(), "DIAMOND")).isEqualTo(22);
+                assertThat(Ledger.accountBalanceById(firmAccount).orElseThrow()).isEqualByComparingTo("140.45");
+                fixture.put("itemKey", sale.itemKey());
+                Ops.run(outsider.getUsername(), () -> {
+                    outsider.chatCommand("/fine issue GovernmentFines " + customer.getUsername() + " 11.25 browser-private-reason");
+                    outsider.awaitMessageContaining("Issued", timeout);
+                    Barrier.settle();
+                });
+                assertThat(Ledger.personalBalance(customer.getUuid()).orElseThrow()).isEqualByComparingTo("9971.75");
+                assertThat(Ledger.accountBalanceById(Ledger.governmentAccountId("GovernmentFines").orElseThrow()).orElseThrow())
+                        .isEqualByComparingTo("11.25");
+            }
             new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(
                     Path.of(System.getenv("IT_EXPLORER_FIXTURE")).toFile(), fixture);
         }

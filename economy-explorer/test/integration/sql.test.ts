@@ -6,7 +6,7 @@ import { setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, r
 import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '@/lib/sql/role';
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { permissionsFor } from '../role-fixtures';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { HAS_DB, resetDb, testDbOptions, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
 import { accountLabel, looksLikeUuid } from '@/lib/format';
 import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount } from '@/lib/sql/ledger';
@@ -16,6 +16,8 @@ import { listFinanceFirms } from '@/lib/sql/webhook';
 import { findCapabilities, findPlayerUuidByName } from '@/lib/sql/group';
 import { findAccountsForPlayer, getPlayerTotals } from '@/lib/sql/me';
 import { findIdentityBySub } from '@/lib/sql/identity';
+import { getDailyVolume, getActivityComparison } from '@/lib/sql/health';
+import { getTxnVolume } from '@/lib/sql/stats';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { listItemSales, getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
 import mysql from 'mysql2/promise';
@@ -832,5 +834,168 @@ d('Business/Realty group leases (PAR-101)', () => {
       await sql`DELETE FROM explorer_group WHERE group_id = 901`.execute(db);
       await sql`DELETE FROM explorer_role_definition WHERE role_key = 'par101_reader'`.execute(db);
     }
+  });
+});
+
+d('bridge analytics estimate (never persisted sale identity)', () => {
+  beforeAll(async () => {
+    await sql`INSERT INTO accounts (account_id, account_type, display_name, owner_uuid_bin)
+      VALUES (9501, 'SYSTEM', 'PAR159 clearing', UNHEX(REPEAT('01',16))),
+             (9502, 'SYSTEM', 'PAR159 other', UNHEX(REPEAT('02',16)))`.execute(db);
+  }, 60_000);
+  afterAll(async () => { await sql`DELETE FROM accounts WHERE account_id IN (9501, 9502)`.execute(db); });
+
+  let nextId = 9500;
+  async function transfer(src: number, dst: number, amount: string, message: string, plugin = 'ChestShop', ageSeconds = 3600) {
+    const id = ++nextId;
+    await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+      VALUES (${id}, ${message}, ${plugin}, UNHEX(REPEAT('00',16)), NOW() - INTERVAL ${ageSeconds} SECOND)`.execute(db);
+    await sql`INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES
+      (${id}, ${src}, ${'-' + amount}), (${id}, ${dst}, ${amount})`.execute(db);
+    return id;
+  }
+  async function totals(days = 7) {
+    const points = await getDailyVolume(days);
+    return { count: points.reduce((n, p) => n + p.txn_count, 0), volume: points.reduce((n, p) => n + Number(p.total_volume), 0) };
+  }
+  async function cleanup() {
+    await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db);
+    await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db);
+  }
+
+  it('counts a bridge once, removes phantom arrows, retains cross-type and atomic flow, and leaves ledger raw', async () => {
+    const before = await totals();
+    const raw = await sql<{ n: number }>`SELECT COUNT(*) n FROM ledger_txns`.execute(db);
+    try {
+      await transfer(1, 9501, '10.25', 'Vault withdraw (ChestShop)');
+      await transfer(9501, 2, '10.25', 'Vault deposit (ChestShop)'); // personal→personal disappears from cross-type flow
+      await transfer(1, 9501, '20.10', 'purchase');
+      await transfer(9501, 3, '20.10', 'purchase'); // personal→business appears once
+      await transfer(1, 3, '7.15', 'atomic');
+      expect(await totals()).toEqual({ count: before.count + 3, volume: before.volume + 37.5 });
+      expect(await getMoneyFlow(7)).toEqual([
+        { from_type: 'PERSONAL', to_type: 'BUSINESS', amount: '527.25', amount_ex_seed: '527.25', txn_count: 3 },
+      ]);
+      expect(await getTxnVolume(7)).toEqual(await getDailyVolume(7));
+      expect((await getActivityComparison(7)).current).toEqual({ transactions: before.count + 3, volume: before.volume + 37.5 });
+      expect(Number((await sql<{ n: number }>`SELECT COUNT(*) n FROM ledger_txns`.execute(db)).rows[0]!.n)).toBe(Number(raw.rows[0]!.n) + 5);
+      expect((await sql`SELECT * FROM ledger_postings WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db)).rows).toHaveLength(10);
+    } finally { await cleanup(); }
+  });
+
+  it.each([
+    ['unmatched claim-block sink', 'sink'], ['unmatched reward faucet', 'faucet'],
+    ['delayed escrow', 'delay'], ['unequal fee loop', 'amount'],
+    ['different plugin', 'plugin'], ['different message', 'message'],
+    ['different SYSTEM account', 'account'], ['intervening posting', 'intervene'],
+    ['backdated intervening posting', 'backdated'],
+    ['case-sensitive message', 'case'], ['reversed settlement order', 'reverse'],
+  ])('preserves %s', async (_label, kind) => {
+    const before = await totals();
+    try {
+      if (kind === 'sink') await transfer(1, 9501, '12.00', 'claim blocks', 'GriefPreventionUI');
+      else if (kind === 'faucet') await transfer(9501, 1, '12.00', 'reward', 'Exams');
+      else {
+        await transfer(1, 9501, '12.00', 'event', 'plugin', kind === 'delay' ? 3602 : 3600);
+        if (kind === 'intervene' || kind === 'backdated') await transfer(2, 9501, '1.00', 'other', 'plugin', kind === 'backdated' ? 60 * 86400 : 3600);
+        await transfer(kind === 'account' ? 9502 : 9501, 3, kind === 'amount' ? '11.00' : '12.00',
+          kind === 'message' ? 'another' : kind === 'case' ? 'EVENT' : 'event', kind === 'plugin' ? 'other' : 'plugin', kind === 'reverse' ? 3601 : 3600);
+      }
+      const count = kind === 'sink' || kind === 'faucet' ? 1 : kind === 'intervene' ? 3 : 2;
+      const volume = count === 1 ? 12 : kind === 'amount' ? 23 : kind === 'intervene' ? 25 : 24;
+      expect(await totals()).toEqual({ count: before.count + count, volume: before.volume + volume });
+      const edges = await getMoneyFlow(7);
+      expect(edges.some(e => e.from_type === 'SYSTEM' || e.to_type === 'SYSTEM')).toBe(true);
+    } finally { await cleanup(); }
+  });
+
+  it('does not collapse split postings or reuse a credit for repeated debits', async () => {
+    const before = await totals();
+    try {
+      const incoming = await transfer(1, 9501, '10.00', 'split');
+      await sql`UPDATE ledger_postings SET amount = -5 WHERE txn_id = ${incoming} AND account_id = 1`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES (${incoming}, 2, -5)`.execute(db);
+      await transfer(9501, 3, '10.00', 'split');
+      expect(await totals()).toEqual({ count: before.count + 2, volume: before.volume + 20 });
+      await transfer(1, 9501, '3.00', 'repeat');
+      await transfer(9501, 3, '3.00', 'repeat');
+      await transfer(9501, 3, '3.00', 'repeat');
+      expect(await totals()).toEqual({ count: before.count + 4, volume: before.volume + 26 });
+    } finally { await cleanup(); }
+  });
+
+  it('bounds reads to the reporting window and indexed predecessor probes, independent of old history', async () => {
+    try {
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        SELECT 960000 + seq, 'old', 'ChestShop', UNHEX(REPEAT('00',16)), NOW() - INTERVAL 60 DAY
+        FROM seq_1_to_10000`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT 960000 + seq, 9501, 1 FROM seq_1_to_10000`.execute(db);
+      await transfer(1, 9501, '4.00', 'recent');
+      await transfer(9501, 3, '4.00', 'recent');
+      for (const read of [() => getMoneyFlow(7), () => getDailyVolume(7), () => getActivityComparison(7)]) {
+        const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
+        let query;
+        try { await read(); query = executed.mock.calls[0]![0]; }
+        finally { executed.mockRestore(); }
+        const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
+        const visited = (node: unknown): number => {
+          if (!node || typeof node !== 'object') return 0;
+          const entry = node as Record<string, unknown>;
+          const reads = 'table_name' in entry ? Number(entry.r_loops ?? 0) * Number(entry.r_rows ?? 0) : 0;
+          return reads + Object.values(entry).reduce<number>((sum, child) => sum + visited(child), 0);
+        };
+        const plan = JSON.parse(analyzed.rows[0]!.ANALYZE);
+        expect(visited(plan)).toBeLessThan(1000);
+      }
+    } finally { await cleanup(); }
+  });
+
+  it('keeps a busy window linear when excluding both legs of 1,000 pairs', async () => {
+    const before = await totals();
+    try {
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        SELECT 970000 + seq, 'busy window', 'ChestShop', UNHEX(REPEAT('00',16)), NOW() - INTERVAL 1 HOUR
+        FROM seq_1_to_2000`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT 970000 + t.seq,
+          CASE WHEN MOD(t.seq, 2) = 1 THEN IF(leg.seq = 1, 1, 9501) ELSE IF(leg.seq = 1, 9501, 3) END,
+          IF(leg.seq = 1, -1, 1)
+        FROM seq_1_to_2000 t CROSS JOIN seq_1_to_2 leg ORDER BY t.seq, leg.seq`.execute(db);
+      expect(await totals()).toEqual({ count: before.count + 1000, volume: before.volume + 1000 });
+      const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
+      let query;
+      try {
+        expect((await getMoneyFlow(7)).find(e => e.to_type === 'BUSINESS')?.amount).toBe('1500.00');
+        query = executed.mock.calls[0]![0];
+      } finally { executed.mockRestore(); }
+      const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
+      const visited = (node: unknown): number => {
+        if (!node || typeof node !== 'object') return 0;
+        const entry = node as Record<string, unknown>;
+        const reads = 'table_name' in entry ? Number(entry.r_loops ?? 0) * Number(entry.r_rows ?? 0) : 0;
+        return reads + Object.values(entry).reduce<number>((sum, child) => sum + visited(child), 0);
+      };
+      // A per-transaction scan of all 1,000 pairs would visit millions of rows.
+      expect(visited(JSON.parse(analyzed.rows[0]!.ANALYZE))).toBeLessThan(250_000);
+    } finally { await cleanup(); }
+  });
+
+  it('uses the outgoing settlement date across day and reporting-window boundaries', async () => {
+    // Pin the DB clock for an exact rolling-window boundary (same pooled connection).
+    await sql`SET timestamp = ${Math.floor(Date.now() / 1000)}`.execute(db);
+    const before = await totals();
+    try {
+      const incoming = await transfer(1, 9501, '9.00', 'boundary');
+      const outgoing = await transfer(9501, 3, '9.00', 'boundary');
+      await sql`UPDATE ledger_txns SET settlement_time = DATE(NOW()) - INTERVAL 1 SECOND WHERE txn_id = ${incoming}`.execute(db);
+      await sql`UPDATE ledger_txns SET settlement_time = DATE(NOW()) WHERE txn_id = ${outgoing}`.execute(db);
+      expect(await totals()).toEqual({ count: before.count + 1, volume: before.volume + 9 });
+      const comparison = await getActivityComparison(7);
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 7 DAY - INTERVAL 1 SECOND WHERE txn_id = ${incoming}`.execute(db);
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 7 DAY WHERE txn_id = ${outgoing}`.execute(db);
+      expect((await getActivityComparison(7)).current.volume).toBe(comparison.current.volume);
+      expect((await getMoneyFlow(7)).find(e => e.to_type === 'SYSTEM')).toBeUndefined();
+    } finally { await cleanup(); await sql`SET timestamp = 0`.execute(db); }
   });
 });

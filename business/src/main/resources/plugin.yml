@@ -45,6 +45,9 @@ permissions:
     business.use:
         description: Access the /business command.
         default: true
+    business.menu:
+        description: Open the firm menu.
+        default: true
     business.help:
         description: View Business help.
         default: true

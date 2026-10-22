@@ -16,7 +16,7 @@ class ServerRestartTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Test
-    void gracefulPaperRestartPreservesLedgerWorldAndShopAndAllowsNextTrade() throws Exception {
+    void paperRestartPreservesCommittedLedgerWorldAndShopAndAllowsNextTrade() throws Exception {
         String sellerName = Usernames.fresh("Boot"), buyerName = Usernames.fresh("Buy");
         UUID sellerId, buyerId;
         int sellerAccount, buyerAccount, sellerPostings, buyerPostings;
@@ -48,7 +48,9 @@ class ServerRestartTest {
         long oldPid = Long.parseLong(System.getenv("IT_PAPER_PID"));
         ProcessHandle old = ProcessHandle.of(oldPid).orElseThrow();
         assertThat(old.isAlive()).as("runner-owned Paper is alive").isTrue();
-        assertThat(old.destroy()).as("SIGTERM accepted for disposable Paper").isTrue();
+        boolean crash = Boolean.parseBoolean(System.getenv("IT_CRASH_RECOVERY"));
+        assertThat(crash ? old.destroyForcibly() : old.destroy())
+                .as(crash ? "SIGKILL accepted for disposable Paper" : "SIGTERM accepted for disposable Paper").isTrue();
         old.onExit().get(60, TimeUnit.SECONDS);
         Path server = Path.of(System.getenv("IT_SERVER_DIR"));
         Process restarted = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),

@@ -108,3 +108,12 @@ tasks.register<JavaExec>("explorerFixture") {
     mainClass.set("net.democracycraft.inttests.support.ExplorerFixture")
     doFirst { systemProperties(tasks.test.get().systemProperties) }
 }
+
+tasks.register<JavaExec>("explorerTransfer") {
+    group = "verification"
+    description = "Transfer fixture ownership through real player commands while OIDC sessions stay open."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.ExplorerTransfer")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
+}

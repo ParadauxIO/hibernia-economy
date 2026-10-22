@@ -688,6 +688,30 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     }
 
     @Test
+    void rejectedFirstVaultWithdrawalDoesNotPoisonSubsequentSettlement() {
+        UUID player = UUID.randomUUID();
+        UUID initiator = UUID.randomUUID();
+        ledgerService.resolveOrCreatePersonal(player);
+        String plugin = "RollbackPlugin";
+        assertThatThrownBy(() -> ledgerService.vaultWithdraw(
+                        plugin, player, new BigDecimal("10001"), "insufficient", initiator, null, null))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("10000");
+        assertThat(countRows(
+                        "SELECT COUNT(*) FROM accounts WHERE account_type = 'SYSTEM' AND display_name = ?", plugin))
+                .isZero();
+
+        long withdrawal =
+                ledgerService.vaultWithdraw(plugin, player, new BigDecimal("37"), "funded", initiator, null, null);
+        assertThat(withdrawal).isPositive();
+        assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("9963");
+        long deposit =
+                ledgerService.vaultDeposit(plugin, player, new BigDecimal("12"), "deposit", initiator, null, null);
+        assertThat(deposit).isGreaterThan(withdrawal);
+        assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("9975");
+    }
+
+    @Test
     void vaultWithdraw_burnsToSystemAccount() {
         UUID player = UUID.randomUUID();
         UUID initiator = UUID.randomUUID();
