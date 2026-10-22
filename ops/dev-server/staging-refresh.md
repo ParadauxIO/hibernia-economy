@@ -8,7 +8,7 @@ Production credentials are read from plugin configuration files fetched through
 the same SFTP connection as `clone.sh`. Prefer dedicated backup credentials for
 recurring use; the existing plugin accounts may lack routine-export permissions.
 
-Requires Python 3.11+, `python3-yaml`, MariaDB client tools, rclone, Node,
+Requires the [Infisical runtime setup](infisical.md), Linux with `/proc` mounted, Python 3.11+, `python3-yaml`, MariaDB client tools, rclone, Node,
 kubectl, and the JDK needed by the deployed economy checkout. The restore host
 must have the existing clone and deployment agent. Run from this repository.
 
@@ -18,7 +18,9 @@ Choose a private directory **outside the repository**, with room for the source
 SQL, a full staging rollback dump, and MariaDB's restored data. Dumps contain
 private production data and credentials until sanitization; restrict access and
 retain only as long as needed. The tools create private files and do not put
-passwords in command arguments.
+passwords in command arguments. MariaDB client options are held in anonymous
+memory descriptors passed only to MariaDB subprocesses, and closed on exit;
+no temporary credential option files are written to disk.
 
 ```bash
 export STAGING_WORK="$HOME/staging-refresh/$(date -u +%Y%m%dT%H%M%SZ)"
@@ -80,7 +82,8 @@ dropping any database.
 
 ```bash
 export JAVA_HOME="$HOME/.jdks/jdk-21.0.12.1+1"
-python3 ops/dev-server/refresh-staging.py restore \
+python3 ops/dev-server/infisical_secrets.py staging -- \
+  python3 ops/dev-server/refresh-staging.py restore \
   --snapshot "$STAGING_WORK/production" \
   --backup-dir "$STAGING_WORK/before-refresh" \
   --kube-context "$STAGING_KUBE_CONTEXT"
@@ -104,6 +107,9 @@ This preserves environment-specific authentication across refreshes, including
 when Infisical manages the Secret. An invalid or expired token fails preflight;
 rotate it in its authoritative secret store before retrying. The refresh does
 not change signing secrets, service-token values, or secret-store permissions.
+The signing key and token come from Infisical; preflight also requires the
+cluster's synchronized token to match. The sandbox DB password is injected by
+the same runtime launcher.
 
 Flyway uses the agent's clean
 `dev-deploy/repo` checkout and requires its commit to match the deployed plugin
@@ -122,8 +128,8 @@ On success **and failure**, all writers stay paused. After success:
 
 1. Confirm the output reports that the existing staging service identity was
    restored. Do not run `setup-cluster-secret.sh` to rotate a controller-managed
-   Secret: Infisical will restore its authoritative value. That script is for
-   initial unmanaged setup; refreshes preserve the existing identity instead.
+   Secret: Infisical owns its authoritative value. That script now only seeds
+   unmanaged clusters from Infisical and never mints a new token.
 2. Close stdin in the DB-only terminal and wait for MariaDB to stop.
 3. Resume the agent with `ctl resume`; it starts the installed plugins and resumes
    normal `develop` deployment polling. This workflow does not pin releases.
@@ -140,7 +146,8 @@ On success **and failure**, all writers stay paused. After success:
 Keep writers paused and MariaDB in DB-only mode. Restore the saved snapshot:
 
 ```bash
-python3 ops/dev-server/refresh-staging.py restore --rollback \
+python3 ops/dev-server/infisical_secrets.py staging -- \
+  python3 ops/dev-server/refresh-staging.py restore --rollback \
   --snapshot "$STAGING_WORK/before-refresh" \
   --backup-dir "$STAGING_WORK/before-rollback" \
   --kube-context "$STAGING_KUBE_CONTEXT"

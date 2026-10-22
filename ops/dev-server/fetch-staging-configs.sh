@@ -6,7 +6,9 @@ umask 077
 SERVER_DIR="${SERVER_DIR:-$HOME/democracycraft-clone}"
 DESTINATION="${1:?Usage: fetch-staging-configs.sh /private/new-directory}"
 [[ ! -e "$DESTINATION" ]] || { echo 'Destination must not exist' >&2; exit 1; }
-source "$SERVER_DIR/.env"
+if [[ ${STAGING_SECRET_SCOPE:-} != democracycraft ]]; then
+  exec python3 "$(dirname "$(readlink -f "$0")")/infisical_secrets.py" democracycraft -- bash "$0" "$@"
+fi
 : "${SFTP_HOST:?}" "${SFTP_PORT:?}" "${SFTP_USER:?}" "${SFTP_PASS:?}"
 RCLONE="$(command -v rclone || echo "$HOME/.local/bin/rclone")"
 export RCLONE_CONFIG_REMOTE_TYPE=sftp

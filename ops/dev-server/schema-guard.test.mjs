@@ -30,7 +30,8 @@ function setup() {
 }
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 async function start(root) {
-  const child = spawn(process.execPath, [path.join(here, 'agent.mjs')], { env: { ...process.env, SERVER_DIR: root, PATH: path.join(root, 'bin') + ':' + process.env.PATH, POLL_SECONDS: '600', START_TIMEOUT_MINUTES: '0.05' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Model the Infisical launcher boundary with synthetic secrets; no network or local secret files.
+  const child = spawn(process.execPath, [path.join(here, 'agent.mjs')], { env: { ...process.env, SERVER_DIR: root, STAGING_SECRET_SCOPE: 'staging', SANDBOX_DB_PASSWORD: 'fixture-only', PATH: path.join(root, 'bin') + ':' + process.env.PATH, POLL_SECONDS: '600', START_TIMEOUT_MINUTES: '0.05' }, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.resume(); child.stderr.resume();
   for (let i = 0; i < 100; i++) { if (fs.existsSync(path.join(root, 'dev-deploy/control.sock'))) return child; await delay(10); }
   throw new Error('Fixture controller did not start');
@@ -106,9 +107,7 @@ function automaticFixture(f) {
   fs.writeFileSync(path.join(f.root, 'dev-deploy/state.json'), JSON.stringify({ paused: false, schemaGuardRequired: true, deployed: { sha: old, jars: oldJars }, failed: null }));
   fs.writeFileSync(path.join(f.root, 'dev-deploy/schema-compatibility.json'), JSON.stringify(f.guard));
   fs.mkdirSync(path.join(f.root, 'dev-deploy/repo/.git'), { recursive: true });
-  fs.mkdirSync(path.join(f.root, '.sandbox/secrets'), { recursive: true });
-  fs.writeFileSync(path.join(f.root, '.sandbox/secrets/db-sandbox'), 'fixture-only');
-  fs.writeFileSync(path.join(f.root, 'dev-deploy/repo/gradlew'), '#!/bin/sh\n[ -f "$SERVER_DIR/migration-fail" ] && exit 1\nexit 0\n');
+  fs.writeFileSync(path.join(f.root, 'dev-deploy/repo/gradlew'), '#!/bin/sh\n[ "$FLYWAY_PASSWORD" = fixture-only ] || exit 2\n[ -f "$SERVER_DIR/migration-fail" ] && exit 1\nexit 0\n');
   fs.writeFileSync(path.join(f.root, 'bin/git'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   fs.writeFileSync(path.join(f.root, 'bin/gh'), `#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path');const a=process.argv.slice(2),src=path.join(process.env.SERVER_DIR,'release-source');if(a[0]==='release'){if(a.includes('-O'))process.stdout.write(fs.readFileSync(path.join(src,'manifest.json')));else{const dst=a[a.indexOf('-D')+1];for(const n of fs.readdirSync(src))fs.copyFileSync(path.join(src,n),path.join(dst,n));}}else process.stdout.write('{"id":1}');\n`, { mode: 0o755 });
   fs.writeFileSync(path.join(f.root, 'start-local.sh'), '#!/bin/bash\nif [ -n "$DB_ONLY" ]; then echo "Sandbox database is up"; cat >/dev/null; exit 0; fi\necho started >> starts.log\nif [ -f fail-boot ]; then echo "[00:00:00 INFO]: Error occurred while enabling Treasury vfixture"; fi\necho "[00:00:00 INFO]: Done (0.1s)!"\nwhile read -r line; do [ "$line" = stop ] && exit 0; done\n');
