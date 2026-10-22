@@ -8,7 +8,7 @@ Production credentials are read from plugin configuration files fetched through
 the same SFTP connection as `clone.sh`. Prefer dedicated backup credentials for
 recurring use; the existing plugin accounts may lack routine-export permissions.
 
-Requires Python 3.11+, `python3-yaml`, MariaDB client tools, rclone, Node,
+Requires Linux with `/proc` mounted, Python 3.11+, `python3-yaml`, MariaDB client tools, rclone, Node,
 kubectl, and the JDK needed by the deployed economy checkout. The restore host
 must have the existing clone and deployment agent. Run from this repository.
 
@@ -18,7 +18,9 @@ Choose a private directory **outside the repository**, with room for the source
 SQL, a full staging rollback dump, and MariaDB's restored data. Dumps contain
 private production data and credentials until sanitization; restrict access and
 retain only as long as needed. The tools create private files and do not put
-passwords in command arguments.
+passwords in command arguments. MariaDB client options are held in anonymous
+memory descriptors passed only to MariaDB subprocesses, and closed on exit;
+no temporary credential option files are written to disk.
 
 ```bash
 export STAGING_WORK="$HOME/staging-refresh/$(date -u +%Y%m%dT%H%M%SZ)"

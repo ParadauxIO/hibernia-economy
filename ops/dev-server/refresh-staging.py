@@ -3,6 +3,7 @@
 import argparse
 import base64
 import datetime as dt
+from contextlib import ExitStack
 import fcntl
 import hashlib
 import hmac
@@ -11,7 +12,6 @@ import os
 from pathlib import Path
 import re
 import subprocess as sp
-import tempfile
 import time
 import uuid
 from urllib.parse import urlsplit
@@ -35,23 +35,28 @@ def digest(path):
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def cnf(path, values):
+def cnf(resources, values):
+    # Anonymous Linux memory, never a credential file in the filesystem.
+    # Keep the descriptor private except for explicitly selected MariaDB children.
+    fd = os.memfd_create("staging-client", os.MFD_CLOEXEC)
+    resources.callback(os.close, fd)
+    os.fchmod(fd, 0o600)
     # MariaDB option-file escaping, not shell quoting. Credentials never enter argv.
     def quote(v):
         return '"' + str(v).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r') + '"'
-    path.write_text("[client]\n" + "".join(f"{k}={quote(v)}\n" for k, v in values.items()))
-    path.chmod(0o600)
-    return path
+    with os.fdopen(os.dup(fd), "w", encoding="utf-8") as stream:
+        stream.write("[client]\n" + "".join(f"{k}={quote(v)}\n" for k, v in values.items()))
+    return fd
 
 
 def query(connection, sql, schema=None):
-    args = ["mariadb", f"--defaults-file={connection}", "--connect-timeout=15", "--batch", "--skip-column-names"]
+    args = ["mariadb", f"--defaults-file=/proc/self/fd/{connection}", "--connect-timeout=15", "--batch", "--skip-column-names"]
     if schema:
         args.append(schema)
-    return run(args, input=sql, text=True, capture_output=True).stdout.strip()
+    return run(args, input=sql, text=True, capture_output=True, pass_fds=(connection,)).stdout.strip()
 
 
-def production_connections(root, work, no_tls=False):
+def production_connections(root, resources, no_tls=False):
     import yaml  # python3-yaml; only needed for reading production plugin configs
     result = {}
     for schema, filename in zip(SCHEMAS, CONFIGS):
@@ -80,7 +85,7 @@ def production_connections(root, work, no_tls=False):
             options["skip-ssl"] = "1"
         else:
             options.update({"ssl": "1", "ssl-verify-server-cert": "1"})
-        result[schema] = cnf(work / f"{schema}.cnf", options)
+        result[schema] = cnf(resources, options)
     return result
 
 
@@ -101,8 +106,8 @@ def snapshot(destination, connections, kind):
         print(f"Exporting {schema}...", flush=True)
         path = destination / f"{schema}.sql"
         with path.open("wb") as out:
-            run(["mariadb-dump", f"--defaults-file={c}", "--single-transaction", "--quick",
-                 "--routines", "--triggers", "--hex-blob", "--skip-lock-tables", schema], stdout=out)
+            run(["mariadb-dump", f"--defaults-file=/proc/self/fd/{c}", "--single-transaction", "--quick",
+                 "--routines", "--triggers", "--hex-blob", "--skip-lock-tables", schema], stdout=out, pass_fds=(c,))
         manifest["databases"][schema] = {
             "sha256": digest(path), "bytes": path.stat().st_size,
             "started_at": started, "finished_at": now(),
@@ -177,7 +182,7 @@ def import_dump(connection, schema, path, defaults):
     # restores rows before triggers, preventing balance triggers firing twice.
     charset, collation = defaults
     query(connection, f"DROP DATABASE IF EXISTS `{schema}`; CREATE DATABASE `{schema}` CHARACTER SET {charset} COLLATE {collation};")
-    with sp.Popen(["mariadb", f"--defaults-file={connection}", "--binary-mode", schema], stdin=sp.PIPE) as p:
+    with sp.Popen(["mariadb", f"--defaults-file=/proc/self/fd/{connection}", "--binary-mode", schema], stdin=sp.PIPE, pass_fds=(connection,)) as p:
         try:
             total = path.stat().st_size
             consumed = 0
@@ -272,14 +277,14 @@ def migration_preflight(connection):
             raise ValueError(f"Migration preflight failed: {label}: {count}")
 
 
-def restore(args, work):
+def restore(args, resources):
     manifest = validate_snapshot(args.snapshot)
     expected = "rollback" if args.rollback else "production"
     if manifest["kind"] != expected:
         raise ValueError(f"Expected a {expected} snapshot")
     server = args.server_dir.resolve()
     password = (server / ".sandbox/secrets/db-sandbox").read_text().strip()
-    connection = cnf(work / "local.cnf", {"host": "127.0.0.1", "port": 33306,
+    connection = cnf(resources, {"host": "127.0.0.1", "port": 33306,
         "user": "sandbox", "password": password, "protocol": "tcp", "skip-ssl": "1"})
     maintenance_check(server, args.kube_context, connection)
     if not args.rollback:
@@ -343,12 +348,11 @@ def main():
     put.add_argument("--kube-context", required=True)
     put.add_argument("--rollback", action="store_true", help="Restore a rollback snapshot without sanitizing or migrating")
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="staging-refresh-") as directory:
-        work = Path(directory)
+    with ExitStack() as resources:
         if args.command == "snapshot":
-            snapshot(args.output.resolve(), production_connections(args.source_config_root, work, args.source_no_tls), "production")
+            snapshot(args.output.resolve(), production_connections(args.source_config_root, resources, args.source_no_tls), "production")
         else:
-            restore(args, work)
+            restore(args, resources)
 
 
 if __name__ == "__main__":
