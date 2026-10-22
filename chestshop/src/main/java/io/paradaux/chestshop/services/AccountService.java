@@ -1,14 +1,15 @@
 package io.paradaux.chestshop.services;
 
 import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.mappers.AccountMapper;
+import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.PlayerSnapshot;
+import io.paradaux.treasury.api.TreasuryApi;
+import java.util.UUID;
 import org.apache.ibatis.exceptions.PersistenceException;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
-import java.util.UUID;
 
 /**
  * Owns the account <em>logic</em>: the username/UUID/short-name caches, get-or-create
@@ -21,6 +22,12 @@ import java.util.UUID;
  * plugin reaches through {@link ChestShop#accounts()}.
  */
 public interface AccountService {
+
+    /** Bind the shared player directory after Treasury integration is ready. */
+    void bindPlayerDirectory(TreasuryApi treasury);
+
+    /** Resolve/create an account only for a name recorded in the shared player directory. */
+    Account resolveKnownPlayer(String name);
 
     int getAccountCount();
 

@@ -1,7 +1,6 @@
 package io.paradaux.treasury.api.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
@@ -10,12 +9,13 @@ import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.DataExportService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
-
+import io.paradaux.treasury.services.PlayerDirectoryService;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TreasuryApiImpl implements TreasuryApi {
@@ -25,18 +25,22 @@ public class TreasuryApiImpl implements TreasuryApi {
     private final LedgerService ledgerService;
     private final DataExportService dataExportService;
     private final TaxApi taxApi;
+    private final PlayerDirectoryService playerDirectory;
 
     @Inject
-    public TreasuryApiImpl(AccountService accountService,
-                           MembershipService membershipService,
-                           LedgerService ledgerService,
-                           DataExportService dataExportService,
-                           TaxApi taxApi) {
+    public TreasuryApiImpl(
+            AccountService accountService,
+            MembershipService membershipService,
+            LedgerService ledgerService,
+            DataExportService dataExportService,
+            TaxApi taxApi,
+            PlayerDirectoryService playerDirectory) {
         this.accountService = accountService;
         this.membershipService = membershipService;
         this.ledgerService = ledgerService;
         this.dataExportService = dataExportService;
         this.taxApi = taxApi;
+        this.playerDirectory = playerDirectory;
     }
 
     // ---- Balance ----
@@ -59,6 +63,11 @@ public class TreasuryApiImpl implements TreasuryApi {
     @Override
     public boolean hasFunds(int accountId, BigDecimal amount) {
         return accountService.hasFunds(accountId, amount);
+    }
+
+    @Override
+    public UUID resolveKnownPlayerUuid(String name) {
+        return playerDirectory.resolveUuidByName(name).orElse(null);
     }
 
     // ---- Account lookups ----
@@ -231,7 +240,8 @@ public class TreasuryApiImpl implements TreasuryApi {
     }
 
     @Override
-    public java.util.OptionalLong sweepAll(int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin) {
+    public java.util.OptionalLong sweepAll(
+            int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin) {
         return ledgerService.sweepAll(fromAccountId, toAccountId, memo, initiator, sourcePlugin);
     }
 

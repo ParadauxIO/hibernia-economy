@@ -2,14 +2,13 @@ package io.paradaux.treasury.api;
 
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.*;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Public, in-process Treasury API.
@@ -41,12 +40,23 @@ public interface TreasuryApi {
     /** Returns true if the account's balance >= amount. */
     boolean hasFunds(int accountId, BigDecimal amount);
 
+    /**
+     * Resolve a current player name from Treasury's persisted player directory.
+     * Case-insensitive; supports Floodgate names. Returns null for unknown names.
+     * Performs a synchronous database read on the calling thread, with no Bukkit or
+     * external profile lookup. Async callers need not switch to the server thread.
+     */
+    @Nullable
+    UUID resolveKnownPlayerUuid(String name);
+
     // ---- Account lookups ----
 
     /** @return the owner's PERSONAL account, or {@code null} if they have none. */
-    @Nullable Account getAccountByUUID(UUID ownerUuid);
+    @Nullable
+    Account getAccountByUUID(UUID ownerUuid);
     /** @return the account, or {@code null} if no account with that id exists. */
-    @Nullable Account getAccountById(int accountId);
+    @Nullable
+    Account getAccountById(int accountId);
 
     /**
      * Batch variant of {@link #getAccountById(int)}: fetches many accounts in one
@@ -56,6 +66,7 @@ public interface TreasuryApi {
     Map<Integer, Account> getAccountsByIds(Collection<Integer> accountIds);
 
     List<Account> getAccountsByOwner(UUID ownerUuid);
+
     List<Account> getAccountsByTypeAndOwner(AccountType accountType, UUID ownerUuid);
 
     /**
@@ -77,16 +88,21 @@ public interface TreasuryApi {
         }
         return getAccountsByTypeAndOwner(type, ownerUuid);
     }
+
     List<Account> getAccountsByMember(UUID memberUuid);
 
     boolean hasAccountByAccountId(int accountId);
+
     boolean hasAccountByOwnerUuid(UUID ownerUuid);
 
     // ---- Access control checks ----
 
     boolean isAccountMember(UUID uuid, int accountId);
+
     boolean isOwnerForAccountId(UUID uuid, int accountId);
+
     boolean canAccessAccount(UUID uuid, int accountId);
+
     boolean accountHasBalance(UUID uuid, int accountId);
 
     // ---- Account lifecycle ----
@@ -114,16 +130,21 @@ public interface TreasuryApi {
     void reassignOwner(int accountId, UUID newOwnerUuid);
 
     void archiveAccount(int accountId);
+
     void unarchiveAccount(int accountId);
 
     // ---- Member / authorizer management ----
 
     void addMember(int accountId, UUID memberUuid, UUID addedByUuid);
+
     void removeMember(int accountId, UUID memberUuid);
+
     List<AccountMember> getMembers(int accountId);
 
     void addAuthorizer(int accountId, UUID authorizerUuid, UUID addedByUuid);
+
     void removeAuthorizer(int accountId, UUID authorizerUuid);
+
     List<AccountMember> getAuthorizers(int accountId);
 
     // ---- Transaction history ----
@@ -143,7 +164,8 @@ public interface TreasuryApi {
     String exportTransactionsFor(int accountId);
 
     /** Single transaction lookup by ID. @return the transaction, or {@code null} if no txn has that id. */
-    @Nullable LedgerTxn getTransaction(long txnId);
+    @Nullable
+    LedgerTxn getTransaction(long txnId);
 
     /** All postings belonging to a transaction. */
     List<LedgerPosting> getPostingsForTransaction(long txnId);
@@ -156,7 +178,8 @@ public interface TreasuryApi {
      * <p>Use this when a consuming plugin needs to route a payment to a specific named
      * government account (e.g. a configurable tax-destination account).
      */
-    @Nullable Account getGovernmentAccountByName(String name);
+    @Nullable
+    Account getGovernmentAccountByName(String name);
 
     // ---- Transfers ----
 
@@ -195,7 +218,9 @@ public interface TreasuryApi {
     // ---- Formatting ----
 
     String formatAmount(BigDecimal amount);
+
     String getCurrencyNameSingular();
+
     String getCurrencyNamePlural();
 
     // ---- Tax ----

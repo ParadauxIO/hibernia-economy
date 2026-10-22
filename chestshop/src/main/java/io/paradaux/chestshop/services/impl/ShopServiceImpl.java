@@ -401,12 +401,8 @@ public class ShopServiceImpl implements ShopService {
                 } else {
                     account = accounts.resolveAccount(name);
                     if (account == null) {
-                        Player otherPlayer = ChestShop.getBukkitServer().getPlayer(name);
                         try {
-                            account = otherPlayer != null
-                                    ? accounts.getOrCreateAccount(otherPlayer)
-                                    : accounts.getOrCreateAccount(
-                                            ChestShop.getBukkitServer().getOfflinePlayer(name));
+                            account = accounts.resolveKnownPlayer(name);
                         } catch (IllegalArgumentException e) {
                             ctx.getPlayer().sendMessage(e.getMessage());
                         }

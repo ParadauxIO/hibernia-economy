@@ -4,14 +4,12 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasuryapi.services.ExplorerUiService;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
-
 import java.util.List;
 import java.util.UUID;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 
 /**
  * Thin command layer for the explorer-UI access commands: {@code /treasuryapi ui
@@ -27,11 +25,13 @@ public class UiAccessHandler {
 
     private final ExplorerUiService service;
     private final Message message;
+    private final TreasuryApi treasury;
 
     @Inject
-    public UiAccessHandler(ExplorerUiService service, Message message) {
+    public UiAccessHandler(ExplorerUiService service, Message message, TreasuryApi treasury) {
         this.service = service;
         this.message = message;
+        this.treasury = treasury;
     }
 
     public void doResetPassword(Player player, boolean confirmed) {
@@ -63,11 +63,21 @@ public class UiAccessHandler {
     public void doUserRemove(CommandSender sender, String role, String playerName) {
         UUID target = requireSeenPlayer(playerName);
         if (service.revokeRole(target, role)) {
-            message.send(sender, "treasuryapi.ui.user.removed",
-                    "role", role.toLowerCase(java.util.Locale.ROOT), "player", playerName);
+            message.send(
+                    sender,
+                    "treasuryapi.ui.user.removed",
+                    "role",
+                    role.toLowerCase(java.util.Locale.ROOT),
+                    "player",
+                    playerName);
         } else {
-            message.send(sender, "treasuryapi.ui.user.not-granted",
-                    "role", role.toLowerCase(java.util.Locale.ROOT), "player", playerName);
+            message.send(
+                    sender,
+                    "treasuryapi.ui.user.not-granted",
+                    "role",
+                    role.toLowerCase(java.util.Locale.ROOT),
+                    "player",
+                    playerName);
         }
     }
 
@@ -82,8 +92,7 @@ public class UiAccessHandler {
     }
 
     public void doLink(Player sender, String code) {
-        ExplorerUiService.LinkOutcome outcome =
-                service.redeemLinkCode(code, sender.getUniqueId(), sender.getName());
+        ExplorerUiService.LinkOutcome outcome = service.redeemLinkCode(code, sender.getUniqueId(), sender.getName());
         if (outcome == ExplorerUiService.LinkOutcome.LINKED_KEYCLOAK_PENDING) {
             message.send(sender, "treasuryapi.ui.link.partial");
         } else {
@@ -91,18 +100,12 @@ public class UiAccessHandler {
         }
     }
 
-    /**
-     * Resolve a player name to a UUID, refusing a name nobody on this server has ever
-     * owned. {@code getOfflinePlayer(name)} fabricates a deterministic offline UUID for
-     * any string, so a typo would otherwise operate on a UUID nobody owns (ADT-38) —
-     * applied to add/remove/list alike (treasury-api-plugin/behaviour/0002).
-     */
-    @SuppressWarnings("deprecation") // offline-safe name→profile; blocking call runs on an async command thread
+    /** Resolve only persisted player names; commands already run on an async thread. */
     private UUID requireSeenPlayer(String name) {
-        OfflinePlayer target = Bukkit.getOfflinePlayer(name);
-        if (!target.hasPlayedBefore() && !target.isOnline()) {
+        UUID target = treasury.resolveKnownPlayerUuid(name);
+        if (target == null) {
             throw new NotFoundException("treasuryapi.ui.user.unknown-player", "player", name);
         }
-        return target.getUniqueId();
+        return target;
     }
 }
