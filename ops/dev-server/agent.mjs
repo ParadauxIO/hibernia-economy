@@ -45,7 +45,7 @@ const RELEASE_TAG = process.env.RELEASE_TAG ?? 'dev-latest';
 const ENVIRONMENT = process.env.ENVIRONMENT ?? 'democracycraft-dev';
 const POLL_SECONDS = Number(process.env.POLL_SECONDS ?? 60);
 const DB_PORT = process.env.DB_PORT ?? '33306';
-const FLYWAY_JAVA_HOME = process.env.FLYWAY_JAVA_HOME ?? path.join(os.homedir(), '.jdks', 'jdk-21.0.12.1+1');
+const FLYWAY_JAVA_HOME = process.env.FLYWAY_JAVA_HOME ?? path.join(os.homedir(), '.local', 'jdks', 'graalvm-community-openjdk-25.0.2+10.1');
 // The first start after a ChestShop change re-encodes ~35k item blobs, so
 // this is generous.
 const START_TIMEOUT_MS = Number(process.env.START_TIMEOUT_MINUTES ?? 20) * 60_000;
@@ -581,7 +581,7 @@ async function main() {
     // Deploy a build that landed while the agent was down before starting,
     // rather than starting the server only to bounce it straight away.
     await check();
-    if (!server) startServer();
+    if (!server && !state.paused) startServer();
   }
 
   for (;;) {

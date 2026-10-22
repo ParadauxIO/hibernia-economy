@@ -1,6 +1,7 @@
 # systemd unit for the DemocracyCraft dev server and its deploy agent
 # (agent.mjs next to this file). Install as root:
 #
+#   install -D -m 0644 ops/dev-server/schema-guard.mjs /home/paseo/democracycraft-clone/dev-deploy/schema-guard.mjs
 #   install -D -m 0644 ops/dev-server/agent.mjs /home/paseo/democracycraft-clone/dev-deploy/agent.mjs
 #   install -m 0644 ops/dev-server/hibernia-dev-server.service /etc/systemd/system/
 #   systemctl daemon-reload && systemctl enable --now hibernia-dev-server
@@ -23,7 +24,7 @@ ExecStart=/usr/bin/node /home/paseo/democracycraft-clone/dev-deploy/agent.mjs
 Environment=SERVER_DIR=/home/paseo/democracycraft-clone
 Environment=REPO=ParadauxIO/hibernia-economy
 Environment=POLL_SECONDS=60
-Environment=FLYWAY_JAVA_HOME=/home/paseo/.jdks/jdk-21.0.12.1+1
+Environment=FLYWAY_JAVA_HOME=/home/paseo/.local/jdks/graalvm-community-openjdk-25.0.2+10.1
 # The agent sends `stop` to the server on SIGTERM; a world save can take a while.
 KillMode=mixed
 TimeoutStopSec=6min

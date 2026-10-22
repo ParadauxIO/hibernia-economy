@@ -92,3 +92,59 @@ test('failed boot remains paused, preserves candidate, never restores old JARs',
     assert.match(await ctl(f.root, 'resume'), /Adopt/);
   } finally { if (child) await stop(child); fs.rmSync(f.root, { recursive: true }); }
 });
+
+function automaticFixture(f) {
+  const release = path.join(f.root, 'release-source'); fs.mkdirSync(release);
+  for (const jar of f.bundle.jars) fs.copyFileSync(path.join(f.root, 'dev-deploy/history', sha, jar), path.join(release, jar));
+  fs.writeFileSync(path.join(release, 'manifest.json'), JSON.stringify({ sha, jars: f.bundle.jars }));
+  const oldDir = path.join(f.root, 'dev-deploy/history', old); fs.mkdirSync(oldDir);
+  const oldJars = [];
+  for (const name of PROVIDERS) {
+    const jar = 'old-' + name.toLowerCase() + '.jar'; oldJars.push(jar);
+    for (const dir of [oldDir, path.join(f.root, 'plugins')]) fs.writeFileSync(path.join(dir, jar), Buffer.from(fixtureJars[name], 'base64'));
+  }
+  fs.writeFileSync(path.join(f.root, 'dev-deploy/state.json'), JSON.stringify({ paused: false, schemaGuardRequired: true, deployed: { sha: old, jars: oldJars }, failed: null }));
+  fs.writeFileSync(path.join(f.root, 'dev-deploy/schema-compatibility.json'), JSON.stringify(f.guard));
+  fs.mkdirSync(path.join(f.root, 'dev-deploy/repo/.git'), { recursive: true });
+  fs.mkdirSync(path.join(f.root, '.sandbox/secrets'), { recursive: true });
+  fs.writeFileSync(path.join(f.root, '.sandbox/secrets/db-sandbox'), 'fixture-only');
+  fs.writeFileSync(path.join(f.root, 'dev-deploy/repo/gradlew'), '#!/bin/sh\n[ -f "$SERVER_DIR/migration-fail" ] && exit 1\nexit 0\n');
+  fs.writeFileSync(path.join(f.root, 'bin/git'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(f.root, 'bin/gh'), `#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path');const a=process.argv.slice(2),src=path.join(process.env.SERVER_DIR,'release-source');if(a[0]==='release'){if(a.includes('-O'))process.stdout.write(fs.readFileSync(path.join(src,'manifest.json')));else{const dst=a[a.indexOf('-D')+1];for(const n of fs.readdirSync(src))fs.copyFileSync(path.join(src,n),path.join(dst,n));}}else process.stdout.write('{"id":1}');\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(f.root, 'start-local.sh'), '#!/bin/bash\nif [ -n "$DB_ONLY" ]; then echo "Sandbox database is up"; cat >/dev/null; exit 0; fi\necho started >> starts.log\nif [ -f fail-boot ]; then echo "[00:00:00 INFO]: Error occurred while enabling Treasury vfixture"; fi\necho "[00:00:00 INFO]: Done (0.1s)!"\nwhile read -r line; do [ "$line" = stop ] && exit 0; done\n');
+}
+async function settled(root) {
+  for (let i = 0; i < 200; i++) {
+    const s = JSON.parse(await ctl(root, 'status'));
+    if (!s.busy) return s;
+    await delay(10);
+  }
+  throw new Error('Fixture deploy did not settle');
+}
+test('automatic startup deployment refuses old rollback and does not restart after pause', async () => {
+  const f = setup(); let child;
+  try {
+    automaticFixture(f); fs.writeFileSync(path.join(f.root, 'fail-boot'), '1');
+    child = await start(f.root); const status = await settled(f.root);
+    assert.equal(status.paused, true); assert.equal(status.serverRunning, false);
+    assert.equal(status.failed, sha); assert.equal(verifyInstalled(f.guard, path.join(f.root, 'plugins')).sha, sha);
+    assert.equal(fs.readFileSync(path.join(f.root, 'starts.log'), 'utf8').trim().split('\n').length, 1);
+    await stop(child); child = await start(f.root);
+    assert.equal(JSON.parse(await ctl(f.root, 'status')).serverRunning, false);
+    assert.equal(fs.readFileSync(path.join(f.root, 'starts.log'), 'utf8').trim().split('\n').length, 1);
+  } finally { if (child) await stop(child); fs.rmSync(f.root, { recursive: true }); }
+});
+test('migration failure cannot boot old incompatible installed JARs, including after process restart', async () => {
+  const f = setup(); let child;
+  try {
+    automaticFixture(f); fs.writeFileSync(path.join(f.root, 'migration-fail'), '1');
+    child = await start(f.root);
+    // The failed migration attempts a start; the schema guard persists pause and may terminate startup.
+    for (let i = 0; i < 200 && !state(f.root).paused; i++) await delay(10);
+    assert.equal(state(f.root).paused, true); assert.equal(state(f.root).failed, sha);
+    assert.equal(fs.existsSync(path.join(f.root, 'starts.log')), false);
+    await stop(child); child = await start(f.root);
+    assert.equal(JSON.parse(await ctl(f.root, 'status')).serverRunning, false);
+    assert.equal(fs.existsSync(path.join(f.root, 'starts.log')), false);
+  } finally { if (child) await stop(child); fs.rmSync(f.root, { recursive: true }); }
+});

@@ -36,7 +36,12 @@ required command ordering, not staging execution or clearance:
    Explorer and jobs. Pin compatible immutable artifacts/images and explicitly
    coordinate Argo self-heal so old replicas cannot return during maintenance.
    Retain consistent database/application backups and original wallet-ID/key maps.
-2. Review/copy both controller modules together while stopped. Review an approval
+2. Review/copy both controller modules together while stopped. Configure the
+   migration launcher to the verified Java25 home (the service template and
+   controller default use `/home/paseo/.local/jdks/graalvm-community-openjdk-25.0.2+10.1`).
+   Reconcile live service drop-ins, daemon reload and paused restart before migrations;
+   the old Java21 launcher cannot configure the combined Java25 build logic.
+   Review an approval
    JSON with `version:1`, `schema:"system-plugin-key-v42"`, and `bundles:[...]`.
    Each bundle has its exact 40-character `sha`, four `jars`, a `hashes` map of
    filename to SHA256, and `providers` mapping Business/ChestShop/Treasury/TreasuryAPI
@@ -69,9 +74,10 @@ Java25 root `build release -Pci=true --max-workers=2` checks every JVM module an
 builds the four-plugin bundle plus REST bootJar. `node --test
 ops/dev-server/schema-guard.test.mjs` checks fail-closed marker/hash/provider
 validation and paused install/restart/boot/adopt/resume, including failed manual
-boot with no rollback. The always-run release metadata CI job includes these
-controller fixtures. Actual automatic deployment failure and external orchestration
-still require coordinated operational rehearsal.
+boot, automatic startup deployment/rollback rejection and migration failure across
+process restart. The startup fallback also honors a pause persisted during checks. The always-run release metadata CI job includes these
+controller fixtures. Actual dataset deployment and external orchestration still require coordinated
+operational rehearsal.
 
 A draft candidate PR triggers normal PR CI; pushing the feature branch alone does
 not publish `dev-latest` or development images. Those workflows target
