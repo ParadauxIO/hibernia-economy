@@ -170,12 +170,14 @@ class FindResultsMenuTest extends ServerTest {
         assertThat(second.getItem(1)).isNull();
         assertThat(second.getItem(48).getType()).isEqualTo(org.bukkit.Material.PAPER);
         assertThat(second.getItem(50).getType()).isEqualTo(org.bukkit.Material.GRAY_STAINED_GLASS_PANE);
+        var secondPageItem = second.getItem(0).clone();
         click(menu, player, 0, ClickType.RIGHT);
+        assertThat(snapshot(second)).containsOnlyNulls();
         assertThat(player.getOpenInventory().getTopInventory().getItem(13).getType())
                 .isEqualTo(org.bukkit.Material.STONE);
         player.closeInventory(InventoryCloseEvent.Reason.PLAYER);
         server.getScheduler().performOneTick();
-        assertThat(player.getOpenInventory().getTopInventory().getItem(0)).isEqualTo(second.getItem(0));
+        assertThat(player.getOpenInventory().getTopInventory().getItem(0)).isEqualTo(secondPageItem);
         assertThat(player.getOpenInventory().getTopInventory().getItem(1)).isNull();
     }
 
@@ -257,11 +259,13 @@ class FindResultsMenuTest extends ServerTest {
         // In-place interactions must preserve it; no callback may award a UI item.
         if (player.getOpenInventory().getTopInventory() == top) {
             assertThat(player.getItemOnCursor()).isEqualTo(cursorBefore);
+            assertThat(snapshot(top)).containsExactly(topBefore);
         } else {
             assertThat(player.getItemOnCursor().getType())
                     .isIn(org.bukkit.Material.AIR, org.bukkit.Material.GOLD_INGOT);
+            // Curator clears copied display items when the old view is retired.
+            assertThat(snapshot(top)).containsOnlyNulls();
         }
-        assertThat(snapshot(top)).containsExactly(topBefore);
         verify(presentation, never()).navigate(any(), any(), anyBoolean());
     }
 
