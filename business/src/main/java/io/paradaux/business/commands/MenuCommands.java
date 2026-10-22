@@ -3,12 +3,13 @@ package io.paradaux.business.commands;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.dialogs.FirmDashboard;
 import io.paradaux.business.dialogs.FirmMenu;
 import io.paradaux.business.services.*;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
+import io.paradaux.hibernia.framework.curator.MenuManager;
 import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.hibernia.framework.usher.DialogManager;
 import java.util.List;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -22,7 +23,7 @@ public final class MenuCommands implements CommandHandler {
     private final FirmAccountService accounts;
     private final FirmStaffService staff;
     private final FirmPlayerService players;
-    private final DialogManager dialogs;
+    private final MenuManager menus;
     private final JavaPlugin plugin;
     private final Message message;
 
@@ -33,7 +34,7 @@ public final class MenuCommands implements CommandHandler {
             FirmAccountService accounts,
             FirmStaffService staff,
             FirmPlayerService players,
-            DialogManager dialogs,
+            MenuManager menus,
             JavaPlugin plugin,
             Message message) {
         this.firms = firms;
@@ -41,7 +42,7 @@ public final class MenuCommands implements CommandHandler {
         this.accounts = accounts;
         this.staff = staff;
         this.players = players;
-        this.dialogs = dialogs;
+        this.menus = menus;
         this.plugin = plugin;
         this.message = message;
     }
@@ -51,6 +52,10 @@ public final class MenuCommands implements CommandHandler {
     @Description("Choose one of your firms to manage")
     @Async
     public void menu(@Sender Player player) {
+        if (!player.hasPermission("business.list")) {
+            message.send(player, "business.general.no-permission");
+            return;
+        }
         var choices = firms.listOwnedOrMemberFirms(player.getUniqueId()).stream()
                 .map(f -> new FirmMenu.Choice(f.getFirmId().toString(), f.getDisplayName()))
                 .toList();
@@ -93,7 +98,8 @@ public final class MenuCommands implements CommandHandler {
 
     private void show(Player player, FirmMenu.State state) {
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (player.isOnline() && player.hasPermission("business.menu")) dialogs.open(player, FirmMenu.class, state);
+            if (player.isOnline() && player.hasPermission("business.menu"))
+                menus.open(player, FirmDashboard.class, state);
         });
     }
 }

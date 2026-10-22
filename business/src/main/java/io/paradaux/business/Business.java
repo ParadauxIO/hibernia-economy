@@ -71,6 +71,7 @@ public class Business extends JavaPlugin {
                         SalesCommands.class,
                         ChatCommands.class)
                 .dialogs(io.paradaux.business.dialogs.FirmMenu.class)
+                .menus(io.paradaux.business.dialogs.FirmDashboard.class)
                 .resolvers(FirmPlayerResolver.class, FirmNameResolver.class, OnlineFirmNameResolver.class)
                 .listeners(FirmBalanceTaxListener.class, ChestShopSaleListener.class, OnlineRosterListener.class)
                 .build();
@@ -123,6 +124,8 @@ public class Business extends JavaPlugin {
 
         // 3) Register commands (DI-managed)
         injector.getInstance(CommandManager.class).registerAll();
+        injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                .registerAll();
 
         // Register jobs
         expireRequestsJob = injector.getInstance(ExpireRequestsJob.class);
@@ -177,6 +180,10 @@ public class Business extends JavaPlugin {
         unregisterPlaceholders.run();
         unregisterPlaceholders = () -> {};
         getServer().getServicesManager().unregisterAll(this);
+        if (injector != null) {
+            injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                    .shutdown();
+        }
 
         // Stop any scheduled tasks (ExpireRequestsJob etc.) before tearing down
         // the DI graph so they can't run with a half-closed DataSource.

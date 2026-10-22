@@ -27,13 +27,10 @@ class FirmMenuTest {
 
     @Test
     void moneyJourneyDispatchesOnceAndIgnoresOldCallbacks() {
-        assertThat(menu.main(state).buttons())
-                .extracting(b -> b.target())
-                .contains("money", "staff", "accounts", "refresh");
         assertThat(menu.money(flow).inputs()).extracting(i -> i.key()).contains("operation", "amount", "target");
         menu.submit("PAY_PLAYER", "Alex", "10.25", state, flow);
         menu.submit("PAY_PLAYER", "Alex", "10.25", state, flow);
-        menu.refresh(state, flow);
+        menu.back(state, flow);
         verify(player, times(1)).performCommand("firm pay player 42 Alex 10.25");
         verify(player, times(1)).performCommand(anyString());
         verify(flow, times(1)).close();
@@ -59,19 +56,11 @@ class FirmMenuTest {
     }
 
     @Test
-    void selectionOnlyAcceptsOfferedIds() {
-        var selection = new FirmMenu.State(List.of(new FirmMenu.Choice("42", "Acme")));
-        assertThatThrownBy(() -> menu.select("1", selection, flow)).isInstanceOf(BadCommandException.class);
-        menu.select("42", selection, flow);
-        verify(player).performCommand("firm menu 42");
-    }
-
-    @Test
     void staffAndAccountFormsUseExistingAuthorizedCommands() {
-        assertThat(menu.staff(state, flow).inputs().getFirst().options())
+        assertThat(menu.staff(flow).inputs().getFirst().options())
                 .extracting(o -> o.id())
                 .containsExactly("HIRE", "FIRE");
-        assertThat(menu.accounts(state, flow).inputs().getFirst().options())
+        assertThat(menu.accounts(flow).inputs().getFirst().options())
                 .extracting(o -> o.id())
                 .containsExactly("CREATE_ACCOUNT", "DEFAULT_ACCOUNT");
         assertThat(FirmMenu.Operation.HIRE.command(42, "Alex", null)).isEqualTo("firm hire 42 Alex");

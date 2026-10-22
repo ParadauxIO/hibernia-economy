@@ -94,6 +94,7 @@ class BusinessStartupTest {
                         SalesCommands.class,
                         ChatCommands.class)
                 .dialogs(io.paradaux.business.dialogs.FirmMenu.class)
+                .menus(io.paradaux.business.dialogs.FirmDashboard.class)
                 .resolvers(FirmPlayerResolver.class, FirmNameResolver.class, OnlineFirmNameResolver.class)
                 .listeners(FirmBalanceTaxListener.class, ChestShopSaleListener.class)
                 .build();
@@ -117,6 +118,8 @@ class BusinessStartupTest {
                 Guice.createInjector(hibernia, new BusinessModule(plugin, treasuryApi, salesQueryApi), database);
 
         HiberniaStartupAssertion.assertRegisters(injector);
+        injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                .registerAll();
         injector.getInstance(ReconcileAccountMembersJob.class);
     }
 }

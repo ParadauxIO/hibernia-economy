@@ -8,9 +8,8 @@ import io.paradaux.hibernia.framework.usher.spi.DialogHandler;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import net.kyori.adventure.text.Component;
 
-/** Native dialogs contain no transferable items. All writes re-enter the normal command dispatcher. */
+/** Usher input forms opened from the Curator dashboard. Writes use the normal command dispatcher. */
 @Dialog("firm-menu")
 public final class FirmMenu implements DialogHandler {
     public record Choice(String id, String name) {}
@@ -41,45 +40,14 @@ public final class FirmMenu implements DialogHandler {
         }
     }
 
-    @Screen
-    public DialogView main(@Model State state) {
-        if (state.firmId == null) {
-            var view = DialogView.multiAction("business.menu.title");
-            if (state.choices.isEmpty())
-                return view.body("business.menu.empty")
-                        .exit("business.menu.close")
-                        .build();
-            return view.option(
-                            "firm",
-                            Text.key("business.menu.firm"),
-                            state.choices.stream()
-                                    .map(c -> new OptionSpec(
-                                            c.id(), literal(c.name()), c.equals(state.choices.getFirst())))
-                                    .toList())
-                    .button("business.menu.select", "select")
-                    .exit("business.menu.close")
-                    .build();
-        }
-        return DialogView.multiAction(Text.key("business.menu.overview", "firm", state.name))
-                .body(Text.key("business.menu.balance", "balance", state.balance))
-                .open("business.menu.money", "money")
-                .open("business.menu.staff", "staff")
-                .open("business.menu.accounts", "accounts")
-                .button("business.menu.refresh", "refresh")
-                .exit("business.menu.close")
-                .columns(1)
-                .build();
-    }
-
-    @Action("select")
-    public void select(@Input("firm") String id, @Model State state, DialogFlow flow) {
-        if (state.choices.stream().noneMatch(c -> c.id().equals(id))) throw invalid();
-        dispatch(state, flow, "firm menu " + id);
-    }
-
-    @Action("refresh")
-    public void refresh(@Model State state, DialogFlow flow) {
+    @Action("back")
+    public void back(@Model State state, DialogFlow flow) {
         dispatch(state, flow, "firm menu " + state.firmId);
+    }
+
+    @Screen
+    public DialogView main(DialogFlow flow) {
+        return money(flow);
     }
 
     @Screen("money")
@@ -99,17 +67,15 @@ public final class FirmMenu implements DialogHandler {
     }
 
     @Screen("staff")
-    public DialogView staff(@Model State state, DialogFlow flow) {
+    public DialogView staff(DialogFlow flow) {
         return form("business.menu.staff", flow, Operation.HIRE, Operation.FIRE)
-                .body(literal(String.join("\n", state.staff)))
                 .text("target", Text.key("business.menu.target-player"))
                 .build();
     }
 
     @Screen("accounts")
-    public DialogView accounts(@Model State state, DialogFlow flow) {
+    public DialogView accounts(DialogFlow flow) {
         return form("business.menu.accounts", flow, Operation.CREATE_ACCOUNT, Operation.DEFAULT_ACCOUNT)
-                .body(literal(String.join("\n", state.accounts)))
                 .text("target", Text.key("business.menu.target-account"))
                 .build();
     }
@@ -118,7 +84,9 @@ public final class FirmMenu implements DialogHandler {
         var allowed = Arrays.stream(operations)
                 .filter(o -> flow.player().hasPermission(o.permission))
                 .toList();
-        var view = DialogView.multiAction(title).exit(ButtonSpec.back(Text.key("business.menu.back")));
+        var view = DialogView.multiAction(title)
+                .button("business.menu.back", "back")
+                .exit("business.menu.close");
         if (allowed.isEmpty()) return view.body("business.general.no-permission");
         return view.option(
                         "operation",
@@ -154,10 +122,6 @@ public final class FirmMenu implements DialogHandler {
         flow.close();
         if (flow.player().isOnline() && flow.player().hasPermission("business.menu"))
             flow.player().performCommand(command);
-    }
-
-    private static Text literal(String text) {
-        return Text.of(Component.text(text));
     }
 
     private static BadCommandException invalid() {
