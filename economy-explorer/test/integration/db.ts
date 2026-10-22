@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { migrationSql } from './migrationSql';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { withoutUndefined } from '../../lib/util/withoutUndefined';
@@ -10,9 +11,8 @@ import { withoutUndefined } from '../../lib/util/withoutUndefined';
 // The schema is the AUTHORITATIVE one: every economy-flyway migration, applied in
 // version order — the same files Flyway runs in production, including the balance
 // triggers (trg_postings_*), stored functions, generated columns and views. No JVM
-// is needed: the migrations carry no client-side DELIMITER directives and MariaDB
-// parses stored-program bodies itself, so each file goes over as one
-// multi-statement query.
+// is needed: client-side DELIMITER directives are translated before MariaDB
+// parses stored-program bodies itself in each multi-statement query.
 export const HAS_DB = process.env.RUN_INTEGRATION === '1';
 
 // Resolved from the package root (vitest and Playwright both run there) rather than
@@ -72,7 +72,7 @@ export async function resetDb(): Promise<void> {
     await conn.query('SET FOREIGN_KEY_CHECKS=1');
     for (const migration of migrationFiles()) {
       try {
-        await conn.query(readFileSync(migration, 'utf8'));
+        await conn.query(migrationSql(readFileSync(migration, 'utf8')));
       } catch (e) {
         throw new Error(`applying ${migration}: ${(e as Error).message}`, { cause: e });
       }
