@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.chestshop.ChestShop;
@@ -580,11 +582,10 @@ class AccountServiceImplTest {
         assertThat(service.isAdminShop(id)).isFalse(); // adminAccount not loaded
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(id);
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", id));
             when(mapper.findByShortName(anyString())).thenReturn(null);
             service.load();
+            bk.verify(() -> Bukkit.getOfflinePlayer(anyString()), never());
         }
         assertThat(service.isAdminShop(id)).isTrue();
         assertThat(service.isAdminShop(UUID.randomUUID())).isFalse();
@@ -601,9 +602,7 @@ class AccountServiceImplTest {
     void load_setsUuidVersionFromOnlineMode_andAdminAccount() {
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
 
             service.load();
@@ -619,9 +618,7 @@ class AccountServiceImplTest {
             bk.when(Bukkit::getOnlineMode).thenReturn(false);
             Player online = player("Someone", UUID.randomUUID()); // random UUID is version 4
             bk.when(Bukkit::getOnlinePlayers).thenAnswer(i -> Collections.singletonList(online));
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
 
             service.load();
@@ -635,9 +632,7 @@ class AccountServiceImplTest {
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(false);
             bk.when(Bukkit::getOnlinePlayers).thenAnswer(i -> Collections.emptyList());
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
 
             service.load();
@@ -647,12 +642,11 @@ class AccountServiceImplTest {
     }
 
     @Test
-    void load_fallsBackToOfflineUuid_whenMojangRatelimited() {
+    void load_usesSyntheticAdminUuidWithoutAnyNameLookup() {
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class);
                 MockedStatic<ChestShop> cs = mockStatic(ChestShop.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            // getOfflinePlayer returns null → NPE on getUniqueId() → fallback path.
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(null);
+
             when(mapper.findByShortName(anyString())).thenReturn(null);
 
             service.load();
@@ -661,6 +655,7 @@ class AccountServiceImplTest {
             UUID expected =
                     UUID.nameUUIDFromBytes("OfflinePlayer:Server".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             assertThat(service.isAdminShop(expected)).isTrue();
+            bk.verify(() -> Bukkit.getOfflinePlayer(anyString()), org.mockito.Mockito.never());
         }
     }
 
@@ -671,9 +666,7 @@ class AccountServiceImplTest {
         Account bank = new Account("Bank", "Bank", bankId);
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
             when(mapper.findLatestByName("Bank")).thenReturn(bank);
             when(mapper.findLatestByUuid(bankId)).thenReturn(bank);
@@ -692,9 +685,7 @@ class AccountServiceImplTest {
         when(config.getServerEconomyAccountUuid()).thenReturn(bankId);
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
             when(mapper.findLatestByName("Bank")).thenReturn(null); // not found by name
             when(mapper.findByUuidAndName(bankId, "Bank")).thenReturn(null);
@@ -712,9 +703,7 @@ class AccountServiceImplTest {
         when(config.getServerEconomyAccountUuid()).thenReturn(new UUID(0, 0)); // no uuid to create from
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
             when(mapper.findLatestByName("Bank")).thenReturn(null);
 
@@ -728,9 +717,7 @@ class AccountServiceImplTest {
     void load_logsError_onPersistenceFailure() {
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             // storeAccount(adminAccount) → mapper.save throws → outer catch logs, no throw.
             org.mockito.Mockito.doThrow(new PersistenceException("db"))
                     .when(mapper)
@@ -845,9 +832,7 @@ class AccountServiceImplTest {
     void load_skipsUuidVersionDetection_whenAlreadySet() {
         service.setUuidVersion(2); // already set → the < 0 block is skipped
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
 
             service.load();
@@ -864,9 +849,7 @@ class AccountServiceImplTest {
         Account bank = new Account("Bank", "Bank", bankId);
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
             when(mapper.findLatestByName("Bank")).thenReturn(bank);
             when(mapper.findLatestByUuid(bankId)).thenReturn(bank);
@@ -881,9 +864,7 @@ class AccountServiceImplTest {
         Account bankNoUuid = new Account("Bank", "Bank", null); // getUuid() == null
         try (MockedStatic<Bukkit> bk = mockStatic(Bukkit.class)) {
             bk.when(Bukkit::getOnlineMode).thenReturn(true);
-            OfflinePlayer op = mock(OfflinePlayer.class);
-            when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-            bk.when(() -> Bukkit.getOfflinePlayer("Server")).thenReturn(op);
+            when(mapper.findLatestByName("Server")).thenReturn(new Account("Server", UUID.randomUUID()));
             when(mapper.findByShortName(anyString())).thenReturn(null);
             when(mapper.findLatestByName("Bank")).thenReturn(bankNoUuid);
 
@@ -893,115 +874,36 @@ class AccountServiceImplTest {
         }
     }
 
-    // ═══════════════════ getLastAccountFromName offline-player block (white-box) ═══════════════════
-    // Only reachable via searchOfflinePlayer=true, which no public caller currently passes
-    // (resolveAccount always passes false). Exercised directly to cover the historical
-    // offline-lookup path retained from the NameManager split.
-
-    private Account invokeGetLast(String name, boolean searchOffline) throws Throwable {
-        var m = AccountServiceImpl.class.getDeclaredMethod("getLastAccountFromName", String.class, boolean.class);
-        m.setAccessible(true);
-        try {
-            return (Account) m.invoke(service, name, searchOffline);
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            throw e.getCause();
+    @Test
+    void unknownDirectoryNameNeverCallsBukkitOrCreatesAccount() {
+        var directory = mock(io.paradaux.treasury.api.TreasuryApi.class);
+        service.bindPlayerDirectory(directory);
+        try (var bukkit = mockStatic(Bukkit.class);
+                var chestShop = mockStatic(ChestShop.class)) {
+            assertThat(service.resolveKnownPlayer("Unknown")).isNull();
+            verify(mapper, never()).save(any());
+            bukkit.verifyNoInteractions();
+            chestShop.verifyNoInteractions();
         }
     }
 
-    private void withOfflineServer(OfflinePlayer op, ThrowingRunnable body) throws Throwable {
-        try (MockedStatic<ChestShop> cs = mockStatic(ChestShop.class)) {
-            org.bukkit.Server server = mock(org.bukkit.Server.class);
-            lenient().when(server.getOfflinePlayer(anyString())).thenReturn(op);
-            cs.when(ChestShop::getBukkitServer).thenReturn(server);
-            body.run();
+    @Test
+    void knownDirectoryPlayerUsesStoredUuidWithoutProfileLookup() {
+        var directory = mock(io.paradaux.treasury.api.TreasuryApi.class);
+        UUID uuid = UUID.fromString("00000000-0000-0000-0009-000000000001");
+        when(directory.resolveKnownPlayerUuid(".Known")).thenReturn(uuid);
+        service.bindPlayerDirectory(directory);
+        try (var bukkit = mockStatic(Bukkit.class);
+                var chestShop = mockStatic(ChestShop.class)) {
+            Account resolved = service.resolveKnownPlayer(".Known");
+            assertThat(resolved.getUuid()).isEqualTo(uuid);
+            assertThat(resolved.getName()).isEqualTo(".Known");
+            verify(mapper).save(resolved);
+            bukkit.verifyNoInteractions();
+            chestShop.verifyNoInteractions();
         }
     }
 
-    private interface ThrowingRunnable {
-        void run() throws Throwable;
-    }
-
-    @Test
-    void getLastAccountFromName_offline_resolvesValidPlayer() throws Throwable {
-        UUID id = UUID.randomUUID();
-        OfflinePlayer op = mock(OfflinePlayer.class);
-        when(op.getName()).thenReturn("Notch");
-        when(op.getUniqueId()).thenReturn(id);
-        Account acc = new Account("Notch", "Notch", id);
-        when(mapper.findByShortName("Notch")).thenReturn(null);
-        when(mapper.findLatestByName("Notch")).thenReturn(null);
-        when(mapper.findByUuidAndName(id, "Notch")).thenReturn(acc);
-        when(mapper.findLatestByUuid(id)).thenReturn(acc);
-        withOfflineServer(op, () -> assertThat(invokeGetLast("Notch", true)).isSameAs(acc));
-    }
-
-    @Test
-    void getLastAccountFromName_offline_marksInvalid_whenNoOfflinePlayer() throws Throwable {
-        when(mapper.findByShortName("Ghost")).thenReturn(null);
-        when(mapper.findLatestByName("Ghost")).thenReturn(null);
-        withOfflineServer(null, () -> assertThat(invokeGetLast("Ghost", true)).isNull());
-    }
-
-    @Test
-    void getLastAccountFromName_offline_marksInvalid_whenNameOrUuidMissing() throws Throwable {
-        OfflinePlayer noName = mock(OfflinePlayer.class);
-        when(noName.getName()).thenReturn(null);
-        withOfflineServer(
-                noName, () -> assertThat(invokeGetLast("Ghost1", true)).isNull());
-
-        OfflinePlayer noUuid = mock(OfflinePlayer.class);
-        when(noUuid.getName()).thenReturn("Ghost2");
-        when(noUuid.getUniqueId()).thenReturn(null);
-        withOfflineServer(
-                noUuid, () -> assertThat(invokeGetLast("Ghost2", true)).isNull());
-    }
-
-    @Test
-    void getLastAccountFromName_offline_skipsWhenAlreadyMarkedInvalid() throws Throwable {
-        // First call marks "Ghost" invalid; a second call short-circuits on the invalidPlayers cache.
-        withOfflineServer(null, () -> {
-            invokeGetLast("Ghost", true);
-            assertThat(invokeGetLast("Ghost", true)).isNull(); // contains(name) → block skipped
-        });
-    }
-
-    @Test
-    void getLastAccountFromName_offline_rejectsWrongUuidVersion() throws Throwable {
-        service.setUuidVersion(4);
-        when(config.isEnsureCorrectPlayerid()).thenReturn(true);
-        OfflinePlayer op = mock(OfflinePlayer.class);
-        when(op.getName()).thenReturn("Legacy");
-        when(op.getUniqueId()).thenReturn(new UUID(0, 0)); // version 0 != 4 → marked invalid
-        when(mapper.findByShortName("Legacy")).thenReturn(null);
-        when(mapper.findLatestByName("Legacy")).thenReturn(null);
-        withOfflineServer(op, () -> assertThat(invokeGetLast("Legacy", true)).isNull());
-    }
-
-    @Test
-    void getLastAccountFromName_offline_acceptsMatchingUuidVersion() throws Throwable {
-        service.setUuidVersion(4);
-        when(config.isEnsureCorrectPlayerid()).thenReturn(true);
-        UUID id = UUID.randomUUID(); // version 4 → matches
-        OfflinePlayer op = mock(OfflinePlayer.class);
-        when(op.getName()).thenReturn("Notch");
-        when(op.getUniqueId()).thenReturn(id);
-        Account acc = new Account("Notch", "Notch", id);
-        when(mapper.findByShortName("Notch")).thenReturn(null);
-        when(mapper.findLatestByName("Notch")).thenReturn(null);
-        when(mapper.findByUuidAndName(id, "Notch")).thenReturn(acc);
-        when(mapper.findLatestByUuid(id)).thenReturn(acc);
-        withOfflineServer(op, () -> assertThat(invokeGetLast("Notch", true)).isSameAs(acc));
-    }
-
-    @Test
-    void getLastAccountFromName_offline_notReached_whenShortNameResolves() throws Throwable {
-        // account found by short name → the account==null guard short-circuits, offline block skipped.
-        UUID id = UUID.randomUUID();
-        Account acc = new Account("Notch", "Notch", id);
-        when(mapper.findByShortName("Notch")).thenReturn(acc);
-        when(mapper.findLatestByUuid(id)).thenReturn(acc);
-        withOfflineServer(null, () -> assertThat(invokeGetLast("Notch", true)).isSameAs(acc));
-    }
     /**
      * Hand-written {@link io.paradaux.chestshop.services.BusinessAccountService} double — see the
      * FakeEconomy pattern for why it's a private, hand-written class rather than a Mockito mock.

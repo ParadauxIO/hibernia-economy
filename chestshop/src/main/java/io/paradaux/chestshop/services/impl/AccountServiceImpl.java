@@ -1,34 +1,33 @@
 package io.paradaux.chestshop.services.impl;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.BusinessAccountService;
-import io.paradaux.chestshop.services.AdminBypassService;
-import io.paradaux.chestshop.services.AccountService;
 import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.utils.Permissions;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.mappers.AccountMapper;
+import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.PlayerSnapshot;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.AdminBypassService;
+import io.paradaux.chestshop.services.BusinessAccountService;
+import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.NameUtil;
 import io.paradaux.chestshop.utils.NumberUtil;
+import io.paradaux.chestshop.utils.Permissions;
 import io.paradaux.chestshop.utils.SimpleCache;
 import io.paradaux.chestshop.utils.encoding.Base62;
+import io.paradaux.treasury.api.TreasuryApi;
+import java.util.Date;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.exceptions.PersistenceException;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
-
-import java.util.Date;
-import java.util.Locale;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Owns the account <em>logic</em>: the username/UUID/short-name caches, get-or-create
@@ -54,7 +53,7 @@ public class AccountServiceImpl implements AccountService {
     private final SimpleCache<String, Account> usernameToAccount;
     private final SimpleCache<UUID, Account> uuidToAccount;
     private final SimpleCache<String, Account> shortToAccount;
-    private final SimpleCache<String, Boolean> invalidPlayers;
+    private volatile TreasuryApi playerDirectory;
 
     private final ChestShopConfiguration config;
     private final SignService signService;
@@ -66,8 +65,12 @@ public class AccountServiceImpl implements AccountService {
     private final AdminBypassService adminBypass;
 
     @Inject
-    public AccountServiceImpl(AccountMapper accounts, BusinessAccountService businessAccounts,
-                          ChestShopConfiguration config, SignService signService, AdminBypassService adminBypass) {
+    public AccountServiceImpl(
+            AccountMapper accounts,
+            BusinessAccountService businessAccounts,
+            ChestShopConfiguration config,
+            SignService signService,
+            AdminBypassService adminBypass) {
         this.adminBypass = adminBypass;
         this.accounts = accounts;
         this.businessAccounts = businessAccounts;
@@ -76,7 +79,18 @@ public class AccountServiceImpl implements AccountService {
         this.usernameToAccount = new SimpleCache<>(config.getCacheSize());
         this.uuidToAccount = new SimpleCache<>(config.getCacheSize());
         this.shortToAccount = new SimpleCache<>(config.getCacheSize());
-        this.invalidPlayers = new SimpleCache<>(config.getCacheSize());
+    }
+
+    @Override
+    public void bindPlayerDirectory(TreasuryApi treasury) {
+        this.playerDirectory = treasury;
+    }
+
+    @Override
+    public Account resolveKnownPlayer(String name) {
+        var directory = playerDirectory;
+        UUID uuid = directory == null ? null : directory.resolveKnownPlayerUuid(name);
+        return uuid == null ? null : getOrCreateAccount(uuid, name);
     }
 
     @Override
@@ -91,9 +105,14 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public Account getOrCreateAccount(OfflinePlayer player) {
         Preconditions.checkNotNull(player.getName(), "Name of player " + player.getUniqueId() + " is null?");
-        Preconditions.checkArgument(player instanceof Player || !config.isEnsureCorrectPlayerid() || uuidVersion < 0 || player.getUniqueId().version() == uuidVersion,
-                "Invalid OfflinePlayer! " + player.getUniqueId() + " has version " + player.getUniqueId().version() + " and not server version " + uuidVersion + ". " +
-                        "If you believe that is an error and your setup allows such UUIDs then set the ENSURE_CORRECT_PLAYERID config option to false.");
+        Preconditions.checkArgument(
+                player instanceof Player
+                        || !config.isEnsureCorrectPlayerid()
+                        || uuidVersion < 0
+                        || player.getUniqueId().version() == uuidVersion,
+                "Invalid OfflinePlayer! " + player.getUniqueId() + " has version "
+                        + player.getUniqueId().version() + " and not server version " + uuidVersion + ". "
+                        + "If you believe that is an error and your setup allows such UUIDs then set the ENSURE_CORRECT_PLAYERID config option to false.");
         return getOrCreateAccount(player.getUniqueId(), player.getName());
     }
 
@@ -192,27 +211,17 @@ public class AccountServiceImpl implements AccountService {
         if (business != null) {
             return business;
         }
-        return getLastAccountFromName(name, false);
+        return getLastAccountFromName(name);
     }
 
     /**
      * The information from the last time a player logged in that previously used the (shortened) name.
      * @throws IllegalArgumentException if the username is empty
      */
-    private Account getLastAccountFromName(String name, boolean searchOfflinePlayer) {
+    private Account getLastAccountFromName(String name) {
         Account account = getAccountFromShortName(name); // first get the account associated with the short name
         if (account == null) {
             account = getAccount(name);
-        }
-        if (account == null && searchOfflinePlayer && !invalidPlayers.contains(name.toLowerCase(Locale.ROOT))) {
-            // no account with that shortname was found, try to get an offline player with that name
-            OfflinePlayer offlinePlayer = ChestShop.getBukkitServer().getOfflinePlayer(name);
-            if (offlinePlayer != null && offlinePlayer.getName() != null && offlinePlayer.getUniqueId() != null
-                    && (!config.isEnsureCorrectPlayerid() || offlinePlayer.getUniqueId().version() == uuidVersion)) {
-                account = storeUsername(new PlayerSnapshot(offlinePlayer.getUniqueId(), offlinePlayer.getName()));
-            } else {
-                invalidPlayers.put(name.toLowerCase(Locale.ROOT), true);
-            }
         }
         if (account != null) {
             return getAccount(account.getUuid()); // then get the last account that was online with that UUID
@@ -290,7 +299,8 @@ public class AccountServiceImpl implements AccountService {
             if (adminBypass.has(player, Permissions.ADMIN_SHOP)) {
                 return true;
             } else {
-                ChestShop.logDebug(player.getName() + " cannot use the name " + name + " as it's an admin shop and they don't have the permission " + Permissions.ADMIN_SHOP);
+                ChestShop.logDebug(player.getName() + " cannot use the name " + name
+                        + " as it's an admin shop and they don't have the permission " + Permissions.ADMIN_SHOP);
                 return false;
             }
         }
@@ -316,10 +326,13 @@ public class AccountServiceImpl implements AccountService {
             if (player.getName().equalsIgnoreCase(name)) {
                 return true;
             }
-            ChestShop.logDebug(player.getName() + " cannot use the name " + name + " for a shop as no account with that name exists");
+            ChestShop.logDebug(player.getName() + " cannot use the name " + name
+                    + " for a shop as no account with that name exists");
             return false;
         }
-        if (!isBusinessAccount && !account.getName().equalsIgnoreCase(name) && adminBypass.otherName(player, base, account.getName())) {
+        if (!isBusinessAccount
+                && !account.getName().equalsIgnoreCase(name)
+                && adminBypass.otherName(player, base, account.getName())) {
             return true;
         }
         return canAccess(player, account);
@@ -409,35 +422,43 @@ public class AccountServiceImpl implements AccountService {
             if (Bukkit.getOnlineMode()) {
                 setUuidVersion(4);
             } else if (!Bukkit.getOnlinePlayers().isEmpty()) {
-                setUuidVersion(Bukkit.getOnlinePlayers().iterator().next().getUniqueId().version());
+                setUuidVersion(Bukkit.getOnlinePlayers()
+                        .iterator()
+                        .next()
+                        .getUniqueId()
+                        .version());
             }
         }
         try {
-            try {
-                adminAccount = new Account(config.getAdminShopName(), Bukkit.getOfflinePlayer(config.getAdminShopName()).getUniqueId());
-            } catch (NullPointerException ratelimitedException) {
-                // This happens when the server was ratelimited by Mojang. Unfortunately there is no nice way to check that.
-                // We fall back to the method used by CraftBukkit to generate an OfflinePlayer's UUID
-                adminAccount = new Account(config.getAdminShopName(), UUID.nameUUIDFromBytes(("OfflinePlayer:" + config.getAdminShopName()).getBytes(Charsets.UTF_8)));
-                log.warn("Your server appears to be ratelimited by Mojang and can't query UUID data from their API. If you run into issues with admin shops please report them!");
+            // Reuse the persisted identity: changing it would strand existing shop ownership.
+            adminAccount = accounts.findLatestByName(config.getAdminShopName());
+            if (adminAccount == null || adminAccount.getUuid() == null) {
+                // Admin shops are synthetic, not a Minecraft player profile.
+                adminAccount = new Account(
+                        config.getAdminShopName(),
+                        UUID.nameUUIDFromBytes(
+                                ("OfflinePlayer:" + config.getAdminShopName()).getBytes(Charsets.UTF_8)));
             }
             storeAccount(adminAccount);
 
             if (!config.getServerEconomyAccount().isEmpty()) {
                 serverEconomyAccount = getAccount(config.getServerEconomyAccount());
             }
-            if (serverEconomyAccount == null && !config.getServerEconomyAccount().isEmpty() && !config.getServerEconomyAccountUuid().equals(new UUID(0, 0))) {
-                serverEconomyAccount = getOrCreateAccount(config.getServerEconomyAccountUuid(), config.getServerEconomyAccount());
+            if (serverEconomyAccount == null
+                    && !config.getServerEconomyAccount().isEmpty()
+                    && !config.getServerEconomyAccountUuid().equals(new UUID(0, 0))) {
+                serverEconomyAccount =
+                        getOrCreateAccount(config.getServerEconomyAccountUuid(), config.getServerEconomyAccount());
             }
             if (serverEconomyAccount == null || serverEconomyAccount.getUuid() == null) {
                 serverEconomyAccount = null;
                 if (!config.getServerEconomyAccount().isEmpty()) {
                     log.warn("Server economy account setting '"
                             + config.getServerEconomyAccount()
-                            + "' doesn't seem to be the name of a known player account!" +
-                            " Please specify the SERVER_ECONOMY_ACCOUNT_UUID" +
-                            " or log in at least once and create a player shop with that account" +
-                            " in order for the server economy account to work.");
+                            + "' doesn't seem to be the name of a known player account!"
+                            + " Please specify the SERVER_ECONOMY_ACCOUNT_UUID"
+                            + " or log in at least once and create a player shop with that account"
+                            + " in order for the server economy account to work.");
                 }
             }
         } catch (PersistenceException e) {

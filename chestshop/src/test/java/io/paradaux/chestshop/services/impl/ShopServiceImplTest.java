@@ -463,10 +463,15 @@ class ShopServiceImplTest extends ServerTest {
         setStaticServer();
         when(accounts.canUseName(any(Player.class), anyString(), eq("Ghost"))).thenReturn(true);
         when(accounts.resolveAccount("Ghost")).thenReturn(null);
-        // getBukkitServer().getPlayer("Ghost") is null (offline) -> getOfflinePlayer path.
-        when(accounts.getOrCreateAccount(any(org.bukkit.OfflinePlayer.class))).thenReturn(null);
-        ShopCreation ctx = create(new String[] {"Ghost", "64", "B 5", "Diamond"});
-        assertThat(ctx.getOutcome()).isEqualTo(CreationOutcome.UNKNOWN_PLAYER);
+        // Offline names must use the persisted directory.
+        when(accounts.resolveKnownPlayer("Ghost")).thenReturn(null);
+        try (var chestShop = org.mockito.Mockito.mockStatic(io.paradaux.chestshop.ChestShop.class)) {
+            var lookupServer = mock(org.bukkit.Server.class);
+            chestShop.when(io.paradaux.chestshop.ChestShop::getBukkitServer).thenReturn(lookupServer);
+            ShopCreation ctx = create(new String[] {"Ghost", "64", "B 5", "Diamond"});
+            assertThat(ctx.getOutcome()).isEqualTo(CreationOutcome.UNKNOWN_PLAYER);
+            org.mockito.Mockito.verifyNoInteractions(lookupServer);
+        }
     }
 
     @Test
@@ -475,7 +480,7 @@ class ShopServiceImplTest extends ServerTest {
         Account ghost = new Account("Ghost", "Ghost", UUID.randomUUID());
         when(accounts.canUseName(any(Player.class), anyString(), eq("Ghost"))).thenReturn(true);
         when(accounts.resolveAccount("Ghost")).thenReturn(null);
-        when(accounts.getOrCreateAccount(any(org.bukkit.OfflinePlayer.class))).thenReturn(ghost);
+        when(accounts.resolveKnownPlayer("Ghost")).thenReturn(ghost);
         when(adminBypass.has(any(Player.class), anyString())).thenReturn(true); // pass perms
         ShopCreation ctx = create(new String[] {"Ghost", "64", "B 5", "Diamond"});
         // Name resolved -> not UNKNOWN_PLAYER.
@@ -489,7 +494,7 @@ class ShopServiceImplTest extends ServerTest {
         Account ghost = new Account("Ghost", "Ghost", other.getUniqueId());
         when(accounts.canUseName(any(Player.class), anyString(), eq("Ghost"))).thenReturn(true);
         when(accounts.resolveAccount("Ghost")).thenReturn(null);
-        when(accounts.getOrCreateAccount(other)).thenReturn(ghost);
+        when(accounts.resolveKnownPlayer("Ghost")).thenReturn(ghost);
         when(adminBypass.has(any(Player.class), anyString())).thenReturn(true);
         ShopCreation ctx = create(new String[] {"Ghost", "64", "B 5", "Diamond"});
         assertThat(ctx.getOutcome()).isNotEqualTo(CreationOutcome.UNKNOWN_PLAYER);
