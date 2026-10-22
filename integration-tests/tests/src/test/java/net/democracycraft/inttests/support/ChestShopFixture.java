@@ -234,13 +234,22 @@ public final class ChestShopFixture implements AutoCloseable {
      * be placed with {@code /item replace}). Returns the {@code diag createshop} response.
      */
     public String createSellShopRaw(String creator, String signOwner, int qty, int price, String itemLine) {
+        return createShopRaw(creator, signOwner, qty, price + " B", itemLine);
+    }
+
+    /** Create a real shop that pays the clicking player for a custom item. */
+    public String createBuyShopRaw(String creator, String signOwner, int qty, int price, String itemLine) {
+        return createShopRaw(creator, signOwner, qty, price + " S", itemLine);
+    }
+
+    private String createShopRaw(String creator, String signOwner, int qty, String priceLine, String itemLine) {
         RconClient.send(String.format("setblock %d %d %d minecraft:stone",
                 chestPos.x(), chestPos.y() - 1, chestPos.z() + 1));
         RconClient.send(String.format("setblock %d %d %d minecraft:chest",
                 chestPos.x(), chestPos.y(), chestPos.z()));
         RconClient.send(String.format("setblock %d %d %d minecraft:oak_sign",
                 signPos.x(), signPos.y(), signPos.z()));
-        String lines = signOwner + "|" + qty + "|" + price + " B|" + itemLine;
+        String lines = signOwner + "|" + qty + "|" + priceLine + "|" + itemLine;
         return RconClient.send("diag createshop " + creator + " world "
                 + signPos.x() + " " + signPos.y() + " " + signPos.z() + " " + lines);
     }

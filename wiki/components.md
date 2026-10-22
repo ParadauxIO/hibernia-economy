@@ -6,7 +6,7 @@ together. For how they fit as a whole, see [architecture.md](architecture.md).
 ## JVM build topology
 
 All JVM projects are part of **one** Gradle build (`settings.gradle.kts` at the
-root includes them all). Group is `io.paradaux`, Java toolchain is 21, plugin
+root includes them all). Group is `io.paradaux`, Java toolchain is 25, plugin
 versions are centralized in the root `build.gradle.kts`. Cross-project
 dependencies are wired with `project(...)` deps, so nothing resolves a sibling
 from a published snapshot. See [build-and-test.md](build-and-test.md).
@@ -193,7 +193,7 @@ Treasury and Business so a sale can pay a player or a firm.
 
 - **Vendored fork:** DC-specific changes are expected; it's built here, not pulled
   from upstream.
-- **Single Gradle module** (`plugin/`) compiled against the **Paper 1.21.11** API,
+- **Single Gradle module** (`plugin/`) compiled against the **Paper 26.3** API,
   shaded straight to **`chestshop-<version>.jar`**. (Originally ported from Maven with the
   upstream multi-version adapter matrix — a 1.13.2-baseline core + seven
   `Spigot_*`/`Paper_*` adapter modules + an `assemble` module — but since DC runs

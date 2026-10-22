@@ -34,7 +34,7 @@ public final class Dialogs {
             else if (value instanceof Float number) payload.putFloat(key, number);
             else throw new IllegalArgumentException("Unsupported dialog input: " + key);
         });
-        // Paper 1.21.11 enqueues new callback registrations and drains them on a
+        // Paper enqueues new callback registrations and drains them on a
         // server tick. A mock can reply before that drain; a packet echo alone
         // does not prove a tick boundary. Observe two world ticks, without retries.
         long tick = gameTime();
@@ -53,13 +53,19 @@ public final class Dialogs {
         return "";
     }
 
-    private static long gameTime() {
-        String reply = RconClient.send("time query gametime").trim();
-        int start = reply.length();
-        while (start > 0 && reply.charAt(start - 1) >= '0' && reply.charAt(start - 1) <= '9') start--;
-        if (start == reply.length() || reply.length() - start > 19)
-            throw new IllegalStateException("Cannot read server tick: " + reply);
-        return Long.parseLong(reply.substring(start));
+    public static long gameTime() {
+        return parseGameTime(RconClient.send("time query gametime").trim());
+    }
+
+    static long parseGameTime(String reply) {
+        var match = java.util.regex.Pattern.compile(
+                "^The (?:game )?time is ([0-9]+)(?: tick\\(s\\))?$").matcher(reply);
+        if (!match.matches()) throw new IllegalStateException("Cannot read server tick: " + reply);
+        try {
+            return Long.parseLong(match.group(1));
+        } catch (NumberFormatException error) {
+            throw new IllegalStateException("Cannot read server tick: " + reply, error);
+        }
     }
 
     public static String title(NbtMap dialog) { return text(dialog.get("title")); }

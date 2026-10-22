@@ -9,6 +9,25 @@ import org.junit.jupiter.api.Test;
 
 class DerivedGroupMapperIT extends IntegrationTestBase {
     @Test
+    void staleBindingCannotRemoveMembershipPublishedByTheCurrentBinding() throws Exception {
+        var mapper = mapper(DerivedGroupMapper.class);
+        var previous = new GroupSource(1, "business", "7");
+        var current = new GroupSource(1, "business", "8");
+        UUID oldOwner = UUID.randomUUID(), newOwner = UUID.randomUUID();
+        execute("INSERT INTO explorer_group (group_id, name) VALUES (1, 'Retargeted')");
+        execute("INSERT INTO explorer_group_sync VALUES (1, 'business', '7')");
+        mapper.refresh(previous, oldOwner);
+        // Another publisher completes after this pass resolved the previous selector.
+        execute("UPDATE explorer_group_sync SET selector = '8' WHERE group_id = 1 AND source = 'business'");
+        mapper.refresh(current, newOwner);
+        mapper.remove(previous, newOwner);
+        assertThat(mapper.listMembers(current)).containsExactlyInAnyOrder(oldOwner, newOwner);
+        // The current publisher must still be able to remove an old-selector row.
+        mapper.remove(current, oldOwner);
+        assertThat(mapper.listMembers(current)).containsExactly(newOwner);
+    }
+
+    @Test
     void bindingsFenceStaleWritesAndSourcesRemainIndependent() throws Exception {
         var mapper = mapper(DerivedGroupMapper.class);
         var lp = mapper(ExplorerGroupMapper.class);

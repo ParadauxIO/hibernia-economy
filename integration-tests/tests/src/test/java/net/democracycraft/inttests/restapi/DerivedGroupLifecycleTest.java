@@ -15,6 +15,74 @@ class DerivedGroupLifecycleTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
 
     @Test
+    void bindingRetargetFailureRecoveryAndRemovalPreserveIndependentPublication() throws Exception {
+        try (var first = MockPlayer.connectLocal(Usernames.fresh("DgOne"));
+             var second = MockPlayer.connectLocal(Usernames.fresh("DgTwo"))) {
+            for (var player : List.of(first, second)) Ledger.waitForPersonalBalance(player.getUuid(), TIMEOUT);
+            String firstFirm = Usernames.fresh("DgFst");
+            String secondFirm = Usernames.fresh("DgSnd");
+            command(first, "/business create " + firstFirm, "Successfully created");
+            command(second, "/business create " + secondFirm, "Successfully created");
+            int firstId = BusinessLedger.waitForFirm(firstFirm, TIMEOUT);
+            int secondId = BusinessLedger.waitForFirm(secondFirm, TIMEOUT);
+            int group = createGroup();
+            int control = createGroup();
+            try {
+                sql("INSERT INTO explorer_group_member(group_id,player_uuid_bin,source) VALUES (?,UUID_TO_BIN(?),'manual')", group, first.getUuid().toString());
+                sql("INSERT INTO explorer_group_sync(group_id,source,selector) VALUES (?,'business',?), (?,'business',?)",
+                        group, "" + firstId, control, "" + firstId);
+                long checkpoint = Ledger.transactionCheckpoint();
+                members(group, Set.of(first.getUuid()));
+                members(control, Set.of(first.getUuid()));
+
+                sql("UPDATE explorer_group_sync SET selector=? WHERE group_id=? AND source='business'", "" + secondId, group);
+                members(group, Set.of(second.getUuid()));
+                assertThat(readMembers(group, "manual")).containsExactly(first.getUuid());
+
+                // Invalid provider input must not publish an empty replacement or stop other bindings.
+                sql("UPDATE explorer_group_sync SET selector='invalid-firm-id' WHERE group_id=? AND source='business'", group);
+                Timestamp prior = refreshed(control, first.getUuid());
+                Await.until("healthy binding refreshed despite failing binding", () -> refreshed(control, first.getUuid()),
+                        value -> value.after(prior), TIMEOUT);
+                assertThat(readMembers(group, "business")).containsExactly(second.getUuid());
+
+                sql("UPDATE explorer_group_sync SET selector=? WHERE group_id=? AND source='business'", "" + firstId, group);
+                members(group, Set.of(first.getUuid()));
+                String trigger = "it_group_failure_" + group;
+                sql("CREATE TRIGGER " + trigger + " BEFORE UPDATE ON explorer_group_member FOR EACH ROW BEGIN "
+                        + "IF NEW.group_id = " + group + " AND NEW.source = 'business' THEN "
+                        + "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'PAR502 group publication failure'; END IF; END");
+                Timestamp failedRefresh;
+                try {
+                    failedRefresh = refreshed(group, first.getUuid());
+                    Timestamp healthyRefresh = refreshed(control, first.getUuid());
+                    Await.until("healthy binding progresses during database write failure", () -> refreshed(control, first.getUuid()),
+                            value -> value.after(healthyRefresh), TIMEOUT);
+                    Timestamp nextCycle = refreshed(control, first.getUuid());
+                    Await.until("a complete reconciliation cycle survives database write failure", () -> refreshed(control, first.getUuid()),
+                            value -> value.after(nextCycle), TIMEOUT);
+                    assertThat(refreshed(group, first.getUuid())).isEqualTo(failedRefresh);
+                    assertThat(readMembers(group, "business")).containsExactly(first.getUuid());
+                    assertThat(readMembers(group, "manual")).containsExactly(first.getUuid());
+                } finally {
+                    sql("DROP TRIGGER " + trigger);
+                }
+                Await.until("publication recovers after database write failure", () -> refreshed(group, first.getUuid()),
+                        value -> value.after(failedRefresh), TIMEOUT);
+                sql("DELETE FROM explorer_group_sync WHERE group_id=? AND source='business'", group);
+                members(group, Set.of());
+                assertThat(readMembers(group, "manual")).containsExactly(first.getUuid());
+                assertThat(readMembers(control, "business")).containsExactly(first.getUuid());
+                assertThat(Ledger.transactionCheckpoint()).isEqualTo(checkpoint);
+                for (var player : List.of(first, second))
+                    assertThat(Ledger.personalBalance(player.getUuid()).orElseThrow()).isEqualByComparingTo("10000");
+            } finally {
+                sql("DELETE FROM explorer_group WHERE group_id IN (?,?)", group, control);
+            }
+        }
+    }
+
+    @Test
     void scheduledBusinessMembershipTracksOfflineRolesAndArchiveWithoutRemovingManualGrants() throws Exception {
         try (var owner = MockPlayer.connectLocal(Usernames.fresh("DgOwn"));
              var employee = MockPlayer.connectLocal(Usernames.fresh("DgEmp"));

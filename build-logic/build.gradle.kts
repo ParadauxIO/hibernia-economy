@@ -2,12 +2,12 @@ plugins {
     `kotlin-dsl`
 }
 
-// Compile the convention plugins themselves on JDK 21 (the monorepo toolchain).
+// Compile the convention plugins themselves on JDK 25 (the monorepo toolchain).
 // Without this, Gradle's toolchain auto-detection can pick a stray JRE that has
 // no compiler and the included build fails to configure.
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
 }
 
