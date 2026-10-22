@@ -142,6 +142,89 @@ class BusinessAccountServiceImplTest {
         assertThat(service.resolveBusinessAccount("B:1A")).isNull();
     }
 
+    @Test
+    void resolve_nativeBusinessShowsFirmRatherThanWalletLabel() {
+        service.bind(treasury, business);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
+        Firm firm = new Firm();
+        firm.setDisplayName("Acme Hardware");
+        firm.setDefaultAccountId(99); // The shop wallet is not the firm's default account.
+        when(firms.getFirmByAccountId(46)).thenReturn(firm);
+
+        Account account = service.resolveBusinessAccount("B:1A");
+
+        assertThat(account.getName()).isEqualTo("Acme Hardware");
+        assertThat(account.getShortName()).isEqualTo("B:1A");
+        assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+        firm.setDisplayName("Acme Renamed");
+        assertThat(service.resolveBusinessAccount("B:1A").getName()).isEqualTo("Acme Renamed");
+    }
+
+    @Test
+    void resolve_aliasBusinessShowsFirmAndPreservesAliasIdentity() {
+        service.bind(treasury, business);
+        when(firms.resolveShopAlias("acme")).thenReturn(46);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
+        Firm firm = new Firm();
+        firm.setDisplayName("Acme Hardware");
+        firm.setDefaultAccountId(99); // The shop wallet is not the firm's default account.
+        when(firms.getFirmByAccountId(46)).thenReturn(firm);
+
+        Account account = service.resolveBusinessAccount("B:@acme");
+
+        assertThat(account.getName()).isEqualTo("Acme Hardware");
+        assertThat(account.getShortName()).isEqualTo("B:@acme");
+        assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+    }
+
+    @Test
+    void resolve_legacyBusinessShowsFirmRatherThanWalletLabel() {
+        service.bind(treasury, business);
+        Firm firm = new Firm();
+        firm.setDisplayName("Acme Hardware");
+        firm.setDefaultAccountId(46);
+        when(firms.getFirm("Old Shop")).thenReturn(firm);
+        when(firms.getFirmByAccountId(46)).thenReturn(firm);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
+
+        Account account = service.resolveBusinessAccount("B:Old Shop");
+
+        assertThat(account.getName()).isEqualTo("Acme Hardware");
+        assertThat(account.getShortName()).isEqualTo("B:1A");
+        assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+    }
+
+    @Test
+    void resolve_missingBusinessApiKeepsWalletLabelAndIdentity() {
+        service.bind(treasury, null);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
+        Account account = service.resolveBusinessAccount("B:1A");
+        assertThat(account.getName()).isEqualTo("ChestShops");
+        assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+    }
+
+    @Test
+    void resolve_blankFirmNameKeepsWalletLabel() {
+        service.bind(treasury, business);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
+        Firm firm = new Firm();
+        firm.setDisplayName(" ");
+        when(firms.getFirmByAccountId(46)).thenReturn(firm);
+        assertThat(service.resolveBusinessAccount("B:1A").getName()).isEqualTo("ChestShops");
+        firm.setDisplayName(null);
+        assertThat(service.resolveBusinessAccount("B:1A").getName()).isEqualTo("ChestShops");
+    }
+
+    @Test
+    void resolve_displayLookupFailureKeepsWalletIdentity() {
+        service.bind(treasury, business);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
+        when(firms.getFirmByAccountId(46)).thenThrow(new IllegalStateException("unavailable"));
+        Account account = service.resolveBusinessAccount("B:1A");
+        assertThat(account.getName()).isEqualTo("ChestShops");
+        assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+    }
+
     // ── canAccessBusinessAccount ──────────────────────────────────────────────
 
     private Player player(UUID id) {

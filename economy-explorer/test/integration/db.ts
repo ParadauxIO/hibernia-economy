@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { migrationSql } from './migrationSql';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { withoutUndefined } from '../../lib/util/withoutUndefined';
@@ -25,24 +26,6 @@ export function migrationFiles(dir: string = MIGRATIONS): string[] {
   const files = readdirSync(dir).filter((f) => /^V\d+__.+\.sql$/.test(f));
   if (files.length === 0) throw new Error(`no Flyway migrations found in ${dir}`);
   return files.sort((a, b) => version(a) - version(b)).map((f) => resolve(dir, f));
-}
-
-/** Translate the standalone DELIMITER directives and line-ending terminators
- * used by our migrations. Leave stored-program bodies and SQL strings intact. */
-export function migrationSql(script: string): string {
-  let delimiter = ';';
-  return script.split('\n').map((line) => {
-    const directive = /^\s*DELIMITER\s+(\S+)\s*$/i.exec(line);
-    if (directive) {
-      delimiter = directive[1]!;
-      return '';
-    }
-    const trimmed = line.trimEnd();
-    if (delimiter !== ';' && !trimmed.trimStart().startsWith('--') && trimmed.endsWith(delimiter)) {
-      return trimmed.slice(0, -delimiter.length) + ';';
-    }
-    return line;
-  }).join('\n');
 }
 
 /** Connection options for the disposable test DB named by DB_*. */

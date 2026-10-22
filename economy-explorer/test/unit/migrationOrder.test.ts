@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { basename } from 'node:path';
-import { migrationFiles, migrationSql } from '../integration/db';
+import { migrationFiles } from '../integration/db';
+import { migrationSql } from '../integration/migrationSql';
 
 // The integration + e2e DB is built by applying these in order, so a lexical
 // sort (V10 before V2) would build a different schema than Flyway does.
