@@ -15,7 +15,7 @@ plugins {
     // [plugins].shadow) and shared with the build-logic classpath dep so the two
     // never drift. See build-logic/build.gradle.kts.
     alias(libs.plugins.shadow) apply false
-    id("org.springframework.boot") version "4.1.0" apply false
+    id("org.springframework.boot") version "4.1.1" apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
     // Formatting for the repo-level files (every *.gradle.kts, md/yml/sql) that no
     // JVM subproject owns; the JVM projects get it via io.paradaux.jvm-conventions.

@@ -126,13 +126,13 @@ remaining reviews, disabled tests and unavailable integrations. Refresh the inde
 with `python3 integration-tests/acceptance/inventory.py`; use `--check` to detect drift.
 
 The runner executes `:tests:preflight` before selected tests. It requires offline
-Paper 1.21.11, enabled economy/protection plugins, a real login and starting balance,
+Paper 26.3, enabled economy/protection plugins, a real login and starting balance,
 and an authenticated REST boundary. It prints plugin versions. The protection
 profile also checks that both startup integration flags are enabled. Core Nexo coverage
 uses **a stub**; the opt-in `nexo` profile requires a real supplied plugin. Same-stack
 browser acceptance uses `explorer`; Realty, CarbonChat and Bedrock remain unverified.
-Paper 26.3 staging (ADT-193) needs a separate matching client/profile and is not
-certified by this run. Live tests always execute, even with unchanged class files,
+The isolated harness targets the same Paper 26.3 version as staging. Passing it
+does not certify the separately deployed staging server. Live tests always execute, even with unchanged class files,
 because Gradle cannot fingerprint external server/database state.
 
 ### Test catalogue
@@ -270,8 +270,8 @@ Chat assertions still happen for **command response correctness** ("did the user
 
 ## Compatibility notes
 
-- **Built and tested against Paper 1.21.11.** MCProtocolLib pins protocol version, so changing the dev-server MC version may require bumping the `org.geysermc.mcprotocollib:protocol` snapshot version in `mock-client/build.gradle.kts`. The 1.21.11-SNAPSHOT version lives in OpenCollab's snapshot repo.
-- **Java 21 toolchain.** Tests JVM-fork at runtime — they'll use whatever JDK is in `JAVA_HOME`. Java 21 is fine; Java 25 also works.
+- **Targets Paper 26.3 build 206.** MCProtocolLib pins protocol version, so changing the dev-server MC version may require bumping the `org.geysermc.mcprotocollib:protocol` snapshot version in `mock-client/build.gradle.kts`. The 26.3-SNAPSHOT version lives in OpenCollab's snapshot repo.
+- **Java 25 toolchain.** Tests JVM-fork at runtime — they'll use whatever JDK is in `JAVA_HOME`. Set `JAVA_HOME` to a Java 25 JDK before running the harness.
 - **Online mode must be disabled** on the target server. The mock client does no authentication.
 - **RCON must be enabled** on the target server. Used by `RconClient` for admin-side seeding from inside tests.
 
@@ -388,7 +388,7 @@ tests and restores the default navigation commands afterward.
 bash ops/integration/run.sh -- --tests '*FindMenuE2ETest' --tests '*FindCommandTest'
 ```
 
-These are Java protocol tests on the harness's pinned Paper 1.21.11 build. They do
+These are Java protocol tests on the harness's pinned Paper 26.3 build. They do
 not render screenshots or simulate a Bedrock/Geyser client.
 
 ### Scheduled Explorer group profile

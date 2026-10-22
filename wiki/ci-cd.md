@@ -121,7 +121,7 @@ a published module, add its path there. `ci.yml` needs no such list: it runs
   comment (`uses: actions/checkout@<sha> # v4.4.0`). Dependabot bumps both
   together (`.github/dependabot.yml`).
 - JVM jobs share [`.github/actions/setup-jvm`](../.github/actions/setup-jvm/action.yml)
-  after `actions/checkout`: wrapper validation, Temurin 21, `setup-gradle`.
+  after `actions/checkout`: wrapper validation, Temurin 25, `setup-gradle`.
   Invoke the wrapper as `sh ./gradlew` — it is committed without the exec bit.
 - Every job has a `timeout-minutes`, and permissions are least-privilege: the
   workflow default is `contents: read`, and jobs that write (checks, PR comments,

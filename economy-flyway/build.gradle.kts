@@ -33,7 +33,7 @@ description = "Flyway-managed schema for the shared DemocracyCraft economy datab
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
 }
 

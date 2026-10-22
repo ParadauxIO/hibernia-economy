@@ -5,7 +5,7 @@ include("mock-client", "tests", "diag-plugin", "nexo-stub")
 dependencyResolutionManagement {
     repositories {
         mavenCentral()
-        // MCProtocolLib SNAPSHOTs (1.21.11-SNAPSHOT lives here).
+        // MCProtocolLib SNAPSHOTs (26.3-SNAPSHOT lives here).
         maven("https://repo.opencollab.dev/maven-snapshots") {
             name = "opencollab-snapshots"
             mavenContent { snapshotsOnly() }

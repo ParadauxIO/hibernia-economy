@@ -94,10 +94,10 @@ class TradeValidatorTest {
         lenient().when(items.getName(any())).thenReturn("Stone");
         lenient()
                 .when(message.component(anyString(), any(java.util.Map.class)))
-                .thenReturn(mock(net.kyori.adventure.text.Component.class));
+                .thenReturn(net.kyori.adventure.text.Component.empty());
         lenient()
                 .when(message.component(anyString(), any(Object[].class)))
-                .thenReturn(mock(net.kyori.adventure.text.Component.class));
+                .thenReturn(net.kyori.adventure.text.Component.empty());
 
         validator = new TradeValidatorImpl(
                 economy,

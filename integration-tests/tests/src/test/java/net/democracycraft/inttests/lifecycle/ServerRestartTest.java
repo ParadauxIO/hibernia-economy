@@ -59,7 +59,7 @@ class ServerRestartTest {
             Await.until("restarted Paper RCON ready", () -> {
                 if (!restarted.isAlive()) throw new AssertionError("Restarted Paper exited: " + restarted.exitValue());
                 try { return RconClient.send("diag runtime"); } catch (RuntimeException unavailable) { return "starting"; }
-            }, response -> response.contains("minecraft=1.21.11"), Duration.ofSeconds(120));
+            }, response -> response.contains("minecraft=26.3"), Duration.ofSeconds(120));
             for (String plugin : new String[]{"Treasury", "Business", "ChestShop", "TreasuryAPI", "LuckPerms"}) {
                 assertThat(RconClient.send("diag plugin " + plugin)).contains("enabled=true");
             }

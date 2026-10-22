@@ -21,8 +21,16 @@
 # already-running server instead (CI service container) — the database named by
 # IT_DB_NAME is DROPPED and recreated.
 #
-# Requires: JDK 21 on PATH/JAVA_HOME, curl and a mariadb/mysql client.
+# Requires: JDK 25 on PATH/JAVA_HOME, curl and a mariadb/mysql client.
 set -euo pipefail
+
+# Honor JAVA_HOME for both the build and the Paper/REST runtime processes.
+JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}java"
+JAVA_MAJOR="$("$JAVA_BIN" -XshowSettings:properties -version 2>&1 | sed -n 's/.*java.specification.version = //p')"
+if [[ ! "$JAVA_MAJOR" =~ ^[0-9]+$ ]] || (( JAVA_MAJOR < 25 )); then
+  echo "Paper 26.3 requires Java 25 or newer; set JAVA_HOME to a Java 25 JDK" >&2
+  exit 2
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -134,20 +142,20 @@ PY
 
 # Pinned downloads. Paper is addressed by content hash; bump them together
 # with the server version the plugins target.
-PAPER_JAR="paper-1.21.11-132.jar"
-PAPER_URL="https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/$PAPER_JAR"
-PAPER_SHA256="5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
+PAPER_JAR="paper-26.3-206.jar"
+PAPER_URL="https://fill-data.papermc.io/v1/objects/4208a692538104ec88699c0e078b2b89842920a10472ebb37e72cdda27c0d80e/$PAPER_JAR"
+PAPER_SHA256="4208a692538104ec88699c0e078b2b89842920a10472ebb37e72cdda27c0d80e"
 LUCKPERMS_JAR="LuckPerms-Bukkit-5.5.87.jar"
 LUCKPERMS_URL="https://download.luckperms.net/1674/bukkit/loader/$LUCKPERMS_JAR"
-GP_JAR="GriefPrevention-16.18.6.jar"
-GP_URL="https://cdn.modrinth.com/data/O4o4mKaq/versions/4RqY8Kfl/GriefPrevention.jar"
+GP_JAR="GriefPrevention-16.18.7.jar"
+GP_URL="https://cdn.modrinth.com/data/O4o4mKaq/versions/dGfCZHqk/GriefPrevention.jar"
 # DcDiag links against WorldGuard, so it (and WorldEdit) must be installed even
-# for runs that don't exercise the protection hooks. These are the last builds
-# that run on Java 21 and support 1.21.11.
-WE_JAR="worldedit-bukkit-7.4.2.jar"
-WE_URL="https://cdn.modrinth.com/data/1u6JkXh5/versions/p8T2aZ8U/$WE_JAR"
-WG_JAR="worldguard-bukkit-7.0.15.jar"
-WG_URL="https://cdn.modrinth.com/data/DKY9btbd/versions/WaElxvDz/$WG_JAR"
+# for runs that don't exercise the protection hooks. Keep these released
+# protection-plugin pins explicit; their 26.3 compatibility is checked at startup.
+WE_JAR="worldedit-bukkit-7.4.6.jar"
+WE_URL="https://cdn.modrinth.com/data/1u6JkXh5/versions/YFnqiUlL/$WE_JAR"
+WG_JAR="worldguard-bukkit-7.0.20.jar"
+WG_URL="https://cdn.modrinth.com/data/DKY9btbd/versions/9YdeGXiK/$WG_JAR"
 
 log() { printf '\n==> %s\n' "$*"; }
 
@@ -297,6 +305,7 @@ fi
 echo "eula=true" >"$SERVER/eula.txt"
 cat >"$SERVER/server.properties" <<EOF
 online-mode=false
+white-list=false
 server-ip=127.0.0.1
 server-port=$MC_PORT
 enable-rcon=true
@@ -304,6 +313,7 @@ rcon.port=$RCON_PORT
 rcon.password=$RCON_PASSWORD
 broadcast-rcon-to-ops=false
 level-type=minecraft\:flat
+generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
 generate-structures=false
 spawn-protection=0
 difficulty=peaceful
@@ -387,7 +397,7 @@ printf 'log-notify: false\n' >"$SERVER/plugins/LuckPerms/config.yml"
 printf 'commands:\n  spam-exclusions:\n  - /skill\n  - /dcsync\n' >"$SERVER/spigot.yml"
 
 log "Starting Paper on :$MC_PORT (RCON :$RCON_PORT)"
-(cd "$SERVER" && exec java -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \
+(cd "$SERVER" && exec "$JAVA_BIN" -Dterminal.jline=false -Dterminal.ansi=false -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \
     -jar "$CACHE/$PAPER_JAR" --nogui >"$WORK/server.log" 2>&1) &
 PIDS+=($!)
 PAPER_PID="${PIDS[-1]}"
@@ -416,7 +426,7 @@ fi
 
 log "Starting the REST API on :$REST_PORT"
 DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \
-    java -jar "${REST_JARS[0]}" \
+    "$JAVA_BIN" -jar "${REST_JARS[0]}" \
     --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" "${REST_PROFILE_ARGS[@]}" \
     --treasury.webhook.insecure-test-targets="127.0.0.1:$WEBHOOK_PORT" >"$WORK/rest-api.log" 2>&1 &
 PIDS+=($!)

@@ -1,7 +1,7 @@
 plugins {
     `java-library`
     `maven-publish`
-    id("io.paradaux.jvm-conventions") // Java 21 toolchain + UTF-8 / release=21 JavaCompile
+    id("io.paradaux.jvm-conventions") // Java 25 toolchain + UTF-8 / release=25 JavaCompile
     id("io.paradaux.published-library-conventions") // publish target: repo.paradaux.io + REPO_USER/REPO_PASS
 }
 
@@ -71,7 +71,12 @@ publishing {
                         distribution.set("repo")
                     }
                 }
-                developers { developer { id.set("rian"); name.set("Rían Errity") } }
+                developers {
+                    developer {
+                        id.set("rian")
+                        name.set("Rían Errity")
+                    }
+                }
                 scm {
                     url.set("https://github.com/DemocracyCraft/Treasury")
                     connection.set("scm:git:https://github.com/DemocracyCraft/Treasury.git")

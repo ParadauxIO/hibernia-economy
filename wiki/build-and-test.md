@@ -3,10 +3,10 @@
 ## One build to rule them all
 
 Every JVM project is part of a **single root Gradle build**. There is one Gradle
-wrapper (Gradle **9.6.0**) and one settings file at the repo root; the individual
+wrapper (Gradle **9.8.1**) and one settings file at the repo root; the individual
 projects have no wrapper or settings of their own.
 
-- **Group/version:** `io.paradaux` · Java toolchain **21**.
+- **Group/version:** `io.paradaux` · Java toolchain **25**.
 - **Plugin versions are centralized** in the root `build.gradle.kts` (declared with
   `apply false`); each subproject applies them **without** a version. A single
   build rejects the same versioned plugin being requested twice, so don't re-add
@@ -23,6 +23,25 @@ projects have no wrapper or settings of their own.
 
 On Windows use `.\gradlew.bat`.
 
+## Minecraft runtime baseline
+
+Paper plugins compile against `26.3.build.206-stable` and declare `api-version: 26.3`.
+Use **Java 25** for Gradle, the plugins, the REST container and the live harness;
+Paper 26.1 and later require Java 25 ([Paper requirements](https://docs.papermc.io/paper/getting-started/)).
+CI installs the same JDK through `.github/actions/setup-jvm`.
+
+The isolated harness pins Paper **26.3 build 206** by SHA-256 in
+`ops/integration/run.sh`, uses MCProtocolLib `26.3-SNAPSHOT`, and rejects other
+Minecraft versions before acceptance tests. MockBukkit uses the matching 26.3
+line. Historical results from 1.21.11 remain historical evidence; a successful
+source build alone does not certify live plugins, licensed integrations or Bedrock.
+
+Roll out plugin artifacts through the server coordinator after an isolated run
+and a database compatibility check. Keep the previous plugin set and configuration
+backup together for rollback on the existing Java 25/Paper 26.3 staging runtime.
+Rolling back plugins does not roll back database migrations or upgraded worlds;
+those require their own verified backup/restore procedure.
+
 ## Convention plugins (`build-logic/`)
 
 Shared plugin-build boilerplate lives in **`build-logic/`**, an included build wired
@@ -31,8 +50,8 @@ in via `pluginManagement { includeBuild("build-logic") }` in the root
 subprojects apply by id (no version):
 
 - **`io.paradaux.jvm-conventions`** — applied by all four Paper plugins
-  (treasury, business, treasury-api-plugin, chestshop): the Java toolchain (21)
-  and `JavaCompile` options (UTF-8, `--release 21`).
+  (treasury, business, treasury-api-plugin, chestshop): the Java toolchain (25)
+  and `JavaCompile` options (UTF-8, `--release 25`).
 - **`io.paradaux.paper-server-conventions`** — applied by the three shading
   *server* plugins (treasury, business, treasury-api-plugin); applies
   `jvm-conventions` transitively and adds the common repositories (with
@@ -46,7 +65,7 @@ subprojects apply by id (no version):
 Each project still owns what genuinely differs: its **shadow relocations**, its
 **dependencies**, and (treasury/business) its **jacoco coverage gate**. ChestShop
 applies only `jvm-conventions` and keeps its bespoke repos/shadow/resources —
-they diverge too far to share. `build-logic` compiles on the JDK 21 toolchain
+they diverge too far to share. `build-logic` compiles on the JDK 25 toolchain
 like everything else.
 
 ## Build the deployable artifacts
@@ -92,7 +111,7 @@ For consumers **outside** this repo:
 ## ChestShop specifics
 
 ChestShop is a **single module** (`:chestshop`) compiled against the **Paper
-1.21.11** API and shaded straight to `chestshop-<version>.jar` (standardised with
+26.3** API and shaded straight to `chestshop-<version>.jar` (standardised with
 the other plugins — base name = project name, version = the pinned monorepo
 version). It was ported from Maven with
 upstream's multi-version adapter matrix — a 1.13.2-baseline core plus seven
@@ -115,7 +134,7 @@ Things worth knowing if you touch it:
   use — just against the existing SQLite files (`users.db`/`items.db`), not MariaDB.
   The SQLite JDBC driver (`org.sqlite.JDBC`) is server-provided at runtime, as it was
   for ORMLite. There are no version-adapter modules or a runtime adapter jar-scan any
-  more — the single 1.21.11 core replaced them.
+  more — the single 26.3 core replaced them.
 - **Soft-depend APIs are resolved non-transitively.** Gradle's `compileOnly` pulls
   transitives that Maven's `provided` didn't, dragging in dead/incompatible
   artifacts; the build pins them off. WorldEdit is force-pinned to **7.3.9** (the
@@ -255,7 +274,7 @@ database with `economy-flyway`, starts Paper (offline mode, RCON) and the REST A
 runs the tests and tears everything down. Work files and logs go to
 `build/integration/`.
 
-- **Needs:** JDK 21, `curl`, and either a local `mariadbd` (a scratch
+- **Needs:** JDK 25, `curl`, and either a local `mariadbd` (a scratch
   instance is started on port 33306) or `IT_DB_EXTERNAL=1` plus `IT_DB_*` pointing at
   a running server whose `IT_DB_NAME` database may be dropped.
 - **Ports:** 25565 (game), 25575 (RCON), 8080 (REST) and 8099 (the tests' webhook

@@ -6,9 +6,9 @@ import io.paradaux.mockclient.MockPlayer;
 public final class CapabilityPreflight {
     public static void main(String[] args) {
         String runtime = RconClient.send("diag runtime").trim();
-        require(runtime.equals("minecraft=1.21.11 online-mode=false"),
-                "Mock client requires offline Paper 1.21.11; observed " + runtime
-                        + ". Paper 26.3 staging needs a matching protocol client/profile (ADT-193).");
+        require(runtime.equals("minecraft=26.3 online-mode=false"),
+                "Mock client requires offline Paper 26.3; observed " + runtime
+                        + ". Use the pinned 26.3 client and isolated runtime profile.");
         System.out.println("Runtime: " + runtime);
         for (String name : new String[]{"Treasury", "Business", "TreasuryAPI", "ChestShop",
                 "LuckPerms", "DcDiag", "WorldEdit", "WorldGuard", "GriefPrevention", "Nexo"}) {

@@ -8,7 +8,7 @@
 #   docker build treasury-rest-api
 #
 # This image just packages that prebuilt app.jar.
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 # Security: run as non-root
 RUN groupadd --system appgroup && useradd --system --gid appgroup appuser

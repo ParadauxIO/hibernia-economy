@@ -48,8 +48,6 @@ class HopperMinecartProtectionTest {
     }
 
     private static long gameTime() {
-        var match = java.util.regex.Pattern.compile("(\\d+)$").matcher(RconClient.send("time query gametime").trim());
-        if (!match.find()) throw new AssertionError("Missing world game time");
-        return Long.parseLong(match.group(1));
+        return Dialogs.gameTime();
     }
 }
