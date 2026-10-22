@@ -24,7 +24,7 @@ class BusinessAccountScopeTest {
                 owner.chatCommand("/business create " + firm);
                 owner.awaitMessageContaining("Successfully created", TIMEOUT);
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
-                owner.chatCommand("/business account create " + firm + " Reserve");
+                owner.chatCommand("/business account create " + firm + " Reserve" + firm);
                 owner.awaitMessageContaining("created account", TIMEOUT);
             });
             int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);

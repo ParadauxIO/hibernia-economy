@@ -21,7 +21,7 @@ class FirmRolePermissionPropagationTest {
             String firm = Usernames.fresh("RpFrm");
             admin(owner, "/" + root + " create " + firm);
             int id = BusinessLedger.waitForFirm(firm, TIMEOUT);
-            admin(owner, "/" + root + " account create " + firm + " Reserve");
+            admin(owner, "/" + root + " account create " + firm + " Reserve" + firm);
             int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
             int reserve = BusinessLedger.firmAccountIdAt(id, 1);
             admin(owner, "/" + root + " attribute set hq " + firm + " original499");

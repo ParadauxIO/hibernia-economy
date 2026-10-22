@@ -21,7 +21,7 @@ class FirmBalanceLifecycleTest {
             setup(owner, "/business create " + firm);
             int id = BusinessLedger.waitForFirm(firm, TIMEOUT);
             int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
-            setup(owner, "/business account create " + firm + " Reserve");
+            setup(owner, "/business account create " + firm + " Reserve" + firm);
             int reserve = BusinessLedger.firmAccountIdAt(id, 1);
             setup(owner, "/paya account " + primary + " 23.45 PrimaryTotal");
             setup(owner, "/paya account " + reserve + " 11 ReserveTotal");

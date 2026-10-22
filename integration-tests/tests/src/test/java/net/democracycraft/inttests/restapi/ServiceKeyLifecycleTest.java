@@ -20,7 +20,7 @@ class ServiceKeyLifecycleTest {
             int other = Ledger.personalAccountId(peer.getUuid()).orElseThrow();
             var first = ApiTokens.mintServiceKey(owner.getUuid());
             var independent = ApiTokens.mintServiceKey(peer.getUuid());
-            rename(first.token(), account, "Before Rotation");
+            rename(first.token(), account, "Before Rotation " + owner.getUsername());
             var rotation = RestApi.postRotate(first.token());
             assertThat(rotation.status()).as("%s", rotation.body()).isEqualTo(200);
             assertThat(rotation.json().path("keyId").asInt()).isEqualTo(first.keyId());
@@ -33,26 +33,26 @@ class ServiceKeyLifecycleTest {
             assertThat(stored.jwtId()).isNotEqualTo(first.jwtId());
             long checkpoint = Ledger.transactionCheckpoint();
             invalid(first.token(), account, other, "TOKEN_SUPERSEDED");
-            state(account, other, "Before Rotation", "10000", "10000", checkpoint);
+            state(account, other, "Before Rotation " + owner.getUsername(), "10000", "10000", checkpoint);
             // Only a correctly retained SERVICE claim can perform these admin operations.
-            rename(current, account, "After Rotation");
+            rename(current, account, "After Rotation " + owner.getUsername());
             paid(current, account, other, "23.45");
             checkpoint = Ledger.transactionCheckpoint();
             var invalidated = RestApi.call("POST", "/admin/api-keys/" + first.keyId() + "/" + operation, current, null);
             assertThat(invalidated.status()).as("%s", invalidated.body()).isEqualTo(operation.equals("rotate") ? 200 : 204);
             String error = operation.equals("rotate") ? "TOKEN_SUPERSEDED" : "TOKEN_REVOKED";
             invalid(current, account, other, error);
-            state(account, other, "After Rotation", "9976.55", "10023.45", checkpoint);
+            state(account, other, "After Rotation " + owner.getUsername(), "9976.55", "10023.45", checkpoint);
             var after = ApiTokens.keyById(first.keyId());
             assertThat(after.revoked()).isEqualTo(operation.equals("revoke"));
             if (operation.equals("rotate")) assertThat(after.jwtId()).isNotEqualTo(stored.jwtId());
             else assertThat(after.jwtId()).isEqualTo(stored.jwtId());
             // Another SERVICE credential retains control after the first invalidates itself.
-            rename(independent.token(), account, "Independent Admin");
+            rename(independent.token(), account, "Independent Admin " + owner.getUsername());
             paid(independent.token(), other, account, "11.00");
             assertThat(Ledger.initiatedTransactionCountAfter(peer.getUuid(), checkpoint)).isEqualTo(1);
             assertThat(Ledger.initiatedPostingsAfter(peer.getUuid(), checkpoint)).hasSize(2);
-            state(account, other, "Independent Admin", "9987.55", "10012.45", null);
+            state(account, other, "Independent Admin " + owner.getUsername(), "9987.55", "10012.45", null);
             assertThat(ApiTokens.keyById(independent.keyId()).jwtId()).isEqualTo(independent.jwtId());
             assertThat(ApiTokens.keyById(independent.keyId()).revoked()).isFalse();
         }

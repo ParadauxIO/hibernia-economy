@@ -76,7 +76,7 @@ class FirmBalanceRankingTest {
         assertThat(command(owner, "/" + root + " create " + name)).anyMatch(m -> m.contains("Successfully created"));
         int id = BusinessLedger.waitForFirm(name, TIMEOUT);
         int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
-        command(owner, "/" + root + " account create " + name + " Reserve");
+        command(owner, "/" + root + " account create " + name + " Reserve" + name);
         BusinessLedger.waitForFirmAccountCountAtLeast(id, 2, TIMEOUT);
         int reserve = BusinessLedger.firmAccountIdAt(id, 1);
         command(owner, "/paya account " + primary + " " + primaryAmount);

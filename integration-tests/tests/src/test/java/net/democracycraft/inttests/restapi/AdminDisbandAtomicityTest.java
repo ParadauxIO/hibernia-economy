@@ -27,8 +27,8 @@ class AdminDisbandAtomicityTest {
             setup(owner, "/business create " + firm);
             int id = BusinessLedger.waitForFirm(firm, TIMEOUT);
             int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
-            setup(owner, "/business account create " + firm + " Reserve");
-            setup(owner, "/business account create " + firm + " Empty");
+            setup(owner, "/business account create " + firm + " Reserve" + firm);
+            setup(owner, "/business account create " + firm + " Empty" + firm);
             int reserve = BusinessLedger.firmAccountIdAt(id, 1);
             int empty = BusinessLedger.firmAccountIdAt(id, 2);
             setup(owner, "/paya account " + primary + " 23.45 AtomicPrimary");

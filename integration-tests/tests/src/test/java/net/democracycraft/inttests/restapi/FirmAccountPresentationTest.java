@@ -25,7 +25,7 @@ class FirmAccountPresentationTest {
             setup(owner, "/business create " + firm);
             int id = BusinessLedger.waitForFirm(firm, TIMEOUT);
             int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
-            setup(owner, "/business account create " + firm + " Reserve");
+            setup(owner, "/business account create " + firm + " Reserve" + firm);
             int reserve = BusinessLedger.firmAccountIdAt(id, 1);
             setup(owner, "/paya account " + primary + " 23.45 PrimaryList");
             setup(owner, "/paya account " + reserve + " 11 ReserveList");
@@ -40,7 +40,7 @@ class FirmAccountPresentationTest {
             JsonNode all = accounts(whole.token());
             assertThat(all.size()).isEqualTo(2);
             row(all.get(0), primary, firm + " Corporate Account", "23.45");
-            row(all.get(1), reserve, "Reserve", "11.00");
+            row(all.get(1), reserve, "Reserve" + firm, "11.00");
             JsonNode restricted = accounts(scoped.token());
             assertThat(restricted.size()).isEqualTo(1);
             assertThat(restricted.get(0)).isEqualTo(all.get(1));
@@ -97,7 +97,7 @@ class FirmAccountPresentationTest {
             setup(owner, "/business create " + firm);
             int id = BusinessLedger.waitForFirm(firm, TIMEOUT);
             int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
-            setup(owner, "/business account create " + firm + " Reserve");
+            setup(owner, "/business account create " + firm + " Reserve" + firm);
             int reserve = BusinessLedger.firmAccountIdAt(id, 1);
             var key = ApiTokens.issueBusiness(owner.getUsername(), owner, firm);
             String duplicate = firm + " Corporate Account";
@@ -105,7 +105,7 @@ class FirmAccountPresentationTest {
             var response = rename(key.token(), reserve, duplicate);
             assertAll(
                     () -> assertThat(response.status()).as("%s", response.body()).isBetween(400, 499),
-                    () -> assertThat(storedName(reserve)).isEqualTo("Reserve"),
+                    () -> assertThat(storedName(reserve)).isEqualTo("Reserve" + firm),
                     () -> assertThat(storedName(primary)).isEqualTo(duplicate),
                     () -> assertThat(Ledger.transactionCheckpoint()).isEqualTo(checkpoint));
         }

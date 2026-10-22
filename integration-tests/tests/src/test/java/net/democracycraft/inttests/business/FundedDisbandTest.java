@@ -24,7 +24,7 @@ class FundedDisbandTest {
                 command(owner, "/" + root + " create " + firm);
                 int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
                 int primary = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-                command(owner, "/" + root + " account create " + firm + " Reserve");
+                command(owner, "/" + root + " account create " + firm + " Reserve" + firm);
                 BusinessLedger.waitForFirmAccountCountAtLeast(firmId, 2, TIMEOUT);
                 int reserve = BusinessLedger.firmAccountIdAt(firmId, 1);
                 assertThat(reserve).isNotEqualTo(primary);

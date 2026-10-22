@@ -23,6 +23,10 @@ class AccountOwnerResolutionTest {
             String path = "/admin/accounts/" + account + "/owner";
             // Move away, then resolve the known player's name to reclaim the same ID.
             UUID temporaryOwner = UUID.randomUUID();
+            var shared = RestApi.call("PATCH", "/admin/accounts/" + account + "/display-name", service,
+                    "{\"displayName\":\"" + owner.getUsername() + "\"}");
+            assertThat(shared.status()).as(shared.body()).isEqualTo(200);
+            Await.until("player and account share their name", () -> claims(owner.getUsername()), n -> n == 2, Duration.ofSeconds(10));
             // A player's name cannot be transferred to another identity under PAR-501.
             denied(RestApi.call("PATCH", path, service, body(temporaryOwner.toString())), 409, "NAME_RESERVED");
             unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
@@ -49,7 +53,10 @@ class AccountOwnerResolutionTest {
             }
             denied(RestApi.call("PATCH", path, service, body(Usernames.fresh("OrNo"))), 404, "PLAYER_NOT_FOUND");
             unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
-            denied(RestApi.call("PATCH", path, personal, body(temporaryOwner.toString())), 403, "FORBIDDEN");
+            denied(RestApi.call("PATCH", path, personal, body(temporaryOwner.toString())), 401, "TOKEN_REVOKED");
+            unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
+            String freshPersonal = ApiTokens.issuePersonal(owner.getUsername(), owner).token();
+            denied(RestApi.call("PATCH", path, freshPersonal, body(temporaryOwner.toString())), 403, "FORBIDDEN");
             unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
             denied(RestApi.call("PATCH", path, null, body(temporaryOwner.toString())), 401, "MISSING_TOKEN");
             unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
@@ -57,6 +64,13 @@ class AccountOwnerResolutionTest {
                     body(owner.getUsername())), 404, "ACCOUNT_NOT_FOUND");
             unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
         }
+    }
+    private static int claims(String name) {
+        try (var c = DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
+             var q = c.prepareStatement("SELECT claim_count FROM global_name_reservations WHERE name_key=?")) {
+            q.setString(1, name);
+            try (var r = q.executeQuery()) { return r.next() ? r.getInt(1) : 0; }
+        } catch (java.sql.SQLException e) { throw new IllegalStateException("read name claims", e); }
     }
     private static String body(String owner) { return "{\"owner\":\"" + owner + "\"}"; }
     private static void denied(RestApi.Response response, int status, String error) {

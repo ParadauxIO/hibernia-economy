@@ -23,7 +23,7 @@ class FirmRenameLifecycleTest {
             setup(owner, "/" + root + " create " + original);
             int id = BusinessLedger.waitForFirm(original, TIMEOUT);
             int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
-            setup(owner, "/" + root + " account create " + original + " Reserve");
+            setup(owner, "/" + root + " account create " + original + " Reserve" + original);
             int reserve = BusinessLedger.firmAccountIdAt(id, 1);
             setup(owner, "/paya account " + primary + " 23.45 RenamePrimary");
             setup(owner, "/paya account " + reserve + " 11 RenameReserve");

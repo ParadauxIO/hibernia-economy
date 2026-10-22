@@ -27,7 +27,7 @@ class AdminDisbandMissingProprietorTest {
             setup(creator, "/business create " + firm);
             int id = BusinessLedger.waitForFirm(firm, TIMEOUT);
             int primary = BusinessLedger.firmDefaultAccountId(id).orElseThrow();
-            setup(creator, "/business account create " + firm + " Reserve");
+            setup(creator, "/business account create " + firm + " Reserve" + firm);
             int reserve = BusinessLedger.firmAccountIdAt(id, 1);
             if (funded) setup(creator, "/paya account " + reserve + " 23.45 MissingProprietor");
             // Model a legacy/imported firm owned by somebody who has never joined.

@@ -22,7 +22,7 @@ class FirmReadCommandsTest {
             admin(owner, "/" + root + " create " + firm);
             int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
             int primary = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-            admin(owner, "/" + root + " account create " + firm + " Reserve");
+            admin(owner, "/" + root + " account create " + firm + " Reserve" + firm);
             int reserve = BusinessLedger.firmAccountIdAt(firmId, 1);
             admin(owner, "/paya account " + primary + " 23.45 InfoPrimary");
             admin(owner, "/paya account " + reserve + " 11 InfoReserve");

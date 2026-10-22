@@ -1984,3 +1984,18 @@ shared player/account names remain rejected. Existing V40 SQL is unchanged.
 The first V41 draft used a procedure syntax the Flyway parser split incorrectly;
 that setup attempt was stopped and corrected to its supported DROP/CREATE form.
 No clone database was modified. Full build and live reruns are pending.
+
+Full CI discovery on `a5d0abc` completed 755 cases: 698 passed, 45 failed and 12
+were skipped. All failures were inspected: 40 concerned globally duplicated fixture
+account names after PAR-501, four used the overlong ownership fixture prefixes,
+and one reused a service-key test's renamed account label. Names are now scoped to
+the fresh firm/player; no balance, posting, access or recovery assertion was removed.
+The independent CI JVM, migration, mutation, API-contract and Explorer checks passed.
+CodeQL's single test-helper regex finding is corrected locally for the next push.
+
+The V41 focused run passed 50 of 51 cases. The remaining fixture assumed a newly
+created personal account already displayed the player name; it sometimes still
+held its UUID label. The test now explicitly renames through the admin API and
+waits for both player/account claims before asserting shared-name rejection. It
+also checks that returning ownership does not revive the old personal key, then
+uses a newly issued personal key to test the admin-role denial separately.
