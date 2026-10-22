@@ -20,7 +20,9 @@ public interface DerivedGroupMapper {
     void refresh(@Param("binding") GroupSource binding, @Param("uuid") UUID uuid);
 
     @Delete("DELETE FROM explorer_group_member WHERE group_id = #{binding.groupId} AND source = #{binding.source} "
-            + "AND player_uuid_bin = #{uuid} AND source IN ('business', 'realty')")
+            + "AND player_uuid_bin = #{uuid} AND source IN ('business', 'realty') "
+            + "AND EXISTS (SELECT 1 FROM explorer_group_sync s WHERE s.group_id = #{binding.groupId} "
+            + "AND s.source = #{binding.source} AND BINARY s.selector = BINARY #{binding.selector})")
     void remove(@Param("binding") GroupSource binding, @Param("uuid") UUID uuid);
 
     @Delete("DELETE m FROM explorer_group_member m LEFT JOIN explorer_group_sync s "

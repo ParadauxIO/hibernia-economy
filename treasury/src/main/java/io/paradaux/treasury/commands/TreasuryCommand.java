@@ -79,7 +79,7 @@ public class TreasuryCommand implements CommandHandler {
             configReloadService.reloadAll();
         } catch (RuntimeException e) {
             log.warn("Config reload failed", e);
-            message.send(sender, "treasury.admin.reload.failed", "error", e.getMessage());
+            message.send(sender, "treasury.admin.reload.failed", "error", "Could not reload configuration");
             return;
         }
         message.send(sender, "treasury.admin.reload.success");
@@ -146,7 +146,7 @@ public class TreasuryCommand implements CommandHandler {
                     sender,
                     "treasury.admin.ingest.failed",
                     "error",
-                    t.getClass().getSimpleName() + ": " + t.getMessage());
+                    "Import could not be completed. Check the server logs before retrying.");
         }
     }
 
@@ -305,7 +305,11 @@ public class TreasuryCommand implements CommandHandler {
             return;
         } catch (RuntimeException e) {
             log.warn("Admin transfer failed ({} -> {}, {})", from.label(), to.label(), normalized, e);
-            message.send(sender, "treasury.admin.transfer.failed", "error", e.getMessage());
+            message.send(
+                    sender,
+                    "treasury.admin.transfer.failed",
+                    "error",
+                    "An unexpected error occurred. Check the server logs before retrying.");
             return;
         }
 

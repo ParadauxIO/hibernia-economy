@@ -38,7 +38,8 @@ file contains only routing metadata, never secret values. Set `cli` to the
 absolute Infisical executable path when it is outside the service PATH. Set
 `STAGING_INFISICAL_CONFIG` to use a different metadata file.
 
-Install `infisical_secrets.py`, `sftp.sh`, and `agent.mjs` into `dev-deploy/`.
+Install `infisical_secrets.py`, `sftp.sh`, `schema-guard.mjs`, and `agent.mjs`
+into `dev-deploy/`.
 Install the four scripts in `host/` into the clone root. Those scripts are now
 versioned here so a fresh installation has the same secret handling. Preserve
 any additional host-specific agent behavior when updating an existing install.

@@ -31,7 +31,7 @@ public final class Market {
     /** A live shop registry row. */
     public record Shop(long shopId, String shopAccountType, Integer shopFirmId, UUID shopOwnerUuid,
                        boolean adminShop, String material, String itemKey, BigDecimal buyPrice,
-                       BigDecimal sellPrice, int batchQty, Integer currentStock, boolean active) {}
+                       BigDecimal sellPrice, int batchQty, Integer currentStock, boolean active, boolean visible, boolean hologram) {}
 
     private static Connection conn() throws SQLException {
         return DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
@@ -97,7 +97,7 @@ public final class Market {
 
     public static Optional<Shop> shopAt(String world, int x, int y, int z) {
         String sql = "SELECT shop_id, shop_account_type, shop_firm_id, shop_owner_uuid_bin, is_admin_shop, "
-                + "material, item_key, buy_price, sell_price, batch_qty, current_stock, active "
+                + "material, item_key, buy_price, sell_price, batch_qty, current_stock, active, visible, hologram "
                 + "FROM chestshop_shop WHERE world = ? AND sign_x = ? AND sign_y = ? AND sign_z = ?";
         try (Connection c = conn(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, world);
@@ -111,7 +111,7 @@ public final class Market {
                         (Integer) rs.getObject("shop_firm_id"), uuid(rs.getBytes("shop_owner_uuid_bin")),
                         rs.getBoolean("is_admin_shop"), rs.getString("material"), rs.getString("item_key"),
                         rs.getBigDecimal("buy_price"), rs.getBigDecimal("sell_price"), rs.getInt("batch_qty"),
-                        (Integer) rs.getObject("current_stock"), rs.getBoolean("active")));
+                        (Integer) rs.getObject("current_stock"), rs.getBoolean("active"), rs.getBoolean("visible"), rs.getBoolean("hologram")));
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);

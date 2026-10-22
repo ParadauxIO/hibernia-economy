@@ -87,7 +87,7 @@ export function VolumeTimeline({ data, countLabel = 'Transactions' }: VolumeTime
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
           labelFormatter={(d) => fmtDate(String(d))}
-          formatter={(v: number, name: string) => name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), countLabel]}
+          formatter={(v, name) => typeof v !== 'number' ? null : name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), countLabel]}
         />
         <Area hide={metric === 'count'} yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill={`url(#${chartId}-volume)`} dot={false} isAnimationActive={false} />
         <Area hide={metric === 'volume'} yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill={`url(#${chartId}-count)`} dot={false} isAnimationActive={false} />
@@ -123,13 +123,13 @@ export function WealthDonut({ data }: DonutProps) {
       <RC height={230}>
         <PieChart>
           <Pie data={pie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={3} stroke="var(--bg-card)" strokeWidth={2}>
-            {pie.map((d) => <Cell key={d.name} fill={d.fill} />)}
+            {pie.map((d) => <Cell key={d.name} fill={d.fill} role="img" aria-label={`${d.name}: ${fmtAmtFull(d.value)}, ${fmtN(d.accountCount)} accounts`} />)}
           </Pie>
           <Tooltip
             contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-            formatter={(value: number, _name, payload) => [
+            formatter={(value, _name, payload) => typeof value !== 'number' ? null : [
               `${fmtAmtFull(value)} · ${fmtN((payload as { payload?: { accountCount?: number } }).payload?.accountCount ?? 0)} accts`,
               'Balance',
             ]}
@@ -148,7 +148,7 @@ export function WealthDonut({ data }: DonutProps) {
   );
 }
 
-const PALETTE = ['var(--c-1)', 'var(--c-2)', 'var(--c-3)', 'var(--c-4)', 'var(--c-5)', 'var(--c-6)', 'var(--c-7)'];
+const PALETTE = ['var(--c-1)', 'var(--c-2)', 'var(--c-3)', 'var(--c-4)', 'var(--c-5)', 'var(--c-6)', 'var(--c-7)'] as const;
 
 interface DistProps {
   data: { bucket: string; bucket_label: string; account_count: number }[];
@@ -176,10 +176,10 @@ export function BalanceDistribution({ data }: DistProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number) => [`${fmtN(v)} accts`, 'Accounts']}
+          formatter={(v) => typeof v !== 'number' ? null : [`${fmtN(v)} accts`, 'Accounts']}
         />
         <Bar dataKey="account_count" name="Accounts" radius={[4, 4, 0, 0]}>
-          {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={0.85} />)}
+          {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length] ?? PALETTE[0]} fillOpacity={0.85} />)}
         </Bar>
       </BarChart>
     </RC>
@@ -201,7 +201,7 @@ export function TopAccountsBar({ data }: TopAccountsProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number) => [fmtAmtFull(v), 'Balance']}
+          formatter={(v) => typeof v !== 'number' ? null : [fmtAmtFull(v), 'Balance']}
         />
         <Bar dataKey="balance" name="Balance" radius={[0, 4, 4, 0]} fill="var(--c-1)" />
       </BarChart>
@@ -231,7 +231,7 @@ export function InOutChart({ data }: InOutProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number, name) => [fmtAmtFull(v), name === 'cr' ? 'In' : 'Out']}
+          formatter={(v, name) => typeof v !== 'number' ? null : [fmtAmtFull(v), name === 'cr' ? 'In' : 'Out']}
         />
         <Bar dataKey="cr" stackId="a" fill="var(--c-3)" radius={[3, 3, 0, 0]} />
         <Bar dataKey="dr" stackId="a" fill="var(--c-5)" radius={[3, 3, 0, 0]} />
@@ -268,7 +268,7 @@ export function BalanceLine({ data }: BalanceLineProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number) => [fmtAmtFull(v), 'Balance']}
+          formatter={(v) => typeof v !== 'number' ? null : [fmtAmtFull(v), 'Balance']}
         />
         <Area type="monotone" dataKey="balance" stroke="var(--c-2)" strokeWidth={2} fill="url(#gBalLine)" dot={false} isAnimationActive={false} />
       </AreaChart>
@@ -299,7 +299,7 @@ export function PriceLine({ data }: PriceLineProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number, name) => name === 'price' ? [fmtAmtFull(v), 'Avg price'] : [fmtN(v), 'Sales']}
+          formatter={(v, name) => typeof v !== 'number' ? null : name === 'price' ? [fmtAmtFull(v), 'Avg price'] : [fmtN(v), 'Sales']}
         />
         <Line type="monotone" dataKey="price" stroke="var(--c-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
       </LineChart>
@@ -320,9 +320,9 @@ export function TaxRevenueTimeline({ data }: { data: ({ date: string } & Record<
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis dataKey="date" tickFormatter={fmtDate} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={28} />
         <YAxis tickFormatter={v => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={60} />
-        <Tooltip labelFormatter={d => fmtDate(String(d))} formatter={(v: number) => fmtAmtFull(v)}
+        <Tooltip labelFormatter={d => fmtDate(String(d))} formatter={(v) => typeof v !== 'number' ? null : fmtAmtFull(v)}
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }} />
-        {TAX_KINDS.map((kind, i) => <Line key={kind} dataKey={kind} name={TAX_LABELS[kind]} stroke={PALETTE[i]} strokeWidth={2} dot={false} isAnimationActive={false} />)}
+        {TAX_KINDS.map((kind, i) => <Line key={kind} dataKey={kind} name={TAX_LABELS[kind]} stroke={PALETTE[i] ?? PALETTE[0]} strokeWidth={2} dot={false} isAnimationActive={false} />)}
       </LineChart>
     </RC>
   </>;

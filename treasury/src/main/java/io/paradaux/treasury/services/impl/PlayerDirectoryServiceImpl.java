@@ -4,10 +4,9 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.treasury.mappers.EconomyPlayerMapper;
 import io.paradaux.treasury.services.PlayerDirectoryService;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.util.Optional;
 import java.util.UUID;
+import org.mybatis.guice.transactional.Transactional;
 
 @Singleton
 public class PlayerDirectoryServiceImpl implements PlayerDirectoryService {
@@ -23,6 +22,7 @@ public class PlayerDirectoryServiceImpl implements PlayerDirectoryService {
      * row lock below, not these monitors (ADT-9).
      */
     private static final int LOGIN_LOCK_STRIPES = 64;
+
     private final Object[] loginLocks;
 
     @Inject
@@ -46,11 +46,9 @@ public class PlayerDirectoryServiceImpl implements PlayerDirectoryService {
             // DB — the JVM monitor above only covers concurrent logins in this JVM.
             Long previousEpoch = economyPlayers.findLastLoginForUpdate(playerUuid);
 
-            // A name belongs to exactly one player at a time; release any stale claim by a
-            // different player first so the upsert can't collide on UNIQUE(name_lower)
-            // when a name is changed or reused. The old holder's row (and its login
-            // epoch) is kept under a placeholder name until their next login restores it.
-            economyPlayers.releaseNameFromOthers(currentName, playerUuid);
+            // PAR-501: never evict another identity when Minecraft reuses a name.
+            // The database reservation rejects the login-name update atomically;
+            // both players' names and tax-proration epochs remain intact for admin resolution.
             economyPlayers.upsertLogin(playerUuid, currentName, epochSeconds);
 
             return previousEpoch;

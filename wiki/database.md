@@ -36,6 +36,34 @@ disband. Release changes no account links, balances or ownership.
 Deploy V33 together with the Business plugin, REST API and Explorer changes:
 older application versions assume names identify a single row even across archives.
 
+## Shared name namespace (PAR-501)
+
+V40 enforces cross-kind reservations through database triggers. See
+[comparison, projection, lifecycle and rollout rules](name-namespace.md) before
+applying it to an existing dataset.
+
+## Cross-kind name collision inventory (PAR-501)
+
+[`ops/name-collision-inventory.sql`](../ops/name-collision-inventory.sql) is a
+read-only candidate inventory for a consistent restored database snapshot migrated
+through V35 or later. It compares accounts, firms, the unified player directory,
+and current/historical shop alias reservations. It includes archived accounts,
+released firms and same-owner pairs so a reviewer can make explicit lifecycle and
+projection decisions rather than hide them behind implicit exemptions.
+
+Each pair includes IDs, original spelling, owner UUIDs and lifecycle flags. The
+`comparison_basis` column distinguishes existing `utf8mb4_unicode_ci` equality
+from additional candidates that match only after trimming surrounding ASCII
+spaces, as required by V40. Existing whitespace cleanup still requires review. Punctuation
+is significant; blocked-term filtering is not used as a uniqueness rule. Null
+account display names are omitted because they do not identify a name claim.
+
+The script neither enforces uniqueness nor selects remediation winners. It can
+produce a large result and compare many pairs: run it on a restored snapshot,
+not as a frequent live check. A clean result does not by itself approve remediation or remove the
+[projection and lifecycle rules](name-namespace.md). Review collisions by immutable IDs before
+any enforcement migration; do not merge, rename or reroute balances automatically.
+
 ## Why the database owns balances
 
 Balances live in a **materialized table maintained by database triggers**, not by
@@ -182,3 +210,14 @@ The public REST shop DTO exposes it as `currentSpace` (including item-detail
 shop offers), and the explorer as `current_space`. Both use `stock_at` as the
 observation timestamp. PAR-17 reuses V25 and the existing MarketApi capture path;
 no duplicate `current_space` database column or new migration is needed.
+
+### V38 collision reconciliation (2026-10-22)
+
+Three independently merged branches used V38. Taxation retains V38; employment
+history is V39 and the global namespace is V40, with unchanged SQL. The project
+owner confirmed only the non-production clone had been deployed. Its history
+contained successful `V38__taxation_read_index.sql`; it needs no history rewrite.
+Do not apply a generic Flyway repair to any other database: inspect its history
+first. The migration guard permits only the exact two renames from the pinned
+invalid combined tree. Upgrade tests for that tree use its valid V37 prefix;
+normal migration history remains immutable.

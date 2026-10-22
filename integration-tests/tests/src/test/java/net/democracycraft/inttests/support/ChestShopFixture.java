@@ -234,13 +234,22 @@ public final class ChestShopFixture implements AutoCloseable {
      * be placed with {@code /item replace}). Returns the {@code diag createshop} response.
      */
     public String createSellShopRaw(String creator, String signOwner, int qty, int price, String itemLine) {
+        return createShopRaw(creator, signOwner, qty, price + " B", itemLine);
+    }
+
+    /** Create a real shop that pays the clicking player for a custom item. */
+    public String createBuyShopRaw(String creator, String signOwner, int qty, int price, String itemLine) {
+        return createShopRaw(creator, signOwner, qty, price + " S", itemLine);
+    }
+
+    private String createShopRaw(String creator, String signOwner, int qty, String priceLine, String itemLine) {
         RconClient.send(String.format("setblock %d %d %d minecraft:stone",
                 chestPos.x(), chestPos.y() - 1, chestPos.z() + 1));
         RconClient.send(String.format("setblock %d %d %d minecraft:chest",
                 chestPos.x(), chestPos.y(), chestPos.z()));
         RconClient.send(String.format("setblock %d %d %d minecraft:oak_sign",
                 signPos.x(), signPos.y(), signPos.z()));
-        String lines = signOwner + "|" + qty + "|" + price + " B|" + itemLine;
+        String lines = signOwner + "|" + qty + "|" + priceLine + "|" + itemLine;
         return RconClient.send("diag createshop " + creator + " world "
                 + signPos.x() + " " + signPos.y() + " " + signPos.z() + " " + lines);
     }
@@ -317,6 +326,23 @@ public final class ChestShopFixture implements AutoCloseable {
     public void clickSell(MockPlayer client, String name) {
         positionClicker(client, name);
         click(client, name, () -> client.leftClickBlock(signPos, BlockFace.SOUTH));
+    }
+
+    /**
+     * Dig a shop block from the caller's prepared position/game mode. A sign dig
+     * also enters trade handling, even when rejected, so subsequent trades must
+     * respect its interaction interval. No retries: assert actual event delivery.
+     */
+    public void digBlock(MockPlayer client, BlockPos target) {
+        String name = client.getUsername();
+        awaitInteractionInterval(name);
+        long before = interactions(name);
+        client.breakBlock(target);
+        client.sync(TIMEOUT);
+        LAST_CLICK_HANDLED.put(name, System.currentTimeMillis());
+        if (interactions(name) <= before) {
+            throw new AssertionError("dig by " + name + " at " + target + " never reached Bukkit as a PlayerInteractEvent");
+        }
     }
 
     /**

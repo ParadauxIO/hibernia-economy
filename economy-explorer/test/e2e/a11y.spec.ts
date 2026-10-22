@@ -64,6 +64,11 @@ for (const route of ROUTES) {
       test.skip(viewer !== 'anon' && !process.env.E2E_AUTH_SHIM, 'role scans need the auth shim');
       if (viewer !== 'anon') await context.addCookies([{ name: 'e2e_viewer', value: viewer, url: baseURL }]);
       await visit(page, route.path);
+      // Recharts mounts after hydration. Include its slices in the wealth scan
+      // rather than occasionally checking only the empty server placeholder.
+      if (route.path === '/economy/wealth') {
+        await expect(page.locator('.recharts-pie-sector path')).toHaveCount(3);
+      }
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'])
         .disableRules(Object.keys(KNOWN))

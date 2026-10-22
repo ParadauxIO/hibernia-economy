@@ -37,6 +37,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import { parseGuard, loadGuard, approvedBundle, verifyBundleDirectory, verifyInstalled, PROVIDERS } from './schema-guard.mjs';
 
 const SERVER_DIR = process.env.SERVER_DIR ?? path.join(os.homedir(), 'democracycraft-clone');
 const REPO = process.env.REPO ?? 'ParadauxIO/hibernia-economy';
@@ -44,7 +45,7 @@ const RELEASE_TAG = process.env.RELEASE_TAG ?? 'dev-latest';
 const ENVIRONMENT = process.env.ENVIRONMENT ?? 'democracycraft-dev';
 const POLL_SECONDS = Number(process.env.POLL_SECONDS ?? 60);
 const DB_PORT = process.env.DB_PORT ?? '33306';
-const FLYWAY_JAVA_HOME = process.env.FLYWAY_JAVA_HOME ?? path.join(os.homedir(), '.jdks', 'jdk-21.0.12.1+1');
+const FLYWAY_JAVA_HOME = process.env.FLYWAY_JAVA_HOME ?? path.join(os.homedir(), '.local', 'jdks', 'graalvm-community-openjdk-25.0.2+10.1');
 // The first start after a ChestShop change re-encodes ~35k item blobs, so
 // this is generous.
 const START_TIMEOUT_MS = Number(process.env.START_TIMEOUT_MINUTES ?? 20) * 60_000;
@@ -53,6 +54,7 @@ const KEEP_HISTORY = 5;
 
 const STATE_DIR = path.join(SERVER_DIR, 'dev-deploy');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
+const SCHEMA_GUARD_FILE = path.join(STATE_DIR, 'schema-compatibility.json');
 const HISTORY_DIR = path.join(STATE_DIR, 'history');
 const CHECKOUT_DIR = path.join(STATE_DIR, 'repo');
 const CONTROL_SOCKET = path.join(STATE_DIR, 'control.sock');
@@ -74,6 +76,21 @@ const saveState = () => {
   fs.writeFileSync(`${STATE_FILE}.tmp`, JSON.stringify(state, null, 2) + '\n');
   fs.renameSync(`${STATE_FILE}.tmp`, STATE_FILE);
 };
+
+function schemaGuard() { return loadGuard(SCHEMA_GUARD_FILE, Boolean(state.schemaGuardRequired)); }
+function assertSafeStart() {
+  try {
+    const guard = schemaGuard();
+    if (guard) verifyInstalled(guard, PLUGINS_DIR);
+  } catch (error) {
+    state.paused = true;
+    saveState();
+    throw error;
+  }
+}
+function assertPausedMaintenance() {
+  if (!state.paused || busy) throw new Error('Controller must be paused and idle');
+}
 
 // ---------------------------------------------------------------- processes
 
@@ -159,6 +176,7 @@ let server = null;
 let crashes = [];
 
 function startServer() {
+  assertSafeStart();
   if (server) return server;
   log('starting server');
   const child = startSandbox({});
@@ -347,6 +365,8 @@ async function deploy(manifest) {
     previous = { dir: preDir, jars: existing };
   }
 
+  const guard = schemaGuard();
+  if (guard) verifyBundleDirectory(approvedBundle(guard, sha, jars), dir);
   await stopServer();
   try {
     await migrate(sha);
@@ -375,6 +395,15 @@ async function deploy(manifest) {
   state.failed = sha;
   saveState();
   await stopServer();
+  if (guard) {
+    try { verifyBundleDirectory(approvedBundle(guard, state.deployed?.sha, previous.jars), previous.dir); }
+    catch (error) {
+      state.paused = true;
+      saveState();
+      await reportDeployment(deploymentId, 'failure', `Schema guard blocked incompatible rollback; maintenance paused`);
+      return;
+    }
+  }
   await installJars(previous.dir, previous.jars, names);
   startServer();
   await reportDeployment(deploymentId, 'failure', `Rolled back: ${result.reason}`);
@@ -389,6 +418,11 @@ async function check({ force = false } = {}) {
     const manifest = await fetchManifest();
     if (!manifest) return;
     if (!force && (manifest.sha === state.deployed?.sha || manifest.sha === state.failed)) return;
+    const guard = schemaGuard();
+    if (guard) {
+      try { approvedBundle(guard, manifest.sha, manifest.jars); }
+      catch { log('dev-latest is not approved by the schema guard; keeping the current bundle'); return; }
+    }
     await deploy(manifest);
   } catch (err) {
     log(`deploy failed: ${err.stack ?? err}`);
@@ -416,6 +450,10 @@ async function handleControl(line) {
       await stopServer();
       return 'paused; the server is stopped and deploys are off';
     case 'resume':
+      if (state.staged) throw new Error('Adopt the boot-verified staged bundle before resuming');
+      const resumeGuard = schemaGuard();
+      if (resumeGuard) approvedBundle(resumeGuard, state.deployed?.sha, state.deployed?.jars);
+      assertSafeStart();
       state.paused = false;
       saveState();
       crashes = [];
@@ -426,6 +464,66 @@ async function handleControl(line) {
       if (busy) return 'a deploy is already running';
       check({ force: true });
       return 'deploying the current dev-latest build';
+    case 'maintenance-arm': {
+      assertPausedMaintenance();
+      if (server) throw new Error('Stop the server before arming schema maintenance');
+      const guard = parseGuard(fs.readFileSync(rest[0], 'utf8'));
+      // Persist the requirement first: a crash before the marker is written fails closed.
+      state.schemaGuardRequired = true;
+      saveState();
+      fs.writeFileSync(`${SCHEMA_GUARD_FILE}.tmp`, JSON.stringify(guard, null, 2) + '\n', { mode: 0o600 });
+      fs.renameSync(`${SCHEMA_GUARD_FILE}.tmp`, SCHEMA_GUARD_FILE);
+      return 'Schema guard armed; maintenance remains paused';
+    }
+    case 'maintenance-install': {
+      assertPausedMaintenance();
+      if (server) throw new Error('Stop the server before maintenance installation');
+      const bundle = approvedBundle(schemaGuard(), rest[0]);
+      const directory = path.join(HISTORY_DIR, bundle.sha);
+      verifyBundleDirectory(bundle, directory);
+      busy = true;
+      try {
+        // Persist intent first. Interrupted copying cannot auto-start after a process restart.
+        state.staged = { sha: bundle.sha, jars: bundle.jars, bootVerified: false };
+        saveState();
+        await installJars(directory, bundle.jars, PROVIDERS);
+        verifyBundleDirectory(bundle, PLUGINS_DIR);
+      } finally { busy = false; }
+      return 'Approved complete bundle installed; still paused; boot not accepted';
+    }
+    case 'maintenance-boot': {
+      assertPausedMaintenance();
+      if (server || state.staged?.sha !== rest[0]) throw new Error('Expected stopped staged bundle');
+      const bundle = approvedBundle(schemaGuard(), rest[0]);
+      verifyBundleDirectory(bundle, PLUGINS_DIR);
+      state.staged.bootVerified = false;
+      saveState();
+      busy = true;
+      try {
+        const result = await startServerChecked(PROVIDERS, bundle.jars);
+        if (!result.ok) {
+          await stopServer();
+          return `Boot failed; no rollback performed; maintenance remains paused: ${result.reason}`;
+        }
+        state.staged.bootVerified = true;
+        saveState();
+        return 'Boot smoke passed; polling and crash restart remain paused; acceptance/adoption still required';
+      } catch (error) {
+        await stopServer();
+        throw error;
+      } finally { busy = false; }
+    }
+    case 'maintenance-adopt': {
+      assertPausedMaintenance();
+      if (!server || state.staged?.sha !== rest[0] || !state.staged.bootVerified) throw new Error('Staged running bundle must pass boot before adoption');
+      const bundle = approvedBundle(schemaGuard(), rest[0]);
+      verifyBundleDirectory(bundle, PLUGINS_DIR);
+      state.deployed = { sha: bundle.sha, jars: bundle.jars };
+      state.failed = null;
+      state.staged = null;
+      saveState();
+      return 'Compatible bundle adopted; controller remains paused until explicit resume';
+    }
     case 'restart':
       // Stops the server cleanly and exits non-zero, so systemd
       // (Restart=on-failure) starts the agent again with its file as it is
@@ -443,7 +541,8 @@ function listenForControl() {
   fs.rmSync(CONTROL_SOCKET, { force: true });
   net.createServer((socket) => {
     readline.createInterface({ input: socket }).once('line', async (line) => {
-      socket.end((await handleControl(line)) + '\n');
+      try { socket.end((await handleControl(line)) + '\n'); }
+      catch (error) { log(`control rejected: ${error.message}`); socket.end(`ERROR: ${error.message}\n`); }
     });
   }).listen(CONTROL_SOCKET);
 }
@@ -485,7 +584,7 @@ async function main() {
     // Deploy a build that landed while the agent was down before starting,
     // rather than starting the server only to bounce it straight away.
     await check();
-    if (!server) startServer();
+    if (!server && !state.paused) startServer();
   }
 
   for (;;) {

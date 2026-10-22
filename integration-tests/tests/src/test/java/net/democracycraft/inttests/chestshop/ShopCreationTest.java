@@ -24,9 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * cancels a pull when the destination holder is NOT a BlockState — i.e. a hopper
  * MINECART, not a hopper block (upstream Acrobot logic, ItemMoveListener.java:36). A
  * plain hopper block below a shop chest is therefore not blocked by this listener (it's
- * assumed block-place protection stops the hopper being placed). Asserting the minecart
- * path needs a reliably-siphoning minecart, which is too finicky to set up deterministically
- * over RCON, so it's left out rather than shipped flaky.
+ * assumed block-place protection stops the hopper being placed). The real minecart
+ * path is covered by HopperMinecartProtectionTest, using the same cart before and
+ * after sign removal to prove that transfer protection is operational.
  */
 class ShopCreationTest {
 

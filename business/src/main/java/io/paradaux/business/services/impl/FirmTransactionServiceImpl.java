@@ -243,11 +243,11 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
                 .toList();
 
         int totalCount = ranked.size();
-        int offset = (page - 1) * pageSize;
+        int offset = (int) Math.min((long) (page - 1) * pageSize, Integer.MAX_VALUE);
         if (offset >= totalCount) {
             return new Page<>(List.of(), totalCount, offset, pageSize);
         }
-        int end = Math.min(offset + pageSize, totalCount);
+        int end = (int) Math.min((long) offset + pageSize, totalCount);
         return new Page<>(List.copyOf(ranked.subList(offset, end)), totalCount, offset, pageSize);
     }
 

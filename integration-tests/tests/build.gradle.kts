@@ -10,22 +10,25 @@ dependencies {
     testImplementation(project(":mock-client"))
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
-    testImplementation("org.assertj:assertj-core:3.26.3")
+    testImplementation("org.assertj:assertj-core:3.27.7")
 
     // Direct MariaDB access for state assertions — read balances, ledger
     // postings, firm rows, etc. Faster and more deterministic than scraping
     // chat output.
-    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.5.2")
+    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.5.10")
 
     // JSON for Treasury REST API tests — parse response bodies into JsonNode.
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
 
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.12")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.test {
     useJUnitPlatform()
+    // External server/database state is not a Gradle input. A fresh disposable stack
+    // must never inherit an UP-TO-DATE result from a previous acceptance run.
+    outputs.upToDateWhen { false }
     // Forward the connection-override -D properties to the forked test JVM
     // (Gradle doesn't propagate them automatically). Env-var fallbacks still work
     // since the fork inherits the environment.
@@ -86,4 +89,31 @@ tasks.test {
             println("All timings: ${file.relativeTo(rootDir)}")
         }
     })
+}
+
+tasks.register<JavaExec>("preflight") {
+    group = "verification"
+    description = "Fail early when the disposable live acceptance profile lacks required capabilities."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.CapabilityPreflight")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
+}
+
+tasks.register<JavaExec>("explorerFixture") {
+    group = "verification"
+    description = "Create a real player payment for same-stack Explorer browser assertions."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.ExplorerFixture")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
+}
+
+tasks.register<JavaExec>("explorerTransfer") {
+    group = "verification"
+    description = "Transfer fixture ownership through real player commands while OIDC sessions stay open."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.ExplorerTransfer")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
 }

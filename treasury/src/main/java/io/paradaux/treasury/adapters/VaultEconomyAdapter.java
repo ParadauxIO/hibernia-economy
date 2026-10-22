@@ -6,6 +6,7 @@ import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.tax.TaxResult;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
+import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.utils.CallingPluginDetector;
 import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
@@ -19,7 +20,6 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.economy.EconomyResponse;
-import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -44,6 +44,7 @@ public class VaultEconomyAdapter implements Economy {
     private final LedgerService ledgerService;
     private final EconomyConfiguration economyConfiguration;
     private final TaxApi taxApi;
+    private final PlayerDirectoryService playerDirectory;
     // DecimalFormat is not thread-safe; use a ThreadLocal so each thread gets its own instance.
     private final ThreadLocal<DecimalFormat> formatter;
 
@@ -55,11 +56,13 @@ public class VaultEconomyAdapter implements Economy {
             AccountService accountService,
             LedgerService ledgerService,
             EconomyConfiguration economyConfiguration,
-            TaxApi taxApi) {
+            TaxApi taxApi,
+            PlayerDirectoryService playerDirectory) {
         this.accountService = Objects.requireNonNull(accountService, "accountService");
         this.ledgerService = Objects.requireNonNull(ledgerService, "ledgerService");
         this.economyConfiguration = Objects.requireNonNull(economyConfiguration, "economyConfiguration");
         this.taxApi = Objects.requireNonNull(taxApi, "taxApi");
+        this.playerDirectory = Objects.requireNonNull(playerDirectory, "playerDirectory");
 
         String pattern = "###,##0." + "0".repeat(FRACTIONAL_DIGITS);
         this.formatter = ThreadLocal.withInitial(() -> {
@@ -210,7 +213,7 @@ public class VaultEconomyAdapter implements Economy {
 
     @Override
     public @NotNull EconomyResponse withdrawPlayer(@NotNull String playerName, double amount) {
-        return withdrawPlayer(resolveOffline(playerName), amount);
+        return withdraw(resolveUuid(playerName), amount, null);
     }
 
     @Override
@@ -256,7 +259,7 @@ public class VaultEconomyAdapter implements Economy {
 
     @Override
     public @NotNull EconomyResponse depositPlayer(@NotNull String playerName, double amount) {
-        return depositPlayer(Objects.requireNonNull(resolveOffline(playerName)), amount);
+        return deposit(resolveUuid(playerName), amount, null);
     }
 
     @Override
@@ -415,7 +418,8 @@ public class VaultEconomyAdapter implements Economy {
 
     @Override
     public boolean createPlayerAccount(@NotNull String playerName) {
-        return createPlayerAccount(Objects.requireNonNull(resolveOffline(playerName)));
+        UUID uuid = resolveUuid(playerName);
+        return uuid != null && createPlayerAccount(uuid);
     }
 
     @Override
@@ -430,7 +434,10 @@ public class VaultEconomyAdapter implements Economy {
 
     @Override
     public boolean createPlayerAccount(@NotNull OfflinePlayer player) {
-        UUID uuid = player.getUniqueId();
+        return createPlayerAccount(player.getUniqueId());
+    }
+
+    private boolean createPlayerAccount(UUID uuid) {
         // Redirected UUIDs already have a target (GOVERNMENT) account.
         // Don't create a PERSONAL row for them — that would defeat the
         // redirect by leaving an unused empty account around.
@@ -444,17 +451,9 @@ public class VaultEconomyAdapter implements Economy {
 
     /* ========================= Helpers ========================= */
 
-    private static @Nullable UUID resolveUuid(@NotNull String playerName) {
-        OfflinePlayer off = resolveOffline(playerName);
-        return off != null ? off.getUniqueId() : null;
-    }
-
-    private static @Nullable OfflinePlayer resolveOffline(@NotNull String playerName) {
-        try {
-            return Bukkit.getOfflinePlayer(playerName);
-        } catch (Throwable t) {
-            return null;
-        }
+    private @Nullable UUID resolveUuid(@NotNull String playerName) {
+        // The directory lookup is also the existence guard: never ask Mojang about names.
+        return playerDirectory.resolveUuidByName(playerName).orElse(null);
     }
 
     /**

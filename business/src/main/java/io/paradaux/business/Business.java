@@ -2,10 +2,6 @@ package io.paradaux.business;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-
-import io.paradaux.hibernia.framework.commander.CommandManager;
-import io.paradaux.hibernia.framework.events.ListenerManager;
-import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.business.api.BusinessApi;
 import io.paradaux.business.commands.AccountCommands;
 import io.paradaux.business.commands.ChatCommands;
@@ -18,6 +14,9 @@ import io.paradaux.business.commands.RoleCommands;
 import io.paradaux.business.commands.SalesCommands;
 import io.paradaux.business.commands.StaffCommands;
 import io.paradaux.business.commands.TaxCommands;
+import io.paradaux.business.commands.resolvers.FirmNameResolver;
+import io.paradaux.business.commands.resolvers.FirmPlayerResolver;
+import io.paradaux.business.commands.resolvers.OnlineFirmNameResolver;
 import io.paradaux.business.guice.BusinessModule;
 import io.paradaux.business.guice.DatabaseModule;
 import io.paradaux.business.integration.BusinessPlaceholderHook;
@@ -29,9 +28,9 @@ import io.paradaux.business.listeners.OnlineRosterListener;
 import io.paradaux.business.model.config.DatabaseConfiguration;
 import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmSalesNotificationService;
-import io.paradaux.business.commands.resolvers.FirmNameResolver;
-import io.paradaux.business.commands.resolvers.FirmPlayerResolver;
-import io.paradaux.business.commands.resolvers.OnlineFirmNameResolver;
+import io.paradaux.hibernia.framework.commander.CommandManager;
+import io.paradaux.hibernia.framework.events.ListenerManager;
+import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.treasury.api.SalesQueryApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import org.bukkit.Bukkit;
@@ -46,7 +45,7 @@ public class Business extends JavaPlugin {
 
     private Injector injector;
     private ExpireRequestsJob expireRequestsJob;
-    private Runnable unregisterPlaceholders = () -> { };
+    private Runnable unregisterPlaceholders = () -> {};
 
     @Override
     public void onEnable() {
@@ -60,6 +59,7 @@ public class Business extends JavaPlugin {
                 .scanConfiguration("io.paradaux.business.model.config")
                 .handlers(
                         AccountCommands.class,
+                        io.paradaux.business.commands.MenuCommands.class,
                         FirmCommands.class,
                         HelpCommands.class,
                         MiscCommands.class,
@@ -69,25 +69,19 @@ public class Business extends JavaPlugin {
                         ReloadCommand.class,
                         TaxCommands.class,
                         SalesCommands.class,
-                        ChatCommands.class
-                )
-                .resolvers(
-                        FirmPlayerResolver.class,
-                        FirmNameResolver.class,
-                        OnlineFirmNameResolver.class
-                )
-                .listeners(
-                        FirmBalanceTaxListener.class,
-                        ChestShopSaleListener.class,
-                        OnlineRosterListener.class
-                )
+                        ChatCommands.class)
+                .dialogs(io.paradaux.business.dialogs.FirmMenu.class)
+                .menus(io.paradaux.business.dialogs.FirmDashboard.class)
+                .resolvers(FirmPlayerResolver.class, FirmNameResolver.class, OnlineFirmNameResolver.class)
+                .listeners(FirmBalanceTaxListener.class, ChestShopSaleListener.class, OnlineRosterListener.class)
                 .build();
 
         // Pull the typed DatabaseConfiguration out of the (already-loaded)
         // HiberniaModule so DatabaseModule can wire the DataSource pre-injector.
         DatabaseConfiguration dbCfg = hiberniaModule.configuration(DatabaseConfiguration.class);
         if (dbCfg == null) {
-            throw new IllegalStateException("DatabaseConfiguration not found. Check @ConfigurationComponent and package scan.");
+            throw new IllegalStateException(
+                    "DatabaseConfiguration not found. Check @ConfigurationComponent and package scan.");
         }
 
         // Fail fast rather than boot against the shared money DB with the shipped
@@ -97,12 +91,11 @@ public class Business extends JavaPlugin {
         if ("password".equals(dbPass) || "CHANGE_ME".equals(dbPass)) {
             throw new IllegalStateException(
                     "Refusing to start: the database password is still the placeholder default. "
-                    + "Set database.password in config.yml.");
+                            + "Set database.password in config.yml.");
         }
 
         // 1b) Obtain TreasuryApi from Bukkit services (Treasury plugin must be loaded first)
-        RegisteredServiceProvider<TreasuryApi> rsp =
-                Bukkit.getServicesManager().getRegistration(TreasuryApi.class);
+        RegisteredServiceProvider<TreasuryApi> rsp = Bukkit.getServicesManager().getRegistration(TreasuryApi.class);
         if (rsp == null) {
             getLogger().severe("Treasury plugin not found! Business plugin requires Treasury.");
             getServer().getPluginManager().disablePlugin(this);
@@ -127,13 +120,12 @@ public class Business extends JavaPlugin {
         //    - DatabaseModule (needs the typed DatabaseConfiguration)
         getLogger().info("Setting up dependency injection...");
         this.injector = Guice.createInjector(
-                hiberniaModule,
-                new BusinessModule(this, treasuryApi, salesQueryApi),
-                new DatabaseModule(dbCfg)
-        );
+                hiberniaModule, new BusinessModule(this, treasuryApi, salesQueryApi), new DatabaseModule(dbCfg));
 
         // 3) Register commands (DI-managed)
         injector.getInstance(CommandManager.class).registerAll();
+        injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                .registerAll();
 
         // Register jobs
         expireRequestsJob = injector.getInstance(ExpireRequestsJob.class);
@@ -143,6 +135,18 @@ public class Business extends JavaPlugin {
         // 4) Register public API
         BusinessApi api = injector.getInstance(BusinessApi.class);
         getServer().getServicesManager().register(BusinessApi.class, api, this, ServicePriority.Normal);
+        getServer()
+                .getServicesManager()
+                .register(
+                        io.paradaux.treasury.api.BusinessAccountLookup.class,
+                        name -> {
+                            var firm = api.firms().getFirmByName(name);
+                            return firm == null || Boolean.TRUE.equals(firm.getArchived())
+                                    ? null
+                                    : firm.getDefaultAccountId();
+                        },
+                        this,
+                        ServicePriority.Normal);
         unregisterPlaceholders = BusinessPlaceholderHook.register(this, api);
 
         // 5) Register events via the framework ListenerManager (FirmBalanceTaxListener,
@@ -153,8 +157,7 @@ public class Business extends JavaPlugin {
         // timer so bursts are condensed into one message per firm per window.
         // Asynchronous: the flush reads the database (enabled flag, firm, roster,
         // customer name) and must not stall the main thread.
-        FirmSalesNotificationService salesNotifications =
-                injector.getInstance(FirmSalesNotificationService.class);
+        FirmSalesNotificationService salesNotifications = injector.getInstance(FirmSalesNotificationService.class);
         long flushTicks = injector.getInstance(FirmConfiguration.class).getSalesNotifyFlushSeconds() * 20L;
         getServer().getScheduler().runTaskTimerAsynchronously(this, salesNotifications::flush, flushTicks, flushTicks);
 
@@ -163,17 +166,24 @@ public class Business extends JavaPlugin {
         // itself when Carbon is absent; the catch here is a second line of defence
         // so firm chat can never break enable.
         try {
-            injector.getInstance(io.paradaux.business.chat.FirmChatService.class).initialise();
+            injector.getInstance(io.paradaux.business.chat.FirmChatService.class)
+                    .initialise();
         } catch (Throwable t) {
-            getLogger().info("CarbonChat unavailable — firm chat disabled (" + t.getClass().getSimpleName() + ").");
+            getLogger()
+                    .info("CarbonChat unavailable — firm chat disabled ("
+                            + t.getClass().getSimpleName() + ").");
         }
     }
 
     @Override
     public void onDisable() {
         unregisterPlaceholders.run();
-        unregisterPlaceholders = () -> { };
+        unregisterPlaceholders = () -> {};
         getServer().getServicesManager().unregisterAll(this);
+        if (injector != null) {
+            injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                    .shutdown();
+        }
 
         // Stop any scheduled tasks (ExpireRequestsJob etc.) before tearing down
         // the DI graph so they can't run with a half-closed DataSource.
@@ -182,7 +192,8 @@ public class Business extends JavaPlugin {
         try {
             javax.sql.DataSource ds = injector.getInstance(javax.sql.DataSource.class);
             if (ds instanceof com.zaxxer.hikari.HikariDataSource hikari) hikari.close();
-        } catch (Exception ignored) { }
+        } catch (Exception ignored) {
+        }
         injector = null;
     }
 }

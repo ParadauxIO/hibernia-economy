@@ -136,8 +136,9 @@ class FirmServiceImplTest {
         org.mockito.Mockito.verifyNoInteractions(treasury, accounts, roles, requests);
     }
 
-    @Test
-    void createFirm_assignsTreasuryAccount_andPersistsDefaultRoles() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void createFirm_assignsTreasuryAccount_andPersistsDefaultRoles(boolean generatedNameReserved) {
         UUID actor = UUID.randomUUID();
         stubOfflinePlayer(actor, "Alice");
 
@@ -155,8 +156,15 @@ class FirmServiceImplTest {
 
         Account treasuryAccount = new Account();
         treasuryAccount.setAccountId(7);
-        when(treasury.createAccount(eq(AccountType.BUSINESS), eq(actor), eq("Acme Corporate Account")))
-                .thenReturn(treasuryAccount);
+        if (generatedNameReserved) {
+            when(treasury.createAccount(AccountType.BUSINESS, actor, "Acme Corporate Account"))
+                    .thenThrow(new RuntimeException(new java.sql.SQLException("GLOBAL_NAME_CONFLICT:", "45000", 1644)));
+            when(treasury.createAccount(AccountType.BUSINESS, actor, "Acme Corporate Account (42)"))
+                    .thenReturn(treasuryAccount);
+        } else {
+            when(treasury.createAccount(AccountType.BUSINESS, actor, "Acme Corporate Account"))
+                    .thenReturn(treasuryAccount);
+        }
 
         Firm result = svc.createFirm("Acme", actor);
 

@@ -1,18 +1,18 @@
 package io.paradaux.treasury.events;
 
 import com.google.inject.Inject;
+import io.paradaux.common.NameReservationErrors;
 import io.paradaux.treasury.Treasury;
 import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.services.BalanceTaxService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
+import java.time.Instant;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * The single per-login flow (PAR-35). On every join it, in order:
@@ -41,14 +41,15 @@ public class PlayerLoginListener implements Listener {
     private final BalanceTaxConfiguration taxConfig;
 
     @Inject
-    public PlayerLoginListener(Treasury plugin,
-                               PlayerDirectoryService playerDirectory,
-                               BalanceTaxService balanceTaxService,
-                               BalanceTaxConfiguration taxConfig) {
-        this.plugin            = plugin;
-        this.playerDirectory   = playerDirectory;
+    public PlayerLoginListener(
+            Treasury plugin,
+            PlayerDirectoryService playerDirectory,
+            BalanceTaxService balanceTaxService,
+            BalanceTaxConfiguration taxConfig) {
+        this.plugin = plugin;
+        this.playerDirectory = playerDirectory;
         this.balanceTaxService = balanceTaxService;
-        this.taxConfig         = taxConfig;
+        this.taxConfig = taxConfig;
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -67,10 +68,16 @@ public class PlayerLoginListener implements Listener {
                     balanceTaxService.collect(playerUuid, previousLoginEpoch, loginEpochSecs);
                 }
             } catch (RuntimeException e) {
+                NameReservationErrors.userMessage(e)
+                        .ifPresent(message -> Bukkit.getScheduler().runTask(plugin, () -> {
+                            var player = Bukkit.getPlayer(playerUuid);
+                            if (player != null)
+                                player.sendMessage("Economy name registration failed: " + message
+                                        + " Your wallet has not been reassigned.");
+                        }));
                 // Best-effort upkeep: never let a write failure surface as an uncaught
                 // async scheduler error. Log so a persistent problem stays visible.
-                plugin.getLogger().warning("Failed to process login for "
-                        + name + " (" + playerUuid + "): " + e);
+                plugin.getLogger().warning("Failed to process login for " + name + " (" + playerUuid + "): " + e);
             }
         });
     }

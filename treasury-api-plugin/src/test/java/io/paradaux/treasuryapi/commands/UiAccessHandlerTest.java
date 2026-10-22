@@ -1,19 +1,5 @@
 package io.paradaux.treasuryapi.commands;
 
-import io.paradaux.hibernia.framework.exceptions.NotFoundException;
-import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.treasuryapi.services.ExplorerUiService;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-
-import java.util.List;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -24,6 +10,18 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
+import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.treasuryapi.services.ExplorerUiService;
+import java.util.List;
+import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 /**
  * Unit coverage for the (now thin) {@link UiAccessHandler}: it resolves player
@@ -38,6 +36,7 @@ class UiAccessHandlerTest {
     private ExplorerUiService service;
     private Message message;
     private UiAccessHandler handler;
+    private io.paradaux.treasury.api.TreasuryApi treasury;
     private Player sender;
 
     private final UUID playerId = UUID.randomUUID();
@@ -46,7 +45,8 @@ class UiAccessHandlerTest {
     void setUp() {
         service = mock(ExplorerUiService.class);
         message = mock(Message.class);
-        handler = new UiAccessHandler(service, message);
+        treasury = mock(io.paradaux.treasury.api.TreasuryApi.class);
+        handler = new UiAccessHandler(service, message, treasury);
 
         sender = mock(Player.class);
         when(sender.getUniqueId()).thenReturn(playerId);
@@ -57,8 +57,7 @@ class UiAccessHandlerTest {
 
     @Test
     void doLink_fullyLinked_rendersSuccess() {
-        when(service.redeemLinkCode("abc123", playerId, "Alice"))
-                .thenReturn(ExplorerUiService.LinkOutcome.LINKED);
+        when(service.redeemLinkCode("abc123", playerId, "Alice")).thenReturn(ExplorerUiService.LinkOutcome.LINKED);
 
         handler.doLink(sender, "abc123");
 
@@ -101,14 +100,12 @@ class UiAccessHandlerTest {
     @Test
     void doUserAdd_realPlayer_resolvesUuid_delegates_rendersAdded() {
         UUID targetUuid = UUID.randomUUID();
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(true);
-        when(target.getUniqueId()).thenReturn(targetUuid);
+        when(treasury.resolveKnownPlayerUuid("Bob")).thenReturn(targetUuid);
         when(service.grantRole(targetUuid, "ADMIN", playerId)).thenReturn("admin");
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Bob")).thenReturn(target);
             handler.doUserAdd(sender, "ADMIN", "Bob");
+            bukkit.verifyNoInteractions();
         }
 
         verify(service).grantRole(targetUuid, "ADMIN", playerId);
@@ -118,15 +115,13 @@ class UiAccessHandlerTest {
     @Test
     void doUserAdd_fromConsole_grantedByIsNull() {
         UUID targetUuid = UUID.randomUUID();
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(true);
-        when(target.getUniqueId()).thenReturn(targetUuid);
+        when(treasury.resolveKnownPlayerUuid("Bob")).thenReturn(targetUuid);
         when(service.grantRole(eq(targetUuid), eq("government"), isNull())).thenReturn("government");
         CommandSender console = mock(CommandSender.class); // not a Player
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Bob")).thenReturn(target);
             handler.doUserAdd(console, "government", "Bob");
+            bukkit.verifyNoInteractions();
         }
 
         verify(service).grantRole(eq(targetUuid), eq("government"), isNull());
@@ -136,15 +131,12 @@ class UiAccessHandlerTest {
     void doUserAdd_unknownPlayer_isRefused_neverDelegates() {
         // ADT-38 / behaviour/0002: getOfflinePlayer fabricates a deterministic UUID for
         // any string, so a never-seen name must be refused before any service call.
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(false);
-        when(target.isOnline()).thenReturn(false);
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Ghost")).thenReturn(target);
-            NotFoundException ex = assertThrows(NotFoundException.class,
-                    () -> handler.doUserAdd(sender, "admin", "Ghost"));
+            NotFoundException ex =
+                    assertThrows(NotFoundException.class, () -> handler.doUserAdd(sender, "admin", "Ghost"));
             org.junit.jupiter.api.Assertions.assertEquals("treasuryapi.ui.user.unknown-player", ex.getMessage());
+            bukkit.verifyNoInteractions();
         }
 
         verify(service, never()).grantRole(any(), anyString(), any());
@@ -153,14 +145,12 @@ class UiAccessHandlerTest {
     @Test
     void doUserRemove_removedRow_reportsRemoved() {
         UUID targetUuid = UUID.randomUUID();
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(true);
-        when(target.getUniqueId()).thenReturn(targetUuid);
+        when(treasury.resolveKnownPlayerUuid("Bob")).thenReturn(targetUuid);
         when(service.revokeRole(targetUuid, "ADMIN")).thenReturn(true);
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Bob")).thenReturn(target);
             handler.doUserRemove(sender, "ADMIN", "Bob");
+            bukkit.verifyNoInteractions();
         }
 
         verify(service).revokeRole(targetUuid, "ADMIN");
@@ -170,14 +160,12 @@ class UiAccessHandlerTest {
     @Test
     void doUserRemove_noRow_reportsNotGranted() {
         UUID targetUuid = UUID.randomUUID();
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(true);
-        when(target.getUniqueId()).thenReturn(targetUuid);
+        when(treasury.resolveKnownPlayerUuid("Bob")).thenReturn(targetUuid);
         when(service.revokeRole(targetUuid, "admin")).thenReturn(false);
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Bob")).thenReturn(target);
             handler.doUserRemove(sender, "admin", "Bob");
+            bukkit.verifyNoInteractions();
         }
 
         verify(message).send(sender, "treasuryapi.ui.user.not-granted", "role", "admin", "player", "Bob");
@@ -186,13 +174,10 @@ class UiAccessHandlerTest {
     @Test
     void doUserRemove_unknownPlayer_isRefused_neverDelegates() {
         // behaviour/0002: the guard now applies to remove too (previously it did not).
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(false);
-        when(target.isOnline()).thenReturn(false);
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Ghost")).thenReturn(target);
             assertThrows(NotFoundException.class, () -> handler.doUserRemove(sender, "admin", "Ghost"));
+            bukkit.verifyNoInteractions();
         }
 
         verify(service, never()).revokeRole(any(), anyString());
@@ -201,14 +186,12 @@ class UiAccessHandlerTest {
     @Test
     void doUserList_withRoles_joinsThem() {
         UUID targetUuid = UUID.randomUUID();
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(true);
-        when(target.getUniqueId()).thenReturn(targetUuid);
+        when(treasury.resolveKnownPlayerUuid("Bob")).thenReturn(targetUuid);
         when(service.listRoles(targetUuid)).thenReturn(List.of("admin", "government"));
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Bob")).thenReturn(target);
             handler.doUserList(sender, "Bob");
+            bukkit.verifyNoInteractions();
         }
 
         verify(message).send(sender, "treasuryapi.ui.user.list", "player", "Bob", "roles", "admin, government");
@@ -217,14 +200,12 @@ class UiAccessHandlerTest {
     @Test
     void doUserList_noRoles_showsImplicitPlayer() {
         UUID targetUuid = UUID.randomUUID();
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(true);
-        when(target.getUniqueId()).thenReturn(targetUuid);
+        when(treasury.resolveKnownPlayerUuid("Bob")).thenReturn(targetUuid);
         when(service.listRoles(targetUuid)).thenReturn(List.of());
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Bob")).thenReturn(target);
             handler.doUserList(sender, "Bob");
+            bukkit.verifyNoInteractions();
         }
 
         verify(message).send(sender, "treasuryapi.ui.user.no-roles", "player", "Bob");
@@ -233,17 +214,15 @@ class UiAccessHandlerTest {
     @Test
     void doUserList_unknownPlayer_isRefused_neverDelegates() {
         // behaviour/0002: list also guards never-seen names now.
-        OfflinePlayer target = mock(OfflinePlayer.class);
-        when(target.hasPlayedBefore()).thenReturn(false);
-        when(target.isOnline()).thenReturn(false);
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer("Ghost")).thenReturn(target);
             assertThrows(NotFoundException.class, () -> handler.doUserList(sender, "Ghost"));
+            bukkit.verifyNoInteractions();
         }
 
         verify(service, never()).listRoles(any());
     }
+
     @Test
     void resetPassword_requiresExplicitConfirmation() {
         handler.doResetPassword(sender, false);
@@ -258,5 +237,4 @@ class UiAccessHandlerTest {
         verify(service).resetPassword(playerId);
         verify(message).send(sender, "treasuryapi.ui.reset.success", "password", "temporary-secret");
     }
-
 }
