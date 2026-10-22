@@ -87,3 +87,33 @@ read access, sign-in and the affected operation on staging. Confirm rejected
 access stays rejected. Restore the previous settings and restart if validation
 fails; coordinate signing-secret rollback across TreasuryAPI, REST and SERVICE
 tokens rather than changing only one consumer.
+
+### Explorer request blocking
+
+`BLOCKED_IPS` accepts comma-separated IPv4/IPv6 addresses and CIDRs.
+`BLOCKED_UAS` matches complete, case-sensitive User-Agent values;
+`BLOCKED_UA_SUBSTRINGS` matches case-sensitive literal substrings. Empty lists
+allow traffic. Invalid IP rules fail initialization. Changes require a restart.
+For example, the historical scraper rules are `BLOCKED_IPS=136.107.101.57` and
+`BLOCKED_UAS=Blockantir-BalanceCollector/1.0`; these are examples, not defaults.
+Each tenant can configure its own lists on the shared image.
+
+IP rules require `BLOCK_TRUST_ENVOY=1`. This trusts only
+`x-envoy-external-address`, never X-Forwarded-For. The reviewed GitOps topology
+uses a Cilium hostNetwork gateway and a ClusterIP Explorer service. Its production
+`scraper-block.yaml` documents Envoy `useRemoteAddress=true`, zero trusted XFF
+hops, and replacement of the external-address header. NextRequest does not expose
+the socket peer, so the app cannot authenticate that header itself. Before
+activation, verify the deployed Envoy configuration and restrict direct ingress
+to the app to the gateway; a ClusterIP alone does not enforce that restriction.
+Do not enable trust for a directly reachable app or a gateway that preserves this
+header. Missing, malformed or multiple client addresses return 403 when IP rules
+are active. UA blocking works independently of proxy trust.
+
+Blocks run before auth, redirects and route rendering, returning a plain 403 with
+`Cache-Control: no-store`. Structured JSON logs have `kind: "blocked"`, tenant,
+method, path, resolved IP, UA, reason and status. Query strings and cookies are
+omitted. Static assets, image optimization, favicon, robots and liveness remain
+outside the proxy matcher. Authentication endpoints are included.
+Deployment, network policy and tenant rule activation are separate operations;
+this change does not alter GitOps or existing gateway blocks.
