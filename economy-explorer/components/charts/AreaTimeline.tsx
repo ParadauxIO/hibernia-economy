@@ -123,7 +123,7 @@ export function WealthDonut({ data }: DonutProps) {
       <RC height={230}>
         <PieChart>
           <Pie data={pie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={3} stroke="var(--bg-card)" strokeWidth={2}>
-            {pie.map((d) => <Cell key={d.name} fill={d.fill} />)}
+            {pie.map((d) => <Cell key={d.name} fill={d.fill} aria-label={`${d.name}: ${fmtAmtFull(d.value)}, ${fmtN(d.accountCount)} accounts`} />)}
           </Pie>
           <Tooltip
             contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}

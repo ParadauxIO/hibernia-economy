@@ -1,7 +1,7 @@
 # Shared name namespace (PAR-501)
 
 Account display names, business names, player directory names and shop aliases
-share one persistent reservation namespace after V38. MariaDB arbitrates every
+share one persistent reservation namespace after V40. MariaDB arbitrates every
 source insert/update, including plugin, REST, API and administrative SQL writers.
 IDs, ownership, account types and balances are never changed to resolve a conflict.
 
@@ -60,7 +60,17 @@ autocomplete draws from the same constrained source tables.
 
 ## Migration and rollout
 
-Do not deploy V38 to an unreviewed existing dataset. Stop **all** writers for the
+The namespace script was originally merged as V38 alongside two other V38
+scripts. The repair preserves taxation at V38, employment history at V39, and
+this namespace at V40, without changing any SQL. The migration guard permits
+only the exact renames from that broken tree. Its upgrade rehearsal omits the
+two pending collisions from the scratch base archive, migrates through taxation
+V38, and then applies V39/V40 and validates normally. A database that applied
+employment history or the namespace as V38 from an individual feature branch
+needs an explicit history reconciliation before using this sequence; no automatic
+Flyway repair is performed.
+
+Do not deploy V40 to an unreviewed existing dataset. Stop **all** writers for the
 migration/backfill/trigger installation window; application locks do not cover the
 REST process. The migration owner needs the existing schema privileges plus
 `CREATE ROUTINE` and `TRIGGER`; application calls use the trigger/routine definer.
@@ -79,7 +89,7 @@ Do not grant application code permission to edit reservations as a release API.
    a lowest-ID winner, or move balances to make a uniqueness migration pass.
    Source data is not silently normalized: existing surrounding whitespace also
    blocks migration until its cleanup is approved.
-4. Rehearse V38 against the restored/remediated dataset. Its preflight rejects
+4. Rehearse V40 against the restored/remediated dataset. Its preflight rejects
    unresolved collisions and blank names before creating namespace tables.
    MariaDB DDL is not transactional: a failed preflight can leave only its helper
    routine and failed Flyway history. Inspect the error, approve corrections and
