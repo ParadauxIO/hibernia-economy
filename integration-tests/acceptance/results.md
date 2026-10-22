@@ -2076,3 +2076,20 @@ Evidence is retained locally in `.context/par-499/nexo-identity-fault-results/`,
 The broader custom-item and runtime combinations remain in PAR-502. All three
 runner unit tests, shell syntax, diff whitespace and the 587-entry inventory check
 passed after the addition.
+
+### Final upstream reconciliation
+
+Develop then advanced to `144b8060` (PR #77). Its independent V38 collision repair
+uses the same byte-identical V39/V40 renames. The final branch keeps that upstream
+guard/upgrade implementation: for the pinned invalid tree only, omit the two
+colliding pending scripts from the scratch archive, migrate taxation V38, then
+apply V39/V40/V41. This supersedes this branch's earlier V37-prefix rehearsal
+strategy without rewriting historical evidence above. The collision test now
+removes later migrations while reconstructing its pinned base, then restores them.
+
+All **20** reconciled guard tests pass. Full build/release passed; upgrades from
+both `662724d` and current `origin/develop` passed Flyway validation and money
+invariants using a new disposable database. The clone was not mutated. Evidence:
+`.context/par-499/final-reconciled-build.log` and `final-migration-rehearsal.log`.
+The upstream accessibility correction and its tests are retained unchanged.
+Final full core repeats and exact-head CI results are reported in PR #76.
