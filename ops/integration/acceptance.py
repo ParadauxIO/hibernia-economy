@@ -51,7 +51,7 @@ def collect_reports(test_dir, output, browser_report=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runs', type=int, default=2)
-    parser.add_argument('--profile', choices=('core', 'protection', 'restart', 'tax', 'groups', 'explorer', 'webhook-failure'), default='core')
+    parser.add_argument('--profile', choices=('core', 'protection', 'restart', 'tax', 'groups', 'nexo', 'explorer', 'webhook-failure'), default='core')
     parser.add_argument('--test', action='append', default=[], help='Gradle test filter; repeat for a focused run')
     args = parser.parse_args()
     if args.runs < 1:

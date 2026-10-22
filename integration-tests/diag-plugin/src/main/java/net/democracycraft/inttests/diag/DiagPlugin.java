@@ -201,6 +201,35 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
 
     // ---------------------------------------------------------------- commands
 
+    private boolean doRealNexo(CommandSender sender, String[] args) {
+        if ((args[0].equals("nexostock") && args.length != 7)
+                || (args[0].equals("nexocount") && args.length != 3)) {
+            sender.sendMessage("usage: diag nexostock <world> <x> <y> <z> <id> <count> OR diag nexocount <player> <id>");
+            return true;
+        }
+        try {
+            var nexo = java.util.Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("Nexo"));
+            Class<?> api = nexo.getClass().getClassLoader().loadClass("com.nexomc.nexo.api.NexoItems");
+            if (args[0].equals("nexostock")) {
+                var chest = (org.bukkit.block.Chest) Bukkit.getWorld(args[1]).getBlockAt(
+                        Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4])).getState();
+                Object builder = api.getMethod("itemFromId", String.class).invoke(null, args[5]);
+                ItemStack item = (ItemStack) builder.getClass().getMethod("build").invoke(builder);
+                item.setAmount(Integer.parseInt(args[6]));
+                chest.getBlockInventory().setItem(0, item);
+                sender.sendMessage("nexostock " + args[5]);
+            } else {
+                Player player = java.util.Objects.requireNonNull(Bukkit.getPlayerExact(args[1]));
+                int count = 0;
+                for (ItemStack item : player.getInventory().getContents()) {
+                    if (item != null && args[2].equals(api.getMethod("idFromItem", ItemStack.class).invoke(null, item))) count += item.getAmount();
+                }
+                sender.sendMessage("nexocount " + args[2] + " = " + count);
+            }
+        } catch (Exception e) { sender.sendMessage("real Nexo diagnostic failed: " + e); }
+        return true;
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("dcsync")) {
@@ -215,6 +244,9 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
             return true;
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "nexostock":
+            case "nexocount":
+                return doRealNexo(sender, args);
             case "taxschedule":
                 return doTaxSchedule(sender, args);
             case "taxscheduledstate":

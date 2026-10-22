@@ -1,9 +1,13 @@
 # PAR-499 execution evidence
 
+The latest reconciled results and remaining scope are at the end of this report.
+Earlier sections preserve historical observations, including pre-fix failures.
+
 Initial focused runs used checkout `1f523442ce7fa63571171187e71126355f7ef89e`.
 The branch was subsequently fast-forwarded to develop
 `b7dfa4a67f964e83bbeebc1edee49c0f82ea923b` (PAR-448 business account scope).
-No application production behavior was changed by this task.
+At that initial stage no application production behavior had changed. Later
+regressions exposed product defects; their fixes and final evidence are recorded below.
 
 Environment: Temurin Java 21.0.12.1, Paper 1.21.11 build 132, Treasury/Business/
 TreasuryAPI/ChestShop 2.3.0-SNAPSHOT, LuckPerms 5.5.87, WorldEdit 7.4.2,
@@ -1999,3 +2003,76 @@ held its UUID label. The test now explicitly renames through the admin API and
 waits for both player/account claims before asserting shared-name rejection. It
 also checks that returning ownership does not revive the old personal key, then
 uses a newly issued personal key to test the admin-role denial separately.
+
+## Final reconciled acceptance before the real-Nexo addition
+
+Production revision `a1e875d118a21309a66a0320611df984fd68ade5` passed all ordinary
+profiles twice from clean disposable worlds/databases without retries. This includes
+the V41 ownership fix and all earlier enabled defect regressions. Production JARs
+were built by the successful full build/release run; repeats recorded `IT_SKIP_BUILD=1`.
+The source tree was clean for these runs.
+
+| Profile | Run | Tests / skipped | Failures / errors | Seconds | Evidence directory |
+|---|---:|---:|---:|---:|---|
+| core | run-1 | 757 / 14 | 0 / 0 | 841.8 | `20261022T003013Z-4097794/run-1` |
+| core | run-2 | 757 / 14 | 0 / 0 | 863.04 | `20261022T003013Z-4097794/run-2` |
+| groups | run-1 | 1 / 0 | 0 / 0 | 71.87 | `20261022T004901Z-3531270/run-1` |
+| groups | run-2 | 1 / 0 | 0 / 0 | 61.24 | `20261022T004901Z-3531270/run-2` |
+| protection | run-1 | 4 / 0 | 0 / 0 | 52.08 | `20261022T005114Z-4120305/run-1` |
+| protection | run-2 | 4 / 0 | 0 / 0 | 52.96 | `20261022T005114Z-4120305/run-2` |
+| restart | run-1 | 1 / 0 | 0 / 0 | 100.5 | `20261022T005259Z-416991/run-1` |
+| restart | run-2 | 1 / 0 | 0 / 0 | 79.61 | `20261022T005259Z-416991/run-2` |
+| tax | run-1 | 6 / 0 | 0 / 0 | 66.19 | `20261022T005559Z-1083188/run-1` |
+| tax | run-2 | 6 / 0 | 0 / 0 | 72.78 | `20261022T005559Z-1083188/run-2` |
+| webhook-failure | run-1 | 2 / 0 | 0 / 0 | 108.88 | `20261022T005818Z-1697126/run-1` |
+| webhook-failure | run-2 | 2 / 0 | 0 / 0 | 112.48 | `20261022T005818Z-1697126/run-2` |
+| explorer | run-1 | 1 / 0 | 0 / 0 | 83.11 | `20261022T010200Z-2247772/run-1` |
+| explorer | run-2 | 1 / 0 | 0 / 0 | 72.99 | `20261022T010200Z-2247772/run-2` |
+
+All directories above are under `build/integration-acceptance/`. Core reports 743
+passes and 14 explicit skips; applicable gated cases pass in their own profiles,
+while three standalone-ingest tests remain unavailable. Tax parameters expand to
+six cases when enabled. Explorer uses Chromium against the same live ledger and
+signed test sessions, not a real Keycloak login.
+
+All CI checks on this revision also passed, including the full live server suite,
+JVM build, migrations, mutation testing, API contract, Explorer and CodeQL:
+[run 39700000764](https://github.com/ParadauxIO/hibernia-economy/actions/runs/39700000764).
+Final-head checks after the additive Nexo profile are reported in
+[PR #76](https://github.com/ParadauxIO/hibernia-economy/pull/76).
+
+Remaining acceptance work is tracked by child [PAR-502](https://app.taskl.ie/w/paradaux/issues/PAR-502).
+PAR-499 remains open; neither this table nor the 587-entry source inventory claims
+that every permission/configuration combination has been reviewed or automated.
+
+
+### Real Nexo profile and fault detection
+
+The additive `nexo` profile was verified with real Nexo 1.29.1 on the same pinned
+Paper 1.21.11/Java 21 stack. Supplied artifact SHA-256:
+`66c38e677d19bf45d43b744b8a5d4914cd2ea68c40f082e8f1d779fd363326cc`.
+Only the plugin JAR was read from the non-production clone; the runner generated
+fresh synthetic configuration/items, with resource-pack generation/import/dispatch
+disabled. No clone state or private assets were copied into this repository.
+
+`20261022T010504Z-2546609/run-{1,2}` passed **1 case each**, zero failures/errors/skips,
+in **85.92s / 77.38s**. These runs used `a1e875d1` production artifacts plus the
+additive framework/test changes subsequently committed unchanged. The test rejects
+ordinary diamonds without balance, posting or inventory changes, then buys four
+actual `test_ruby` items for exactly 250, checks both posting increments, native
+custom identity and eight remaining stock items. Core retains its separate stub
+test; the new real-runtime test adds one explicit core skip.
+
+Controlled fault in an isolated fixture copy: replacing the native Nexo ItemStack
+with an ordinary diamond made the positive purchase assertion fail after 10s
+(expected buyer 9750, observed 10000; 53 observations). The fixture was restored
+before both acceptance runs above. This proves detection of lost custom identity
+at the setup/integration boundary; it is not a mutation of licensed Nexo code.
+Supplying `nexo-stub` to the real profile also failed capability preflight with
+`Nexo runtime does not match selected real/stub profile`, before any test ran.
+Evidence is retained locally in `.context/par-499/nexo-identity-fault-results/`,
+`nexo-identity-fault.log` and `nexo-stub-gate.log`.
+
+The broader custom-item and runtime combinations remain in PAR-502. All three
+runner unit tests, shell syntax, diff whitespace and the 587-entry inventory check
+passed after the addition.

@@ -59,5 +59,7 @@ archiving the first, its row disappears but its original account ID, balance and
 posting remain. Government balance/history, transfers in/out and payout reject
 it; `/pay` rejects it too. Creating the same name is denied without reactivation.
 The entire read/rejection/archive sequence leaves the transaction checkpoint and
-all three balances unchanged. Dedicated typed-payment checks found a bypass; see
-`known-defects.md`. Thus archived-account behavior is not generally accepted.
+all three balances unchanged. Dedicated typed-payment checks originally found a bypass; it is now fixed, with
+`ArchivedTypedPaymentTest` asserting rejection and unchanged funds/postings. See
+`known-defects.md` for the retained pre-fix evidence. The remaining archive branches
+in the review table still require coverage.

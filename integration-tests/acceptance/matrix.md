@@ -5,7 +5,8 @@ Baseline checkout: `b7dfa4a` (develop merge #68, including PAR-448). This is an 
 not a claim of complete acceptance.
 Current status: the twelve defect areas recorded in earlier rows below are now
 fixed and passed two focused rebuilt runs (47 cases each); see `known-defects.md`
-and `results.md`. Full updated-core verification is pending. Historical failure
+and `results.md`. Reconciled core and all six ordinary dedicated profiles passed
+twice on `a1e875d1`; the opt-in real-Nexo addition is recorded separately. Historical failure
 labels below refer to the discovery evidence. The source index contains every syntactically
 found `@Route`, permission/configuration annotation, HTTP mapping, event handler and repeating-task registration in the
 five in-repository runtime modules. `python3 integration-tests/acceptance/inventory.py
@@ -17,7 +18,7 @@ inspected and executed; annotation presence does not prove registration.
 | Behavior / source | Executable evidence | Fault it must detect | Execution |
 |---|---|---|---|
 | Treasury `PayAccountCommand`: player/government/business/numeric targets, aliases and greedy memo | `PayAccountCommandTest.typedPaymentSelectsRequestedAccount` | Wrong typed destination; missing/duplicate debit or credit; dropped memo; unauthorized source | Passed in both clean core runs |
-| Typed payment to archived government by name or numeric ID | `ArchivedTypedPaymentTest` | Archived destination must not receive funds | **Known defect reproduced:** both forms pay successfully and mutate both balances; active failing regressions retained |
+| Typed payment to archived government by name or numeric ID | `ArchivedTypedPaymentTest` | Archived destination must not receive funds | Fixed after reproducing both bypasses; enabled regressions verify rejection without money/posting changes |
 | Typed payment invalid amount, self-target, missing target/type, insufficient funds | `PayAccountCommandTest.rejectionDoesNotWriteMoneyOrPostings` | Rejection with balance mutation or extra postings | Passed in both clean core runs |
 | `treasury.pay` permission | `PayAccountCommandTest.explicitPermissionDenialLeavesBothAccountsUnchanged` | Permission gate bypass | Passed in both clean core runs |
 | Two asynchronous payments sharing insufficient source funds | `PayAccountCommandTest.competingPaymentsCannotSpendTheSameFundsTwice` | Double spending; partial settlement | Passed; request contention, not forced DB interleaving |
@@ -29,7 +30,7 @@ inspected and executed; annotation presence does not prove registration.
 | PAR-448 account-scoped business key issue, spend/history isolation and REST rotation | `BusinessAccountScopeTest` | Sibling-account authority leak or lost restriction after rotation | Passed in both clean core runs |
 
 Detailed execution and fault evidence: [results.md](results.md).
-Unresolved live failures: [known-defects.md](known-defects.md).
+Original defect observations and repairs: [known-defects.md](known-defects.md).
 
 ## Existing suite review queue and explicit gaps
 
@@ -41,20 +42,20 @@ names and automatically declaring a feature covered.
 |---|---|---|
 | Treasury balance/pay/history/admin/fines/government | `treasury/*Command*Test`, `TreasuryAdminTest`, `AmountAttacksTest`, `GovMemberTransferTest` | Review each indexed route, aliases and authorization changes; several older rejection tests assert chat or only one balance |
 | Treasury history/audit/export | `TransactionHistoryPaginationTest`, `TransactionAuditTest`, `TransactionExportTest`: exact rows/pages, durable audit records, role distinction and actual gzip CSV upload/recovery | See the nine-route review; group/non-default/archived export roles, populated audit pagination, wider CSV metadata/size/network boundaries (direct government and business role transitions now passed twice) |
-| Balance leaderboard | `BaltopRankingTest`: twelve real players, exact ranks/names/amounts across pages, zero/negative clamp, help and revoked permission on every route | **Known defect:** maximum int page overflows to negative SQL offset; active `BaltopOverflowProbeTest` fails. Confirmed offline names on both pages, leader reconnect, archive/unarchive ranking and high-value business/government exclusion passed twice; unknown-name fallback, additional account types and tie behavior remain |
-| Funded government archive/list lifecycle | `GovernmentArchiveLifecycleTest`: both aliases, exact list IDs/names/balances/order, archived row hidden, reads/transfers/payout/pay rejected, original balance/posting preserved and name reuse rejected | Passed twice. Typed payment bypass remains a demonstrated defect; archive permission revocation, primitive-state assertions and reactivation remain |
+| Balance leaderboard | `BaltopRankingTest`: twelve real players, exact ranks/names/amounts across pages, zero/negative clamp, help and revoked permission on every route | Fixed integer-overflow offsets; `BaltopOverflowProbeTest` protects maximum and wraparound boundaries. Confirmed offline names on both pages, leader reconnect, archive/unarchive ranking and high-value business/government exclusion passed twice; unknown-name fallback, additional account types and tie behavior remain |
+| Funded government archive/list lifecycle | `GovernmentArchiveLifecycleTest`: both aliases, exact list IDs/names/balances/order, archived row hidden, reads/transfers/payout/pay rejected, original balance/posting preserved and name reuse rejected | Passed twice. The typed-payment bypass is fixed and covered by enabled regressions; archive permission revocation, primitive-state assertions and reactivation remain |
 | Government balance/history and viewer access | `GovernmentHistoryAccessTest`, `GovernmentGroupViewerTest`: both aliases, exact 12-credit history and balance, zero/extreme pages, direct/group viewer cannot spend, live LP/account grant revocation and exact lists | Viewer journeys and individual role/permission transitions passed twice; see `government-reads.md`. Group demotion, archived/missing accounts and offline-name branches remain |
 | Personal sales reports | `PersonalSalesCommandTest`: all five routes, known buy/sell trades, owner isolation, exact quantities/totals and revoked permission | Multi-page sales, window boundaries, taxed trades and top-item ranking |
 | Economy summary | `EconomyOverviewTest`: category deltas from three actual transfer types, conserved total supply, help and revoked permission | Funded personal/business/government archive/unarchive category deltas passed twice; SYSTEM exclusion, custom formatting and console sender remain |
 | Starting balance/login | `FirstJoinSeedsBalanceTest`, `treasury/AdditionalCoverageTest` | Disabled starting grant/configuration branches; crash recovery (graceful restart persistence is covered) |
 | Tax cycles/exemptions | `lifecycle/TaxCycleLifecycleTest`: exact manual collection, exemption/config reload, accelerated real Bukkit task execution, same-period no-op and next-period progression; existing tax tests | Natural calendar boundaries/DST/catch-up, multi-account rounding boundaries and remaining config matrix |
-| Business aggregate leaderboard | `FirmBalanceRankingTest`: multi-account totals/order, lower-page clamping, far-page empty, archived-firm exclusion and revoked permission through all five aliases | Passed twice. `FirmBalanceOverflowTest` exposes maximum-page negative-index error; populated second page, ties and zero/negative totals remain |
-| Funded firm disband | `FundedDisbandTest`: all five roots, confirmation gating, exact two-account sweep and proprietor refund, archived accounts/default pointer/soft-unlinked history, repeat-confirm no-op | Passed twice; see `business-firm-lifecycle.md`. `DisbandAuthorizationTest` also passed all five aliases for caller/firm isolation, permission revocation and proprietor changes with exact refund recipient. Real-time expiry/re-prompt also passed twice in `DisbandExpiryTest`. Partial drain rollback is verified, but proprietor resume and numeric firm references have demonstrated authorization failures; admin recovery passed both fault positions twice with exact rollback and no duplicate payouts. Reconnect and concurrency remain |
+| Business aggregate leaderboard | `FirmBalanceRankingTest`: multi-account totals/order, lower-page clamping, far-page empty, archived-firm exclusion and revoked permission through all five aliases | Passed twice. `FirmBalanceOverflowTest` protects the repaired maximum-page negative-index error; populated second page, ties and zero/negative totals remain |
+| Funded firm disband | `FundedDisbandTest`: all five roots, confirmation gating, exact two-account sweep and proprietor refund, archived accounts/default pointer/soft-unlinked history, repeat-confirm no-op | Passed twice; see `business-firm-lifecycle.md`. `DisbandAuthorizationTest` also passed all five aliases for caller/firm isolation, permission revocation and proprietor changes with exact refund recipient. Real-time expiry/re-prompt also passed twice in `DisbandExpiryTest`. Partial drain rollback is verified, and the discovered proprietor-resume/numeric-reference authorization defects are fixed; admin recovery passed both fault positions twice with exact rollback and no duplicate payouts. Reconnect and concurrency remain |
 | Business firm/account/staff/roles/requests | `business/*Commands*Test`, `AccountMembershipTest`, `CrossFirmIsolationTest`, `FirmAuthorizationAttacksTest`, `FirmTransferTheftTest` | Route-by-route assertion review; ownership/access revocation across plugins; payroll and archived-state journeys |
-| Business information and employment lists | `FirmReadCommandsTest`: five aliases, exact metadata/aggregate balance, numeric info, archived state, real hire/fire list transitions, owner/member/other/global reads and permission revocation. `FirmListPaginationTest`: two exact full pages, disconnected proprietor names, clamping and revoked page routes | Information verified; list state/access checks pass but five active regressions expose literal markup in defunct rows. Missing player-record fallback and click targets remain |
+| Business information and employment lists | `FirmReadCommandsTest`: five aliases, exact metadata/aggregate balance, numeric info, archived state, real hire/fire list transitions, owner/member/other/global reads and permission revocation. `FirmListPaginationTest`: two exact full pages, disconnected proprietor names, clamping and revoked page routes | Information verified; list state/access checks and all five repaired defunct-markup regressions pass. Missing player-record fallback and click targets remain |
 | Business chat | `business/MiscCommandsTest` and command index | CarbonChat is absent from disposable stack: cannot certify real chat integration |
 | Funded firm rename | `FirmRenameLifecycleTest`: five aliases, numeric target, no-op/case-only rename, exact stored casing, case-insensitive collision, invalid name and permission grant/revocation; identity, linked accounts, metadata and funds preserved | Archived rename targets, concurrent collisions and downstream display labels remain |
-| Disbanded firm name release/reuse | `FirmNameReleaseTest`: active release denied, archived name reserved, permission revocation, release/repeat, new identity/account on reuse, name-vs-ID info routing and new payment preserving old history through five aliases | Partial-drain name reuse exposes a wrong-destination payment regression; numeric old-firm recovery is tested separately. Console/missing IDs and concurrent release/create remain |
+| Disbanded firm name release/reuse | `FirmNameReleaseTest`: active release denied, archived name reserved, permission revocation, release/repeat, new identity/account on reuse, name-vs-ID info routing and new payment preserving old history through five aliases | The wrong-destination payment after partial-drain name reuse is fixed and regression-tested; numeric old-firm recovery is tested separately. Console/missing IDs and concurrent release/create remain |
 | Firm attribute setters and admin override | `FirmAttributeAuthorizationTest`: five aliases, numeric targets, ordinary outsider denied, explicit admin grant/revoke, proprietor node revocation, exact metadata after each denial; seven invalid URLs on both routes and valid length boundaries. `FirmAttributeRoleTransitionTest`: connected Manager → Co-Proprietor → Manager, both fields denied/allowed/denied with server nodes unchanged | Realty plot validation, archived targets and link click events remain; direct ADMIN-role edits are covered below |
 | Personal/business/admin shop trades | `chestshop/PersonalShopTest`, `BusinessShopTest`, `AdminShopTest`, `SellDirectionTest`, `BothDirectionShopTest` | Existing stock/ledger evidence; fixture places sign NBT via RCON, so this does **not** cover real sign placement/editing |
 | Shop rejections/stock/capacity/concurrency | `FailureModesTest`, `SellRejectionsTest`, `StockAndPriceEdgeTest`, `ConcurrencyTest`, `MultiBuyerTest` | Review rollback and exact inventory conservation; packet delivery barriers required |
@@ -63,19 +64,18 @@ names and automatically declaring a feature covered.
 | Shop metrics | `MetricsCommandTest`: exact live buy/sell counters and revoked permission through both aliases | 30-minute rollover and account count |
 | Container stock and ownership | `ContainerRestockTest`: actual quick-move/close updates registry 36→41→0; `OutsiderContainerAccessTest`: owner window vs outsider read-only response and zero windows | Business roles, bypass/config branches, other click modes and disconnect while carrying items |
 | Hopper automation | `HopperMinecartProtectionTest`: actual rail/cart, protected stock retained, same cart drains all stock after sign removal | Block-hopper placement, disabled protection, stock-counter automation branches |
-| Custom items | `NexoCustomItemTest` | **Stub-only:** runner installs `nexo-stub`; real licensed Nexo and Utilities/BreweryX/VaultStorage/Bolt compatibility remain blockers under [PAR-496](https://app.taskl.ie/w/paradaux/issues/PAR-496) |
+| Custom items | Core `NexoCustomItemTest` uses a stub; opt-in `nexo` profile runs `RealNexoCustomItemTest` with a supplied real plugin | Real-plugin purchase and ordinary-material rejection evidence is recorded in `results.md`; selling, metadata/dyes, pack rendering, reloads and Utilities/BreweryX/VaultStorage/Bolt combinations remain under [PAR-502](https://app.taskl.ie/w/paradaux/issues/PAR-502) and [PAR-496](https://app.taskl.ie/w/paradaux/issues/PAR-496) |
 | REST tokens/transfers/auth/feed/webhooks/admin | `restapi/*Test` | Audit every indexed endpoint, scopes/expiry, both transfer engines, retries/idempotency, and cross-service read-after-write |
 | TreasuryAPI command | `restapi/TreasuryApiCommandTest` | Route/permission review against current source |
 | Ingest | `ingest/EssentialsXIngestTest` | **Disabled:** standalone TreasuryIngest plugin absent; DcDiag ingest stub is not real migration acceptance |
-| Vault/Realty | No real Realty plugin installed by runner | **Blocked:** runtime absent; realty submodule uninitialized in this checkout. Realty is disabled on 26.3 staging per ADT-193 |
+| Vault/Realty | No real Realty plugin installed by runner | **Blocked on compatible isolated profile:** local Realty/VaultStorage artifacts require Java 25; the pinned suite uses Java 21. Real money/access flows remain under PAR-502. ADT-193 also records Realty disabled on staging |
 | Explorer | `explorer` profile: real player payment → same database → browser balance/history; sender/recipient vs anonymous/outsider; signed test sessions | Wider pages/roles, live role revocation, shop/business views, real Keycloak login. Standalone managed E2E resets its own DB; never use that reset on the Paper stack |
 | Lifecycle/dependency failures | Reconnect tests and `lifecycle/ServerRestartTest` in the dedicated `restart` profile: real graceful Paper restart preserves accounts/postings/world/items/shop and permits next trade | Crash recovery, REST restart, DB outage/recovery, schedules across downtime and configuration reload matrix remain open |
 | Java/Bedrock/runtime parity | Mock client `1.21.11-SNAPSHOT`, Paper `1.21.11-132`, Java 21 | [ADT-193](https://app.taskl.ie/w/paradaux/issues/ADT-193) staging is Paper 26.3-206/protocol 777/Java 25. This profile intentionally fails unsupported versions. Bedrock and licensed integrations remain unverified |
 
 Unannotated configuration fields, role combinations, registration wiring, external submodules,
 and Explorer routes are not exhaustively indexed by the Java annotation scanner.
-They need manual review alongside `entry-points.json`. All unresolved rows remain
-under PAR-499; no task status or external tracker data is changed by this work.
+They need manual review alongside `entry-points.json`. All unresolved rows remain under PAR-499 and child [PAR-502](https://app.taskl.ie/w/paradaux/issues/PAR-502).
 
 ## Acceptance commands and evidence
 
@@ -93,10 +93,9 @@ Repeatable command: `python3 ops/integration/acceptance.py` (two clean core runs
 and `python3 ops/integration/acceptance.py --profile protection` for the startup-hook profile.
 Reports are retained with JWTs and configured secrets redacted.
 
-Earlier core runs passed twice from clean state before the enabled defect
-regressions were added. The current suite is not green: unresolved failures are
-listed in [known-defects.md](known-defects.md); counts, durations and controlled
-fault evidence are in [results.md](results.md).
+The historical discovery runs included enabled failures, all retained in
+[known-defects.md](known-defects.md). Current verification, exact revisions, counts,
+durations and controlled-fault evidence are in [results.md](results.md).
 The four protection-profile cases also passed twice. The remaining cross-plugin/browser journeys,
 source-to-assertion review, and unavailable integrations remain part of acceptance.
 JUnit XML/HTML and timings are under `integration-tests/tests/build/`; server/API/DB
@@ -149,7 +148,7 @@ owner-change/type-specific lifecycle gaps.
 starting grant, but retains two regressions showing that the old PERSONAL key can
 still spend and read the reassigned account.
 
-Owner identifier resolution: `AccountOwnerResolutionTest` adds real REST UUID reassignment and name restoration, same-owner idempotence, duplicate-personal conflicts by name/UUID, invalid/unknown identifiers and auth denials. Each rejection preserves both persisted owners, account types/archive flags, balances and ledger checkpoint. See `rest-admin-accounts.md` and `results.md`; credential revocation remains a separate known defect.
+Owner identifier resolution: `AccountOwnerResolutionTest` adds real REST UUID reassignment and name restoration, same-owner idempotence, duplicate-personal conflicts by name/UUID, invalid/unknown identifiers and auth denials. Each rejection preserves both persisted owners, account types/archive flags, balances and ledger checkpoint. See `rest-admin-accounts.md` and `results.md`; the formerly discovered credential-revocation defect is fixed and separately regression-tested.
 
 Admin API-key lifecycle: `AdminKeyLifecycleTest` exercises force-rotation,
 in-game reissue and repeated revocation through real transfer/history requests.

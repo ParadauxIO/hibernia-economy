@@ -9,7 +9,10 @@ regressions introduced by the coverage commit `33c759d`.
 All twelve defect areas now have production fixes on this branch. The enabled
 regressions and selected authorization/custom-item controls passed twice from clean
 rebuilt stacks: `20261021T234424Z-1362229/run-{1,2}`, **47 passed each**, zero failures,
-errors or skips; 123.11s / 126.12s. Full updated-suite verification remains pending.
+errors or skips; 123.11s / 126.12s. After reconciling develop through `662724d`,
+full core also passed twice on `a1e875d1`: 743 passes and 14 explicit profile/ingest
+skips each, zero failures/errors; 841.8s / 863.04s. All six ordinary dedicated
+profiles passed twice too. See `results.md` for revision-specific evidence.
 The earlier wording below about enabled failures and unchanged production describes
 the original discovery runs, not the current branch.
 

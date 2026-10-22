@@ -128,8 +128,9 @@ with `python3 integration-tests/acceptance/inventory.py`; use `--check` to detec
 The runner executes `:tests:preflight` before selected tests. It requires offline
 Paper 1.21.11, enabled economy/protection plugins, a real login and starting balance,
 and an authenticated REST boundary. It prints plugin versions. The protection
-profile also checks that both startup integration flags are enabled. The Nexo runtime is
-**a stub**; Realty, CarbonChat, Bedrock and same-stack Explorer acceptance are absent.
+profile also checks that both startup integration flags are enabled. Core Nexo coverage
+uses **a stub**; the opt-in `nexo` profile requires a real supplied plugin. Same-stack
+browser acceptance uses `explorer`; Realty, CarbonChat and Bedrock remain unverified.
 Paper 26.3 staging (ADT-193) needs a separate matching client/profile and is not
 certified by this run. Live tests always execute, even with unchanged class files,
 because Gradle cannot fingerprint external server/database state.
@@ -405,3 +406,28 @@ browser authorization rendering. The test is explicitly gated outside this profi
 The runner validates the four staged plugin ZIP archives before starting services.
 If a release artifact is incomplete, rebuild it with `sh ./gradlew release --rerun`.
 Avoid running a separate root build while the live runner assembles its server.
+
+
+### Real Nexo profile
+
+Supply your own compatible Nexo plugin locally; no licensed JAR or existing server
+configuration is downloaded from the clone or redistributed by this repository:
+
+```sh
+IT_NEXO_JAR=/absolute/path/to/nexo.jar python3 ops/integration/acceptance.py --profile nexo
+```
+
+This opt-in profile replaces `nexo-stub` with the supplied artifact, records its
+SHA-256 and observed plugin version, and rejects a stub at capability preflight.
+It creates one synthetic `test_ruby` item and disables resource-pack generation,
+imports and distribution. `RealNexoCustomItemTest` proves that ordinary diamonds
+cannot satisfy the custom-item shop, then buys four actual custom items through
+a player click and checks exact balances, posting increments and remaining stock.
+Item setup/identity observation uses the installed plugin's API; it does not
+replace ChestShop's parsing or trading path. Default core tests retain their stub.
+
+Verified runtime is recorded in `acceptance/results.md`. This narrow purchase and
+identity-rejection journey does not certify custom-item selling, metadata/dyes,
+resource-pack rendering, reloads, other providers or staging runtime parity.
+Missing `IT_NEXO_JAR` fails this profile; the real test is explicitly skipped in
+core and is not advertised as covered by ordinary CI.

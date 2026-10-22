@@ -48,6 +48,15 @@ while [ $# -gt 0 ]; do
 done
 case "$PROFILE" in
   core) PROFILE_ARGS=() ;;
+  nexo)
+    PROFILE_ARGS=()
+    if [ -z "${IT_NEXO_JAR:-}" ] || [ ! -f "$IT_NEXO_JAR" ]; then
+      echo "nexo profile requires IT_NEXO_JAR pointing to a locally supplied real Nexo JAR" >&2
+      exit 2
+    fi
+    IT_NEXO_JAR="$(realpath "$IT_NEXO_JAR")"
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*RealNexoCustomItemTest'); fi
+    ;;
   groups)
     PROFILE_ARGS=()
     GROUPS_PROFILE=true
@@ -78,7 +87,7 @@ case "$PROFILE" in
     PROFILE_ARGS=(-Dchestshop.integrations=true)
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ProtectionIntegrationCreationTest'); fi
     ;;
-  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, tax, groups, webhook-failure or explorer)" >&2; exit 2 ;;
+  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, tax, groups, nexo, webhook-failure or explorer)" >&2; exit 2 ;;
 esac
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
@@ -254,7 +263,36 @@ sql -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\`;"
 log "Assembling the Paper server in $SERVER"
 cp "$ROOT"/release/*.jar "$SERVER/plugins/"
 cp "$CACHE/$LUCKPERMS_JAR" "$CACHE/$GP_JAR" "$CACHE/$WE_JAR" "$CACHE/$WG_JAR" "$SERVER/plugins/"
-cp "$TESTS_DIR/diag-plugin/build/libs/DcDiag.jar" "$TESTS_DIR/nexo-stub/build/libs/Nexo.jar" "$SERVER/plugins/"
+cp "$TESTS_DIR/diag-plugin/build/libs/DcDiag.jar" "$SERVER/plugins/"
+if [ "$PROFILE" = nexo ]; then
+  cp "$IT_NEXO_JAR" "$SERVER/plugins/Nexo.jar"
+  log "Real Nexo artifact SHA-256: $(sha256sum "$SERVER/plugins/Nexo.jar" | cut -d ' ' -f 1)"
+mkdir -p "$SERVER/plugins/Nexo/items"
+cat > "$SERVER/plugins/Nexo/settings.yml" <<'NEXOCONFIG'
+ConfigTools:
+  generate_default_configs: false
+Pack:
+  generation:
+    generate_pack: false
+  import:
+    default_assets: false
+    external_packs: false
+    model_engine: false
+  dispatch:
+    send_pre_join: false
+    send_on_join: false
+    send_on_reload: false
+    mandatory: false
+NEXOCONFIG
+cat > "$SERVER/plugins/Nexo/items/acceptance.yml" <<'NEXOITEM'
+test_ruby:
+  material: DIAMOND
+  itemname: "<red>Acceptance Ruby"
+NEXOITEM
+else
+  cp "$TESTS_DIR/nexo-stub/build/libs/Nexo.jar" "$SERVER/plugins/"
+fi
+
 
 echo "eula=true" >"$SERVER/eula.txt"
 cat >"$SERVER/server.properties" <<EOF
@@ -390,7 +428,7 @@ log "Running the integration tests"
 # connection -D properties listed there to the forked test JVM.
 (cd "$ROOT" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
     BYTEBIN_URL="http://127.0.0.1:$BYTEBIN_PORT/" WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" IT_SERVER_DIR="$SERVER" IT_EXPLORER_FIXTURE="$WORK/explorer-fixture.json" \
-    IT_GROUPS_PROFILE="$GROUPS_PROFILE" IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
+    IT_NEXO_PROFILE="$([ "$PROFILE" = nexo ] && echo true || echo false)" IT_GROUPS_PROFILE="$GROUPS_PROFILE" IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
     sh ./gradlew -p "$TESTS_DIR" --console=plain "${GRADLE_TASKS[@]}" \
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \
