@@ -21,6 +21,7 @@ import org.geysermc.mcprotocollib.protocol.data.game.setting.ParticleStatus;
 import org.geysermc.mcprotocollib.protocol.data.game.setting.SkinPart;
 import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundClientInformationPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientCommandPacket;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientTickEndPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundPlayerLoadedPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundAwardStatsPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundLoginPacket;
@@ -110,6 +111,7 @@ public final class MockPlayer implements AutoCloseable {
      * the n-th response answers the n-th request.
      */
     private final Object syncLock = new Object();
+    private final Object movementLock = new Object();
     private long syncRequested;
     private long syncAnswered;
 
@@ -220,10 +222,7 @@ public final class MockPlayer implements AutoCloseable {
             Position pos = player.currentPosition;
             if (pos != null && session.isConnected()) {
                 try {
-                    session.send(new ServerboundMovePlayerPosRotPacket(
-                            true, false,
-                            pos.x(), pos.y(), pos.z(),
-                            pos.yaw(), pos.pitch()));
+                    player.sendMovementTick(pos);
                 } catch (Throwable ignored) {}
             }
         }, 200, 200, TimeUnit.MILLISECONDS);
@@ -414,13 +413,19 @@ public final class MockPlayer implements AutoCloseable {
      */
     public void sendPosition(Position pos) {
         Objects.requireNonNull(pos, "pos");
-        session.send(new ServerboundMovePlayerPosRotPacket(
-                true,                  // onGround — assume true; tests park players on a setblock'd platform
-                false,                 // horizontalCollision
-                pos.x(), pos.y(), pos.z(),
-                pos.yaw(), pos.pitch()));
+        sendMovementTick(pos);
         currentPosition = pos;
         LOG.debug("[{}] sent position {}", username, pos);
+    }
+
+    /** Paper 26.3 permits only one positional update per client tick. */
+    private void sendMovementTick(Position pos) {
+        synchronized (movementLock) {
+            session.send(new ServerboundMovePlayerPosRotPacket(
+                    true, false, pos.x(), pos.y(), pos.z(), pos.yaw(), pos.pitch()));
+            // Keep this pair together when the heartbeat races an explicit move.
+            session.send(ServerboundClientTickEndPacket.INSTANCE);
+        }
     }
 
     /**
