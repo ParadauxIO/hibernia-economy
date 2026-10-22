@@ -387,3 +387,20 @@ Upstream integration: develop through `303135e` adds the PAR-101 derived Busines
 Realty group-reconciliation task. The refreshed source index contains 589 entries.
 That scheduled cross-plugin journey still needs live-stack review; upstream unit
 and SQL tests are not counted as live acceptance here.
+
+### Latest develop reconciliation and scheduled group acceptance
+
+The current source inventory contains 587 entries after merging through `662724d`.
+Finder acceptance now uses Curator inventory click packets and 47 physical shop
+fixtures, covering both sides of the 45-result page boundary. The prior dialog
+results are no longer the shipped interface. Typed-payment fixtures use globally
+unique names under PAR-501; destination isolation assertions remain unchanged.
+
+The new `groups` profile executes `DerivedGroupLifecycleTest` against the real
+TreasuryAPI scheduler and Business API. It passed twice from clean state, checking
+proprietor inclusion, FINANCIAL/ADMIN role grants, an offline employee's refreshed
+publication timestamp, revocation, firm archival, preservation of manual grants,
+and independent Business publication despite unavailable Realty. No balances or
+postings change. This supersedes the Business scheduler gap above; real Realty,
+binding edits/expiry/failure interleavings and browser authorization rendering still
+need dedicated live coverage. A controlled disabled-scheduler run failed waiting for the first required membership; the original configuration was restored before final reruns.

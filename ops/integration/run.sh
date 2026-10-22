@@ -30,6 +30,7 @@ TESTS_DIR="${IT_TESTS_DIR:-$ROOT/integration-tests}"
 KEEP=0
 PROFILE=core
 RESTART_ENABLED=false
+GROUPS_PROFILE=false
 TAX_PROFILE=false
 WEBHOOK_FAILURE_PROFILE=false
 REST_PROFILE_ARGS=()
@@ -47,6 +48,11 @@ while [ $# -gt 0 ]; do
 done
 case "$PROFILE" in
   core) PROFILE_ARGS=() ;;
+  groups)
+    PROFILE_ARGS=()
+    GROUPS_PROFILE=true
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*DerivedGroupLifecycleTest'); fi
+    ;;
   explorer)
     PROFILE_ARGS=()
     GRADLE_TASKS=(:tests:preflight :tests:explorerFixture)
@@ -72,7 +78,7 @@ case "$PROFILE" in
     PROFILE_ARGS=(-Dchestshop.integrations=true)
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ProtectionIntegrationCreationTest'); fi
     ;;
-  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, tax, webhook-failure or explorer)" >&2; exit 2 ;;
+  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, tax, groups, webhook-failure or explorer)" >&2; exit 2 ;;
 esac
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
@@ -194,6 +200,23 @@ else
   (cd "$ROOT" && sh ./gradlew --console=plain -q release :treasury-rest-api:bootJar -Pci=true ${IT_GRADLE_ARGS:-})
 fi
 
+# Reject incomplete cached/staged artifacts before starting any services.
+python3 - "$ROOT/release" <<'PYZIP'
+from pathlib import Path
+from zipfile import ZipFile
+import sys
+jars = list(Path(sys.argv[1]).glob('*.jar'))
+if len(jars) != 4:
+    raise SystemExit('Expected four release plugin JARs; rebuild with ./gradlew release --rerun')
+for jar in jars:
+    try:
+        with ZipFile(jar) as archive:
+            if archive.testzip() is not None:
+                raise ValueError('entry CRC mismatch')
+    except Exception as error:
+        raise SystemExit(f'Invalid release artifact {jar.name}: {error}; rebuild with ./gradlew release --rerun')
+PYZIP
+
 log "Building DcDiag, Nexo stub and tests from $TESTS_DIR"
 (cd "$ROOT" && sh ./gradlew -p "$TESTS_DIR" --console=plain -q :diag-plugin:jar :nexo-stub:jar :tests:testClasses \
     -PgriefPreventionJar="$CACHE/$GP_JAR")
@@ -287,6 +310,9 @@ render_config() { # render_config <module dir> <plugin data folder>
 render_config treasury Treasury
 render_config business Business
 render_config treasury-api-plugin TreasuryAPI
+if [ "$PROFILE" = groups ]; then
+  sed -i 's/interval-seconds: 1800/interval-seconds: 1/' "$SERVER/plugins/TreasuryAPI/config.yml"
+fi
 
 log "Starting the local Bytebin capture service on :$BYTEBIN_PORT"
 python3 "$ROOT/ops/integration/bytebin.py" --port "$BYTEBIN_PORT" \
@@ -364,7 +390,7 @@ log "Running the integration tests"
 # connection -D properties listed there to the forked test JVM.
 (cd "$ROOT" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
     BYTEBIN_URL="http://127.0.0.1:$BYTEBIN_PORT/" WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" IT_SERVER_DIR="$SERVER" IT_EXPLORER_FIXTURE="$WORK/explorer-fixture.json" \
-    IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
+    IT_GROUPS_PROFILE="$GROUPS_PROFILE" IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
     sh ./gradlew -p "$TESTS_DIR" --console=plain "${GRADLE_TASKS[@]}" \
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \

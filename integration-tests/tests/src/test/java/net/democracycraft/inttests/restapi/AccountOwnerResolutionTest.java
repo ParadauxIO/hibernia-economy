@@ -27,7 +27,7 @@ class AccountOwnerResolutionTest {
             denied(RestApi.call("PATCH", path, service, body(temporaryOwner.toString())), 409, "NAME_RESERVED");
             unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
             var renamed = RestApi.call("PATCH", "/admin/accounts/" + account + "/display-name", service,
-                    "{\"displayName\":\"" + Usernames.fresh("OwnerAlias") + "\"}");
+                    "{\"displayName\":\"" + Usernames.fresh("OrAls") + "\"}");
             assertThat(renamed.status()).as(renamed.body()).isEqualTo(200);
             success(RestApi.call("PATCH", path, service, body(temporaryOwner.toString())), account, temporaryOwner);
             state(account, temporaryOwner);

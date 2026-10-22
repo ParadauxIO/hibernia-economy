@@ -1942,3 +1942,31 @@ Only a recognized database name-conflict signal allows that fallback. Both
 migration upgrade rehearsals passed Flyway validation and money invariants:
 `origin/develop` (pinned invalid tree's V37 prefix) and `64282ac` (the clone's
 actual taxation-only V38 baseline). Full reconciled verification remains pending.
+
+Local verification sequencing incident: the concurrent root build and release
+assembly truncated the staged TreasuryAPI JAR. Three startup attempts were rejected
+by capability preflight, with zero gameplay cases; neither artifact reuse nor an
+ordinary up-to-date release task replaced that stale output. Forcing the release
+Sync task (`release --rerun`) restored it; all four archives then passed CRC checks.
+The runner now rejects incomplete archives before service startup. A controlled
+truncated-archive check verified the actual guard's failure and rebuild guidance.
+The root build also recorded one embedded MariaDB startup error (`business_test`
+not found); the isolated repeat completed all required build/coverage checks.
+CI's independent JVM build passed on `a5d0abc`.
+
+CodeQL identified a polynomial trailing-digit regex in the new test-only dialog
+helper. It was replaced by a linear scan bounded to a signed-long digit count;
+server dialog interaction reruns and the next code-scanning run verify the change.
+
+Scheduled groups: `20261022T001429Z-2980005/run-{1,2}` passed 1 case each, zero
+failures/errors/skips, in 63.71s and 68.01s. This is real scheduled Business API
+publication, including offline role changes, archival and manual-source isolation.
+The preceding new-test attempt failed during fixture generation because its name
+prefix exceeded the helper's five-character limit; that fixture error was corrected.
+
+Controlled group fault: disabling only `reconciliation.enabled` in the disposable
+server's source configuration caused the real test to time out after 15 seconds
+waiting for its first proprietor membership (78 observations, membership empty).
+The fault wrapper restored the original config in `finally`. Final consecutive
+clean runs are required after restoration; this intentional failure is not retried
+or counted as a passing acceptance result.

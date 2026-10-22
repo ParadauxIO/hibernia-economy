@@ -389,3 +389,19 @@ bash ops/integration/run.sh -- --tests '*FindMenuE2ETest' --tests '*FindCommandT
 
 These are Java protocol tests on the harness's pinned Paper 1.21.11 build. They do
 not render screenshots or simulate a Bedrock/Geyser client.
+
+### Scheduled Explorer group profile
+
+`python3 ops/integration/acceptance.py --profile groups` runs two clean stacks
+with TreasuryAPI's real reconciliation interval set to one second. The test drives
+Business offers, role permissions and disband through player commands, then waits
+for the production scheduler to publish the expected Explorer membership. It checks
+fresh publication for offline staff, revocation after permission removal/archival,
+manual-grant preservation and isolation from an unavailable optional Realty source.
+SQL configures operator-owned group bindings and observes the results; it does not
+invoke reconciliation or synthesize membership. This does not certify Realty or
+browser authorization rendering. The test is explicitly gated outside this profile.
+
+The runner validates the four staged plugin ZIP archives before starting services.
+If a release artifact is incomplete, rebuild it with `sh ./gradlew release --rerun`.
+Avoid running a separate root build while the live runner assembles its server.

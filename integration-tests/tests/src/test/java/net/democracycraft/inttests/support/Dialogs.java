@@ -55,9 +55,11 @@ public final class Dialogs {
 
     private static long gameTime() {
         String reply = RconClient.send("time query gametime").trim();
-        var match = java.util.regex.Pattern.compile("(\\d+)$").matcher(reply);
-        if (!match.find()) throw new IllegalStateException("Cannot read server tick: " + reply);
-        return Long.parseLong(match.group(1));
+        int start = reply.length();
+        while (start > 0 && reply.charAt(start - 1) >= '0' && reply.charAt(start - 1) <= '9') start--;
+        if (start == reply.length() || reply.length() - start > 19)
+            throw new IllegalStateException("Cannot read server tick: " + reply);
+        return Long.parseLong(reply.substring(start));
     }
 
     public static String title(NbtMap dialog) { return text(dialog.get("title")); }
