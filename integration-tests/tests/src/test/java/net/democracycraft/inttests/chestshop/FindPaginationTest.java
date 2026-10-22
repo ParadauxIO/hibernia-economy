@@ -8,6 +8,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
+import org.geysermc.mcprotocollib.protocol.data.game.inventory.ClickItemAction;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundOpenScreenPacket;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FindPaginationTest {
@@ -25,11 +28,11 @@ class FindPaginationTest {
             // on a fast full-suite server; keep this fixture operator-enabled.
             RconClient.send("op " + owner.getUsername());
             try {
-                for (int i = 0; i < 9; i++) {
+                for (int i = 0; i < 47; i++) {
                     ChestShopFixture shop = ChestShopFixture.create();
                     shops.add(shop);
                     shop.setupSellShop(owner.getUsername(), 1, 10 + i, "amethyst_shard");
-                    if (i == 8) {
+                    if (i == 46) {
                         var p = shop.chestPos();
                         RconClient.send("item replace block " + p.x() + " " + p.y() + " " + p.z() + " container.0 with minecraft:air");
                     }
@@ -41,17 +44,16 @@ class FindPaginationTest {
                 NbtMap sortedMain = Dialogs.await(owner,
                         () -> Dialogs.click(owner, sorting, "Save", Map.of("dir_BUY_PRICE", "desc", "pri_BUY_PRICE", 80f)),
                         d -> Dialogs.title(d).contains("Find Shops"));
-                NbtMap first = search(owner, sortedMain);
-                assertThat(Dialogs.title(first)).contains("9 found (page 1/2)");
-                assertPrices(first, 18, 17, 16, 15, 14, 13, 12);
-                NbtMap second = Dialogs.await(owner,
-                        () -> Dialogs.click(owner, first, "Next page ►", Map.of()), d -> Dialogs.title(d).contains("page 2/2"));
-                assertPrices(second, 11, 10);
-                assertThat(Dialogs.buttons(second).stream().map(b -> Dialogs.text(b.get("label"))))
-                        .doesNotContain("Next page ►");
-                NbtMap back = Dialogs.await(owner,
-                        () -> Dialogs.click(owner, second, "◄ Previous page", Map.of()), d -> Dialogs.title(d).contains("page 1/2"));
-                assertPrices(back, 18, 17, 16, 15, 14, 13, 12);
+                var first = search(owner, sortedMain);
+                assertThat(Menus.summary(owner)).contains("47 shops", "Page 1/2");
+                assertPrices(owner, IntStream.rangeClosed(12, 56).map(i -> 68 - i).toArray());
+                var second = Menus.click(owner, first, 50, ClickItemAction.LEFT_CLICK);
+                assertThat(Menus.summary(owner)).contains("Page 2/2");
+                assertPrices(owner, 11, 10);
+                assertThat(Menus.slot(owner, 50).get("material").getAsString()).isNotEqualTo("PAPER");
+                Menus.click(owner, second, 48, ClickItemAction.LEFT_CLICK);
+                assertThat(Menus.summary(owner)).contains("Page 1/2");
+                assertPrices(owner, IntStream.rangeClosed(12, 56).map(i -> 68 - i).toArray());
 
                 NbtMap reopened = Dialogs.await(owner, () -> owner.chatCommand("/find amethyst_shard"), d -> true);
                 NbtMap filters = Dialogs.await(owner,
@@ -60,19 +62,19 @@ class FindPaginationTest {
                         () -> Dialogs.click(owner, filters, "Save", Map.of("type_buy", "true", "type_sell", "false",
                                 "type_both", "false", "show_empty", "false", "show_full", "true")),
                         d -> Dialogs.title(d).contains("Find Shops"));
-                NbtMap filtered = search(owner, filteredMain);
-                assertThat(Dialogs.title(filtered)).contains("8 found (page 1/2)");
-                assertPrices(filtered, 10, 11, 12, 13, 14, 15, 16);
-                NbtMap filteredLast = Dialogs.await(owner,
-                        () -> Dialogs.click(owner, filtered, "Next page ►", Map.of()), d -> Dialogs.title(d).contains("page 2/2"));
-                assertPrices(filteredLast, 17);
+                var filtered = search(owner, filteredMain);
+                assertThat(Menus.summary(owner)).contains("46 shops", "Page 1/2");
+                assertPrices(owner, IntStream.rangeClosed(10, 54).toArray());
+                Menus.click(owner, filtered, 50, ClickItemAction.LEFT_CLICK);
+                assertThat(Menus.summary(owner)).contains("Page 2/2");
+                assertPrices(owner, 55);
                 assertThat(Inv.playerCount(owner.getUsername(), "AMETHYST_SHARD")).isZero();
                 assertThat(Ledger.personalBalance(owner.getUuid()).orElseThrow()).isEqualByComparingTo("10000");
             } finally {
                 try {
                     for (ChestShopFixture shop : shops) {
                         // Fixture teardown only: synthetic break deactivates the registry,
-                        // without sending nine more player commands into vanilla spam limits.
+                        // without sending 47 more player commands into vanilla spam limits.
                         var p = shop.signPos();
                         try {
                             RconClient.send("diag break " + owner.getUsername() + " world " + p.x() + " " + p.y() + " " + p.z());
@@ -85,16 +87,14 @@ class FindPaginationTest {
         }
     }
 
-    private static NbtMap search(MockPlayer player, NbtMap main) {
-        return Dialogs.await(player, () -> Dialogs.click(player, main, "Search", Map.of("fuzzy", "false")),
-                d -> Dialogs.title(d).contains("found (page"));
+    private static ClientboundOpenScreenPacket search(MockPlayer player, NbtMap main) {
+        return Menus.open(player, () -> Dialogs.click(player, main, "Search", Map.of("fuzzy", "false")));
     }
 
-    private static void assertPrices(NbtMap dialog, int... prices) {
-        var labels = Dialogs.buttons(dialog).stream().map(b -> Dialogs.text(b.get("label")))
-                .filter(label -> label.contains("Buy $")).toList();
+    private static void assertPrices(MockPlayer player, int... prices) {
+        var labels = Menus.offers(player);
         assertThat(labels).hasSize(prices.length);
-        for (int i = 0; i < prices.length; i++) assertThat(labels.get(i)).contains("Buy $" + prices[i] + ".00");
+        for (int i = 0; i < prices.length; i++) assertThat(labels.get(i)).contains("Buy: $" + prices[i] + ".00");
     }
 
     private static void visibility(MockPlayer owner, ChestShopFixture shop, boolean visible) {

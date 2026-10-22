@@ -16,7 +16,7 @@ inspected and executed; annotation presence does not prove registration.
 
 | Behavior / source | Executable evidence | Fault it must detect | Execution |
 |---|---|---|---|
-| Treasury `PayAccountCommand`: player/government/business/numeric targets, aliases and greedy memo | `PayAccountCommandTest.typedPaymentDisambiguatesIdenticallyNamedAccounts` | Wrong same-named destination; missing/duplicate debit or credit; dropped memo; unauthorized source | Passed in both clean core runs |
+| Treasury `PayAccountCommand`: player/government/business/numeric targets, aliases and greedy memo | `PayAccountCommandTest.typedPaymentSelectsRequestedAccount` | Wrong typed destination; missing/duplicate debit or credit; dropped memo; unauthorized source | Passed in both clean core runs |
 | Typed payment to archived government by name or numeric ID | `ArchivedTypedPaymentTest` | Archived destination must not receive funds | **Known defect reproduced:** both forms pay successfully and mutate both balances; active failing regressions retained |
 | Typed payment invalid amount, self-target, missing target/type, insufficient funds | `PayAccountCommandTest.rejectionDoesNotWriteMoneyOrPostings` | Rejection with balance mutation or extra postings | Passed in both clean core runs |
 | `treasury.pay` permission | `PayAccountCommandTest.explicitPermissionDenialLeavesBothAccountsUnchanged` | Permission gate bypass | Passed in both clean core runs |

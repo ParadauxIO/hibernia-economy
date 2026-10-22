@@ -1048,7 +1048,7 @@
     {
       "kind": "event",
       "source": "treasury/src/main/java/io/paradaux/treasury/events/PlayerLoginListener.java",
-      "line": 54,
+      "line": 55,
       "trigger": "@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)",
       "handler": "onJoin"
     },
@@ -2380,13 +2380,13 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/ReloadCommand.java",
-      "line": 40,
+      "line": 43,
       "value": "\"business.admin.reload\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/ReloadCommand.java",
-      "line": 39,
+      "line": 42,
       "roots": [
         "db",
         "democracybusiness",
@@ -3392,20 +3392,6 @@
       "source": "chestshop/src/main/java/io/paradaux/chestshop/commands/resolvers/FindItemResolver.java",
       "line": 32,
       "trigger": "runTaskTimerAsynchronously("
-    },
-    {
-      "kind": "event",
-      "source": "chestshop/src/main/java/io/paradaux/chestshop/dialogs/FindResultsMenu.java",
-      "line": 106,
-      "trigger": "@EventHandler",
-      "handler": "click"
-    },
-    {
-      "kind": "event",
-      "source": "chestshop/src/main/java/io/paradaux/chestshop/dialogs/FindResultsMenu.java",
-      "line": 149,
-      "trigger": "@EventHandler",
-      "handler": "drag"
     },
     {
       "kind": "event",

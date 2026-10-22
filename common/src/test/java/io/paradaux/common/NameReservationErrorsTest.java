@@ -7,6 +7,15 @@ import org.junit.jupiter.api.Test;
 
 class NameReservationErrorsTest {
     @Test
+    void fallbackIsOnlyAllowedForReservedNames() {
+        assertTrue(NameReservationErrors.isConflict(
+                new RuntimeException(new SQLException("GLOBAL_NAME_CONFLICT:", "45000", 1644))));
+        assertFalse(NameReservationErrors.isConflict(new SQLException("GLOBAL_NAME_INVALID:", "45000", 1644)));
+        assertFalse(NameReservationErrors.isConflict(new SQLException("connection failed", "08001")));
+        assertFalse(NameReservationErrors.isConflict(new RuntimeException("GLOBAL_NAME_CONFLICT:")));
+    }
+
+    @Test
     void recognizesOnlyTheDatabaseSignalsAndDoesNotExposeSql() {
         var cause = new SQLException("GLOBAL_NAME_CONFLICT: private SQL and names", "45000", 1644);
         String message =

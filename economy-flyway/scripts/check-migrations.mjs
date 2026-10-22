@@ -78,6 +78,16 @@ const pendingCorrections = new Map([
   ['V18__consolidate_account_access.sql', 'dbab43188ee05aad197a5757570dbc7ebdfce4ea:ffa37fd6eae5ef75fd7649b575a4944769e9d63c'],
 ]);
 
+// Three independently green branches merged with V38 before deployment. The
+// owner confirmed only the disposable clone was deployed (2026-10-22). Permit
+// ONLY these byte-identical renames from this exact invalid combined tree.
+const collisionBase = base.size > 0 &&
+  git('-C', root, 'rev-parse', `${baseRef}:${migrationDir}`) === '338af2234f3233d335f950ca31641550354db2df';
+const collisionRenames = new Map([
+  ['V38__firm_employment_history.sql', ['V39__firm_employment_history.sql', '827c49a4013635d951a7fb5629435d8ae16b7817']],
+  ['V38__global_name_namespace.sql', ['V40__global_name_namespace.sql', '10353f218560a91888356b24e207376301530185']],
+]);
+
 // ── Head side: the working tree ──────────────────────────────────────────────
 const absDir = join(root, migrationDir);
 const head = existsSync(absDir) ? readdirSync(absDir).sort() : [];
@@ -89,6 +99,8 @@ for (const [name, blob] of base) {
   if (!VERSIONED.test(name)) continue;
   const where = join(migrationDir, name);
   if (!headBlobs.has(name)) {
+    const correction = collisionRenames.get(name);
+    if (collisionBase && correction && blob === correction[1] && headBlobs.get(correction[0]) === blob) continue;
     const renamedTo = [...headBlobs].find(([, b]) => b === blob)?.[0];
     fail(where, renamedTo
       ? `renamed to ${renamedTo}. Flyway tracks applied migrations by version and description; keep the original name.`
@@ -147,8 +159,10 @@ if (errors.length) {
 }
 if (upgradeTarget) {
   if (preCutover) console.log('15');
+  else if (collisionBase) console.log('37');
   process.exit(0);
 }
+if (collisionBase) console.log('Pinned undeployed V38 collision: upgrade from valid V37; byte-identical V39/V40 renames only.');
 if (preCutover) {
   console.log('Pre-cutover release baseline: V15 applied; only the pinned V17/V18 corrections are permitted. See wiki/release-runbook.md.');
 }

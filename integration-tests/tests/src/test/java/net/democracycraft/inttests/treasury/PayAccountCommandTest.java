@@ -17,25 +17,27 @@ class PayAccountCommandTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"player", "government", "gov", "business", "firm", "account", "id"})
-    void typedPaymentDisambiguatesIdenticallyNamedAccounts(String type) {
+    void typedPaymentSelectsRequestedAccount(String type) {
         String name = Usernames.fresh("Targ");
-        // New government accounts cannot reuse an already-known player's name.
-        // A government created first can later collide with a player's first login.
+        // PAR-501 forbids cross-kind name collisions. Keep all destination kinds
+        // present and verify the typed route changes only its selected ledger.
+        String governmentName = Usernames.fresh("Tgov");
+        String firmName = Usernames.fresh("Tfirm");
         try (MockPlayer sender = MockPlayer.connectLocal(Usernames.fresh("Typed"))) {
             Ops.run(sender.getUsername(), () -> {
-                sender.chatCommand("/gov account create " + name);
+                sender.chatCommand("/gov account create " + governmentName);
                 sender.awaitMessageContaining("Created", TIMEOUT);
             });
-            Ledger.waitForGovernmentAccount(name, TIMEOUT);
+            Ledger.waitForGovernmentAccount(governmentName, TIMEOUT);
             try (MockPlayer target = MockPlayer.connectLocal(name)) {
                 Ledger.waitForPersonalBalance(sender.getUuid(), TIMEOUT);
                 Ledger.waitForPersonalBalance(target.getUuid(), TIMEOUT);
                 Ops.run(name, () -> {
-                    target.chatCommand("/business create " + name);
+                    target.chatCommand("/business create " + firmName);
                     target.awaitMessageContaining("Successfully created", TIMEOUT);
                 });
-                int government = Ledger.waitForGovernmentAccount(name, TIMEOUT);
-                int firm = BusinessLedger.waitForFirm(name, TIMEOUT);
+                int government = Ledger.waitForGovernmentAccount(governmentName, TIMEOUT);
+                int firm = BusinessLedger.waitForFirm(firmName, TIMEOUT);
                 int business = BusinessLedger.firmDefaultAccountId(firm).orElseThrow();
                 int personal = Ledger.personalAccountId(target.getUuid()).orElseThrow();
                 int source = Ledger.personalAccountId(sender.getUuid()).orElseThrow();
@@ -49,7 +51,12 @@ class PayAccountCommandTest {
                 BigDecimal[] before = java.util.Arrays.stream(accounts)
                         .mapToObj(id -> Ledger.accountBalanceById(id).orElseThrow()).toArray(BigDecimal[]::new);
                 long checkpoint = Ledger.transactionCheckpoint();
-                String token = type.equals("account") || type.equals("id") ? "" + destination : name;
+                String token = switch (type) {
+                    case "account", "id" -> "" + destination;
+                    case "government", "gov" -> governmentName;
+                    case "business", "firm" -> firmName;
+                    default -> name;
+                };
                 String memo = "invoice with several words";
                 sender.chatCommand("/pay-account " + type + " " + token + " 12.34 " + memo);
                 sender.awaitMessageContaining("Paid", TIMEOUT);

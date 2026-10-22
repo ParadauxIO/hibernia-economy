@@ -1906,3 +1906,39 @@ all five list aliases, invalid Discord rejection, duplicate-name rejection and
 ordinary-item classification. Nexo remains a stub control, not licensed acceptance.
 No live retries or weakened assertions were used. Full updated-core runs remain
 pending. Source inventory now includes 589 entries after upstream group changes.
+
+### Develop reconciliation (2026-10-22)
+
+Develop advanced through `662724d` during verification. The full core attempt
+`20261021T234955Z-1876880` was deliberately stopped after 175 passes to reconcile
+the new Curator finder; the subsequent connection failures were shutdown fallout,
+not an accepted full run or newly classified product defects. Finder acceptance
+now uses actual inventory click packets and server observations, with 47 fixtures
+to cross the new 45-result page boundary.
+
+Three upstream PRs independently added V38 migrations. The owner confirmed that
+only the non-production clone had been deployed and authorized repair if needed.
+Read-only inspection of its Flyway history found successful V38 taxation index
+(`-99881344`), with no employment/global-namespace migration. Taxation therefore
+retains V38; byte-identical employment/global-namespace SQL becomes V39/V40.
+No clone database mutation was needed. The guard pins the exact invalid combined
+migration tree and exact renamed blobs; all 17 guard tests pass, including rejection
+of altered SQL, deletion and a different base. Upgrade rehearsal of the invalid
+combined tree starts from its valid V37 prefix; ordinary bases retain full history.
+
+Reconciliation discovery run `20261022T000123Z-2495059/run-1`: 21 cases,
+16 passed, 5 failed, zero skipped/errors. Two failures were the new generated
+corporate-account name collision after release; two preview fixtures assumed
+right-click preview despite the new default compass action; one owner fixture
+attempted to move a reserved player name to a different identity. The latter
+fixtures now explicitly configure preview or rename the account through the
+admin API before ownership transfer, and retain a rejection assertion for the
+reserved player name. Typed payment fixtures now use distinct names, as required
+by PAR-501, while retaining exact selected/unselected balance and posting checks.
+
+The generated corporate-account collision is repaired with one bounded attempt
+using the new firm ID suffix; original financial identities retain their names.
+Only a recognized database name-conflict signal allows that fallback. Both
+migration upgrade rehearsals passed Flyway validation and money invariants:
+`origin/develop` (pinned invalid tree's V37 prefix) and `64282ac` (the clone's
+actual taxation-only V38 baseline). Full reconciled verification remains pending.

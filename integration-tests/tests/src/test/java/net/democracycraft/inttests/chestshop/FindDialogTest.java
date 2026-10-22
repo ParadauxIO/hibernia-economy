@@ -3,6 +3,7 @@ package net.democracycraft.inttests.chestshop;
 import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.*;
 import org.cloudburstmc.nbt.NbtMap;
+import org.geysermc.mcprotocollib.protocol.data.game.inventory.ClickItemAction;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import java.time.Duration;
@@ -10,6 +11,14 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FindDialogTest {
+    @org.junit.jupiter.api.BeforeEach
+    void enablePreviewAction() {
+        assertThat(RconClient.send("diag menusetting shop-icon-right-click-command ")).contains("updated");
+    }
+    @org.junit.jupiter.api.AfterEach
+    void restoreNavigationAction() {
+        assertThat(RconClient.send("diag menusetting shop-icon-right-click-command compass <x> <y> <z>")).contains("updated");
+    }
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @ParameterizedTest
@@ -27,35 +36,26 @@ class FindDialogTest {
             assertThat(Dialogs.title(main)).contains("Find Shops", "prismarine_shard");
             assertThat(Dialogs.buttons(main).stream().map(b -> Dialogs.text(b.get("label"))))
                     .contains("Search", "Buy — cheapest", "Filters…", "Sorting…");
-            NbtMap results = Dialogs.await(owner,
-                    () -> Dialogs.click(owner, main, "Buy — cheapest", Map.of("fuzzy", "false")),
-                    d -> Dialogs.title(d).contains("found (page"));
-            assertThat(Dialogs.title(results)).contains("1 found (page 1/1)");
-            String labels = Dialogs.buttons(results).stream().map(b -> Dialogs.text(b.get("label")))
-                    .reduce("", (a, b) -> a + "\n" + b);
-
-            assertThat(labels).contains(owner.getUsername(), "Buy $37.00", "36 stock", "qty 3")
+            var results = Menus.open(owner,
+                    () -> Dialogs.click(owner, main, "Buy — cheapest", Map.of("fuzzy", "false")));
+            assertThat(Menus.summary(owner)).contains("1 shops", "Page 1/1");
+            assertThat(Menus.offers(owner)).hasSize(1);
+            assertThat(Menus.offers(owner).getFirst()).contains(owner.getUsername(), "Buy: $37.00", "Stock: 36", "Quantity: 3")
                     .doesNotContain("91.00");
-            NbtMap inspection = Dialogs.await(owner,
-                    () -> Dialogs.click(owner, results, "Inspect item", Map.of()),
-                    d -> Dialogs.title(d).contains("Item preview"));
-            assertThat(inspection.toString()).contains("minecraft:prismarine_shard", "37.00");
-            NbtMap back = Dialogs.await(owner,
-                    () -> Dialogs.click(owner, inspection, "Back", Map.of()),
-                    d -> Dialogs.title(d).contains("found (page"));
-            assertThat(Dialogs.title(back)).isEqualTo(Dialogs.title(results));
+            var inspection = Menus.click(owner, results, 0, ClickItemAction.RIGHT_CLICK);
+            assertThat(Menus.state(owner).get("title").getAsString()).isEqualTo("Item preview");
+            assertThat(Menus.slot(owner, 13).get("material").getAsString()).isEqualTo("PRISMARINE_SHARD");
+            Menus.click(owner, inspection, 18, ClickItemAction.LEFT_CLICK);
+            assertThat(Menus.summary(owner)).contains("1 shops", "Page 1/1");
 
             hidden.positionClicker(owner, owner.getUsername());
             owner.chatCommand("/cs toggle visibility true");
             owner.awaitMessageContaining("now shown", TIMEOUT);
             Barrier.settle();
             NbtMap reopened = Dialogs.await(owner, () -> owner.chatCommand("/" + root + " prismarine_shard"), d -> true);
-            NbtMap both = Dialogs.await(owner,
-                    () -> Dialogs.click(owner, reopened, "Buy — cheapest", Map.of("fuzzy", "false")),
-                    d -> Dialogs.title(d).contains("found (page"));
-            assertThat(Dialogs.title(both)).contains("2 found (page 1/1)");
-            var offers = Dialogs.buttons(both).stream().map(b -> Dialogs.text(b.get("label")))
-                    .filter(label -> label.contains("Buy $")).toList();
+            Menus.open(owner, () -> Dialogs.click(owner, reopened, "Buy — cheapest", Map.of("fuzzy", "false")));
+            assertThat(Menus.summary(owner)).contains("2 shops", "Page 1/1");
+            var offers = Menus.offers(owner);
             assertThat(offers).hasSize(2);
             assertThat(offers.get(0)).contains("37.00");
             assertThat(offers.get(1)).contains("91.00");

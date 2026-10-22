@@ -80,6 +80,11 @@ class PersonalOwnershipKeyTest {
         }
     }
     private static void move(String service, int account, UUID owner) {
+        // PAR-501 keeps the previous player's name reserved to that player.
+        // Rename explicitly before transferring the financial identity.
+        var renamed = RestApi.call("PATCH", "/admin/accounts/" + account + "/display-name", service,
+                "{\"displayName\":\"" + Usernames.fresh("TransferAlias") + "\"}");
+        assertThat(renamed.status()).as(renamed.body()).isEqualTo(200);
         var response = RestApi.call("PATCH", "/admin/accounts/" + account + "/owner", service, "{\"owner\":\"" + owner + "\"}");
         assertThat(response.status()).as("%s", response.body()).isEqualTo(200);
         assertThat(response.json().path("accountId").asInt()).isEqualTo(account);

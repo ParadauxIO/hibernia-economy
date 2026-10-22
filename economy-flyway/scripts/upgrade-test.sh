@@ -32,7 +32,7 @@ MIGRATIONS="economy-flyway/src/main/resources/db/migration"
 BASE_TARGET="$(node "$ROOT/economy-flyway/scripts/check-migrations.mjs" "$BASE_REF" --upgrade-target)"
 BASE_TARGET_ARGS=()
 if [ -n "$BASE_TARGET" ]; then
-  echo "==> Pre-cutover release baseline: migrate base through V$BASE_TARGET"
+  echo "==> Pinned historical baseline: migrate base through V$BASE_TARGET"
   BASE_TARGET_ARGS=("-Dflyway.target=$BASE_TARGET")
 fi
 
@@ -57,6 +57,16 @@ sql -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\`;"
 
 if git -C "$ROOT" cat-file -e "$BASE_REF:$MIGRATIONS" 2>/dev/null; then
   git -C "$ROOT" archive "$BASE_REF" "$MIGRATIONS" | tar -x -C "$BASE_DIR"
+  # Flyway resolves all filenames before applying target, so duplicate V38s
+  # must be omitted even when target is V37. The guard alone selects the pinned
+  # historical target; normal bases retain every migration.
+  if [ -n "$BASE_TARGET" ]; then
+    for migration in "$BASE_DIR/$MIGRATIONS"/V*__*.sql; do
+      version="${migration##*/V}"
+      version="${version%%__*}"
+      if [ "$version" -gt "$BASE_TARGET" ]; then rm -- "$migration"; fi
+    done
+  fi
   echo "==> Migrating with $BASE_REF's migrations ($(find "$BASE_DIR/$MIGRATIONS" -name "*.sql" | wc -l) files)"
   flyway flywayMigrate -PflywayLocations="filesystem:$BASE_DIR/$MIGRATIONS" "${BASE_TARGET_ARGS[@]}"
 else

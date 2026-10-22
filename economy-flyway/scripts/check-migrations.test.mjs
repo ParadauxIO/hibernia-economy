@@ -118,3 +118,39 @@ test('duplicate versions still fail', (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /duplicate version V18/);
 });
+
+function collisionFixture(t, { differentBase = false } = {}) {
+  const f = fixture(t, { currentBase: true });
+  const renames = [
+    ['V38__firm_employment_history.sql', 'V39__firm_employment_history.sql'],
+    ['V38__global_name_namespace.sql', 'V40__global_name_namespace.sql'],
+  ];
+  for (const [oldName, newName] of renames) renameSync(join(f.migrations, newName), join(f.migrations, oldName));
+  if (differentBase) appendFileSync(join(f.migrations, 'V38__taxation_read_index.sql'), '\n-- different base\n');
+  execFileSync('git', ['-C', f.migrations, 'add', '.']);
+  execFileSync('git', ['-C', f.migrations, '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Combined V38 collision']);
+  for (const [oldName, newName] of renames) renameSync(join(f.migrations, oldName), join(f.migrations, newName));
+  return f;
+}
+
+test('exact undeployed V38 collision permits only unchanged renames and upgrades from V37', t => {
+  const f = collisionFixture(t);
+  const result = f.run('--upgrade-target');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '37\n');
+});
+for (const name of ['V39__firm_employment_history.sql', 'V40__global_name_namespace.sql', 'V38__taxation_read_index.sql']) {
+  test(`V38 collision correction rejects SQL changes to ${name}`, t => {
+    const f = collisionFixture(t);
+    appendFileSync(join(f.migrations, name), '\n-- changed SQL\n');
+    assert.equal(f.run().status, 1);
+  });
+}
+test('V38 collision correction rejects any different base tree', t => {
+  assert.equal(collisionFixture(t, { differentBase: true }).run().status, 1);
+});
+test('V38 collision correction rejects deleting a renamed migration', t => {
+  const f = collisionFixture(t);
+  rmSync(join(f.migrations, 'V39__firm_employment_history.sql'));
+  assert.equal(f.run().status, 1);
+});

@@ -146,7 +146,7 @@ class GlobalNameNamespaceIT extends IntegrationTestBase {
     @Test
     void preflightRejectsExistingCollisionsWithoutRewritingSourceRows() throws Exception {
         String source;
-        try (var in = getClass().getClassLoader().getResourceAsStream("db/migration/V38__global_name_namespace.sql")) {
+        try (var in = getClass().getClassLoader().getResourceAsStream("db/migration/V40__global_name_namespace.sql")) {
             source = new String(
                     java.util.Objects.requireNonNull(in).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }

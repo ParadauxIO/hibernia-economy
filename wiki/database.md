@@ -38,7 +38,7 @@ older application versions assume names identify a single row even across archiv
 
 ## Shared name namespace (PAR-501)
 
-V38 enforces cross-kind reservations through database triggers. See
+V40 enforces cross-kind reservations through database triggers. See
 [comparison, projection, lifecycle and rollout rules](name-namespace.md) before
 applying it to an existing dataset.
 
@@ -54,7 +54,7 @@ projection decisions rather than hide them behind implicit exemptions.
 Each pair includes IDs, original spelling, owner UUIDs and lifecycle flags. The
 `comparison_basis` column distinguishes existing `utf8mb4_unicode_ci` equality
 from additional candidates that match only after trimming surrounding ASCII
-spaces, as required by V38. Existing whitespace cleanup still requires review. Punctuation
+spaces, as required by V40. Existing whitespace cleanup still requires review. Punctuation
 is significant; blocked-term filtering is not used as a uniqueness rule. Null
 account display names are omitted because they do not identify a name claim.
 
@@ -210,3 +210,14 @@ The public REST shop DTO exposes it as `currentSpace` (including item-detail
 shop offers), and the explorer as `current_space`. Both use `stock_at` as the
 observation timestamp. PAR-17 reuses V25 and the existing MarketApi capture path;
 no duplicate `current_space` database column or new migration is needed.
+
+### V38 collision reconciliation (2026-10-22)
+
+Three independently merged branches used V38. Taxation retains V38; employment
+history is V39 and the global namespace is V40, with unchanged SQL. The project
+owner confirmed only the non-production clone had been deployed. Its history
+contained successful `V38__taxation_read_index.sql`; it needs no history rewrite.
+Do not apply a generic Flyway repair to any other database: inspect its history
+first. The migration guard permits only the exact two renames from the pinned
+invalid combined tree. Upgrade tests for that tree use its valid V37 prefix;
+normal migration history remains immutable.
