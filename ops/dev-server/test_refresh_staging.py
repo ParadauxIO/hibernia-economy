@@ -39,6 +39,17 @@ class Guards(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'SERVICE token'):
             refresh.service_identity_sql(token, secret)
 
+    def test_service_identity_uses_infisical_and_rejects_unsynchronized_cluster(self):
+        token, signing = service_token()
+        cluster = subprocess.CompletedProcess([], 0, json.dumps({
+            'data': {'TREASURY_ADMIN_TOKEN': base64.b64encode(token.encode()).decode()}}))
+        with patch.dict(os.environ, {'TREASURY_API_JWT': signing, 'TREASURY_ADMIN_TOKEN': token}), \
+                patch.object(refresh, 'run', return_value=cluster):
+            self.assertIn('INSERT INTO api_keys', refresh.load_service_identity(Path('/unused'), 'test'))
+            with patch.dict(os.environ, {'TREASURY_ADMIN_TOKEN': 'different-token'}):
+                with self.assertRaisesRegex(ValueError, 'differs from Infisical'):
+                    refresh.load_service_identity(Path('/unused'), 'test')
+
     def test_source_options_are_accepted_by_dump_client(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

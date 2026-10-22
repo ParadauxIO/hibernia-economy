@@ -290,9 +290,9 @@ async function migrate(sha) {
   try {
     if (!(await waitForLine(db, [/Sandbox database is up/], 5 * 60_000))) throw new Error('sandbox database did not start');
     const schema = 's80037_economy';
-    // start-local.sh keeps the sandbox password here; through the environment
-    // rather than -P so it stays out of `ps`.
-    const password = fs.readFileSync(path.join(SERVER_DIR, '.sandbox', 'secrets', 'db-sandbox'), 'utf8').trim();
+    // Supplied by the Infisical launcher; never read a local credential file.
+    const password = process.env.SANDBOX_DB_PASSWORD;
+    if (!password) throw new Error('Missing SANDBOX_DB_PASSWORD; launch through infisical_secrets.py');
     const result = await run('sh', [
       './gradlew', '--no-daemon', '--quiet', ':economy-flyway:flywayMigrate',
       `-PflywayUrl=jdbc:mysql://127.0.0.1:${DB_PORT}/${schema}`, `-PflywaySchema=${schema}`,
@@ -460,6 +460,9 @@ function sendControl(args) {
 // ---------------------------------------------------------------- main
 
 async function main() {
+  if (process.env.STAGING_SECRET_SCOPE !== 'staging' || !process.env.SANDBOX_DB_PASSWORD) {
+    throw new Error('Launch the agent through infisical_secrets.py staging');
+  }
   fs.mkdirSync(HISTORY_DIR, { recursive: true });
   loadState();
   listenForControl();
@@ -492,4 +495,14 @@ async function main() {
 }
 
 if (process.argv[2] === 'ctl') sendControl(process.argv.slice(3));
-else main();
+else if (process.env.STAGING_SECRET_SCOPE !== 'staging') {
+  // Replace this process so existing systemd units retain their signal/PID semantics.
+  // Node 22.15+ supports execve; older runtimes must use the explicit unit launcher.
+  if (typeof process.execve !== 'function') {
+    throw new Error('Launch through infisical_secrets.py staging or use Node 22.15+');
+  }
+  process.execve('/usr/bin/python3', [
+    '/usr/bin/python3', path.join(STATE_DIR, 'infisical_secrets.py'), 'staging', '--',
+    process.execPath, ...process.argv.slice(1),
+  ], process.env);
+} else main();

@@ -1,6 +1,8 @@
 # systemd unit for the DemocracyCraft dev server and its deploy agent
 # (agent.mjs next to this file). Install as root:
 #
+#   # Configure Infisical first; see ops/dev-server/infisical.md.
+#   install -D -m 0644 ops/dev-server/infisical_secrets.py /home/paseo/democracycraft-clone/dev-deploy/infisical_secrets.py
 #   install -D -m 0644 ops/dev-server/agent.mjs /home/paseo/democracycraft-clone/dev-deploy/agent.mjs
 #   install -m 0644 ops/dev-server/hibernia-dev-server.service /etc/systemd/system/
 #   systemctl daemon-reload && systemctl enable --now hibernia-dev-server
@@ -19,7 +21,8 @@ Type=simple
 User=paseo
 Group=paseo
 WorkingDirectory=/home/paseo/democracycraft-clone
-ExecStart=/usr/bin/node /home/paseo/democracycraft-clone/dev-deploy/agent.mjs
+ExecStart=/usr/bin/python3 /home/paseo/democracycraft-clone/dev-deploy/infisical_secrets.py staging -- /usr/bin/node /home/paseo/democracycraft-clone/dev-deploy/agent.mjs
+Environment=PATH=/home/paseo/.npm-global/bin:/home/paseo/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=SERVER_DIR=/home/paseo/democracycraft-clone
 Environment=REPO=ParadauxIO/hibernia-economy
 Environment=POLL_SECONDS=60

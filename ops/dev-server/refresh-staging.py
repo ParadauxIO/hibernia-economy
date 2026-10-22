@@ -247,7 +247,9 @@ def load_service_identity(server, context):
     secret = json.loads(run(['kubectl', '--context', context, '-n', 'development', 'get',
                              'secret', 'economy-dev-server', '-o', 'json'], capture_output=True, text=True).stdout)
     token = base64.b64decode(secret['data']['TREASURY_ADMIN_TOKEN']).decode()
-    signing = (server / '.sandbox/secrets/treasury-api-jwt').read_text().strip()
+    signing = required_secret('TREASURY_API_JWT')
+    if token != required_secret('TREASURY_ADMIN_TOKEN'):
+        raise ValueError('Cluster service token differs from Infisical; wait for secret synchronization')
     return service_identity_sql(token, signing)
 
 
@@ -277,13 +279,20 @@ def migration_preflight(connection):
             raise ValueError(f"Migration preflight failed: {label}: {count}")
 
 
+def required_secret(name):
+    value = os.environ.get(name)
+    if not value:
+        raise ValueError(f"Missing {name}; run through infisical_secrets.py staging")
+    return value
+
+
 def restore(args, resources):
     manifest = validate_snapshot(args.snapshot)
     expected = "rollback" if args.rollback else "production"
     if manifest["kind"] != expected:
         raise ValueError(f"Expected a {expected} snapshot")
     server = args.server_dir.resolve()
-    password = (server / ".sandbox/secrets/db-sandbox").read_text().strip()
+    password = required_secret("SANDBOX_DB_PASSWORD")
     connection = cnf(resources, {"host": "127.0.0.1", "port": 33306,
         "user": "sandbox", "password": password, "protocol": "tcp", "skip-ssl": "1"})
     maintenance_check(server, args.kube_context, connection)
