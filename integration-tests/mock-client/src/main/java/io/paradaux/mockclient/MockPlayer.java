@@ -511,7 +511,7 @@ public final class MockPlayer implements AutoCloseable {
             throw new IllegalArgumentException(
                     "sign update requires exactly 4 lines, got " + lines.length);
         }
-        session.send(new ServerboundSignUpdatePacket(pos.toVector3i(), lines, frontText));
+        session.send(new ServerboundSignUpdatePacket(pos.toVector3i(), java.util.List.of(lines), frontText));
         LOG.debug("[{}] sign-update at {} frontText={} lines={}", username, pos, frontText, List.of(lines));
     }
 
@@ -626,8 +626,8 @@ public final class MockPlayer implements AutoCloseable {
      * this client sent before the call, and the client has received every packet the
      * server queued for it before handling them.
      *
-     * <p>Mechanism: a {@code ServerboundClientCommandPacket(STATS)} request, answered with
-     * a {@code ClientboundAwardStatsPacket}. Why that is a sound barrier on Paper 1.21.11:
+     * <p>Mechanism: a {@code ServerboundClientCommandPacket(REQUEST_STATS)} request, answered with
+     * a {@code ClientboundAwardStatsPacket}. Why that is a sound barrier on Paper 26.3:
      * <ul>
      *   <li>Netty decodes one connection's packets in order, and game packets that touch the
      *       world — {@code UseItemOn}, {@code PlayerAction} (dig/left-click), movement, sign
@@ -659,7 +659,7 @@ public final class MockPlayer implements AutoCloseable {
         synchronized (syncLock) {
             // Send under the lock so ticket order is wire order.
             ticket = ++syncRequested;
-            session.send(new ServerboundClientCommandPacket(ClientCommand.STATS));
+            session.send(new ServerboundClientCommandPacket(ClientCommand.REQUEST_STATS));
         }
         synchronized (syncLock) {
             while (syncAnswered < ticket) {
@@ -781,8 +781,9 @@ public final class MockPlayer implements AutoCloseable {
             // ServerboundAcceptTeleportationPacket arrives. MCProtocolLib's
             // default ClientListener does not auto-ack, so we do it here.
             if (p instanceof ClientboundPlayerPositionPacket pos) {
-                session.send(new ServerboundAcceptTeleportationPacket(pos.getId()));
                 Vector3d v = pos.getPosition();
+                session.send(new ServerboundAcceptTeleportationPacket(
+                        pos.getId(), v.getX(), v.getY(), v.getZ(), pos.getYRot(), pos.getXRot()));
                 currentPosition = new Position(v.getX(), v.getY(), v.getZ(), pos.getYRot(), pos.getXRot());
                 positionReceived.countDown();
                 // Mark the client as fully loaded once we have an initial

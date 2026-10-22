@@ -1,7 +1,7 @@
 name: Nexo
 version: 1.15.0-stub
 main: net.democracycraft.inttests.nexostub.NexoStubPlugin
-api-version: '1.21'
+api-version: '26.3'
 description: Test stand-in for the Nexo plugin — provides the com.nexomc.nexo API surface ChestShop integrates with, plus defined test items and RCON commands. NOT the real Nexo.
 commands:
   nexostock:

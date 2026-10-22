@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:26.3.build.206-stable")
 }
 
 // Builds "Nexo.jar" — a minimal stand-in for the Nexo plugin that provides just the

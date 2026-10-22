@@ -3,7 +3,7 @@ plugins {
     jacoco
     id("org.springframework.boot")
     id("io.spring.dependency-management")
-    id("io.paradaux.jvm-conventions") // Java 21 toolchain + UTF-8 / release=21 JavaCompile
+    id("io.paradaux.jvm-conventions") // Java 25 toolchain + UTF-8 / release=25 JavaCompile
 }
 
 // group + version are set centrally by the root allprojects block (single
