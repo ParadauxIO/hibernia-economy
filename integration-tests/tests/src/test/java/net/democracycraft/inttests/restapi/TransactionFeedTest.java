@@ -109,12 +109,46 @@ class TransactionFeedTest {
 
             long next = p1.json().path("nextCursor").asLong();
             assertThat(next).isEqualTo(txns.get(1));
+            // A new payment arrives after the client has saved page one's cursor.
+            long fourth = transfer(key.token(), toAcct, "4.00", "fp-between-pages");
+            waitForFeed(key.token(), key.accountId(), next, 2);
             Response p2 = RestApi.getTransactionFeed(key.token(), key.accountId(), next, 2);
             assertThat(p2.status()).isEqualTo(200);
-            assertThat(txnIds(p2.json().path("items"))).containsExactly(txns.get(2));
-            assertThat(p2.json().path("hasMore").asBoolean()).isFalse();
-            assertThat(p2.json().path("items").get(0).path("counterparty").path("accountId").asInt())
-                    .isEqualTo(toAcct);
+            assertThat(txnIds(p2.json().path("items"))).containsExactly(txns.get(2), fourth);
+            assertThat(p2.json().path("cursor").asLong()).isEqualTo(next);
+            assertThat(p2.json().path("nextCursor").asLong()).isEqualTo(fourth);
+            // Contract: a full page signals that more MAY exist, even at the tail.
+            assertThat(p2.json().path("hasMore").asBoolean()).isTrue();
+            assertThat(p2.json().path("items").get(0).path("amount").asText()).isEqualTo("-3.00");
+            assertThat(p2.json().path("items").get(1).path("amount").asText()).isEqualTo("-4.00");
+            assertThat(p2.json().path("items").get(1).path("memo").asText()).isEqualTo("fp-between-pages");
+            for (JsonNode item : p2.json().path("items")) {
+                assertThat(item.path("counterparty").path("accountId").asInt()).isEqualTo(toAcct);
+            }
+            Response empty = RestApi.getTransactionFeed(key.token(), key.accountId(), fourth, 2);
+            assertThat(empty.status()).isEqualTo(200);
+            assertThat(empty.json().path("cursor").asLong()).isEqualTo(fourth);
+            assertThat(empty.json().path("items").size()).isZero();
+            assertThat(empty.json().path("nextCursor").isNull()).isTrue();
+            assertThat(empty.json().path("hasMore").asBoolean()).isFalse();
+
+            // An empty response must not prevent resuming from the last non-null cursor.
+            long fifth = transfer(key.token(), toAcct, "5.00", "fp-after-caught-up");
+            waitForFeed(key.token(), key.accountId(), fourth, 1);
+            long checkpoint = Ledger.transactionCheckpoint();
+            Response resumed = RestApi.getTransactionFeed(key.token(), key.accountId(), fourth, 2);
+            assertThat(resumed.status()).isEqualTo(200);
+            assertThat(txnIds(resumed.json().path("items"))).containsExactly(fifth);
+            assertThat(resumed.json().path("nextCursor").asLong()).isEqualTo(fifth);
+            assertThat(resumed.json().path("hasMore").asBoolean()).isFalse();
+            assertThat(resumed.json().path("items").get(0).path("amount").asText()).isEqualTo("-5.00");
+            assertThat(resumed.json().path("items").get(0).path("memo").asText()).isEqualTo("fp-after-caught-up");
+            Response replay = RestApi.getTransactionFeed(key.token(), key.accountId(), since, 10);
+            assertThat(replay.status()).isEqualTo(200);
+            assertThat(txnIds(replay.json().path("items"))).containsExactly(txns.get(0), txns.get(1), txns.get(2), fourth, fifth);
+            assertThat(Ledger.personalBalance(s.getUuid()).orElseThrow()).isEqualByComparingTo("9985");
+            assertThat(Ledger.personalBalance(t.getUuid()).orElseThrow()).isEqualByComparingTo("10015");
+            assertThat(Ledger.transactionCheckpoint()).isEqualTo(checkpoint);
         }
     }
 

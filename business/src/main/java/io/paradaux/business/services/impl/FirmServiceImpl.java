@@ -169,7 +169,18 @@ public class FirmServiceImpl implements FirmService {
         }
 
         // Create a treasury account via the TreasuryApi
-        Account account = treasury.createAccount(AccountType.BUSINESS, actorId, name + " Corporate Account");
+        Account account;
+        String generatedName = name + " Corporate Account";
+        try {
+            account = treasury.createAccount(AccountType.BUSINESS, actorId, generatedName);
+        } catch (RuntimeException conflict) {
+            if (!NameReservationErrors.isConflict(conflict)) throw conflict;
+            // The generated account name is not the user-selected firm name.
+            // Released firms may retain their old financial identity; preserve it
+            // and use the new firm's ID for one bounded fallback attempt.
+            account = treasury.createAccount(
+                    AccountType.BUSINESS, actorId, generatedName + " (" + firm.getFirmId() + ")");
+        }
 
         // Best-effort compensation for exceptions inside this block only.
         // Process death and interceptor commit failures bypass it (see ADT-92 above).
@@ -384,7 +395,9 @@ public class FirmServiceImpl implements FirmService {
     public List<Firm> listAllFirms(int page, int pageSize) {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 25; // sane default
-        int offset = (page - 1) * pageSize;
+        long requestedOffset = (long) (page - 1) * pageSize;
+        if (requestedOffset > Integer.MAX_VALUE) return List.of();
+        int offset = (int) requestedOffset;
         return firms.listAllFiltered(pageSize, offset, false);
     }
 

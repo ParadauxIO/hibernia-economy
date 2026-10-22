@@ -1,5 +1,4 @@
 package io.paradaux.chestshop.services.impl;
-import io.paradaux.chestshop.utils.SignText;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
@@ -12,12 +11,19 @@ import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.MaterialUtil;
 import io.paradaux.chestshop.utils.PriceUtil;
+import io.paradaux.chestshop.utils.SignText;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.ChestShopShopRecord;
 import io.paradaux.treasury.model.economy.Account;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -27,13 +33,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.RegisteredServiceProvider;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.Arrays;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Holds the Treasury market APIs (resolved at enable) and builds the MarketApi DTOs from ChestShop
@@ -72,9 +71,9 @@ public class MarketServiceImpl implements MarketService {
         // Business is a soft dependency: its API classes only exist when the plugin is installed,
         // so the class literal must not be touched otherwise (NoClassDefFoundError at enable).
         business = businessInstalled() ? load(BusinessApi.class) : null;
-        log.info("ChestShop market tracker {}",
-                enabled() ? "enabled" : "disabled (Treasury MarketApi not available)");
-        log.info("ChestShop /find search {}",
+        log.info("ChestShop market tracker {}", enabled() ? "enabled" : "disabled (Treasury MarketApi not available)");
+        log.info(
+                "ChestShop /find search {}",
                 searchEnabled() ? "enabled" : "disabled (Treasury ShopQueryApi not available)");
     }
 
@@ -182,7 +181,9 @@ public class MarketServiceImpl implements MarketService {
             ItemMeta meta = item.getItemMeta();
             net.kyori.adventure.text.Component displayName = meta != null ? meta.displayName() : null;
             if (displayName != null) {
-                String name = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(displayName).trim();
+                String name = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                        .serialize(displayName)
+                        .trim();
                 if (!name.isEmpty()) {
                     return name;
                 }
@@ -225,7 +226,7 @@ public class MarketServiceImpl implements MarketService {
     }
 
     private boolean isCustom(ItemStack item) {
-        String vanilla = itemCodes.encode(item, MaterialUtil.MAXIMUM_SIGN_WIDTH);
+        String vanilla = itemCodes.encode(item, 0);
         String canonical = canonicalCode(item);
         if (canonical != null && vanilla != null && !canonical.equalsIgnoreCase(vanilla)) {
             return true;
@@ -263,25 +264,47 @@ public class MarketServiceImpl implements MarketService {
     }
 
     @Override
-    public ChestShopSaleRecord sale(Sign sign, ItemStack item, int quantity, UUID customer,
-                                    Owner owner, BigDecimal total, BigDecimal tax,
-                                    String direction, Integer shopStock, Long txnId) {
+    public ChestShopSaleRecord sale(
+            Sign sign,
+            ItemStack item,
+            int quantity,
+            UUID customer,
+            Owner owner,
+            BigDecimal total,
+            BigDecimal tax,
+            String direction,
+            Integer shopStock,
+            Long txnId) {
         Location l = sign.getLocation();
-        BigDecimal unit = quantity > 0
-                ? total.divide(BigDecimal.valueOf(quantity), 4, RoundingMode.HALF_UP)
-                : total;
+        BigDecimal unit = quantity > 0 ? total.divide(BigDecimal.valueOf(quantity), 4, RoundingMode.HALF_UP) : total;
         return new ChestShopSaleRecord(
-                txnId, direction, customer,
-                owner.accountId(), owner.type(), owner.firmId(), owner.ownerUuid(), owner.admin(),
-                item.getType().name(), itemKey(item), itemName(item), isCustom(item), itemData(item),
-                quantity, unit, total, tax != null ? tax : BigDecimal.ZERO,
-                worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ(),
+                txnId,
+                direction,
+                customer,
+                owner.accountId(),
+                owner.type(),
+                owner.firmId(),
+                owner.ownerUuid(),
+                owner.admin(),
+                item.getType().name(),
+                itemKey(item),
+                itemName(item),
+                isCustom(item),
+                itemData(item),
+                quantity,
+                unit,
+                total,
+                tax != null ? tax : BigDecimal.ZERO,
+                worldName(l),
+                l.getBlockX(),
+                l.getBlockY(),
+                l.getBlockZ(),
                 owner.admin() ? null : shopStock);
     }
 
     @Override
-    public ChestShopShopRecord shop(Sign sign, ItemStack item, Owner owner,
-                                    Integer currentStock, Integer estimatedCapacity) {
+    public ChestShopShopRecord shop(
+            Sign sign, ItemStack item, Owner owner, Integer currentStock, Integer estimatedCapacity) {
         Location l = sign.getLocation();
         String priceLine = SignText.getLine(sign, SignService.PRICE_LINE);
         int batch;
@@ -290,27 +313,56 @@ public class MarketServiceImpl implements MarketService {
         } catch (RuntimeException e) {
             batch = Math.max(1, item.getAmount());
         }
-        return shop(l, item, owner, PriceUtil.getExactBuyPrice(priceLine),
-                PriceUtil.getExactSellPrice(priceLine), batch, currentStock, estimatedCapacity);
+        return shop(
+                l,
+                item,
+                owner,
+                PriceUtil.getExactBuyPrice(priceLine),
+                PriceUtil.getExactSellPrice(priceLine),
+                batch,
+                currentStock,
+                estimatedCapacity);
     }
 
     @Override
-    public ChestShopShopRecord shop(Location l, ItemStack item, Owner owner,
-                                    BigDecimal buyPrice, BigDecimal sellPrice, int batch,
-                                    Integer currentStock, Integer estimatedCapacity) {
+    public ChestShopShopRecord shop(
+            Location l,
+            ItemStack item,
+            Owner owner,
+            BigDecimal buyPrice,
+            BigDecimal sellPrice,
+            int batch,
+            Integer currentStock,
+            Integer estimatedCapacity) {
         return new ChestShopShopRecord(
-                worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ(), owner.admin(),
-                owner.accountId(), owner.type(), owner.firmId(), owner.ownerUuid(),
-                item.getType().name(), itemKey(item), itemName(item), isCustom(item), itemData(item),
+                worldName(l),
+                l.getBlockX(),
+                l.getBlockY(),
+                l.getBlockZ(),
+                owner.admin(),
+                owner.accountId(),
+                owner.type(),
+                owner.firmId(),
+                owner.ownerUuid(),
+                item.getType().name(),
+                itemKey(item),
+                itemName(item),
+                isCustom(item),
+                itemData(item),
                 nonNegativeOrNull(buyPrice),
                 nonNegativeOrNull(sellPrice),
-                batch, owner.admin() ? null : currentStock,
-                owner.admin() ? null : estimatedCapacity, worldUuid(l));
+                batch,
+                owner.admin() ? null : currentStock,
+                owner.admin() ? null : estimatedCapacity,
+                worldUuid(l));
     }
 
     @Override
     public int totalAmount(ItemStack[] stock) {
-        return Arrays.stream(stock).filter(Objects::nonNull).mapToInt(ItemStack::getAmount).sum();
+        return Arrays.stream(stock)
+                .filter(Objects::nonNull)
+                .mapToInt(ItemStack::getAmount)
+                .sum();
     }
 
     private static String worldName(Location l) {

@@ -210,3 +210,14 @@ The public REST shop DTO exposes it as `currentSpace` (including item-detail
 shop offers), and the explorer as `current_space`. Both use `stock_at` as the
 observation timestamp. PAR-17 reuses V25 and the existing MarketApi capture path;
 no duplicate `current_space` database column or new migration is needed.
+
+### V38 collision reconciliation (2026-10-22)
+
+Three independently merged branches used V38. Taxation retains V38; employment
+history is V39 and the global namespace is V40, with unchanged SQL. The project
+owner confirmed only the non-production clone had been deployed. Its history
+contained successful `V38__taxation_read_index.sql`; it needs no history rewrite.
+Do not apply a generic Flyway repair to any other database: inspect its history
+first. The migration guard permits only the exact two renames from the pinned
+invalid combined tree. Upgrade tests for that tree use its valid V37 prefix;
+normal migration history remains immutable.

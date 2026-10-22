@@ -201,6 +201,35 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
 
     // ---------------------------------------------------------------- commands
 
+    private boolean doRealNexo(CommandSender sender, String[] args) {
+        if ((args[0].equals("nexostock") && args.length != 7)
+                || (args[0].equals("nexocount") && args.length != 3)) {
+            sender.sendMessage("usage: diag nexostock <world> <x> <y> <z> <id> <count> OR diag nexocount <player> <id>");
+            return true;
+        }
+        try {
+            var nexo = java.util.Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("Nexo"));
+            Class<?> api = nexo.getClass().getClassLoader().loadClass("com.nexomc.nexo.api.NexoItems");
+            if (args[0].equals("nexostock")) {
+                var chest = (org.bukkit.block.Chest) Bukkit.getWorld(args[1]).getBlockAt(
+                        Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4])).getState();
+                Object builder = api.getMethod("itemFromId", String.class).invoke(null, args[5]);
+                ItemStack item = (ItemStack) builder.getClass().getMethod("build").invoke(builder);
+                item.setAmount(Integer.parseInt(args[6]));
+                chest.getBlockInventory().setItem(0, item);
+                sender.sendMessage("nexostock " + args[5]);
+            } else {
+                Player player = java.util.Objects.requireNonNull(Bukkit.getPlayerExact(args[1]));
+                int count = 0;
+                for (ItemStack item : player.getInventory().getContents()) {
+                    if (item != null && args[2].equals(api.getMethod("idFromItem", ItemStack.class).invoke(null, item))) count += item.getAmount();
+                }
+                sender.sendMessage("nexocount " + args[2] + " = " + count);
+            }
+        } catch (Exception e) { sender.sendMessage("real Nexo diagnostic failed: " + e); }
+        return true;
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("dcsync")) {
@@ -215,6 +244,41 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
             return true;
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "nexostock":
+            case "nexocount":
+                return doRealNexo(sender, args);
+            case "taxschedule":
+                return doTaxSchedule(sender, args);
+            case "taxscheduledstate":
+                return doTaxScheduledState(sender, args);
+            case "worlduuid":
+                if (args.length != 2 || Bukkit.getWorld(args[1]) == null) {
+                    sender.sendMessage("usage: /diag worlduuid <loaded-world>");
+                    return true;
+                }
+                sender.sendMessage(Bukkit.getWorld(args[1]).getUID().toString());
+                return true;
+            case "itembytes":
+                if (args.length != 2 || org.bukkit.Material.matchMaterial(args[1]) == null) {
+                    sender.sendMessage("usage: /diag itembytes <material>");
+                    return true;
+                }
+                sender.sendMessage(java.util.Base64.getEncoder().encodeToString(
+                        new org.bukkit.inventory.ItemStack(org.bukkit.Material.matchMaterial(args[1])).serializeAsBytes()));
+                return true;
+            case "runtime":
+                sender.sendMessage("minecraft=" + Bukkit.getMinecraftVersion()
+                        + " online-mode=" + Bukkit.getOnlineMode());
+                return true;
+            case "plugin":
+                if (args.length != 2) {
+                    sender.sendMessage("usage: /diag plugin <name>");
+                    return true;
+                }
+                org.bukkit.plugin.Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
+                sender.sendMessage(plugin == null ? "missing" : "enabled=" + plugin.isEnabled()
+                        + " version=" + plugin.getDescription().getVersion());
+                return true;
             case "logon":
                 logging = true;
                 sender.sendMessage("DcDiag logging ON");
@@ -655,6 +719,55 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
         java.lang.reflect.Method getInstance = injectorIface.getMethod("getInstance", Class.class);
         getInstance.setAccessible(true);
         return getInstance.invoke(injector, cfgCls);
+    }
+
+    /** Test fixture: run the real weekly Bukkit task with an explicit due period. */
+    private boolean doTaxSchedule(CommandSender sender, String[] args) {
+        try {
+            if (args.length != 2) throw new IllegalArgumentException("expected epoch seconds");
+            var treasury = Bukkit.getPluginManager().getPlugin("Treasury");
+            ClassLoader loader = treasury.getClass().getClassLoader();
+            Object injector = treasury.getClass().getMethod("getInjector").invoke(treasury);
+            var get = loader.loadClass("io.paradaux.libs.guice.Injector").getMethod("getInstance", Class.class);
+            Class<?> api = loader.loadClass("io.paradaux.treasury.api.TaxApi");
+            Class<?> registry = loader.loadClass("io.paradaux.treasury.services.TaxCycleRegistry");
+            Class<?> webhook = loader.loadClass("io.paradaux.treasury.services.TaxWebhookService");
+            Class<?> type = loader.loadClass("io.paradaux.treasury.tasks.TaxCycleTask");
+            Object task = type.getMethod("weekly", org.bukkit.plugin.Plugin.class, api, registry, webhook, int.class, int.class)
+                    .invoke(null, treasury, get.invoke(injector, api), get.invoke(injector, registry),
+                            get.invoke(injector, webhook), 0, 1);
+            var due = type.getDeclaredField("scheduledFire");
+            due.setAccessible(true);
+            due.set(task, java.time.Instant.ofEpochSecond(Long.parseLong(args[1])));
+            org.bukkit.scheduler.BukkitTask scheduled = ((org.bukkit.scheduler.BukkitRunnable) task)
+                    .runTaskLaterAsynchronously(treasury, 1);
+            sender.sendMessage("task=" + scheduled.getTaskId());
+        } catch (Exception error) {
+            sender.sendMessage("taxschedule failed: " + error);
+        }
+        return true;
+    }
+
+    private boolean doTaxScheduledState(CommandSender sender, String[] args) {
+        try {
+            if (args.length != 2) throw new IllegalArgumentException("expected task id");
+            int id = Integer.parseInt(args[1]);
+            var treasury = Bukkit.getPluginManager().getPlugin("Treasury");
+            ClassLoader loader = treasury.getClass().getClassLoader();
+            Object injector = treasury.getClass().getMethod("getInjector").invoke(treasury);
+            var get = loader.loadClass("io.paradaux.libs.guice.Injector").getMethod("getInstance", Class.class);
+            Class<?> registry = loader.loadClass("io.paradaux.treasury.services.TaxCycleRegistry");
+            Class<?> cycle = loader.loadClass("io.paradaux.treasury.model.tax.TaxCycleType");
+            Object weekly = java.util.Arrays.stream(cycle.getEnumConstants()).filter(c -> c.toString().equals("WEEKLY")).findFirst().orElseThrow();
+            var next = (java.util.Optional<?>) registry.getMethod("getNextFireTime", cycle)
+                    .invoke(get.invoke(injector, registry), weekly);
+            sender.sendMessage("queued=" + Bukkit.getScheduler().isQueued(id)
+                    + " running=" + Bukkit.getScheduler().isCurrentlyRunning(id)
+                    + " next=" + next.map(Object::toString).orElse("none"));
+        } catch (Exception error) {
+            sender.sendMessage("taxscheduledstate failed: " + error);
+        }
+        return true;
     }
 
     private boolean doBreak(CommandSender sender, String[] args) {

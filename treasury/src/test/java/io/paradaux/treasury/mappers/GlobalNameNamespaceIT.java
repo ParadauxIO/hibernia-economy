@@ -58,12 +58,36 @@ class GlobalNameNamespaceIT extends IntegrationTestBase {
         sql(create("PLAYER", "ALICE", OWNER));
         assertThat(number("SELECT claim_count FROM global_name_reservations WHERE name_key='Alice'"))
                 .isEqualTo(2);
+        assertThatThrownBy(() ->
+                        sql("UPDATE accounts SET owner_uuid_bin=UNHEX('" + OTHER + "') WHERE account_type='PERSONAL'"))
+                .isInstanceOf(SQLException.class);
         sql("UPDATE accounts SET display_name='Wallet' WHERE account_type='PERSONAL'");
         assertThat(number("SELECT claim_count FROM global_name_reservations WHERE name_key='Alice'"))
                 .isEqualTo(1);
         assertThatThrownBy(() -> sql(create("FIRM", "alice", OWNER))).isInstanceOf(SQLException.class);
         assertThatThrownBy(() -> sql("UPDATE accounts SET owner_uuid_bin=UNHEX('" + OTHER + "'),display_name='Alice'"))
                 .isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void solePersonalAccountClaimCanFollowItsNewOwnerWithoutReleasingThePlayerName() throws Exception {
+        sql(create("PLAYER", "Alice", OWNER));
+        sql("INSERT INTO accounts(account_type,owner_uuid_bin,display_name) VALUES ('PERSONAL',UNHEX('" + OWNER
+                + "'),'Wallet')");
+        sql("UPDATE accounts SET owner_uuid_bin=UNHEX('" + OTHER + "') WHERE account_type='PERSONAL'");
+        assertThat(number("SELECT COUNT(*) FROM accounts WHERE owner_uuid_bin=UNHEX('" + OTHER + "')"))
+                .isEqualTo(1);
+        assertThat(number("SELECT claim_count FROM global_name_reservations WHERE name_key='Wallet' AND entity_key='P:"
+                        + OTHER + "'"))
+                .isEqualTo(1);
+        assertThat(number("SELECT COUNT(*) FROM global_name_claims WHERE name_key='Wallet' AND entity_key='P:" + OTHER
+                        + "'"))
+                .isEqualTo(1);
+        assertThat(number("SELECT claim_count FROM global_name_reservations WHERE name_key='Alice' AND entity_key='P:"
+                        + OWNER + "'"))
+                .isEqualTo(1);
+        assertThatThrownBy(() -> sql(create("FIRM", "Wallet", OWNER))).isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> sql(create("FIRM", "Alice", OTHER))).isInstanceOf(SQLException.class);
     }
 
     @Test

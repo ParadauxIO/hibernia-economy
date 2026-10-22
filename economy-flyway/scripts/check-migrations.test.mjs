@@ -130,6 +130,8 @@ function collisionFixture(t, { differentBase = false } = {}) {
   for (const [oldName, newName] of collisionMoves) {
     renameSync(join(f.migrations, newName), join(f.migrations, oldName));
   }
+  const later = readdirSync(source).filter(name => Number(/^V(\d+)__/.exec(name)?.[1]) > 40);
+  for (const name of later) rmSync(join(f.migrations, name));
   if (differentBase) appendFileSync(join(f.migrations, v18), '\n-- different collision base\n');
   f.git('add', '.');
   f.git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'Colliding V38 migrations');
@@ -139,6 +141,7 @@ function collisionFixture(t, { differentBase = false } = {}) {
   for (const [oldName, newName] of collisionMoves) {
     renameSync(join(f.migrations, oldName), join(f.migrations, newName));
   }
+  for (const name of later) copyFileSync(join(source, name), join(f.migrations, name));
   return f;
 }
 

@@ -116,3 +116,8 @@ A nested-writer regression verifies Business can hold its firm transaction open
 while Treasury independently creates the default account.
 `PlayerDirectoryServiceIT` verifies login epochs and no-eviction behavior through
 the production service. Shared/HTTP error tests cover safe conflict reporting.
+
+V41 permits a personal account's sole name claim to follow an administrative owner
+change, under the reservation row lock. A name shared with the original player's
+current-name projection still cannot move. Explicitly rename that account first
+if the ownership transfer is intended; the player's original name remains reserved.

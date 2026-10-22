@@ -135,6 +135,51 @@ public final class Ledger {
 
     // ----------------------------------------------------------------- fines
 
+    public record Posting(long transactionId, int accountId, BigDecimal amount, String message) {}
+
+    /** All postings for transactions initiated by this isolated test player after a checkpoint. */
+    public static List<Posting> initiatedPostingsAfter(UUID initiator, long checkpoint) {
+        List<Posting> result = new ArrayList<>();
+        try (Connection c = connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT p.txn_id, p.account_id, p.amount, t.message FROM ledger_postings p "
+                             + "JOIN ledger_txns t ON t.txn_id = p.txn_id "
+                             + "WHERE t.initiator_uuid_bin = UNHEX(REPLACE(?, '-', '')) AND t.txn_id > ? "
+                             + "ORDER BY p.posting_id")) {
+            ps.setString(1, initiator.toString());
+            ps.setLong(2, checkpoint);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) result.add(new Posting(rs.getLong(1), rs.getInt(2),
+                        rs.getBigDecimal(3), rs.getString(4)));
+            }
+            return result;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** Counts transaction headers independently of postings, detecting orphan records after rollback. */
+    public static int initiatedTransactionCountAfter(UUID initiator, long checkpoint) {
+        try (Connection c = connect();
+             PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM ledger_txns WHERE initiator_uuid_bin = UNHEX(REPLACE(?, '-', '')) AND txn_id > ?")) {
+            ps.setString(1, initiator.toString());
+            ps.setLong(2, checkpoint);
+            try (ResultSet rs = ps.executeQuery()) { rs.next(); return rs.getInt(1); }
+        } catch (SQLException e) { throw new RuntimeException(e); }
+    }
+
+    /** Snapshot after fixture setup has settled; never use it as a completion barrier. */
+    public static long transactionCheckpoint() {
+        try (Connection c = connect();
+             PreparedStatement ps = c.prepareStatement("SELECT COALESCE(MAX(txn_id), 0) FROM ledger_txns");
+             ResultSet rs = ps.executeQuery()) {
+            rs.next();
+            return rs.getLong(1);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /** Number of (un-revoked) fines against a player. */
     public static int activeFinesForPlayer(UUID playerUuid) {
         try (Connection c = connect();
