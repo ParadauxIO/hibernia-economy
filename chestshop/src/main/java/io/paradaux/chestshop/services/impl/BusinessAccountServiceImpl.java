@@ -1,22 +1,18 @@
 package io.paradaux.chestshop.services.impl;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.services.EconomyService;
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.AccountService;
-import io.paradaux.chestshop.services.BusinessAccountService;
 import com.google.inject.Singleton;
 import io.paradaux.business.api.BusinessApi;
 import io.paradaux.business.model.RolePermission;
-import io.paradaux.chestshop.ChestShop;
 import io.paradaux.chestshop.model.Account;
+import io.paradaux.chestshop.services.BusinessAccountService;
+import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.BusinessAccountUtil;
 import io.paradaux.treasury.api.TreasuryApi;
-import org.bukkit.entity.Player;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.Locale;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Resolves and access-checks Business-plugin firm accounts against the Treasury/Business APIs
@@ -33,7 +29,9 @@ import java.util.UUID;
 public class BusinessAccountServiceImpl implements BusinessAccountService {
 
     private volatile TreasuryApi treasury;
-    @Nullable private volatile BusinessApi businessApi;
+
+    @Nullable
+    private volatile BusinessApi businessApi;
 
     /** Wire the resolved Treasury handle + optional Business API in once available (enable time). */
     @Override
@@ -59,7 +57,8 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
                 if (resolved == null) return null;
                 treasuryAccount = treasury.getAccountById(resolved);
                 if (treasuryAccount == null || treasuryAccount.isArchived()) return null;
-                return new Account(treasuryAccount.getDisplayName(),
+                return new Account(
+                        businessDisplayName(resolved, treasuryAccount.getDisplayName()),
                         "B:" + token,
                         BusinessAccountUtil.toBusinessUuid(resolved));
             }
@@ -82,7 +81,7 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
             }
 
             if (treasuryAccount != null) {
-                String displayName = treasuryAccount.getDisplayName();
+                String displayName = businessDisplayName(accountId, treasuryAccount.getDisplayName());
                 String shortName = SignService.businessAccountSignName(accountId);
                 return new Account(displayName, shortName, BusinessAccountUtil.toBusinessUuid(accountId));
             }
@@ -90,6 +89,24 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
             log.warn("Treasury: Could not resolve business account for " + name, e);
         }
         return null;
+    }
+
+    /** The shop owner is the firm, not the label of its selected Treasury wallet. */
+    private String businessDisplayName(int accountId, String walletName) {
+        if (businessApi != null) {
+            try {
+                io.paradaux.business.model.Firm firm = businessApi.firms().getFirmByAccountId(accountId);
+                if (firm != null
+                        && firm.getDisplayName() != null
+                        && !firm.getDisplayName().isBlank()) {
+                    return firm.getDisplayName();
+                }
+            } catch (RuntimeException unavailable) {
+                // Display enrichment must not change whether the existing wallet resolves.
+                log.warn("Could not look up business shop owner display name; using wallet label", unavailable);
+            }
+        }
+        return walletName;
     }
 
     @Override
@@ -118,7 +135,10 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
             return treasury.isAccountMember(playerUuid, accountId)
                     || treasury.isOwnerForAccountId(playerUuid, accountId);
         } catch (Exception e) {
-            log.warn("Treasury: Could not check access for " + player.getName() + " on account " + account.getShortName(), e);
+            log.warn(
+                    "Treasury: Could not check access for " + player.getName() + " on account "
+                            + account.getShortName(),
+                    e);
             return false;
         }
     }

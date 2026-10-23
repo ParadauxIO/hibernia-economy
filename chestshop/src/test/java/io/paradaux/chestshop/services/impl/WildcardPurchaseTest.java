@@ -98,7 +98,8 @@ class WildcardPurchaseTest extends ServerTest {
                 economy,
                 mock(StockCounterService.class),
                 mock(MarketSyncService.class),
-                mock(MetricsService.class));
+                mock(MetricsService.class),
+                mock(SettledPurchasePublisher.class));
         var protection = mock(ProtectionService.class);
         when(protection.canAccess(any(), any(), anyBoolean())).thenReturn(true);
         previews = new PurchasePreviewService(transactions, accounts, protection, signs, config, message, materials);

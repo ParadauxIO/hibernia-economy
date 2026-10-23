@@ -21,6 +21,7 @@ import org.geysermc.mcprotocollib.protocol.data.game.setting.ParticleStatus;
 import org.geysermc.mcprotocollib.protocol.data.game.setting.SkinPart;
 import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundClientInformationPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientCommandPacket;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientTickEndPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundPlayerLoadedPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundAwardStatsPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundLoginPacket;
@@ -110,6 +111,7 @@ public final class MockPlayer implements AutoCloseable {
      * the n-th response answers the n-th request.
      */
     private final Object syncLock = new Object();
+    private final Object movementLock = new Object();
     private long syncRequested;
     private long syncAnswered;
 
@@ -125,6 +127,7 @@ public final class MockPlayer implements AutoCloseable {
 
     private volatile Position currentPosition;
     private volatile boolean connected;
+    private volatile String disconnectReason;
     private volatile boolean playerLoadedSent;
     private volatile java.util.concurrent.ScheduledFuture<?> heartbeat;
     private static final java.util.concurrent.ScheduledExecutorService HEARTBEAT_POOL =
@@ -210,6 +213,13 @@ public final class MockPlayer implements AutoCloseable {
             throw new IllegalStateException("Interrupted during login", e);
         }
 
+        // Disconnect also releases the latches. Their release alone is not a
+        // successful login (e.g. whitelist rejection or a plugin login cooldown).
+        if (player.disconnectReason != null || !session.isConnected() || player.currentPosition == null) {
+            session.disconnect("login did not complete");
+            throw new IllegalStateException("Login failed for " + username + ": "
+                    + (player.disconnectReason == null ? "no initial player position" : player.disconnectReason));
+        }
         player.connected = true;
         OPEN.add(player);
         // Periodic position heartbeat — vanilla clients send a movement packet
@@ -219,10 +229,7 @@ public final class MockPlayer implements AutoCloseable {
             Position pos = player.currentPosition;
             if (pos != null && session.isConnected()) {
                 try {
-                    session.send(new ServerboundMovePlayerPosRotPacket(
-                            true, false,
-                            pos.x(), pos.y(), pos.z(),
-                            pos.yaw(), pos.pitch()));
+                    player.sendMovementTick(pos);
                 } catch (Throwable ignored) {}
             }
         }, 200, 200, TimeUnit.MILLISECONDS);
@@ -285,8 +292,8 @@ public final class MockPlayer implements AutoCloseable {
                 return existing;
             }
         }
-        // Non-matching messages are consumed while waiting; keep them so a
-        // timeout can report what the player actually received instead.
+        // Preserve unrelated replies, including those arriving while blocked.
+        // Async command responses may arrive in either order.
         java.util.List<String> rejected = new java.util.ArrayList<>();
         try {
             while (System.nanoTime() < deadlineNanos) {
@@ -299,6 +306,8 @@ public final class MockPlayer implements AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new AssertionError("Interrupted while waiting for chat message", e);
+        } finally {
+            messages.addAll(rejected);
         }
         throw new AssertionError(
                 "Timed out after " + timeout + " waiting for chat message matching predicate. "
@@ -310,6 +319,11 @@ public final class MockPlayer implements AutoCloseable {
         return awaitMessage(m -> m.contains(substring), timeout);
     }
 
+    /** Snapshot buffered replies; use a processing barrier before negative assertions. */
+    public java.util.List<String> collectedMessages() {
+        return java.util.List.copyOf(messages);
+    }
+
     /** Discard any chat messages received so far. */
     public void drainMessages() {
         messages.clear();
@@ -317,9 +331,9 @@ public final class MockPlayer implements AutoCloseable {
 
     /**
      * Run {@code trigger} (typically a {@link #chatCommand}) and wait for a chat line that
-     * arrives after it and matches {@code matcher}. Unlike {@link #awaitMessage}, this
-     * neither consumes nor discards other lines: everything else stays buffered for later
-     * awaits, and only the matched line is removed.
+     * arrives after it and matches {@code matcher}. Unlike {@link #awaitMessage},
+     * preexisting buffered replies are not eligible. Everything else stays buffered
+     * for later awaits, and only the matched line is removed.
      *
      * @return the matched line
      * @throws AssertionError on timeout
@@ -379,6 +393,24 @@ public final class MockPlayer implements AutoCloseable {
 
     // ------------------------------------------------------------------ blocks / signs
 
+    /** Submit a custom dialog action using the identifier and payload supplied by the server. */
+    public void clickDialogAction(String id, org.cloudburstmc.nbt.NbtMap payload) {
+        session.send(new org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundCustomClickActionPacket(
+                net.kyori.adventure.key.Key.key(id), payload));
+    }
+
+    /** Select a hotbar slot (0–8) before placing or using the held item. */
+    public void selectHotbarSlot(int slot) {
+        if (slot < 0 || slot > 8) throw new IllegalArgumentException("Hotbar slot must be 0–8");
+        session.send(new org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundSetCarriedItemPacket(slot));
+    }
+
+    /** Send the shift input, e.g. to place a sign on a chest instead of opening it. */
+    public void setSneaking(boolean sneaking) {
+        session.send(new org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.level.ServerboundPlayerInputPacket(
+                false, false, false, false, false, sneaking, false));
+    }
+
     /**
      * Send a position+rotation update so the server's view of the player
      * matches {@code pos}. After a server-issued teleport, modern Paper
@@ -388,13 +420,19 @@ public final class MockPlayer implements AutoCloseable {
      */
     public void sendPosition(Position pos) {
         Objects.requireNonNull(pos, "pos");
-        session.send(new ServerboundMovePlayerPosRotPacket(
-                true,                  // onGround — assume true; tests park players on a setblock'd platform
-                false,                 // horizontalCollision
-                pos.x(), pos.y(), pos.z(),
-                pos.yaw(), pos.pitch()));
+        sendMovementTick(pos);
         currentPosition = pos;
         LOG.debug("[{}] sent position {}", username, pos);
+    }
+
+    /** Paper 26.3 permits only one positional update per client tick. */
+    private void sendMovementTick(Position pos) {
+        synchronized (movementLock) {
+            session.send(new ServerboundMovePlayerPosRotPacket(
+                    true, false, pos.x(), pos.y(), pos.z(), pos.yaw(), pos.pitch()));
+            // Keep this pair together when the heartbeat races an explicit move.
+            session.send(ServerboundClientTickEndPacket.INSTANCE);
+        }
     }
 
     /**
@@ -454,6 +492,21 @@ public final class MockPlayer implements AutoCloseable {
         LOG.debug("[{}] break-block at {}", username, pos);
     }
 
+    /** Shift-click using the server's current container/state IDs and explicit client slot predictions. */
+    public void quickMoveContainerSlot(int containerId, int stateId, int slot,
+            java.util.Map<Integer, org.geysermc.mcprotocollib.protocol.data.game.item.HashedStack> changedSlots) {
+        session.send(new org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.inventory.ServerboundContainerClickPacket(
+                containerId, stateId, slot,
+                org.geysermc.mcprotocollib.protocol.data.game.inventory.ContainerActionType.SHIFT_CLICK_ITEM,
+                org.geysermc.mcprotocollib.protocol.data.game.inventory.ShiftClickItemAction.LEFT_CLICK,
+                null, changedSlots));
+    }
+
+    /** Close an actual open container, triggering the server's normal InventoryCloseEvent. */
+    public void closeContainer(int containerId) {
+        session.send(new org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.inventory.ServerboundContainerClosePacket(containerId));
+    }
+
     /**
      * Write text to a sign. The sign block must already exist at {@code pos}
      * — typically because the client just placed one via {@link #useBlock}.
@@ -470,7 +523,7 @@ public final class MockPlayer implements AutoCloseable {
             throw new IllegalArgumentException(
                     "sign update requires exactly 4 lines, got " + lines.length);
         }
-        session.send(new ServerboundSignUpdatePacket(pos.toVector3i(), lines, frontText));
+        session.send(new ServerboundSignUpdatePacket(pos.toVector3i(), java.util.List.of(lines), frontText));
         LOG.debug("[{}] sign-update at {} frontText={} lines={}", username, pos, frontText, List.of(lines));
     }
 
@@ -491,6 +544,30 @@ public final class MockPlayer implements AutoCloseable {
     }
 
     // ------------------------------------------------------------------ generic packet observation
+
+    /**
+     * Capture packets caused by synchronous gameplay through the packet barrier.
+     * Registers before the action, so an empty result can prove that an action did
+     * not open a screen. Like {@link #sync}, this does not cover async commands.
+     */
+    public <P extends Packet> List<P> collectClientboundDuring(Runnable action, Class<P> packetType, Duration timeout) {
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(packetType, "packetType");
+        Objects.requireNonNull(timeout, "timeout");
+        var captured = new java.util.concurrent.ConcurrentLinkedQueue<P>();
+        PendingAwait<P> observer = new PendingAwait<>(packetType, packet -> {
+            captured.add(packet);
+            return false; // Keep observing until the gameplay barrier completes.
+        });
+        awaiting.add(observer);
+        try {
+            action.run();
+            sync(timeout);
+            return List.copyOf(captured);
+        } finally {
+            awaiting.remove(observer);
+        }
+    }
 
     /**
      * Block until a clientbound packet of the given type arrives that satisfies
@@ -562,8 +639,8 @@ public final class MockPlayer implements AutoCloseable {
      * this client sent before the call, and the client has received every packet the
      * server queued for it before handling them.
      *
-     * <p>Mechanism: a {@code ServerboundClientCommandPacket(STATS)} request, answered with
-     * a {@code ClientboundAwardStatsPacket}. Why that is a sound barrier on Paper 1.21.11:
+     * <p>Mechanism: a {@code ServerboundClientCommandPacket(REQUEST_STATS)} request, answered with
+     * a {@code ClientboundAwardStatsPacket}. Why that is a sound barrier on Paper 26.3:
      * <ul>
      *   <li>Netty decodes one connection's packets in order, and game packets that touch the
      *       world — {@code UseItemOn}, {@code PlayerAction} (dig/left-click), movement, sign
@@ -595,7 +672,7 @@ public final class MockPlayer implements AutoCloseable {
         synchronized (syncLock) {
             // Send under the lock so ticket order is wire order.
             ticket = ++syncRequested;
-            session.send(new ServerboundClientCommandPacket(ClientCommand.STATS));
+            session.send(new ServerboundClientCommandPacket(ClientCommand.REQUEST_STATS));
         }
         synchronized (syncLock) {
             while (syncAnswered < ticket) {
@@ -719,8 +796,9 @@ public final class MockPlayer implements AutoCloseable {
             // ServerboundAcceptTeleportationPacket arrives. MCProtocolLib's
             // default ClientListener does not auto-ack, so we do it here.
             if (p instanceof ClientboundPlayerPositionPacket pos) {
-                session.send(new ServerboundAcceptTeleportationPacket(pos.getId()));
                 Vector3d v = pos.getPosition();
+                session.send(new ServerboundAcceptTeleportationPacket(
+                        pos.getId(), v.getX(), v.getY(), v.getZ(), pos.getYRot(), pos.getXRot()));
                 currentPosition = new Position(v.getX(), v.getY(), v.getZ(), pos.getYRot(), pos.getXRot());
                 positionReceived.countDown();
                 // Mark the client as fully loaded once we have an initial
@@ -774,6 +852,7 @@ public final class MockPlayer implements AutoCloseable {
 
         @Override
         public void disconnected(DisconnectedEvent e) {
+            disconnectReason = e.getReason() == null ? "unknown" : PLAIN.serialize(e.getReason());
             connected = false;
             OPEN.remove(MockPlayer.this);
             synchronized (syncLock) {

@@ -22,9 +22,10 @@
 //     always a renumbering mistake or a collision with another branch).
 // Repeatable migrations (R__*.sql) may change freely — Flyway re-runs them.
 //
-// The pre-cutover release baseline has one narrowly pinned exception below.
+// Historical corrections have narrowly pinned exceptions below.
 // --upgrade-target prints only its applied version (or nothing for normal bases),
-// after all checks pass, for upgrade-test.sh.
+// after all checks pass, for upgrade-test.sh. --upgrade-excludes prints only
+// pending colliding filenames to omit from its scratch base archive.
 // =============================================================================
 
 import { execFileSync } from 'node:child_process';
@@ -37,8 +38,9 @@ const REPEATABLE = /^R__([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/;
 
 const baseRef = process.argv[2];
 const upgradeTarget = process.argv[3] === '--upgrade-target';
-if (!baseRef || process.argv.length > (upgradeTarget ? 4 : 3)) {
-  console.error('usage: check-migrations.mjs <base-ref> [--upgrade-target]');
+const upgradeExcludes = process.argv[3] === '--upgrade-excludes';
+if (!baseRef || process.argv.length > (upgradeTarget || upgradeExcludes ? 4 : 3)) {
+  console.error('usage: check-migrations.mjs <base-ref> [--upgrade-target | --upgrade-excludes]');
   process.exit(2);
 }
 
@@ -78,6 +80,18 @@ const pendingCorrections = new Map([
   ['V18__consolidate_account_access.sql', 'dbab43188ee05aad197a5757570dbc7ebdfce4ea:ffa37fd6eae5ef75fd7649b575a4944769e9d63c'],
 ]);
 
+// Three independently merged branches chose V38. Keep the first merged script
+// (taxation) at V38 and permit only these byte-identical renames from the exact
+// broken tree. Flyway cannot migrate that tree because versions are duplicated.
+// The upgrade rehearsal excludes only the two pending collisions from its scratch
+// base, then applies V39/V40 normally. Never repair a deployed DB's history here.
+const collisionBase = base.size > 0 &&
+  git('-C', root, 'rev-parse', `${baseRef}:${migrationDir}`) === '338af2234f3233d335f950ca31641550354db2df';
+const collisionRenames = new Map([
+  ['V38__firm_employment_history.sql', ['V39__firm_employment_history.sql', '827c49a4013635d951a7fb5629435d8ae16b7817']],
+  ['V38__global_name_namespace.sql', ['V40__global_name_namespace.sql', '10353f218560a91888356b24e207376301530185']],
+]);
+
 // ── Head side: the working tree ──────────────────────────────────────────────
 const absDir = join(root, migrationDir);
 const head = existsSync(absDir) ? readdirSync(absDir).sort() : [];
@@ -89,6 +103,8 @@ for (const [name, blob] of base) {
   if (!VERSIONED.test(name)) continue;
   const where = join(migrationDir, name);
   if (!headBlobs.has(name)) {
+    const correction = collisionBase && collisionRenames.get(name);
+    if (correction && blob === correction[1] && headBlobs.get(correction[0]) === blob) continue;
     const renamedTo = [...headBlobs].find(([, b]) => b === blob)?.[0];
     fail(where, renamedTo
       ? `renamed to ${renamedTo}. Flyway tracks applied migrations by version and description; keep the original name.`
@@ -144,6 +160,10 @@ for (const { file, msg } of errors) {
 if (errors.length) {
   console.error(`\ncheck-migrations: ${errors.length} problem(s) against ${baseRef}.`);
   process.exit(1);
+}
+if (upgradeExcludes) {
+  if (collisionBase) console.log([...collisionRenames.keys()].join('\n'));
+  process.exit(0);
 }
 if (upgradeTarget) {
   if (preCutover) console.log('15');

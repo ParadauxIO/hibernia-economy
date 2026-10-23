@@ -20,24 +20,8 @@ const BUCKET_LABEL: Record<string, string> = {
   '100k_plus': '> 100K',
 };
 
-/** Mirrors LedgerExplorerMapper.getTxnVolume (line 218-226). */
-export async function getTxnVolume(days: number): Promise<TxnVolumePoint[]> {
-  const r = await sql<{ txn_date: string; txn_count: string | number; total_volume: string }>`
-    SELECT DATE_FORMAT(DATE(lt.settlement_time), '%Y-%m-%d') AS txn_date,
-           COUNT(DISTINCT lt.txn_id) AS txn_count,
-           COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0.00) AS total_volume
-    FROM ledger_txns lt
-    LEFT JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
-    WHERE lt.settlement_time >= NOW() - INTERVAL ${days} DAY
-    GROUP BY DATE(lt.settlement_time)
-    ORDER BY txn_date ASC
-  `.execute(db);
-  return r.rows.map((row) => ({
-    date: row.txn_date,
-    txn_count: Number(row.txn_count),
-    total_volume: row.total_volume,
-  }));
-}
+/** Same corrected economic-event volume used by the dashboard and velocity. */
+export { getDailyVolume as getTxnVolume } from './health';
 
 /**
  * Mirrors LedgerExplorerMapper.getBalanceDistribution (line 244-258), but

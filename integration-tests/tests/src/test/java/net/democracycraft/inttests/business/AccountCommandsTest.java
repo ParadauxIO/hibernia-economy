@@ -53,6 +53,43 @@ class AccountCommandsTest {
     }
 
     @Test
+    void crossFirmNameCollisionShowsSafeFeedbackAndPreservesAccounts() {
+        String owner = Usernames.fresh("NcA");
+        String otherOwner = Usernames.fresh("NcB");
+        String firm = freshFirmName("NcFirmA");
+        String otherFirm = freshFirmName("NcFirmB");
+        String accountName = "Shared" + firm;
+        try (MockPlayer first = MockPlayer.connectLocal(owner);
+             MockPlayer second = MockPlayer.connectLocal(otherOwner)) {
+            Ledger.waitForPersonalBalance(first.getUuid(), TIMEOUT);
+            Ledger.waitForPersonalBalance(second.getUuid(), TIMEOUT);
+            Ops.run(owner, () -> {
+                first.chatCommand("/business create " + firm);
+                first.awaitMessageContaining("Successfully created", TIMEOUT);
+                Barrier.settle();
+                first.chatCommand("/business account create " + firm + " " + accountName);
+                first.awaitMessageContaining("created account", TIMEOUT);
+            });
+            int firstFirmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
+            BusinessLedger.waitForFirmAccountCountAtLeast(firstFirmId, 2, TIMEOUT);
+            int reservedAccountId = BusinessLedger.firmAccountIdAt(firstFirmId, 1);
+            Ops.run(otherOwner, () -> {
+                second.chatCommand("/business create " + otherFirm);
+                second.awaitMessageContaining("Successfully created", TIMEOUT);
+                int secondFirmId = BusinessLedger.waitForFirm(otherFirm, TIMEOUT);
+                Barrier.settle();
+                second.drainMessages();
+                second.chatCommand("/business account create " + otherFirm + " " + accountName);
+                second.awaitMessageContaining("That name is reserved by another identity", TIMEOUT);
+                Barrier.settle();
+                assertThat(BusinessLedger.firmAccountCount(secondFirmId)).isEqualTo(1);
+                assertThat(BusinessLedger.firmAccountCount(firstFirmId)).isEqualTo(2);
+                assertThat(BusinessLedger.firmAccountIdAt(firstFirmId, 1)).isEqualTo(reservedAccountId);
+            });
+        }
+    }
+
+    @Test
     void listAccountsShowsHeader() {
         String owner = Usernames.fresh("AlO");
         String firm = freshFirmName("AcLst");

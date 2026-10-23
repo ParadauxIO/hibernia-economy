@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server';
+import { createRequestBlocker } from '@/lib/requestBlocking';
 import { auth } from '@/lib/auth/authjs';
+
+const blockRequest = createRequestBlocker(process.env);
 
 /** Logging and theme handling stay public. The admin boundary verifies the
  * signed session at the edge; live permissions are checked again by the page
@@ -15,6 +18,17 @@ const authenticatedAdmin = auth((req, event: NextFetchEvent) => {
 });
 
 export default function proxy(req: NextRequest, event: NextFetchEvent) {
+  const decision = blockRequest(req.headers);
+  if (decision.reason) {
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(), kind: 'blocked', tenant: process.env.TENANT ?? 'unknown',
+      method: req.method, path: req.nextUrl.pathname, ip: decision.ip,
+      ua: req.headers.get('user-agent') ?? '', reason: decision.reason, status: 403,
+    }));
+    return new NextResponse('Forbidden', {
+      status: 403, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain' },
+    });
+  }
   // Pre-consolidation Health bookmarks keep their window on the overview. Done
   // here as a plain HTTP redirect: a redirect() from the page fires after the
   // loading.tsx shell has streamed, so the browser got a 200, a client-side
@@ -35,7 +49,7 @@ export default function proxy(req: NextRequest, event: NextFetchEvent) {
 function handleRequest(req: NextRequest) {
   const start = Date.now();
   const ua = req.headers.get('user-agent') ?? '';
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '';
+  const ip = blockRequest(req.headers).ip;
   const hasSession = req.cookies.has('authjs.session-token') || req.cookies.has('__Secure-authjs.session-token');
 
   // Theme preview override: ?theme=red|blue sets a cookie and redirects to
@@ -82,7 +96,7 @@ function handleRequest(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on everything except static assets and the Auth.js endpoint itself.
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|healthz|api/auth).*)',
+    // Include auth endpoints so blocks precede session work. Keep liveness public.
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|healthz).*)',
   ],
 };

@@ -67,6 +67,10 @@ public final class BusinessLedger {
         return queryString("SELECT hq_region FROM firm WHERE firm_id = ?", firmId);
     }
 
+    public static Optional<String> firmDisplayName(int firmId) {
+        return queryString("SELECT display_name FROM firm WHERE firm_id = ?", firmId);
+    }
+
     public static Optional<String> firmDiscordUrl(int firmId) {
         return queryString("SELECT discord_url FROM firm WHERE firm_id = ?", firmId);
     }
@@ -201,6 +205,7 @@ public final class BusinessLedger {
 
     // -------------------------------------------------------------- firm-account mapping
 
+    /** All account-link rows, including soft-removed history. */
     public static int firmAccountCount(int firmId) {
         try (Connection c = connect();
              PreparedStatement ps = c.prepareStatement(
@@ -212,6 +217,12 @@ public final class BusinessLedger {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /** Currently linked accounts; disband preserves historical rows with removed_at set. */
+    public static int activeFirmAccountCount(int firmId) {
+        return queryInt("SELECT COUNT(*) FROM firm_accounts WHERE firm_id = ? AND removed_at IS NULL",
+                Integer.toString(firmId)).orElseThrow();
     }
 
     /** All Treasury account_ids associated with a firm via firm_accounts. */

@@ -174,9 +174,12 @@ test('mobile account rows keep balances visible and expand secondary details', a
 });
 
 
-test('wealth keeps signed balances visible on mobile', async ({ page }) => {
+test('wealth labels chart slices and keeps signed balances visible on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await visit(page, '/economy/wealth');
+  for (const type of ['PERSONAL', 'BUSINESS', 'GOVERNMENT']) {
+    await expect(page.getByRole('img', { name: new RegExp(`^${type}: .+\\d, [\\d,]+ accounts$`) })).toBeVisible();
+  }
   for (const table of await page.locator('.directory-table').all()) {
     const balance = table.locator('tbody tr').first().locator('td.amount:visible').first();
     await expect(balance).toBeVisible();

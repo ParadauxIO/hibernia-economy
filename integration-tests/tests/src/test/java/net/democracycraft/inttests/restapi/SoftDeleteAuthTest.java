@@ -126,7 +126,7 @@ class SoftDeleteAuthTest {
                 int baseline = BusinessLedger.firmAccountCount(firmIdHolder[0]);
 
                 Barrier.settle();
-                p.chatCommand("/business account create " + firm + " Savings");
+                p.chatCommand("/business account create " + firm + " Savings" + firm);
                 p.awaitMessageContaining("created account", TIMEOUT);
                 BusinessLedger.waitForFirmAccountCountAtLeast(firmIdHolder[0], baseline + 1, TIMEOUT);
                 secondAccountHolder[0] = BusinessLedger.firmAccountIdAt(firmIdHolder[0], 1);
@@ -150,10 +150,9 @@ class SoftDeleteAuthTest {
                     .as("transfer from active firm-account should succeed, body=%s", active.body())
                     .isEqualTo(200);
 
-            // Soft-delete the firm_accounts link directly. The plugin
-            // doesn't expose an "unlink" command in this codebase; the
-            // soft-delete is what we're testing the REST API enforcement
-            // against, so SQL is the most direct way to simulate it.
+            // Isolate link removal without archiving the Treasury account.
+            // FirmBalanceLifecycleTest separately covers the real account-archive
+            // command, which both archives the account and removes this link.
             softDeleteFirmAccountLink(firmId, savingsAccount);
 
             Response afterUnlink = RestApi.postTransfer(key.token(),
@@ -226,9 +225,9 @@ class SoftDeleteAuthTest {
     /**
      * Stamps {@code firm_accounts.removed_at} for one (firm_id, account_id)
      * row. The plugin's {@link net.democracycraft.inttests.support.BusinessLedger}
-     * helpers don't expose this since the plugin itself doesn't run the
-     * removal as part of any current command flow — the REST API filters
-     * are what we're testing here, not the plugin's removal mechanism.
+     * helpers don't expose this fixture-only operation. The real archive command
+     * also archives the account; these tests deliberately change only the link
+     * to isolate the REST API's removed-link authorization and query filters.
      */
     private static void softDeleteFirmAccountLink(int firmId, int accountId) {
         try (Connection c = DriverManager.getConnection(

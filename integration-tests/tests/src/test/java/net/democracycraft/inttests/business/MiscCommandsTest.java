@@ -23,7 +23,8 @@ class MiscCommandsTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     private static String freshFirmName(String tag) {
-        return tag + Long.toHexString(Instant.now().toEpochMilli());
+        // Keep firm names distinct from player names generated in the same millisecond.
+        return "Firm" + tag + Long.toHexString(Instant.now().toEpochMilli());
     }
 
     @Test

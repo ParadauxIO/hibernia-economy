@@ -80,7 +80,7 @@ internals.
 | **`treasury-rest-api/`** | Spring Boot service | A REST/HTTP surface over the ledger for tooling and integrations, with API-key auth and rate limiting. Ships as a Docker image. |
 | **`economy-flyway/`** | Flyway migrations | The **authoritative shared database schema**. All schema changes are versioned migrations here; deploys run through gated workflows. |
 | **`common/`** | Library jar | Framework-free shared kernel used by the MariaDB-writing modules: `UuidBin` (UUID↔BINARY(16)), `JwtKeys` (the single source of the mint/verify HMAC key derivation), `DataSourceProvider`, `BalanceTaxBrackets`. |
-| **`chestshop/`** | Paper plugin (fork) | Sign-based automated shops, integrated with Treasury and Business. A vendored fork of ChestShop-3, built as a single Gradle module against the Paper 1.21.11 API (the old per-server-version adapter modules were folded into the core). |
+| **`chestshop/`** | Paper plugin (fork) | Sign-based automated shops, integrated with Treasury and Business. A vendored fork of ChestShop-3, built as a single Gradle module against the Paper 26.3 API (the old per-server-version adapter modules were folded into the core). |
 | **`economy-explorer/`** | Next.js app | The public, read-side web explorer (balances, prices, money flow) **and** the player/admin documentation site served at `/docs`. |
 | **`realty/`** | Paper plugin *(submodule)* | Property and land: buying, renting, offers, and auctions. Maintained upstream; consumed here. |
 | **`hibernia-framework/`** | Library *(submodule)* | The shared command (Brigadier-based `@Command`), type-safe configuration, and i18n framework the Paper plugins are built on. Published as `io.paradaux:hibernia-framework`. |
@@ -123,7 +123,7 @@ There are two audiences, two doc sets:
 
 ### Prerequisites
 
-- **JDK 21** (Temurin recommended). The Gradle wrapper is included — you do **not**
+- **JDK 25** (Temurin recommended). The Gradle wrapper is included — you do **not**
   need a system Gradle.
 - **Node.js 22 + npm** — only for `economy-explorer`.
 - **MariaDB 10.11+ / MySQL** — to run the services, or for full integration tests.

@@ -12,18 +12,30 @@ import org.springframework.http.HttpStatus;
 final class FirmFieldLimits {
 
     static final int MAX_DISCORD_URL_LENGTH = 255; // firm.discord_url
-    static final int MAX_HQ_REGION_LENGTH = 64;    // firm.hq_region
+    static final int MAX_HQ_REGION_LENGTH = 64; // firm.hq_region
 
     private FirmFieldLimits() {}
 
     /** Reject over-long discord_url / hq_region up front so they 400 rather than hitting a driver-level 500. */
     static void validate(String discordUrl, String hqRegion) {
         if (discordUrl != null && discordUrl.strip().length() > MAX_DISCORD_URL_LENGTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "Field 'discordUrl' must be at most " + MAX_DISCORD_URL_LENGTH + " characters.");
         }
+        if (discordUrl != null
+                && !discordUrl.isBlank()
+                && !discordUrl.strip().matches("https://discord\\.gg/[A-Za-z0-9]{2,32}")) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
+                    "Field 'discordUrl' must be an https://discord.gg/<code> invite.");
+        }
         if (hqRegion != null && hqRegion.strip().length() > MAX_HQ_REGION_LENGTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "Field 'hqRegion' must be at most " + MAX_HQ_REGION_LENGTH + " characters.");
         }
     }

@@ -465,6 +465,43 @@ class InfoServiceImplTest extends ServerTest {
         assertRejectedAsInvalid(p);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"B:1A", "B:@acme", "B:Old Shop"})
+    void showShopInfo_businessOwnerIsFirmNotNonDefaultWalletLabel(String ownerToken) {
+        Player p = mock(Player.class);
+        Sign sign = shopSign(ownerToken, "1", "B 10", "Stone");
+        when(signService.isValid(sign)).thenReturn(true);
+        io.paradaux.treasury.api.TreasuryApi treasury = mock(io.paradaux.treasury.api.TreasuryApi.class);
+        io.paradaux.business.api.BusinessApi business = mock(io.paradaux.business.api.BusinessApi.class);
+        io.paradaux.business.api.FirmApi firms = mock(io.paradaux.business.api.FirmApi.class);
+        when(business.firms()).thenReturn(firms);
+        io.paradaux.business.model.Firm firm = new io.paradaux.business.model.Firm();
+        firm.setDisplayName("Acme Hardware");
+        firm.setDefaultAccountId(99); // The selected wallet is a linked non-default account.
+        io.paradaux.treasury.model.economy.Account wallet = new io.paradaux.treasury.model.economy.Account();
+        wallet.setAccountId(46);
+        wallet.setDisplayName("ChestShops");
+        when(treasury.getAccountById(46)).thenReturn(wallet);
+        when(firms.getFirmByAccountId(46)).thenReturn(firm);
+        lenient().when(firms.resolveShopAlias("acme")).thenReturn(46);
+        // Legacy names select the default wallet; its label also differs from the firm name.
+        lenient().when(firms.getFirm("Old Shop")).thenReturn(firm);
+        io.paradaux.treasury.model.economy.Account defaultWallet = new io.paradaux.treasury.model.economy.Account();
+        defaultWallet.setAccountId(99);
+        defaultWallet.setDisplayName("Default Wallet");
+        lenient().when(treasury.getAccountById(99)).thenReturn(defaultWallet);
+        lenient().when(firms.getFirmByAccountId(99)).thenReturn(firm);
+        BusinessAccountServiceImpl resolver = new BusinessAccountServiceImpl();
+        resolver.bind(treasury, business);
+        when(accounts.resolveAccount(ownerToken)).thenAnswer(call -> resolver.resolveBusinessAccount(ownerToken));
+        when(items.parse(any())).thenReturn(new ItemStack(Material.STONE));
+        when(economy.format(any(BigDecimal.class))).thenReturn("$10");
+
+        info.showShopInfo(p, sign);
+
+        assertThat(shopInfoValues()).containsEntry("owner", "Acme Hardware");
+    }
+
     @Test
     void showShopInfoWildcardShowsPatternAndTotalMatchingStock() {
         Player p = mock(Player.class);

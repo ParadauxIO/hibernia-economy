@@ -8,6 +8,7 @@
 #
 #   ops/integration/run.sh
 #   ops/integration/run.sh -- --tests '*PayCommandTest'
+#   bash ops/integration/run.sh --profile protection
 #
 # What it does: builds the plugin jars + REST API from this checkout and the
 # DcDiag / Nexo-stub plugins from integration-tests/; downloads Paper, LuckPerms
@@ -20,23 +21,110 @@
 # already-running server instead (CI service container) — the database named by
 # IT_DB_NAME is DROPPED and recreated.
 #
-# Requires: JDK 21 on PATH/JAVA_HOME, curl and a mariadb/mysql client.
+# Requires: JDK 25 on PATH/JAVA_HOME, curl and a mariadb/mysql client.
 set -euo pipefail
+
+# Honor JAVA_HOME for both the build and the Paper/REST runtime processes.
+JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}java"
+JAVA_MAJOR="$("$JAVA_BIN" -XshowSettings:properties -version 2>&1 | sed -n 's/.*java.specification.version = //p')"
+if [[ ! "$JAVA_MAJOR" =~ ^[0-9]+$ ]] || (( JAVA_MAJOR < 25 )); then
+  echo "Paper 26.3 requires Java 25 or newer; set JAVA_HOME to a Java 25 JDK" >&2
+  exit 2
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 TESTS_DIR="${IT_TESTS_DIR:-$ROOT/integration-tests}"
 KEEP=0
+PROFILE=core
+RESTART_ENABLED=false
+GROUPS_PROFILE=false
+TAX_PROFILE=false
+WEBHOOK_FAILURE_PROFILE=false
+REST_PROFILE_ARGS=()
+GRADLE_TASKS=(:tests:preflight :tests:test)
 TEST_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --tests-dir) TESTS_DIR="$2"; shift 2 ;;   # a different copy of the suite
     --keep) KEEP=1; shift ;;          # leave the stack running after the tests
+    --profile) PROFILE="$2"; shift 2 ;; # core or protection (startup-only shop hooks)
     --) shift; TEST_ARGS=("$@"); break ;;
-    -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+case "$PROFILE" in
+  core) PROFILE_ARGS=() ;;
+  realty)
+    PROFILE_ARGS=()
+    for artifact in IT_REALTY_JAR IT_VAULT_JAR; do
+      if [ -z "${!artifact:-}" ] || [ ! -f "${!artifact}" ]; then
+        echo "realty profile requires $artifact pointing to a supplied real plugin JAR" >&2
+        exit 2
+      fi
+    done
+    IT_REALTY_JAR="$(realpath "$IT_REALTY_JAR")"
+    IT_VAULT_JAR="$(realpath "$IT_VAULT_JAR")"
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*RealtyEconomyTest'); fi
+    ;;
+  nexo|providers)
+    PROFILE_ARGS=()
+    if [ -z "${IT_NEXO_JAR:-}" ] || [ ! -f "$IT_NEXO_JAR" ]; then
+      echo "nexo profile requires IT_NEXO_JAR pointing to a locally supplied real Nexo JAR" >&2
+      exit 2
+    fi
+    IT_NEXO_JAR="$(realpath "$IT_NEXO_JAR")"
+    if [ "$PROFILE" = providers ]; then
+      for artifact in IT_UTILITIES_JAR IT_BOLT_JAR IT_BOLT_CHESTSHOP_JAR IT_BREWERY_JAR; do
+        if [ -z "${!artifact:-}" ] || [ ! -f "${!artifact}" ]; then
+          echo "providers profile requires $artifact pointing to a supplied plugin JAR" >&2
+          exit 2
+        fi
+        printf -v "$artifact" '%s' "$(realpath "${!artifact}")"
+      done
+    fi
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then
+      TEST_ARGS=(--tests '*RealNexoCustomItemTest')
+      if [ "$PROFILE" = providers ]; then TEST_ARGS+=(--tests '*RealUtilitiesPermissionTest' --tests '*UtilitiesReloadTest'); fi
+    fi
+    ;;
+  groups)
+    PROFILE_ARGS=()
+    GROUPS_PROFILE=true
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*DerivedGroupLifecycleTest'); fi
+    ;;
+  explorer|explorer-keycloak)
+    PROFILE_ARGS=()
+    GRADLE_TASKS=(:tests:preflight :tests:explorerFixture)
+    if [ "${#TEST_ARGS[@]}" -ne 0 ]; then echo "explorer profile does not accept Gradle test filters" >&2; exit 2; fi
+    ;;
+  webhook-failure)
+    PROFILE_ARGS=()
+    WEBHOOK_FAILURE_PROFILE=true
+    REST_PROFILE_ARGS=(--treasury.webhook.max-attempts=3 --treasury.webhook.failure-threshold=2 --treasury.webhook.retry-base-seconds=1 --treasury.webhook.retry-max-seconds=2)
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*WebhookExhaustionTest'); fi
+    ;;
+  tax)
+    PROFILE_ARGS=()
+    TAX_PROFILE=true
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*TaxCycleLifecycleTest' --tests '*TaxConfigPublicationTest'); fi
+    ;;
+  rest-restart)
+    PROFILE_ARGS=()
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*RestRestartTest'); fi
+    ;;
+  restart|crash)
+    PROFILE_ARGS=()
+    RESTART_ENABLED=true
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ServerRestartTest'); fi
+    ;;
+  protection)
+    PROFILE_ARGS=(-Dchestshop.integrations=true)
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ProtectionIntegrationCreationTest'); fi
+    ;;
+  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, crash, rest-restart, tax, groups, nexo, providers, realty, webhook-failure or explorer)" >&2; exit 2 ;;
+esac
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
 WORK="${IT_WORK_DIR:-$ROOT/build/integration}"
@@ -50,7 +138,12 @@ REST_PORT="${IT_REST_PORT:-8080}"
 # The tests run a local HTTP receiver here; the REST API is told it may deliver
 # webhooks to it despite the SSRF guard (treasury.webhook.insecure-test-targets).
 WEBHOOK_PORT="${IT_WEBHOOK_PORT:-8099}"
+BYTEBIN_PORT="${IT_BYTEBIN_PORT:-8098}"
 DB_EXTERNAL="${IT_DB_EXTERNAL:-0}"
+if [ "$PROFILE" = realty ] && [ "$DB_EXTERNAL" = 1 ]; then
+  echo "realty profile requires the runner-owned MariaDB instance for its separate schema" >&2
+  exit 2
+fi
 DB_HOST="${IT_DB_HOST:-127.0.0.1}"
 DB_PORT="${IT_DB_PORT:-33306}"
 DB_NAME="${IT_DB_NAME:-economy}"
@@ -59,22 +152,42 @@ DB_PASSWORD="${IT_DB_PASSWORD:-dev}"
 # The tests forge tokens with this exact secret (support/JwtForge.java).
 JWT_SECRET="${IT_JWT_SECRET:-dev-jwt-secret-change-in-production-please-use-32-plus-random-bytes}"
 
+# Never mistake another stack's listener for this run's successful startup.
+# External databases are intentionally shared; every other listener is owned here.
+CHECK_PORTS=("$MC_PORT" "$RCON_PORT" "$REST_PORT" "$WEBHOOK_PORT" "$BYTEBIN_PORT")
+if [ "$DB_EXTERNAL" != 1 ]; then CHECK_PORTS+=("$DB_PORT"); fi
+python3 - "${CHECK_PORTS[@]}" <<'PY'
+import socket
+import sys
+
+ports = [int(value) for value in sys.argv[1:]]
+if len(set(ports)) != len(ports):
+    raise SystemExit("integration listener ports must be distinct")
+for port in ports:
+    with socket.socket() as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            listener.bind(("127.0.0.1", port))
+        except OSError as error:
+            raise SystemExit(f"integration port {port} unavailable: {error}") from error
+PY
+
 # Pinned downloads. Paper is addressed by content hash; bump them together
 # with the server version the plugins target.
-PAPER_JAR="paper-1.21.11-132.jar"
-PAPER_URL="https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/$PAPER_JAR"
-PAPER_SHA256="5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
+PAPER_JAR="paper-26.3-206.jar"
+PAPER_URL="https://fill-data.papermc.io/v1/objects/4208a692538104ec88699c0e078b2b89842920a10472ebb37e72cdda27c0d80e/$PAPER_JAR"
+PAPER_SHA256="4208a692538104ec88699c0e078b2b89842920a10472ebb37e72cdda27c0d80e"
 LUCKPERMS_JAR="LuckPerms-Bukkit-5.5.87.jar"
 LUCKPERMS_URL="https://download.luckperms.net/1674/bukkit/loader/$LUCKPERMS_JAR"
-GP_JAR="GriefPrevention-16.18.6.jar"
-GP_URL="https://cdn.modrinth.com/data/O4o4mKaq/versions/4RqY8Kfl/GriefPrevention.jar"
+GP_JAR="GriefPrevention-16.18.7.jar"
+GP_URL="https://cdn.modrinth.com/data/O4o4mKaq/versions/dGfCZHqk/GriefPrevention.jar"
 # DcDiag links against WorldGuard, so it (and WorldEdit) must be installed even
-# for runs that don't exercise the protection hooks. These are the last builds
-# that run on Java 21 and support 1.21.11.
-WE_JAR="worldedit-bukkit-7.4.2.jar"
-WE_URL="https://cdn.modrinth.com/data/1u6JkXh5/versions/p8T2aZ8U/$WE_JAR"
-WG_JAR="worldguard-bukkit-7.0.15.jar"
-WG_URL="https://cdn.modrinth.com/data/DKY9btbd/versions/WaElxvDz/$WG_JAR"
+# for runs that don't exercise the protection hooks. Keep these released
+# protection-plugin pins explicit; their 26.3 compatibility is checked at startup.
+WE_JAR="worldedit-bukkit-7.4.6.jar"
+WE_URL="https://cdn.modrinth.com/data/1u6JkXh5/versions/YFnqiUlL/$WE_JAR"
+WG_JAR="worldguard-bukkit-7.0.20.jar"
+WG_URL="https://cdn.modrinth.com/data/DKY9btbd/versions/9YdeGXiK/$WG_JAR"
 
 log() { printf '\n==> %s\n' "$*"; }
 
@@ -136,6 +249,23 @@ else
   (cd "$ROOT" && sh ./gradlew --console=plain -q release :treasury-rest-api:bootJar -Pci=true ${IT_GRADLE_ARGS:-})
 fi
 
+# Reject incomplete cached/staged artifacts before starting any services.
+python3 - "$ROOT/release" <<'PYZIP'
+from pathlib import Path
+from zipfile import ZipFile
+import sys
+jars = list(Path(sys.argv[1]).glob('*.jar'))
+if len(jars) != 4:
+    raise SystemExit('Expected four release plugin JARs; rebuild with ./gradlew release --rerun')
+for jar in jars:
+    try:
+        with ZipFile(jar) as archive:
+            if archive.testzip() is not None:
+                raise ValueError('entry CRC mismatch')
+    except Exception as error:
+        raise SystemExit(f'Invalid release artifact {jar.name}: {error}; rebuild with ./gradlew release --rerun')
+PYZIP
+
 log "Building DcDiag, Nexo stub and tests from $TESTS_DIR"
 (cd "$ROOT" && sh ./gradlew -p "$TESTS_DIR" --console=plain -q :diag-plugin:jar :nexo-stub:jar :tests:testClasses \
     -PgriefPreventionJar="$CACHE/$GP_JAR")
@@ -173,11 +303,79 @@ sql -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\`;"
 log "Assembling the Paper server in $SERVER"
 cp "$ROOT"/release/*.jar "$SERVER/plugins/"
 cp "$CACHE/$LUCKPERMS_JAR" "$CACHE/$GP_JAR" "$CACHE/$WE_JAR" "$CACHE/$WG_JAR" "$SERVER/plugins/"
-cp "$TESTS_DIR/diag-plugin/build/libs/DcDiag.jar" "$TESTS_DIR/nexo-stub/build/libs/Nexo.jar" "$SERVER/plugins/"
+cp "$TESTS_DIR/diag-plugin/build/libs/DcDiag.jar" "$SERVER/plugins/"
+if [ "$PROFILE" = realty ]; then
+  sql -e 'CREATE DATABASE realty_acceptance;'
+  cp "$IT_REALTY_JAR" "$SERVER/plugins/Realty.jar"
+  cp "$IT_VAULT_JAR" "$SERVER/plugins/Vault.jar"
+  log "Realty/Vault artifact SHA-256: $(sha256sum "$SERVER/plugins/Realty.jar" "$SERVER/plugins/Vault.jar")"
+  mkdir -p "$SERVER/plugins/Realty"
+  cat > "$SERVER/plugins/Realty/database.yml" <<EOF
+url: 'mariadb://$DB_HOST:$DB_PORT/realty_acceptance'
+username: '$DB_USER'
+password: '$DB_PASSWORD'
+EOF
+  cat > "$SERVER/plugins/Realty/settings.yml" <<'EOF'
+default-freehold-authority: { name: GovernmentFines, type: government }
+default-leasehold-landlord: { name: GovernmentFines, type: government }
+EOF
+fi
+if [ "$PROFILE" = nexo ] || [ "$PROFILE" = providers ]; then
+  cp "$IT_NEXO_JAR" "$SERVER/plugins/Nexo.jar"
+  log "Real Nexo artifact SHA-256: $(sha256sum "$SERVER/plugins/Nexo.jar" | cut -d ' ' -f 1)"
+mkdir -p "$SERVER/plugins/Nexo/items"
+cat > "$SERVER/plugins/Nexo/settings.yml" <<'NEXOCONFIG'
+ConfigTools:
+  generate_default_configs: false
+Pack:
+  generation:
+    generate_pack: false
+  import:
+    default_assets: false
+    external_packs: false
+    model_engine: false
+  dispatch:
+    send_pre_join: false
+    send_on_join: false
+    send_on_reload: false
+    mandatory: false
+NEXOCONFIG
+cat > "$SERVER/plugins/Nexo/items/acceptance.yml" <<'NEXOITEM'
+test_ruby:
+  material: DIAMOND
+  itemname: "<red>Acceptance Ruby"
+test_restricted:
+  material: DIAMOND
+  itemname: "<red>Restricted Ruby"
+NEXOITEM
+else
+  cp "$TESTS_DIR/nexo-stub/build/libs/Nexo.jar" "$SERVER/plugins/"
+fi
+
+if [ "$PROFILE" = providers ]; then
+  cp "$IT_UTILITIES_JAR" "$SERVER/plugins/Utilities.jar"
+  cp "$IT_BOLT_JAR" "$SERVER/plugins/Bolt.jar"
+  cp "$IT_BOLT_CHESTSHOP_JAR" "$SERVER/plugins/BoltChestShop.jar"
+  cp "$IT_BREWERY_JAR" "$SERVER/plugins/BreweryX.jar"
+  log "Provider artifact SHA-256: $(sha256sum "$SERVER/plugins/Utilities.jar" "$SERVER/plugins/Bolt.jar" "$SERVER/plugins/BoltChestShop.jar" "$SERVER/plugins/BreweryX.jar")"
+  mkdir -p "$SERVER/plugins/Utilities"
+  cat > "$SERVER/plugins/Utilities/config.yml" <<'UTILITIES'
+aliases: { ruby: test_ruby, lockedruby: test_restricted }
+input: { acceptBareIds: true }
+display: { preferAlias: true, fallbackFormat: '%s', signMaxChars: 15 }
+furnace: { enabled: false }
+helmet: { enabled: false }
+bindCommands: { enabled: false }
+inventoryCombine: { enabled: false }
+furnitureHarvest: { enabled: false }
+shopPermissions: { enabled: true, items: [test_restricted] }
+UTILITIES
+fi
 
 echo "eula=true" >"$SERVER/eula.txt"
 cat >"$SERVER/server.properties" <<EOF
 online-mode=false
+white-list=false
 server-ip=127.0.0.1
 server-port=$MC_PORT
 enable-rcon=true
@@ -185,6 +383,7 @@ rcon.port=$RCON_PORT
 rcon.password=$RCON_PASSWORD
 broadcast-rcon-to-ops=false
 level-type=minecraft\:flat
+generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
 generate-structures=false
 spawn-protection=0
 difficulty=peaceful
@@ -197,19 +396,25 @@ simulation-distance=4
 enforce-secure-profile=false
 EOF
 
-# Each plugin's shipped config.yml with only the database block (and the JWT
-# secret) pointed at this run's stack, so every other default is the real one.
+# Shipped configuration with database/JWT settings and the external Bytebin
+# boundary pointed at this disposable stack; other defaults remain real.
 render_config() { # render_config <module dir> <plugin data folder>
   mkdir -p "$SERVER/plugins/$2"
   CFG_HOST="$DB_HOST" CFG_PORT="$DB_PORT" CFG_DATABASE="$DB_NAME" CFG_USERNAME="$DB_USER" \
-  CFG_PASSWORD="$DB_PASSWORD" CFG_SECRET="$JWT_SECRET" awk '
+  CFG_PASSWORD="$DB_PASSWORD" CFG_SECRET="$JWT_SECRET" CFG_BYTEBIN="http://127.0.0.1:$BYTEBIN_PORT/" awk '
     function quoted(v) { gsub(/\\/, "\\\\", v); gsub(/"/, "\\\"", v); return "\"" v "\"" }
-    /^[^ \t#]/ { in_db = ($0 ~ /^database:/) }
+    /^[^ \t#]/ { in_db = ($0 ~ /^database:/); in_bytebin = ($0 ~ /^bytebin:/) }
     in_db && /^[ \t]+(host|port|database|username|password):/ {
       indent = $0; sub(/[^ \t].*/, "", indent)
       key = $0; sub(/^[ \t]+/, "", key); sub(/:.*/, "", key)
       if (key == "port") print indent "port: " ENVIRON["CFG_PORT"]
       else print indent key ": " quoted(ENVIRON["CFG_" toupper(key)])
+      next
+    }
+    in_bytebin && /^[ \t]+(post-url|base-url):/ {
+      indent = $0; sub(/[^ \t].*/, "", indent)
+      key = $0; sub(/^[ \t]+/, "", key); sub(/:.*/, "", key)
+      print indent key ": " quoted(ENVIRON["CFG_BYTEBIN"] (key == "post-url" ? "post" : ""))
       next
     }
     /^[ \t]+jwt-secret:/ {
@@ -223,6 +428,23 @@ render_config() { # render_config <module dir> <plugin data folder>
 render_config treasury Treasury
 render_config business Business
 render_config treasury-api-plugin TreasuryAPI
+if [ "$PROFILE" = groups ] || [ "$PROFILE" = explorer ] || [ "$PROFILE" = explorer-keycloak ] || [ "$PROFILE" = realty ]; then
+  sed -i 's/interval-seconds: 1800/interval-seconds: 1/' "$SERVER/plugins/TreasuryAPI/config.yml"
+fi
+
+log "Starting the local Bytebin capture service on :$BYTEBIN_PORT"
+python3 "$ROOT/ops/integration/bytebin.py" --port "$BYTEBIN_PORT" \
+    --evidence "$WORK/bytebin-captures.jsonl" >"$WORK/bytebin.log" 2>&1 &
+PIDS+=($!)
+wait_for_port "$BYTEBIN_PORT" 15 Bytebin "${PIDS[-1]}"
+
+# These hooks are installed only at startup. A dedicated profile exercises the
+# existing gated creation checks without changing the core suite's wilderness fixtures.
+if [ "$PROFILE" = protection ]; then
+  mkdir -p "$SERVER/plugins/ChestShop"
+  printf 'WORLDGUARD_INTEGRATION: true\nGRIEFPREVENTION_INTEGRATION: true\n' \
+    >"$SERVER/plugins/ChestShop/config.yml"
+fi
 
 # Every mock player connects from 127.0.0.1; GriefPrevention's default of three
 # logins per address kicks the fourth. Fresh-spawn PvP protection is off because it
@@ -245,10 +467,11 @@ printf 'log-notify: false\n' >"$SERVER/plugins/LuckPerms/config.yml"
 printf 'commands:\n  spam-exclusions:\n  - /skill\n  - /dcsync\n' >"$SERVER/spigot.yml"
 
 log "Starting Paper on :$MC_PORT (RCON :$RCON_PORT)"
-(cd "$SERVER" && exec java -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \
+(cd "$SERVER" && exec "$JAVA_BIN" -Dterminal.jline=false -Dterminal.ansi=false -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \
     -jar "$CACHE/$PAPER_JAR" --nogui >"$WORK/server.log" 2>&1) &
 PIDS+=($!)
-wait_for_port "$RCON_PORT" 300 Paper "${PIDS[-1]}"
+PAPER_PID="${PIDS[-1]}"
+wait_for_port "$RCON_PORT" 300 Paper "$PAPER_PID"
 
 # A plugin that failed to enable leaves the server up but the suite meaningless.
 for plugin in Treasury Business TreasuryAPI ChestShop LuckPerms DcDiag; do
@@ -273,23 +496,31 @@ fi
 
 log "Starting the REST API on :$REST_PORT"
 DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \
-    java -jar "${REST_JARS[0]}" \
-    --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" \
+    "$JAVA_BIN" -jar "${REST_JARS[0]}" \
+    --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" "${REST_PROFILE_ARGS[@]}" \
     --treasury.webhook.insecure-test-targets="127.0.0.1:$WEBHOOK_PORT" >"$WORK/rest-api.log" 2>&1 &
 PIDS+=($!)
-wait_for_port "$REST_PORT" 120 "REST API" "${PIDS[-1]}"
+REST_PID="${PIDS[-1]}"
+wait_for_port "$REST_PORT" 120 "REST API" "$REST_PID"
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 log "Running the integration tests"
 # The REST settings go by env var: tests/build.gradle.kts only forwards the
 # connection -D properties listed there to the forked test JVM.
 (cd "$ROOT" && RESTAPI_BASE="http://127.0.0.1:$REST_PORT/api/v1" RESTAPI_JWT_SECRET="$JWT_SECRET" \
-    WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" \
-    sh ./gradlew -p "$TESTS_DIR" --console=plain :tests:test \
+    BYTEBIN_URL="http://127.0.0.1:$BYTEBIN_PORT/" WEBHOOK_RECEIVER_PORT="$WEBHOOK_PORT" IT_SERVER_DIR="$SERVER" IT_EXPLORER_FIXTURE="$WORK/explorer-fixture.json" \
+    IT_REST_RESTART_ENABLED="$([ "$PROFILE" = rest-restart ] && echo true || echo false)" IT_REST_PID="$REST_PID" IT_REST_JAR="${REST_JARS[0]}" IT_CRASH_RECOVERY="$([ "$PROFILE" = crash ] && echo true || echo false)" \
+    IT_KEYCLOAK_PROFILE="$([ "$PROFILE" = explorer-keycloak ] && echo true || echo false)" IT_REALTY_PROFILE="$([ "$PROFILE" = realty ] && echo true || echo false)" IT_PROVIDERS_PROFILE="$([ "$PROFILE" = providers ] && echo true || echo false)" IT_NEXO_PROFILE="$([ "$PROFILE" = nexo ] || [ "$PROFILE" = providers ] && echo true || echo false)" IT_GROUPS_PROFILE="$GROUPS_PROFILE" IT_WEBHOOK_FAILURE_PROFILE="$WEBHOOK_FAILURE_PROFILE" IT_TAX_PROFILE="$TAX_PROFILE" IT_RESTART_ENABLED="$RESTART_ENABLED" IT_PAPER_PID="$PAPER_PID" IT_PAPER_JAR="$CACHE/$PAPER_JAR" \
+    sh ./gradlew -p "$TESTS_DIR" --console=plain "${GRADLE_TASKS[@]}" \
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \
     -Ddevserver.host=127.0.0.1 -Ddevserver.port="$MC_PORT" \
     -Ddevserver.db.url="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" \
     -Ddevserver.db.user="$DB_USER" -Ddevserver.db.password="$DB_PASSWORD" \
     -Drcon.host=127.0.0.1 -Drcon.port="$RCON_PORT" -Drcon.password="$RCON_PASSWORD" \
+    "${PROFILE_ARGS[@]}" \
     "${TEST_ARGS[@]}")
+
+if [ "$PROFILE" = explorer ] || [ "$PROFILE" = explorer-keycloak ]; then
+  source "$ROOT/ops/integration/explorer.sh"
+fi

@@ -10,7 +10,7 @@ dependencies {
     // to raw packet handling. Keep this `api` so the transitive surface is
     // explicit; downgrade to `implementation` if we ever stabilise a wrapper-
     // only API and want to hide the underlying library.
-    api("org.geysermc.mcprotocollib:protocol:1.21.11-SNAPSHOT")
+    api("org.geysermc.mcprotocollib:protocol:26.3-SNAPSHOT")
 
     // ClientboundSystemChatPacket exposes content as Adventure Component;
     // the plain-text serializer turns it into something we can match on.
@@ -19,11 +19,11 @@ dependencies {
 
     // Logging facade only — consumers bring their own backend (logback,
     // log4j2, etc.). The tests submodule wires logback for its runs.
-    implementation("org.slf4j:slf4j-api:2.0.16")
+    implementation("org.slf4j:slf4j-api:2.0.20")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
-    testImplementation("org.assertj:assertj-core:3.26.3")
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.12")
+    testImplementation("org.assertj:assertj-core:3.27.7")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
