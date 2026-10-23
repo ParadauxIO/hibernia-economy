@@ -2114,3 +2114,9 @@ The `explorer-keycloak` profile passed twice against the real Minecraft realm
 durable identity links, real in-game proprietor transfer, and access reversal in
 the unchanged sessions. It exposed and verified the stable-subject fix; the
 failed runs and final source fingerprint are in the [PAR-502 report](par-502.md#real-minecraft-realm-login-and-proprietorship-transfer).
+
+
+The PAR-519 reload repair supersedes the historical provider skip above for the
+corrected Utilities artifact. Two clean provider runs now pass all six cases with
+zero failures or skips, including changed restrictions after reload. The original
+installed JAR still fails; see [exact artifact and paired-run evidence](par-502.md#utilities-reload-repair-par-519-2026-10-23).

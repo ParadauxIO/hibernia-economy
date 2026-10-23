@@ -309,12 +309,13 @@ are recorded separately from these demonstrated product defects.
 Real supplied Utilities 3.0.0 reads changed YAML on `/utilities reload` but does
 not call `ShopPermissionManager.reload()`. Enabling `shopPermissions` at runtime
 therefore left a denied custom-item purchase allowed (stock 8 became 4).
-The failed run is `20261022T095004Z-3048952`; `UtilitiesReloadTest` retains the
-assertion and explicit external-defect skip. Startup-loaded restrictions have a
-separate successful case. This repository does not contain the Utilities source;
-accepting reload requires a corrected provider artifact and rerunning the probe.
-Tracking: [PAR-496](https://app.taskl.ie/w/paradaux/issues/PAR-496).
-See [provider evidence](par-502.md#real-combined-provider-profile).
+The original failed run is `20261022T095004Z-3048952`. PAR-519 now repairs the
+external provider, and `UtilitiesReloadTest` is enabled. The unmodified source
+build reproduces the same failure; two clean runs with the corrected artifact
+pass all six provider cases with zero skips. The old installed JAR remains
+defective: release selection must include the corrected artifact hash, not just
+the unchanged 3.0.0 version. See [repair and artifact evidence](par-502.md#utilities-reload-repair-par-519-2026-10-23).
+Tracking: [PAR-519](https://app.taskl.ie/w/paradaux/issues/PAR-519).
 
 ### Fixed: Explorer used a generated Auth.js ID as the Keycloak subject
 
