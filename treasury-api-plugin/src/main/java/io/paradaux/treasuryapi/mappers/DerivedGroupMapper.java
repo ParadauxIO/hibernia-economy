@@ -10,6 +10,12 @@ public interface DerivedGroupMapper {
     @Select("SELECT group_id, source, selector FROM explorer_group_sync")
     List<GroupSource> listSources();
 
+    // Held through resolution and publication so separate servers cannot publish
+    // older snapshots after newer ones, even when the selector has not changed.
+    @Select("SELECT group_id, source, selector FROM explorer_group_sync "
+            + "WHERE group_id = #{groupId} AND source = #{source} FOR UPDATE")
+    GroupSource lockSource(GroupSource binding);
+
     @Select("SELECT player_uuid_bin FROM explorer_group_member WHERE group_id = #{groupId} AND source = #{source}")
     List<UUID> listMembers(GroupSource binding);
 
@@ -25,8 +31,13 @@ public interface DerivedGroupMapper {
             + "AND s.source = #{binding.source} AND BINARY s.selector = BINARY #{binding.selector})")
     void remove(@Param("binding") GroupSource binding, @Param("uuid") UUID uuid);
 
-    @Delete("DELETE m FROM explorer_group_member m LEFT JOIN explorer_group_sync s "
-            + "ON s.group_id = m.group_id AND s.source = m.source "
-            + "WHERE m.source IN ('business', 'realty') AND s.group_id IS NULL")
-    void removeUnconfigured();
+    @Select(
+            "SELECT DISTINCT m.group_id, m.source, '' AS selector FROM explorer_group_member m LEFT JOIN explorer_group_sync s "
+                    + "ON s.group_id = m.group_id AND s.source = m.source "
+                    + "WHERE m.source IN ('business', 'realty') AND s.group_id IS NULL")
+    List<GroupSource> listUnconfigured();
+
+    @Delete("DELETE FROM explorer_group_member WHERE group_id = #{groupId} AND source = #{source} "
+            + "AND source IN ('business', 'realty')")
+    void removeUnconfigured(GroupSource binding);
 }

@@ -24,13 +24,6 @@
 # Requires: JDK 25 on PATH/JAVA_HOME, curl and a mariadb/mysql client.
 set -euo pipefail
 
-# Honor JAVA_HOME for both the build and the Paper/REST runtime processes.
-JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}java"
-JAVA_MAJOR="$("$JAVA_BIN" -XshowSettings:properties -version 2>&1 | sed -n 's/.*java.specification.version = //p')"
-if [[ ! "$JAVA_MAJOR" =~ ^[0-9]+$ ]] || (( JAVA_MAJOR < 25 )); then
-  echo "Paper 26.3 requires Java 25 or newer; set JAVA_HOME to a Java 25 JDK" >&2
-  exit 2
-fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -54,6 +47,23 @@ while [ $# -gt 0 ]; do
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+# Licensed Nexo is local acceptance only. CI must always use the diagnostic stub.
+if [[ "${CI:-}" != "" && "${CI,,}" != "false" && "${CI}" != "0" ]] \
+    || [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  if [[ -n "${IT_NEXO_JAR:-}" || "$PROFILE" == nexo || "$PROFILE" == providers ]]; then
+    echo "Real Nexo artifacts are prohibited in CI; use the diagnostic stub in the core profile" >&2
+    exit 2
+  fi
+fi
+
+# Honor JAVA_HOME for both the build and the Paper/REST runtime processes.
+JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}java"
+JAVA_MAJOR="$("$JAVA_BIN" -XshowSettings:properties -version 2>&1 | sed -n 's/.*java.specification.version = //p')"
+if [[ ! "$JAVA_MAJOR" =~ ^[0-9]+$ ]] || (( JAVA_MAJOR < 25 )); then
+  echo "Paper 26.3 requires Java 25 or newer; set JAVA_HOME to a Java 25 JDK" >&2
+  exit 2
+fi
+
 case "$PROFILE" in
   core) PROFILE_ARGS=() ;;
   realty)
@@ -85,7 +95,7 @@ case "$PROFILE" in
       done
     fi
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then
-      TEST_ARGS=(--tests '*RealNexoCustomItemTest')
+      TEST_ARGS=(--tests '*RealNexoCustomItemTest' --tests '*RealNexoDyeTest')
       if [ "$PROFILE" = providers ]; then TEST_ARGS+=(--tests '*RealUtilitiesPermissionTest' --tests '*UtilitiesReloadTest'); fi
     fi
     ;;
@@ -347,6 +357,9 @@ test_ruby:
 test_restricted:
   material: DIAMOND
   itemname: "<red>Restricted Ruby"
+test_cap:
+  material: LEATHER_HELMET
+  itemname: "<gold>Acceptance Cap"
 NEXOITEM
 else
   cp "$TESTS_DIR/nexo-stub/build/libs/Nexo.jar" "$SERVER/plugins/"

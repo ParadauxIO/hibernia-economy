@@ -223,9 +223,9 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
     }
 
     private boolean doRealNexo(CommandSender sender, String[] args) {
-        if ((args[0].equals("nexostock") && args.length != 7)
-                || (args[0].equals("nexocount") && args.length != 3)) {
-            sender.sendMessage("usage: diag nexostock <world> <x> <y> <z> <id> <count> OR diag nexocount <player> <id>");
+        if ((args[0].equals("nexostock") && args.length != 7 && args.length != 8)
+                || (args[0].equals("nexocount") && args.length != 3 && args.length != 4)) {
+            sender.sendMessage("usage: diag nexostock <world> <x> <y> <z> <id> <count> [hex-color] OR diag nexocount <player> <id> [hex-color]");
             return true;
         }
         try {
@@ -237,13 +237,20 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 Object builder = api.getMethod("itemFromId", String.class).invoke(null, args[5]);
                 ItemStack item = (ItemStack) builder.getClass().getMethod("build").invoke(builder);
                 item.setAmount(Integer.parseInt(args[6]));
+                if (args.length == 8) {
+                    var meta = (org.bukkit.inventory.meta.LeatherArmorMeta) item.getItemMeta();
+                    meta.setColor(org.bukkit.Color.fromRGB(Integer.parseInt(args[7], 16)));
+                    item.setItemMeta(meta);
+                }
                 chest.getBlockInventory().setItem(0, item);
                 sender.sendMessage("nexostock " + args[5]);
             } else {
                 Player player = java.util.Objects.requireNonNull(Bukkit.getPlayerExact(args[1]));
                 int count = 0;
                 for (ItemStack item : player.getInventory().getContents()) {
-                    if (item != null && args[2].equals(api.getMethod("idFromItem", ItemStack.class).invoke(null, item))) count += item.getAmount();
+                    if (item != null && args[2].equals(api.getMethod("idFromItem", ItemStack.class).invoke(null, item))
+                            && (args.length == 3 || (item.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta meta
+                            && meta.getColor().asRGB() == Integer.parseInt(args[3], 16)))) count += item.getAmount();
                 }
                 sender.sendMessage("nexocount " + args[2] + " = " + count);
             }

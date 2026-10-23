@@ -67,7 +67,7 @@ names and automatically declaring a feature covered.
 | Custom items | Core uses a labeled Nexo stub; real `nexo` profile verifies native purchase/sale, base-material rejection, failed-payment inventory restoration and paired postings | Two clean Paper 26.3 runs passed. Metadata/dye variants, rendering, reloads and Utilities/BreweryX/VaultStorage/Bolt combinations remain under [PAR-502](https://app.taskl.ie/w/paradaux/issues/PAR-502) / [PAR-496](https://app.taskl.ie/w/paradaux/issues/PAR-496); see [evidence](par-502.md) |
 | REST tokens/transfers/auth/feed/webhooks/admin | `restapi/*Test` | Audit every indexed endpoint, scopes/expiry, both transfer engines, retries/idempotency, and cross-service read-after-write |
 | TreasuryAPI command | `restapi/TreasuryApiCommandTest` | Route/permission review against current source |
-| Ingest | `ingest/EssentialsXIngestTest` | **Disabled:** standalone TreasuryIngest plugin absent; DcDiag ingest stub is not real migration acceptance |
+| Retired standalone ingest | Removed `EssentialsXIngestTest` at the maintainer's request (PAR-502) | TreasuryIngest no longer exists; its three tests are removed from scope, not counted as passes. Core provider-dispatch tests remain. |
 | Vault/Realty | Real supplied `realty` profile: registration, buy permission denial, debit failure/recovery, exact Treasury settlement, WG ownership and scheduled title-holder publication; real Vault withdrawal/deposit | Passed twice on Java 25/Paper 26.3 after fixing the Vault rollback/cache defect. Contract/lease/provider combinations remain broader than these assertions; see [evidence](par-502.md) |
 | Explorer | Same-stack Chromium: payment privacy, firm account/activity, market prices/volume, fine totals, scheduled group grants and same-session revocation/expiry | Three cases passed twice. The separate `explorer-keycloak` profile also passed real login and same-session proprietor transfer/revocation twice. See [evidence](par-502.md) |
 | Lifecycle/dependency failures | `restart` and `crash` verify committed ledger/world/shop state and the next trade; `rest-restart` verifies persisted token revocation, idempotency and new settlement | Each passed twice. Crash evidence starts from an explicitly saved checkpoint. In-flight atomicity, DB outage/recovery, downtime schedules and remaining reload matrix stay open; see [evidence](par-502.md) |
@@ -420,3 +420,22 @@ and BreweryX. Native trade/failure cases and startup Utilities item-permission
 denial/grant passed twice (3 passes, 1 explicit external reload-defect skip each).
 This does not establish every Bolt protection or BreweryX/VaultStorage branch.
 See [provider evidence and preserved failure](par-502.md#real-combined-provider-profile).
+
+
+The 2026-10-23 follow-up adds transactional same-selector group publication and
+rollback regressions, fixes tax-status markup, and verifies economy mutation
+permission/console/offline contracts. Core passed twice with 767 passes and 20
+named dedicated-profile skips per run. Local providers passed twice with 5 passes
+and the same explicit Utilities reload skip; named/hex Nexo leather dye metadata
+is now covered. Real Nexo execution is prohibited in CI. TreasuryIngest is retired,
+and its three disabled tests were removed. See the dated follow-up in
+[PAR-502](par-502.md#final-follow-up-verification-2026-10-23) for exact fingerprints,
+failure evidence and outstanding acceptance; these results do not close the queue.
+
+
+Owner-at-archive policy is now confirmed and enforced in both Paper and REST.
+Stale owner snapshots cannot archive, archived ownership cannot be replaced, and
+REST serializes owner selection with archival. Real MariaDB regressions reproduce
+the former wrong-recipient race; two final focused live runs passed 30 disband,
+transfer and recovery cases each. See [ownership policy evidence](par-502.md#owner-at-archive-disband-policy-2026-10-23).
+The earlier full-core pair predates this change; broader acceptance remains open.
