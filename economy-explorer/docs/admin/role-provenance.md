@@ -1,3 +1,9 @@
+---
+title: Role grant provenance
+order: 3
+description: Inspect user roles, originating groups, recorded grant sources and synchronization freshness.
+---
+
 # Role grant provenance
 
 Open **Admin → Roles → Browse user role grants and group provenance**.
