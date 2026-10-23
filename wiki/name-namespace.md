@@ -80,6 +80,13 @@ Do not grant application code permission to edit reservations as a release API.
    Run the candidate [inventory](../ops/name-collision-inventory.sql) there after
    migration through V35. Older schemas require their actual player-table layout;
    do not run queries assuming tables that are not deployed.
+   Then run the read-only [V40 blocker report](../ops/name-namespace-preflight.sql)
+   on that same consistent snapshot. Zero rows means V40's name guard passes;
+   it does not validate Flyway history or certify the release. Unlike the broad
+   candidate inventory, this report excludes allowed same-identity projections,
+   released firm claims and UUID player placeholders, and flags blank names and
+   surrounding whitespace using V40's rules. It retains historical alias claims.
+   Keep its names and identifiers in private operator evidence.
 2. Review conflicts using immutable IDs. Recognize only the player/own PERSONAL
    and alias/own-account projections above. Review archived and alias-history
    claims too. The inventory deliberately keeps projections visible for review.

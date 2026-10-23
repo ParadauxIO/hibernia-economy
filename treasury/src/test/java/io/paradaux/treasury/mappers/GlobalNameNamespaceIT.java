@@ -168,6 +168,78 @@ class GlobalNameNamespaceIT extends IntegrationTestBase {
     }
 
     @Test
+    void operatorPreflightMatchesMigrationGuardWithoutChangingNames() throws Exception {
+        var path = java.nio.file.Path.of("ops/name-namespace-preflight.sql");
+        if (!java.nio.file.Files.exists(path)) path = java.nio.file.Path.of("../ops/name-namespace-preflight.sql");
+        String report = java.nio.file.Files.readString(path);
+        String source;
+        try (var in = getClass().getClassLoader().getResourceAsStream("db/migration/V40__global_name_namespace.sql")) {
+            source = new String(
+                    java.util.Objects.requireNonNull(in).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        String guard = source.substring(
+                source.indexOf("CREATE PROCEDURE global_names_preflight()"),
+                source.indexOf("CALL global_names_preflight()"));
+        String[] tables = {"accounts", "firm", "economy_players", "firm_accounts", "firm_shop_alias_reservations"};
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
+            try {
+                for (String table : tables) {
+                    st.execute("CREATE TEMPORARY TABLE pf_" + table + " LIKE " + table);
+                    guard = guard.replaceAll("\\b" + table + "\\b", "pf_" + table);
+                    report = report.replaceAll("\\b" + table + "\\b", "pf_" + table);
+                }
+                st.execute(guard);
+                st.execute(
+                        "INSERT INTO pf_accounts(account_id,account_type,owner_uuid_bin,display_name) VALUES (1,'PERSONAL',UNHEX('"
+                                + OWNER + "'),'Alice')");
+                st.execute(create("PLAYER", "alice", OWNER).replace("INTO economy_players", "INTO pf_economy_players"));
+                assertPreflight(st, report, null); // Own PERSONAL/player projections are one identity.
+                st.execute(create("FIRM", "Álice", OTHER).replace("INTO firm", "INTO pf_firm"));
+                assertPreflight(st, report, "COLLISION"); // MariaDB's accent/case collation is authoritative.
+                st.execute("UPDATE pf_firm SET is_archived=1,name_released=1");
+                assertPreflight(st, report, null);
+                st.execute("INSERT INTO pf_firm_shop_alias_reservations(alias,account_id) VALUES ('ALICE',1)");
+                assertPreflight(st, report, "COLLISION"); // Alias A:1 is not personal identity P:UUID.
+                st.execute("DELETE FROM pf_firm_shop_alias_reservations");
+                st.execute(
+                        "INSERT INTO pf_accounts(account_id,account_type,owner_uuid_bin,display_name) VALUES (2,'SYSTEM',UNHEX('"
+                                + OTHER + "'),'Plugin')");
+                st.execute("INSERT INTO pf_firm_shop_alias_reservations(alias,account_id) VALUES ('plugin',2)");
+                assertPreflight(st, report, null); // Own-account alias is allowed, even without an active firm link.
+                st.execute("UPDATE pf_firm_shop_alias_reservations SET alias=''");
+                assertPreflight(st, report, "BLANK_NAME");
+                st.execute("DELETE FROM pf_firm_shop_alias_reservations");
+                st.execute("UPDATE pf_firm SET display_name=' Released '");
+                assertPreflight(st, report, "FIRM_WHITESPACE"); // Released names still hit V40's whitespace guard.
+                try (var rows = st.executeQuery("SELECT display_name FROM pf_firm")) {
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getString(1)).isEqualTo(" Released ");
+                }
+            } finally {
+                st.execute("DROP PROCEDURE IF EXISTS global_names_preflight");
+                for (String table : tables) st.execute("DROP TEMPORARY TABLE IF EXISTS pf_" + table);
+            }
+        }
+    }
+
+    private static void assertPreflight(Statement st, String report, String expected) throws Exception {
+        try (var rows = st.executeQuery(report)) {
+            if (expected == null) {
+                assertThat(rows.next()).isFalse();
+            } else {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString("blocker")).isEqualTo(expected);
+                assertThat(rows.next()).isFalse();
+            }
+        }
+        if (expected == null) st.execute("CALL global_names_preflight()");
+        else
+            assertThatThrownBy(() -> st.execute("CALL global_names_preflight()"))
+                    .isInstanceOf(SQLException.class);
+    }
+
+    @Test
     void preflightRejectsExistingCollisionsWithoutRewritingSourceRows() throws Exception {
         String source;
         try (var in = getClass().getClassLoader().getResourceAsStream("db/migration/V40__global_name_namespace.sql")) {
