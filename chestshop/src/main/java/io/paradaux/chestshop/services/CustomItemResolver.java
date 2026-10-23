@@ -16,6 +16,11 @@ public interface CustomItemResolver {
     /** The sign string for a custom item within {@code maxWidth}, or {@code null} if not a custom item. */
     String queryString(ItemStack stack, int maxWidth);
 
+    /** Stable custom item ID used for wildcard matching, independent of display aliases. */
+    default String itemId(ItemStack stack) {
+        return queryString(stack, 0);
+    }
+
     /** Reload the provider's own config (on {@code /chestshop reload}). */
     void reload();
 }

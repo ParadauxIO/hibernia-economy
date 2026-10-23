@@ -84,6 +84,11 @@ public class NexoIntegration implements Integration, CustomItemResolver {
     }
 
     @Override
+    public String itemId(ItemStack stack) {
+        return Nexo.isAutographedItem(stack) ? null : Nexo.getNexoIdFromItem(stack);
+    }
+
+    @Override
     public void reload() {
         Nexo.reload();
     }

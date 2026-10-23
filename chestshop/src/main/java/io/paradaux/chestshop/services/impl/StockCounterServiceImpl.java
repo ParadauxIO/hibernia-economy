@@ -1,31 +1,30 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.utils.SignText;
-import lombok.extern.slf4j.Slf4j;
+import static io.paradaux.chestshop.services.SignService.QUANTITY_LINE;
+import static io.paradaux.chestshop.utils.InventoryUtil.getHolder;
 
-import io.paradaux.chestshop.services.ShopBlockService;
-import io.paradaux.chestshop.services.InventoryService;
-import io.paradaux.chestshop.services.MaterialService;
-import io.paradaux.chestshop.services.StockCounterService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.chestshop.services.ItemService;
-import io.paradaux.chestshop.utils.QuantityUtil;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.model.Transaction;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.InventoryService;
+import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.MaterialService;
+import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.services.StockCounterService;
+import io.paradaux.chestshop.services.WildcardItems;
+import io.paradaux.chestshop.utils.QuantityUtil;
+import io.paradaux.chestshop.utils.SignText;
+import java.util.IllegalFormatException;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-
-import java.util.IllegalFormatException;
-
-import static io.paradaux.chestshop.utils.InventoryUtil.getHolder;
-import static io.paradaux.chestshop.services.SignService.QUANTITY_LINE;
 
 /**
  * The shop-sign stock-counter business logic, extracted from {@code StockCounterListener}
@@ -48,8 +47,13 @@ public class StockCounterServiceImpl implements StockCounterService {
     private final MaterialService materialService;
 
     @Inject
-    public StockCounterServiceImpl(ItemService items, ChestShopConfiguration config, SignService signService,
-                                   ShopBlockService shopBlockService, InventoryService inventoryService, MaterialService materialService) {
+    public StockCounterServiceImpl(
+            ItemService items,
+            ChestShopConfiguration config,
+            SignService signService,
+            ShopBlockService shopBlockService,
+            InventoryService inventoryService,
+            MaterialService materialService) {
         this.items = items;
         this.config = config;
         this.signService = signService;
@@ -82,11 +86,23 @@ public class StockCounterServiceImpl implements StockCounterService {
             return;
         }
 
-        ItemStack itemTradedByShop = determineItemTradedByShop(SignService.getItem(event.getSignLines()));
+        String pattern = SignService.getItem(event.getSignLines());
+        if (WildcardItems.isPattern(pattern)) {
+            Container container = shopBlockService.findConnectedContainer(event.getSign());
+            if (container != null)
+                event.setSignLine(
+                        QUANTITY_LINE,
+                        String.format(
+                                PRICE_LINE_WITH_COUNT, quantity, wildcardCount(pattern, container.getInventory())));
+            return;
+        }
+        ItemStack itemTradedByShop = determineItemTradedByShop(pattern);
         if (itemTradedByShop != null) {
             Container container = shopBlockService.findConnectedContainer(event.getSign());
             if (container != null) {
-                event.setSignLine(QUANTITY_LINE, getQuantityLineWithCounter(quantity, itemTradedByShop, container.getInventory()));
+                event.setSignLine(
+                        QUANTITY_LINE,
+                        getQuantityLineWithCounter(quantity, itemTradedByShop, container.getInventory()));
             }
         }
     }
@@ -119,7 +135,7 @@ public class StockCounterServiceImpl implements StockCounterService {
             return;
         }
 
-        for (Sign shopSign : shopBlockService.findConnectedShopSigns( getHolder(event.getOwnerInventory(), false))) {
+        for (Sign shopSign : shopBlockService.findConnectedShopSigns(getHolder(event.getOwnerInventory(), false))) {
             updateCounterOnQuantityLine(shopSign, event.getOwnerInventory());
         }
     }
@@ -132,8 +148,10 @@ public class StockCounterServiceImpl implements StockCounterService {
      */
     @Override
     public void updateCounterOnQuantityLine(Sign sign, Inventory chestShopInventory, ItemStack... extraItems) {
-        ItemStack itemTradedByShop = determineItemTradedByShop(sign);
-        if (itemTradedByShop == null) {
+        String pattern = SignService.getItem(sign);
+        boolean wildcard = WildcardItems.isPattern(pattern);
+        ItemStack itemTradedByShop = wildcard ? null : determineItemTradedByShop(sign);
+        if (!wildcard && itemTradedByShop == null) {
             return;
         }
 
@@ -144,10 +162,14 @@ public class StockCounterServiceImpl implements StockCounterService {
             return;
         }
 
-        int numTradedItemsInChest = inventoryService.getAmount(itemTradedByShop, chestShopInventory);
+        int numTradedItemsInChest = wildcard
+                ? wildcardCount(pattern, chestShopInventory)
+                : inventoryService.getAmount(itemTradedByShop, chestShopInventory);
 
         for (ItemStack extraStack : extraItems) {
-            if (!materialService.equals(extraStack, itemTradedByShop)) {
+            if (wildcard
+                    ? !new WildcardItems(items).matches(pattern, extraStack)
+                    : !materialService.equals(extraStack, itemTradedByShop)) {
                 continue;
             }
 
@@ -193,6 +215,10 @@ public class StockCounterServiceImpl implements StockCounterService {
         int numTransactionItemsInChest = inventoryService.getAmount(itemTransacted, chestShopInventory);
 
         return String.format(PRICE_LINE_WITH_COUNT, amount, numTransactionItemsInChest);
+    }
+
+    private int wildcardCount(String pattern, Inventory inventory) {
+        return new WildcardItems(items).count(pattern, inventory);
     }
 
     @Override

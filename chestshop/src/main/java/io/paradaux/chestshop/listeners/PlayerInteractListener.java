@@ -1,26 +1,39 @@
 package io.paradaux.chestshop.listeners;
-import io.paradaux.chestshop.utils.StringUtil;
-import io.paradaux.chestshop.utils.SignText;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.utils.BlockUtil;
-import io.paradaux.chestshop.services.AdminBypassService;
-import io.paradaux.chestshop.services.ShopBlockService;
+import static io.paradaux.chestshop.services.SignService.*;
+import static io.paradaux.chestshop.utils.BlockUtil.getState;
+import static io.paradaux.chestshop.utils.BlockUtil.isSign;
+import static io.paradaux.chestshop.utils.Permissions.OTHER_NAME_CREATE;
+import static org.bukkit.event.block.Action.LEFT_CLICK_BLOCK;
+import static org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK;
+
 import com.google.inject.Inject;
-import io.paradaux.chestshop.utils.*;
-import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.model.Account;
+import io.paradaux.chestshop.dialogs.PurchasePreviewMenu;
+import io.paradaux.chestshop.dialogs.ShopVariantsMenu;
 import io.paradaux.chestshop.model.PendingTransaction;
 import io.paradaux.chestshop.model.Transaction;
-import io.paradaux.chestshop.utils.Permissions;
-import io.paradaux.chestshop.services.ProtectionService;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.AdminBypassService;
 import io.paradaux.chestshop.services.InfoService;
 import io.paradaux.chestshop.services.ItemService;
-import io.paradaux.chestshop.services.TransactionService;
+import io.paradaux.chestshop.services.ProtectionService;
+import io.paradaux.chestshop.services.PurchasePreviewService;
+import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.services.ShopVariantsService;
 import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.services.TransactionService;
+import io.paradaux.chestshop.services.WildcardItems;
+import io.paradaux.chestshop.utils.*;
+import io.paradaux.chestshop.utils.BlockUtil;
+import io.paradaux.chestshop.utils.Permissions;
+import io.paradaux.chestshop.utils.SignText;
+import io.paradaux.chestshop.utils.StringUtil;
+import io.paradaux.hibernia.framework.curator.MenuManager;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.util.Map;
+import java.util.WeakHashMap;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.GameMode;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
@@ -32,18 +45,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-
-import java.util.Map;
-import java.util.WeakHashMap;
-
-import static io.paradaux.chestshop.utils.BlockUtil.getState;
-import static io.paradaux.chestshop.utils.BlockUtil.isSign;
-import static io.paradaux.chestshop.utils.Permissions.OTHER_NAME_CREATE;
-import static io.paradaux.chestshop.services.SignService.*;
-import static org.bukkit.event.block.Action.LEFT_CLICK_BLOCK;
-import static org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK;
 
 /**
  * @author Acrobot
@@ -70,11 +72,28 @@ public class PlayerInteractListener implements Listener {
     private final ShopBlockService shopBlockService;
 
     private final AdminBypassService adminBypass;
+    private final PurchasePreviewService previews;
+    private final MenuManager menus;
+    private final ShopVariantsService variants;
 
     @Inject
-    public PlayerInteractListener(TransactionService transactions, InfoService info, AccountService accounts,
-                          ItemService items, Message message, ProtectionService protection,
-                          ChestShopConfiguration config, SignService signService, ShopBlockService shopBlockService, AdminBypassService adminBypass) {
+    public PlayerInteractListener(
+            TransactionService transactions,
+            InfoService info,
+            AccountService accounts,
+            ItemService items,
+            Message message,
+            ProtectionService protection,
+            ChestShopConfiguration config,
+            SignService signService,
+            ShopBlockService shopBlockService,
+            AdminBypassService adminBypass,
+            PurchasePreviewService previews,
+            MenuManager menus,
+            ShopVariantsService variants) {
+        this.variants = variants;
+        this.previews = previews;
+        this.menus = menus;
         this.adminBypass = adminBypass;
         this.transactions = transactions;
         this.info = info;
@@ -90,8 +109,7 @@ public class PlayerInteractListener implements Listener {
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent event) {
         Block block = event.getClickedBlock();
-        if (block == null)
-            return;
+        if (block == null) return;
 
         Action action = event.getAction();
         Player player = event.getPlayer();
@@ -114,15 +132,15 @@ public class PlayerInteractListener implements Listener {
             }
         }
 
-        if (!isSign(block))
-            return;
+        if (!isSign(block)) return;
 
         Sign sign = (Sign) getState(block, false);
         if (!signService.isValid(sign)) {
             return;
         }
 
-        if (config.isAllowAutoItemFill() && StringUtil.stripColourCodes(SignService.getItem(sign)).equals(AUTOFILL_CODE)) {
+        if (config.isAllowAutoItemFill()
+                && StringUtil.stripColourCodes(SignService.getItem(sign)).equals(AUTOFILL_CODE)) {
             if (accounts.hasPermission(player, OTHER_NAME_CREATE, sign)) {
                 ItemStack item = player.getInventory().getItemInMainHand();
                 if (!MaterialUtil.isEmpty(item)) {
@@ -156,13 +174,19 @@ public class PlayerInteractListener implements Listener {
             return;
         }
 
-        boolean notAllowedToTrade = accounts.isOwner(player, sign)
-                || (config.isIgnoreAccessPerms() && accounts.canAccess(player, sign));
-        if (notAllowedToTrade && player.getInventory().getItemInMainHand().getType().name().contains("SIGN") && action == RIGHT_CLICK_BLOCK) {
+        boolean notAllowedToTrade =
+                accounts.isOwner(player, sign) || (config.isIgnoreAccessPerms() && accounts.canAccess(player, sign));
+        if (notAllowedToTrade
+                && player.getInventory().getItemInMainHand().getType().name().contains("SIGN")
+                && action == RIGHT_CLICK_BLOCK) {
             // Allow editing of sign (if supported)
             return;
         } else if ((player.getInventory().getItemInMainHand().getType().name().endsWith("DYE")
-                || player.getInventory().getItemInMainHand().getType().name().endsWith("INK_SAC"))
+                        || player.getInventory()
+                                .getItemInMainHand()
+                                .getType()
+                                .name()
+                                .endsWith("INK_SAC"))
                 && action == RIGHT_CLICK_BLOCK) {
             if (notAllowedToTrade && config.isSignDying()) {
                 return;
@@ -172,8 +196,10 @@ public class PlayerInteractListener implements Listener {
         }
 
         if (notAllowedToTrade && accounts.canAccess(player, sign) && !signService.isAdminShop(sign)) {
-            if (config.isAllowSignChestOpen() && !(config.isIgnoreCreativeMode() && player.getGameMode() == GameMode.CREATIVE)) {
-                if (player.isSneaking() || player.isInsideVehicle()
+            if (config.isAllowSignChestOpen()
+                    && !(config.isIgnoreCreativeMode() && player.getGameMode() == GameMode.CREATIVE)) {
+                if (player.isSneaking()
+                        || player.isInsideVehicle()
                         || (config.isAllowLeftClickDestroying() && action == LEFT_CLICK_BLOCK)) {
                     return;
                 }
@@ -192,7 +218,9 @@ public class PlayerInteractListener implements Listener {
 
         if (action == RIGHT_CLICK_BLOCK) {
             event.setCancelled(true);
-        } else if (action == LEFT_CLICK_BLOCK && !config.isTurnOffSignProtection() && !accounts.canAccess(player, sign)) {
+        } else if (action == LEFT_CLICK_BLOCK
+                && !config.isTurnOffSignProtection()
+                && !accounts.canAccess(player, sign)) {
             event.setCancelled(true);
         }
 
@@ -214,13 +242,23 @@ public class PlayerInteractListener implements Listener {
         }
         LAST_TRADE_CLICK.put(player, now);
 
-        PendingTransaction pEvent = transactions.prepare(sign, player, action);
-        if (pEvent == null)
+        if (WildcardItems.isPattern(SignService.getItem(sign))) {
+            var selection = variants.choices(sign, player, action);
+            if (selection != null) menus.open(player, ShopVariantsMenu.class, selection);
             return;
+        }
+        Action buy = config.isReverseButtons() ? LEFT_CLICK_BLOCK : RIGHT_CLICK_BLOCK;
+        if (action == buy) {
+            var offer = previews.preview(sign, player, action);
+            if (offer != null) menus.open(player, PurchasePreviewMenu.class, offer);
+            return;
+        }
+
+        PendingTransaction pEvent = transactions.prepare(sign, player, action);
+        if (pEvent == null) return;
 
         transactions.validate(pEvent);
-        if (pEvent.isCancelled())
-            return;
+        if (pEvent.isCancelled()) return;
 
         Transaction tEvent = new Transaction(pEvent, sign);
         transactions.process(tEvent);
@@ -237,7 +275,7 @@ public class PlayerInteractListener implements Listener {
         if (!protection.canAccess(player, signBlock)) {
             return;
         }
-        
+
         if (!protection.canAccess(player, container.getBlock())) {
             return;
         }

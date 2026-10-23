@@ -1,5 +1,7 @@
 package io.paradaux.chestshop.services.impl;
 
+import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
+
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.ChestShop;
@@ -14,9 +16,12 @@ import io.paradaux.chestshop.services.PostTradeReactions;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.ShopService;
 import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.services.WildcardItems;
 import io.paradaux.chestshop.utils.InventoryUtil;
 import io.paradaux.chestshop.utils.LocationUtil;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -26,11 +31,6 @@ import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-
-import static io.paradaux.chestshop.model.Transaction.TransactionType.BUY;
 
 /**
  * The ChestShop-internal MONITOR reactions to a settled trade — remove an emptied shop, write the
@@ -56,8 +56,16 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
     private final InventoryService inventoryService;
 
     @Inject
-    PostTradeReactionsImpl(EconomyService economy, ShopService shops, AccountService accounts, Message message, ItemService items,
-                       ChestShopConfiguration config, SignService signService, ShopBlockService shopBlockService, InventoryService inventoryService) {
+    PostTradeReactionsImpl(
+            EconomyService economy,
+            ShopService shops,
+            AccountService accounts,
+            Message message,
+            ItemService items,
+            ChestShopConfiguration config,
+            SignService signService,
+            ShopBlockService shopBlockService,
+            InventoryService inventoryService) {
         this.economy = economy;
         this.shops = shops;
         this.accounts = accounts;
@@ -80,6 +88,9 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
             return;
         }
         Inventory ownerInventory = event.getOwnerInventory();
+        String pattern = SignService.getItem(sign);
+        if (WildcardItems.isPattern(pattern)
+                && !new WildcardItems(items).variants(pattern, ownerInventory).isEmpty()) return;
         if (!shopShouldBeRemoved(ownerInventory, event.getStock()) || !isInRemoveWorld(sign)) {
             return;
         }
@@ -98,7 +109,8 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
             if (!signType.isItem()) {
                 try {
                     signType = Material.valueOf(signType.name().replace("WALL_", ""));
-                } catch (IllegalArgumentException ignored) {}
+                } catch (IllegalArgumentException ignored) {
+                }
             }
             if (signType.isItem()) {
                 ownerInventory.addItem(new ItemStack(signType, 1));
@@ -125,7 +137,8 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
     }
 
     private boolean isInRemoveWorld(Sign sign) {
-        return config.getRemoveEmptyWorlds().isEmpty() || config.getRemoveEmptyWorlds().contains(sign.getWorld().getName());
+        return config.getRemoveEmptyWorlds().isEmpty()
+                || config.getRemoveEmptyWorlds().contains(sign.getWorld().getName());
     }
 
     /** Write a completed trade to the shop log. */
@@ -134,7 +147,8 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
         String template = event.getTransactionType() == BUY ? BUY_LOG : SELL_LOG;
 
         StringBuilder itemList = new StringBuilder(50);
-        for (Map.Entry<ItemStack, Integer> entry : inventoryService.getItemCounts(event.getStock()).entrySet()) {
+        for (Map.Entry<ItemStack, Integer> entry :
+                inventoryService.getItemCounts(event.getStock()).entrySet()) {
             itemList.append(entry.getValue()).append(' ').append(items.getName(entry.getKey()));
         }
 
@@ -145,7 +159,8 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
         // affect the already-committed, synchronous trade. This is the only post-trade step
         // with no main-thread dependency — the money legs (atomic) and the
         // market sync (recordSale fires a synchronous Bukkit event) must stay on-thread.
-        String line = String.format(template,
+        String line = String.format(
+                template,
                 event.getClient().getName(),
                 itemList.toString(),
                 event.getExactPrice(),
@@ -161,16 +176,23 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
         boolean buy = event.getTransactionType() == BUY;
 
         if (config.isShowTransactionInformationClient()) {
-            sendTradeMessage(player,
-                    buy ? "chestshop.YOU_BOUGHT_FROM_SHOP" : "chestshop.YOU_SOLD_TO_SHOP", event,
-                    buy ? "owner" : "buyer", event.getOwnerAccount().getName());
+            sendTradeMessage(
+                    player,
+                    buy ? "chestshop.YOU_BOUGHT_FROM_SHOP" : "chestshop.YOU_SOLD_TO_SHOP",
+                    event,
+                    buy ? "owner" : "buyer",
+                    event.getOwnerAccount().getName());
         }
 
-        if (config.isShowTransactionInformationOwner() && !accounts.isIgnoring(event.getOwnerAccount().getUuid())) {
+        if (config.isShowTransactionInformationOwner()
+                && !accounts.isIgnoring(event.getOwnerAccount().getUuid())) {
             Player owner = Bukkit.getPlayer(event.getOwnerAccount().getUuid());
-            sendTradeMessage(owner,
-                    buy ? "chestshop.SOMEBODY_BOUGHT_FROM_YOUR_SHOP" : "chestshop.SOMEBODY_SOLD_TO_YOUR_SHOP", event,
-                    buy ? "buyer" : "seller", player.getName());
+            sendTradeMessage(
+                    owner,
+                    buy ? "chestshop.SOMEBODY_BOUGHT_FROM_YOUR_SHOP" : "chestshop.SOMEBODY_SOLD_TO_YOUR_SHOP",
+                    event,
+                    buy ? "buyer" : "seller",
+                    player.getName());
         }
     }
 
@@ -193,6 +215,7 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
         }
 
         replacementMap.put("item", items.getItemList(event.getStock()));
-        player.sendMessage(message.component(key, io.paradaux.chestshop.utils.MessageUtil.values(true, replacementMap)));
+        player.sendMessage(
+                message.component(key, io.paradaux.chestshop.utils.MessageUtil.values(true, replacementMap)));
     }
 }

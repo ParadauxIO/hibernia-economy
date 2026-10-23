@@ -116,6 +116,13 @@ public final class MockPlayer implements AutoCloseable {
     /** Every player between a successful {@link #connect} and {@link #close}/disconnect. */
     private static final Set<MockPlayer> OPEN = ConcurrentHashMap.newKeySet();
 
+    private volatile org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundOpenScreenPacket currentScreen;
+
+    /** Latest server-opened screen, cleared on either side closing it. */
+    public Optional<org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundOpenScreenPacket> currentScreen() {
+        return Optional.ofNullable(currentScreen);
+    }
+
     private volatile Position currentPosition;
     private volatile boolean connected;
     private volatile boolean playerLoadedSent;
@@ -469,6 +476,7 @@ public final class MockPlayer implements AutoCloseable {
 
     /** Send a protocol packet, including deliberately stale/forged packets in adversarial tests. */
     public void sendPacket(Packet packet) {
+        if (packet instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.inventory.ServerboundContainerClosePacket) currentScreen = null;
         session.send(Objects.requireNonNull(packet, "packet"));
     }
 
@@ -670,6 +678,8 @@ public final class MockPlayer implements AutoCloseable {
     private final class SessionListener extends SessionAdapter {
         @Override
         public void packetReceived(Session s, Packet p) {
+            if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundOpenScreenPacket screen) currentScreen = screen;
+            if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerClosePacket) currentScreen = null;
             if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerSetContentPacket content) {
                 containers.put(content.getContainerId(), content);
             }

@@ -160,6 +160,21 @@ class ShopServiceImplTest extends ServerTest {
         assertThat(ctx.getOutcome()).isEqualTo(CreationOutcome.SHOP_CREATED_SUCCESSFULLY);
     }
 
+    @Test
+    void wildcardCreationPreservesPatternAndRequiresMatchingStock() {
+        when(adminBypass.has(player, Permissions.SHOP_CREATION_BUY)).thenReturn(true);
+        when(items.wildcardName(any())).thenReturn("carlton_dry_bottle");
+        when(items.getName(any())).thenReturn("Diamond");
+        String[] lines = {"Notch", "2", "B 5", "carlton_dry*"};
+        assertThat(create(lines.clone()).isCancelled()).isTrue();
+        container.getInventory().addItem(diamond.clone());
+        var result = create(lines.clone());
+        assertThat(result.isCancelled()).isFalse();
+        assertThat(result.getSignLines()[3]).isEqualTo("carlton_dry*");
+        when(adminBypass.has(player, Permissions.SHOP_CREATION_BUY)).thenReturn(false);
+        assertThat(create(lines.clone()).isCancelled()).isTrue();
+    }
+
     // ---- checkItem --------------------------------------------------------------
 
     @Test

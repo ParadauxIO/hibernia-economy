@@ -18,6 +18,7 @@ import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.TradeContextFactory;
+import io.paradaux.chestshop.services.WildcardItems;
 import io.paradaux.chestshop.utils.PriceUtil;
 import io.paradaux.hibernia.framework.i18n.Message;
 import java.math.BigDecimal;
@@ -70,6 +71,11 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
 
     @Override
     public PendingTransaction prepare(Sign sign, Player player, Action action) {
+        return prepare(sign, player, action, null);
+    }
+
+    @Override
+    public PendingTransaction prepare(Sign sign, Player player, Action action, ItemStack selected) {
         String name = SignService.getOwner(sign);
         String prices = SignService.getPrice(sign);
         String material = SignService.getItem(sign);
@@ -94,7 +100,13 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
         Container shopBlock = shopBlockService.findConnectedContainer(sign);
         Inventory ownerInventory = shopBlock != null ? shopBlock.getInventory() : null;
 
-        ItemStack item = items.parse(material);
+        ItemStack item;
+        if (WildcardItems.isPattern(material)) {
+            var wildcard = new WildcardItems(items);
+            item = wildcard.matches(material, selected) ? selected.clone() : null;
+        } else {
+            item = selected == null ? items.parse(material) : null;
+        }
         if (item == null) {
             message.send(player, "chestshop.INVALID_SHOP_DETECTED");
             return null;

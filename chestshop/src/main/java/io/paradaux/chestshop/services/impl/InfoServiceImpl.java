@@ -125,19 +125,25 @@ public class InfoServiceImpl implements InfoService {
         String ownerName = account.getName();
         ownerName = ownerName != null ? ownerName : nameLine;
 
-        ItemStack item = items.parse(SignService.getItem(sign));
-        if (item == null || amount < 1) {
+        String itemCode = SignService.getItem(sign);
+        boolean wildcard = io.paradaux.chestshop.services.WildcardItems.isPattern(itemCode);
+        ItemStack item = wildcard ? null : items.parse(itemCode);
+        if ((!wildcard && item == null) || amount < 1) {
             message.send(sender, "chestshop.INVALID_SHOP_DETECTED");
             return;
         }
 
         Container shopBlock = shopBlockService.findConnectedContainer(sign);
         String stock = shopBlock != null
-                ? String.valueOf(inventoryService.getAmount(item, shopBlock.getInventory()))
+                ? String.valueOf(
+                        wildcard
+                                ? new io.paradaux.chestshop.services.WildcardItems(items)
+                                        .count(itemCode, shopBlock.getInventory())
+                                : inventoryService.getAmount(item, shopBlock.getInventory()))
                 : "∞"; // Infinity symbol
 
         Map<String, String> replacementMap = ImmutableMap.of(
-                "item", items.getName(item),
+                "item", wildcard ? itemCode : items.getName(item),
                 "stock", stock,
                 "owner", ownerName,
                 "prices", pricesLine,
@@ -147,9 +153,11 @@ public class InfoServiceImpl implements InfoService {
         BigDecimal buyPrice = PriceUtil.getExactBuyPrice(pricesLine);
         BigDecimal sellPrice = PriceUtil.getExactSellPrice(pricesLine);
 
-        ItemInfoLines lines = collectItemInfo(sender, item);
-        for (Map.Entry<String, Component> entry : lines.getMessages()) {
-            sender.sendMessage(entry.getValue());
+        if (!wildcard) {
+            ItemInfoLines lines = collectItemInfo(sender, item);
+            for (Map.Entry<String, Component> entry : lines.getMessages()) {
+                sender.sendMessage(entry.getValue());
+            }
         }
 
         if (buyPrice.compareTo(PriceUtil.NO_PRICE) != 0) {

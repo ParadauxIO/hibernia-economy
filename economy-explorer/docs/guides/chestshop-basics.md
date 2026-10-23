@@ -80,11 +80,36 @@ money to buy, or the customer can't afford even a single item.
 
 To trade at a shop, click its sign:
 
-- **Right-click** to **buy** from the shop.
+- **Right-click** to inspect a purchase in an inventory menu. Hover over the items
+  to inspect their name, lore, and other details, then confirm the displayed quantity
+  and price to **buy**. Close the menu or choose **Cancel** to leave without buying.
 - **Left-click** to **sell** to it.
 
 The [partial-trade](#partial-trades) rule works in your favour as a shopper too: if you
 can't afford a full stack, you'll still get as many as your money covers.
+
+If stock, price, quantity, or access changes before confirmation, the purchase may
+be rejected. Click the sign again to review a fresh offer.
+
+## Sell several variations with one sign
+
+Use a literal prefix followed by `*` on the item line, for example `carlton_dry*`.
+It matches item codes beginning with that prefix, ignoring case. For Nexo items,
+matching uses the custom item ID rather than a display alias. Only one trailing
+`*` is supported; `*` alone is not accepted.
+
+Place at least one matching item in the connected container before creating the
+sign. Keep sample items in the container for unlimited admin shops too. The sign's
+quantity and price apply to whichever variation the customer chooses.
+
+Buying opens a menu of matching variations currently in the chest. Selling opens
+matching variations in the customer's inventory. Select one, inspect the exact
+items and price, then confirm. Different names, lore, and other metadata remain
+separate choices; a trade never automatically substitutes another variation.
+
+The stock counter totals all matching variations. Wildcard shops are currently
+excluded from `/find` and market shop listings, which represent one exact item per
+shop; completed sales still appear in transaction history.
 
 ## Check a shop
 

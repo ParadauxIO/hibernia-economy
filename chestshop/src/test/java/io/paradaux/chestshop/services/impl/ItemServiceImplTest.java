@@ -114,6 +114,21 @@ class ItemServiceImplTest extends ServerTest {
         }
     }
 
+    @Test
+    void wildcardIdentityUsesStableCustomIdAndFallsBackForOrdinaryItems() {
+        var service = newService();
+        var diamond = item(Material.DIAMOND, 1);
+        assertThat(service.wildcardName(diamond)).startsWith("Diamond");
+        var resolver = mock(CustomItemResolver.class);
+        service.registerCustomItemResolver(resolver);
+        when(resolver.itemId(diamond)).thenReturn("carlton_dry_bottle");
+        when(resolver.queryString(diamond, 0)).thenReturn("ShortAlias");
+        assertThat(service.wildcardName(diamond)).isEqualTo("carlton_dry_bottle");
+        when(resolver.itemId(diamond)).thenReturn(null);
+        when(resolver.queryString(diamond, 0)).thenReturn(null);
+        assertThat(service.wildcardName(diamond)).startsWith("Diamond");
+    }
+
     // ---- loadAliases (constructor) ---------------------------------------------
 
     @Test
