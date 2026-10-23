@@ -61,14 +61,18 @@ class ResyncCommandsTest {
                 RconClient.send("lp user " + name + " permission set chestshop.admin false");
                 Await.until("resync permission revoked", () -> Perms.check(name, "chestshop.admin"),
                         r -> r.contains("has=false"), TIMEOUT);
-                var chest = live.chestPos();
-                RconClient.send("item replace block " + chest.x() + " " + chest.y() + " " + chest.z() + " container.0 with minecraft:dirt 7");
                 owner.drainMessages();
                 owner.chatCommand("/" + root + " resync 64");
+                // Assert the command rejection itself. Changing stock here races with
+                // legitimate chunk discovery, which can refresh it without this command.
+                owner.awaitMessage(m -> m.toLowerCase(java.util.Locale.ROOT).contains("permission")
+                        || m.toLowerCase(java.util.Locale.ROOT).contains("unknown"), TIMEOUT);
                 Barrier.settle();
                 assertThat(row(live)).isEqualTo(refreshed);
                 assertThat(owner.collectedMessages()).noneMatch(m -> m.contains("Resync queued") || m.contains("loaded chunks") || m.contains("Resync complete"));
                 Perms.grant(name, "chestshop.admin");
+                var chest = live.chestPos();
+                RconClient.send("item replace block " + chest.x() + " " + chest.y() + " " + chest.z() + " container.0 with minecraft:dirt 7");
                 run(owner, root);
                 assertThat(row(live).currentStock()).isEqualTo(7);
                 assertThat(row(live).shopId()).isEqualTo(original.shopId());

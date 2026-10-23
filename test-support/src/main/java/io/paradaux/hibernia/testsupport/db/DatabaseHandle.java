@@ -78,6 +78,12 @@ final class DatabaseHandle implements AutoCloseable {
         } else {
             try {
                 DBConfigurationBuilder cfg = DBConfigurationBuilder.newBuilder();
+                // Separate JVMs run these suites concurrently. MariaDB4j removes its
+                // temporary binaries at shutdown, so none of its directories may be shared.
+                var directory = java.nio.file.Files.createTempDirectory("economy-test-db-");
+                cfg.setBaseDir(directory.resolve("base").toFile());
+                cfg.setDataDir(directory.resolve("data").toFile());
+                cfg.setTmpDir(directory.resolve("tmp").toString());
                 cfg.setPort(0); // dynamic free port
                 DBConfiguration dbConfig = cfg.build();
                 embedded = DB.newEmbeddedDB(dbConfig);
