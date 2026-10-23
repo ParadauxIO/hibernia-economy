@@ -8,6 +8,7 @@ import io.paradaux.chestshop.services.EconomyService;
 import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.MetricsService;
 import io.paradaux.chestshop.services.PostTradeReactions;
+import io.paradaux.chestshop.services.SettledPurchasePublisher;
 import io.paradaux.chestshop.services.StockCounterService;
 import io.paradaux.chestshop.services.TradeContextFactory;
 import io.paradaux.chestshop.services.TradeSettlement;
@@ -40,6 +41,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final StockCounterService stockCounter;
     private final MarketSyncService market;
     private final MetricsService metrics;
+    private final SettledPurchasePublisher purchases;
 
     @Inject
     public TransactionServiceImpl(
@@ -50,7 +52,8 @@ public class TransactionServiceImpl implements TransactionService {
             EconomyService economy,
             StockCounterService stockCounter,
             MarketSyncService market,
-            MetricsService metrics) {
+            MetricsService metrics,
+            SettledPurchasePublisher purchases) {
         this.contextFactory = contextFactory;
         this.validator = validator;
         this.settlement = settlement;
@@ -59,6 +62,7 @@ public class TransactionServiceImpl implements TransactionService {
         this.stockCounter = stockCounter;
         this.market = market;
         this.metrics = metrics;
+        this.purchases = purchases;
     }
 
     @Override
@@ -90,6 +94,13 @@ public class TransactionServiceImpl implements TransactionService {
 
         if (event.isCancelled()) {
             return;
+        }
+        // Publish before optional cleanup/logging/messages: their failure cannot hide settled goods.
+        // Observer failure must not interrupt the already committed trade's remaining reactions.
+        try {
+            purchases.publish(event);
+        } catch (RuntimeException e) {
+            log.warn("Could not publish the settled purchase notification", e);
         }
         postTrade.deleteEmptyShop(event); // was @HIGHEST EmptyShopDeleter
 
