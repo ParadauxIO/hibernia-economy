@@ -340,9 +340,16 @@ public class FirmServiceImpl implements FirmService {
         // the flag (1 row affected) owns the drain; a loser that sees 0 rows
         // short-circuits here, before touching any balance, and leaves it to the
         // winner (business/behaviour/0002). A resumed disband skips the gate — the
-        // flag was flipped by the run it is finishing.
+        // flag was flipped by the run it is finishing. The owner comparison rejects
+        // stale snapshots; archived ownership stays fixed for every resumed sweep.
         if (!resumed) {
-            if (firms.archiveFirm(firm.getFirmId()) == 0) {
+            if (firms.archiveFirm(firm.getFirmId(), firm.getProprietorUuid()) == 0) {
+                Firm current = firms.getFirmById(firm.getFirmId());
+                if (current == null
+                        || !Boolean.TRUE.equals(current.getArchived())
+                        || !proprietorUuid.toString().equalsIgnoreCase(current.getProprietorUuid())) {
+                    throw new BadCommandException("Firm ownership changed; disband was not performed. Try again.");
+                }
                 LOG.log(
                         Level.FINE,
                         "Firm {0} was already archived by a concurrent disband; skipping drain.",
@@ -477,7 +484,9 @@ public class FirmServiceImpl implements FirmService {
         Firm firm = new Firm();
         firm.setFirmId(firmId);
         firm.setProprietorUuid(playerId.toString());
-        firms.updateFirm(firm);
+        if (firms.updateFirm(firm) == 0) {
+            throw new BadCommandException("Cannot transfer ownership of an archived or missing firm.");
+        }
         // The outgoing proprietor is no longer a member: re-check the firm's chat.
         chatProvider.get().membershipChanged(firmId);
     }

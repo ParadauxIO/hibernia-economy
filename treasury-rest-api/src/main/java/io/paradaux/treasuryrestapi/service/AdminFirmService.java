@@ -65,7 +65,7 @@ public class AdminFirmService {
     public FirmDisbandResponse disband(VerifiedToken verified, long firmId) {
         requireServiceKey(verified);
 
-        Firm firm = firmMapper.findFirmById(firmId);
+        Firm firm = firmMapper.lockFirmById(firmId);
         if (firm == null) {
             throw new ApiException(HttpStatus.NOT_FOUND, "FIRM_NOT_FOUND", "Firm not found.");
         }

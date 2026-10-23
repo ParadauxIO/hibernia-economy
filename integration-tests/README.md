@@ -147,7 +147,7 @@ because Gradle cannot fingerprint external server/database state.
 
 Those are the foundations; the last full acceptance covered 94 classes (532 cases, including parameterized invocations and explicit skips) across
 `business/`, `chestshop/`, `treasury/`, `restapi/` (including the SERVICE-scoped admin API,
-`AdminApiTest`) and `ingest/`.
+`AdminApiTest`). The retired standalone TreasuryIngest plugin is no longer part of acceptance.
 
 **Runtime** (measured October 2026 on a shared 16-core box, `IT_SKIP_BUILD=1`): about
 4 minutes for the `:tests:test` task and 6 minutes for the whole of `run.sh` (stack
@@ -410,7 +410,9 @@ Avoid running a separate root build while the live runner assembles its server.
 
 ### Real Nexo profile
 
-Supply your own compatible Nexo plugin locally; no licensed JAR or existing server
+Real Nexo is prohibited in CI. The runner rejects `nexo`/`providers` profiles and
+`IT_NEXO_JAR` in CI, before starting Java or building anything. CI continues to use
+the diagnostic stub. Supply your own compatible Nexo plugin locally; no licensed JAR or existing server
 configuration is downloaded from the clone or redistributed by this repository:
 
 ```sh

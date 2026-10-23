@@ -101,7 +101,7 @@ public class TaxCommands implements CommandHandler {
                 "firm",
                 f.getDisplayName(),
                 "exempt",
-                exemptStatus,
+                Message.rich(exemptStatus),
                 "balance",
                 balanceFmt,
                 "rate",

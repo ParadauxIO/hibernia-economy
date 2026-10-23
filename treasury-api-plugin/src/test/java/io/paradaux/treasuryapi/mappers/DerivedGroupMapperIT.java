@@ -58,7 +58,7 @@ class DerivedGroupMapperIT extends IntegrationTestBase {
         mapper.refresh(business, player);
         assertThat(mapper.listMembers(business)).isEmpty();
         execute("DELETE FROM explorer_group_sync WHERE source = 'realty'");
-        mapper.removeUnconfigured();
+        for (var binding : mapper.listUnconfigured()) mapper.removeUnconfigured(binding);
         assertThat(mapper.listMembers(realty)).isEmpty();
         assertThat(count("SELECT COUNT(*) FROM explorer_group_member")).isEqualTo(2);
     }

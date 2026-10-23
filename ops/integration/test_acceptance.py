@@ -10,6 +10,19 @@ import acceptance
 
 
 class AcceptanceEvidenceTest(unittest.TestCase):
+    def test_ci_rejects_real_nexo_before_build_or_runtime_start(self):
+        for profile, artifact, ci, github in (
+                ('nexo', '', 'true', ''), ('providers', '', '1', ''),
+                ('core', '/licensed/nexo.jar', 'true', ''),
+                ('nexo', '', '', 'true')):
+            with self.subTest(profile=profile, artifact=artifact, ci=ci, github=github):
+                env = {**os.environ, 'CI': ci, 'GITHUB_ACTIONS': github,
+                       'IT_NEXO_JAR': artifact, 'JAVA_HOME': '/must-not-start-java'}
+                result = subprocess.run(['bash', str(acceptance.ROOT / 'ops/integration/run.sh'),
+                                         '--profile', profile], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('Real Nexo artifacts are prohibited in CI', result.stderr)
+
     def test_source_fingerprint_detects_tracked_and_untracked_edits(self):
         scratch = acceptance.ROOT / '.context/par-502'
         scratch.mkdir(parents=True, exist_ok=True)

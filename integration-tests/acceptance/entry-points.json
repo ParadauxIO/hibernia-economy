@@ -1253,7 +1253,7 @@
     {
       "kind": "scheduled",
       "source": "business/src/main/java/io/paradaux/business/Business.java",
-      "line": 157,
+      "line": 162,
       "trigger": "runTaskTimerAsynchronously("
     },
     {
@@ -2148,6 +2148,44 @@
         "company"
       ],
       "route": "help <page>"
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MenuCommands.java",
+      "line": 51,
+      "value": "\"business.menu\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/MenuCommands.java",
+      "line": 66,
+      "value": "\"business.menu\""
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MenuCommands.java",
+      "line": 50,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "menu"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/MenuCommands.java",
+      "line": 65,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "menu <firm>"
     },
     {
       "kind": "permission",

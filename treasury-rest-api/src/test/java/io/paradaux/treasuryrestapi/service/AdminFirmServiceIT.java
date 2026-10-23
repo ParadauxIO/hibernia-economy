@@ -1,18 +1,17 @@
 package io.paradaux.treasuryrestapi.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+
 import io.paradaux.treasuryrestapi.dto.FirmDisbandResponse;
 import io.paradaux.treasuryrestapi.dto.FirmResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Integration tests for {@link AdminFirmService} (PAR-210) against the embedded
@@ -39,6 +38,61 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
     }
 
     // ── disband ──────────────────────────────────────────────────────────────────
+
+    @Test
+    void disbandWaitsForOwnershipTransferAndRefundsTheOwnerAtArchive() throws Exception {
+        UUID nextOwner = UUID.randomUUID();
+        insertAccount(1, "PERSONAL", PROPRIETOR, "Old owner");
+        insertAccount(4, "PERSONAL", nextOwner, "New owner");
+        seedBalance(1, "0.00");
+        seedBalance(4, "0.00");
+        insertFirm(10, "Contended", PROPRIETOR, null);
+        insertAccount(2, "BUSINESS", null, "Contended Main");
+        linkFirmAccount(10, 2);
+        seedBalance(2, "125.00");
+        try (var ownerChange = dataSource.getConnection();
+                var workers = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            ownerChange.setAutoCommit(false);
+            try (var statement = ownerChange.prepareStatement(
+                    "UPDATE firm SET proprietor_uuid_bin = uuid_to_bin(?) WHERE firm_id = 10")) {
+                statement.setString(1, nextOwner.toString());
+                statement.executeUpdate();
+            }
+            var disband = workers.submit(() -> adminFirmService.disband(serviceToken(), 10));
+            try {
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+                boolean waiting = false;
+                while (!waiting && System.nanoTime() < deadline) {
+                    try (var c = dataSource.getConnection();
+                            var st = c.createStatement();
+                            var rows = st.executeQuery("SELECT COUNT(*) FROM information_schema.PROCESSLIST "
+                                    + "WHERE ID <> CONNECTION_ID() AND (INFO LIKE '%UPDATE firm SET is_archived%' "
+                                    + "OR (INFO LIKE '%SELECT%FROM firm WHERE firm_id%FOR UPDATE'))")) {
+                        rows.next();
+                        waiting = rows.getInt(1) > 0;
+                    }
+                    if (disband.isDone()) disband.get();
+                    if (!waiting) java.util.concurrent.TimeUnit.MILLISECONDS.sleep(20);
+                }
+                assertThat(waiting)
+                        .as("disband reached the firm lock held by ownership transfer")
+                        .isTrue();
+                ownerChange.commit();
+                var response = disband.get(10, java.util.concurrent.TimeUnit.SECONDS);
+                assertThat(response.accounts())
+                        .singleElement()
+                        .satisfies(a -> assertThat(a.toAccountId()).isEqualTo(4L));
+                assertThat(sumPostings(1)).isEqualByComparingTo("0.00");
+                assertThat(sumPostings(4)).isEqualByComparingTo("125.00");
+                assertThat(sumPostings(2)).isEqualByComparingTo("-125.00");
+                assertThat(rowCount("ledger_txns")).isEqualTo(1);
+                assertThat(rowCount("ledger_postings")).isEqualTo(2);
+                assertThat(isFirmArchived(10)).isTrue();
+            } finally {
+                ownerChange.rollback();
+            }
+        }
+    }
 
     @Test
     void disband_sweepsBalances_archivesAccounts_softDeletesLinks_archivesFirm() {
@@ -104,8 +158,7 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
         linkFirmAccount(10, 2);
         seedBalance(2, "100.00");
 
-        ApiException ex = catchThrowableOfType(
-                () -> adminFirmService.disband(serviceToken(), 10), ApiException.class);
+        ApiException ex = catchThrowableOfType(() -> adminFirmService.disband(serviceToken(), 10), ApiException.class);
         assertThat(ex).isNotNull();
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(ex.getErrorCode()).isEqualTo("PROPRIETOR_NO_PERSONAL_ACCOUNT");
@@ -114,16 +167,14 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
     @Test
     void disband_requiresServiceKey() {
         insertFirm(10, "Acme", PROPRIETOR, null);
-        ApiException ex = catchThrowableOfType(
-                () -> adminFirmService.disband(personalToken(), 10), ApiException.class);
+        ApiException ex = catchThrowableOfType(() -> adminFirmService.disband(personalToken(), 10), ApiException.class);
         assertThat(ex).isNotNull();
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test
     void disband_unknownFirm_is404() {
-        ApiException ex = catchThrowableOfType(
-                () -> adminFirmService.disband(serviceToken(), 999), ApiException.class);
+        ApiException ex = catchThrowableOfType(() -> adminFirmService.disband(serviceToken(), 999), ApiException.class);
         assertThat(ex).isNotNull();
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -135,14 +186,15 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
         insertFirm(10, "Acme", PROPRIETOR, null);
         insertFirm(11, "Beta", PROPRIETOR, null);
         adminFirmService.disband(serviceToken(), 10);
-        ApiException taken = catchThrowableOfType(
-                () -> adminFirmService.rename(serviceToken(), 11, "ACME"), ApiException.class);
+        ApiException taken =
+                catchThrowableOfType(() -> adminFirmService.rename(serviceToken(), 11, "ACME"), ApiException.class);
         assertThat(taken).isNotNull();
         assertThat(taken.getErrorCode()).isEqualTo("NAME_TAKEN");
         // Simulate the plugin admin command's persisted release, not an API disband.
         exec("UPDATE firm SET name_released = 1 WHERE firm_id = ?", ps -> ps.setInt(1, 10));
 
-        assertThat(adminFirmService.rename(serviceToken(), 11, "ACME").displayName()).isEqualTo("ACME");
+        assertThat(adminFirmService.rename(serviceToken(), 11, "ACME").displayName())
+                .isEqualTo("ACME");
         assertThat(firmService.getPublicFirm("acme").firmId()).isEqualTo(11);
         adminFirmService.disband(serviceToken(), 11);
         assertThat(firmService.getPublicFirm("Acme").firmId()).isEqualTo(11);
@@ -175,8 +227,8 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
         insertFirm(10, "Acme", PROPRIETOR, null);
         insertFirm(11, "Beta", PROPRIETOR, null);
 
-        ApiException ex = catchThrowableOfType(
-                () -> adminFirmService.rename(serviceToken(), 11, "acme"), ApiException.class);
+        ApiException ex =
+                catchThrowableOfType(() -> adminFirmService.rename(serviceToken(), 11, "acme"), ApiException.class);
         assertThat(ex).isNotNull();
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(ex.getErrorCode()).isEqualTo("NAME_TAKEN");
@@ -221,8 +273,8 @@ class AdminFirmServiceIT extends EmbeddedDbIT {
     }
 
     private void assertBadName(int firmId, String name) {
-        ApiException ex = catchThrowableOfType(
-                () -> adminFirmService.rename(serviceToken(), firmId, name), ApiException.class);
+        ApiException ex =
+                catchThrowableOfType(() -> adminFirmService.rename(serviceToken(), firmId, name), ApiException.class);
         assertThat(ex).isNotNull();
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ex.getErrorCode()).isEqualTo("INVALID_BODY");
