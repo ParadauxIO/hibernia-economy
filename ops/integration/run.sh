@@ -479,6 +479,24 @@ printf 'log-notify: false\n' >"$SERVER/plugins/LuckPerms/config.yml"
 # only the sentinel (Spigot fills in every other default); /skill is Spigot's default.
 printf 'commands:\n  spam-exclusions:\n  - /skill\n  - /dcsync\n' >"$SERVER/spigot.yml"
 
+# A local `build` also creates Spring Boot's non-executable *-plain.jar. Never
+# let the launch glob select it (or silently choose between stale versions).
+REST_JARS=()
+for candidate in "$ROOT"/treasury-rest-api/build/libs/treasury-rest-api-*.jar; do
+  if [[ -f "$candidate" && "$candidate" != *-plain.jar ]]; then
+    REST_JARS+=("$candidate")
+  fi
+done
+if [ "${#REST_JARS[@]}" -ne 1 ]; then
+  echo "Expected exactly one executable treasury-rest-api jar, found ${#REST_JARS[@]}" >&2
+  exit 1
+fi
+
+# Capture exactly the installed JARs before either runtime starts. Configs and
+# credentials are deliberately excluded from the retained evidence.
+python3 "$ROOT/ops/integration/artifacts.py" --paper "$CACHE/$PAPER_JAR" \
+    --plugins "$SERVER/plugins" --rest "${REST_JARS[0]}" --output "$WORK/runtime-artifacts.json"
+
 log "Starting Paper on :$MC_PORT (RCON :$RCON_PORT)"
 (cd "$SERVER" && exec "$JAVA_BIN" -Dterminal.jline=false -Dterminal.ansi=false -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \
     -jar "$CACHE/$PAPER_JAR" --nogui >"$WORK/server.log" 2>&1) &
@@ -493,19 +511,6 @@ for plugin in Treasury Business TreasuryAPI ChestShop LuckPerms DcDiag; do
     exit 1
   fi
 done
-
-# A local `build` also creates Spring Boot's non-executable *-plain.jar. Never
-# let the launch glob select it (or silently choose between stale versions).
-REST_JARS=()
-for candidate in "$ROOT"/treasury-rest-api/build/libs/treasury-rest-api-*.jar; do
-  if [[ -f "$candidate" && "$candidate" != *-plain.jar ]]; then
-    REST_JARS+=("$candidate")
-  fi
-done
-if [ "${#REST_JARS[@]}" -ne 1 ]; then
-  echo "Expected exactly one executable treasury-rest-api jar, found ${#REST_JARS[@]}" >&2
-  exit 1
-fi
 
 log "Starting the REST API on :$REST_PORT"
 DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \

@@ -235,6 +235,15 @@ reuses the existing plugin jars and is recorded in the summary; use it only afte
 building the checkout. `python3 ops/integration/test_acceptance.py` checks evidence
 counting and redaction without starting a server.
 
+Before starting Paper or REST, the runner writes `runtime-artifacts.json` with
+the SHA-256 and size of the selected Paper/REST JARs and every installed top-level
+plugin JAR, including supplied providers. The repeated acceptance runner retains
+this inventory with each summary and rejects missing/invalid evidence or different
+artifacts between runs, even when the source SHA and JAR filenames are unchanged.
+No configurations, credentials or absolute artifact paths are included. Matching
+JARs do not certify private resource packs, graphical rendering or Bedrock behavior;
+those still need separate acceptance. A skipped build remains explicitly recorded.
+
 The script builds the plugins from the checkout, boots Paper (offline mode, RCON), a
 migrated MariaDB and the REST API, runs `:tests:test` and tears it all down.
 
