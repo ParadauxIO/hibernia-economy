@@ -13,7 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Exercises the supplied Utilities listener through native shop transactions. */
 @EnabledIfEnvironmentVariable(named = "IT_PROVIDERS_PROFILE", matches = "true")
 class UtilitiesReloadTest {
-    @org.junit.jupiter.api.Disabled("PAR-496: supplied Utilities 3.0.0 reload omits ShopPermissionManager.reload; preserved red run 20261022T095004Z-3048952")
     @Test
     void reloadedItemPermissionDeniesWithoutSettlementAndAllowsAfterGrant() throws Exception {
         Path config = Path.of(System.getenv("IT_SERVER_DIR"), "plugins", "Utilities", "config.yml");
