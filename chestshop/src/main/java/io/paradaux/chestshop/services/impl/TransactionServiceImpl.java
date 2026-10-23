@@ -71,6 +71,12 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    public PendingTransaction prepare(
+            Sign sign, Player player, Action action, org.bukkit.inventory.ItemStack selected) {
+        return contextFactory.prepare(sign, player, action, selected);
+    }
+
+    @Override
     public void validate(PendingTransaction ctx) {
         validator.validate(ctx);
     }

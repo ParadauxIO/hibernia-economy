@@ -1,13 +1,12 @@
 package io.paradaux.chestshop.services;
 
-import org.bukkit.event.block.Action;
 import io.paradaux.chestshop.ChestShop;
 import io.paradaux.chestshop.model.PendingTransaction;
 import io.paradaux.chestshop.model.Transaction;
-import org.bukkit.Bukkit;
+import java.util.UUID;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
-import java.util.UUID;
+import org.bukkit.event.block.Action;
 
 /**
  * Owns a shop trade end to end: pre-trade validation ({@link #validate}), the atomic
@@ -34,6 +33,9 @@ public interface TransactionService {
      * listener so the whole lifecycle lives in this service (PAR-299).
      */
     PendingTransaction prepare(Sign sign, Player player, Action action);
+
+    /** Prepare an explicitly selected wildcard variation; reject items outside the sign pattern. */
+    PendingTransaction prepare(Sign sign, Player player, Action action, org.bukkit.inventory.ItemStack selected);
 
     /**
      * Run a shop interaction through the pre-transaction validation steps, mutating the

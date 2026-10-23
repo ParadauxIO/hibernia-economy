@@ -314,12 +314,29 @@ public final class ChestShopFixture implements AutoCloseable {
     /**
      * Position the client, then right-click the sign — a buy on a {@code "B"} shop.
      *
-     * <p>Returns once the click has been fully processed: the trade, if any, is complete
-     * (see {@link #click}). Tests can assert balances and stock straight away.
+     * <p>Confirms the purchase preview when one opens, then waits for its deferred action.
+     * Rejected previews do not trade. Tests can assert balances and stock on return.
      */
     public void clickBuy(MockPlayer client, String name) {
         positionClicker(client, name);
         click(client, name, () -> client.useBlock(signPos, BlockFace.SOUTH));
+        confirmPurchase(client);
+    }
+
+    /** Confirm a previously opened offer, then wait for Curator's deferred action to finish. */
+    public void confirmPurchase(MockPlayer client) {
+        var screen = client.currentScreen().orElse(null);
+        if (screen != null && com.google.gson.JsonParser.parseString(RconClient.send("diag menustate " + client.getUsername()).trim())
+                .getAsJsonObject().get("title").getAsString().equals("Inspect your purchase")) {
+            var content = Await.until("purchase preview contents", () -> client.containerContent(screen.getContainerId()).orElse(null),
+                    value -> value != null, TIMEOUT);
+            client.sendPacket(new org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.inventory.ServerboundContainerClickPacket(
+                    screen.getContainerId(), content.getStateId(), 49,
+                    org.geysermc.mcprotocollib.protocol.data.game.inventory.ContainerActionType.CLICK_ITEM,
+                    org.geysermc.mcprotocollib.protocol.data.game.inventory.ClickItemAction.LEFT_CLICK, null, java.util.Map.of()));
+            // Curator dispatches actions on the next server tick; a packet barrier alone is insufficient.
+            Barrier.settle(client);
+        }
     }
 
     /** Position the client, then left-click the sign — a sell on an {@code "S"} shop. Same contract as {@link #clickBuy}. */
@@ -351,9 +368,8 @@ public final class ChestShopFixture implements AutoCloseable {
      *
      * <ul>
      *   <li>{@link MockPlayer#sync} after the click: the click and the barrier share
-     *       Paper's FIFO packet queue, and ChestShop settles a trade synchronously inside
-     *       its {@code PlayerInteractEvent} handler (goods and the Treasury transfer, see
-     *       its {@code TransactionService}), so after the barrier the outcome is final.</li>
+     *       Paper's FIFO packet queue, so after the barrier the sign interaction has finished.
+     *       Purchases open a preview; {@link #confirmPurchase} separately waits for settlement.</li>
      *   <li>DcDiag's per-player {@code PlayerInteractEvent} counter (MONITOR, sees cancelled
      *       events too) must have moved. Without that, a "rejected trade changes nothing"
      *       test would pass if Paper silently dropped the packet (range, rate limit).</li>

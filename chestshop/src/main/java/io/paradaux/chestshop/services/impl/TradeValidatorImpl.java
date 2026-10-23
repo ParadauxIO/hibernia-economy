@@ -33,6 +33,7 @@ import io.paradaux.chestshop.services.RestrictedSignService;
 import io.paradaux.chestshop.services.SignBreakService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.TradeValidator;
+import io.paradaux.chestshop.services.WildcardItems;
 import io.paradaux.chestshop.utils.MessageUtil;
 import io.paradaux.chestshop.utils.Permissions;
 import io.paradaux.chestshop.utils.PriceUtil;
@@ -322,6 +323,15 @@ public class TradeValidatorImpl implements TradeValidator {
         }
 
         for (ItemStack stock : ctx.getStock()) {
+            if (WildcardItems.isPattern(itemLine)) {
+                String selectedCode = items.getName(stock);
+                if (selectedCode != null
+                        && Permissions.hasPermissionSetFalse(
+                                client, (buy ? Permissions.BUY_ID : Permissions.SELL_ID) + selectedCode)) {
+                    ctx.setCancelled(CLIENT_DOES_NOT_HAVE_PERMISSION);
+                    return;
+                }
+            }
             String matID = stock.getType().toString().toLowerCase(Locale.ROOT);
             boolean hasPerm = buy
                     ? (adminBypass.has(client, Permissions.BUY)

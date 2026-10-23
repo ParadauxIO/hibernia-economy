@@ -5,6 +5,8 @@ import io.paradaux.chestshop.commands.ItemInfoCommand;
 import io.paradaux.chestshop.commands.ShopInfoCommand;
 import io.paradaux.chestshop.commands.ToggleCommand;
 import io.paradaux.chestshop.commands.VersionCommand;
+import io.paradaux.chestshop.dialogs.PurchasePreviewMenu;
+import io.paradaux.chestshop.dialogs.ShopVariantsMenu;
 import io.paradaux.chestshop.integration.IntegrationRegistrar;
 import io.paradaux.chestshop.integration.WorldGuardIntegration;
 import io.paradaux.chestshop.listeners.BlockPlaceListener;
@@ -23,6 +25,7 @@ import io.paradaux.chestshop.listeners.StockCounterListener;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.hibernia.framework.curator.MenuManager;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -113,7 +116,10 @@ public class ChestShop extends JavaPlugin {
                         .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
                         // Usher dialog handlers — the /find search flow (first Usher use).
                         .dialogs(io.paradaux.chestshop.dialogs.FindDialog.class)
-                        .menus(io.paradaux.chestshop.dialogs.FindResultsMenu.class)
+                        .menus(
+                                io.paradaux.chestshop.dialogs.FindResultsMenu.class,
+                                PurchasePreviewMenu.class,
+                                ShopVariantsMenu.class)
                         // Bukkit entrypoints — Guice-constructed so each injects the
                         // services it needs (listener → service → persistence), and
                         // registered in one call via ListenerManager#registerAll (PAR-282).
@@ -151,8 +157,7 @@ public class ChestShop extends JavaPlugin {
                 .registerAll();
 
         io.paradaux.chestshop.integration.LegacyCompatibility.install(injector);
-        injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
-                .registerAll();
+        injector.getInstance(MenuManager.class).registerAll();
 
         loadConfig();
 
@@ -241,8 +246,7 @@ public class ChestShop extends JavaPlugin {
         }
 
         if (injector != null) {
-            injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
-                    .shutdown();
+            injector.getInstance(MenuManager.class).shutdown();
             // The preview displays are live entities; untracked, they'd float on until chunk unload.
             injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)
                     .destroyAll();

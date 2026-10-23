@@ -120,6 +120,13 @@ public class ItemServiceImpl implements ItemService {
         return applyAlias(result, maxWidth); // configured alias override
     }
 
+    @Override
+    public String wildcardName(ItemStack item) {
+        CustomItemResolver resolver = customItems;
+        String id = resolver != null ? resolver.itemId(item) : null;
+        return id != null ? id : getName(item);
+    }
+
     /** Resolve the material part of an item code (vanilla material lookup), or {@code null}. */
     @Override
     public Material parseMaterial(String materialString, short data) {

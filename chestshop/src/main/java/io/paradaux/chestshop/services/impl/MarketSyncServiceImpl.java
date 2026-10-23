@@ -13,6 +13,7 @@ import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.services.WildcardItems;
 import io.paradaux.chestshop.utils.PriceUtil;
 import io.paradaux.treasury.api.MarketApi;
 import java.util.List;
@@ -98,7 +99,9 @@ public class MarketSyncServiceImpl implements MarketSyncService {
                     direction,
                     shopStock,
                     event.getSettlementTxnId()));
-            market.upsertShop(marketService.shop(sign, item, owner, shopStock, capacity));
+            if (!hideWildcard(sign, SignService.getItem(sign))) {
+                market.upsertShop(marketService.shop(sign, item, owner, shopStock, capacity));
+            }
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
             // analytics only
@@ -111,7 +114,9 @@ public class MarketSyncServiceImpl implements MarketSyncService {
         if (!marketService.enabled()) return;
         try {
             Sign sign = event.getSign();
-            ItemStack item = items.parse(event.getSignLines()[SignService.ITEM_LINE]);
+            String itemCode = event.getSignLines()[SignService.ITEM_LINE];
+            if (hideWildcard(sign, itemCode)) return;
+            ItemStack item = items.parse(itemCode);
             if (item == null) return;
             boolean admin = signService.isAdminShop(event.getSignLines());
             UUID ownerUuid =
@@ -187,7 +192,9 @@ public class MarketSyncServiceImpl implements MarketSyncService {
 
     private boolean registerShop(Sign sign, Inventory inventory) {
         try {
-            ItemStack item = items.parse(SignService.getItem(sign));
+            String itemCode = SignService.getItem(sign);
+            if (hideWildcard(sign, itemCode)) return false;
+            ItemStack item = items.parse(itemCode);
             if (item == null) return false;
             boolean admin = signService.isAdminShop(sign);
             MarketService.Owner owner;
@@ -236,6 +243,14 @@ public class MarketSyncServiceImpl implements MarketSyncService {
         return world.getBlockAt(x, y, z).getState(false) instanceof Sign sign && signService.isValid(sign)
                 ? sign
                 : null;
+    }
+
+    private boolean hideWildcard(Sign sign, String itemCode) {
+        if (!WildcardItems.isPattern(itemCode)) return false;
+        Location l = sign.getLocation();
+        previews.destroy(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
+        marketService.market().deactivateShop(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
+        return true;
     }
 
     private static String worldName(Location l) {
