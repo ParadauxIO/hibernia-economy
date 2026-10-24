@@ -1,12 +1,15 @@
+import { DirectorySort } from '@/components/DirectorySort';
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { z } from 'zod';
 import { listAccounts, countAccounts, type SortColumn, type SortDir } from '@/lib/sql/ledger';
 import { memo } from '@/lib/cache';
-import { accountLabel, fmtAmtFull, fmtTs, shortenUuid, looksLikeUuid } from '@/lib/format';
+import { accountLabel, fmtAmtFull, shortenUuid, looksLikeUuid } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
-import { Pagination } from '@/components/Pagination';
+import { Pagination } from '@democracycraft/design-system/next';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 
@@ -31,7 +34,7 @@ export default async function AccountsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const raw = await searchParams;
-  const parsed = SP_SCHEMA.safeParse(flatten(raw));
+  const parsed = SP_SCHEMA.safeParse(flattenSearchParams(raw));
   const sp = parsed.success ? parsed.data : SP_SCHEMA.parse({});
   const dir: SortDir = sp.dir.toUpperCase() as SortDir;
   // Inactive/archived accounts are hidden entirely — active only.
@@ -64,7 +67,7 @@ export default async function AccountsPage({
         <span className="sub">{total.toLocaleString()} total</span>
       </div>
 
-      <Toolbar
+      <Toolbar filterLabels={{ type: 'Account type' }}
         searchPlaceholder="Search by name, display name, or UUID…"
         filters={
           <FilterSelect
@@ -99,13 +102,14 @@ export default async function AccountsPage({
         }
       />
 
-      <div className="table-wrap"><table className="data-table">
+      <DirectorySort basePath="/accounts" params={raw} sort={sp.sort} dir={dir} options={[{ label: 'Richest', sort: 'balance', dir: 'DESC' }, { label: 'Newest', sort: 'created', dir: 'DESC' }, { label: 'Name A–Z', sort: 'name', dir: 'ASC' }]} />
+      <div className="table-wrap directory-wrap"><table className="data-table directory-table">
         <thead>
           <tr>
             <th>{sortHeader('Name', 'name', sp.sort, dir, raw)}</th>
-            <th>{sortHeader('Type', 'type', sp.sort, dir, raw)}</th>
+            <th data-secondary="true">{sortHeader('Type', 'type', sp.sort, dir, raw)}</th>
             <th className="amount">{sortHeader('Balance', 'balance', sp.sort, dir, raw)}</th>
-            <th className="ts">{sortHeader('Created', 'created', sp.sort, dir, raw)}</th>
+            <th data-secondary="true" className="ts">{sortHeader('Created', 'created', sp.sort, dir, raw)}</th>
           </tr>
         </thead>
         <tbody>
@@ -121,7 +125,7 @@ export default async function AccountsPage({
               <td>
                 <Link href={`/accounts/${a.account_id}` as Route} className="rowlink" prefetch={false}>
                   <span style={{ fontWeight: 500 }}>{accountLabel(a)}</span>
-                  <span className="mono muted small">{` #${a.account_id}`}</span>
+                  <span className="mono muted small desktop-only">{` #${a.account_id}`}</span>
                   {a.display_name && !looksLikeUuid(a.display_name) && a.owner_name && a.display_name !== a.owner_name && (
                     <span className="muted small">{` owner: ${a.owner_name}`}</span>
                   )}
@@ -129,12 +133,13 @@ export default async function AccountsPage({
                     <span className="mono muted small" title={a.owner_uuid}>{` ${shortenUuid(a.owner_uuid)}`}</span>
                   )}
                 </Link>
+                <details className="mobile-only directory-details"><summary>Details</summary><p>#{a.account_id} · {a.account_type}</p><p>Created <LocalTimestamp value={a.created_at} /></p></details>
               </td>
-              <td>
+              <td data-secondary="true">
                 <span className={`badge badge-${a.account_type}`}>{a.account_type}</span>
               </td>
               <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
-              <td className="ts">{fmtTs(a.created_at)}</td>
+              <td data-secondary="true" className="ts"><LocalTimestamp value={a.created_at} /></td>
             </tr>
           ))}
         </tbody>
@@ -155,18 +160,6 @@ export default async function AccountsPage({
       />
     </>
   );
-}
-
-function flatten(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      if (v.length > 0 && v[0] !== undefined) out[k] = v[0];
-    } else if (v !== undefined) {
-      out[k] = v;
-    }
-  }
-  return out;
 }
 
 function sortHeader(

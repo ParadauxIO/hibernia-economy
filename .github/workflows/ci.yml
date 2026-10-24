@@ -1,0 +1,478 @@
+name: CI
+
+# The one pipeline for pull requests, pushes to develop/main, a nightly run and
+# manual runs. It replaced the per-module *-build/*-test workflows, whose
+# hand-picked Gradle tasks had drifted from what `./gradlew check` covers (the
+# treasury-api / business-api tests and :business:testWithoutCarbon gated
+# nothing).
+#
+#   changes ──┬─ explorer (typecheck, lint, vitest; playwright if explorer changed)
+#             └─ integration (live Paper server suite, if JVM/schema/suite changed)
+#   jvm ── coverage (PR comment)
+#   mutation (PIT; incremental on PRs/pushes, full nightly — if JVM changed)
+#   api-contract (OpenAPI breaking-change diff, PRs only)
+#   migrations (guard, upgrade test, money invariants, kysely schema drift)
+#   ci-gate ◄── all of the above
+#
+# Only the two expensive suites (explorer e2e, live integration) are skipped on
+# PRs that can't affect them; push to develop/main, the nightly schedule and
+# manual runs always run everything. `ci-gate` is the single required status
+# check for branch protection: it fails if any job failed or was cancelled, and
+# treats skipped jobs as fine — so adding a job means adding it to its `needs`.
+
+on:
+  pull_request:
+    branches: [ main, develop, 'stack/**' ]
+  push:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '23 3 * * *'   # nightly, catches drift in external deps/images
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: Optional Gradle test filter for the live integration suite, e.g. '*PayCommandTest'
+        default: ''
+      migration_base:
+        description: Base ref for the migration guard + upgrade test (default HEAD^), e.g. origin/main
+        default: ''
+
+permissions:
+  contents: read
+
+# A new push to a PR supersedes its running checks. Every other run gets its
+# own group (run_id): a shared group would still cancel a *pending* develop run
+# when a third push queues, and every merged commit should get a full result.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  release-metadata:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Check release metadata tooling
+        run: node --test .github/scripts/release-metadata.test.mjs
+      - name: Check schema compatibility guard
+        run: node --test ops/dev-server/schema-guard.test.mjs
+      - name: Check acceptance evidence tooling
+        run: python3 -m unittest discover -s ops/integration -p 'test_*.py'
+
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read   # paths-filter lists PR files through the API
+    outputs:
+      explorer: ${{ github.event_name != 'pull_request' || steps.filter.outputs.explorer == 'true' }}
+      live: ${{ github.event_name != 'pull_request' || steps.filter.outputs.live == 'true' }}
+    steps:
+      - name: Filter paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            explorer:
+              - 'economy-explorer/**'
+              - 'economy-flyway/**'   # the explorer test DB is built from the migrations
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/explorer-check.yml'
+            live:
+              - 'treasury/**'
+              - 'business/**'
+              - 'chestshop/**'
+              - 'treasury-api-plugin/**'
+              - 'treasury-rest-api/**'
+              - 'common/**'
+              - 'test-support/**'
+              - '.gitmodules'
+              - 'hibernia-framework'
+              - 'hibernia-framework/**'
+              - 'realty'
+              - 'realty/**'
+              - 'gradlew'
+              - 'gradlew.bat'
+              - 'economy-flyway/**'
+              - 'gradle/**'
+              - 'gradle.properties'
+              - 'build-logic/**'
+              - 'build.gradle.kts'
+              - 'settings.gradle.kts'
+              - 'ops/integration/**'
+              - 'integration-tests/**'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/setup-jvm/**'
+
+  # Every JVM project's `check` (+ assemble) against a MariaDB 10.11 service.
+  jvm:
+    name: JVM
+    uses: ./.github/workflows/jvm-check.yml
+    permissions:
+      contents: read
+      checks: write
+
+  # PR-only coverage comment for the two plugins with a coverage gate. The gates
+  # themselves (line + branch ratchets, in-scope classes) are
+  # jacocoTestCoverageVerification in their build.gradle.kts and already ran in
+  # `jvm`; this only reports, so the overall threshold is 0 here and the 80 %
+  # changed-files mark is advisory. Mutation score is the quality gate (below).
+  coverage:
+    name: Coverage comment
+    needs: jvm
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download coverage XML
+        id: xml
+        continue-on-error: true   # absent if the build failed before jacoco ran
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: jacoco-xml
+
+      - name: Treasury coverage comment
+        if: steps.xml.outcome == 'success'
+        continue-on-error: true   # advisory; never fails the run
+        uses: madrapps/jacoco-report@e51ce1f46f7f8b5331593f935e59cbaf44b84920 # v1.8.0
+        with:
+          paths: ${{ github.workspace }}/treasury/build/reports/jacoco/test/jacocoTestReport.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 0
+          min-coverage-changed-files: 80
+          title: Treasury coverage report
+          update-comment: true
+          pass-emoji: ':white_check_mark:'
+          fail-emoji: ':x:'
+
+      - name: Business coverage comment
+        if: steps.xml.outcome == 'success'
+        continue-on-error: true   # advisory; never fails the run
+        uses: madrapps/jacoco-report@e51ce1f46f7f8b5331593f935e59cbaf44b84920 # v1.8.0
+        with:
+          paths: ${{ github.workspace }}/business/build/reports/jacoco/test/jacocoTestReport.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 0
+          min-coverage-changed-files: 80
+          title: Business coverage report
+          update-comment: true
+          pass-emoji: ':white_check_mark:'
+          fail-emoji: ':x:'
+
+  # PIT mutation testing for the money-critical modules (thresholds live in each
+  # module's `pitest {}` block). Too slow for `check`, so it is its own job:
+  # PRs and pushes restore the newest history file and only re-analyse what
+  # changed (seconds per module); the nightly run starts cold, so the score is
+  # recomputed from scratch at least daily. Treasury runs its DB ITs under PIT,
+  # hence the MariaDB service.
+  mutation:
+    name: Mutation testing
+    needs: changes
+    if: needs.changes.outputs.live == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci
+          MARIADB_DATABASE: treasury_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=20
+    env:
+      TREASURY_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_test
+      TREASURY_TEST_DB_USER: root
+      TREASURY_TEST_DB_PASS: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
+
+      # Saved under a per-commit key; restore-keys picks the newest one this ref
+      # can see (a PR sees its own and its base branch's). Skipped nightly.
+      - name: Restore PIT history
+        if: github.event_name != 'schedule'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: '*/build/pitest-history/'
+          key: pitest-${{ runner.os }}-${{ github.sha }}
+          restore-keys: pitest-${{ runner.os }}-
+
+      - name: gradle pitest
+        run: >-
+          sh ./gradlew --continue -Pci=true
+          :common:pitest :treasury:pitest :business:pitest
+          :treasury-api-plugin:pitest :chestshop:pitest
+
+      - name: Save PIT history
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: '*/build/pitest-history/'
+          key: pitest-${{ runner.os }}-${{ github.sha }}
+
+      - name: Upload PIT reports
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pitest-reports
+          path: '*/build/reports/pitest/'
+          if-no-files-found: ignore
+
+  # treasury-rest-api/openapi/openapi.json is kept equal to what the app serves by
+  # OpenApiSnapshotIT (in `jvm`), so diffing the committed files is enough — no
+  # app boot here. Fails on breaking changes unless the PR carries the
+  # api-breaking-change label; skipped until the base branch has a spec.
+  api-contract:
+    name: REST API contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Extract the base branch spec
+        id: base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          mkdir -p build/oasdiff
+          if git show "origin/$BASE_REF:treasury-rest-api/openapi/openapi.json" >build/oasdiff/base.json 2>/dev/null; then
+            echo "present=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "origin/$BASE_REF has no committed OpenAPI spec yet — nothing to diff."
+            echo "present=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail on breaking API changes
+        if: steps.base.outputs.present == 'true' && !contains(github.event.pull_request.labels.*.name, 'api-breaking-change')
+        uses: oasdiff/oasdiff-action/breaking@b9325c9e0a27ab65b0da3b766522cedec6be81dc # v0.1.18
+        with:
+          base: build/oasdiff/base.json
+          revision: treasury-rest-api/openapi/openapi.json
+          fail-on: ERR
+          review: false
+
+  explorer:
+    name: Explorer
+    needs: changes
+    uses: ./.github/workflows/explorer-check.yml
+    with:
+      e2e: ${{ needs.changes.outputs.explorer == 'true' }}
+
+  # Schema safety, end to end:
+  #   1. check-migrations.mjs — no merged V*__ script edited/renamed/deleted, names
+  #      lint clean, new versions continue the base's sequence;
+  #   2. upgrade-test.sh — migrate a scratch DB with the base's migrations, then
+  #      this commit's, flywayValidate, and require ops/money-invariants.sql OK;
+  #   3. regenerate the explorer's kysely types from that DB and fail if
+  #      economy-explorer/lib/db.generated.ts is stale (ADT-5).
+  migrations:
+    name: Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0   # the base ref's migrations come from history
+
+      # pull_request checks out the merge commit, whose first parent is the tip
+      # of the target branch — exactly what the PR is being merged into.
+      - name: Resolve the base ref
+        id: base
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          INPUT_BASE: ${{ inputs.migration_base }}
+        run: |
+          case "$EVENT" in
+            pull_request) base=HEAD^1 ;;
+            push)         base="$BEFORE" ;;
+            *)            base="${INPUT_BASE:-HEAD^}" ;;
+          esac
+          # A branch's first push or a force-push has no usable "before".
+          if ! git cat-file -e "${base}^{commit}" 2>/dev/null; then base=HEAD^; fi
+          echo "Comparing migrations against $base ($(git rev-parse --short "$base"))"
+          echo "ref=$base" >>"$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: economy-explorer/package-lock.json
+
+      - name: Test migration guard
+        run: node --test economy-flyway/scripts/check-migrations.test.mjs
+
+      - name: Migration guard
+        env:
+          BASE: ${{ steps.base.outputs.ref }}
+        run: node economy-flyway/scripts/check-migrations.mjs "$BASE"
+
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
+
+      - name: Upgrade test (base → HEAD, validate, money invariants)
+        env:
+          BASE: ${{ steps.base.outputs.ref }}
+          DB_PASSWORD: ci
+        run: bash economy-flyway/scripts/upgrade-test.sh "$BASE"
+
+      - name: Install explorer deps
+        working-directory: economy-explorer
+        run: npm ci --no-audit --no-fund
+
+      - name: Regenerate kysely types from the migrated schema
+        working-directory: economy-explorer
+        env:
+          DATABASE_URL: mysql://root:ci@127.0.0.1:3306/economy_upgrade
+        run: npm run db:codegen
+
+      - name: Fail on schema drift
+        working-directory: economy-explorer
+        run: |
+          if ! git diff --quiet -- lib/db.generated.ts; then
+            echo "::error file=economy-explorer/lib/db.generated.ts::lib/db.generated.ts is out of date with the migrated schema. Run 'npm run db:codegen' against a migrated DB and commit it."
+            git --no-pager diff -- lib/db.generated.ts | head -200
+            exit 1
+          fi
+          echo "kysely DB types are in sync with the migrations."
+
+      - name: Upload regenerated types
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: db-generated-types
+          path: economy-explorer/lib/db.generated.ts
+          if-no-files-found: ignore
+
+  # Boots a real Paper server with the plugins built from this commit, a migrated
+  # MariaDB and the REST API, then runs the mock-client suite in
+  # integration-tests/ against it. ops/integration/run.sh is the whole
+  # environment — the same script runs locally. PRs select affected groups;
+  # pushes, nightly and unfiltered manual runs exercise the full suite.
+  integration:
+    name: Integration (live server)
+    needs: changes
+    if: needs.changes.outputs.live == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: dev
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0  # merge-base diff covers the entire PR, including renames/deletions
+
+      - name: Select affected live tests
+        id: selection
+        env:
+          PR_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+        run: python3 ops/integration/select_tests.py --base "$PR_BASE" --github-output "$GITHUB_OUTPUT"
+
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
+
+      - name: Cache server downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/hibernia-it
+          key: hibernia-it-${{ hashFiles('ops/integration/run.sh') }}
+
+      - name: Run the live integration tests
+        env:
+          IT_DB_EXTERNAL: '1'
+          IT_DB_HOST: 127.0.0.1
+          IT_DB_PORT: '3306'
+          IT_DB_USER: root
+          IT_DB_PASSWORD: dev
+          TEST_FILTER: ${{ inputs.test_filter }}
+          AFFECTED_FILTERS: ${{ steps.selection.outputs.filters }}
+        shell: python
+        run: |
+          import json
+          import os
+          import subprocess
+
+          filters = ([os.environ['TEST_FILTER']] if os.environ['TEST_FILTER']
+                     else json.loads(os.environ['AFFECTED_FILTERS']))
+          args = ['bash', 'ops/integration/run.sh']
+          if filters:
+              args += ['--']
+              for pattern in filters:
+                  args += ['--tests', pattern]
+          subprocess.run(args, check=True)
+
+      - name: Upload logs and test reports
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-tests
+          path: |
+            build/integration/*.log
+            integration-tests/tests/build/reports/tests/
+            integration-tests/tests/build/reports/test-timings.txt
+            integration-tests/tests/build/test-results/
+          if-no-files-found: ignore
+
+  # The required check. `needs` must list every job above.
+  ci-gate:
+    name: ci-gate
+    if: always()
+    needs: [ release-metadata, changes, jvm, coverage, mutation, api-contract, explorer, migrations, integration ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Fail if any job failed or was cancelled
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$NEEDS" >/dev/null; then
+            echo "::error::A required CI job failed or was cancelled."
+            exit 1
+          fi

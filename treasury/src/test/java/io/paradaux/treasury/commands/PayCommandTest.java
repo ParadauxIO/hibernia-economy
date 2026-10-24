@@ -5,6 +5,7 @@ import io.paradaux.treasury.commands.resolvers.PayTarget;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
+import io.paradaux.treasury.services.PlayerDirectoryService;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -35,6 +36,7 @@ class PayCommandTest {
 
     @Mock AccountService accountService;
     @Mock LedgerService ledgerService;
+    @Mock PlayerDirectoryService playerDirectory;
     @Mock Message message;
     @Mock Player sender;
     @Mock OfflinePlayer targetPlayer;
@@ -44,7 +46,7 @@ class PayCommandTest {
 
     @BeforeEach
     void setUp() {
-        command = new PayCommand(accountService, ledgerService, message);
+        command = new PayCommand(accountService, ledgerService, playerDirectory, message);
         bukkit = mockStatic(Bukkit.class);
     }
 
@@ -58,6 +60,7 @@ class PayCommandTest {
         // The name resolves to a cached player AND a non-archived gov account.
         bukkit.when(() -> Bukkit.getOfflinePlayerIfCached(COLLIDING_NAME)).thenReturn(targetPlayer);
         when(targetPlayer.hasPlayedBefore()).thenReturn(true);
+        when(targetPlayer.getUniqueId()).thenReturn(UUID.randomUUID());
         when(accountService.governmentAccountExists(COLLIDING_NAME)).thenReturn(true);
 
         command.pay(sender, new PayTarget(COLLIDING_NAME), new BigDecimal("100"));
@@ -88,6 +91,31 @@ class PayCommandTest {
         // payment goes to the gov account — no ambiguity prompt.
         verify(message, never()).send(sender, "treasury.pay.ambiguous", "target", COLLIDING_NAME);
         verify(ledgerService).transfer(any());
+    }
+
+    @Test
+    void pay_resolvesUncachedPlayerThroughDirectory_andPaysPersonalAccount() {
+        // Real player, but not in the usercache (Bedrock / never-joined-this-node):
+        // the live cache misses, so resolution must fall back to the player
+        // directory rather than rejecting a legitimate payee as "unknown player".
+        UUID senderUuid = UUID.randomUUID();
+        UUID targetUuid = UUID.randomUUID();
+        bukkit.when(() -> Bukkit.getOfflinePlayerIfCached("Notch")).thenReturn(null);
+        when(playerDirectory.resolveUuidByName("Notch")).thenReturn(java.util.Optional.of(targetUuid));
+        when(playerDirectory.resolveNameByUuid(targetUuid)).thenReturn(java.util.Optional.of("Notch"));
+        when(accountService.governmentAccountExists("Notch")).thenReturn(false);
+        when(sender.getUniqueId()).thenReturn(senderUuid);
+        when(accountService.getOrCreatePersonalAccountId(senderUuid)).thenReturn(7);
+        when(accountService.getBalanceReadOnly(7)).thenReturn(new BigDecimal("1000"));
+        when(accountService.getOrCreatePersonalAccountId(targetUuid)).thenReturn(8);
+
+        command.pay(sender, new PayTarget("Notch"), new BigDecimal("100"));
+
+        ArgumentCaptor<TransferRequest> req = ArgumentCaptor.forClass(TransferRequest.class);
+        verify(ledgerService).transfer(req.capture());
+        assertThat(req.getValue().fromAccountId()).isEqualTo(7);
+        assertThat(req.getValue().toAccountId()).isEqualTo(8);
+        verify(message, never()).send(sender, "treasury.general.unknown-player");
     }
 
     @Test

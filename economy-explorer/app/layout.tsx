@@ -1,5 +1,6 @@
-import './global.css';
+import '@democracycraft/design-system/styles.css';
 import './explorer.css';
+import './experience.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Script from 'next/script';
@@ -79,6 +80,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               "(function(){try{var m=document.cookie.match(/(?:^|; )mode=([^;]+)/);var c=m?decodeURIComponent(m[1]):'dark';if(c==='system'){c=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-mode',c);var t=document.cookie.match(/(?:^|; )theme=([^;]+)/);if(t){var tv=decodeURIComponent(t[1]).toLowerCase();if(tv==='red'||tv==='blue')document.documentElement.setAttribute('data-theme',tv);}}catch(e){}})();",
           }}
         />
+        <a href="#main-content" className="skip-link">Skip to content</a>
         <div className="brand-stripe" aria-hidden />
         <ViewerProvider>
           <header className="explorer-header">
@@ -97,7 +99,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <HeaderNav />
             </div>
           </header>
-          <main className="explorer-main">{children}</main>
+          <main id="main-content" className="explorer-main" tabIndex={-1}>{children}</main>
         </ViewerProvider>
         <Footer theme={theme} />
         {umamiSrc && umamiId && (

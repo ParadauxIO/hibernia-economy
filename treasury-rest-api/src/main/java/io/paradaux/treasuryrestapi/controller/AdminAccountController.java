@@ -6,6 +6,7 @@ import io.paradaux.treasuryrestapi.model.AccountAdminSummary;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.AdminAccountService;
 import io.swagger.v3.oas.annotations.Hidden;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -37,7 +38,7 @@ public class AdminAccountController {
     @PatchMapping("/{id}/display-name")
     public ResponseEntity<AccountAdminSummary> rename(@AuthenticationPrincipal VerifiedToken verified,
                                                       @PathVariable long id,
-                                                      @RequestBody AccountDisplayNameRequest req) {
+                                                      @Valid @RequestBody AccountDisplayNameRequest req) {
         log.info("PATCH /admin/accounts/{}/display-name by keyId={}", id, verified != null ? verified.keyId() : null);
         return ResponseEntity.ok(accounts.rename(verified, id, req.displayName()));
     }
@@ -45,7 +46,7 @@ public class AdminAccountController {
     @PatchMapping("/{id}/owner")
     public ResponseEntity<AccountAdminSummary> changeOwner(@AuthenticationPrincipal VerifiedToken verified,
                                                            @PathVariable long id,
-                                                           @RequestBody AccountOwnerRequest req) {
+                                                           @Valid @RequestBody AccountOwnerRequest req) {
         log.info("PATCH /admin/accounts/{}/owner by keyId={}", id, verified != null ? verified.keyId() : null);
         return ResponseEntity.ok(accounts.changeOwner(verified, id, req.owner()));
     }

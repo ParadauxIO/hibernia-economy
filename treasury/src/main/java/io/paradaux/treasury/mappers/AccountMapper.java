@@ -3,11 +3,11 @@ package io.paradaux.treasury.mappers;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.economy.AccountTypeTotal;
 import io.paradaux.treasury.model.economy.BalanceEntry;
-import org.apache.ibatis.annotations.*;
-
 import java.util.List;
 import java.util.UUID;
+import org.apache.ibatis.annotations.*;
 
 @Mapper
 public interface AccountMapper {
@@ -19,27 +19,45 @@ public interface AccountMapper {
               FROM accounts
              WHERE account_id = #{accountId}
             """)
-    @Results(id = "accountMap", value = {
-            @Result(column = "account_id", property = "accountId", id = true),
-            @Result(column = "account_type", property = "accountType"),
-            @Result(column = "owner_uuid_bin", property = "ownerUuid"),
-            @Result(column = "display_name", property = "displayName"),
-            @Result(column = "requires_authorization", property = "requiresAuthorization"),
-            @Result(column = "is_archived", property = "isArchived"),
-            @Result(column = "allow_overdraft", property = "allowOverdraft"),
-            @Result(column = "credit_limit", property = "creditLimit")
-    })
+    @Results(
+            id = "accountMap",
+            value = {
+                @Result(column = "account_id", property = "accountId", id = true),
+                @Result(column = "account_type", property = "accountType"),
+                @Result(column = "owner_uuid_bin", property = "ownerUuid"),
+                @Result(column = "display_name", property = "displayName"),
+                @Result(column = "requires_authorization", property = "requiresAuthorization"),
+                @Result(column = "is_archived", property = "isArchived"),
+                @Result(column = "allow_overdraft", property = "allowOverdraft"),
+                @Result(column = "credit_limit", property = "creditLimit")
+            })
     Account findById(@Param("accountId") int accountId);
 
     @Select("""
       SELECT a.account_id, a.account_type, a.owner_uuid_bin, a.display_name,
              a.requires_authorization, a.is_archived, a.allow_overdraft, a.credit_limit
         FROM accounts a
-       WHERE a.account_type = 'SYSTEM' AND a.display_name = #{pluginName}
+       WHERE a.account_type = 'SYSTEM' AND a.system_plugin_key = #{pluginName}
        LIMIT 1
       """)
     @ResultMap("accountMap")
     Account findSystemAccountForPlugin(@Param("pluginName") String pluginName);
+
+    /**
+     * Locking variant used to re-resolve after a concurrent SYSTEM-account insert
+     * trips {@code uq_one_system_per_plugin} (V24). Same REPEATABLE-READ reasoning
+     * as {@link #findPersonalAccountIdLocking}: {@code LOCK IN SHARE MODE} reads the
+     * latest committed row so the loser of the race resolves to the winner's id.
+     */
+    @Select("""
+            SELECT account_id
+              FROM accounts
+             WHERE account_type = 'SYSTEM'
+               AND system_plugin_key = #{pluginName}
+             LIMIT 1
+             LOCK IN SHARE MODE
+            """)
+    Integer findSystemAccountIdForPluginLocking(@Param("pluginName") String pluginName);
 
     @Select("""
             SELECT account_id
@@ -49,6 +67,41 @@ public interface AccountMapper {
              LIMIT 1
             """)
     Integer findPersonalAccountId(@Param("ownerUuid") UUID ownerUuid);
+
+    /**
+     * Locking variant of {@link #findPersonalAccountId} used to re-resolve after a
+     * concurrent-first-login duplicate-key insert. Under REPEATABLE READ a plain
+     * SELECT keeps the transaction's snapshot and can't see the row the other
+     * transaction just committed; {@code LOCK IN SHARE MODE} reads the latest
+     * committed version so the loser of the race resolves to the winner's id.
+     */
+    @Select("""
+            SELECT account_id
+              FROM accounts
+             WHERE account_type = 'PERSONAL'
+               AND owner_uuid_bin = #{ownerUuid}
+             LIMIT 1
+             LOCK IN SHARE MODE
+            """)
+    Integer findPersonalAccountIdLocking(@Param("ownerUuid") UUID ownerUuid);
+
+    /**
+     * Reads one account's overdraft flags under a shared row lock. Used by the
+     * transfer overdraft gate so a concurrent {@code allow_overdraft}/{@code
+     * credit_limit} flip (which needs the exclusive lock via {@link #updateAccount})
+     * cannot race the gate and let a now-limited account be treated as unlimited
+     * and overdraw (ADT-10). A *shared* lock lets concurrent transfers from the same
+     * faucet still run in parallel — only the rare flag-flip is serialised against.
+     */
+    @Select("""
+            SELECT account_id, account_type, owner_uuid_bin, display_name,
+                   requires_authorization, is_archived, allow_overdraft, credit_limit
+              FROM accounts
+             WHERE account_id = #{accountId}
+             LOCK IN SHARE MODE
+            """)
+    @ResultMap("accountMap")
+    Account lockAccountFlagsForShare(@Param("accountId") int accountId);
 
     @Select("""
             SELECT account_id, account_type, owner_uuid_bin, display_name,
@@ -87,8 +140,8 @@ public interface AccountMapper {
            AND owner_uuid_bin = #{ownerUuid}
         """)
     @ResultMap("accountMap")
-    List<Account> findAccountsByTypeAndOwner(@Param("accountType") AccountType accountType,
-                                            @Param("ownerUuid") UUID ownerUuid);
+    List<Account> findAccountsByTypeAndOwner(
+            @Param("accountType") AccountType accountType, @Param("ownerUuid") UUID ownerUuid);
 
     @Select("""
         SELECT DISTINCT a.account_id, a.account_type, a.owner_uuid_bin, a.display_name,
@@ -103,12 +156,14 @@ public interface AccountMapper {
 
     // ---- inserts ----
 
-    // generic insert (one param -> MyBatis can set generated key)
+    // Capture the plugin key only on creation; updateAccount never changes routing identity.
+    // The DB insert trigger also captures it for legacy/direct SQL writers.
     @Insert("""
             INSERT INTO accounts(
                 account_type,
                 owner_uuid_bin,
                 display_name,
+                system_plugin_key,
                 requires_authorization,
                 is_archived,
                 allow_overdraft,
@@ -118,15 +173,14 @@ public interface AccountMapper {
                 #{accountType},
                 #{ownerUuid},
                 #{displayName},
+                CASE WHEN #{accountType} = 'SYSTEM' THEN #{displayName} END,
                 #{requiresAuthorization},
                 #{isArchived},
                 #{allowOverdraft},
                 #{creditLimit}
             )
             """)
-    @Options(useGeneratedKeys = true,
-            keyProperty = "accountId",
-            keyColumn = "account_id")
+    @Options(useGeneratedKeys = true, keyProperty = "accountId", keyColumn = "account_id")
     int insertAccount(Account account);
 
     @Insert("""
@@ -141,11 +195,13 @@ public interface AccountMapper {
              WHERE account_id = #{accountId}
              FOR UPDATE
             """)
-    @Results(id = "balanceMap", value = {
-            @Result(column = "account_id", property = "accountId", id = true),
-            @Result(column = "balance", property = "balance"),
-            @Result(column = "version", property = "version")
-    })
+    @Results(
+            id = "balanceMap",
+            value = {
+                @Result(column = "account_id", property = "accountId", id = true),
+                @Result(column = "balance", property = "balance"),
+                @Result(column = "version", property = "version")
+            })
     AccountBalance lockBalance(@Param("accountId") int accountId);
 
     /** Non-locking balance read for read-only API calls. */
@@ -156,6 +212,18 @@ public interface AccountMapper {
             """)
     @ResultMap("balanceMap")
     AccountBalance readBalance(@Param("accountId") int accountId);
+
+    /** Non-locking batch balance read; one round-trip for many accounts (no FOR UPDATE). */
+    @Select("""
+            <script>
+            SELECT account_id, balance, version
+              FROM account_balances_mat
+             WHERE account_id IN
+             <foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach>
+            </script>
+            """)
+    @ResultMap("balanceMap")
+    List<AccountBalance> readBalances(@Param("ids") List<Integer> ids);
 
     /** Loads several accounts in one round-trip (used by transfer for from+to). */
     @Select("""
@@ -221,13 +289,34 @@ public interface AccountMapper {
              ORDER BY b.balance DESC
              LIMIT #{limit} OFFSET #{offset}
             """)
-    @Results(id = "balanceEntryMap", value = {
-            @Result(column = "account_id", property = "accountId", id = true),
-            @Result(column = "owner_uuid_bin", property = "ownerUuid"),
-            @Result(column = "display_name", property = "displayName"),
-            @Result(column = "balance", property = "balance")
-    })
+    @Results(
+            id = "balanceEntryMap",
+            value = {
+                @Result(column = "account_id", property = "accountId", id = true),
+                @Result(column = "owner_uuid_bin", property = "ownerUuid"),
+                @Result(column = "display_name", property = "displayName"),
+                @Result(column = "balance", property = "balance")
+            })
     List<BalanceEntry> getTopBalances(@Param("limit") int limit, @Param("offset") int offset);
+
+    // ---- economy summary ----
+
+    /**
+     * Total balance per account type for the active (non-archived) economy,
+     * excluding SYSTEM. Mirrors the explorer's total-supply scope so the
+     * in-game {@code /economy} figures match the UI.
+     */
+    @Select("""
+            SELECT a.account_type AS account_type, COALESCE(SUM(b.balance), 0) AS total
+              FROM accounts a
+              JOIN account_balances_mat b ON a.account_id = b.account_id
+             WHERE a.is_archived = 0
+               AND a.account_type IN ('PERSONAL', 'BUSINESS', 'GOVERNMENT')
+             GROUP BY a.account_type
+            """)
+    @Results({@Result(column = "account_type", property = "accountType"), @Result(column = "total", property = "total")
+    })
+    List<AccountTypeTotal> getEconomyTotalsByType();
 
     @Select("SELECT COUNT(*) FROM accounts WHERE account_type = 'PERSONAL' AND is_archived = 0")
     int countPersonalAccounts();
@@ -253,5 +342,4 @@ public interface AccountMapper {
         """)
     @ResultMap("accountMap")
     Account findBusinessAccountByName(@Param("name") String name);
-
 }

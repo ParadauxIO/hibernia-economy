@@ -25,8 +25,7 @@ export function HeaderAuth() {
     <>
       <Link href="/me" className="header-me" prefetch={false}>
         {v.minecraftName ?? 'My data'}
-        {v.role === 'admin' && <span className="badge badge-SYSTEM">admin</span>}
-        {v.role === 'government' && <span className="badge badge-GOVERNMENT">gov</span>}
+        {v.role && v.role !== 'player' && <span className="badge">{v.role}</span>}
       </Link>
       <Link href="/api/auth/signout" className="btn" prefetch={false}>Log out</Link>
     </>

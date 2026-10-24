@@ -1,10 +1,16 @@
+import { BackLink, Pagination } from '@democracycraft/design-system/next';
+import { marketReturnPath } from '@/lib/marketNavigation';
 import { buildMetadata } from '@/lib/metadata';
+import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
-import { listItemSales, countItemSales, listItemSellers, countItemSellers, itemPriceByDay, listSamplesInRange } from '@/lib/sql/market';
-import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
+import Link from 'next/link';
+import { getShopOffers, getItemHistory } from '@/lib/services/market';
+import { ShopOffers } from '@/components/market/ShopOffers';
+import { listItemSales, listSamplesInRange } from '@/lib/sql/market';
+import { fmtAmtFull, fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { bucketSamples, type CandleInterval } from '@/lib/derived';
-import { BackLink } from '@/components/BackLink';
-import { Pagination } from '@/components/Pagination';
+
 import { PriceLine } from '@/components/charts/AreaTimeline';
 import { Candlestick } from '@/components/charts/Candlestick';
 import { SectionTabs } from '@/components/SectionTabs';
@@ -15,13 +21,17 @@ import { JsonButton } from '@/components/JsonButton';
 import { resolveTheme } from '@/lib/theme';
 import { serverIdentity, blueMapUrl } from '@/lib/serverIdentity';
 import { getViewer } from '@/lib/auth/viewer';
-import { isStaff } from '@/lib/auth/access';
+import { hasPermission } from '@/lib/auth/access';
+import { TableWrap } from '@democracycraft/design-system';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   // Default to 1h: with only a few weeks of data, daily buckets give ~4 sparse
   // candles that read as broken; hourly is dense and readable.
+  from: z.string().optional(),
+  direction: z.enum(['buy', 'sell']).catch('buy'),
+  advanced: z.enum(['true', 'false']).catch('false'),
   interval: z.enum(['1h', '4h', '1d']).default('1h'),
 });
 
@@ -43,35 +53,37 @@ export default async function ItemDetailPage({
 }) {
   const { itemKey: raw } = await params;
   const itemKey = decodeURIComponent(raw);
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
+  const returnTo = marketReturnPath(sp.from);
+  const itemQuery = (changes: Record<string, string>) => `?${new URLSearchParams({ direction: sp.direction, advanced: sp.advanced, interval: sp.interval, from: returnTo, ...changes })}`;
 
   // Windows capped at 30 days (there isn't more data yet, and tighter windows
   // give denser, readable candles).
   const candleWindowDays = sp.interval === '1h' ? 7 : sp.interval === '4h' ? 14 : 30;
-  const candlesFrom = new Date(Date.now() - candleWindowDays * 24 * 60 * 60 * 1000);
   const candlesTo = new Date();
+  const candlesFrom = new Date(candlesTo.getTime() - candleWindowDays * 24 * 60 * 60 * 1000);
 
-  const [viewer, sales, totalSales, sellers, totalSellers, byDay, samples, theme] = await Promise.all([
-    getViewer(),
-    listItemSales(itemKey, sp.limit, (sp.page - 1) * sp.limit),
-    countItemSales(itemKey),
-    listItemSellers(itemKey, 10, 0),
-    countItemSellers(itemKey),
-    itemPriceByDay(itemKey, 30),
-    listSamplesInRange({ itemKey, from: candlesFrom, to: candlesTo, maxRows: 5000 }),
+  const viewerPromise = getViewer();
+  const [viewer, sales, { identity, totalSales, sellers, totalSellers, byDay }, samples, theme, [offers, offerCount]] = await Promise.all([
+    viewerPromise,
+    viewerPromise.then(viewer => hasPermission(viewer, 'market.figures.read')
+      ? listItemSales(itemKey, sp.limit, (sp.page - 1) * sp.limit) : []),
+    getItemHistory(itemKey),
+    sp.advanced === 'true' ? listSamplesInRange({ itemKey, from: candlesFrom, to: candlesTo, maxRows: 5000 }) : Promise.resolve([]),
     resolveTheme(),
+    getShopOffers({ itemKey, material: null, firmId: null, ownerUuid: null, buyable: false, direction: sp.direction, inStock: false, search: null, limit: 4, offset: 0 }),
   ]);
   const candles = bucketSamples(samples, sp.interval as CandleInterval);
   const mapBase = serverIdentity(theme).map;
   // Item-level aggregates (totals, price, who sells it) are public; per-seller
   // money/quantity and the individual-sale feed are financial drilldown — staff
   // only. A firm's own finance staff see their detail on the firm page.
-  const showSaleFigures = isStaff(viewer);
+  const showSaleFigures = hasPermission(viewer, 'market.figures.read');
 
   const totalPages = Math.max(1, Math.ceil(totalSales / sp.limit));
-  const headerName = sales[0]?.item_name ?? sellers[0]?.owner_name ?? itemKey;
-  const material = sales[0]?.material ?? null;
-  const icon = itemIconUrl(material, sales[0]?.item_custom);
+  const headerName = identity?.item_name ?? offers[0]?.item_name ?? itemKey;
+  const material = identity?.material ?? offers[0]?.material ?? null;
+  const icon = itemIconUrl(material, identity?.item_custom ?? offers[0]?.item_custom);
   // Item keys carry ':' / '#' (e.g. nexo:ruby_sword#02) — unsafe in filenames.
   const fileKey = itemKey.replace(/[^a-z0-9]+/gi, '_');
 
@@ -94,20 +106,22 @@ export default async function ItemDetailPage({
   const avgPrice = last30Quantity > 0 ? last30Volume / last30Quantity : null;
 
   // 30-day price movement (first vs last daily avg unit price).
-  const firstPrice = byDay.length ? parseFloat(byDay[0].avg_unit_price) : null;
-  const lastPrice = byDay.length ? parseFloat(byDay[byDay.length - 1].avg_unit_price) : null;
+  const firstDay = byDay.at(0);
+  const lastDay = byDay.at(-1);
+  const firstPrice = firstDay ? parseFloat(firstDay.avg_unit_price) : null;
+  const lastPrice = lastDay ? parseFloat(lastDay.avg_unit_price) : null;
   const changePct = firstPrice && firstPrice > 0 && lastPrice != null ? (lastPrice - firstPrice) / firstPrice : null;
   const dir = changePct == null ? 'flat' : changePct > 0.001 ? 'up' : changePct < -0.001 ? 'down' : 'flat';
 
   return (
     <>
-      <BackLink href="/chestshop" label="ChestShop" />
+      <BackLink href={returnTo} label={returnTo.startsWith('/chestshop/shops') ? 'Back to shop results' : returnTo.startsWith('/market') ? 'Back to Market' : 'Back to item results'} />
 
       <div className="page-heading item-heading">
         <ItemIcon icon={icon} name={headerName} size={44} />
         <div className="item-heading-text">
           <h1>{headerName}</h1>
-          <span className="mono" style={{ color: 'var(--fg-muted)', fontSize: 12 }}>{material ? material.toLowerCase() : itemKey}</span>
+          <details className="small muted"><summary>Item identifiers</summary><span className="mono">{itemKey} · {material ?? 'Unknown material'}</span></details>
         </div>
         {changePct != null && (
           <span className={`kpi-delta ${dir}`} style={{ alignSelf: 'center' }}>
@@ -117,6 +131,17 @@ export default async function ItemDetailPage({
         <SectionTabs />
       </div>
 
+      <section aria-label="Observed shop offers">
+        <div className="page-heading"><h2>Where to trade</h2><nav className="window-tabs" aria-label="Trade direction">
+          <Link href={itemQuery({ direction: 'buy' })} aria-current={sp.direction === 'buy' ? 'true' : undefined} className={sp.direction === 'buy' ? 'active' : ''}>I want to buy</Link>
+          <Link href={itemQuery({ direction: 'sell' })} aria-current={sp.direction === 'sell' ? 'true' : undefined} className={sp.direction === 'sell' ? 'active' : ''}>I want to sell</Link>
+        </nav></div>
+        <p className="page-intro">Observed offers, ordered by unit price. Stock and prices can change in-game.</p>
+        <ShopOffers shops={offers} direction={sp.direction} mapBase={mapBase} returnTo={returnTo} resetHref={`/chestshop/shops?direction=${sp.direction}`} />
+        <p className="offer-compare"><Link className="btn" href={`/chestshop/shops?item=${encodeURIComponent(itemKey)}&direction=${sp.direction}`}>Compare all {fmtN(offerCount)} offers →</Link></p>
+      </section>
+      <h2>Trading history</h2>
+      <p className="page-intro">Historical averages are not current shop quotes. Price movement compares the first and latest trading day; daily buckets use UTC and today may be partial.</p>
       <div className="kpi-grid">
         <div className="kpi">
           <div className="kpi-label">Sales (30d)</div>
@@ -137,6 +162,17 @@ export default async function ItemDetailPage({
         </div>
       </div>
 
+      {/* Daily price line — table dropped, candles + line cover the same window */}
+      {byDay.length > 0 && (
+        <div className="card">
+          <div className="card-title">
+            Daily price line <span className="sub">avg unit price · last 30 days</span>
+          </div>
+          <PriceLine data={byDay} />
+        </div>
+      )}
+      <p><Link href={itemQuery({ advanced: sp.advanced === 'true' ? 'false' : 'true' })}>{sp.advanced === 'true' ? 'Hide' : 'Show'} advanced candlesticks</Link></p>
+      {sp.advanced === 'true' && <>
       {/* Candlestick (OHLC) */}
       <div className="card">
         <div className="card-title">
@@ -145,7 +181,7 @@ export default async function ItemDetailPage({
             {(['1h', '4h', '1d'] as const).map((iv) => (
               <a
                 key={iv}
-                href={`?interval=${iv}`}
+                href={itemQuery({ advanced: 'true', interval: iv })}
                 className={`btn ${sp.interval === iv ? 'btn-primary' : ''}`}
                 style={{ padding: '2px 9px', fontSize: 11 }}
               >
@@ -157,10 +193,11 @@ export default async function ItemDetailPage({
         <Candlestick candles={candles} />
       </div>
 
+      </>}
       {/* Top sellers */}
       <div className="card">
         <div className="card-title">
-          Sellers <span className="sub">distinct shops · sorted by sales</span>
+          Historical sellers <span className="sub">not current offers · sorted by sales</span>
           <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
             <CsvButton
               filename={`item-${fileKey}-sellers.csv`}
@@ -179,7 +216,7 @@ export default async function ItemDetailPage({
             <JsonButton filename={`item-${fileKey}-sellers.json`} data={sellersExport} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Historical sellers">
           <table className="data-table">
             <thead>
               <tr>
@@ -208,7 +245,7 @@ export default async function ItemDetailPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
 
       {/* Sales feed — individual transactions (money + quantity per sale) are
@@ -237,7 +274,7 @@ export default async function ItemDetailPage({
             <JsonButton filename={`item-${fileKey}-sales-page-${sp.page}.json`} data={sales} />
           </span>
         </div>
-        <div className="table-wrap">
+        <TableWrap label="Recent sales">
           <table className="data-table">
             <thead>
               <tr>
@@ -256,7 +293,7 @@ export default async function ItemDetailPage({
               )}
               {sales.map((s) => (
                 <tr key={s.sale_id}>
-                  <td className="ts">{fmtTs(s.occurred_at)}</td>
+                  <td className="ts"><LocalTimestamp value={s.occurred_at} /></td>
                   <td><span className={`badge ${s.direction === 'BUY' ? 'badge-active' : 'badge-archived'}`}>{s.direction}</span></td>
                   <td className="amount mono">{fmtN(s.quantity)}</td>
                   <td className="amount neutral">{fmtAmtFull(s.unit_price)}</td>
@@ -279,35 +316,19 @@ export default async function ItemDetailPage({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
 
         <Pagination
           page={sp.page}
           totalPages={totalPages}
           totalItems={totalSales}
           basePath={`/chestshop/items/${encodeURIComponent(itemKey)}`}
-          searchParams={{ limit: String(sp.limit) }}
+          searchParams={{ from: returnTo, limit: String(sp.limit) }}
         />
       </div>
       )}
 
-      {/* Daily price line — table dropped, candles + line cover the same window */}
-      {byDay.length > 0 && (
-        <div className="card">
-          <div className="card-title">
-            Daily price line <span className="sub">avg unit price · last 30 days</span>
-          </div>
-          <PriceLine data={byDay} />
-        </div>
-      )}
     </>
   );
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
-}

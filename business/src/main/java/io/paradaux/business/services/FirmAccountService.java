@@ -9,6 +9,18 @@ import java.util.UUID;
 public interface FirmAccountService {
 
     /**
+     * Sets (or clears with null) a letters-only shop alias; proprietor only.
+     * Previous aliases stop resolving but remain reserved to the same account.
+     */
+    void setShopAlias(int firmId, int accountId, String alias, UUID actorId);
+
+    String getShopAlias(int firmId, int accountId);
+
+    /** Resolves a live firm's alias to its Treasury account id, or null. */
+    Integer resolveShopAlias(String alias);
+
+
+    /**
      * Creates a new Treasury account for the firm and registers it.
      * Automatically syncs current staff members/authorizers based on their roles.
      */
@@ -50,6 +62,13 @@ public interface FirmAccountService {
      * Preferred over calling syncAccountMembers in a loop from callers.
      */
     void syncAllFirmAccounts(Integer firmId);
+
+    /**
+     * Repairs membership for all persisted live account links, including work
+     * interrupted by a process crash. Failures are logged per account and retried
+     * on the next pass; one broken account does not block the rest.
+     */
+    void reconcileLinkedAccounts();
 
     /**
      * Hands every live Treasury account of the firm to a new proprietor:

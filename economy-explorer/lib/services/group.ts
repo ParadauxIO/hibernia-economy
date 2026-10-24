@@ -1,6 +1,12 @@
 import 'server-only';
-import { db } from '@/lib/db';
+import { getViewer } from '@/lib/auth/viewer';
+import { requirePermission } from '@/lib/auth/access';
+import { assertCanGrantRoles, withPolicyMutation } from '@/lib/auth/delegation';
+import type { Permission } from '@/lib/auth/policy';
+import type { Executor } from '@/lib/sql/role';
+import type { Viewer } from '@/lib/auth/viewer';
 import {
+  clearSyncedMembers,
   listGroups as listGroupsDal,
   selectGroupById,
   createGroup as createGroupRow,
@@ -37,53 +43,55 @@ export function getGroup(groupId: number): Promise<GroupSummary | null> {
   return selectGroupById(groupId);
 }
 
-export function createGroup(args: {
+export async function createGroup(args: {
   name: string;
   description: string | null;
   createdBy: string | null;
 }): Promise<void> {
+  requirePermission(await getViewer(), 'groups.create');
   return createGroupRow(args);
 }
 
-export function deleteGroup(groupId: number): Promise<void> {
-  return deleteGroupRow(groupId);
+async function mutateGroup<T>(groupId: number, permission: Permission, operation: (trx: Executor, actor: Viewer) => Promise<T>): Promise<T> {
+  return withPolicyMutation(permission, async (trx, actor) => {
+    const group = await selectGroupById(groupId, trx);
+    if (!group) throw new Error('Group not found.');
+    await assertCanGrantRoles(actor, group.capabilities, trx);
+    return operation(trx, actor);
+  });
 }
 
-export function setLuckpermsNode(groupId: number, node: string | null): Promise<void> {
-  return setLuckpermsNodeRow(groupId, node);
+export async function deleteGroup(groupId: number): Promise<void> {
+  await mutateGroup(groupId, 'groups.delete', trx => deleteGroupRow(groupId, trx));
+}
+
+export async function setLuckpermsNode(groupId: number, node: string | null): Promise<void> {
+  const normalized = node?.trim().toLowerCase() || null;
+  if (normalized && !/^[a-z0-9_.*-]+$/.test(normalized)) throw new Error('Invalid LuckPerms node.');
+  await mutateGroup(groupId, 'groups.sync.update', async trx => {
+    await setLuckpermsNodeRow(groupId, normalized, trx);
+    await clearSyncedMembers(groupId, trx);
+  });
 }
 
 export function listGroupMembers(groupId: number): Promise<GroupMember[]> {
   return listGroupMembersDal(groupId);
 }
 
-export function addManualMember(
-  groupId: number,
-  playerUuid: string,
-  addedBy: string | null,
-): Promise<void> {
-  return addManualMemberRow(groupId, playerUuid, addedBy);
+export async function addManualMember(groupId: number, playerUuid: string, addedBy: string | null): Promise<void> {
+  await mutateGroup(groupId, 'groups.members.update', trx => addManualMemberRow(groupId, playerUuid, addedBy, trx));
 }
 
-export function removeManualMember(groupId: number, playerUuid: string): Promise<void> {
-  return removeManualMemberRow(groupId, playerUuid);
+export async function removeManualMember(groupId: number, playerUuid: string): Promise<void> {
+  await mutateGroup(groupId, 'groups.members.update', trx => removeManualMemberRow(groupId, playerUuid, trx));
 }
 
-/**
- * Replaces a group's capability set wholesale, atomically: the DELETE and the
- * per-capability INSERTs run in a single transaction so a failure can't leave a
- * group with a partial set. The transaction boundary is the service's concern;
- * each statement is a pure DAL call.
- */
-export async function setGroupCapabilities(
-  groupId: number,
-  capabilities: string[],
-): Promise<void> {
-  await db.transaction().execute(async (trx) => {
+/** Replace grants atomically under the same policy lock as role edits. */
+export async function setGroupCapabilities(groupId: number, capabilities: string[]): Promise<void> {
+  await mutateGroup(groupId, 'groups.roles.update', async (trx, actor) => {
+    await assertCanGrantRoles(actor, capabilities, trx);
     await deleteGroupCapabilities(groupId, trx);
-    for (const cap of capabilities) {
-      await insertGroupCapability(groupId, cap, trx);
-    }
+    for (const cap of new Set(capabilities)) await insertGroupCapability(groupId, cap, trx);
   });
 }
 

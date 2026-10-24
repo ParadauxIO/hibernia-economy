@@ -15,8 +15,15 @@ import java.net.UnknownHostException;
  *
  * <p>Enforced both at registration time and again immediately before each
  * delivery (DNS can be re-pointed after registration — a "DNS rebinding"
- * attack). Requires {@code https}, an explicit host, a default/standard port,
- * and that <b>every</b> resolved address is a public unicast address.
+ * attack). Requires {@code https}, an explicit host, the standard https port
+ * (443), and that <b>every</b> resolved address is a public unicast address.
+ *
+ * <p><b>Residual (ADT-27):</b> the delivery-time re-check is the rebinding
+ * mitigation, but a narrow TOCTOU remains — the JDK {@code HttpClient} re-resolves
+ * DNS at connect with no resolver hook, so it cannot be pinned to the address this
+ * validator vetted. Eliminating it entirely needs a custom transport that connects
+ * to the vetted literal IP while preserving Host/SNI; the re-check keeps the window
+ * to milliseconds.
  */
 public final class SsrfValidator {
 
@@ -47,6 +54,13 @@ public final class SsrfValidator {
         }
         if (uri.getUserInfo() != null) {
             throw bad("Webhook url must not contain user info.");
+        }
+        int port = uri.getPort();
+        if (port != -1 && port != 443) {
+            // Enforce the standard https port (ADT-27). A public host on an
+            // off-port (e.g. :22, :6379) is a route to reach a non-HTTP internal
+            // service the resolved-address checks below don't catch.
+            throw bad("Webhook url must use the default https port (443).");
         }
         if (!isPublicHost(host)) {
             throw bad("Webhook url must resolve to a public address.");

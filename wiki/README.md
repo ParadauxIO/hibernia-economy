@@ -20,7 +20,16 @@ the code.
   deploys are gated.
 - **[CI/CD](ci-cd.md)** — the GitHub Actions workflows, container builds, and the
   release flow.
+- **[Release runbook](release-runbook.md)** — the order of operations for a
+  release that changes the schema: backup, stop, migrate, deploy, verify, rollback.
+- **[Shop registry backfill](shop-registry-backfill.md)** — importing legacy shops at cutover.
+- **[Historical ChestShop sale links](chestshop-sale-backfill.md)** — manual dry-run, conservative matching, audit reports and safe batch resumption.
+- **[ChestShop staging parity](chestshop-staging-parity.md)** — feature comparison, add-on compatibility gaps, and acceptance checks.
+- **[ChestShop add-on compatibility](chestshop-add-on-compatibility.md)** — restored hooks, finder settings and preference cutover.
+- **[ChestShop hopper updates](chestshop-hopper-updates.md)** — batching, overload recovery, acceptance tests and rollout criteria.
 - **[Conventions](conventions.md)** — the rules that keep the monorepo coherent.
+
+- **[Documentation coverage](documentation-coverage.md)** — PAR-498 audit baseline, feature map and maintenance checks.
 
 ## Quick links
 

@@ -1,14 +1,17 @@
+import { canViewTransaction, hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { findTransaction, findPostingsByTxnId } from '@/lib/sql/ledger';
-import { accountLabel, fmtAmtFull, fmtTs } from '@/lib/format';
+import { accountLabel, fmtAmtFull } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 import { Player } from '@/components/Player';
 import { PrivacyGate } from '@/components/PrivacyGate';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,27 +31,28 @@ export default async function TransactionDetailPage({
       <PrivacyGate
         kind="login"
         title="Transaction detail is private"
-        hint="Sign in with admin access to view transaction detail."
+        hint="Sign in to view transactions involving accounts you can access."
       />
     );
   }
-  if (viewer.role !== 'admin') {
-    return <PrivacyGate kind="private" title="Admin only" hint="Only admins can view individual transactions." />;
-  }
-
   const { txnId: idStr } = await params;
   const id = Number(idStr);
-  if (!Number.isInteger(id) || id <= 0) notFound();
+  if (!Number.isSafeInteger(id) || id <= 0) notFound();
+  if (!await canViewTransaction(id, viewer)) {
+    return <PrivacyGate kind="private" title="Transaction access required" hint="You need read access to an account involved in this transaction, or permission to investigate all transactions." />;
+  }
 
   const [txn, postings] = await Promise.all([findTransaction(id), findPostingsByTxnId(id)]);
   if (!txn) notFound();
 
-  // Privileged read: admin inspecting an individual transaction's postings.
+  // Record both global investigations and relationship-based transaction reads.
   await auditView(viewer, { path: `/transactions/${id}`, targetType: 'transaction', targetId: String(id) });
 
   return (
     <>
-      <BackLink href="/transactions" label="Transactions" />
+      {hasPermission(viewer, 'transactions.read')
+        ? <BackLink href="/transactions" label="Transactions" />
+        : <BackLink href="/me" label="My data" />}
 
       <div className="page-heading">
         <h1>
@@ -59,8 +63,8 @@ export default async function TransactionDetailPage({
       <div className="kpi-grid">
         <div className="kpi">
           <div className="kpi-label">Settled</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>{fmtTs(txn.settlement_time)}</div>
-          {txn.trade_time && <div className="kpi-meta">trade: {fmtTs(txn.trade_time)}</div>}
+          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}><LocalTimestamp value={txn.settlement_time} /></div>
+          {txn.trade_time && <div className="kpi-meta">trade: <LocalTimestamp value={txn.trade_time} /></div>}
         </div>
         <div className="kpi">
           <div className="kpi-label">Initiator</div>
@@ -87,7 +91,7 @@ export default async function TransactionDetailPage({
 
       <div className="card">
         <div className="card-title">Postings</div>
-        <div className="table-wrap"><table className="data-table">
+        <TableWrap label="Postings"><table className="data-table">
           <thead>
             <tr>
               <th>Posting</th>
@@ -117,7 +121,7 @@ export default async function TransactionDetailPage({
               );
             })}
           </tbody>
-        </table></div>
+        </table></TableWrap>
       </div>
     </>
   );

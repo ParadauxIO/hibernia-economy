@@ -1,6 +1,11 @@
 package io.paradaux.business.model.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.Business;
+import java.util.logging.Logger;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,17 +13,26 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.logging.Logger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FirmConfigurationTest {
 
-    @Mock Business plugin;
-    @Mock FileConfiguration cfg;
+    @Test
+    void blockedTermsDefaultToEmptyAndReloadFromConfig() {
+        FirmConfiguration config = new FirmConfiguration(plugin);
+        assertThat(config.getBlockedNameTerms()).isEmpty();
+        when(cfg.getStringList("firm.name-filter.blocked-terms")).thenReturn(java.util.List.of("blocked phrase"));
+        config.reload();
+        assertThat(config.getBlockedNameTerms()).containsExactly("blocked phrase");
+        when(cfg.getStringList("firm.name-filter.blocked-terms")).thenReturn(java.util.List.of());
+        config.reload();
+        assertThat(config.getBlockedNameTerms()).isEmpty();
+    }
+
+    @Mock
+    Business plugin;
+
+    @Mock
+    FileConfiguration cfg;
 
     @BeforeEach
     void setUp() {

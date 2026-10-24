@@ -16,10 +16,17 @@ The money you're holding is taxed a small amount each week. A few things to know
 
 - It's **based on your balance** — the more you're sitting on, the more tax applies,
   and higher balances are taxed at a higher rate.
-- It's applied when you **log in**, catching up for the time since you last played, so
-  you're not charged for time you were away unfairly.
+- It's applied when you **log in**, prorated by elapsed time since your previous
+  login, including time offline. A longer absence can therefore mean a larger charge.
 - Spending and using your money normally is the point — parking a huge balance and
   never touching it is what the tax gently discourages.
+
+The rates on this server right now. Your **whole** balance pays the rate of the band
+it falls in, and the weekly rate is scaled to the time since your last login:
+
+```live
+balance-tax
+```
 
 > [!NOTE]
 > When tax is taken, you'll see a message in chat telling you the amount and what it
@@ -44,6 +51,12 @@ Some kinds of income have a little tax taken at the source as you earn it, rathe
 later. When that happens it's handled automatically — the amount you receive is already
 net of the tax. Unlike balance tax, this one is **silent** — there's no chat message
 for each deduction (it would be too noisy), but it still shows up in `/transactions`.
+
+The rate depends on what paid you — each row is the plugin the money came through:
+
+```live
+income-tax
+```
 
 ## Keeping an eye on it
 

@@ -44,32 +44,34 @@ jobs:
   migrate:
     name: Migrate ${{ inputs.target }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Scopes this target's environment secrets into the job.
     environment: ${{ inputs.target }}
+    env:
+      FLYWAY_URL: ${{ secrets.FLYWAY_URL }}
+      FLYWAY_USER: ${{ secrets.FLYWAY_USER }}
+      FLYWAY_PASSWORD: ${{ secrets.FLYWAY_PASSWORD }}
+      FLYWAY_SCHEMA: ${{ secrets.FLYWAY_SCHEMA }}
 
     steps:
+      # Inputs go through env, never straight into the script: confirm_target is
+      # free text.
       - name: Confirm target matches typed input
+        env:
+          TARGET: ${{ inputs.target }}
+          CONFIRM: ${{ inputs.confirm_target }}
         run: |
-          if [ "${{ inputs.confirm_target }}" != "${{ inputs.target }}" ]; then
-            echo "::error::confirm_target='${{ inputs.confirm_target }}' does not match target='${{ inputs.target }}'"
+          if [ "$CONFIRM" != "$TARGET" ]; then
+            echo "::error::confirm_target='$CONFIRM' does not match target='$TARGET'"
             exit 1
           fi
-          echo "Target confirmed: ${{ inputs.target }}"
+          echo "Target confirmed: $TARGET"
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
 
       # The plan. flywayInfo never fails on pending migrations — unlike
       # flywayValidate, which exits non-zero on a green-field DB where every
@@ -77,30 +79,17 @@ jobs:
       # validateOnMigrate=true (set in build.gradle.kts), so applied
       # migrations are still checked for drift.
       - name: flywayInfo (plan)
-        env:
-          FLYWAY_URL: ${{ secrets.FLYWAY_URL }}
-          FLYWAY_USER: ${{ secrets.FLYWAY_USER }}
-          FLYWAY_PASSWORD: ${{ secrets.FLYWAY_PASSWORD }}
-          FLYWAY_SCHEMA: ${{ secrets.FLYWAY_SCHEMA }}
-        run: ./gradlew --no-daemon :economy-flyway:flywayInfo
+        run: sh ./gradlew :economy-flyway:flywayInfo
 
       - name: flywayMigrate
         env:
-          FLYWAY_URL: ${{ secrets.FLYWAY_URL }}
-          FLYWAY_USER: ${{ secrets.FLYWAY_USER }}
-          FLYWAY_PASSWORD: ${{ secrets.FLYWAY_PASSWORD }}
-          FLYWAY_SCHEMA: ${{ secrets.FLYWAY_SCHEMA }}
+          BASELINE: ${{ inputs.baseline }}
         run: |
-          if [ "${{ inputs.baseline }}" = "true" ]; then
-            ./gradlew --no-daemon :economy-flyway:flywayMigrate -Pbaseline=true
+          if [ "$BASELINE" = "true" ]; then
+            sh ./gradlew :economy-flyway:flywayMigrate -Pbaseline=true
           else
-            ./gradlew --no-daemon :economy-flyway:flywayMigrate
+            sh ./gradlew :economy-flyway:flywayMigrate
           fi
 
       - name: Post-migrate flywayInfo (audit trail)
-        env:
-          FLYWAY_URL: ${{ secrets.FLYWAY_URL }}
-          FLYWAY_USER: ${{ secrets.FLYWAY_USER }}
-          FLYWAY_PASSWORD: ${{ secrets.FLYWAY_PASSWORD }}
-          FLYWAY_SCHEMA: ${{ secrets.FLYWAY_SCHEMA }}
-        run: ./gradlew --no-daemon :economy-flyway:flywayInfo
+        run: sh ./gradlew :economy-flyway:flywayInfo

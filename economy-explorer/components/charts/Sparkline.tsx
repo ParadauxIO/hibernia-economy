@@ -1,5 +1,6 @@
 'use client';
-import { useId, useEffect, useState } from 'react';
+import { useId } from 'react';
+import { useHydrated } from '@democracycraft/design-system/use-hydrated';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 
 interface SparklineProps {
@@ -19,10 +20,9 @@ interface SparklineProps {
 export function Sparkline({ data, stroke = 'var(--accent)' }: SparklineProps) {
   const rawId = useId();
   const id = `spark-${rawId.replace(/:/g, '')}`;
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   const series = (typeof data[0] === 'number' ? (data as number[]).map((v) => ({ value: v })) : (data as { value: number }[]));
-  if (!series || series.length < 2) return null;
+  if (series.length < 2) return null;
   // recharts measures the DOM → render nothing until mounted to avoid the
   // SSR/client hydration mismatch.
   if (!mounted) return null;

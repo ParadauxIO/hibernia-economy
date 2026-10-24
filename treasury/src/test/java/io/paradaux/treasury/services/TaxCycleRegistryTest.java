@@ -25,7 +25,7 @@ class TaxCycleRegistryTest {
 
     @BeforeEach
     void setUp() {
-        registry = new TaxCycleRegistry(accountMapper);
+        registry = new io.paradaux.treasury.services.impl.TaxCycleRegistryImpl(accountMapper);
         lenient().when(accountMapper.findById(101)).thenReturn(account("DCGovernment"));
         lenient().when(accountMapper.findById(202)).thenReturn(account("GovernmentFines"));
     }

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { visit } from './helpers';
 
 // UI consistency audit. Drives both a desktop and a mobile viewport on Chromium
 // (the device presets default to WebKit, which we don't install — and this is a
@@ -28,6 +29,9 @@ const ROUTES: { path: string; name: string; viewer?: 'admin' }[] = [
   { path: '/chestshop/sales', name: 'chestshop-sales', viewer: 'admin' },
   { path: '/chestshop/firms', name: 'chestshop-firms' },
   { path: '/economy/health', name: 'health' },
+  { path: '/economy/wealth', name: 'wealth' },
+  { path: '/market/activity', name: 'market-activity' },
+  { path: '/government?view=fines', name: 'government-fines', viewer: 'admin' },
   { path: '/money-flow', name: 'money-flow' },
   { path: '/government', name: 'government' },
   { path: '/search?q=a', name: 'search' },
@@ -36,7 +40,9 @@ const ROUTES: { path: string; name: string; viewer?: 'admin' }[] = [
   { path: '/me', name: 'me', viewer: 'admin' },
   { path: '/me/market', name: 'me-market', viewer: 'admin' },
   { path: '/admin/api-keys', name: 'admin-api-keys', viewer: 'admin' },
-  { path: '/admin/audit', name: 'admin-audit', viewer: 'admin' },
+  { path: '/admin/roles', name: 'admin-roles', viewer: 'admin' },
+  { path: '/admin/roles/player', name: 'admin-role-player', viewer: 'admin' },
+  { path: '/admin/groups/1', name: 'admin-group', viewer: 'admin' },
   { path: '/docs', name: 'docs' },
   { path: '/link', name: 'link', viewer: 'admin' },
 ];
@@ -47,15 +53,16 @@ mkdirSync(OUT, { recursive: true });
 for (const route of ROUTES) {
   test(`audit ${route.name}`, async ({ page, context }) => {
     if (route.viewer) {
-      await context.addCookies([{ name: 'e2e_viewer', value: route.viewer, url: 'http://127.0.0.1:3000' }]);
+      await context.addCookies([{ name: 'e2e_viewer', value: route.viewer, url: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100' }]);
     }
 
     const failures: string[] = [];
     for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await page.setViewportSize(size);
-      await page.goto(route.path, { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('networkidle').catch(() => {});
-      await page.waitForTimeout(250);
+      // Settled = streamed sections swapped in and web fonts applied (both move
+      // the boxes being measured); no fixed sleep.
+      await visit(page, route.path);
+      await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
       // Guard: the page actually rendered content (a blank/errored page would
       // trivially pass the overflow + gap checks, so assert it isn't empty).
@@ -76,9 +83,10 @@ for (const route of ROUTES) {
           return r.height > 0 && cs.display !== 'none' && cs.position !== 'absolute';
         });
         const out: number[] = [];
-        for (let i = 1; i < kids.length; i++) {
-          out.push(Math.round(kids[i].getBoundingClientRect().top - kids[i - 1].getBoundingClientRect().bottom));
-        }
+        kids.slice(1).forEach((kid, i) => {
+          const prev = kids[i]; // kids.slice(1)[i] follows kids[i]
+          if (prev) out.push(Math.round(kid.getBoundingClientRect().top - prev.getBoundingClientRect().bottom));
+        });
         return out;
       });
       const distinctGaps = [...new Set(gaps.filter((g) => g >= 0))].sort((a, b) => a - b);

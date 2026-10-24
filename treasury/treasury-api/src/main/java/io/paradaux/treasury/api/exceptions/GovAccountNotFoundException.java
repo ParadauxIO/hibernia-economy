@@ -5,6 +5,7 @@ package io.paradaux.treasury.api.exceptions;
  * by id (depending on the call site).
  */
 public class GovAccountNotFoundException extends TreasuryException {
+    private static final long serialVersionUID = 1L;
     private final String identifier;
 
     public GovAccountNotFoundException(String identifier) {

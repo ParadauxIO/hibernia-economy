@@ -1,0 +1,16 @@
+name: Nexo
+version: 1.15.0-stub
+main: net.democracycraft.inttests.nexostub.NexoStubPlugin
+api-version: '26.3'
+description: Test stand-in for the Nexo plugin — provides the com.nexomc.nexo API surface ChestShop integrates with, plus defined test items and RCON commands. NOT the real Nexo.
+commands:
+  nexostock:
+    description: Put a Nexo item into a container. /nexostock <world> <x> <y> <z> <id> <count>
+  nexogive:
+    description: Give a Nexo item to a player. /nexogive <player> <id> <count>
+  nexocount:
+    description: Count a player's Nexo items by id. /nexocount <player> <id>
+permissions:
+  nexostub.use:
+    description: Run nexo-stub commands.
+    default: op

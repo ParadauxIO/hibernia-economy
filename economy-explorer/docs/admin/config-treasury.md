@@ -9,10 +9,23 @@ description: Treasury's config.yml — accounts, currency, tax cycles, balance/i
 Treasury's settings live in `plugins/Treasury/config.yml`.
 
 > [!CAUTION]
-> Treasury reads its config **once at startup and caches it** — there is **no reload
-> command**. Every change here requires a **server restart**. Treasury is the economy
-> system of record, so a bad `database.*` value or an invalid `economy.format` pattern
-> will stop the plugin from enabling.
+> Most changes here are picked up by **`/treasury reload`** (permission
+> `treasury.admin.reload`) — it re-reads `config.yml` and `messages.properties` and
+> refreshes salaries, balance-tax brackets/rates, source-income tax, government account
+> names, and the log level live. A full **server restart** is only needed for `database.*`,
+> the tax/salary schedule intervals, and `economy.format` (the currency pattern). Treasury
+> is the economy system of record, so a bad `database.*` value or an invalid
+> `economy.format` pattern will stop the plugin from enabling.
+
+Salary, personal balance-tax, and source-income-tax settings are parsed before
+publication. Invalid YAML, malformed salary amounts, or invalid tax rates reject
+the reload and keep the previous settings. Tax rates must be between 0 and 1;
+salary amounts and balance-bracket thresholds must be non-negative. Startup still
+uses the documented defaults and warning-based recovery.
+
+An in-flight tax collection keeps its original rate and government account. A
+scheduled payroll keeps its original amounts and funding account even if a reload
+happens before its async payout. Subsequent operations use the new settings.
 
 ## Currency — `economy`
 
@@ -32,7 +45,7 @@ startup as unlimited faucet/sink accounts (their balance can go negative by desi
 |---|---|---|
 | `government.starting-balances-account` | `starting-balances` | Source account every new player's starting balance is paid from. |
 | `government.tax-income-account` | `DCGovernment` | The **default tax destination** — the fallback for any tax with no/missing destination. |
-| `government.fines-account` | `GovernmentFines` | Account `/fine` payments are credited to (and refunded from on revoke). |
+| `government.fines-account` | `GovernmentFines` | Default destination for API fines issued without an explicit account. `/fine issue` and `/fine firm` use their named account; revocation refunds from the account recorded on the fine. |
 
 > [!CAUTION]
 > **Don't rename these once the server is live.** Renaming creates a *new* empty account
@@ -77,11 +90,12 @@ marginal):
 | $500,000 | 1.8% |
 
 > [!WARNING]
-> **Bracket keys must be integers — decimal keys are silently broken.** Treasury loads the
+> **Bracket keys must be integers.** Treasury loads the
 > brackets via `getConfigurationSection("tax.balance.brackets").getKeys(false)` and parses
 > each key as the balance floor. Bukkit/SnakeYAML treats a `.` in a YAML mapping key as a
 > **path separator**, so a decimal key like `100000.00:` is read as a nested section
-> (`100000` → `00`) rather than a scalar key — its rate **never applies**. Always use whole
+> (`100000` → `00`) rather than a scalar key. Invalid bracket structure rejects
+> a strict reload; startup can skip invalid entries with warnings. Always use whole
 > integer threshold keys; the value is the **weekly rate** at that balance floor:
 >
 > ```yaml
@@ -101,6 +115,12 @@ marginal):
 > 7)`. Emptying the bracket map doesn't disable it (it reverts to these defaults) — use
 > `enabled: false`.
 
+In effect on this server (what players see on [How tax works](/docs/guides/tax)):
+
+```live
+balance-tax
+```
+
 ## Income tax — `tax.source-income-tax`
 
 An optional tax on money **deposited** through Vault (income), charged to the recipient.
@@ -117,6 +137,28 @@ An optional tax on money **deposited** through Vault (income), charged to the re
 > **every** plugin. Scope it with `plugin-rates` and keep `default-rate: 0.0` unless you
 > mean it. A misspelled plugin name silently falls through to the default rate.
 
+In effect on this server:
+
+```live
+income-tax
+```
+
+## Published rates — `economy_config`
+
+Treasury writes the tax rates it is applying to the `economy_config` table on every
+start and every `/treasury reload`, and the tables on this page, on
+[How tax works](/docs/guides/tax) and at `GET /api/v1/config/tax` on the REST API
+read them from there. So **to change what players are told, change `config.yml` and
+reload** — there is no copy of the numbers in the docs to edit.
+
+- What is published is what Treasury actually uses. At startup an entry it skips (bad
+  number, rate outside 0–1) is left out, and an empty bracket map shows the defaults. A
+  reload with an invalid rate is rejected, so the published rates stay as they were.
+- A disabled tax still shows its rates, marked as switched off.
+- If the write fails (for example the schema migration `V32` isn't applied yet),
+  Treasury logs a warning and carries on; the docs keep showing the last published
+  rates, or "not available" if there are none.
+
 ## Salaries — `salaries`
 
 Recurring pay to online players based on their LuckPerms group.
@@ -127,11 +169,15 @@ Recurring pay to online players based on their LuckPerms group.
 | `salaries.government-account` | `DCGovernment` | Unlimited faucet account salaries are paid from. |
 | `salaries.interval` | `900` | Seconds between payout cycles (900 = 15 minutes). |
 | `salaries.amount` | *(group → amount map)* | Per-LuckPerms-group salary, e.g. `senator: 65.0`. |
+| `salaries.skip-afk` | `true` | Skip online-but-AFK players when paying out. |
+| `salaries.afk-context-key` | `afk` | LuckPerms context key checked for AFK status. |
+| `salaries.afk-context-value` | `true` | Context value that marks a player as AFK. |
 
 Behaviour: requires **LuckPerms**; pays **online players only**; a player in several
 salaried groups gets the **single highest** amount (never the sum); group names match
 **case-insensitively**; groups set to `0` are intentionally unsalaried. Inherited groups
-count.
+count. With `skip-afk: true` (the default), online players whose LuckPerms `afk=true`
+context is set are **skipped** for that cycle; set `skip-afk: false` to pay AFK players too.
 
 > [!CAUTION]
 > If `salaries.government-account` doesn't name an existing government account, **the
@@ -143,6 +189,7 @@ count.
 | Key | Default | What it does |
 |---|---|---|
 | `tax.webhook.enabled` / `tax.webhook.url` | `false` / *(empty)* | Posts a Discord summary after each tax cycle. A blank URL disables it even when enabled. |
+| `fines.webhook.enabled` / `fines.webhook.url` | `false` / *(empty)* | Posts a Discord notification when a fine is issued or revoked. A blank URL disables it even when enabled. |
 | `bytebin.post-url` / `bytebin.base-url` | `pastes.paradaux.io` | Paste service the CSV transaction-export uploads to (must be a matched pair). |
 | `logging.level` | `WARN` | Log verbosity: `TRACE/DEBUG/INFO/WARN/ERROR/OFF`. `INFO` shows cycles, account creation, and admin money commands. |
 

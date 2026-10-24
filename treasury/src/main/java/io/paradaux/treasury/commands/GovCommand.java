@@ -1,6 +1,10 @@
 package io.paradaux.treasury.commands;
 
 import com.google.inject.Inject;
+import com.google.inject.Provider;
+import io.paradaux.common.AmountInput;
+import io.paradaux.hibernia.framework.commander.CommandManager;
+import io.paradaux.hibernia.framework.commander.HelpGenerator;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
@@ -14,20 +18,15 @@ import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.utils.GovDedupKeys;
-import io.paradaux.treasury.utils.Money;
 import io.paradaux.treasury.utils.TreasuryConstants;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.UUID;
 
 @Command({"government", "gov"})
 @Permission("treasury.gov")
@@ -36,8 +35,6 @@ public class GovCommand implements CommandHandler {
     private static final int PAGE_SIZE = 10;
     /** Hard cap so /gov account history <name> <huge> can't push MariaDB into a giant OFFSET scan. */
     private static final int MAX_PAGE = 10_000;
-    private static final DateTimeFormatter TIME_FMT =
-            DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(ZoneId.systemDefault());
 
     private final AccountService accountService;
     private final LedgerService ledgerService;
@@ -45,20 +42,26 @@ public class GovCommand implements CommandHandler {
     private final GovService govService;
     private final PlayerDirectoryService playerDirectory;
     private final Message message;
+    // Provider breaks the construction cycle: CommandManager injects Set<CommandHandler>
+    // (which includes this handler), so resolve it lazily when help is rendered.
+    private final Provider<CommandManager> commandManager;
 
     @Inject
-    public GovCommand(AccountService accountService,
-                      LedgerService ledgerService,
-                      MembershipService membershipService,
-                      GovService govService,
-                      PlayerDirectoryService playerDirectory,
-                      Message message) {
-        this.accountService   = accountService;
-        this.ledgerService    = ledgerService;
+    public GovCommand(
+            AccountService accountService,
+            LedgerService ledgerService,
+            MembershipService membershipService,
+            GovService govService,
+            PlayerDirectoryService playerDirectory,
+            Message message,
+            Provider<CommandManager> commandManager) {
+        this.accountService = accountService;
+        this.ledgerService = ledgerService;
         this.membershipService = membershipService;
-        this.govService       = govService;
-        this.playerDirectory  = playerDirectory;
-        this.message          = message;
+        this.govService = govService;
+        this.playerDirectory = playerDirectory;
+        this.message = message;
+        this.commandManager = commandManager;
     }
 
     // =====================================================================
@@ -68,37 +71,20 @@ public class GovCommand implements CommandHandler {
     @Route("")
     @Description("Show /government help")
     public void root(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov");
+        helpPage(sender, 1);
     }
 
     @Route("help")
     @Description("Show /government help")
     public void help(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov");
+        helpPage(sender, 1);
     }
 
-    @Route("help account")
-    @Description("Show government account lifecycle help")
-    public void helpAccount(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.account");
-    }
-
-    @Route("help member")
-    @Description("Show government member-management help")
-    public void helpMember(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.member");
-    }
-
-    @Route("help auth")
-    @Description("Show government authorizer-management help")
-    public void helpAuth(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.auth");
-    }
-
-    @Route("help transfer")
-    @Description("Show government transfer / pay / payout help")
-    public void helpTransfer(@Sender CommandSender sender) {
-        message.send(sender, "treasury.help.gov.transfer");
+    @Route("help <page>")
+    @Description("Show a page of the /government help index")
+    public void helpPage(@Sender CommandSender sender, @Arg("page") int page) {
+        HelpGenerator help = new HelpGenerator(commandManager.get());
+        sender.sendMessage(help.render(sender, "government", page));
     }
 
     // =====================================================================
@@ -109,7 +95,7 @@ public class GovCommand implements CommandHandler {
     @Async
     @Description("Create a new government department account")
     public void accountCreate(@Sender CommandSender sender, @Arg("name") String name) {
-        if (!isAllowed(sender,"treasury.gov.account.create")) {
+        if (!isAllowed(sender, "treasury.gov.account.create")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -125,7 +111,7 @@ public class GovCommand implements CommandHandler {
     @Async
     @Description("Archive a government department account")
     public void accountArchive(@Sender CommandSender sender, @Arg("name") String name) {
-        if (!isAllowed(sender,"treasury.gov.admin")) {
+        if (!isAllowed(sender, "treasury.gov.admin")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -143,7 +129,7 @@ public class GovCommand implements CommandHandler {
     @Async
     @Description("List all government accounts")
     public void accountList(@Sender CommandSender sender) {
-        if (!isAllowed(sender,"treasury.gov.account.list")) {
+        if (!isAllowed(sender, "treasury.gov.account.list")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -155,10 +141,15 @@ public class GovCommand implements CommandHandler {
         message.send(sender, "treasury.gov.account.list.header");
         for (Account acc : accounts) {
             BigDecimal balance = accountService.getBalanceReadOnly(acc.getAccountId());
-            message.send(sender, "treasury.gov.account.list.entry",
-                    "id", String.valueOf(acc.getAccountId()),
-                    "name", acc.getDisplayName(),
-                    "balance", accountService.formatAmount(balance));
+            message.send(
+                    sender,
+                    "treasury.gov.account.list.entry",
+                    "id",
+                    String.valueOf(acc.getAccountId()),
+                    "name",
+                    acc.getDisplayName(),
+                    "balance",
+                    accountService.formatAmount(balance));
         }
     }
 
@@ -166,7 +157,7 @@ public class GovCommand implements CommandHandler {
     @Async
     @Description("View the balance of a government account")
     public void accountBalance(@Sender CommandSender sender, @Arg("name") String name) {
-        if (!isAllowed(sender,"treasury.gov.account.view")) {
+        if (!isAllowed(sender, "treasury.gov.account.view")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -177,9 +168,13 @@ public class GovCommand implements CommandHandler {
             return;
         }
         BigDecimal balance = accountService.getBalanceReadOnly(account.getAccountId());
-        message.send(sender, "treasury.gov.account.balance",
-                "name", account.getDisplayName(),
-                "balance", accountService.formatAmount(balance));
+        message.send(
+                sender,
+                "treasury.gov.account.balance",
+                "name",
+                account.getDisplayName(),
+                "balance",
+                accountService.formatAmount(balance));
     }
 
     @Route("account history <name>")
@@ -192,72 +187,76 @@ public class GovCommand implements CommandHandler {
     @Route("account history <name> <page>")
     @Async
     @Description("View the transaction history of a government account (paged)")
-    public void accountHistoryPage(@Sender CommandSender sender,
-                                   @Arg("name") String name,
-                                   @Arg("page") int page) {
+    public void accountHistoryPage(@Sender CommandSender sender, @Arg("name") String name, @Arg("page") int page) {
         showHistory(sender, name, page);
     }
 
     @Route("account transfer <from> <to> <amount>")
     @Async
     @Description("Transfer funds between government accounts")
-    public void accountTransfer(@Sender CommandSender sender,
-                                @Arg("from") String fromName,
-                                @Arg("to") String toName,
-                                @Arg("amount") BigDecimal amount) {
+    public void accountTransfer(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String toName,
+            @Arg("amount") BigDecimal amount) {
         doTransfer(sender, fromName, toName, amount, null);
     }
 
     @Route("account transfer <from> <to> <amount> <reason>")
     @Async
     @Description("Transfer funds between government accounts with a reason")
-    public void accountTransferReason(@Sender CommandSender sender,
-                                      @Arg("from") String fromName,
-                                      @Arg("to") String toName,
-                                      @Arg("amount") BigDecimal amount,
-                                      @GreedyArg("reason") String reason) {
+    public void accountTransferReason(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String toName,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
         doTransfer(sender, fromName, toName, amount, reason);
     }
 
     @Route("pay <from> <to> <amount>")
     @Async
     @Description("Transfer funds between government accounts (alias)")
-    public void pay(@Sender CommandSender sender,
-                    @Arg("from") String fromName,
-                    @Arg("to") String toName,
-                    @Arg("amount") BigDecimal amount) {
+    public void pay(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String toName,
+            @Arg("amount") BigDecimal amount) {
         doTransfer(sender, fromName, toName, amount, null);
     }
 
     @Route("pay <from> <to> <amount> <reason>")
     @Async
     @Description("Transfer funds between government accounts with a reason (alias)")
-    public void payReason(@Sender CommandSender sender,
-                          @Arg("from") String fromName,
-                          @Arg("to") String toName,
-                          @Arg("amount") BigDecimal amount,
-                          @GreedyArg("reason") String reason) {
+    public void payReason(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String toName,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
         doTransfer(sender, fromName, toName, amount, reason);
     }
 
     @Route("payout <from> <to> <amount>")
     @Async
     @Description("Pay a player or business account from a government account")
-    public void payout(@Sender CommandSender sender,
-                       @Arg("from") String fromName,
-                       @Arg("to") String toName,
-                       @Arg("amount") BigDecimal amount) {
+    public void payout(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String toName,
+            @Arg("amount") BigDecimal amount) {
         doExternalPayout(sender, fromName, toName, amount, null);
     }
 
     @Route("payout <from> <to> <amount> <reason>")
     @Async
     @Description("Pay a player or business account from a government account with a reason")
-    public void payoutReason(@Sender CommandSender sender,
-                             @Arg("from") String fromName,
-                             @Arg("to") String toName,
-                             @Arg("amount") BigDecimal amount,
-                             @GreedyArg("reason") String reason) {
+    public void payoutReason(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String toName,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
         doExternalPayout(sender, fromName, toName, amount, reason);
     }
 
@@ -268,10 +267,9 @@ public class GovCommand implements CommandHandler {
     @Route("account member add <account> <player>")
     @Async
     @Description("Add a player as a member of a government account")
-    public void memberAdd(@Sender CommandSender sender,
-                          @Arg("account") String accountName,
-                          @Arg("player") OfflinePlayer target) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void memberAdd(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("player") OfflinePlayer target) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -286,17 +284,16 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.addMember(account.getAccountId(), target.getUniqueId(), actorOf(sender));
-        message.send(sender, "treasury.gov.member.added",
-                "player", target.getName(), "account", account.getDisplayName());
+        message.send(
+                sender, "treasury.gov.member.added", "player", target.getName(), "account", account.getDisplayName());
     }
 
     @Route("account member remove <account> <player>")
     @Async
     @Description("Remove a player's membership from a government account")
-    public void memberRemove(@Sender CommandSender sender,
-                             @Arg("account") String accountName,
-                             @Arg("player") OfflinePlayer target) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void memberRemove(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("player") OfflinePlayer target) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -311,17 +308,16 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.removeMember(account.getAccountId(), target.getUniqueId());
-        message.send(sender, "treasury.gov.member.removed",
-                "player", target.getName(), "account", account.getDisplayName());
+        message.send(
+                sender, "treasury.gov.member.removed", "player", target.getName(), "account", account.getDisplayName());
     }
 
     @Route("account member addgroup <account> <group>")
     @Async
     @Description("Add an LP group as a member of a government account")
-    public void memberAddGroup(@Sender CommandSender sender,
-                               @Arg("account") String accountName,
-                               @Arg("group") String group) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void memberAddGroup(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("group") String group) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -332,17 +328,16 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.addGroupMember(account.getAccountId(), group, actorOf(sender));
-        message.send(sender, "treasury.gov.member.group-added",
-                "group", group, "account", account.getDisplayName());
+        message.send(sender, "treasury.gov.member.group-added", "group", group, "account", account.getDisplayName());
+        warnIfUnknownGroup(sender, group);
     }
 
     @Route("account member removegroup <account> <group>")
     @Async
     @Description("Remove an LP group's membership from a government account")
-    public void memberRemoveGroup(@Sender CommandSender sender,
-                                  @Arg("account") String accountName,
-                                  @Arg("group") String group) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void memberRemoveGroup(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("group") String group) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -353,15 +348,14 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.removeGroupMember(account.getAccountId(), group);
-        message.send(sender, "treasury.gov.member.group-removed",
-                "group", group, "account", account.getDisplayName());
+        message.send(sender, "treasury.gov.member.group-removed", "group", group, "account", account.getDisplayName());
     }
 
     @Route("account member list <account>")
     @Async
     @Description("List members of a government account")
     public void memberList(@Sender CommandSender sender, @Arg("account") String accountName) {
-        if (!isAllowed(sender,"treasury.gov.account.view")) {
+        if (!isAllowed(sender, "treasury.gov.account.view")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -397,10 +391,9 @@ public class GovCommand implements CommandHandler {
     @Route("account viewer add <account> <player>")
     @Async
     @Description("Grant a player read-only view (balance + history) of a government account")
-    public void viewerAdd(@Sender CommandSender sender,
-                          @Arg("account") String accountName,
-                          @Arg("player") OfflinePlayer target) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void viewerAdd(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("player") OfflinePlayer target) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -415,17 +408,16 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.addViewer(account.getAccountId(), target.getUniqueId(), actorOf(sender));
-        message.send(sender, "treasury.gov.viewer.added",
-                "player", target.getName(), "account", account.getDisplayName());
+        message.send(
+                sender, "treasury.gov.viewer.added", "player", target.getName(), "account", account.getDisplayName());
     }
 
     @Route("account viewer remove <account> <player>")
     @Async
     @Description("Revoke a player's read-only view of a government account")
-    public void viewerRemove(@Sender CommandSender sender,
-                             @Arg("account") String accountName,
-                             @Arg("player") OfflinePlayer target) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void viewerRemove(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("player") OfflinePlayer target) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -440,17 +432,16 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.removeViewer(account.getAccountId(), target.getUniqueId());
-        message.send(sender, "treasury.gov.viewer.removed",
-                "player", target.getName(), "account", account.getDisplayName());
+        message.send(
+                sender, "treasury.gov.viewer.removed", "player", target.getName(), "account", account.getDisplayName());
     }
 
     @Route("account viewer addgroup <account> <group>")
     @Async
     @Description("Grant an LP group read-only view of a government account")
-    public void viewerAddGroup(@Sender CommandSender sender,
-                               @Arg("account") String accountName,
-                               @Arg("group") String group) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void viewerAddGroup(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("group") String group) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -461,17 +452,16 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.addGroupViewer(account.getAccountId(), group, actorOf(sender));
-        message.send(sender, "treasury.gov.viewer.group-added",
-                "group", group, "account", account.getDisplayName());
+        message.send(sender, "treasury.gov.viewer.group-added", "group", group, "account", account.getDisplayName());
+        warnIfUnknownGroup(sender, group);
     }
 
     @Route("account viewer removegroup <account> <group>")
     @Async
     @Description("Revoke an LP group's read-only view of a government account")
-    public void viewerRemoveGroup(@Sender CommandSender sender,
-                                  @Arg("account") String accountName,
-                                  @Arg("group") String group) {
-        if (!isAllowed(sender,"treasury.gov.account.manage")) {
+    public void viewerRemoveGroup(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("group") String group) {
+        if (!isAllowed(sender, "treasury.gov.account.manage")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -482,15 +472,14 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.removeGroupViewer(account.getAccountId(), group);
-        message.send(sender, "treasury.gov.viewer.group-removed",
-                "group", group, "account", account.getDisplayName());
+        message.send(sender, "treasury.gov.viewer.group-removed", "group", group, "account", account.getDisplayName());
     }
 
     @Route("account viewer list <account>")
     @Async
     @Description("List read-only viewers of a government account")
     public void viewerList(@Sender CommandSender sender, @Arg("account") String accountName) {
-        if (!isAllowed(sender,"treasury.gov.account.view")) {
+        if (!isAllowed(sender, "treasury.gov.account.view")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -526,10 +515,9 @@ public class GovCommand implements CommandHandler {
     @Route("account auth add <account> <player>")
     @Async
     @Description("Add a player as an authorizer of a government account")
-    public void authAdd(@Sender CommandSender sender,
-                        @Arg("account") String accountName,
-                        @Arg("player") OfflinePlayer target) {
-        if (!isAllowed(sender,"treasury.gov.admin")) {
+    public void authAdd(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("player") OfflinePlayer target) {
+        if (!isAllowed(sender, "treasury.gov.admin")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -556,17 +544,16 @@ public class GovCommand implements CommandHandler {
             message.send(sender, "treasury.gov.auth.not-member", "player", target.getName());
             return;
         }
-        message.send(sender, "treasury.gov.auth.added",
-                "player", target.getName(), "account", account.getDisplayName());
+        message.send(
+                sender, "treasury.gov.auth.added", "player", target.getName(), "account", account.getDisplayName());
     }
 
     @Route("account auth remove <account> <player>")
     @Async
     @Description("Remove a player's authorizer status from a government account")
-    public void authRemove(@Sender CommandSender sender,
-                           @Arg("account") String accountName,
-                           @Arg("player") OfflinePlayer target) {
-        if (!isAllowed(sender,"treasury.gov.admin")) {
+    public void authRemove(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("player") OfflinePlayer target) {
+        if (!isAllowed(sender, "treasury.gov.admin")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -577,17 +564,16 @@ public class GovCommand implements CommandHandler {
             return;
         }
         membershipService.removeAuthorizer(account.getAccountId(), target.getUniqueId());
-        message.send(sender, "treasury.gov.auth.removed",
-                "player", target.getName(), "account", account.getDisplayName());
+        message.send(
+                sender, "treasury.gov.auth.removed", "player", target.getName(), "account", account.getDisplayName());
     }
 
     @Route("account auth addgroup <account> <group>")
     @Async
     @Description("Add an LP group as an authorizer of a government account")
-    public void authAddGroup(@Sender CommandSender sender,
-                             @Arg("account") String accountName,
-                             @Arg("group") String group) {
-        if (!isAllowed(sender,"treasury.gov.admin")) {
+    public void authAddGroup(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("group") String group) {
+        if (!isAllowed(sender, "treasury.gov.admin")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -599,7 +585,7 @@ public class GovCommand implements CommandHandler {
         // `treasury.gov.auth.group-not-member` i18n key unreachable and
         // hid mis-typed group names behind a successful-looking message.
         List<String> groupMembers = membershipService.getGroupMembers(account.getAccountId());
-        if (!groupMembers.contains(group)) {
+        if (groupMembers.stream().noneMatch(group::equalsIgnoreCase)) {
             message.send(sender, "treasury.gov.auth.group-not-member", "group", group);
             return;
         }
@@ -609,32 +595,30 @@ public class GovCommand implements CommandHandler {
             message.send(sender, "treasury.gov.auth.group-not-member", "group", group);
             return;
         }
-        message.send(sender, "treasury.gov.auth.group-added",
-                "group", group, "account", account.getDisplayName());
+        message.send(sender, "treasury.gov.auth.group-added", "group", group, "account", account.getDisplayName());
+        warnIfUnknownGroup(sender, group);
     }
 
     @Route("account auth removegroup <account> <group>")
     @Async
     @Description("Remove an LP group's authorizer status from a government account")
-    public void authRemoveGroup(@Sender CommandSender sender,
-                                @Arg("account") String accountName,
-                                @Arg("group") String group) {
-        if (!isAllowed(sender,"treasury.gov.admin")) {
+    public void authRemoveGroup(
+            @Sender CommandSender sender, @Arg("account") String accountName, @Arg("group") String group) {
+        if (!isAllowed(sender, "treasury.gov.admin")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
         Account account = resolveGovAccount(accountName, sender);
         if (account == null) return;
         membershipService.removeGroupAuthorizer(account.getAccountId(), group);
-        message.send(sender, "treasury.gov.auth.group-removed",
-                "group", group, "account", account.getDisplayName());
+        message.send(sender, "treasury.gov.auth.group-removed", "group", group, "account", account.getDisplayName());
     }
 
     @Route("account auth list <account>")
     @Async
     @Description("List authorizers of a government account")
     public void authList(@Sender CommandSender sender, @Arg("account") String accountName) {
-        if (!isAllowed(sender,"treasury.gov.account.view")) {
+        if (!isAllowed(sender, "treasury.gov.account.view")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -668,7 +652,7 @@ public class GovCommand implements CommandHandler {
     // =====================================================================
 
     private void showHistory(CommandSender sender, String name, int page) {
-        if (!isAllowed(sender,"treasury.gov.account.view")) {
+        if (!isAllowed(sender, "treasury.gov.account.view")) {
             message.send(sender, "treasury.gov.no-access");
             return;
         }
@@ -688,40 +672,32 @@ public class GovCommand implements CommandHandler {
             return;
         }
 
-        message.send(sender, "treasury.gov.account.history.header",
-                "name", account.getDisplayName(),
-                "page", String.valueOf(result.pageNumber()),
-                "pages", String.valueOf(result.totalPages()));
+        message.send(
+                sender,
+                "treasury.gov.account.history.header",
+                "name",
+                account.getDisplayName(),
+                "page",
+                String.valueOf(result.pageNumber()),
+                "pages",
+                String.valueOf(result.totalPages()));
 
         for (TransactionEntry entry : result.items()) {
-            String formattedAmount = accountService.formatAmount(entry.getAmount().abs());
-            String sign = entry.getAmount().signum() >= 0 ? "+" : "-";
-            String colorTag = entry.getAmount().signum() >= 0 ? "green" : "red";
-            String coloredAmount = "<" + colorTag + ">" + sign + formattedAmount + "</" + colorTag + ">";
-            String memo = entry.getMemo() != null ? entry.getMemo() : entry.getMessage();
-            if (memo == null) memo = "—";
-            memo = sanitize(memo);
-            String time = entry.getSettlementTime() != null
-                    ? TIME_FMT.format(entry.getSettlementTime()) : "—";
-
-            message.send(sender, "treasury.transactions.entry",
-                    "txn", String.valueOf(entry.getTxnId()),
-                    "amount", coloredAmount,
-                    "memo", memo,
-                    "time", time);
+            TransactionEntryRenderer.send(sender, message, accountService, entry);
         }
 
         if (result.hasMore()) {
-            message.send(sender, "treasury.transactions.footer",
-                    "next", String.valueOf(page + 1));
+            message.send(sender, "treasury.transactions.footer", "next", String.valueOf(page + 1));
         }
     }
 
     private void doTransfer(CommandSender sender, String fromName, String toName, BigDecimal amount, String reason) {
         // Access is decided per-source-account by canTransferFrom (member /
         // authorizer / global node / admin) once the account is resolved below.
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }
@@ -736,8 +712,7 @@ public class GovCommand implements CommandHandler {
         // comparing with `==` is reference equality and silently misfires for
         // IDs outside the JVM's -128..127 cache.
         if (from.getAccountId().intValue() == to.getAccountId().intValue()) {
-            message.send(sender, "treasury.gov.account.transfer.same-account",
-                    "name", from.getDisplayName());
+            message.send(sender, "treasury.gov.account.transfer.same-account", "name", from.getDisplayName());
             return;
         }
 
@@ -747,8 +722,11 @@ public class GovCommand implements CommandHandler {
         }
 
         if (from.getAccountType() != AccountType.GOVERNMENT || to.getAccountType() != AccountType.GOVERNMENT) {
-            message.send(sender, "treasury.gov.account.not-government",
-                    "name", from.getAccountType() != AccountType.GOVERNMENT ? fromName : toName);
+            message.send(
+                    sender,
+                    "treasury.gov.account.not-government",
+                    "name",
+                    from.getAccountType() != AccountType.GOVERNMENT ? fromName : toName);
             return;
         }
 
@@ -778,23 +756,35 @@ public class GovCommand implements CommandHandler {
             }
         } catch (IllegalStateException e) {
             BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
-            message.send(sender, "treasury.gov.account.transfer.insufficient",
-                    "from", from.getDisplayName(),
-                    "balance", accountService.formatAmount(balance));
+            message.send(
+                    sender,
+                    "treasury.gov.account.transfer.insufficient",
+                    "from",
+                    from.getDisplayName(),
+                    "balance",
+                    accountService.formatAmount(balance));
             return;
         }
 
-        message.send(sender, "treasury.gov.account.transfer.success",
-                "from", from.getDisplayName(),
-                "to", to.getDisplayName(),
-                "amount", accountService.formatAmount(normalized));
+        message.send(
+                sender,
+                "treasury.gov.account.transfer.success",
+                "from",
+                from.getDisplayName(),
+                "to",
+                to.getDisplayName(),
+                "amount",
+                accountService.formatAmount(normalized));
     }
 
-    private void doExternalPayout(CommandSender sender, String fromName, String toName, BigDecimal amount, String reason) {
+    private void doExternalPayout(
+            CommandSender sender, String fromName, String toName, BigDecimal amount, String reason) {
         // Access is decided per-source-account by canTransferFrom (member /
         // authorizer / global node / admin) once the account is resolved below.
-        BigDecimal normalized = Money.normalize(amount);
-        if (normalized.signum() <= 0) {
+        // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
+        // (not rounded) — see AmountInput.
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) {
             message.send(sender, "treasury.general.invalid-amount");
             return;
         }
@@ -817,6 +807,15 @@ public class GovCommand implements CommandHandler {
         java.util.Optional<java.util.UUID> directoryUuid =
                 knownPlayer ? java.util.Optional.empty() : playerDirectory.resolveUuidByName(toName);
 
+        // PAR-144: a name that is both a known player and a non-archived GOVERNMENT
+        // account is ambiguous. Don't silently pay the personal account (which is
+        // what the player branches below would do) — refuse so the operator types
+        // the recipient explicitly rather than relying on cache/lookup order.
+        if ((knownPlayer || directoryUuid.isPresent()) && accountService.governmentAccountExists(toName)) {
+            message.send(sender, "treasury.gov.payout.ambiguous", "name", toName);
+            return;
+        }
+
         if (knownPlayer) {
             toAccountId = accountService.getOrCreatePersonalAccountId(targetPlayer.getUniqueId());
             toDisplayName = targetPlayer.getName();
@@ -837,10 +836,7 @@ public class GovCommand implements CommandHandler {
             // bare token first, then fall back to the canonical suffix —
             // letting `/gov payout DCGov Acme 100 …` resolve to Acme's
             // corporate account without users having to know the convention.
-            Account businessAccount = accountService.getBusinessAccountByName(toName);
-            if (businessAccount == null) {
-                businessAccount = accountService.getBusinessAccountByName(toName + " Corporate Account");
-            }
+            Account businessAccount = accountService.resolveBusinessAccountByToken(toName);
             if (businessAccount == null) {
                 message.send(sender, "treasury.gov.payout.unknown-recipient", "name", toName);
                 return;
@@ -849,12 +845,20 @@ public class GovCommand implements CommandHandler {
             toDisplayName = businessAccount.getDisplayName();
         }
 
+        // Reject a payout that resolves to the source account itself up front, with a
+        // clear message — the ledger now rejects a same-account transfer outright
+        // (ADT-33), so without this guard it would surface as an uncaught error (ADT-55).
+        if (from.getAccountId() == toAccountId) {
+            message.send(sender, "treasury.gov.account.transfer.same-account", "name", toDisplayName);
+            return;
+        }
+
         String memo = reason != null
                 ? "Gov payout: " + reason
                 : "Gov payout from " + from.getDisplayName() + " to " + toDisplayName;
 
-        byte[] dedupKey = GovDedupKeys.payout(
-                actorOf(sender), from.getAccountId(), toAccountId, normalized, Instant.now());
+        byte[] dedupKey =
+                GovDedupKeys.payout(actorOf(sender), from.getAccountId(), toAccountId, normalized, Instant.now());
 
         try {
             TransferRequest req = new TransferRequest(
@@ -874,23 +878,36 @@ public class GovCommand implements CommandHandler {
             }
         } catch (IllegalStateException e) {
             BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
-            message.send(sender, "treasury.gov.account.transfer.insufficient",
-                    "from", from.getDisplayName(),
-                    "balance", accountService.formatAmount(balance));
+            message.send(
+                    sender,
+                    "treasury.gov.account.transfer.insufficient",
+                    "from",
+                    from.getDisplayName(),
+                    "balance",
+                    accountService.formatAmount(balance));
             return;
         }
 
-        message.send(sender, "treasury.gov.payout.success",
-                "from", from.getDisplayName(),
-                "to", toDisplayName,
-                "amount", accountService.formatAmount(normalized));
+        message.send(
+                sender,
+                "treasury.gov.payout.success",
+                "from",
+                from.getDisplayName(),
+                "to",
+                toDisplayName,
+                "amount",
+                accountService.formatAmount(normalized));
 
         if (onlineTarget != null) {
             Player onlinePlayer = onlineTarget.getPlayer();
             if (onlinePlayer != null) {
-                message.send(onlinePlayer, "treasury.gov.payout.received",
-                        "amount", accountService.formatAmount(normalized),
-                        "from", from.getDisplayName());
+                message.send(
+                        onlinePlayer,
+                        "treasury.gov.payout.received",
+                        "amount",
+                        accountService.formatAmount(normalized),
+                        "from",
+                        from.getDisplayName());
             }
         }
     }
@@ -940,14 +957,17 @@ public class GovCommand implements CommandHandler {
     private boolean canTransferFrom(CommandSender sender, Account account) {
         // Console / RCON bypasses the per-account membership gate — the server is
         // the authority. A plain player needs the global transfer/admin node, or
-        // membership/authorizer on this specific account.
+        // membership/authorizer on this specific account. The per-account
+        // member/authorizer predicate lives in the service
+        // (MembershipService.canSpend); this command enforces it by denying when it
+        // returns false. The coarse @Permission gate and these global nodes stay at
+        // the command layer.
         if (!(sender instanceof Player p)) {
             return true;
         }
         return p.hasPermission("treasury.gov.admin")
                 || p.hasPermission("treasury.gov.account.transfer")
-                || membershipService.isMember(account.getAccountId(), p.getUniqueId())
-                || membershipService.isAuthorizer(account.getAccountId(), p.getUniqueId());
+                || membershipService.canSpend(account.getAccountId(), p.getUniqueId());
     }
 
     /**
@@ -963,6 +983,18 @@ public class GovCommand implements CommandHandler {
                 || membershipService.isAuthorizer(account.getAccountId(), p.getUniqueId());
     }
 
+    /**
+     * A group grant is stored whether or not the group exists, and a name that
+     * matches no LuckPerms group never grants anyone anything. Say so at the point
+     * of the mistake (usually a typo, or the display name in place of the internal
+     * one); the grant is kept, so creating the group later makes it take effect.
+     */
+    private void warnIfUnknownGroup(CommandSender sender, String group) {
+        if (!membershipService.isKnownGroup(group)) {
+            message.send(sender, "treasury.gov.group-unknown", "group", group);
+        }
+    }
+
     /** A permission gate that always passes for console / RCON (non-player
      *  senders), since many gov nodes are {@code default: false} and would
      *  otherwise deny even the console. Players get the normal permission check. */
@@ -970,21 +1002,11 @@ public class GovCommand implements CommandHandler {
         return !(sender instanceof Player) || sender.hasPermission(node);
     }
 
-    /** The initiator UUID to attribute an action to: the player, or the virtual
-     *  console initiator when run from console / RCON. */
     private static UUID actorOf(CommandSender sender) {
-        return sender instanceof Player p
-                ? p.getUniqueId()
-                : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
+        return CommandSenders.actorOf(sender);
     }
 
     private String resolvePlayerName(UUID uuid) {
-        OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
-        String name = op.getName();
-        return name != null ? name : uuid.toString();
-    }
-
-    private static String sanitize(String input) {
-        return input.replace("<", "\\<");
+        return CommandSenders.resolvePlayerName(uuid);
     }
 }

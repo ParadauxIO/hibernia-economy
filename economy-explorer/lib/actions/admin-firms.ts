@@ -1,15 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
-import { ForbiddenError } from '@/lib/errors';
+import { getViewer } from '@/lib/auth/viewer';
+import { requirePermission } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import { disbandFirm, renameFirm, updateFirmDetails, type DisbandResult, type FirmResult } from '@/lib/treasury';
 import { findFirmById } from '@/lib/sql/firm';
-
-function requireAdmin(viewer: Viewer): asserts viewer is Extract<Viewer, { anon: false }> {
-  if (viewer.anon || viewer.role !== 'admin') throw new ForbiddenError('Admin only.');
-}
 
 /**
  * Disband a firm via the ledger-authoritative treasury-rest-api admin endpoint.
@@ -21,7 +17,7 @@ export async function disbandFirmAction(
   confirmName: string,
 ): Promise<{ ok: boolean; error?: string; result?: DisbandResult }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'firm.disband');
   try {
     const firm = await findFirmById(firmId);
     if (!firm) return { ok: false, error: 'Firm not found.' };
@@ -50,7 +46,7 @@ export async function renameFirmAction(
   newName: string,
 ): Promise<{ ok: boolean; error?: string; result?: FirmResult }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'firm.rename');
   try {
     const name = newName.trim();
     if (!name) return { ok: false, error: 'A new name is required.' };
@@ -74,7 +70,7 @@ export async function updateFirmDetailsAction(
   body: { discordUrl: string | null; hqRegion: string | null },
 ): Promise<{ ok: boolean; error?: string; result?: FirmResult }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'firm.details.update');
   try {
     const result = await updateFirmDetails(firmId, body);
     await auditView(viewer, {

@@ -11,7 +11,7 @@ export function DeleteGroupButton({ groupId, name }: { groupId: number; name: st
     setErr(null);
     start(async () => {
       const r = await deleteGroupAction(groupId);
-      if (!r.ok) setErr(r.error ?? 'Failed');
+      if (!r.ok) setErr(r.error ?? 'Failed'); else window.location.reload();
     });
   }
 

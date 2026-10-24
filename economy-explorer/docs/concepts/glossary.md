@@ -14,11 +14,11 @@ Short definitions of the terms used across these docs and in-game.
   `/bal`.
 - **Account** — where money lives. Every transfer moves money from one account to
   another. See [Accounts & money](/docs/concepts/accounts-and-money).
-- **Personal account** — your own money; nobody else can spend from it.
+- **Personal account** — your own player balance; ordinary players cannot spend it on your behalf.
 - **Business account** — money owned by a [firm](#firms), shared by its staff.
 - **Government account** — a shared account run by a government department.
 - **System account** — an internal account used by the server and plugins (e.g. the
-  Vault bridge, starting-balance and tax-collection accounts). Not something players
+  Vault bridge and ChestShop settlement account). Not something players
   create or see in normal play.
 - **Transaction** — a single recorded movement of money. Your history is
   `/transactions`.
@@ -26,11 +26,20 @@ Short definitions of the terms used across these docs and in-game.
 
 ## Access
 
-- **Member** — someone added to a shared account; can *view* it and, on government
-  accounts, *spend* from it.
-- **Authorizer** — a member with elevated rights: moving money out and, on government
-  accounts, managing who else has access. See
+A shared account has three access tiers: **Viewer** < **Member** < **Authorizer**.
+
+- **Viewer** — read-only access to a shared account: can see its balance and transactions
+  but cannot spend or manage it. (Used on government accounts.)
+- **Member** — can view the account; on a **government** account, members can also spend.
+- **Authorizer** — can spend from the account; on a **government** account, authorizers
+  can manage viewers/members with additional command permissions (authorizer grants
+  remain admin-only; on a firm account the owner manages access). See
   [Permissions & roles](/docs/concepts/permissions-and-roles).
+
+> **Two "viewers".** This per-account *Viewer* tier is separate from the site-wide
+> legacy Explorer `viewer` role, which now maps to the ordinary `player` baseline.
+> Global financial investigation belongs to configured permissions such as those
+> in the initial `moderator` role; see [Permissions & roles](/docs/concepts/permissions-and-roles).
 
 ## Firms
 

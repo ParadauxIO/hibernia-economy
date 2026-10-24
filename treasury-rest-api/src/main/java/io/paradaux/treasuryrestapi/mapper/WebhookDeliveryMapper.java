@@ -26,10 +26,17 @@ public interface WebhookDeliveryMapper {
     /**
      * Deliveries due now, joined to their (still-active) subscription and the
      * matched posting/transaction for the payload. Inactive/deleted
-     * subscriptions drop out of the join and are simply skipped.
+     * subscriptions drop out of the join and are simply skipped. The posting's
+     * counterparty is attached to the due batch afterwards (see
+     * {@link LedgerMapper#SELECT_WITH_COUNTERPARTY}) so it can't disturb the
+     * idx_delivery_due plan.
      */
-    @Select("SELECT d.delivery_id AS deliveryId, d.subscription_id AS subscriptionId, d.txn_id AS txnId, "
-            + "       d.account_id AS accountId, d.attempts, "
+    @Select("SELECT h.*, "
+            + "       ca.account_id AS counterpartyAccountId, ca.account_type AS counterpartyAccountType, "
+            + "       ca.display_name AS counterpartyDisplayName, ca.owner_uuid_bin AS counterpartyOwnerUuidBin "
+            + "FROM ("
+            + "SELECT d.delivery_id AS deliveryId, d.subscription_id AS subscriptionId, d.txn_id AS txnId, "
+            + "       d.account_id AS accountId, d.attempts, d.next_attempt_at AS nextAttemptAt, "
             + "       s.target_url AS targetUrl, s.secret, "
             + "       lp.posting_id AS postingId, lp.amount, lp.memo, "
             + "       lt.message, lt.settlement_time AS settlementTime, "
@@ -38,8 +45,17 @@ public interface WebhookDeliveryMapper {
             + "JOIN webhook_subscription s ON s.subscription_id = d.subscription_id AND s.active = 1 "
             + "JOIN ledger_postings lp ON lp.txn_id = d.txn_id AND lp.account_id = d.account_id "
             + "JOIN ledger_txns lt ON lt.txn_id = d.txn_id "
+            // idx_delivery_due (status, next_attempt_at): the status equality lets the
+            // index's next_attempt_at column satisfy the sort (due-order, oldest first);
+            // delivery_id breaks ties deterministically.
             + "WHERE d.status = 'PENDING' AND d.next_attempt_at <= NOW() "
-            + "ORDER BY d.delivery_id ASC LIMIT #{limit}")
+            + "ORDER BY d.next_attempt_at ASC, d.delivery_id ASC LIMIT #{limit}"
+            + ") h "
+            + "LEFT JOIN ledger_postings cp ON cp.posting_id = ("
+            + "    SELECT MIN(o.posting_id) FROM ledger_postings o "
+            + "    WHERE o.txn_id = h.txnId AND o.posting_id <> h.postingId) "
+            + "LEFT JOIN accounts ca ON ca.account_id = cp.account_id "
+            + "ORDER BY h.nextAttemptAt ASC, h.deliveryId ASC")
     List<DueDelivery> findDue(@Param("limit") int limit);
 
     @Update("UPDATE webhook_delivery SET status = 'DELIVERED', attempts = attempts + 1, "

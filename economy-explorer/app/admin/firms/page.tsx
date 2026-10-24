@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
@@ -22,7 +23,7 @@ export async function generateMetadata() {
  */
 export default async function AdminFirmsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const viewer = await getViewer();
-  if (viewer.anon || viewer.role !== 'admin') return null; // layout already gates; defence in depth
+  if (viewer.anon || !hasPermission(viewer, 'firm.admin.read')) return null; // layout already gates; defence in depth
   const { q } = await searchParams;
   const query = (q ?? '').trim();
   await auditView(viewer, { path: '/admin/firms', targetType: 'global' });

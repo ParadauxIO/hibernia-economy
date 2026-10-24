@@ -68,6 +68,33 @@ class MembershipServiceImplTest {
         assertThat(svc.isAuthorizer(1, u)).isFalse();
     }
 
+    // ---- Spend authorization (per-account member/authorizer gate) ----
+
+    @Test
+    void canSpend_trueWhenMember_doesNotCheckAuthorizer() {
+        UUID u = UUID.randomUUID();
+        when(membershipMapper.isMember(1, u)).thenReturn(1);
+        assertThat(svc.canSpend(1, u)).isTrue();
+        // Member short-circuits — authorizer lookup is never consulted.
+        verify(membershipMapper, never()).isAuthorizer(anyInt(), any());
+    }
+
+    @Test
+    void canSpend_trueWhenAuthorizerOnly() {
+        UUID u = UUID.randomUUID();
+        when(membershipMapper.isMember(1, u)).thenReturn(0);
+        when(membershipMapper.isAuthorizer(1, u)).thenReturn(1);
+        assertThat(svc.canSpend(1, u)).isTrue();
+    }
+
+    @Test
+    void canSpend_falseWhenNeither() {
+        UUID u = UUID.randomUUID();
+        when(membershipMapper.isMember(1, u)).thenReturn(0);
+        when(membershipMapper.isAuthorizer(1, u)).thenReturn(0);
+        assertThat(svc.canSpend(1, u)).isFalse();
+    }
+
     // ---- UUID CRUD ----
 
     @Test
@@ -258,6 +285,12 @@ class MembershipServiceImplTest {
         assertThat(svc.getGroupViewers(1)).containsExactly("health-sec");
     }
 
+    @Test
+    void isKnownGroup_withoutLuckPerms_cannotJudge_soSaysYes() {
+        // No LuckPerms: warning about every group would be noise, not information.
+        assertThat(svc.isKnownGroup("anything")).isTrue();
+    }
+
     // ---- LuckPerms-aware paths (uses mocked LuckPerms) ----
 
     @org.junit.jupiter.api.Nested
@@ -276,6 +309,18 @@ class MembershipServiceImplTest {
             org.mockito.Mockito.lenient().when(user.getQueryOptions()).thenReturn(queryOptions);
             org.mockito.Mockito.lenient().when(groupVip.getName()).thenReturn("vip");
             svc.setLuckPerms(luckPerms);
+        }
+
+        @Test
+        void isKnownGroup_looksTheNameUpLowerCased() {
+            net.luckperms.api.model.group.GroupManager groupManager =
+                    org.mockito.Mockito.mock(net.luckperms.api.model.group.GroupManager.class);
+            org.mockito.Mockito.when(luckPerms.getGroupManager()).thenReturn(groupManager);
+            org.mockito.Mockito.when(groupManager.getGroup("vip")).thenReturn(groupVip);
+
+            // LuckPerms stores names lower-cased; staff type them as they read them.
+            assertThat(svc.isKnownGroup("VIP")).isTrue();
+            assertThat(svc.isKnownGroup("vipp")).isFalse();
         }
 
         @Test

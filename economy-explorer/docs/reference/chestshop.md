@@ -34,6 +34,7 @@ Who the shop belongs to.
 |---|---|
 | *your name* | A personal shop — money goes to you. |
 | *(blank)* | Filled in with your name automatically. |
+| `B:@alias` | A player-managed, letters-only business shop alias, set by the proprietor with `/business account alias <firm> <accountId> <alias>`. The alias stays visible on the sign, including after trades. |
 | `B:<code>` | A **firm account** — money goes to the company. The code after `B:` is a short **base-36 code** for the account, **not** the account's decimal number, so copy it exactly as shown. Get it from `/business account list` (or the Explorer). See [ChestShops for your firm](/docs/guides/chestshop-business). |
 | `b:<FirmName>` | An older **legacy** form — lowercase `b:` plus the firm's *name*, which resolves to that firm's default business account. Still works (the prefix is matched case-insensitively) and the sign quietly self-heals to the modern `B:<code>` form. |
 | `Admin Shop` | An **admin shop** with unlimited stock and no chest, backed by the server. Needs the `ChestShop.adminshop` permission. |
@@ -53,7 +54,10 @@ view:
 | `B 100` | Players **buy** from the shop for 100 (the shop sells to them). |
 | `S 90` | Players **sell** to the shop for 90 (the shop buys from them). |
 | `100 : 90` | Both — the **first** number is the buy price (100), the **second** is the sell price (90). |
-| `free` | No charge. |
+
+> [!NOTE]
+> Free shops are **disabled by default** (`ALLOW_FREE_SHOPS` is off). A `0`/`free`
+> price is rejected at creation, and any pre-existing free shop is removed when next used.
 
 The letter can go before or after the number (`B 100`, `100 B`, and `100B` all work). A
 plain number with no letter — like `100` — becomes a **buy-only** shop (the same as
@@ -70,14 +74,23 @@ Numbers accept `K` and `M` shorthand: `1.5K` = 1,500, `2M` = 2,000,000.
 The item being traded, e.g. `DIAMOND` or `OAK_PLANKS`. Use `?` to fill it in from the
 item you're holding when you place the sign.
 
+**Custom items** (from the **Nexo** item plugin) go on this line too — as a short item
+id or configured nickname (e.g. `ruby_gem`) rather than a vanilla material name. The
+simplest way is to hold the item and use `?`, which encodes it correctly; `/iteminfo`
+shows the exact text otherwise. Custom items trade identically to vanilla ones. (Item ids
+appear *bare*, without a `nexo:` prefix, because a colon isn't allowed on the item line.)
+See [Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
+
 > [!TIP]
 > Not sure what an item is called? Hold it and run `/iteminfo`. You can also look one up
 > by name — e.g. `/iteminfo log`.
 
 > [!NOTE]
-> A buy-and-sell shop needs **items in the chest** to sell to players and **money in
-> the owner's balance** to buy from them. If one side runs dry, that side pauses until
-> it's topped up.
+> **Partial trades.** A trade isn't all-or-nothing: if the shop can't cover the full
+> quantity, it serves **as much as it can** and charges/pays only for that — a customer
+> gets the 12 items left in a chest that advertises 64, or as many as their money covers.
+> A side stops only when it reaches **zero** (no stock, no room, or the customer can't
+> afford one item). Controlled by `ALLOW_PARTIAL_TRANSACTIONS` (on).
 
 ## Commands
 
@@ -85,11 +98,20 @@ item you're holding when you place the sign.
 |---|---|
 | `/shopinfo` | Show details of the shop you're looking at — owner, item, quantity, prices. Aliases: `/sinfo`, `/shop`. |
 | `/iteminfo [item]` | Show the name and shop code for the item in your hand, or for a named item (e.g. `/iteminfo log`). Alias: `/iinfo`. |
-| `/cstoggle` | Turn the "someone used your shop" messages on or off. |
-| `/csaccess` | Toggle your access to trade at shops. |
-| `/csVersion` | Show the ChestShop version. Alias: `/chestshop`. |
-| `/csMetrics` | Show server-wide shop metrics. |
-| `/csGive <item code> [amount] [player]` | Admin: give an item by its shop code. |
+| `/find [item]` | Search every shop on the server for an item and browse the results. |
+| `/chestshop` | Show ChestShop command help (also `/chestshop help [page]`). Alias: `/cs` — every subcommand below works as `/cs …` too. |
+| `/chestshop notify` | Turn the "someone used your shop" messages on or off. |
+| `/chestshop toggle visibility <true\|false>` | Show or hide the shop you're looking at in `/find` results. Shop owner (or admin) only. |
+| `/chestshop toggle hologram <true\|false>` | Show or hide the floating item preview above the shop you're looking at. Shop owner (or admin) only. |
+| `/chestshop toggle preview <true\|false>` | Show or hide shop item previews for yourself. |
+| `/chestshop bypass` | Admin: toggle your own admin bypass — off lets you use shops as a normal customer. |
+| `/chestshop version` | Admin: show the ChestShop version. |
+| `/chestshop reload` | Admin: reload the ChestShop configuration. |
+| `/chestshop metrics` | Admin: show server-wide shop metrics. |
+| `/chestshop give <item code> [amount] [player]` | Admin: give an item by its shop code. |
+| `/chestshop importpreferences` | Admin/console: import missing player preview preferences from `plugins/ChestShop/legacy-preferences.jsonl`, preserving newer native choices. |
+| `/chestshop importlegacy` | Admin/console: import missing shops from `plugins/ChestShop/legacy-shops.jsonl`; preserves existing rows. See the repository [cutover runbook](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/shop-registry-backfill.md). |
+| `/chestshop resync <chunks>` | Admin/console: rebuild the `/find` registry from loaded chunks in all loaded worlds; argument is chunks per tick (1–64), not a radius. |
 
 ## Shops and firms
 
@@ -110,9 +132,11 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 |---|---|---|
 | `/iteminfo` (`/iinfo`) | `ChestShop.iteminfo` | `true` |
 | `/shopinfo` (`/sinfo`, `/shop`) | `ChestShop.shopinfo` | `true` |
-| `/cstoggle` | `ChestShop.toggle` | `true` |
-| `/csaccess` | `ChestShop.accesstoggle` | `op` |
-| `/csGive` · `/csVersion` (`/chestshop`) · `/csMetrics` | `ChestShop.admin` | `op` |
+| `/find` | `ChestShop.find` | `true` |
+| `/chestshop notify` | `ChestShop.toggle` | `true` |
+| `/chestshop toggle visibility` · `toggle hologram` | shop owner, or `ChestShop.admin` | — |
+| `/chestshop toggle preview` | none | everyone |
+| `/chestshop bypass` · `version` · `reload` · `metrics` · `give` · `resync` · `importlegacy` · `importpreferences` | `ChestShop.admin` | `op` |
 
 ### Using and building shops
 
@@ -125,9 +149,10 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 | `ChestShop.admin` | Modify/destroy others' shops; create admin shops (parent of `ChestShop.adminshop`) | `op` |
 | `ChestShop.adminshop` | Create/destroy **Admin Shops** | inherits from `ChestShop.admin` |
 | `ChestShop.mod` | View other players' shop chests (no destroy/admin powers) | `op` |
-| `ChestShop.nofee` | Skip the shop-creation fee | not granted |
-| `ChestShop.notax.buy` · `ChestShop.notax.sell` | Skip transaction tax | not granted |
-| `ChestShop.nolimit.buy.min` · `.buy.max` · `.sell.min` · `.sell.max` | Bypass configured price limits | not granted |
+| `ChestShop.nofee` | Skip the shop-creation fee | `op` |
+| `ChestShop.notax.buy` | Treasury adapter: exempt the initiating player from trade tax, for either direction | `op` |
+| `ChestShop.notax.sell` | Declared compatibility node; not independently checked by the current Treasury adapter | `op` |
+| `ChestShop.nolimit.buy.min` · `.buy.max` · `.sell.min` · `.sell.max` | Legacy declarations; the upstream price-limit system was removed | `op` |
 
 > [!NOTE]
 > Most of these have per-item and per-category variants — e.g.
@@ -135,3 +160,39 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 > groups like `ChestShop.shop.create.food` — for restricting which items a player may
 > trade. There are also per-name nodes (`ChestShop.name.*`, `ChestShop.othername.*`)
 > for shared/town shops. See the upstream ChestShop `plugin.yml` for the full list.
+
+## Finder controls and compatibility aliases
+
+`/find toggle visibility <true|false>` and `/find toggle hologram <true|false>`
+act on the shop you are looking at with the same owner/admin checks as the
+ChestShop forms; `/find toggle preview <true|false>` changes your own preference.
+The compatibility `/csdb find [item]` and `/csdb find toggle ...` forms forward
+to the native finder; `/csdb reload` and `/csdb resync <chunks>` require admin.
+Use `/chestshop resync <chunks>` as the canonical repair command.
+
+Finder results include batch quantity, stock/capacity observations and configurable
+location labels. Java results expose transit and GPS actions; Bedrock uses an
+inventory menu with left/right actions. Navigation runs with your own permissions;
+a displayed result is not a guarantee that stock or travel access is still valid.
+
+Typed searches accept staff-configured search aliases and suggest item codes using
+case-insensitive substring matching. Suggestions can take up to 30 seconds to
+reflect newly registered items; codes containing spaces are supported. These
+search aliases do not change the item code on a shop sign.
+
+Java results provide **Inspect item** to check the stored item's name,
+enchantments and metadata. In inventory results, shift-right-click opens the
+inspector; ordinary right-click also does so when GPS/navigation is unconfigured.
+Use **Back** to return to the same page. Inspection does not transfer the item.
+
+Ordinary item purchases complete on the buy click without a confirmation menu.
+Wildcard shops let you choose a specific item variant and confirm its purchase.
+
+To create a wildcard shop, put at least one matching item in the connected chest
+first. For example, stock an amethyst shard or block before using `amethyst*` on
+the item line. Patterns match a case-insensitive prefix followed by one `*`.
+
+The wildcard chooser shows one entry per unstackable custom item type, such as a
+Nexo wallet. Its purchase preview uses a real item from stock, preserving that
+item’s metadata. Obsolete holograms are removed within a second when their sign
+is deleted or edited, including edits made by another plugin.

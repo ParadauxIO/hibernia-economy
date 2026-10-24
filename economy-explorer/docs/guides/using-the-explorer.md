@@ -16,16 +16,27 @@ sign in and link your Minecraft account.
 Plenty is public:
 
 - **Balances and leaderboards** — who holds what, the richest accounts.
-- **Firms** — companies, their accounts, and activity.
+- **Firms** — public company profiles and directory balances; internal accounts and activity require permission.
 - **Market** — ChestShop prices, top items, and sales volume.
 - **Money flow** and other economy-wide charts.
 - **Search** — the search box up top finds accounts, players, firms, and account IDs.
 
+## Dates and times
+
+Timestamps use your browser’s local timezone, including daylight saving time.
+The timezone is shown beside each timestamp; hover over it for the exact UTC
+instant and full timezone name. Before JavaScript loads (or if it is disabled),
+timestamps are shown in UTC.
+
+Daily charts and activity calendars use **UTC days**, as labelled. Their totals
+cover midnight to midnight UTC, so a local timestamp can fall on a different
+calendar date from its chart bucket.
+
 ## What signing in unlocks
 
-Your **own** detailed data is private to you — your accounts, your income and spending
-over time, and your personal ChestShop activity. To see it, you sign in and link your
-in-game identity.
+Signing in and linking your in-game identity unlocks your detailed account,
+income/spending and personal ChestShop data. Shared-account users and authorized
+staff may also read records according to their permissions.
 
 ## Step 1 — Sign in
 
@@ -65,8 +76,18 @@ From there, the **ChestShop activity** link opens a separate page breaking down 
 buy and sell, who you trade with, and a 7/30/90-day or all-time window.
 
 > [!TIP]
-> Only you can see your private data — linking ties it to your login. Public pages
-> (balances, firms, market) stay visible to everyone whether you're signed in or not.
+> Linking identifies your own data. Authorized investigators and administrators
+> can also read private data according to their configured permissions. Shared
+> account relationships grant access to those accounts. Public balances, firm
+> profiles and aggregate market pages remain public.
+
+## Opening a transaction
+
+You can open a transaction involving an account you have permission to read,
+including shared government accounts. Its detail page shows every posting and
+counterparty for that transaction, so you can trace the payment. This does not
+expose the counterparty's other transactions or private account history. The
+whole-economy transaction list still requires staff investigation permission.
 
 ## Exporting data
 
@@ -84,3 +105,99 @@ and **system** (follow your device) appearance. Your choice is remembered.
 - New to the economy itself? Start with **[Getting started](/docs/guides/getting-started)**.
 - Curious what counts as public vs. private:
   **[Accounts & money](/docs/concepts/accounts-and-money)**.
+
+## Understanding summary figures
+
+Open accounts means non-archived accounts, not players active recently. Personal
+supply is the current player-held balance; transaction activity measures transfers
+in the selected period. Balance summaries include negative net balances, while
+the positive-net-balance chart excludes types whose total is zero or negative.
+Market items traded counts every distinct item traded in the selected window,
+not just the featured cards. Government fine totals cover all non-revoked fines
+in the selected window and your permitted accounts; the fines list is paginated.
+The item catalogue is ordered by item key for predictable browsing.
+
+## Economy pages
+
+Overview combines activity and player participation for 7 or 30 days. Transaction
+and volume comparisons use the preceding period of equal length; there is no
+percentage when that period had no activity. The former Health bookmark redirects
+here. Wealth contains current distribution, inequality and account rankings.
+Money Flow shows received, sent and net received amounts for each account type.
+Only attributable transfers between different types are counted, including initial
+player funding. Daily chart buckets use UTC; the first and current day can be partial.
+
+[Taxation](/economy/taxation) is public and shows 7- or 30-day collections,
+fine refunds, net revenue by type, and receiving government accounts. It counts
+recognised personal/corporate balance tax, source income tax, ChestShop sales tax,
+and recorded fines from the ledger. Other government transfers and property tax
+are excluded. Archived receiving accounts remain included. Refunds count on their
+settlement date, so a period can have negative net fine revenue. Individual payers,
+fine reasons and private account details are not exposed.
+
+The rates panel shows the latest published Treasury configuration, regardless of
+the selected period. It shows enabled/disabled status, personal weekly balance-tax
+brackets and per-source income-tax overrides. If live rates cannot be read, it says
+unavailable; it never substitutes shipped defaults. Corporate and ChestShop rates
+are not published in this panel.
+
+Government opens with accounts you may view. Its Fines tab supports reason search,
+active/revoked filtering and pagination. Summary totals always cover the whole
+selected period for your permitted accounts, independent of the list filter.
+
+## Finding items
+
+Market starts with a search across the full catalogue and popular items for 7 or
+30 days. Browse Items includes the complete alphabetical catalogue; Find Shops
+lists observed shops; Activity contains market-wide totals and charts. Item cards
+show historical daily average prices per item, not guaranteed shop offers.
+
+## Comparing shops
+
+Choose **I want to buy** to buy from shops at the lowest unit price, or **I want to
+sell** to sell your items to the highest bidder. Prices on signs are for a batch;
+the Explorer divides by that batch quantity for a fair per-item comparison. The
+optional 64-item view is an estimate, not a promise that the item stacks to 64.
+Check the sign batch, stock observation time and shop observation time before
+travelling. Copy location copies the world and coordinates; the map link opens
+the server map. Offers show both observed stock and space available: the number
+of additional items of that type the container can accept. Zero space means the
+container is full for that item. Admin shops show unlimited stock and space;
+unknown observations stay unknown. Stock and space share the observation time
+and may have changed since the last check.
+
+Item pages show observed offers before historical averages. The simple daily
+price chart is followed by an optional advanced candlestick view. Historical
+sellers do not necessarily still have an active shop. Private sales figures retain
+their existing permission requirements.
+
+## Search and directories on a phone
+
+Use **Search** in the header to find accounts, firms and players. Escape closes
+search and returns focus to its button. Account and firm directories keep names
+and balances together on narrow screens; expand **Details** for other columns.
+Sort presets include Richest, Newest, Name A–Z and Largest employers (firms).
+The selected sort is shown above the table and stays in the URL with your filters.
+Account details show a single current balance; owner UUIDs are expandable.
+Authorised viewers can follow a business account back to its firm.
+
+## Recover your website password
+
+If you already linked your Minecraft account, the server can let you reset the
+website password without email:
+
+```text
+/treasuryapi ui resetpassword
+/treasuryapi ui resetpassword confirm
+```
+
+Run both yourself in-game. Copy the temporary password from the private response,
+sign in with your existing website username, then choose a permanent password
+when prompted. The temporary password must be replaced at login; it has no
+separate timed expiry. Keep it private, including your client chat log.
+
+This requires server support and an existing, unambiguous link. Missing/multiple
+links or a disabled integration need staff assistance; you cannot select another
+person's username. Confirmed attempts are limited to one per minute. Resetting
+the password does not explicitly sign out existing sessions or revoke API keys;
+report a suspected compromise to staff as well.

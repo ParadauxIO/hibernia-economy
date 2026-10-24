@@ -1,13 +1,13 @@
 package io.paradaux.treasuryrestapi.util;
 
 import io.paradaux.treasuryrestapi.model.DueDelivery;
-
 import java.math.BigDecimal;
 import java.net.URI;
 import java.text.DecimalFormat;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -27,14 +27,13 @@ public final class DiscordWebhook {
 
     private DiscordWebhook() {}
 
-    private static final Set<String> HOSTS = Set.of(
-            "discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com");
+    private static final Set<String> HOSTS =
+            Set.of("discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com");
     // /api/webhooks/<id>/<token>, optionally version-pinned (/api/v10/webhooks/…).
     private static final Pattern PATH = Pattern.compile("^/api(/v\\d+)?/webhooks/\\d+/.+");
 
     private static final int COLOR_CREDIT = 0x2ECC71; // green
-    private static final int COLOR_DEBIT = 0xE74C3C;  // red
-    private static final DecimalFormat MONEY = new DecimalFormat("#,##0.00");
+    private static final int COLOR_DEBIT = 0xE74C3C; // red
 
     /** True if {@code uri} is a Discord channel/webhook execute URL. */
     public static boolean isDiscordWebhook(URI uri) {
@@ -42,7 +41,8 @@ public final class DiscordWebhook {
         String host = uri.getHost();
         String path = uri.getPath();
         if (host == null || path == null) return false;
-        return HOSTS.contains(host.toLowerCase()) && PATH.matcher(path).matches();
+        return HOSTS.contains(host.toLowerCase(Locale.ROOT))
+                && PATH.matcher(path).matches();
     }
 
     /** Builds the Discord embed payload for a due delivery. */
@@ -54,6 +54,16 @@ public final class DiscordWebhook {
         fields.add(new Field("Amount", money(amount), true));
         fields.add(new Field("Account", "#" + d.getAccountId(), true));
         fields.add(new Field("Transaction", "#" + d.getTxnId(), true));
+        if (d.getCounterpartyAccountId() != null) {
+            String counterparty = "#" + d.getCounterpartyAccountId();
+            if (notBlank(d.getCounterpartyDisplayName())) {
+                counterparty += " " + d.getCounterpartyDisplayName();
+            }
+            if (d.getCounterpartyAccountType() != null) {
+                counterparty += " (" + d.getCounterpartyAccountType() + ")";
+            }
+            fields.add(new Field("Counterparty", trim(counterparty, 1024), false));
+        }
         if (notBlank(d.getPluginSystem())) {
             fields.add(new Field("System", trim(d.getPluginSystem(), 1024), true));
         }
@@ -65,7 +75,8 @@ public final class DiscordWebhook {
         }
 
         String timestamp = d.getSettlementTime() != null
-                ? d.getSettlementTime().toInstant(ZoneOffset.UTC).toString() : null;
+                ? d.getSettlementTime().toInstant(ZoneOffset.UTC).toString()
+                : null;
         String description = notBlank(d.getMessage()) ? trim(d.getMessage(), 4096) : null;
 
         Embed embed = new Embed(
@@ -80,8 +91,10 @@ public final class DiscordWebhook {
 
     /** Signed, grouped money string: {@code +$1,234.56} / {@code -$500.00}. */
     private static String money(BigDecimal amount) {
+        // DecimalFormat is not thread-safe; build a fresh instance per call rather
+        // than sharing a static one across webhook-delivery threads.
         String sign = amount.signum() < 0 ? "-" : "+";
-        return sign + "$" + MONEY.format(amount.abs());
+        return sign + "$" + new DecimalFormat("#,##0.00").format(amount.abs());
     }
 
     private static boolean notBlank(String s) {
@@ -97,8 +110,11 @@ public final class DiscordWebhook {
     // the ObjectMapper's default (non-null) inclusion where configured; Discord
     // tolerates explicit nulls regardless.
     public record Payload(String username, List<Embed> embeds) {}
-    public record Embed(String title, String description, int color,
-                        List<Field> fields, String timestamp, Footer footer) {}
+
+    public record Embed(
+            String title, String description, int color, List<Field> fields, String timestamp, Footer footer) {}
+
     public record Field(String name, String value, boolean inline) {}
+
     public record Footer(String text) {}
 }

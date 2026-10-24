@@ -1,15 +1,14 @@
 package io.paradaux.business.mappers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmAccount;
 import io.paradaux.business.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class FirmAccountsMapperIT extends IntegrationTestBase {
 
@@ -27,6 +26,20 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         f.setProprietorUuid(UUID.randomUUID().toString());
         firms.createFirm(f);
         firmId = f.getFirmId();
+    }
+
+    @Test
+    void recoveryWorklistIncludesLiveLinksAndExcludesRemovedLinks() throws Exception {
+        int live = insertStubAccount("Live");
+        int removed = insertStubAccount("Removed");
+        firmAccounts.insertFirmAccount(firmId, live);
+        firmAccounts.insertFirmAccount(firmId, removed);
+        firmAccounts.removeFirmAccount(firmId, removed);
+
+        assertThat(firmAccounts.listActiveAccountLinks()).singleElement().satisfies(link -> {
+            assertThat(link.getFirmId()).isEqualTo(firmId);
+            assertThat(link.getAccountId()).isEqualTo(live);
+        });
     }
 
     @Test
@@ -77,5 +90,72 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         assertThat(firmAccounts.getAnyAccountId(firmId)).isEqualTo(a);
         assertThat(firmAccounts.getFirmIdByAccountId(a)).isEqualTo(firmId);
         assertThat(firmAccounts.getFirmIdByAccountId(9999)).isNull();
+    }
+
+    @Test
+    void accountResolutionExcludesRemovedLinksAndKeepsArchivedFirmLinks() throws Exception {
+        int retained = insertStubAccount("Retained");
+        int removed = insertStubAccount("Removed");
+        firmAccounts.insertFirmAccount(firmId, retained);
+        firmAccounts.insertFirmAccount(firmId, removed);
+        firmAccounts.removeFirmAccount(firmId, removed);
+        firms.archiveFirm(firmId, firms.getFirmById(firmId).getProprietorUuid());
+
+        assertThat(firmAccounts.listAccountsByFirm(firmId))
+                .extracting(FirmAccount::getAccountId)
+                .containsExactly(retained);
+        assertThat(firmAccounts.getFirmIdByAccountId(retained)).isEqualTo(firmId);
+        assertThat(firmAccounts.getFirmIdByAccountId(removed)).isNull();
+        assertThat(firmAccounts.listAccountsByFirm(-1)).isEmpty();
+    }
+
+    @Test
+    void shopAliases_areUniqueCaseInsensitiveAndClearable() throws Exception {
+        int first = insertStubAccount("First");
+        int second = insertStubAccount("Second");
+        firmAccounts.insertFirmAccount(firmId, first);
+        firmAccounts.insertFirmAccount(firmId, second);
+        assertThat(firmAccounts.setShopAlias(firmId, first, "ShopName")).isEqualTo(1);
+        assertThat(firmAccounts.getShopAlias(firmId, first)).isEqualTo("ShopName");
+        assertThat(firmAccounts.resolveShopAlias("SHOPNAME")).isEqualTo(first);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "shopname"))
+                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
+        firmAccounts.setShopAlias(firmId, first, null);
+        // Clearing an alias does not release historical sign ownership, even
+        // when a writer uses the mapper directly instead of the service.
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "shopname"))
+                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
+        firmAccounts.setShopAlias(firmId, first, "shopname");
+        assertThat(firmAccounts.resolveShopAlias("SHOPNAME")).isEqualTo(first);
+        firmAccounts.removeFirmAccount(firmId, first);
+        assertThat(firmAccounts.resolveShopAlias("shopname")).isNull();
+        assertThat(firmAccounts.setShopAlias(firmId, first, "other")).isZero();
+    }
+
+    @Test
+    void shopAliases_disbandedFirmDoesNotResolve() throws Exception {
+        int account = insertStubAccount("Shop");
+        firmAccounts.insertFirmAccount(firmId, account);
+        firmAccounts.setShopAlias(firmId, account, "shopname");
+        firms.archiveFirm(firmId, firms.getFirmById(firmId).getProprietorUuid());
+        assertThat(firmAccounts.resolveShopAlias("shopname")).isNull();
+        assertThat(firmAccounts.setShopAlias(firmId, account, "other")).isZero();
+    }
+
+    @Test
+    void shopAliasReservationSurvivesClearingAndCannotChangeAccount() throws Exception {
+        int original = insertStubAccount("Original");
+        int other = insertStubAccount("Other");
+        firmAccounts.insertFirmAccount(firmId, original);
+        firmAccounts.insertFirmAccount(firmId, other);
+        firmAccounts.reserveShopAlias("ShopName", original);
+        firmAccounts.setShopAlias(firmId, original, "ShopName");
+        firmAccounts.setShopAlias(firmId, original, null);
+        assertThat(firmAccounts.resolveShopAlias("ShopName")).isNull();
+        firmAccounts.reserveShopAlias("SHOPNAME", other);
+        assertThat(firmAccounts.getShopAliasReservation("shopname")).isEqualTo(original);
+        firmAccounts.reserveShopAlias("ShopName", original);
+        firmAccounts.setShopAlias(firmId, original, "ShopName");
+        assertThat(firmAccounts.resolveShopAlias("shopname")).isEqualTo(original);
     }
 }

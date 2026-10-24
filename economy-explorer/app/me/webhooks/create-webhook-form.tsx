@@ -41,7 +41,7 @@ export function CreateWebhookForm({ hasPersonal, firms }: { hasPersonal: boolean
   return (
     <>
       <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select className="input" value={scope} onChange={(e) => setScope(e.target.value)} required>
+        <select className="input" aria-label="Webhook scope" value={scope} onChange={(e) => setScope(e.target.value)} required>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <input

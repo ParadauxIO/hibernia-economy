@@ -13,3 +13,4 @@ and reference make sense.
   (personal, business, government) and how money moves between them.
 - **[Permissions & roles](/docs/concepts/permissions-and-roles)** — who's allowed to do
   what: firm roles, members vs. authorizers, and staff-only commands.
+- **[Glossary](/docs/concepts/glossary)** — quick definitions of the key terms.

@@ -23,18 +23,6 @@ public class FirmPlayerServiceImpl implements FirmPlayerService {
     }
 
     @Override
-    public void touch(UUID uuid, String currentName) {
-        if (uuid == null || currentName == null || currentName.isBlank()) {
-            throw new IllegalArgumentException("uuid and currentName must be provided");
-        }
-
-        int affected = mapper.upsert(uuid.toString(), currentName);
-        if (affected <= 0) {
-            throw new IllegalStateException("Failed to upsert firm_players for " + uuid);
-        }
-    }
-
-    @Override
     public Optional<FirmPlayer> findByUuid(UUID uuid) {
         if (uuid == null) return Optional.empty();
         return Optional.ofNullable(mapper.getByUuid(uuid.toString()));

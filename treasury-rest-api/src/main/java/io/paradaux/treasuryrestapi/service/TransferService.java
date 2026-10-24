@@ -1,5 +1,6 @@
 package io.paradaux.treasuryrestapi.service;
 
+import io.paradaux.common.OverdraftPolicy;
 import io.paradaux.treasuryrestapi.dto.FirmTransferRequest;
 import io.paradaux.treasuryrestapi.dto.PlayerTransferRequest;
 import io.paradaux.treasuryrestapi.dto.TransferRequest;
@@ -14,12 +15,6 @@ import io.paradaux.treasuryrestapi.model.Firm;
 import io.paradaux.treasuryrestapi.model.LedgerPosting;
 import io.paradaux.treasuryrestapi.model.LedgerTxn;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -28,6 +23,11 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TransferService {
@@ -65,17 +65,20 @@ public class TransferService {
      * @param idempotencyKey raw Idempotency-Key header value, or null if not supplied
      */
     @Transactional
-    public TransferResponse transfer(VerifiedToken verified,
-                                     TransferRequest request,
-                                     String idempotencyKey) {
-        log.debug("Processing transfer: fromAccount={} toAccount={} amount={} idempotencyKey={}",
-                verified.accountId(), request.toAccountId(), request.amount(),
+    public TransferResponse transfer(VerifiedToken verified, TransferRequest request, String idempotencyKey) {
+        log.debug(
+                "Processing transfer: fromAccount={} toAccount={} amount={} idempotencyKey={}",
+                verified.accountId(),
+                request.toAccountId(),
+                request.amount(),
                 idempotencyKey != null ? "present" : "absent");
 
         // Step 2: toAccountId present and positive
         if (request.toAccountId() == null || request.toAccountId() <= 0) {
             log.warn("Transfer rejected: invalid toAccountId={}", request.toAccountId());
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "Field 'toAccountId' is required and must be a positive integer.");
         }
 
@@ -88,13 +91,20 @@ public class TransferService {
         if ("BUSINESS".equals(verified.keyType())) {
             // BUSINESS keys must specify the firm account to debit in the request body
             if (request.fromAccountId() == null || request.fromAccountId() <= 0) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+                throw new ApiException(
+                        HttpStatus.BAD_REQUEST,
+                        "INVALID_BODY",
                         "Field 'fromAccountId' is required for BUSINESS API keys.");
             }
-            if (firmMapper.isFirmAccount(verified.firmId(), request.fromAccountId()) == 0) {
-                log.warn("Transfer rejected: accountId={} does not belong to firmId={}",
-                        request.fromAccountId(), verified.firmId());
-                throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN",
+            if ((verified.accountId() != null && verified.accountId().longValue() != request.fromAccountId())
+                    || firmMapper.isFirmAccount(verified.firmId(), request.fromAccountId()) == 0) {
+                log.warn(
+                        "Transfer rejected: accountId={} does not belong to firmId={}",
+                        request.fromAccountId(),
+                        verified.firmId());
+                throw new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "FORBIDDEN",
                         "Account does not belong to the firm associated with this API key.");
             }
             fromAccountId = request.fromAccountId();
@@ -109,8 +119,7 @@ public class TransferService {
         // transfer 500'd on the insert constraint.
         String memo = request.memo() == null ? "" : request.memo();
 
-        return executeTransfer(fromAccountId, toAccountId, amount, memo,
-                verified.ownerUuid(), idempotencyKey, false);
+        return executeTransfer(fromAccountId, toAccountId, amount, memo, verified.ownerUuid(), idempotencyKey, false);
     }
 
     /**
@@ -121,20 +130,29 @@ public class TransferService {
      * guard — an account needing an in-game authorizer is rejected (403).
      */
     @Transactional
-    public TransferResponse adminTransfer(VerifiedToken verified,
-                                          Long fromAccountId,
-                                          Long toAccountId,
-                                          String amount,
-                                          String memo,
-                                          String idempotencyKey) {
+    public TransferResponse adminTransfer(
+            VerifiedToken verified,
+            Long fromAccountId,
+            Long toAccountId,
+            String amount,
+            String memo,
+            String idempotencyKey) {
         io.paradaux.treasuryrestapi.security.AdminScope.require(verified);
         if (fromAccountId == null || fromAccountId <= 0 || toAccountId == null || toAccountId <= 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "Fields 'fromAccountId' and 'toAccountId' are required and must be positive.");
         }
         BigDecimal amt = validatedAmount(amount);
-        return executeTransfer(fromAccountId, toAccountId, amt, memo == null ? "" : memo,
-                verified.ownerUuid(), idempotencyKey, /* bypassAuthRequired */ false);
+        return executeTransfer(
+                fromAccountId,
+                toAccountId,
+                amt,
+                memo == null ? "" : memo,
+                verified.ownerUuid(),
+                idempotencyKey, /* bypassAuthRequired */
+                false);
     }
 
     /**
@@ -149,27 +167,28 @@ public class TransferService {
      *                           ordinary API transfers
      */
     @Transactional
-    public TransferResponse executeTransfer(long fromAccountId,
-                                            long toAccountId,
-                                            BigDecimal amount,
-                                            String memo,
-                                            UUID initiator,
-                                            String idempotencyKey,
-                                            boolean bypassAuthRequired) {
+    public TransferResponse executeTransfer(
+            long fromAccountId,
+            long toAccountId,
+            BigDecimal amount,
+            String memo,
+            UUID initiator,
+            String idempotencyKey,
+            boolean bypassAuthRequired) {
         // ledger_txns.message is VARCHAR(255) and NOT NULL. Pre-validate so a too-long
         // memo surfaces as a clean 400 INVALID_BODY rather than a driver-level 500.
         String safeMemo = memo == null ? "" : memo;
         if (safeMemo.length() > 255) {
             log.warn("Transfer rejected: memo length {} exceeds 255", safeMemo.length());
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'memo' must be at most 255 characters.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "INVALID_BODY", "Field 'memo' must be at most 255 characters.");
         }
 
         // Step 4: no self-transfers
         if (fromAccountId == toAccountId) {
             log.warn("Transfer rejected: self-transfer attempted on accountId={}", fromAccountId);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "SELF_TRANSFER",
-                    "Source and destination accounts must be different.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "SELF_TRANSFER", "Source and destination accounts must be different.");
         }
 
         // Step 5: idempotency check.
@@ -179,39 +198,51 @@ public class TransferService {
         // either blocked (409 IDEMPOTENCY_CONFLICT on a body mismatch) or, on a body
         // match, handed back a transaction that isn't theirs. Folding fromAccountId in
         // confines collisions to the one account a caller is already authorised to debit.
-        String dedupKey = idempotencyKey != null
-                ? sha256Hex(fromAccountId + ":" + idempotencyKey) : null;
+        String dedupKey = idempotencyKey != null ? sha256Hex(fromAccountId + ":" + idempotencyKey) : null;
         if (dedupKey != null) {
             LedgerTxn existing = ledgerMapper.findByDedupKey(dedupKey);
             if (existing != null) {
-                log.info("Idempotent replay: dedupKey found for txnId={}, returning cached response", existing.getTxnId());
+                log.info(
+                        "Idempotent replay: dedupKey found for txnId={}, returning cached response",
+                        existing.getTxnId());
                 return replayIdempotent(existing, fromAccountId, toAccountId, amount, safeMemo);
             }
             log.debug("Idempotency key provided but no prior transaction found; proceeding with new transfer");
         }
 
-        // Step 6: source account must exist and not be archived
+        // Step 6: source account must exist and not be archived.
+        // Note on parity with the in-process plugin engine (LedgerServiceImpl): the plugin
+        // re-reads the source's overdraft flags (allow_overdraft/credit_limit) under a
+        // shared row lock (ADT-10) to exclude a concurrent flag flip mid-transfer. This
+        // engine deliberately reads them from this unlocked findById instead — and that is
+        // safe here, NOT an oversight: treasury-rest-api has no code path that writes those
+        // flags at all (only the plugin's admin tooling flips them), and no normal user can
+        // trigger a flip. If parity were ever needed, the correct change is a shared-lock
+        // read of the accounts row BEFORE the balance FOR UPDATE locks below (accounts-then-
+        // balances, matching the plugin's order) — do not "fix" it as a deadlock issue.
         Account source = accountMapper.findById(fromAccountId);
         if (source == null || source.isArchived()) {
             log.warn("Transfer rejected: source accountId={} not found or archived", fromAccountId);
-            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND",
-                    "Source account not found.");
+            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Source account not found.");
         }
 
         // Step 7: destination account must exist and not be archived
         Account destination = accountMapper.findById(toAccountId);
         if (destination == null || destination.isArchived()) {
             log.warn("Transfer rejected: destination accountId={} not found or archived", toAccountId);
-            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND",
-                    "Destination account not found.");
+            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Destination account not found.");
         }
 
         // Step 8: reject accounts that require in-game authorizer flows — unless this is
         // a privileged system flow (admin disband) that is authorised out-of-band.
         if (!bypassAuthRequired && (source.isRequiresAuthorization() || destination.isRequiresAuthorization())) {
-            log.warn("Transfer rejected: authorization required (source={}, dest={})",
-                    source.isRequiresAuthorization(), destination.isRequiresAuthorization());
-            throw new ApiException(HttpStatus.FORBIDDEN, "AUTHORIZATION_REQUIRED",
+            log.warn(
+                    "Transfer rejected: authorization required (source={}, dest={})",
+                    source.isRequiresAuthorization(),
+                    destination.isRequiresAuthorization());
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "AUTHORIZATION_REQUIRED",
                     "One or both accounts require an in-game authorizer and cannot be used via the REST API.");
         }
 
@@ -220,29 +251,126 @@ public class TransferService {
         // concurrent A→B and B→A transfers can't deadlock each other. Without
         // this ordering, MariaDB will detect the deadlock and roll one back,
         // surfacing as a 500 to whichever client lost the race.
-        long firstLockId  = Math.min(fromAccountId, toAccountId);
+        long firstLockId = Math.min(fromAccountId, toAccountId);
         long secondLockId = Math.max(fromAccountId, toAccountId);
-        AccountBalance firstLock  = accountMapper.findBalanceForUpdate(firstLockId);
+        AccountBalance firstLock = accountMapper.findBalanceForUpdate(firstLockId);
         AccountBalance secondLock = accountMapper.findBalanceForUpdate(secondLockId);
-        AccountBalance sourceBalance = (fromAccountId == firstLockId) ? firstLock  : secondLock;
-        AccountBalance destBalance   = (fromAccountId == firstLockId) ? secondLock : firstLock;
-        log.debug("Locked balances in id-asc order: source(accountId={} balance={} version={}), "
-                + "dest(accountId={} balance={} version={})",
-                fromAccountId, sourceBalance.getBalance(), sourceBalance.getVersion(),
-                toAccountId, destBalance.getBalance(), destBalance.getVersion());
+        AccountBalance sourceBalance = (fromAccountId == firstLockId) ? firstLock : secondLock;
+        AccountBalance destBalance = (fromAccountId == firstLockId) ? secondLock : firstLock;
+        log.debug(
+                "Locked balances in id-asc order: source(accountId={} balance={} version={}), "
+                        + "dest(accountId={} balance={} version={})",
+                fromAccountId,
+                sourceBalance.getBalance(),
+                sourceBalance.getVersion(),
+                toAccountId,
+                destBalance.getBalance(),
+                destBalance.getVersion());
 
-        // Step 10: overdraft check (after both locks held — order is irrelevant for the check itself)
-        if (!source.isAllowOverdraft()) {
-            BigDecimal creditLimit = source.getCreditLimit() != null
-                    ? source.getCreditLimit() : BigDecimal.ZERO;
-            if (sourceBalance.getBalance().subtract(amount).compareTo(creditLimit.negate()) < 0) {
-                log.warn("Transfer rejected: insufficient funds on accountId={} (balance={}, amount={}, creditLimit={})",
-                        fromAccountId, sourceBalance.getBalance(), amount, creditLimit);
-                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "INSUFFICIENT_FUNDS",
-                        "Source account has insufficient funds.");
-            }
+        // Step 10: overdraft check (after both locks held — order is irrelevant for the check itself).
+        // Defers to the shared OverdraftPolicy so this engine and the in-process Treasury plugin
+        // interpret (allow_overdraft, credit_limit) identically (PAR-319):
+        //   SYSTEM account                            → unlimited (ignores credit limits)
+        //   allow_overdraft = false                   → floor 0 (credit_limit ignored)
+        //   allow_overdraft = true, credit_limit < 0  → unlimited faucet/sink
+        //   allow_overdraft = true, credit_limit >= 0 → floor -credit_limit
+        boolean sourceIsSystem = "SYSTEM".equals(source.getAccountType());
+        if (!OverdraftPolicy.isWithinFloor(
+                sourceBalance.getBalance(),
+                amount,
+                source.isAllowOverdraft(),
+                source.getCreditLimit(),
+                sourceIsSystem)) {
+            log.warn(
+                    "Transfer rejected: insufficient funds on accountId={} (balance={}, amount={}, "
+                            + "allowOverdraft={}, creditLimit={}, accountType={})",
+                    fromAccountId,
+                    sourceBalance.getBalance(),
+                    amount,
+                    source.isAllowOverdraft(),
+                    source.getCreditLimit(),
+                    source.getAccountType());
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT, "INSUFFICIENT_FUNDS", "Source account has insufficient funds.");
         }
 
+        return postTransfer(fromAccountId, toAccountId, amount, safeMemo, initiator, dedupKey);
+    }
+
+    /**
+     * Sweeps the <em>freshly locked</em> positive balance of {@code fromAccountId}
+     * into {@code toAccountId} in a single ledger transaction. Unlike
+     * {@link #executeTransfer}, the moved amount is not a caller-supplied snapshot: it
+     * is read under the {@code SELECT ... FOR UPDATE} lock, so a concurrent credit or
+     * debit that lands between a caller's snapshot and this call cannot leave a residual
+     * behind or make the sweep overdraw (conservation stays exact). Used by the admin
+     * firm-disband sweep, which must not trust {@code account_balances_mat} snapshots.
+     *
+     * <p>Returns {@code null} when the locked balance is zero-or-negative (nothing to
+     * move) so the caller can archive the account without emitting an empty transfer.
+     *
+     * @return the transfer receipt, or {@code null} if the locked balance was not positive
+     */
+    @Transactional
+    public TransferResponse sweepAll(long fromAccountId, long toAccountId, String memo, UUID initiator) {
+        String safeMemo = memo == null ? "" : memo;
+        if (fromAccountId == toAccountId) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "SELF_TRANSFER", "Source and destination accounts must be different.");
+        }
+
+        // Lock both balance rows in ascending account-id order — identical ordering to
+        // executeTransfer — so a sweep and a concurrent A→B / B→A transfer can't deadlock.
+        long firstLockId = Math.min(fromAccountId, toAccountId);
+        long secondLockId = Math.max(fromAccountId, toAccountId);
+        AccountBalance firstLock = accountMapper.findBalanceForUpdate(firstLockId);
+        AccountBalance secondLock = accountMapper.findBalanceForUpdate(secondLockId);
+        AccountBalance sourceBalance = (fromAccountId == firstLockId) ? firstLock : secondLock;
+        if (sourceBalance == null) {
+            // Two-engine parity with LedgerServiceImpl.sweepAll: a missing source balance
+            // row is a state error, not a silent no-op. Not live-reachable today (disband
+            // callers only sweep accounts that exist), but keep the engines equivalent.
+            throw new IllegalStateException("Missing balance row for source account " + fromAccountId);
+        }
+
+        BigDecimal amount = sourceBalance.getBalance();
+        if (amount == null || amount.signum() <= 0) {
+            log.debug("Sweep no-op: locked balance on accountId={} is {} (nothing to move)", fromAccountId, amount);
+            return null;
+        }
+
+        log.debug(
+                "Sweeping locked balance {} from accountId={} to accountId={}",
+                amount.toPlainString(),
+                fromAccountId,
+                toAccountId);
+        return postTransfer(fromAccountId, toAccountId, amount, safeMemo, initiator, /* dedupKey */ null);
+    }
+
+    /**
+     * Reads an account's balance under a {@code SELECT ... FOR UPDATE} lock, held for
+     * the remainder of the caller's transaction. Used by the admin disband flow to
+     * decide — from the authoritative, concurrency-safe value rather than a stale
+     * {@code account_balances_mat} snapshot — whether an account with no sweep
+     * destination truly still holds money. Returns {@code null} if no balance row
+     * exists for the account.
+     */
+    @Transactional
+    public BigDecimal lockedBalance(long accountId) {
+        AccountBalance locked = accountMapper.findBalanceForUpdate(accountId);
+        return locked == null ? null : locked.getBalance();
+    }
+
+    /**
+     * Records the money movement once both balance rows are locked and the amount is
+     * settled: inserts the {@code ledger_txns} row and the debit/credit postings, then
+     * builds the receipt. The {@code account_balances_mat} deltas are applied by the
+     * {@code trg_postings_ai} trigger on {@code ledger_postings} — never an
+     * application-side UPDATE. Shared by {@link #executeTransfer} and {@link #sweepAll}
+     * so both write the ledger identically.
+     */
+    private TransferResponse postTransfer(
+            long fromAccountId, long toAccountId, BigDecimal amount, String safeMemo, UUID initiator, String dedupKey) {
         Instant now = Instant.now();
         LocalDateTime settlementTime = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
 
@@ -281,17 +409,15 @@ public class TransferService {
         // (sourceBalance, destBalance) above serialise concurrent writers
         // long enough for the trigger-driven update to commit.
 
-        log.info("Transfer completed: txnId={} fromAccount={} toAccount={} amount={} initiator={}",
-                txn.getTxnId(), fromAccountId, toAccountId, amount.toPlainString(), initiator);
-
-        return new TransferResponse(
+        log.info(
+                "Transfer completed: txnId={} fromAccount={} toAccount={} amount={} initiator={}",
                 txn.getTxnId(),
                 fromAccountId,
                 toAccountId,
                 amount.toPlainString(),
-                safeMemo,
-                now
-        );
+                initiator);
+
+        return new TransferResponse(txn.getTxnId(), fromAccountId, toAccountId, amount.toPlainString(), safeMemo, now);
     }
 
     /**
@@ -299,47 +425,50 @@ public class TransferService {
      * to the standard transfer pipeline. Supports the same idempotency semantics.
      */
     @Transactional
-    public TransferResponse transferToFirm(VerifiedToken verified,
-                                           FirmTransferRequest request,
-                                           String idempotencyKey) {
+    public TransferResponse transferToFirm(VerifiedToken verified, FirmTransferRequest request, String idempotencyKey) {
         if (request.toFirm() == null || request.toFirm().isBlank()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'toFirm' is required.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY", "Field 'toFirm' is required.");
         }
 
         Firm firm = firmMapper.findFirmByDisplayName(request.toFirm());
         if (firm == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "FIRM_NOT_FOUND",
-                    "Firm '" + request.toFirm() + "' not found.");
+            throw new ApiException(
+                    HttpStatus.NOT_FOUND, "FIRM_NOT_FOUND", "Firm '" + request.toFirm() + "' not found.");
         }
         if (firm.getDefaultAccountId() == null) {
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "NO_DEFAULT_ACCOUNT",
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "NO_DEFAULT_ACCOUNT",
                     "Firm '" + request.toFirm() + "' has no default account configured.");
         }
 
         log.debug("Resolved toFirm='{}' to toAccountId={}", request.toFirm(), firm.getDefaultAccountId());
 
-        return transfer(verified,
-                new TransferRequest(request.fromAccountId(), firm.getDefaultAccountId(), request.amount(), request.memo()),
+        return transfer(
+                verified,
+                new TransferRequest(
+                        request.fromAccountId(), firm.getDefaultAccountId(), request.amount(), request.memo()),
                 idempotencyKey);
     }
 
     /**
      * Resolves a player (by UUID or in-game name) to their PERSONAL account, then
      * delegates to the standard transfer pipeline. Exactly one of
-     * {@code toPlayerUuid} / {@code toPlayerName} must be supplied. The target
+     * {@code toPlayerUuid} / {@code toPlayerName} must be supplied; a name that is also
+     * a GOVERNMENT account's is rejected as ambiguous (409). The target
      * must already have a PERSONAL account — this never mints one (no faucet
      * exposure via REST). Same idempotency semantics as {@link #transfer}.
      */
     @Transactional
-    public TransferResponse transferToPlayer(VerifiedToken verified,
-                                             PlayerTransferRequest request,
-                                             String idempotencyKey) {
-        boolean hasUuid = request.toPlayerUuid() != null && !request.toPlayerUuid().isBlank();
-        boolean hasName = request.toPlayerName() != null && !request.toPlayerName().isBlank();
+    public TransferResponse transferToPlayer(
+            VerifiedToken verified, PlayerTransferRequest request, String idempotencyKey) {
+        boolean hasUuid =
+                request.toPlayerUuid() != null && !request.toPlayerUuid().isBlank();
+        boolean hasName =
+                request.toPlayerName() != null && !request.toPlayerName().isBlank();
         if (hasUuid == hasName) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Provide exactly one of 'toPlayerUuid' or 'toPlayerName'.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "INVALID_BODY", "Provide exactly one of 'toPlayerUuid' or 'toPlayerName'.");
         }
 
         UUID targetUuid;
@@ -347,27 +476,42 @@ public class TransferService {
             try {
                 targetUuid = UUID.fromString(request.toPlayerUuid().trim());
             } catch (IllegalArgumentException e) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                        "Field 'toPlayerUuid' is not a valid UUID.");
+                throw new ApiException(
+                        HttpStatus.BAD_REQUEST, "INVALID_BODY", "Field 'toPlayerUuid' is not a valid UUID.");
             }
         } else {
             targetUuid = firmMapper.findPlayerUuidByName(request.toPlayerName().trim());
             if (targetUuid == null) {
-                throw new ApiException(HttpStatus.NOT_FOUND, "PLAYER_NOT_FOUND",
+                throw new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "PLAYER_NOT_FOUND",
                         "No player known by the name '" + request.toPlayerName() + "'.");
+            }
+            // PAR-144, same guard as GET /accounts/by-player: governments run as player
+            // alts of the same name, so a bare name that is both a player and a
+            // non-archived GOVERNMENT account is ambiguous. Refuse rather than silently
+            // paying the personal account; the caller should pay by 'toPlayerUuid' (or
+            // by account id for the government) to disambiguate.
+            if (accountMapper.existsGovernmentAccountByName(
+                    request.toPlayerName().trim())) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "AMBIGUOUS_NAME",
+                        "'" + request.toPlayerName() + "' is both a player and a government account; "
+                                + "use 'toPlayerUuid' to disambiguate.");
             }
         }
 
         Long toAccountId = accountMapper.findPersonalAccountIdByOwner(targetUuid);
         if (toAccountId == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND",
-                    "The target player has no personal account.");
+            throw new ApiException(
+                    HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "The target player has no personal account.");
         }
 
-        log.debug("Resolved player ({}) to toAccountId={}",
-                hasUuid ? targetUuid : request.toPlayerName(), toAccountId);
+        log.debug("Resolved player ({}) to toAccountId={}", hasUuid ? targetUuid : request.toPlayerName(), toAccountId);
 
-        return transfer(verified,
+        return transfer(
+                verified,
                 new TransferRequest(request.fromAccountId(), toAccountId, request.amount(), request.memo()),
                 idempotencyKey);
     }
@@ -379,38 +523,43 @@ public class TransferService {
      * values, not the request — a same-key replay with mismatched body is a
      * 409 IDEMPOTENCY_CONFLICT, never a silent stored-vs-claimed mismatch.
      */
-    private TransferResponse replayIdempotent(LedgerTxn existing,
-                                               long fromAccountId,
-                                               long toAccountId,
-                                               BigDecimal amount,
-                                               String memo) {
+    private TransferResponse replayIdempotent(
+            LedgerTxn existing, long fromAccountId, long toAccountId, BigDecimal amount, String memo) {
         LedgerPosting credit = ledgerMapper.findCreditPostingByTxnId(existing.getTxnId());
-        LedgerPosting debit  = ledgerMapper.findDebitPostingByTxnId(existing.getTxnId());
+        LedgerPosting debit = ledgerMapper.findDebitPostingByTxnId(existing.getTxnId());
 
-        boolean shapeMatches =
-                credit != null && debit != null
+        boolean shapeMatches = credit != null
+                && debit != null
                 && credit.getAccountId() == toAccountId
                 && debit.getAccountId() == fromAccountId
                 && credit.getAmount().compareTo(amount) == 0
                 && java.util.Objects.equals(
-                        existing.getMessage() == null ? "" : existing.getMessage(),
-                        memo == null ? "" : memo);
+                        existing.getMessage() == null ? "" : existing.getMessage(), memo == null ? "" : memo);
 
         if (!shapeMatches) {
-            log.warn("Idempotency conflict: txnId={} stored from={} to={} amount={} memo='{}' "
-                    + "vs requested from={} to={} amount={} memo='{}'",
+            log.warn(
+                    "Idempotency conflict: txnId={} stored from={} to={} amount={} memo='{}' "
+                            + "vs requested from={} to={} amount={} memo='{}'",
                     existing.getTxnId(),
-                    debit  != null ? debit.getAccountId()  : "null",
+                    debit != null ? debit.getAccountId() : "null",
                     credit != null ? credit.getAccountId() : "null",
-                    credit != null ? credit.getAmount()    : "null",
+                    credit != null ? credit.getAmount() : "null",
                     existing.getMessage(),
-                    fromAccountId, toAccountId, amount, memo);
-            throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT",
+                    fromAccountId,
+                    toAccountId,
+                    amount,
+                    memo);
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "IDEMPOTENCY_CONFLICT",
                     "Idempotency key reused with a different request body.");
         }
 
-        log.info("Replaying idempotent transfer: txnId={} fromAccount={} toAccount={} amount={}",
-                existing.getTxnId(), debit.getAccountId(), credit.getAccountId(),
+        log.info(
+                "Replaying idempotent transfer: txnId={} fromAccount={} toAccount={} amount={}",
+                existing.getTxnId(),
+                debit.getAccountId(),
+                credit.getAccountId(),
                 credit.getAmount().toPlainString());
 
         // Echo the *stored* values so the caller can't be misled into believing
@@ -422,8 +571,7 @@ public class TransferService {
                 credit.getAccountId(),
                 credit.getAmount().toPlainString(),
                 existing.getMessage(),
-                existing.getSettlementTime().toInstant(ZoneOffset.UTC)
-        );
+                existing.getSettlementTime().toInstant(ZoneOffset.UTC));
     }
 
     /**
@@ -441,27 +589,24 @@ public class TransferService {
     private static BigDecimal validatedAmount(String raw) {
         if (raw == null || raw.isBlank()) {
             log.warn("Transfer rejected: missing amount");
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT",
-                    "Field 'amount' is required.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT", "Field 'amount' is required.");
         }
         if (raw.length() > MAX_AMOUNT_STRING_LENGTH) {
-            log.warn("Transfer rejected: amount string length {} exceeds {}",
-                    raw.length(), MAX_AMOUNT_STRING_LENGTH);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT",
-                    "Field 'amount' is too long.");
+            log.warn("Transfer rejected: amount string length {} exceeds {}", raw.length(), MAX_AMOUNT_STRING_LENGTH);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT", "Field 'amount' is too long.");
         }
         BigDecimal amount;
         try {
             amount = new BigDecimal(raw);
         } catch (NumberFormatException e) {
             log.warn("Transfer rejected: unparseable amount='{}'", raw);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT",
-                    "Field 'amount' must be a valid decimal number.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "INVALID_AMOUNT", "Field 'amount' must be a valid decimal number.");
         }
         if (amount.signum() <= 0) {
             log.warn("Transfer rejected: non-positive amount={}", amount);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT",
-                    "Field 'amount' must be greater than zero.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "INVALID_AMOUNT", "Field 'amount' must be greater than zero.");
         }
         // Normalise away trailing zeros so "10.000" is accepted, then bound scale and
         // magnitude to DECIMAL(19,2). stripTrailingZeros is cheap here (unscaled value
@@ -470,13 +615,15 @@ public class TransferService {
         BigDecimal normalized = amount.stripTrailingZeros();
         if (normalized.scale() > MAX_AMOUNT_SCALE) {
             log.warn("Transfer rejected: amount {} has more than {} decimal places", raw, MAX_AMOUNT_SCALE);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_AMOUNT",
                     "Field 'amount' must have at most " + MAX_AMOUNT_SCALE + " decimal places.");
         }
         if ((long) normalized.precision() - normalized.scale() > MAX_AMOUNT_INTEGER_DIGITS) {
             log.warn("Transfer rejected: amount {} exceeds DECIMAL(19,2) range", raw);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMOUNT",
-                    "Field 'amount' exceeds the maximum supported value.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "INVALID_AMOUNT", "Field 'amount' exceeds the maximum supported value.");
         }
         return amount;
     }

@@ -1,10 +1,10 @@
 package io.paradaux.business.api;
 
 import io.paradaux.business.model.Firm;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Firm lookup and modification operations.
@@ -15,12 +15,46 @@ import java.util.UUID;
 public interface FirmApi {
 
     /**
+     * Resolve a shop alias (without B:@) to a live firm's unarchived Treasury account.
+     * Returns null for an unknown or inactive alias. Aliases are 1–12 ASCII letters, case-insensitive; existing API
+     * implementations without alias support return null.
+     */
+    default @Nullable Integer resolveShopAlias(String alias) {
+        return null;
+    }
+
+    /**
      * Looks up a firm by its display name or numeric ID.
      *
      * @param nameOrId the firm name or ID string
      * @return the firm, or {@code null} if not found
      */
+    @Nullable
     Firm getFirm(String nameOrId);
+
+    /**
+     * Typed lookup by numeric firm id — prefer this over {@link #getFirm(String)}
+     * when you already hold the id, so callers aren't forced through the
+     * name-or-id string parser (ADT-108). Default-implemented for source/binary
+     * compatibility with existing {@code FirmApi} implementations.
+     *
+     * @param firmId the firm id
+     * @return the firm, or {@code null} if not found
+     */
+    default @Nullable Firm getFirmById(int firmId) {
+        return getFirm(Integer.toString(firmId));
+    }
+
+    /**
+     * Typed lookup by display name — the name-only counterpart of
+     * {@link #getFirmById(int)} (ADT-108).
+     *
+     * @param name the firm display name
+     * @return the firm, or {@code null} if not found
+     */
+    default @Nullable Firm getFirmByName(String name) {
+        return getFirm(name);
+    }
 
     /**
      * Lists firms with pagination.
@@ -51,8 +85,15 @@ public interface FirmApi {
     /**
      * Disbands (archives) a firm. The actor must be the firm's proprietor.
      *
+     * <p>Each of the firm's accounts is drained to the proprietor independently. If
+     * any could not be drained the firm is still archived, the affected accounts
+     * keep their balance, and this throws {@link IllegalStateException}; calling it
+     * again on the same firm retries just those accounts.
+     *
      * @param firmId  the firm ID
      * @param actorId UUID of the player performing the action
+     * @throws IllegalStateException if the actor is not the proprietor, or the
+     *                               firm was disbanded but not fully drained
      */
     void disbandFirm(int firmId, UUID actorId);
 
@@ -88,12 +129,55 @@ public interface FirmApi {
      *
      * <p>Because each Treasury account belongs to at most one firm, this returns
      * {@code null} when the account is a personal account or is not registered
-     * with any firm.
+     * with any firm. Removed links are excluded; archived firms with remaining
+     * links are included. This is a relationship lookup, not an access check.
      *
      * @param accountId the Treasury account ID (as returned by {@code Account.getAccountId()})
      * @return the owning firm, or {@code null} if the account is not a firm account
      */
+    @Nullable
     Firm getFirmByAccountId(int accountId);
+
+    /**
+     * Lists Treasury account IDs currently linked to a firm (not just its default).
+     * Removed links are excluded; an unknown firm or one without links returns an
+     * empty list. Archived firms may retain links after an incomplete disband, so
+     * this lookup includes those links. It does not check Treasury account status
+     * or grant permission to use an account. No ordering is guaranteed.
+     *
+     * @param firmId the firm ID
+     * @return the linked account IDs, never null
+     * @throws UnsupportedOperationException if an older provider does not support
+     *         this lookup; upgrade the Business plugin alongside the API
+     */
+    default List<Integer> getAccountIds(int firmId) {
+        throw new UnsupportedOperationException("Firm account lookup requires an updated Business provider");
+    }
+
+    /**
+     * Reads the firm's configured default Treasury account ID without creating an
+     * account or falling back to another linked account. Includes archived firms,
+     * matching {@link #getFirmById(int)}; this is not an account-access check.
+     *
+     * @param firmId the firm ID
+     * @return the configured account ID, or null for an unknown firm or unset default
+     */
+    default @Nullable Integer getDefaultAccountId(int firmId) {
+        Firm firm = getFirmById(firmId);
+        return firm == null ? null : firm.getDefaultAccountId();
+    }
+
+    /**
+     * Resolves a Treasury account ID to its linked firm ID, including archived
+     * firms. Removed links, personal accounts and unknown accounts return null.
+     *
+     * @param accountId the Treasury account ID
+     * @return the firm ID, or null if no linked firm exists
+     */
+    default @Nullable Integer getFirmIdByAccountId(int accountId) {
+        Firm firm = getFirmByAccountId(accountId);
+        return firm == null ? null : firm.getFirmId();
+    }
 
     /**
      * Returns a firm's total balance, summed across all of its treasury accounts.

@@ -1,0 +1,55 @@
+{
+  "domain": "https://secrets.paradaux.io",
+  "scopes": {
+    "democracycraft": [
+      {
+        "project_id": "REPLACE_WITH_PROJECT_ID",
+        "environment": "dev",
+        "path": "/hibernia-economy/staging/sftp/democracycraft",
+        "keys": {
+          "SFTP_HOST": "SFTP_HOST",
+          "SFTP_PORT": "SFTP_PORT",
+          "SFTP_USER": "SFTP_USER",
+          "SFTP_PASS": "SFTP_PASS"
+        }
+      }
+    ],
+    "statecraft": [
+      {
+        "project_id": "REPLACE_WITH_PROJECT_ID",
+        "environment": "dev",
+        "path": "/hibernia-economy/staging/sftp/statecraft",
+        "keys": {
+          "SFTP_HOST": "SFTP_HOST",
+          "SFTP_PORT": "SFTP_PORT",
+          "SFTP_USER": "SFTP_USER",
+          "SFTP_PASS": "SFTP_PASS"
+        }
+      }
+    ],
+    "staging": [
+      {
+        "project_id": "REPLACE_WITH_PROJECT_ID",
+        "environment": "dev",
+        "path": "/hibernia-economy/staging/server",
+        "keys": {
+          "SANDBOX_DB_PASSWORD": "SANDBOX_DB_PASSWORD",
+          "VOTIFIER_DEFAULT": "VOTIFIER_DEFAULT",
+          "VOTIFIER_MCSL": "VOTIFIER_MCSL",
+          "REALTY_QUERY_SECRET": "REALTY_QUERY_SECRET",
+          "DISCORDSRV_STAGING_TOKEN": "DISCORDSRV_STAGING_TOKEN"
+        }
+      },
+      {
+        "project_id": "REPLACE_WITH_PROJECT_ID",
+        "environment": "dev",
+        "path": "/development/economy-dev-server",
+        "keys": {
+          "ECONOMY_DEV_DB_PASSWORD": "DB_PASSWORD",
+          "TREASURY_API_JWT": "JWT_SECRET",
+          "TREASURY_ADMIN_TOKEN": "TREASURY_ADMIN_TOKEN"
+        }
+      }
+    ]
+  }
+}

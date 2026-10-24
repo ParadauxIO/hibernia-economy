@@ -1,5 +1,14 @@
 package io.paradaux.business.api.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmEmployee;
 import io.paradaux.business.model.FirmPlayer;
@@ -13,31 +22,40 @@ import io.paradaux.business.services.FirmRoleService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.FirmTransactionService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class BusinessApiImplTest {
 
-    @Mock FirmService firmService;
-    @Mock FirmStaffService staffService;
-    @Mock FirmRoleService roleService;
-    @Mock FirmRequestService requestService;
-    @Mock FirmPlayerService playerService;
-    @Mock FirmAccountService accountService;
-    @Mock FirmTransactionService transactionService;
+    @Mock
+    FirmService firmService;
+
+    @Mock
+    FirmStaffService staffService;
+
+    @Mock
+    FirmRoleService roleService;
+
+    @Mock
+    FirmRequestService requestService;
+
+    @Mock
+    FirmPlayerService playerService;
+
+    @Mock
+    FirmAccountService accountService;
+
+    @Mock
+    FirmTransactionService transactionService;
 
     private BusinessApiImpl api;
     private final UUID actor = UUID.randomUUID();
@@ -45,7 +63,22 @@ class BusinessApiImplTest {
 
     @BeforeEach
     void setUp() {
-        api = new BusinessApiImpl(firmService, staffService, roleService, requestService, playerService, accountService, transactionService);
+        api = new BusinessApiImpl(
+                firmService,
+                staffService,
+                roleService,
+                requestService,
+                playerService,
+                accountService,
+                transactionService);
+    }
+
+    @Test
+    void firms_shopAliasResolvesThroughAccountService() {
+        when(accountService.resolveShopAlias("acme")).thenReturn(46);
+        when(accountService.resolveShopAlias("unknown")).thenReturn(null);
+        assertThat(api.firms().resolveShopAlias("acme")).isEqualTo(46);
+        assertThat(api.firms().resolveShopAlias("unknown")).isNull();
     }
 
     // ---- FirmApi delegate ----
@@ -89,45 +122,56 @@ class BusinessApiImplTest {
     }
 
     @Test
-    void firms_disbandFirm_requiresProprietor() {
+    void firms_disbandFirm_requiresProprietor_andNeverStartsTheDrain() {
         when(firmService.isProprietor(7, actor)).thenReturn(false);
         assertThatThrownBy(() -> api.firms().disbandFirm(7, actor))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Only the proprietor");
+        verify(firmService, never()).disbandFirm(anyInt(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true}) // fresh disband, or a resumed partial one
+    void firms_disbandFirm_completeDrain_returnsNormally(boolean resumed) {
+        when(firmService.isProprietor(7, actor)).thenReturn(true);
+        when(firmService.disbandFirm(7, actor)).thenReturn(new FirmService.DisbandResult(resumed, List.of()));
+        assertThatCode(() -> api.firms().disbandFirm(7, actor)).doesNotThrowAnyException();
+        verify(firmService).disbandFirm(7, actor);
     }
 
     @Test
-    void firms_disbandFirm_succeedsForProprietor() {
+    void firms_disbandFirm_partialDrain_isSurfacedNotReportedAsSuccess() {
         when(firmService.isProprietor(7, actor)).thenReturn(true);
-        api.firms().disbandFirm(7, actor);
-        verify(firmService).disbandFirm("7", actor);
+        when(firmService.disbandFirm(7, actor)).thenReturn(new FirmService.DisbandResult(false, List.of(41, 42)));
+        assertThatThrownBy(() -> api.firms().disbandFirm(7, actor))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("2 account(s) could not be drained");
     }
 
     @Test
     void firms_setHq_requiresAdmin() {
         when(staffService.hasPermission(7, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> api.firms().setHq(7, "plot", actor))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> api.firms().setHq(7, "plot", actor)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void firms_setHq_succeedsForAdmin() {
         when(staffService.hasPermission(7, actor, RolePermission.ADMIN)).thenReturn(true);
         api.firms().setHq(7, "plot", actor);
-        verify(firmService).updateFirmHq("7", "plot", actor);
+        verify(firmService).updateFirmHq(7, "plot", actor);
     }
 
     @Test
     void firms_setDiscord_requiresAdmin() {
         when(staffService.hasPermission(7, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> api.firms().setDiscord(7, "url", actor))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> api.firms().setDiscord(7, "url", actor)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void firms_setDiscord_succeedsForAdmin() {
         when(staffService.hasPermission(7, actor, RolePermission.ADMIN)).thenReturn(true);
         api.firms().setDiscord(7, "url", actor);
-        verify(firmService).updateFirmDiscord("7", "url", actor);
+        verify(firmService).updateFirmDiscord(7, "url", actor);
     }
 
     @Test
@@ -146,21 +190,64 @@ class BusinessApiImplTest {
     void firms_getFirmByAccountId_resolvesById() {
         Firm f = new Firm();
         when(accountService.getFirmIdByAccountId(99)).thenReturn(7);
-        when(firmService.getAnyFirmByNameOrId("7")).thenReturn(f);
+        when(firmService.getAnyFirmById(7)).thenReturn(f);
         assertThat(api.firms().getFirmByAccountId(99)).isSameAs(f);
+    }
+
+    @Test
+    void firms_olderProviderReportsUnsupportedAccountListing() {
+        var legacy = org.mockito.Mockito.mock(
+                io.paradaux.business.api.FirmApi.class, org.mockito.Mockito.CALLS_REAL_METHODS);
+        assertThatThrownBy(() -> legacy.getAccountIds(7)).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void firms_accountIdsIncludeAllLinksAndRoundTripToArchivedFirm() {
+        Firm firm = new Firm();
+        firm.setFirmId(7);
+        firm.setArchived(true);
+        when(accountService.listAccountIds(7)).thenReturn(List.of(41, 42));
+        when(firmService.getAnyFirmById(7)).thenReturn(firm);
+        for (int accountId : List.of(41, 42)) {
+            when(accountService.getFirmIdByAccountId(accountId)).thenReturn(7);
+        }
+
+        assertThat(api.firms().getAccountIds(7)).containsExactlyInAnyOrder(41, 42);
+        for (int accountId : api.firms().getAccountIds(7)) {
+            assertThat(api.firms().getFirmIdByAccountId(accountId)).isEqualTo(7);
+            assertThat(api.firms().getFirmByAccountId(accountId)).isSameAs(firm);
+        }
+    }
+
+    @Test
+    void firms_unknownOrUnlinkedAccountsHaveNoResolution() {
+        when(accountService.listAccountIds(999)).thenReturn(List.of());
+        assertThat(api.firms().getAccountIds(999)).isEmpty();
+        assertThat(api.firms().getFirmIdByAccountId(999)).isNull();
+        assertThat(api.firms().getDefaultAccountId(999)).isNull();
+    }
+
+    @Test
+    void firms_defaultAccountUsesConfiguredValueWithoutFallback() {
+        Firm firm = new Firm();
+        firm.setDefaultAccountId(42);
+        when(firmService.getAnyFirmById(7)).thenReturn(firm);
+        assertThat(api.firms().getDefaultAccountId(7)).isEqualTo(42);
+        firm.setDefaultAccountId(null);
+        assertThat(api.firms().getDefaultAccountId(7)).isNull();
     }
 
     // ---- StaffApi delegate ----
 
     @Test
     void staff_getEmployees_delegates() {
-        when(staffService.getCurrentEmployees("7")).thenReturn(List.of(new FirmEmployee()));
+        when(staffService.getCurrentEmployees(7)).thenReturn(List.of(new FirmEmployee()));
         assertThat(api.staff().getEmployees(7)).hasSize(1);
     }
 
     @Test
     void staff_getOnlineEmployees_delegates() {
-        when(staffService.getOnlineEmployees("7")).thenReturn(List.of());
+        when(staffService.getOnlineEmployees(7)).thenReturn(List.of());
         assertThat(api.staff().getOnlineEmployees(7)).isEmpty();
     }
 
@@ -191,38 +278,40 @@ class BusinessApiImplTest {
     @Test
     void staff_fire_delegates() {
         api.staff().fire(7, target, actor);
-        verify(staffService).fireEmployee("7", target, actor);
+        verify(staffService).fireEmployee(7, target, actor);
     }
 
     @Test
     void staff_promote_delegates() {
-        when(staffService.promoteEmployee("7", target, actor)).thenReturn("Manager");
+        when(staffService.promoteEmployee(7, target, actor)).thenReturn("Manager");
         assertThat(api.staff().promote(7, target, actor)).isEqualTo("Manager");
     }
 
     @Test
     void staff_demote_delegates() {
-        when(staffService.demoteEmployee("7", target, actor)).thenReturn("Employee");
+        when(staffService.demoteEmployee(7, target, actor)).thenReturn("Employee");
         assertThat(api.staff().demote(7, target, actor)).isEqualTo("Employee");
     }
 
     @Test
     void staff_resign_delegates() {
         api.staff().resign(7, target);
-        verify(staffService).resignFromFirm("7", target);
+        verify(staffService).resignFromFirm(7, target);
     }
 
     @Test
     void staff_hasPermissionForAccount_unknown_returnsFalse() {
         when(accountService.getFirmIdByAccountId(99)).thenReturn(null);
-        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN)).isFalse();
+        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN))
+                .isFalse();
     }
 
     @Test
     void staff_hasPermissionForAccount_resolvesAndChecks() {
         when(accountService.getFirmIdByAccountId(99)).thenReturn(7);
         when(staffService.hasPermission(7, target, RolePermission.ADMIN)).thenReturn(true);
-        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN)).isTrue();
+        assertThat(api.staff().hasPermissionForAccount(99, target, RolePermission.ADMIN))
+                .isTrue();
     }
 
     // ---- RoleApi delegate ----
@@ -235,33 +324,33 @@ class BusinessApiImplTest {
 
     @Test
     void roles_getRolePermissions_delegates() {
-        when(roleService.getFirmRolePermissions(7, "Lead")).thenReturn(List.of(
-                new FirmRolePermission(7, "Lead", RolePermission.ADMIN)));
+        when(roleService.getFirmRolePermissions(7, "Lead"))
+                .thenReturn(List.of(new FirmRolePermission(7, "Lead", RolePermission.ADMIN)));
         assertThat(api.roles().getRolePermissions(7, "Lead")).hasSize(1);
     }
 
     @Test
     void roles_createRole_delegates() {
         api.roles().createRole(7, "Lead", 3, actor);
-        verify(roleService).createRole("7", "Lead", 3, actor);
+        verify(roleService).createRole(7, "Lead", 3, actor);
     }
 
     @Test
     void roles_deleteRole_delegates() {
         api.roles().deleteRole(7, "Lead", actor);
-        verify(roleService).deleteRole("7", "Lead", actor);
+        verify(roleService).deleteRole(7, "Lead", actor);
     }
 
     @Test
     void roles_addPermission_delegates() {
         api.roles().addPermission(7, "Lead", "ADMIN", actor);
-        verify(roleService).addRolePermission("7", "Lead", "ADMIN", actor);
+        verify(roleService).addRolePermission(7, "Lead", "ADMIN", actor);
     }
 
     @Test
     void roles_removePermission_delegates() {
         api.roles().removePermission(7, "Lead", "ADMIN", actor);
-        verify(roleService).removeRolePermission("7", "Lead", "ADMIN", actor);
+        verify(roleService).removeRolePermission(7, "Lead", "ADMIN", actor);
     }
 
     // ---- RequestApi delegate ----
@@ -269,25 +358,25 @@ class BusinessApiImplTest {
     @Test
     void requests_offerEmployment_delegates() {
         api.requests().offerEmployment(7, target, actor);
-        verify(requestService).offerEmployment("7", target, actor);
+        verify(requestService).offerEmployment(7, target, actor);
     }
 
     @Test
     void requests_rescindOffer_delegates() {
         api.requests().rescindOffer(7, target, actor);
-        verify(requestService).rescindEmploymentOffer("7", target, actor);
+        verify(requestService).rescindEmploymentOffer(7, target, actor);
     }
 
     @Test
     void requests_acceptOffer_delegates() {
-        api.requests().acceptOffer(7, target);
-        verify(requestService).acceptEmploymentOffer("7", target);
+        api.requests().acceptOffer(7, target, actor);
+        verify(requestService).acceptEmploymentOffer(7, target, actor);
     }
 
     @Test
     void requests_rejectOffer_delegates() {
-        api.requests().rejectOffer(7, target);
-        verify(requestService).rejectEmploymentOffer("7", target);
+        api.requests().rejectOffer(7, target, actor);
+        verify(requestService).rejectEmploymentOffer(7, target, actor);
     }
 
     // ---- PlayerApi delegate ----

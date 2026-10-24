@@ -40,7 +40,7 @@ export async function searchGlobal(q: string, limit: number): Promise<SearchResu
               NULL AS firmId, NULL AS firmName,
               NULL AS playerUuidBin, NULL AS playerName
       FROM accounts a
-      LEFT JOIN firm_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
+      LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
       LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
       WHERE a.is_archived = 0
         AND (a.display_name LIKE CONCAT('%', ${q}, '%')
@@ -62,7 +62,7 @@ export async function searchGlobal(q: string, limit: number): Promise<SearchResu
             NULL AS accountId, NULL AS accountType, NULL AS balance,
             NULL AS firmId, NULL AS firmName,
             fp.player_uuid_bin AS playerUuidBin, fp.current_name AS playerName
-      FROM firm_players fp
+      FROM economy_players fp
       WHERE fp.current_name LIKE CONCAT('%', ${q}, '%')
       LIMIT ${limit})
   `.execute(db);

@@ -1,5 +1,9 @@
 package io.paradaux.treasuryrestapi.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 /**
  * Request body for POST /transfers.
  * <ul>
@@ -8,5 +12,12 @@ package io.paradaux.treasuryrestapi.dto;
  *   <li>{@code amount} — decimal string to avoid IEEE 754 precision loss.</li>
  *   <li>{@code memo} — optional, max 255 chars.</li>
  * </ul>
+ *
+ * <p>Bean-validation here is a declarative first line of defence; the
+ * authoritative amount/account checks still live in {@code TransferService}.
  */
-public record TransferRequest(Long fromAccountId, Long toAccountId, String amount, String memo) {}
+public record TransferRequest(
+        Long fromAccountId,
+        @NotNull Long toAccountId,
+        @NotBlank String amount,
+        @Size(max = 255) String memo) {}

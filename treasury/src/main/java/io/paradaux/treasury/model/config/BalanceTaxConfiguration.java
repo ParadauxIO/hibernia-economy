@@ -1,16 +1,16 @@
 package io.paradaux.treasury.model.config;
 
 import com.google.inject.Inject;
+import io.paradaux.common.BalanceTaxBrackets;
 import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.Treasury;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.math.BigDecimal;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.TreeMap;
 
 /**
  * Configuration for the personal balance tax feature.
@@ -26,38 +26,35 @@ import java.util.TreeMap;
  *   tax         = balance × weekly_rate × proration
  * </pre>
  *
+ * <p>The bracket model (defaults, parsing, rate lookup) lives in the shared,
+ * framework-free {@link BalanceTaxBrackets} (ADT-186); this class only reads the
+ * Bukkit config and holds the live snapshot.
+ *
  * <p>Config location: {@code config.yml} under the {@code tax.balance:} key.
  */
 @Slf4j
 public class BalanceTaxConfiguration {
 
-    private static final NavigableMap<BigDecimal, BigDecimal> DEFAULT_BRACKETS;
-
-    static {
-        NavigableMap<BigDecimal, BigDecimal> m = new TreeMap<>();
-        m.put(new BigDecimal("0.00"),       BigDecimal.ZERO);
-        m.put(new BigDecimal("100000.00"),  new BigDecimal("0.01"));
-        m.put(new BigDecimal("200000.00"),  new BigDecimal("0.012"));
-        m.put(new BigDecimal("300000.00"),  new BigDecimal("0.014"));
-        m.put(new BigDecimal("500000.00"),  new BigDecimal("0.018"));
-        DEFAULT_BRACKETS = Collections.unmodifiableNavigableMap(m);
+    /** Immutable values retained by an operation even when a reload publishes newer values. */
+    public record Snapshot(boolean enabled, String governmentAccount, BalanceTaxBrackets brackets) {
+        public BigDecimal getWeeklyRate(BigDecimal balance) { return brackets.weeklyRate(balance); }
+        public boolean isEnabled() { return enabled; }
+        public String getGovernmentAccount() { return governmentAccount; }
+        public BalanceTaxBrackets getBrackets() { return brackets; }
     }
 
-    // Mutable so {@link #reload()} can refresh them at runtime (Guice singleton,
-    // read live per login). {@code brackets} is replaced wholesale.
-    private boolean enabled;
-    private String governmentAccount;
-    /** Sorted ascending by minimum balance. Key = bracket floor, value = weekly rate. */
-    private volatile NavigableMap<BigDecimal, BigDecimal> brackets;
-    /** Set only via the {@code @Inject} ctor; null for test-factory instances. */
-    private Treasury plugin;
+    private volatile Snapshot snapshot;
+    private final Treasury plugin;
+
+    public Snapshot snapshot() { return snapshot; }
 
     private BalanceTaxConfiguration(boolean enabled, String governmentAccount,
                                     NavigableMap<BigDecimal, BigDecimal> brackets) {
-        this.enabled = enabled;
-        this.governmentAccount = (governmentAccount == null || governmentAccount.isBlank())
+        this.plugin = null;
+        governmentAccount = (governmentAccount == null || governmentAccount.isBlank())
                 ? "DCGovernment" : governmentAccount;
-        this.brackets = Collections.unmodifiableNavigableMap(new TreeMap<>(brackets));
+        BalanceTaxBrackets parsedBrackets = BalanceTaxBrackets.of(brackets);
+        this.snapshot = new Snapshot(enabled, governmentAccount, parsedBrackets);
     }
 
     /** Test-only factory: bypasses Bukkit config parsing. Production code uses the {@code @Inject} ctor. */
@@ -69,57 +66,56 @@ public class BalanceTaxConfiguration {
     @Inject
     public BalanceTaxConfiguration(Treasury plugin) {
         this.plugin = plugin;
-        load();
+        snapshot = read(plugin.getConfig());
     }
 
     /** Re-reads from the (already-reloaded) config. No-op for test instances. */
     public void reload() {
-        if (plugin != null) load();
+        if (plugin != null) snapshot = prepareReload(plugin.getConfig());
     }
 
-    private void load() {
-        FileConfiguration cfg = plugin.getConfig();
+    /** Parse completely before publishing; exceptions leave the live snapshot untouched. */
+    public Snapshot prepareReload(FileConfiguration cfg) {
+        ReloadValidation.section(cfg, "tax.balance");
+        ReloadValidation.scalar(cfg, "tax.balance.enabled", Boolean.class);
+        ReloadValidation.scalar(cfg, "tax.balance.government-account", String.class);
+        ReloadValidation.entries(cfg, "tax.balance.brackets", true, true);
+        return read(cfg);
+    }
 
-        this.enabled = cfg.getBoolean("tax.balance.enabled", false);
+    public void publish(Snapshot replacement) {
+        snapshot = java.util.Objects.requireNonNull(replacement);
+    }
+
+    private Snapshot read(FileConfiguration cfg) {
+
+        boolean enabled = cfg.getBoolean("tax.balance.enabled", false);
 
         String gov = cfg.getString("tax.balance.government-account", "DCGovernment");
-        this.governmentAccount = (gov == null || gov.isBlank()) ? "DCGovernment" : gov;
+        String governmentAccount = (gov == null || gov.isBlank()) ? "DCGovernment" : gov;
 
+        Map<String, String> raw = new LinkedHashMap<>();
         ConfigurationSection sec = cfg.getConfigurationSection("tax.balance.brackets");
-        NavigableMap<BigDecimal, BigDecimal> map = new TreeMap<>();
         if (sec != null) {
             for (String key : sec.getKeys(false)) {
-                try {
-                    BigDecimal min  = new BigDecimal(key);
-                    BigDecimal rate = new BigDecimal(sec.getString(key, "0"));
-                    if (rate.compareTo(BigDecimal.ZERO) < 0 || rate.compareTo(BigDecimal.ONE) > 0) {
-                        log.warn("Balance tax bracket rate for floor '{}' is out of range [0,1]: {} — skipping", key, rate);
-                        continue;
-                    }
-                    map.put(min, rate);
-                } catch (NumberFormatException e) {
-                    log.warn("Invalid balance tax bracket key '{}' — skipping", key);
-                }
+                raw.put(key, sec.getString(key, "0"));
             }
         }
-
-        if (map.isEmpty()) {
-            map.putAll(DEFAULT_BRACKETS);
-        }
-        this.brackets = Collections.unmodifiableNavigableMap(map);
+        BalanceTaxBrackets brackets = BalanceTaxBrackets.fromRawEntries(raw, log::warn);
 
         if (enabled) {
             log.info("Personal balance tax enabled: {} bracket(s), government-account={}",
                     brackets.size(), governmentAccount);
         }
+        return new Snapshot(enabled, governmentAccount, brackets);
     }
 
     public boolean isEnabled() {
-        return enabled;
+        return snapshot.enabled();
     }
 
     public String getGovernmentAccount() {
-        return governmentAccount;
+        return snapshot.governmentAccount();
     }
 
     /**
@@ -131,7 +127,6 @@ public class BalanceTaxConfiguration {
      * @return the weekly rate (e.g. {@code 0.01} for 1 %), or {@code BigDecimal.ZERO} if none match
      */
     public BigDecimal getWeeklyRate(BigDecimal balance) {
-        Map.Entry<BigDecimal, BigDecimal> entry = brackets.floorEntry(balance);
-        return entry != null ? entry.getValue() : BigDecimal.ZERO;
+        return snapshot.getWeeklyRate(balance);
     }
 }

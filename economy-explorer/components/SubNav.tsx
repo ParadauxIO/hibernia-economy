@@ -24,6 +24,7 @@ export function SubNav({ items }: { items: SubNavItem[] }) {
             key={it.href}
             href={it.href as Route}
             className={active ? 'active' : ''}
+            aria-current={active ? 'page' : undefined}
             prefetch={false}
           >
             {it.label}
@@ -37,18 +38,19 @@ export function SubNav({ items }: { items: SubNavItem[] }) {
 // Mirrors the SPA's ECONOMY_SUB / MARKET_SUB lists in ExplorerLayout.
 export const ECONOMY_SUB: SubNavItem[] = [
   { href: '/', label: 'Overview', match: (p) => p === '/' },
-  { href: '/economy/health', label: 'Health', match: (p) => p.startsWith('/economy/health') },
+  { href: '/economy/wealth', label: 'Wealth', match: (p) => p.startsWith('/economy/wealth') },
   { href: '/money-flow', label: 'Money Flow', match: (p) => p.startsWith('/money-flow') },
+  { href: '/economy/taxation', label: 'Taxation', match: (p) => p.startsWith('/economy/taxation') },
   { href: '/government', label: 'Government', match: (p) => p.startsWith('/government') },
 ];
 
 // Items + Shops are public. The per-firm market "Firms" tab was removed (it
-// duplicated the main Firms page). The raw Sales feed is admin-only — regular
+// duplicated the main Firms page). The raw Sales feed is for moderators and admins — regular
 // players don't need to know it exists.
 export const MARKET_SUB: SubNavItem[] = [
-  { href: '/market', label: 'Overview', match: (p) => p === '/market' },
-  { href: '/chestshop', label: 'Items', match: (p) => p.startsWith('/chestshop/items') || p === '/chestshop' },
-  { href: '/chestshop/shops', label: 'Shops', match: (p) => p.startsWith('/chestshop/shops') },
+  { href: '/market', label: 'Browse Items', match: (p) => p === '/market' || p === '/chestshop' || p.startsWith('/chestshop/items') },
+  { href: '/chestshop/shops', label: 'Find Shops', match: (p) => p.startsWith('/chestshop/shops') },
+  { href: '/market/activity', label: 'Activity', match: (p) => p.startsWith('/market/activity') },
 ];
 
 const MARKET_SALES: SubNavItem = {
@@ -58,17 +60,17 @@ const MARKET_SALES: SubNavItem = {
 };
 
 // Pure-function path-matcher so the nav can choose which list to render.
-export function pickSubNav(path: string, isAdmin: boolean): SubNavItem[] | null {
+export function pickSubNav(path: string, canInvestigate: boolean): SubNavItem[] | null {
   if (
     path === '/' ||
-    path.startsWith('/economy/health') ||
+    path.startsWith('/economy/') ||
     path.startsWith('/money-flow') ||
     path.startsWith('/government')
   ) {
     return ECONOMY_SUB;
   }
   if (path.startsWith('/market') || path.startsWith('/chestshop')) {
-    return isAdmin ? [...MARKET_SUB, MARKET_SALES] : MARKET_SUB;
+    return canInvestigate ? [...MARKET_SUB, MARKET_SALES] : MARKET_SUB;
   }
   return null;
 }

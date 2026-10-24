@@ -1,7 +1,7 @@
 ---
 title: Plugin configuration
 order: 10
-description: Where each economy plugin's config lives, how reloads work, and what every setting does.
+description: Where each economy plugin's config lives, how reloads work, and how to apply changes.
 ---
 
 # Plugin configuration
@@ -22,9 +22,9 @@ server-side files (`plugins/<Plugin>/…`), edited on the host, not from the web
 - **[Business configuration](/docs/admin/config-business)** — firm ownership limit and the
   weekly firm balance tax.
 - **[ChestShop configuration](/docs/admin/config-chestshop)** — trade limits and rules
-  (note: ChestShop **sales tax is configured in Treasury**, not here).
+  and sales-tax percentages (Treasury collects the resulting tax).
 - **[Realty configuration](/docs/admin/config-realty)** — property **tax** (the formula,
-  brackets, and exemption), plus leases, signs, and tags.
+  ordered rules and per-rule exemptions), plus leases, signs, and tags.
 
 ## When changes take effect
 
@@ -33,9 +33,9 @@ edit is live:
 
 | Plugin | How to apply a change |
 |---|---|
-| **Treasury** | **Restart only.** There is no reload command; config is read once at enable and cached. |
-| **Business** | **Restart for real changes.** `/business reload` only refreshes message strings — it does *not* re-read the tax brackets, firm limit, or database. |
-| **ChestShop** | Restart (stock ChestShop reads its config at enable). |
+| **Treasury** | **`/treasury reload` applies most changes live** — it re-reads `config.yml` + `messages.properties`, refreshing salaries, tax brackets/rates, government account names, and log level. Only `database.*`, the tax/salary schedule intervals, and the `economy.format` currency pattern need a restart. |
+| **Business** | **`/business reload` applies most changes live** — it re-reads `config.yml`, refreshing the firm ownership limit, the creation cooldown, and the balance-tax brackets (plus message strings). Only the database connection needs a restart. |
+| **ChestShop** | **`/chestshop reload`** (alias `/cs reload`) re-reads `config.yml` live; a full restart isn't required. |
 | **Realty** | **`/realty reload` applies most changes live**, including `taxes.yml` (it takes effect on the next tax cycle). Database changes still need a restart. |
 
 ## How the pieces fit together
@@ -48,3 +48,8 @@ edit is live:
   `DCGovernment`).
 - **ChestShop** stores no money — every trade moves funds through Treasury, and ChestShop
   sales tax is collected by Treasury's tax API into Treasury's default tax account.
+
+## Website and API services
+
+[TreasuryAPI and service configuration](/docs/admin/config-services) covers the
+key issuer, Keycloak, REST API, Explorer, Redis and monitoring.

@@ -8,6 +8,7 @@ import io.paradaux.treasuryrestapi.dto.WebhookResponse;
 import io.paradaux.treasuryrestapi.ratelimit.RateLimit;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.WebhookService;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -44,7 +45,7 @@ public class WebhookController {
     @RateLimit(personalPerMinute = 20, businessPerMinute = 60)
     public ResponseEntity<CreateWebhookResponse> create(
             @AuthenticationPrincipal VerifiedToken verified,
-            @RequestBody CreateWebhookRequest request) {
+            @Valid @RequestBody CreateWebhookRequest request) {
         log.info("POST /webhooks by keyId={}", verified.keyId());
         CreateWebhookResponse response = webhookService.create(verified, request != null ? request.url() : null);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

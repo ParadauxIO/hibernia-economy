@@ -1,22 +1,28 @@
 import 'server-only';
 import { sql } from 'kysely';
 import { db } from '@/lib/db';
+import { bridgePairs } from './bridgeAnalytics';
 
 export interface DailyVolumePoint { date: string; txn_count: number; total_volume: string }
 export interface DailyDeltaByType { date: string; account_type: string; balance: string }
 export interface ActivePlayers { active1d: number; active7d: number; active30d: number; registered: number }
 export interface DayCount { date: string; count: number }
 
-/** Mirrors LedgerExplorerMapper.getDailyVolume (line 368-376). */
+/**
+ * Daily economic-event count and volume, estimating adjacent bridge pairs as one. Reads the
+ * trigger-maintained ledger_txn_volume (V36) with a bounded bridge correction.
+ * Unmatched and multi-posting transactions retain their raw positive volume.
+ */
 export async function getDailyVolume(days: number): Promise<DailyVolumePoint[]> {
   const r = await sql<{ txn_date: string; txn_count: string | number; total_volume: string }>`
-    SELECT DATE_FORMAT(DATE(lt.settlement_time), '%Y-%m-%d') AS txn_date,
-           COUNT(DISTINCT lt.txn_id) AS txn_count,
-           COALESCE(SUM(CASE WHEN lp.amount > 0 THEN lp.amount ELSE 0 END), 0.00) AS total_volume
-    FROM ledger_txns lt
-    LEFT JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
-    WHERE lt.settlement_time >= NOW() - INTERVAL ${days} DAY
-    GROUP BY DATE(lt.settlement_time)
+    WITH ${bridgePairs(days)}
+    SELECT DATE_FORMAT(DATE(settlement_time), '%Y-%m-%d') AS txn_date,
+           COUNT(*) AS txn_count,
+           COALESCE(SUM(volume), 0.00) AS total_volume
+    FROM ledger_txn_volume v
+    WHERE settlement_time >= NOW() - INTERVAL ${days} DAY
+      AND NOT EXISTS (SELECT 1 FROM bridge_pairs b WHERE b.incoming_txn = v.txn_id)
+    GROUP BY DATE(settlement_time)
     ORDER BY txn_date ASC
   `.execute(db);
   return r.rows.map((row) => ({
@@ -46,10 +52,10 @@ export async function getDailyDeltaByType(days: number): Promise<DailyDeltaByTyp
 export async function getActivePlayersSummary(): Promise<ActivePlayers> {
   const r = await sql<{ active1d: string | number; active7d: string | number; active30d: string | number; registered: string | number }>`
     SELECT
-      (SELECT COUNT(*) FROM player_login_times WHERE last_login_epoch >= UNIX_TIMESTAMP() - 86400) AS active1d,
-      (SELECT COUNT(*) FROM player_login_times WHERE last_login_epoch >= UNIX_TIMESTAMP() - 7*86400) AS active7d,
-      (SELECT COUNT(*) FROM player_login_times WHERE last_login_epoch >= UNIX_TIMESTAMP() - 30*86400) AS active30d,
-      (SELECT COUNT(*) FROM firm_players) AS registered
+      (SELECT COUNT(*) FROM economy_players WHERE last_login_epoch >= UNIX_TIMESTAMP() - 86400) AS active1d,
+      (SELECT COUNT(*) FROM economy_players WHERE last_login_epoch >= UNIX_TIMESTAMP() - 7*86400) AS active7d,
+      (SELECT COUNT(*) FROM economy_players WHERE last_login_epoch >= UNIX_TIMESTAMP() - 30*86400) AS active30d,
+      (SELECT COUNT(*) FROM economy_players) AS registered
   `.execute(db);
   const row = r.rows[0];
   return {
@@ -64,10 +70,31 @@ export async function getActivePlayersSummary(): Promise<ActivePlayers> {
 export async function getNewPlayersDaily(days: number): Promise<DayCount[]> {
   const r = await sql<{ date: string; count: string | number }>`
     SELECT DATE_FORMAT(DATE(first_seen), '%Y-%m-%d') AS date, COUNT(*) AS count
-    FROM firm_players
+    FROM economy_players
     WHERE first_seen >= NOW() - INTERVAL ${days} DAY
     GROUP BY DATE(first_seen)
     ORDER BY date ASC
   `.execute(db);
   return r.rows.map((row) => ({ date: row.date, count: Number(row.count) }));
+}
+
+/**
+ * Equal rolling windows evaluated in one statement, so their boundary agrees.
+ * Reads ledger_txn_volume (V36) like getDailyVolume.
+ */
+export async function getActivityComparison(days: number) {
+  const r = await sql<{ period: string; transactions: string | number; volume: string }>`
+    WITH ${bridgePairs(days * 2)}
+    SELECT CASE WHEN settlement_time >= NOW() - INTERVAL ${days} DAY THEN 'current' ELSE 'previous' END AS period,
+      COUNT(*) AS transactions,
+      COALESCE(SUM(volume), 0) AS volume
+    FROM ledger_txn_volume v
+    WHERE settlement_time >= NOW() - INTERVAL ${days * 2} DAY
+      AND NOT EXISTS (SELECT 1 FROM bridge_pairs b WHERE b.incoming_txn = v.txn_id)
+    GROUP BY period
+  `.execute(db);
+  const current = r.rows.find(r => r.period === 'current');
+  const previous = r.rows.find(r => r.period === 'previous');
+  return { current: { transactions: Number(current?.transactions ?? 0), volume: Number(current?.volume ?? 0) },
+    previous: { transactions: Number(previous?.transactions ?? 0), volume: Number(previous?.volume ?? 0) } };
 }

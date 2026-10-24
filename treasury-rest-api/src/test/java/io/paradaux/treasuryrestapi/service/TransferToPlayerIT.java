@@ -1,19 +1,19 @@
 package io.paradaux.treasuryrestapi.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import io.paradaux.treasuryrestapi.dto.PlayerTransferRequest;
 import io.paradaux.treasuryrestapi.dto.TransferResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * End-to-end integration tests for {@code POST /api/v1/transfers/to-player}, driving
@@ -67,9 +67,7 @@ class TransferToPlayerIT extends EmbeddedDbIT {
         seedBalance(2, "0.00");
 
         TransferResponse resp = transferService.transferToPlayer(
-                personalToken(1, PAYER),
-                new PlayerTransferRequest(null, null, "steve", "50.00", "by name"),
-                null);
+                personalToken(1, PAYER), new PlayerTransferRequest(null, null, "steve", "50.00", "by name"), null);
 
         assertThat(resp.toAccountId()).isEqualTo(2L);
         assertThat(sumPostings(2)).isEqualByComparingTo("50.00");
@@ -79,32 +77,28 @@ class TransferToPlayerIT extends EmbeddedDbIT {
 
     @Test
     void bothIdentifiers_rejectedAsInvalidBody() {
-        ApiException ex = expectApiException(new PlayerTransferRequest(
-                null, PAYEE.toString(), "Steve", "1.00", null));
+        ApiException ex = expectApiException(new PlayerTransferRequest(null, PAYEE.toString(), "Steve", "1.00", null));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ex.getErrorCode()).isEqualTo("INVALID_BODY");
     }
 
     @Test
     void neitherIdentifier_rejectedAsInvalidBody() {
-        ApiException ex = expectApiException(new PlayerTransferRequest(
-                null, null, null, "1.00", null));
+        ApiException ex = expectApiException(new PlayerTransferRequest(null, null, null, "1.00", null));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ex.getErrorCode()).isEqualTo("INVALID_BODY");
     }
 
     @Test
     void malformedUuid_rejectedAsInvalidBody() {
-        ApiException ex = expectApiException(new PlayerTransferRequest(
-                null, "not-a-uuid", null, "1.00", null));
+        ApiException ex = expectApiException(new PlayerTransferRequest(null, "not-a-uuid", null, "1.00", null));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(ex.getErrorCode()).isEqualTo("INVALID_BODY");
     }
 
     @Test
     void unknownName_404PlayerNotFound() {
-        ApiException ex = expectApiException(new PlayerTransferRequest(
-                null, null, "Ghost", "1.00", null));
+        ApiException ex = expectApiException(new PlayerTransferRequest(null, null, "Ghost", "1.00", null));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ex.getErrorCode()).isEqualTo("PLAYER_NOT_FOUND");
     }
@@ -114,15 +108,47 @@ class TransferToPlayerIT extends EmbeddedDbIT {
         insertAccount(1, "PERSONAL", PAYER, PAYER.toString());
         seedBalance(1, "1000.00");
         // PAYEE has no accounts row at all.
-        ApiException ex = expectApiException(new PlayerTransferRequest(
-                null, PAYEE.toString(), null, "1.00", null));
+        ApiException ex = expectApiException(new PlayerTransferRequest(null, PAYEE.toString(), null, "1.00", null));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(ex.getErrorCode()).isEqualTo("ACCOUNT_NOT_FOUND");
     }
 
+    @Test
+    void payByName_rejectedGovernmentCollisionCannotRedirectFunds() {
+        insertAccount(1, "PERSONAL", PAYER, PAYER.toString());
+        insertAccount(2, "PERSONAL", PAYEE, "Treasury");
+        insertPlayer(PAYEE, "Treasury");
+        seedBalance(1, "1000.00");
+        seedBalance(2, "0.00");
+        assertThatThrownBy(() -> insertAccount(3, "GOVERNMENT", null, "Treasury"))
+                .isInstanceOf(RuntimeException.class)
+                .hasStackTraceContaining("GLOBAL_NAME_CONFLICT");
+        assertThat(rowCount("ledger_txns")).isZero();
+
+        TransferResponse response = transferService.transferToPlayer(
+                personalToken(1, PAYER), new PlayerTransferRequest(null, null, "treasury", "25.00", null), null);
+        assertThat(response.toAccountId()).isEqualTo(2L);
+        assertThat(sumPostings(2)).isEqualByComparingTo("25.00");
+        assertThat(rowCount("accounts")).isEqualTo(2);
+    }
+
+    @Test
+    void payByUuid_rejectedGovernmentCollisionDoesNotChangeTheWallet() {
+        insertAccount(1, "PERSONAL", PAYER, PAYER.toString());
+        insertAccount(2, "PERSONAL", PAYEE, "Treasury");
+        insertPlayer(PAYEE, "Treasury");
+        assertThatThrownBy(() -> insertAccount(3, "GOVERNMENT", null, "Treasury"))
+                .isInstanceOf(RuntimeException.class);
+        seedBalance(1, "1000.00");
+        seedBalance(2, "0.00");
+        TransferResponse response = transferService.transferToPlayer(
+                personalToken(1, PAYER), new PlayerTransferRequest(null, PAYEE.toString(), null, "25.00", null), null);
+        assertThat(response.toAccountId()).isEqualTo(2L);
+        assertThat(sumPostings(2)).isEqualByComparingTo("25.00");
+    }
+
     private ApiException expectApiException(PlayerTransferRequest request) {
-        Throwable t = catchThrowable(() ->
-                transferService.transferToPlayer(personalToken(1, PAYER), request, null));
+        Throwable t = catchThrowable(() -> transferService.transferToPlayer(personalToken(1, PAYER), request, null));
         assertThat(t).isInstanceOf(ApiException.class);
         return (ApiException) t;
     }

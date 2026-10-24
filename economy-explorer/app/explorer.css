@@ -134,10 +134,10 @@ body { background: var(--bg); }
 }
 .explorer-header .btn.btn-primary {
     color: #fff;
-    background: var(--accent);
+    background: var(--accent-fill);
     border-color: transparent;
 }
-.explorer-header .btn.btn-primary:hover { color: #fff; background: var(--accent); filter: brightness(0.94); }
+.explorer-header .btn.btn-primary:hover { color: #fff; background: var(--accent-fill); filter: brightness(0.94); }
 .explorer-header .header-search input {
     background: var(--bg);
     border-color: var(--border);
@@ -266,6 +266,17 @@ body { background: var(--bg); }
     font-size: 12px;
     border-top: 1px solid var(--border);
     padding-top: 14px;
+}
+
+/* Links inside running text need more than colour to stand out (WCAG 1.4.1;
+   the accent is too close to the muted body text on dark surfaces). */
+p a:not(.btn),
+.footer-meta a,
+.sub a,
+.doc-prose a {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
 }
 
 /* Player name links — subtle hover so the affordance reads but doesn't
@@ -411,32 +422,6 @@ body { background: var(--bg); }
     margin-bottom: 0 !important;
 }
 
-/* ───────────────────────── page heading ───────────────────────── */
-.page-heading {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 14px;
-    margin-bottom: var(--section-gap);
-}
-.page-heading h1 {
-    margin: 0;
-    font-size: 26px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-}
-.page-heading .sub {
-    color: var(--fg-muted);
-    font-size: 13px;
-}
-.page-intro {
-    margin: -8px 0 20px;
-    max-width: 720px;
-    color: var(--fg-soft);
-    font-size: 13.5px;
-    line-height: 1.55;
-}
-
 /* ───────────────────────── error / not-found pages ───────────────────────── */
 .explorer-error {
     display: flex;
@@ -459,359 +444,7 @@ body { background: var(--bg); }
 .explorer-error p { margin: 0 0 10px; color: var(--fg-muted); font-size: 14px; max-width: 460px; line-height: 1.5; }
 .page-intro strong { color: var(--fg); font-weight: 600; }
 
-/* ── Inline help "?" tooltip (CSS hover/focus only — no JS) ────────── */
-.info-tip {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    margin-left: 6px;
-    cursor: help;
-    outline: none;
-}
-.info-tip-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--bg-soft);
-    color: var(--fg-muted);
-    font-size: 10px;
-    font-weight: 600;
-    border: 1px solid var(--border-soft);
-    line-height: 1;
-}
-.info-tip-body {
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: max-content;
-    /* Clamp to the viewport so the bubble can't be wider than the screen on
-       mobile. */
-    max-width: min(280px, calc(100vw - 24px));
-    padding: 8px 11px;
-    border-radius: 6px;
-    background: var(--bg-elev);
-    border: 1px solid var(--border);
-    color: var(--fg-soft);
-    font-size: 12px;
-    line-height: 1.4;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-    /* display:none (not visibility:hidden) when at rest: a visibility:hidden
-       absolutely-positioned bubble still contributes to document scrollWidth,
-       and since it's centred on a "?" near a card's right edge it pushed the
-       whole page ~90px past the mobile viewport even while invisible. */
-    display: none;
-    z-index: 30;
-    text-align: left;
-    font-weight: 400;
-}
-.info-tip:hover .info-tip-body,
-.info-tip:focus .info-tip-body {
-    display: block;
-}
-
-/* ───────────────────────── KPI grid ───────────────────────── */
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-    margin-bottom: var(--section-gap);
-}
-
-.kpi {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 18px 20px;
-    transition: border-color var(--t-fast);
-    position: relative;
-    overflow: hidden;
-}
-.kpi:hover { border-color: var(--accent-line); }
-
-.kpi-label {
-    color: var(--fg-muted);
-    font-size: 11.5px;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-}
-.kpi-value {
-    font-size: 26px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.15;
-    font-feature-settings: "tnum";
-}
-.kpi-meta {
-    color: var(--fg-soft);
-    font-size: 12px;
-    margin-top: 4px;
-}
-.kpi-delta {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 11.5px;
-    font-weight: 500;
-    font-feature-settings: "tnum";
-}
-.kpi-delta.up   { color: var(--good); background: rgba(52, 211, 153, 0.10); }
-.kpi-delta.down { color: var(--bad);  background: rgba(248, 113, 113, 0.10); }
-.kpi-delta.flat { color: var(--fg-muted); background: var(--bg-soft); }
-
-.kpi-spark {
-    position: absolute;
-    right: 12px;
-    bottom: 12px;
-    width: 100px;
-    height: 32px;
-    pointer-events: none;
-    opacity: 0.85;
-}
-
-/* ───────────────────────── charts row ───────────────────────── */
-.charts-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-bottom: var(--section-gap);
-}
-.charts-grid.wide-left {
-    grid-template-columns: 2fr 1fr;
-}
-.charts-grid.thirds {
-    grid-template-columns: repeat(3, 1fr);
-}
-@media (max-width: 980px) {
-    .charts-grid, .charts-grid.wide-left, .charts-grid.thirds { grid-template-columns: 1fr; }
-}
-
-.chart-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    /* Grid items default to min-width: auto (= min-content), so a wide SVG
-       child (e.g. the heatmap's 612px) pins the track open and breaks the
-       single-column mobile layout. Force the cell to shrink-fit and let
-       the SVG's own overflow wrapper handle horizontal scroll. */
-    min-width: 0;
-    padding: 18px 20px;
-    /* Standalone chart-card (e.g. the market page) needs the section rhythm.
-       Inside a charts-grid/-row the grid `gap` owns spacing, so it's reset
-       below to avoid a doubled gap on the last row. */
-    margin-bottom: var(--section-gap);
-}
-.charts-grid .chart-card,
-.charts-row .chart-card { margin-bottom: 0; }
-.chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 12px;
-}
-.chart-title {
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: -0.005em;
-}
-.chart-subtitle {
-    color: var(--fg-muted);
-    font-size: 12px;
-    margin-top: 2px;
-}
-.chart-tag {
-    color: var(--fg-muted);
-    font-size: 11px;
-    font-family: var(--mono);
-    padding: 2px 7px;
-    border-radius: 4px;
-    background: var(--bg-soft);
-    border: 1px solid var(--border-soft);
-}
-
-/* Vertical stack utilities — the same flex-gap rhythm as .explorer-main, for
-   grouping content *inside* a card or section (nested card lists, form rows,
-   result blocks). Use these instead of ad-hoc margins so nested spacing matches
-   the page rhythm. .stack = section gap; .stack-sm = tight (intra-card) gap. */
-.stack { display: flex; flex-direction: column; gap: var(--section-gap); }
-.stack > * { margin-top: 0; margin-bottom: 0; }
-.stack-sm { display: flex; flex-direction: column; gap: 12px; }
-.stack-sm > * { margin-top: 0; margin-bottom: 0; }
-/* `.card` sets its own section-gap bottom margin for standalone use, which (equal
-   specificity, defined later) would otherwise beat the `> *` reset above and add
-   to the flex gap. Neutralise it explicitly so the stack's gap owns the spacing. */
-.stack > .card, .stack-sm > .card { margin-top: 0; margin-bottom: 0; }
-
-/* ───────────────────────── card ───────────────────────── */
-.card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 18px 20px;
-    margin-bottom: var(--section-gap);
-}
-.card-title {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: var(--fg);
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-.card-title .sub {
-    color: var(--fg-muted);
-    font-size: 12px;
-    font-weight: 400;
-}
-
-/* A flat list of rows inside a .card — search results, mainly. Flex so a
-   trailing .amount / secondary label can push right with margin-left:auto,
-   with a hairline separator between rows. Anchor rows highlight on hover. */
-.result-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 8px;
-    color: var(--fg);
-    border-bottom: 1px solid var(--border-soft);
-}
-.result-row:last-child { border-bottom: none; }
-a.result-row { border-radius: var(--radius); transition: background var(--t-fast); }
-a.result-row:hover { background: var(--bg-soft); color: var(--fg); }
-
-/* ───────────────────────── data table ───────────────────────── */
-.table-wrap {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-}
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    /* Auto layout: columns size to their content so values aren't truncated
-       when there's room for them. Numeric / timestamp columns are kept on one
-       line (below); long free-text columns wrap. Tables wider than the
-       viewport scroll inside .table-wrap rather than clipping. */
-    table-layout: auto;
-    font-size: 13.5px;
-}
-.data-table thead th {
-    text-align: left;
-    color: var(--fg-muted);
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 10px 16px;
-    background: var(--bg-soft);
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-}
-.data-table tbody td {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border-soft);
-    vertical-align: middle;
-}
-.data-table tbody tr:last-child td { border-bottom: none; }
-.data-table tbody tr { transition: background var(--t-fast); }
-.data-table tbody tr:hover { background: var(--bg-soft); }
-.data-table tbody tr.row-clickable { cursor: pointer; }
-
-/* Numeric / timestamp columns stay on a single line (right-aligned, tabular
-   figures) so they read as columns; their width follows their content. */
-.data-table th.amount,
-.data-table td.amount {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-.data-table th.ts,
-.data-table td.ts { white-space: nowrap; }
-.data-table td .rowlink,
-.data-table td .player-link { display: inline; }
-
-.mono, .data-table .mono {
-    font-family: var(--mono);
-    font-size: 12.5px;
-    font-feature-settings: "tnum";
-    color: var(--fg-soft);
-}
-
-.amount {
-    font-family: var(--mono);
-    font-feature-settings: "tnum";
-    font-size: 13px;
-    font-weight: 500;
-}
-.amount.pos { color: var(--good); }
-.amount.neg { color: var(--bad); }
-.amount.neutral { color: var(--fg); }
-
-/* ─────────────────── window tabs (7d/30d/90d/365d) ─────────────────── */
-.window-tabs {
-    display: inline-flex;
-    gap: 2px;
-    background: var(--bg-soft);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 2px;
-}
-.window-tabs a {
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--fg-muted);
-}
-.window-tabs a:hover { color: var(--fg); }
-.window-tabs a.active { color: #fff; background: var(--accent); }
-
-/* ─────────────────── market item cards ─────────────────── */
-.item-card-grid {
-    display: grid;
-    /* Fixed column counts (not auto-fill) so a 12-item set always forms a full
-       rectangle — 6×2 / 4×3 / 3×4 — with no orphan card on a half-empty row. */
-    /* minmax(0, 1fr) (not bare 1fr) lets a track shrink below its content's
-       intrinsic width — without it the 240px-viewBox sparkline pins each column
-       wide and the grid overflows the viewport on narrow phones. */
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-}
-@media (min-width: 640px)  { .item-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 1024px) { .item-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.item-card {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 14px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--bg);
-    text-decoration: none;
-    color: var(--fg);
-    transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
-}
-.item-card:hover {
-    border-color: var(--accent-line);
-    background: var(--bg-soft);
-    transform: translateY(-1px);
-}
-.item-card-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-}
+/* Item identity in market tables. */
 .item-icon {
     width: 36px;
     height: 36px;
@@ -832,35 +465,6 @@ a.result-row:hover { background: var(--bg-soft); color: var(--fg); }
     color: var(--fg-muted);
     border: 1px solid var(--border);
 }
-.item-card-titles { display: flex; flex-direction: column; min-width: 0; }
-.item-card-name {
-    font-weight: 600;
-    font-size: 13.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.item-card-mat {
-    font-size: 10.5px;
-    color: var(--fg-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.item-card-spark { margin: 2px -2px; min-width: 0; }
-/* The sparkline keeps its 240-wide viewBox (preserveAspectRatio="none") but
-   scales to fill the card so it never forces horizontal overflow. */
-.item-card-spark svg { width: 100%; }
-.item-card-stats { display: flex; flex-direction: column; gap: 3px; }
-.item-card-price { display: flex; align-items: baseline; gap: 8px; }
-.item-card-price-val {
-    font-family: var(--mono);
-    font-feature-settings: "tnum";
-    font-size: 15px;
-    font-weight: 600;
-}
-.item-card-meta { color: var(--fg-muted); font-size: 12px; }
-
 /* Item icon inside a table cell (catalogue / shops). */
 .cell-with-icon {
     display: flex;
@@ -936,219 +540,6 @@ a.result-row:hover { background: var(--bg-soft); color: var(--fg); }
 @media (max-width: 720px) {
     .bar-row { grid-template-columns: 1fr auto; }
     .bar-track { display: none; }
-}
-
-/* ───────────────────────── badges ───────────────────────── */
-.badge {
-    display: inline-block;
-    padding: 1px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    line-height: 1.6;
-    background: var(--bg-soft);
-    color: var(--fg-soft);
-    border: 1px solid var(--border-soft);
-}
-/* Border/bg derived from the type token via color-mix so they adapt to both
-   theme (blue/red) and mode (dark/light) instead of being frozen dark rgba. */
-.badge-PERSONAL   { color: var(--c-1); border-color: color-mix(in srgb, var(--c-1) 30%, transparent); background: color-mix(in srgb, var(--c-1) 9%, transparent); }
-.badge-BUSINESS   { color: var(--c-3); border-color: color-mix(in srgb, var(--c-3) 30%, transparent); background: color-mix(in srgb, var(--c-3) 9%, transparent); }
-.badge-GOVERNMENT { color: var(--c-4); border-color: color-mix(in srgb, var(--c-4) 30%, transparent); background: color-mix(in srgb, var(--c-4) 9%, transparent); }
-.badge-SYSTEM     { color: var(--c-2); border-color: color-mix(in srgb, var(--c-2) 30%, transparent); background: color-mix(in srgb, var(--c-2) 9%, transparent); }
-
-.badge-archived   { color: var(--fg-muted); }
-.badge-exempt     { color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, transparent); background: color-mix(in srgb, var(--good) 9%, transparent); }
-
-.dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--fg-faint);
-    margin-right: 6px;
-    vertical-align: middle;
-}
-
-/* ───────────────────────── controls ───────────────────────── */
-.toolbar {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-}
-.toolbar-filters { display: inline-flex; gap: 8px; flex-wrap: wrap; }
-.toolbar-right { display: inline-flex; gap: 8px; margin-left: auto; }
-.toolbar-export { display: inline-flex; gap: 8px; }
-
-/* Generic form controls — Toolbar's search input, per-page filter selects,
-   and the .input/.select utility classes all hang off the same look so they
-   read consistently in both dark and light. */
-.input,
-.select,
-.filter-select,
-.toolbar-search,
-input[type="search"],
-input[type="text"],
-input[type="number"],
-input[type="email"],
-input[type="password"],
-input[type="url"],
-select {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    color: var(--fg);
-    border-radius: var(--radius);
-    padding: 7px 11px;
-    font-size: 13px;
-    line-height: 1.3;
-    transition: border-color var(--t-fast), background var(--t-fast);
-    outline: none;
-    appearance: none;
-    -webkit-appearance: none;
-}
-.input:hover,
-.select:hover,
-.filter-select:hover,
-.toolbar-search:hover,
-input[type="search"]:hover,
-input[type="text"]:hover,
-input[type="number"]:hover,
-select:hover { border-color: var(--accent-line); }
-.input:focus,
-.select:focus,
-.filter-select:focus,
-.toolbar-search:focus,
-input[type="search"]:focus,
-input[type="text"]:focus,
-input[type="number"]:focus,
-select:focus {
-    border-color: var(--accent-line);
-    background: var(--bg-elev);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-}
-.toolbar-search { flex: 1 1 240px; max-width: 360px; }
-
-/* Native <select> needs an explicit chevron because appearance:none hides
-   the platform one. Two-triangle gradient trick keeps it CSS-only. */
-.filter-select,
-select.select,
-select {
-    background-image:
-        linear-gradient(45deg, transparent 50%, var(--fg-muted) 50%),
-        linear-gradient(135deg, var(--fg-muted) 50%, transparent 50%);
-    background-position:
-        calc(100% - 13px) 50%,
-        calc(100% - 8px) 50%;
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
-    padding-right: 26px;
-}
-.filter-select option,
-select option {
-    background: var(--bg-card);
-    color: var(--fg);
-}
-
-.btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 13px;
-    border-radius: var(--radius);
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.2;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-    color: var(--fg);
-    cursor: pointer;
-    transition: border-color var(--t-fast), background var(--t-fast);
-}
-.btn:hover { border-color: var(--accent-line); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.btn-primary {
-    background: var(--accent);
-    color: #fff;
-    border-color: transparent;
-}
-.btn.btn-primary:hover {
-    background: var(--accent);
-    filter: brightness(0.92);
-    color: #fff;
-}
-
-/* ───────────────────────── pagination ───────────────────────── */
-.pagination {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
-    align-items: center;
-    margin-top: 14px;
-    color: var(--fg-muted);
-    font-size: 12.5px;
-}
-/* The Pagination component emits .pagination-summary (left) + .pagination-controls
-   (right) with bare <a> links and <span class="disabled"> for unavailable steps. */
-.pagination .meta,
-.pagination-summary { margin-right: auto; color: var(--fg-muted); }
-.pagination-controls {
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-.pagination-controls a,
-.pagination-controls .disabled,
-.pagination .pg {
-    padding: 5px 11px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-    color: var(--fg-soft);
-    font-size: 12.5px;
-    line-height: 1.2;
-    white-space: nowrap;
-    transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
-}
-.pagination-controls a:hover,
-.pagination .pg:hover { color: var(--fg); border-color: var(--accent-line); background: var(--bg-soft); }
-.pagination-controls .disabled,
-.pagination .pg:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* ───────────────────────── states ───────────────────────── */
-.state-loading, .state-empty, .state-error {
-    padding: 36px 18px;
-    text-align: center;
-    color: var(--fg-muted);
-    font-size: 13.5px;
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--bg-card);
-}
-.state-error { color: var(--bad); border-color: rgba(248,113,113,0.28); }
-
-/* ───────────────────────── detail rows ───────────────────────── */
-.detail-grid {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    row-gap: 8px;
-    column-gap: 18px;
-    font-size: 13.5px;
-}
-.detail-grid dt {
-    color: var(--fg-muted);
-    font-size: 12.5px;
-}
-.detail-grid dd {
-    margin: 0;
-    color: var(--fg);
-    font-family: var(--mono);
-    font-feature-settings: "tnum";
-    font-size: 13px;
 }
 
 /* ───────────────────────── chart tooltip ───────────────────────── */
@@ -1429,17 +820,6 @@ select option {
 }
 
 /* misc legacy */
-.back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--fg-muted);
-    font-size: 13px;
-    margin-bottom: 14px;
-    transition: color var(--t-fast);
-}
-.back-link:hover { color: var(--fg); }
-
 .explorer-link {
     color: var(--accent);
 }
@@ -1546,98 +926,6 @@ tr.clickable:hover { background: var(--bg-soft); }
     color: var(--fg-soft);
 }
 
-/* ───────────────────────── skeleton shimmer ─────────────────────────────── */
-.skeleton {
-    background: linear-gradient(90deg, var(--bg-soft) 0%, var(--bg-elev) 50%, var(--bg-soft) 100%);
-    background-size: 200% 100%;
-    animation: shimmer 1.4s ease-in-out infinite;
-}
-@keyframes shimmer {
-    0%   { background-position: 100% 0; }
-    100% { background-position: -100% 0; }
-}
-
-/* ───────────────────────── toolbar (search + filter) ────────────────────── */
-.toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    margin-bottom: 14px;
-}
-
-.search-input {
-    flex: 1 1 220px;
-    min-width: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    color: var(--fg);
-    border-radius: var(--radius);
-    padding: 7px 11px 7px 32px;
-    font-size: 13px;
-    background-image: linear-gradient(transparent, transparent);
-    background-repeat: no-repeat;
-    background-position: 10px center;
-    transition: border-color var(--t-fast);
-}
-.search-input::placeholder { color: var(--fg-muted); }
-.search-input:focus {
-    outline: none;
-    border-color: var(--accent-line);
-}
-
-.search-shell {
-    flex: 1 1 220px;
-    position: relative;
-    min-width: 0;
-    display: flex;
-}
-.search-shell::before {
-    content: "";
-    position: absolute;
-    left: 11px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 13px;
-    height: 13px;
-    background: var(--fg-muted);
-    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' d='M11.5 11.5L14 14M7 12a5 5 0 100-10 5 5 0 000 10z'/></svg>") center/contain no-repeat;
-            mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' d='M11.5 11.5L14 14M7 12a5 5 0 100-10 5 5 0 000 10z'/></svg>") center/contain no-repeat;
-    pointer-events: none;
-}
-.search-shell .search-input { width: 100%; }
-.search-shell kbd {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--fg-muted);
-    background: var(--bg-soft);
-    border: 1px solid var(--border-soft);
-    padding: 1px 5px;
-    border-radius: 4px;
-    pointer-events: none;
-}
-
-/* ───────────────────────── sortable header ──────────────────────────────── */
-.data-table thead th[aria-sort] { transition: color var(--t-fast); }
-.data-table thead th[aria-sort]:hover { color: var(--fg); }
-
-/* ───────────────────────── focus ring ───────────────────────────────────── */
-:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 6px;
-}
-
-/* ───────────────────────── density (compact) ────────────────────────────── */
-body.compact .data-table tbody td { padding: 6px 14px; }
-body.compact .data-table thead th { padding: 6px 14px; }
-body.compact .kpi { padding: 12px 16px; }
-body.compact .kpi-value { font-size: 22px; }
-
 /* ───────────────────────── responsive (≤720px) ──────────────────────────── */
 @media (max-width: 720px) {
     .explorer-header-top { padding: 10px 14px; gap: 8px; }
@@ -1652,24 +940,14 @@ body.compact .kpi-value { font-size: 22px; }
     .explorer-meta { display: none; }
     .density-toggle { display: none; }
     .explorer-main { padding: 18px 14px 56px; }
-    .page-heading h1 { font-size: 22px; }
     .explorer-footer-inner { padding: 18px 14px; gap: 14px; }
     .footer-join { margin-left: 0; }
 
-    .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
-    .kpi { padding: 14px; }
-    .kpi-value { font-size: 22px; }
-    .kpi-spark { width: 64px; height: 28px; }
 
     .insight-strip { gap: 8px; }
     .insight { flex: 1 1 calc(50% - 8px); padding: 8px 10px; font-size: 12px; }
 
     /* Overflowing tables: scroll horizontally with a hint shadow */
-    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .data-table { min-width: 560px; }
-    .data-table thead th, .data-table tbody td { padding: 9px 12px; }
-    .toolbar { gap: 6px; }
-    .toolbar .btn, .toolbar .select { font-size: 12.5px; padding: 6px 10px; }
 }
 
 /* ───────────────────────── heatmap (7×24) — refined ─────────────────────── */
@@ -1793,36 +1071,6 @@ body.compact .kpi-value { font-size: 22px; }
     margin-top: 12px;
 }
 .privacy-gate--card .privacy-gate-actions { justify-content: center; }
-
-/* ── Sticky table headers + sticky first column ───────────────────────────── */
-.table-wrap {
-    position: relative;
-    max-height: 70vh;
-    overflow: auto;
-}
-.data-table thead {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--bg-card);
-}
-.data-table thead th {
-    background: var(--bg-card);
-    box-shadow: inset 0 -1px 0 var(--border);
-}
-.data-table tbody tr.row-clickable:hover {
-    background: var(--bg-soft);
-}
-@media (max-width: 720px) {
-    .data-table th.sticky-col,
-    .data-table td.sticky-col {
-        position: sticky;
-        left: 0;
-        background: var(--bg);
-        z-index: 1;
-        box-shadow: inset -1px 0 0 var(--border-soft);
-    }
-}
 
 /* ── Popover (column picker, saved views) ─────────────────────────────────── */
 .popover {
@@ -2008,38 +1256,6 @@ body.compact .kpi-value { font-size: 22px; }
     50%      { box-shadow: 0 0 0 5px rgba(52, 211, 153, 0); }
 }
 
-/* ── Inline section tabs (live inside the page heading) ───────────── */
-.section-tabs {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    margin-left: auto;
-    flex-wrap: wrap;
-}
-.section-tabs a {
-    padding: 5px 11px;
-    font-size: 12.5px;
-    color: var(--fg-muted);
-    text-decoration: none;
-    border-radius: 999px;
-    transition: color 80ms, background 80ms;
-}
-.section-tabs a:hover {
-    color: var(--fg);
-    background: var(--bg-soft);
-}
-.section-tabs a.active {
-    color: var(--fg);
-    background: var(--accent-soft);
-}
-@media (max-width: 720px) {
-    .section-tabs {
-        margin-left: 0;
-        width: 100%;
-        margin-top: 6px;
-    }
-    .section-tabs a { font-size: 12px; padding: 4px 9px; }
-}
 .subnav a {
     padding: 8px 14px;
     font-size: 13px;
@@ -2153,7 +1369,7 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
 .doc-prose h2 + h3 { margin-top: 14px; }
 .doc-prose p { margin: 0 0 16px; }
 .doc-prose strong { color: var(--fg); font-weight: 600; }
-.doc-prose a { color: var(--accent); text-decoration: none; }
+.doc-prose a { color: var(--accent); }
 .doc-prose a:hover { text-decoration: underline; }
 .doc-prose ul, .doc-prose ol { margin: 0 0 16px; padding-left: 22px; }
 .doc-prose li { margin: 4px 0; }
@@ -2298,6 +1514,11 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     vertical-align: middle;
 }
 
+/* ── Live blocks: server values filled into static docs (LiveDocBlocks) ─── */
+.doc-prose .doc-live { margin: 0 0 16px; }
+.doc-prose .doc-live table { margin-bottom: 6px; }
+.doc-prose .doc-live-status { margin: 0 0 8px; font-size: 13px; color: var(--fg-muted); }
+
 /* ── Mobile: sidebar collapses behind a toggle ─────────────────────────── */
 @media (max-width: 720px) {
     .docs-sidebar-toggle { display: block; }
@@ -2309,3 +1530,59 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     .doc-prose h2 { font-size: 19px; }
 }
 
+
+.chart-legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 12px 0 6px; font-size: 12px; }
+.flow-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.flow-summary dl { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.flow-summary dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.market-search label { display: block; margin-bottom: 8px; }
+.market-search-controls { display: flex; gap: 8px; }
+.market-search-controls input { flex: 1; min-width: 0; }
+
+.offer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.offer-card { margin-bottom: 0; min-width: 0; overflow-wrap: anywhere; }
+.offer-price { font-size: 24px; font-weight: 600; }
+.offer-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; }
+.offer-card dd { margin: 0; text-align: right; }
+
+.mobile-search-toggle, .mobile-only { display: none; }
+.directory-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.directory-sort > span { margin-right: auto; font-size: 13px; }
+@media (max-width: 720px) {
+  .mobile-search-toggle { display: inline-flex; min-height: 40px; }
+  .mobile-search-open .header-search { display: flex; position: fixed; top: 108px; left: 12px; right: 12px; z-index: 100; padding: 12px; background: var(--bg-card); border: 1px solid var(--border); }
+  .mobile-search-open .header-search input { width: 100%; min-width: 0; font-size: 16px; }
+  .mobile-search-open .header-search-popover { position: fixed; top: 173px; left: 12px; right: 12px; width: auto; max-height: 60vh; overflow-y: auto; z-index: 101; }
+  .mobile-search-open .header-search-kbd { display: none; }
+  .explorer-logo-text { font-size: 13px; }
+  .directory-table { min-width: 0 !important; width: 100%; table-layout: fixed; }
+  .directory-table [data-secondary], .directory-table .desktop-only { display: none; }
+  .directory-table th:first-child, .directory-table td:first-child { width: 58%; }
+  .directory-table td, .directory-table th { white-space: normal; padding: 12px 8px; overflow-wrap: anywhere; }
+  .directory-table .rowlink { white-space: normal; flex-wrap: wrap; }
+  .directory-table .mobile-only { display: block; }
+  .directory-details { font-size: 12px; margin-top: 8px; color: var(--fg-muted); }
+  .directory-details p { margin: 8px 0; }
+  .directory-sort > span { flex-basis: 100%; }
+  .directory-sort .btn { min-height: 40px; }
+  .chart-legend { gap: 8px; }
+}
+
+@media (max-width: 720px) {
+  .explorer-header-top { flex-wrap: wrap; }
+  .explorer-header-top:has(.header-me) .explorer-logo-text { display: none; }
+  .header-me { max-width: 140px; overflow-wrap: anywhere; }
+  .header-me .badge { display: none; }
+}
+
+/* Two-column tax rates stay visible together on phones. */
+.data-table.tax-rates-table { min-width: 0; width: 100%; }
+.tax-rates-table td:first-child { overflow-wrap: anywhere; }
+
+/* The application shell owns the full-height page layout. */
+.explorer-main { flex: 1 0 auto; }
+
+/* Component catalogue presentation; product component styles live in the package. */
+.ds-swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
+.ds-swatch { height: 56px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; }

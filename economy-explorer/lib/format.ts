@@ -32,16 +32,18 @@ export function fmtDate(d: string): string {
   return new Date(d.length === 10 ? d + 'T00:00:00Z' : d).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   });
 }
 
-export function fmtTs(ts: string | Date | null): string {
+export function fmtTs(ts: string | Date | null, timeZone = 'UTC'): string {
   if (!ts) return '—';
   return new Date(ts).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone,
   });
 }
 
@@ -63,7 +65,7 @@ export function looksLikeUuid(s: string | null | undefined): boolean {
 /**
  * The best human-readable identifier for an account. Prefers a real
  * displayName (BUSINESS / GOVERNMENT / SYSTEM, or an account the player named),
- * then the resolved owner name (firm_players.current_name), then a short UUID.
+ * then the resolved owner name (economy_players.current_name), then a short UUID.
  *
  * Personal accounts default their display_name to the owner's raw UUID, so a
  * UUID-shaped display_name is junk — skip it and use the resolved player name.

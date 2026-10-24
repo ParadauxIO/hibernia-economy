@@ -12,10 +12,13 @@ import type { SearchResult } from '@/lib/sql/search';
 export function HeaderSearch() {
   const router = useRouter();
   const ref = useRef<HTMLInputElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  useEffect(() => { if (mobileOpen) ref.current?.focus(); }, [mobileOpen]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState('');
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [fetched, setResults] = useState<SearchResult[]>([]);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -23,17 +26,20 @@ export function HeaderSearch() {
       const isMod = e.metaKey || e.ctrlKey;
       if (isMod && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
+        setMobileOpen(true);
         ref.current?.focus();
         ref.current?.select();
       }
       if (e.key === 'Escape') {
         setOpen(false);
         ref.current?.blur();
+        setMobileOpen(false);
+        if (mobileOpen) toggleRef.current?.focus();
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [mobileOpen]);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -48,21 +54,19 @@ export function HeaderSearch() {
   useEffect(() => {
     if (!open) return;
     const term = value.trim();
-    if (term.length < 2) {
-      setResults([]);
-      return;
-    }
+    if (term.length < 2) return; // no preview below two characters (see `results`)
+    let active = true;
     const id = setTimeout(() => {
       startTransition(async () => {
         try {
           const r = await searchPreview(term, 4);
-          setResults(r);
+          if (active) setResults(r);
         } catch {
-          setResults([]);
+          if (active) setResults([]);
         }
       });
     }, 150);
-    return () => clearTimeout(id);
+    return () => { active = false; clearTimeout(id); };
   }, [value, open]);
 
   function onSubmit(e: React.FormEvent) {
@@ -70,16 +74,19 @@ export function HeaderSearch() {
     const q = value.trim();
     if (!q) return;
     setOpen(false);
+    setMobileOpen(false);
     router.push(`/search?q=${encodeURIComponent(q)}`);
   }
 
   function gotoResult(r: SearchResult) {
     setOpen(false);
+    setMobileOpen(false);
     if (r.kind === 'account' && r.account_id != null) router.push(`/accounts/${r.account_id}` as Route);
     else if (r.kind === 'firm' && r.firm_name) router.push(`/firms/${encodeURIComponent(r.firm_name)}` as Route);
     else router.push(`/search?q=${encodeURIComponent(value)}` as Route);
   }
 
+  const results = value.trim().length < 2 ? [] : fetched;
   const grouped = {
     account: results.filter((r) => r.kind === 'account'),
     firm: results.filter((r) => r.kind === 'firm'),
@@ -87,9 +94,11 @@ export function HeaderSearch() {
   };
 
   return (
-    <div ref={wrapRef} className="header-search-wrap">
-      <form onSubmit={onSubmit} className="header-search" role="search">
+    <div ref={wrapRef} className={`header-search-wrap ${mobileOpen ? 'mobile-search-open' : ''}`}>
+      <button ref={toggleRef} type="button" className="btn mobile-search-toggle" aria-expanded={mobileOpen} aria-controls="global-search-form" onClick={() => setMobileOpen(v => !v)}>{mobileOpen ? 'Close search' : 'Search'}</button>
+      <form id="global-search-form" onSubmit={onSubmit} className="header-search" role="search" aria-label="Site">
         <input
+          type="search"
           ref={ref}
           value={value}
           onChange={(e) => { setValue(e.target.value); setOpen(true); }}
@@ -102,7 +111,7 @@ export function HeaderSearch() {
         <span className="header-search-kbd" aria-hidden="true">⌘K</span>
       </form>
       {open && results.length > 0 && (
-        <div className="header-search-popover" role="listbox">
+        <div className="header-search-popover" role="group" aria-label="Search suggestions">
           {grouped.account.length > 0 && (
             <ResultGroup label="Accounts">
               {grouped.account.map((r) => (

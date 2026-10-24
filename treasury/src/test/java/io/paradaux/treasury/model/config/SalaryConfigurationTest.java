@@ -75,11 +75,12 @@ class SalaryConfigurationTest {
         when(cfg.getString("salaries.government-account", "DCGovernment")).thenReturn("DCGovernment");
         when(cfg.getLong("salaries.interval", 900L)).thenReturn(1800L);
         when(cfg.getConfigurationSection("salaries.amount")).thenReturn(sec);
-        Set<String> keys = new LinkedHashSet<>(List.of("senator", "president", "bad"));
+        Set<String> keys = new LinkedHashSet<>(List.of("senator", "president", "bad", "garbage"));
         when(sec.getKeys(false)).thenReturn(keys);
-        when(sec.getDouble("senator", 0)).thenReturn(65.0);
-        when(sec.getDouble("president", 0)).thenReturn(75.0);
-        when(sec.getDouble("bad", 0)).thenReturn(-5.0); // negative → skipped
+        when(sec.getString("senator", "0")).thenReturn("65.0");
+        when(sec.getString("president", "0")).thenReturn("75.0");
+        when(sec.getString("bad", "0")).thenReturn("-5.0");     // negative → skipped
+        when(sec.getString("garbage", "0")).thenReturn("NaN");  // unparseable → skipped
 
         SalaryConfiguration c = new SalaryConfiguration(plugin);
 
@@ -102,5 +103,39 @@ class SalaryConfigurationTest {
 
         assertThat(c.getAmounts()).isEmpty();
         assertThat(c.getGovernmentAccount()).isEqualTo("DCGovernment"); // blank → default
+    }
+
+    @Test
+    void reload_refreshesLiveValuesButKeepsTheScheduledInterval(@Mock Treasury plugin, @Mock FileConfiguration cfg) {
+        // The SalaryTask timer is scheduled once at startup and SalaryService buckets
+        // its dedup key by getIntervalSeconds(). If a reload widened the interval while
+        // the timer kept firing at the old period, every fire but the first in the new,
+        // wider bucket would dedup away — silently dropped payouts. So reload must
+        // leave the interval at the value the timer was scheduled with.
+        when(plugin.getConfig()).thenReturn(cfg);
+        when(cfg.getBoolean("salaries.enabled", false)).thenReturn(true, false);
+        when(cfg.getString("salaries.government-account", "DCGovernment")).thenReturn("DCGovernment", "GovBank");
+        when(cfg.getLong("salaries.interval", 900L)).thenReturn(900L, 3600L, 900L);
+        when(cfg.getConfigurationSection("salaries.amount")).thenReturn(null);
+
+        SalaryConfiguration c = new SalaryConfiguration(plugin);
+        assertThat(c.getIntervalSeconds()).isEqualTo(900);
+
+        c.reload(); // interval edited to 3600 in config.yml
+
+        assertThat(c.getIntervalSeconds()).isEqualTo(900);            // pinned
+        assertThat(c.isEnabled()).isFalse();                          // still live
+        assertThat(c.getGovernmentAccount()).isEqualTo("GovBank");    // still live
+
+        c.reload(); // unchanged interval → nothing to ignore
+        assertThat(c.getIntervalSeconds()).isEqualTo(900);
+    }
+
+    @Test
+    void reload_isANoOpForTestInstances() {
+        SalaryConfiguration c = SalaryConfiguration.forTesting(true, "GovBank", 900, amounts());
+        c.reload();
+        assertThat(c.getIntervalSeconds()).isEqualTo(900);
+        assertThat(c.getGovernmentAccount()).isEqualTo("GovBank");
     }
 }

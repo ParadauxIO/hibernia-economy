@@ -1,36 +1,65 @@
 import 'server-only';
-import type { Viewer } from '@/lib/auth/viewer';
-import type { Capability } from '@/lib/auth/capabilities';
-import { hasFirmFinancialAccess } from '@/lib/sql/firm';
+import type { Viewer } from './viewer';
+import type { Capability, Role } from './capabilities';
+import { hasPermission, hasAnyPermission, type Permission } from './policy';
+import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
+import { hasFirmFinancialAccess, isFirmMember } from '@/lib/sql/firm';
+import { findAccount, canReadAccount, findTransactionAccountIds } from '@/lib/sql/ledger';
+export { hasPermission } from './policy';
 
-/** Does the viewer hold a given capability (via any group or legacy role)? */
 export function hasCapability(v: Viewer, cap: Capability): boolean {
   return !v.anon && v.capabilities.includes(cap);
 }
+export function requirePermission(v: Viewer, permission: Permission): asserts v is Extract<Viewer, { anon: false }> {
+  if (v.anon) throw new UnauthorizedError();
+  if (!hasPermission(v, permission)) throw new ForbiddenError();
+}
+export function hasElevatedRead(v: Viewer): boolean {
+  return hasAnyPermission(v, ['player.read.all', 'account.read.all', 'firm.read.all', 'firm.financials.read.all', 'government.read.all', 'transactions.read', 'market.sales.read', 'market.figures.read']);
+}
+/** Audit predicate only. Never use this as a resource authorization gate. */
+export const isStaff = hasElevatedRead;
+export function auditRole(v: Extract<Viewer, { anon: false }>): Role { return v.role; }
 
-/**
- * Financial-privacy model (see wiki / memory): balances are public, but
- * per-entity money & quantity drilldown (sales, volume, profitability,
- * who-paid-whom) is not. Aggregates stay public — market/item totals and
- * *who* the top sellers are — just not the figures attributed to each seller.
- */
-
-/**
- * Global oversight roles. Staff see every per-entity financial figure,
- * including the cross-firm leaderboards where no single firm employee could
- * legitimately have access to every row.
- */
-export function isStaff(v: Viewer): boolean {
-  return hasCapability(v, 'staff.audit');
+/** RBAC AND ReBAC. A scoped account grant never grants access to the whole firm. */
+export async function canViewAccount(accountId: number, v: Viewer): Promise<boolean> {
+  if (hasPermission(v, 'account.read.all')) return true;
+  if (!hasPermission(v, 'account.read')) return false;
+  if (!v.minecraftUuid) return false;
+  const account = await findAccount(accountId);
+  if (!account) return false;
+  if (account.owner_uuid === v.minecraftUuid) return true;
+  return canReadAccount(accountId, v.minecraftUuid);
+}
+export async function requireAccountRead(accountId: number, v: Viewer): Promise<void> {
+  if (v.anon) throw new UnauthorizedError();
+  if (!await canViewAccount(accountId, v)) throw new ForbiddenError();
+}
+/** One readable participating account exposes this transaction, not other account histories. */
+export async function canViewTransaction(txnId: number, v: Viewer): Promise<boolean> {
+  if (hasPermission(v, 'transactions.read')) return true;
+  if (!hasAnyPermission(v, ['account.read', 'account.read.all'])) return false;
+  if (!hasPermission(v, 'account.read.all') && !v.minecraftUuid) return false;
+  for (const accountId of await findTransactionAccountIds(txnId)) {
+    if (await canViewAccount(accountId, v)) return true;
+  }
+  return false;
+}
+export async function canViewFirmInternals(firmId: number, v: Viewer): Promise<boolean> {
+  if (hasPermission(v, 'firm.read.all')) return true;
+  if (!hasPermission(v, 'firm.read')) return false;
+  if (!v.minecraftUuid) return false;
+  return await isFirmMember(firmId, v.minecraftUuid) || await hasFirmFinancialAccess(firmId, v.minecraftUuid);
+}
+export async function canViewFirmFinancials(firmId: number, v: Viewer): Promise<boolean> {
+  if (hasPermission(v, 'firm.financials.read.all')) return true;
+  if (!hasPermission(v, 'firm.financials.read')) return false;
+  return !!v.minecraftUuid && hasFirmFinancialAccess(firmId, v.minecraftUuid);
 }
 
-/**
- * Can this viewer see a single firm's financial drilldown (its ChestShop
- * sales / volume / quantity)? True for staff, or a current employee of that
- * firm whose role grants the FINANCIAL/ADMIN permission.
- */
-export async function canViewFirmFinancials(firmId: number, v: Viewer): Promise<boolean> {
-  if (isStaff(v)) return true;
-  if (v.anon || !v.minecraftUuid) return false;
-  return hasFirmFinancialAccess(firmId, v.minecraftUuid);
+/** Own-player data is never authorized by a client-supplied `self` flag. */
+export function requirePlayerRead(uuid: string, v: Viewer): void {
+  if (hasPermission(v, 'player.read.all')) return;
+  requirePermission(v, 'player.read');
+  if (v.minecraftUuid !== uuid) throw new ForbiddenError();
 }

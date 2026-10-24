@@ -7,15 +7,14 @@ import io.paradaux.treasury.model.tax.TaxCycleReport;
 import io.paradaux.treasury.services.TaxWebhookService;
 
 import java.math.BigDecimal;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.text.DecimalFormat;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+
+import static io.paradaux.treasury.services.impl.DiscordWebhooks.escapeJson;
+import static io.paradaux.treasury.services.impl.DiscordWebhooks.field;
+import static io.paradaux.treasury.services.impl.DiscordWebhooks.formatMoney;
 
 @Slf4j
 public class TaxWebhookServiceImpl implements TaxWebhookService {
@@ -44,22 +43,7 @@ public class TaxWebhookServiceImpl implements TaxWebhookService {
         if (url == null || url.isBlank()) return;
 
         String payload = buildPayload(report);
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Content-Type", "application/json")
-                    .header("User-Agent", "Treasury-Plugin/1.0")
-                    .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("[Tax Webhook] Discord responded with status {} for {} cycle report",
-                        response.statusCode(), report.cycleType());
-            }
-        } catch (Exception e) {
-            log.warn("[Tax Webhook] Failed to send {} cycle report: {}", report.cycleType(), e.getMessage());
-        }
+        DiscordWebhooks.post(httpClient, url, payload, "Tax Webhook");
     }
 
     private String buildPayload(TaxCycleReport report) {
@@ -109,13 +93,6 @@ public class TaxWebhookServiceImpl implements TaxWebhookService {
                 + "}]}";
     }
 
-    private static String field(String name, String value, boolean inline) {
-        String v = value == null || value.isBlank() ? "—" : value;
-        return "{\"name\":\"" + escapeJson(name) + "\","
-                + "\"value\":\"" + escapeJson(v) + "\","
-                + "\"inline\":" + inline + "}";
-    }
-
     private static String buildMapLines(Map<String, BigDecimal> map) {
         if (map == null || map.isEmpty()) return "—";
         StringBuilder sb = new StringBuilder();
@@ -126,22 +103,7 @@ public class TaxWebhookServiceImpl implements TaxWebhookService {
         return sb.toString();
     }
 
-    private static String formatMoney(BigDecimal amount) {
-        if (amount == null) return "$0.00";
-        DecimalFormat df = new DecimalFormat("$#,##0.00");
-        return df.format(amount);
-    }
-
     private static String formatCount(int count) {
         return String.format("%,d", count);
-    }
-
-    private static String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 }

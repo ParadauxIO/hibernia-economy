@@ -31,16 +31,26 @@ public interface RequestApi {
     /**
      * Accepts a pending employment offer.
      *
+     * <p>The acting player must be the offer's target: implementations reject the
+     * call when {@code actorId != playerId} so an offer cannot be accepted on
+     * another player's behalf.
+     *
      * @param firmId   the firm ID
-     * @param playerId the player accepting the offer
+     * @param playerId the player whose offer is being accepted (the offer target)
+     * @param actorId  UUID of the player performing the action; must equal {@code playerId}
      */
-    void acceptOffer(int firmId, UUID playerId);
+    void acceptOffer(int firmId, UUID playerId, UUID actorId);
 
     /**
      * Rejects a pending employment offer.
      *
+     * <p>The acting player must be the offer's target: implementations reject the
+     * call when {@code actorId != playerId} so an offer cannot be rejected on
+     * another player's behalf.
+     *
      * @param firmId   the firm ID
-     * @param playerId the player rejecting the offer
+     * @param playerId the player whose offer is being rejected (the offer target)
+     * @param actorId  UUID of the player performing the action; must equal {@code playerId}
      */
-    void rejectOffer(int firmId, UUID playerId);
+    void rejectOffer(int firmId, UUID playerId, UUID actorId);
 }

@@ -129,8 +129,11 @@ async function revalidate<T>(
     const value = await producer();
     await store(ckey, bucket, value);
     l1.set(key, { bucket, value, at: Date.now() });
-  } catch {
-    // Leave the stale value in place; the next window retries.
+  } catch (e) {
+    // Leave the stale value in place; the next window retries. Log it: a recompute
+    // that keeps failing (e.g. a query past max_statement_time) otherwise serves
+    // the last good value indefinitely with nothing to show why (PAR-407).
+    console.warn(`[cache] recompute of ${key} failed; serving the previous value:`, e);
   } finally {
     try {
       await r.del(lockKey);
@@ -165,7 +168,7 @@ async function memoLocal<T>(
         const value = await producer();
         l1.set(key, { bucket, value, at: Date.now() });
         return value;
-      }).catch(() => {});
+      }).catch((e) => console.warn(`[cache] recompute of ${key} failed; serving the previous value:`, e));
     }
     return cached.value;
   }

@@ -2,37 +2,34 @@ package io.paradaux.treasuryapi.commands;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.business.api.BusinessApi;
 import io.paradaux.business.model.Firm;
+import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasuryapi.model.economy.ApiKey;
+import io.paradaux.treasuryapi.model.economy.KeyType;
 import io.paradaux.treasuryapi.services.ApiKeyService;
-import org.bukkit.entity.Player;
-
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
+import org.bukkit.entity.Player;
 
 @Singleton
 public class BusinessKeyHandler {
-
-    private static final DateTimeFormatter EXP_FMT =
-            DateTimeFormatter.ofPattern("MM/dd/yy").withZone(ZoneId.systemDefault());
 
     private final ApiKeyService apiKeyService;
     private final BusinessApi businessApi;
     private final Message message;
 
     @Inject
-    public BusinessKeyHandler(ApiKeyService apiKeyService,
-                              BusinessApi businessApi,
-                              Message message) {
+    public BusinessKeyHandler(ApiKeyService apiKeyService, BusinessApi businessApi, Message message) {
         this.apiKeyService = apiKeyService;
         this.businessApi = businessApi;
         this.message = message;
     }
 
     public void doIssue(Player sender, String firmName) {
+        doIssue(sender, firmName, null);
+    }
+
+    public void doIssue(Player sender, String firmName, Integer accountId) {
         Firm firm = businessApi.firms().getFirm(firmName);
         if (firm == null) {
             message.send(sender, "treasuryapi.business.issue.firm-not-found");
@@ -44,30 +41,45 @@ public class BusinessKeyHandler {
             return;
         }
 
-        ApiKey key = apiKeyService.issueBusinessKey(firm.getFirmId(), sender.getUniqueId());
-        message.send(sender, "treasuryapi.business.issue.success",
-                "keyId", String.valueOf(key.getKeyId()),
-                "firmId", String.valueOf(key.getFirmId()),
-                "firmName", firm.getDisplayName(),
-                "token", key.getToken());
+        ApiKey key = accountId == null
+                ? apiKeyService.issueBusinessKey(firm.getFirmId(), sender.getUniqueId())
+                : apiKeyService.issueBusinessKey(firm.getFirmId(), accountId, sender.getUniqueId());
+        message.send(
+                sender,
+                "treasuryapi.business.issue.success",
+                "keyId",
+                String.valueOf(key.getKeyId()),
+                "firmId",
+                String.valueOf(key.getFirmId()),
+                "firmName",
+                firm.getDisplayName(),
+                "scope",
+                scope(key),
+                "token",
+                key.getToken());
     }
 
     public void doList(Player sender) {
-        List<ApiKey> keys = apiKeyService.listKeys(sender.getUniqueId(), "BUSINESS");
+        List<ApiKey> keys = apiKeyService.listKeys(sender.getUniqueId(), KeyType.BUSINESS);
         if (keys.isEmpty()) {
             message.send(sender, "treasuryapi.business.list.empty");
             return;
         }
-        message.send(sender, "treasuryapi.business.list.header",
-                "count", String.valueOf(keys.size()));
+        message.send(sender, "treasuryapi.business.list.header", "count", String.valueOf(keys.size()));
         for (ApiKey key : keys) {
-            String status = key.isRevoked() ? "Revoked" : "Active";
-            String expiry = key.isRevoked() ? "—" : EXP_FMT.format(key.getExpiresAt());
-            message.send(sender, "treasuryapi.business.list.entry",
-                    "keyId", String.valueOf(key.getKeyId()),
-                    "firmId", String.valueOf(key.getFirmId()),
-                    "status", status,
-                    "expiry", expiry);
+            message.send(
+                    sender,
+                    "treasuryapi.business.list.entry",
+                    "keyId",
+                    String.valueOf(key.getKeyId()),
+                    "firmId",
+                    String.valueOf(key.getFirmId()),
+                    "scope",
+                    scope(key),
+                    "status",
+                    ApiKeyView.status(key, message),
+                    "expiry",
+                    ApiKeyView.expiry(key, message));
         }
     }
 
@@ -77,63 +89,78 @@ public class BusinessKeyHandler {
             message.send(sender, "treasuryapi.business.list.access.empty");
             return;
         }
-        message.send(sender, "treasuryapi.business.list.access.header",
-                "count", String.valueOf(keys.size()));
+        message.send(sender, "treasuryapi.business.list.access.header", "count", String.valueOf(keys.size()));
         for (ApiKey key : keys) {
-            String status = key.isRevoked() ? "Revoked" : "Active";
-            String expiry = key.isRevoked() ? "—" : EXP_FMT.format(key.getExpiresAt());
-            message.send(sender, "treasuryapi.business.list.access.entry",
-                    "keyId", String.valueOf(key.getKeyId()),
-                    "firmId", String.valueOf(key.getFirmId()),
-                    "status", status,
-                    "expiry", expiry);
+            message.send(
+                    sender,
+                    "treasuryapi.business.list.access.entry",
+                    "keyId",
+                    String.valueOf(key.getKeyId()),
+                    "firmId",
+                    String.valueOf(key.getFirmId()),
+                    "scope",
+                    scope(key),
+                    "status",
+                    ApiKeyView.status(key, message),
+                    "expiry",
+                    ApiKeyView.expiry(key, message));
         }
-    }
-
-    public void doExport(Player sender, int keyId) {
-        ApiKey key = apiKeyService.getKey(keyId);
-        if (key == null || !"BUSINESS".equals(key.getKeyType())) {
-            message.send(sender, "treasuryapi.business.export.not-found");
-            return;
-        }
-        if (!key.getOwnerUuid().equals(sender.getUniqueId())) {
-            message.send(sender, "treasuryapi.business.export.no-access");
-            return;
-        }
-        String url = apiKeyService.exportToken(keyId);
-        message.send(sender, "treasuryapi.business.export.success",
-                "keyId", String.valueOf(keyId),
-                "url", url);
     }
 
     public void doReissue(Player sender, int keyId) {
         ApiKey key = apiKeyService.getKey(keyId);
-        if (key == null || !"BUSINESS".equals(key.getKeyType())) {
+        if (key == null || key.getKeyType() != KeyType.BUSINESS) {
             message.send(sender, "treasuryapi.business.reissue.not-found");
             return;
         }
-        if (!key.getOwnerUuid().equals(sender.getUniqueId())) {
+        if (!canManage(key, sender)) {
             message.send(sender, "treasuryapi.business.reissue.no-access");
             return;
         }
-        ApiKey updated = apiKeyService.reissueKey(keyId);
-        message.send(sender, "treasuryapi.business.reissue.success",
-                "keyId", String.valueOf(updated.getKeyId()),
-                "token", updated.getToken());
+        // Revocation is terminal (ADT-110); the service rejects reissue of a
+        // revoked key. Pre-check so the proprietor gets a clear message rather
+        // than an error from the thrown exception.
+        if (key.isRevoked()) {
+            message.send(sender, "treasuryapi.business.reissue.revoked");
+            return;
+        }
+        // The service re-checks proprietorship as the authoritative boundary
+        // (pa/0005); these handler branches are the fast path for a clear message.
+        ApiKey updated = apiKeyService.reissueKey(keyId, sender.getUniqueId());
+        message.send(
+                sender,
+                "treasuryapi.business.reissue.success",
+                "keyId",
+                String.valueOf(updated.getKeyId()),
+                "token",
+                updated.getToken());
     }
 
     public void doRevoke(Player sender, int keyId) {
         ApiKey key = apiKeyService.getKey(keyId);
-        if (key == null || !"BUSINESS".equals(key.getKeyType())) {
+        if (key == null || key.getKeyType() != KeyType.BUSINESS) {
             message.send(sender, "treasuryapi.business.revoke.not-found");
             return;
         }
-        if (!key.getOwnerUuid().equals(sender.getUniqueId())) {
+        if (!canManage(key, sender)) {
             message.send(sender, "treasuryapi.business.revoke.no-access");
             return;
         }
-        apiKeyService.revokeKey(keyId);
-        message.send(sender, "treasuryapi.business.revoke.success",
-                "keyId", String.valueOf(keyId));
+        apiKeyService.revokeKey(keyId, sender.getUniqueId());
+        message.send(sender, "treasuryapi.business.revoke.success", "keyId", String.valueOf(keyId));
+    }
+
+    private String scope(ApiKey key) {
+        return key.getAccountId() == null
+                ? message.format("treasuryapi.business.scope.firm")
+                : message.format("treasuryapi.business.scope.account", "accountId", String.valueOf(key.getAccountId()));
+    }
+
+    // ADT-111: a BUSINESS key is firm-scoped, so reissue/revoke must be gated on
+    // CURRENT proprietorship of the key's firm — not on the individual who happened
+    // to issue it. Otherwise, once the issuing proprietor leaves or transfers the
+    // firm, no current proprietor can rotate or revoke the firm's own credential.
+    private boolean canManage(ApiKey key, Player sender) {
+        return key.getFirmId() != null && businessApi.firms().isProprietor(key.getFirmId(), sender.getUniqueId());
     }
 }

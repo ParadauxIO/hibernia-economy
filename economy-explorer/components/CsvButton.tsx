@@ -3,6 +3,7 @@
 // functions can't cross the RSC→client boundary, so we accept the final
 // (header[], row-of-strings[][]) shape. Export is gated to logged-in viewers.
 
+import { Button } from '@democracycraft/design-system';
 import { useIsLoggedIn } from '@/components/ViewerContext';
 
 interface CsvButtonProps {
@@ -17,7 +18,14 @@ export function CsvButton({ filename, headers, rows, label = 'CSV' }: CsvButtonP
   if (!loggedIn) return null;
   function escape(v: string | number | null | undefined): string {
     if (v === null || v === undefined) return '';
-    const s = String(v);
+    let s = String(v);
+    // Neutralize CSV/formula injection: a cell starting with one of these is
+    // interpreted as a formula by Excel/Sheets. Exported fields include
+    // attacker-controllable Minecraft strings (display names, txn messages,
+    // item/player names), so prefix with ' to force it to a literal.
+    if (/^[=+\-@\t\r]/.test(s)) {
+      s = `'${s}`;
+    }
     if (s.includes(',') || s.includes('"') || s.includes('\n')) {
       return `"${s.replace(/"/g, '""')}"`;
     }
@@ -38,8 +46,8 @@ export function CsvButton({ filename, headers, rows, label = 'CSV' }: CsvButtonP
     URL.revokeObjectURL(url);
   }
   return (
-    <button type="button" className="btn" onClick={download} disabled={rows.length === 0} title="Download this page as CSV">
+    <Button onClick={download} disabled={rows.length === 0} title="Download this page as CSV">
       {label}
-    </button>
+    </Button>
   );
 }

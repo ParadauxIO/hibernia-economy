@@ -36,6 +36,7 @@ account.
 Check these:
 
 - You must be **online** — salaries are paid on a timer and skip offline players.
+- You must not be marked AFK when the server skips AFK salaries.
 - Your **role** must have a salary set; not every role does.
 - If you hold several roles, you're paid the **highest one**, not the sum.
 
@@ -47,10 +48,20 @@ See [Government salaries](/docs/guides/salaries) for the full rules.
 
 - **Selling to players:** the chest must actually contain the item, in stock.
 - **Buying from players:** the shop owner (you, or the firm account) must have enough
-  **money** to pay. If it runs out, the buy side pauses until it's topped up.
+  **money** to pay.
+- A shop that's *low* on either still trades a **[partial amount](/docs/guides/chestshop-basics#partial-trades)** —
+  it only stops entirely when a side hits zero. So "nothing happens at all" usually means
+  an empty chest, a broke owner, or a wrong item/price on the sign.
 - Stand in front of the sign and run `/shopinfo` to check the owner, item, and prices.
 
 See [Selling with ChestShops](/docs/guides/chestshop-basics).
+
+### Can I sell custom (Nexo) items in a shop?
+
+Yes — custom items work exactly like vanilla ones. Hold the item and put `?` on the item
+line (line 4), or run `/iteminfo` while holding it to see the name to type. Stock the
+chest with the real custom item. See
+[Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
 
 ### How do I make a shop pay my company instead of me?
 
@@ -80,6 +91,13 @@ Send `/business offer <firm> <player>`; they accept with
 Signing in isn't enough — you also have to **link** your Minecraft account. Open
 [Link your account](/link), generate a code, and run `/treasuryapi ui link <code>`
 in-game within 5 minutes. See [Using the Explorer](/docs/guides/using-the-explorer).
+
+### I forgot my website password.
+
+If already linked, run `/treasuryapi ui resetpassword` then
+`/treasuryapi ui resetpassword confirm` yourself in-game. Use the temporary
+password privately and change it at sign-in. If recovery is unavailable or the
+link is missing, contact staff. See [password recovery](/docs/guides/using-the-explorer#recover-your-website-password).
 
 ### My link code didn't work.
 

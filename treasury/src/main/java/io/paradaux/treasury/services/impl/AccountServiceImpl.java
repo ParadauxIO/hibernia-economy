@@ -1,7 +1,8 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
+import io.paradaux.common.NameReservationErrors;
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.MembershipMapper;
 import io.paradaux.treasury.model.Page;
@@ -9,19 +10,26 @@ import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.economy.AccountTypeTotal;
 import io.paradaux.treasury.model.economy.BalanceEntry;
+import io.paradaux.treasury.model.economy.EconomySummary;
 import io.paradaux.treasury.services.AccountService;
-import io.paradaux.treasury.utils.AccountRedirectCache;
-import io.paradaux.treasury.utils.PersonalAccountCache;
-import org.mybatis.guice.transactional.Transactional;
-
+import io.paradaux.treasury.services.cache.AccountRedirectCache;
+import io.paradaux.treasury.services.cache.PersonalAccountCache;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.mybatis.guice.transactional.Transactional;
 
 @Slf4j
 public class AccountServiceImpl implements AccountService {
@@ -32,21 +40,29 @@ public class AccountServiceImpl implements AccountService {
     private final PersonalAccountCache personalAccountCache;
     private final EconomyConfiguration economyConfig;
     // DecimalFormat is not thread-safe; use a ThreadLocal so each thread gets its own instance.
-    private final ThreadLocal<DecimalFormat> formatter;
+    // Rebuilt when the configured pattern changes so `economy.format` reloads live via
+    // /treasury reload, consistent with currency-name reload (ADT format-pattern-not-reloaded).
+    private volatile ThreadLocal<DecimalFormat> formatter;
+    private volatile String formatterPattern;
 
     @Inject
-    public AccountServiceImpl(AccountMapper accountMapper,
-                              MembershipMapper membershipMapper,
-                              AccountRedirectCache redirectCache,
-                              PersonalAccountCache personalAccountCache,
-                              EconomyConfiguration economyConfig) {
+    public AccountServiceImpl(
+            AccountMapper accountMapper,
+            MembershipMapper membershipMapper,
+            AccountRedirectCache redirectCache,
+            PersonalAccountCache personalAccountCache,
+            EconomyConfiguration economyConfig) {
         this.accountMapper = accountMapper;
         this.membershipMapper = membershipMapper;
         this.redirectCache = redirectCache;
         this.personalAccountCache = personalAccountCache;
         this.economyConfig = economyConfig;
-        String pattern = economyConfig.getEconomyFormat();
-        this.formatter = ThreadLocal.withInitial(() -> {
+        this.formatterPattern = economyConfig.getEconomyFormat();
+        this.formatter = newFormatter(this.formatterPattern);
+    }
+
+    private static ThreadLocal<DecimalFormat> newFormatter(String pattern) {
+        return ThreadLocal.withInitial(() -> {
             DecimalFormat fmt = new DecimalFormat(pattern);
             fmt.setRoundingMode(RoundingMode.HALF_EVEN);
             return fmt;
@@ -60,6 +76,19 @@ public class AccountServiceImpl implements AccountService {
     public BigDecimal getBalanceReadOnly(int accountId) {
         AccountBalance b = accountMapper.readBalance(accountId);
         return b == null ? BigDecimal.ZERO : b.getBalance();
+    }
+
+    @Override
+    @Transactional
+    public Map<Integer, BigDecimal> getBalancesByIds(Collection<Integer> accountIds) {
+        if (accountIds == null || accountIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, BigDecimal> byId = new LinkedHashMap<>();
+        for (AccountBalance b : accountMapper.readBalances(new ArrayList<>(accountIds))) {
+            byId.put(b.getAccountId(), b.getBalance());
+        }
+        return byId;
     }
 
     @Override
@@ -93,6 +122,19 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public Account getAccountById(int accountId) {
         return accountMapper.findById(accountId);
+    }
+
+    @Override
+    @Transactional
+    public Map<Integer, Account> getAccountsByIds(Collection<Integer> accountIds) {
+        if (accountIds == null || accountIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, Account> byId = new LinkedHashMap<>();
+        for (Account a : accountMapper.findByIds(new ArrayList<>(accountIds))) {
+            byId.put(a.getAccountId(), a);
+        }
+        return byId;
     }
 
     @Override
@@ -195,9 +237,22 @@ public class AccountServiceImpl implements AccountService {
         // transaction commits; caching now would leave a stale id if it rolls back.
         // The id is cached on the next resolve, which reads the committed row.
         Account account = buildPersonalAccount(ownerUuid);
-        accountMapper.insertAccount(account);
-        accountMapper.seedBalance(account.getAccountId());
-        return account.getAccountId();
+        try {
+            accountMapper.insertAccount(account);
+            accountMapper.seedBalance(account.getAccountId());
+            return account.getAccountId();
+        } catch (PersistenceException e) {
+            // Concurrent first-login: another thread/process inserted this player's
+            // PERSONAL account between our check and insert, tripping the
+            // uq_one_personal_per_player unique constraint. Re-resolve to the
+            // committed row (with a locking read so REPEATABLE READ sees it) instead
+            // of propagating the duplicate-key error (ADT-33).
+            Integer raced = accountMapper.findPersonalAccountIdLocking(ownerUuid);
+            if (raced != null) {
+                return raced;
+            }
+            throw e;
+        }
     }
 
     // ---- System account convenience ----
@@ -209,12 +264,24 @@ public class AccountServiceImpl implements AccountService {
         if (existing != null) return existing.getAccountId();
         // Vault bridge SYSTEM accounts are faucets/sinks. credit_limit = -1
         // disables the credit-limit check — the account can mint and burn freely.
-        Account acc = new Account(0, AccountType.SYSTEM, owner, pluginName,
-                false, false, true, BigDecimal.valueOf(-1));
-        accountMapper.insertAccount(acc);
-        accountMapper.seedBalance(acc.getAccountId());
-        log.info("Created SYSTEM account for plugin '{}' (id={})", pluginName, acc.getAccountId());
-        return acc.getAccountId();
+        Account acc = new Account(0, AccountType.SYSTEM, owner, pluginName, false, false, true, BigDecimal.valueOf(-1));
+        try {
+            accountMapper.insertAccount(acc);
+            accountMapper.seedBalance(acc.getAccountId());
+            log.info("Created SYSTEM account for plugin '{}' (id={})", pluginName, acc.getAccountId());
+            return acc.getAccountId();
+        } catch (PersistenceException e) {
+            // Concurrent first-resolve: another thread/process inserted this
+            // plugin's SYSTEM account between our check and insert, tripping
+            // uq_one_system_per_plugin (V24). Re-resolve to the committed row (with
+            // a locking read so REPEATABLE READ sees it) instead of propagating the
+            // duplicate-key error — mirrors getOrCreatePersonalAccountId (ADT-74).
+            Integer raced = accountMapper.findSystemAccountIdForPluginLocking(pluginName);
+            if (raced != null) {
+                return raced;
+            }
+            throw e;
+        }
     }
 
     // ---- Account lifecycle ----
@@ -225,6 +292,7 @@ public class AccountServiceImpl implements AccountService {
         Objects.requireNonNull(accountType, "accountType");
         Objects.requireNonNull(ownerUuid, "ownerUuid");
         Objects.requireNonNull(displayName, "displayName");
+        displayName = displayName.replaceAll("^ +| +$", "");
 
         Account account = new Account();
         account.setAccountType(accountType);
@@ -232,13 +300,34 @@ public class AccountServiceImpl implements AccountService {
         account.setDisplayName(displayName);
         account.setRequiresAuthorization(false);
         account.setArchived(false);
-        account.setAllowOverdraft(false);
-        account.setCreditLimit(BigDecimal.ZERO);
+        if (accountType == AccountType.SYSTEM) {
+            // SYSTEM accounts are faucets/sinks that mint and burn freely — they ignore
+            // credit limits. Default them to the -1 sentinel so the sentinel and the
+            // type-based OverdraftPolicy check agree (PAR-319). Mirrors the direct
+            // faucet defaults in getOrCreateSystemAccountId.
+            account.setAllowOverdraft(true);
+            account.setCreditLimit(BigDecimal.valueOf(-1));
+        } else {
+            account.setAllowOverdraft(false);
+            account.setCreditLimit(BigDecimal.ZERO);
+        }
 
-        accountMapper.insertAccount(account);
+        try {
+            accountMapper.insertAccount(account);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                // Preserve the JDBC cause so other plugin classloaders can classify the signal.
+                throw new ConflictException(message, e);
+            });
+            throw e;
+        }
         accountMapper.seedBalance(account.getAccountId());
-        log.debug("Created {} account '{}' (id={}, owner={})",
-                accountType, displayName, account.getAccountId(), ownerUuid);
+        log.debug(
+                "Created {} account '{}' (id={}, owner={})",
+                accountType,
+                displayName,
+                account.getAccountId(),
+                ownerUuid);
         return account;
     }
 
@@ -246,10 +335,21 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public void updateAccount(Account account) {
         Objects.requireNonNull(account, "account");
+        if (account.getDisplayName() != null) {
+            account.setDisplayName(account.getDisplayName().replaceAll("^ +| +$", ""));
+        }
         if (accountMapper.findById(account.getAccountId()) == null) {
             throw new IllegalArgumentException("Account not found: " + account.getAccountId());
         }
-        accountMapper.updateAccount(account);
+        try {
+            accountMapper.updateAccount(account);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                // Preserve the JDBC cause so other plugin classloaders can classify the signal.
+                throw new ConflictException(message, e);
+            });
+            throw e;
+        }
     }
 
     @Override
@@ -330,10 +430,38 @@ public class AccountServiceImpl implements AccountService {
         return new Page<>(items, total, offset, limit);
     }
 
+    @Override
+    @Transactional
+    public EconomySummary getEconomySummary() {
+        BigDecimal personal = BigDecimal.ZERO;
+        BigDecimal business = BigDecimal.ZERO;
+        BigDecimal government = BigDecimal.ZERO;
+
+        for (AccountTypeTotal row : accountMapper.getEconomyTotalsByType()) {
+            BigDecimal total = row.getTotal() != null ? row.getTotal() : BigDecimal.ZERO;
+            switch (row.getAccountType()) {
+                case PERSONAL -> personal = total;
+                case BUSINESS -> business = total;
+                case GOVERNMENT -> government = total;
+                default -> {
+                    /* SYSTEM is excluded by the query */
+                }
+            }
+        }
+        return new EconomySummary(personal, business, government);
+    }
+
     // ---- Formatting ----
 
     @Override
     public String formatAmount(BigDecimal amount) {
+        // Rebuild the formatter if economy.format changed via /treasury reload, so the
+        // pattern updates live like the currency names (ADT format-pattern-not-reloaded).
+        String current = economyConfig.getEconomyFormat();
+        if (!current.equals(formatterPattern)) {
+            formatter = newFormatter(current);
+            formatterPattern = current;
+        }
         BigDecimal scaled = amount.setScale(2, RoundingMode.HALF_EVEN);
         return formatter.get().format(scaled);
     }

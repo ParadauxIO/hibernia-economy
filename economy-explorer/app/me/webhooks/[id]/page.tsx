@@ -1,3 +1,4 @@
+import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -5,8 +6,10 @@ import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { findForOwner, listRecentDeliveries } from '@/lib/sql/webhook';
-import { fmtN, fmtTs } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { RotateSecretButton } from './rotate-secret-button';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +28,7 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
   const id = Number(idStr);
 
   const viewer = await getViewer();
+  if (!viewer.anon && !hasPermission(viewer, 'webhooks.read')) return <PrivacyGate kind="private" title="Permission required" />;
   if (viewer.anon) return <PrivacyGate kind="login" title="Webhook deliveries" hint="Sign in to view your webhook delivery history." />;
   if (!viewer.linked || !viewer.minecraftUuid) {
     return <PrivacyGate kind="link" title="Link your Minecraft account" hint="You're signed in but not yet linked." />;
@@ -56,14 +60,14 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
             ? <span className="badge badge-active">active</span>
             : <span className="badge badge-archived">{hook.disabledAt ? 'auto-disabled' : 'paused'}</span>}
           <span className="muted small">consecutive failures: <span className="mono">{fmtN(hook.consecutiveFailures)}</span></span>
-          {hook.disabledAt && <span className="muted small">disabled {fmtTs(hook.disabledAt)}</span>}
-          <span style={{ marginLeft: 'auto' }}><RotateSecretButton id={hook.id} /></span>
+          {hook.disabledAt && <span className="muted small">disabled <LocalTimestamp value={hook.disabledAt} /></span>}
+          <span style={{ marginLeft: 'auto' }}>{hasPermission(viewer, 'webhooks.manage') && <RotateSecretButton id={hook.id} />}</span>
         </div>
       </div>
 
       <div className="card">
         <div className="card-title">Recent deliveries <span className="sub">latest 50</span></div>
-        <div className="table-wrap">
+        <TableWrap label="Recent deliveries">
           <table className="data-table">
             <thead>
               <tr>
@@ -87,13 +91,13 @@ export default async function WebhookDetailPage({ params }: { params: Promise<{ 
                   <td className="amount mono">{fmtN(d.attempts)}</td>
                   <td className="amount mono">{d.httpStatus ?? <span className="muted">—</span>}</td>
                   <td>{d.lastError ? <span className="small">{d.lastError}</span> : <span className="muted">—</span>}</td>
-                  <td className="ts">{d.status === 'PENDING' ? fmtTs(d.nextAttemptAt) : <span className="muted">—</span>}</td>
-                  <td className="ts">{fmtTs(d.createdAt)}</td>
+                  <td className="ts">{d.status === 'PENDING' ? <LocalTimestamp value={d.nextAttemptAt} /> : <span className="muted">—</span>}</td>
+                  <td className="ts"><LocalTimestamp value={d.createdAt} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       </div>
     </>
   );
