@@ -41,7 +41,9 @@ That's it. The next settled transaction on that account/firm will arrive at your
 > [!TIP]
 > Prefer to manage webhooks programmatically? You can also create them through the REST
 > API (`/api/v1/webhooks`, scoped to an API key) — see
-> [Using the economy API](/docs/guides/api) and the Swagger reference.
+> [Using the economy API](/docs/guides/api) and the Swagger reference. A business key
+> restricted to one account subscribes only to that account; a firm-wide key
+> subscribes to all live linked accounts.
 
 ## Send it to Discord (the easy way)
 
@@ -108,7 +110,10 @@ import crypto from 'node:crypto';
 function isValid(rawBody, signatureHeader, secret) {
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   // constant-time compare
-  return crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(expected));
+  if (typeof signatureHeader !== 'string') return false;
+  const actual = Buffer.from(signatureHeader);
+  const wanted = Buffer.from(expected);
+  return actual.length === wanted.length && crypto.timingSafeEqual(actual, wanted);
 }
 ```
 
@@ -128,7 +133,9 @@ and the body is Discord's embed shape, not our event) — so don't expect one th
 - **Auto-disable.** After many consecutive failures a webhook is automatically paused so
   a dead endpoint doesn't pile up forever. Fix your endpoint and **re-enable** it.
 - **At-least-once.** A delivery can, rarely, arrive more than once — use the
-  `deliveryId` (or `txnId`) to de-duplicate on your side.
+  `deliveryId` to de-duplicate on your side. A firm subscription can receive
+  multiple account postings for the same transaction; `txnId` alone would drop
+  valid events.
 
 ## Managing your webhooks
 

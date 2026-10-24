@@ -69,6 +69,7 @@ export interface Accounts {
   isArchived: Generated<number>;
   ownerUuidBin: Buffer;
   requiresAuthorization: Generated<number>;
+  systemPluginKey: Generated<string | null>;
 }
 
 export interface ApiKeys {
@@ -214,8 +215,15 @@ export interface ExplorerGroupMember {
   addedByUuidBin: Generated<Buffer | null>;
   groupId: number;
   playerUuidBin: Buffer;
-  source: Generated<"luckperms" | "manual">;
+  source: Generated<"business" | "luckperms" | "manual" | "realty">;
   syncedAt: Generated<Date | null>;
+  syncSelector: Generated<string | null>;
+}
+
+export interface ExplorerGroupSync {
+  groupId: number;
+  selector: string;
+  source: "business" | "realty";
 }
 
 export interface ExplorerIdentity {
@@ -367,6 +375,19 @@ export interface FlywaySchemaHistory {
   version: Generated<string | null>;
 }
 
+export interface GlobalNameClaims {
+  entityKey: Generated<string | null>;
+  nameKey: Generated<string | null>;
+  sourceKind: string;
+  subjectId: string;
+}
+
+export interface GlobalNameReservations {
+  claimCount: number;
+  entityKey: string;
+  nameKey: string;
+}
+
 export interface GovernmentFines {
   amount: Decimal;
   debtorAccountId: Generated<number | null>;
@@ -398,6 +419,7 @@ export interface LedgerTxns {
   message: string;
   pluginSystem: Generated<string | null>;
   settlementTime: Generated<Date>;
+  taxKind: Generated<string | null>;
   tradeTime: Generated<Date>;
   txnId: Generated<number>;
 }
@@ -482,6 +504,7 @@ export interface DB {
   explorerGroup: ExplorerGroup;
   explorerGroupCapability: ExplorerGroupCapability;
   explorerGroupMember: ExplorerGroupMember;
+  explorerGroupSync: ExplorerGroupSync;
   explorerIdentity: ExplorerIdentity;
   explorerLinkCode: ExplorerLinkCode;
   explorerLpGroupMember: ExplorerLpGroupMember;
@@ -500,6 +523,8 @@ export interface DB {
   firmShopAliasReservations: FirmShopAliasReservations;
   firmTransferRequests: FirmTransferRequests;
   flywaySchemaHistory: FlywaySchemaHistory;
+  globalNameClaims: GlobalNameClaims;
+  globalNameReservations: GlobalNameReservations;
   governmentFines: GovernmentFines;
   ledgerPostings: LedgerPostings;
   ledgerTxns: LedgerTxns;

@@ -9,7 +9,7 @@ import { listGroups } from '@/lib/services/group';
 import { fmtN } from '@/lib/format';
 import { CreateGroupForm } from './create-group-form';
 import { DeleteGroupButton } from './delete-group-button';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,6 +1,6 @@
 // Generic placeholder for pages whose SQL/visuals haven't been ported yet.
 // Used during Phase 2/2.5 — every nav target gets a 200 with a clear message.
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 
 interface ComingSoonProps {
   title: string;

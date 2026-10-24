@@ -10,7 +10,7 @@ import { searchPlayers } from '@/lib/sql/me';
 import { fmtN } from '@/lib/format';
 import { Player } from '@/components/Player';
 import { Toolbar } from '@/components/Toolbar';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

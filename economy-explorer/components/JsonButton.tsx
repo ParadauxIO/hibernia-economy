@@ -3,6 +3,7 @@
 // functions across the RSC→client boundary. Export is gated to logged-in
 // viewers.
 
+import { Button } from '@democracycraft/design-system';
 import { useIsLoggedIn } from '@/components/ViewerContext';
 
 interface JsonButtonProps {
@@ -27,8 +28,8 @@ export function JsonButton({ filename, data, label = 'JSON' }: JsonButtonProps) 
     URL.revokeObjectURL(url);
   }
   return (
-    <button type="button" className="btn" onClick={download} title="Download this page as JSON">
+    <Button onClick={download} title="Download this page as JSON">
       {label}
-    </button>
+    </Button>
   );
 }

@@ -1,6 +1,6 @@
 
 // =============================================================================
-// ChestShop — a single Paper plugin module, compiled against the Paper 1.21.11
+// ChestShop — a single Paper plugin module, compiled against the Paper 26.3
 // API and shaded straight to chestshop-<version>.jar. The former per-server-version
 // adapter modules + the assemble module (and the old `:chestshop:plugin`
 // nesting) were folded into this one module once the core adopted a single
@@ -16,7 +16,7 @@ plugins {
     id("io.paradaux.mutation-testing-conventions")
 }
 
-// The Java toolchain (21) and JavaCompile encoding/release come from
+// The Java toolchain (25) and JavaCompile encoding/release come from
 // io.paradaux.jvm-conventions. ChestShop keeps its own bespoke repositories,
 // shadow relocations, resource filtering, and build metadata below — they
 // diverge too far from the other plugins to share.
@@ -63,18 +63,15 @@ val pluginVersion = project.version.toString()
 // separate startup task also verifies the optional editing APIs are absent.
 configurations.testCompileOnly.get().extendsFrom(configurations.compileOnly.get())
 
-// EngineHub moved its toolchain to Java 25, so anything they publish from now on
-// is unusable on our Java 21 toolchain. Pin both lines to the last Java-21
-// artifacts and never track a moving snapshot: WorldEdit at 7.3.9 (the 8.0.0
-// -SNAPSHOT WorldGuard drags in is Java 25), WorldGuard at 7.0.17 (7.0.18 and the
-// 7.1.0-SNAPSHOT it used to resolve are both Java 25). (PAR-330)
+// Keep reproducible released editing APIs rather than resolving moving snapshots.
+// These pins remain independent of the Java 25 toolchain baseline.
 configurations.configureEach {
     resolutionStrategy {
         force(
-            "com.sk89q.worldedit:worldedit-core:7.3.9",
-            "com.sk89q.worldedit:worldedit-bukkit:7.3.9",
-            "com.sk89q.worldguard:worldguard-core:7.0.17",
-            "com.sk89q.worldguard:worldguard-bukkit:7.0.17",
+            "com.sk89q.worldedit:worldedit-core:7.4.6",
+            "com.sk89q.worldedit:worldedit-bukkit:7.4.6",
+            "com.sk89q.worldguard:worldguard-core:7.0.20",
+            "com.sk89q.worldguard:worldguard-bukkit:7.0.20",
         )
     }
 }
@@ -91,28 +88,19 @@ dependencies {
     testCompileOnly(libs.lombok)
     testAnnotationProcessor(libs.lombok)
 
-    // --- soft-depend plugin APIs: compiled against, never shaded, and resolved
-    //     NON-TRANSITIVELY. We reference each plugin's own classes only; pulling
-    //     their full dependency closures (as Gradle's compileOnly does, unlike
-    //     Maven's provided scope) drags in dead/incompatible artifacts — e.g.
-    //     RedProtect -> de.keyle:mypet (gone), worldguard -> worldedit 8.0.0
-    //     -SNAPSHOT (needs Java 25). Add a specific transitive back explicitly
-    //     below only if compilation actually requires it.
-    // WorldGuard integration genuinely needs WorldGuard's transitives (StateFlag,
-    // Flags, RegionPermissionModel) + WorldEdit's BukkitAdapter, so these stay
-    // transitive — but WorldEdit is force-pinned to 7.3.9 below (the snapshot
-    // chain otherwise resolves worldedit 8.0.0-SNAPSHOT, which needs Java 25).
-    compileOnly("com.sk89q.worldedit:worldedit-core:7.3.9") { isTransitive = false }
-    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.9") { isTransitive = false }
+    // Soft-depend APIs are server-provided and never shaded. Resolve them without
+    // transitives to avoid duplicate Bukkit APIs and moving WorldEdit snapshots.
+    // Keep compile/test APIs aligned with the 26.3-compatible harness releases.
+    compileOnly("com.sk89q.worldedit:worldedit-core:7.4.6") { isTransitive = false }
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.6") { isTransitive = false }
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.16.1") { isTransitive = false }
     // WorldGuard soft-depend: pull only its own API jars, non-transitively, so
     // none of its server-provided transitives (bukkit/gson/fastutil/guava) fight
     // paper-api. They carry the classes we touch (WorldGuard, StateFlag, Flags,
     // RegionPermissionModel, WorldGuardPlugin). Pinned to a release, not
-    // 7.1.0-SNAPSHOT — that snapshot moved to Java 25 on 2026-08-01 and broke the
-    // build with no commit of ours involved. (PAR-330)
-    compileOnly("com.sk89q.worldguard:worldguard-core:7.0.17") { isTransitive = false }
-    compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.17") { isTransitive = false }
+    // a moving 7.1.0-SNAPSHOT.
+    compileOnly("com.sk89q.worldguard:worldguard-core:7.0.20") { isTransitive = false }
+    compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.20") { isTransitive = false }
     compileOnly("com.github.TechFortress:GriefPrevention:16.12.0") { isTransitive = false }
     compileOnly("com.nexomc:nexo:1.15.0") { isTransitive = false }
     // Direct project dependencies on the in-repo API modules (ADT stale-chestshop-substitution-comment):
@@ -143,16 +131,20 @@ dependencies {
     // removed: MineDown's internals implemented a now-sealed Adventure interface and
     // broke at runtime. Messaging now uses the framework i18n + messages.properties).
     // ChestShop compiles against the serializers it uses directly; Paper supplies them.
-    compileOnly("net.kyori:adventure-text-serializer-gson:5.2.0")
-    compileOnly("net.kyori:adventure-text-serializer-legacy:5.2.0")
+    // Keep the Adventure 4 API supplied by Paper: compiling against Adventure 5
+    // produces incompatible builder calls (FindDialogTest catches NoSuchMethodError).
+    compileOnly("net.kyori:adventure-text-serializer-gson:4.21.0")
+    compileOnly("net.kyori:adventure-text-serializer-legacy:4.21.0")
 
     // --- tests
     // Server API on the test runtime (tests mock/instantiate org.bukkit.* types).
     testImplementation(libs.paper.api)
     // Only EngineHub API jars, never their transitive Bukkit implementations.
-    testRuntimeOnly("com.sk89q.worldedit:worldedit-core:7.3.9") { isTransitive = false }
-    testRuntimeOnly("com.sk89q.worldguard:worldguard-core:7.0.17") { isTransitive = false }
-    testRuntimeOnly("com.sk89q.worldedit.worldedit-libs:core:7.3.9") { isTransitive = false }
+    testRuntimeOnly("com.sk89q.worldedit:worldedit-core:7.4.6") { isTransitive = false }
+    testRuntimeOnly("com.sk89q.worldguard:worldguard-core:7.0.20") { isTransitive = false }
+    testRuntimeOnly("com.sk89q.worldedit.worldedit-libs:core:7.4.6") { isTransitive = false }
+    // WorldEdit 7.4 uses LinBus tags in its public EditSession signatures.
+    testRuntimeOnly("org.enginehub.lin-bus:lin-bus-tree:0.2.0")
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
@@ -161,7 +153,7 @@ dependencies {
     testImplementation(libs.assertj.core)
     // MockBukkit — a real in-memory server so Bukkit-coupled services are exercised for
     // real (ItemStacks, inventories, signs) rather than mock-verified.
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.116.3")
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.118.0")
 
     // Shared startup + message-key test-kit (the startup + messages.properties audit).
     // Brings JUnit, Guice, the framework and MockBukkit transitively (declared `api`
@@ -198,7 +190,7 @@ tasks.processResources {
 
 tasks.test {
     useJUnitPlatform()
-    // Mockito's inline mock maker attaches its agent dynamically on JDK 21+.
+    // Mockito's inline mock maker attaches its agent dynamically on JDK 25+.
     jvmArgs("-XX:+EnableDynamicAgentLoading")
 }
 
@@ -388,7 +380,7 @@ val testWithoutWorldEditingApis = tasks.register<Test>("testWithoutWorldEditingA
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath.filter {
         !it.name.startsWith("worldedit-") && !it.name.startsWith("worldguard-") &&
-            it.name != "core-7.3.9.jar"
+            it.name != "core-7.4.6.jar"
     }
     include("**/ChestShopStartupTest*")
     useJUnitPlatform()

@@ -11,11 +11,17 @@ spend, and manage money** in-game — running a business, hiring staff, selling 
 through ChestShops, and buying or renting property — and lists every command you'll
 need along the way.
 
-Everything here is about what you type **in-game**. If you just want to *browse* the
-economy — balances, market prices, money flow — head back to the
-[Economy Explorer](/) instead.
+These docs cover in-game commands, the website, and integrations. See
+[Using the Explorer](/docs/guides/using-the-explorer) to browse balances, markets,
+and money flow, or return to the [Economy Explorer](/).
 
 ## New here? Start with the basics
+
+Business, Treasury, ChestShop, and TreasuryAPI use light blue for plugin names,
+headings, commands, and highlighted values, with light grey labels and metadata.
+Green marks money and success, soft red marks errors and deductions, and yellow
+draws attention to warnings. Chat background opacity and resource packs can affect
+how these colours appear.
 
 You already have a balance the moment you join. The three commands you'll use most:
 
@@ -79,3 +85,5 @@ What each plugin is, who made it, and every command it provides:
 > [!NOTE]
 > Some commands need a permission or a role — those are called out where they apply.
 > If a command says "nothing happens", you probably don't have access to it yet.
+
+- **[TreasuryAPI](/docs/reference/treasury-api)** — API keys, linking, password recovery and access commands.

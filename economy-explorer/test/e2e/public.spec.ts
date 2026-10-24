@@ -174,9 +174,12 @@ test('mobile account rows keep balances visible and expand secondary details', a
 });
 
 
-test('wealth keeps signed balances visible on mobile', async ({ page }) => {
+test('wealth labels chart slices and keeps signed balances visible on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await visit(page, '/economy/wealth');
+  for (const type of ['PERSONAL', 'BUSINESS', 'GOVERNMENT']) {
+    await expect(page.getByRole('img', { name: new RegExp(`^${type}: .+\\d, [\\d,]+ accounts$`) })).toBeVisible();
+  }
   for (const table of await page.locator('.directory-table').all()) {
     const balance = table.locator('tbody tr').first().locator('td.amount:visible').first();
     await expect(balance).toBeVisible();
@@ -189,14 +192,14 @@ test('taxation aggregates are public, bounded and responsive', async ({ page }) 
   const errors = trackErrors(page);
   await visit(page, '/economy/taxation?days=invalid');
   await expect(page.getByRole('heading', { name: 'Taxation', exact: true })).toBeVisible();
-  await expect(page.locator('.window-tabs a.active')).toHaveText('30d');
+  await expect(page.locator('.window-tabs a.active')).toHaveText('30 days');
   await expect(page.getByRole('heading', { name: 'Revenue by type' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Where it lands' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Rates in effect' })).toBeVisible();
   await expect(page.locator('.privacy-gate')).toHaveCount(0);
   await expect(page.locator('a[href^="/transactions/"], a[href^="/players/"]')).toHaveCount(0);
-  await page.getByRole('link', { name: '7d', exact: true }).click();
-  await expect(page.locator('.window-tabs a.active')).toHaveText('7d');
+  await page.getByRole('link', { name: '7 days', exact: true }).click();
+  await expect(page.locator('.window-tabs a.active')).toHaveText('7 days');
   await expect(page.locator('.section-tabs a.active')).toHaveText('Taxation');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   expect(errors.filter(e => /#\d+/.test(e))).toEqual([]);

@@ -36,6 +36,7 @@ account.
 Check these:
 
 - You must be **online** — salaries are paid on a timer and skip offline players.
+- You must not be marked AFK when the server skips AFK salaries.
 - Your **role** must have a salary set; not every role does.
 - If you hold several roles, you're paid the **highest one**, not the sum.
 
@@ -90,6 +91,13 @@ Send `/business offer <firm> <player>`; they accept with
 Signing in isn't enough — you also have to **link** your Minecraft account. Open
 [Link your account](/link), generate a code, and run `/treasuryapi ui link <code>`
 in-game within 5 minutes. See [Using the Explorer](/docs/guides/using-the-explorer).
+
+### I forgot my website password.
+
+If already linked, run `/treasuryapi ui resetpassword` then
+`/treasuryapi ui resetpassword confirm` yourself in-game. Use the temporary
+password privately and change it at sign-in. If recovery is unavailable or the
+link is missing, contact staff. See [password recovery](/docs/guides/using-the-explorer#recover-your-website-password).
 
 ### My link code didn't work.
 

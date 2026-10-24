@@ -1,13 +1,13 @@
 import { CopyServer } from '@/components/CopyServer';
 import { serverIdentity } from '@/lib/serverIdentity';
 import { serverStatus } from '@/lib/serverStatus';
+import { Suspense } from 'react';
 
 // Server-rendered footer. Server name / address / emblem come from the
 // serverIdentity helper (env overrides with theme-derived defaults).
-export async function Footer({ theme }: { theme: 'blue' | 'red' }) {
+export function Footer({ theme }: { theme: 'blue' | 'red' }) {
   const { name, ip, icon } = serverIdentity(theme);
   const year = process.env.BUILD_YEAR ?? '';
-  const status = await serverStatus(ip);
 
   return (
     <footer className="explorer-footer">
@@ -22,12 +22,7 @@ export async function Footer({ theme }: { theme: 'blue' | 'red' }) {
         </div>
 
         <div className="footer-join">
-          {status.online && status.players != null && (
-            <span className="footer-online" title={`${status.players}${status.max != null ? ` / ${status.max}` : ''} players online`}>
-              <span className="online-dot" />
-              {status.players.toLocaleString()} online
-            </span>
-          )}
+          <Suspense fallback={null}><OnlinePlayers ip={ip} /></Suspense>
           <span className="footer-join-label">Play now</span>
           <CopyServer ip={ip} />
         </div>
@@ -40,5 +35,17 @@ export async function Footer({ theme }: { theme: 'blue' | 'red' }) {
         </div>
       </div>
     </footer>
+  );
+}
+
+// An external server-list API must never block the root layout or navigation.
+async function OnlinePlayers({ ip }: { ip: string }) {
+  const status = await serverStatus(ip);
+  if (!status.online || status.players == null) return null;
+  return (
+    <span className="footer-online" title={`${status.players}${status.max != null ? ` / ${status.max}` : ''} players online`}>
+      <span className="online-dot" />
+      {status.players.toLocaleString()} online
+    </span>
   );
 }

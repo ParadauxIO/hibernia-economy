@@ -1,18 +1,20 @@
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
+  transpilePackages: ['@democracycraft/design-system'],
   // Multi-stage Docker build copies .next/standalone — trims node_modules to
   // only what server.js actually imports.
   output: 'standalone',
 
   // Bot mitigation: never let an intermediate cache hold rendered HTML, and
   // keep the app out of search. The /docs documentation site is the deliberate
-  // exception — it's public and indexable, so it's excluded from this rule
-  // (negative lookahead) and given its own cacheable + indexable headers below.
+  // exception — it's public and indexable. Build-hashed assets must also be
+  // excluded: overriding their immutable cache headers forces every visit to
+  // download the same JavaScript, CSS and fonts again.
   async headers() {
     return [
       {
-        source: '/((?!docs).*)',
+        source: '/((?!docs|_next/static).*)',
         headers: [
           { key: 'Cache-Control', value: 'no-store' },
           { key: 'X-Robots-Tag', value: 'noindex, nofollow' },

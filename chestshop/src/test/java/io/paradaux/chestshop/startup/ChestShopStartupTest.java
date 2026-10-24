@@ -101,10 +101,13 @@ class ChestShopStartupTest {
                         ResyncCommand.class)
                 .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
                 .dialogs(FindDialog.class)
+                .menus(
+                        io.paradaux.chestshop.dialogs.FindResultsMenu.class,
+                        io.paradaux.chestshop.dialogs.PurchasePreviewMenu.class,
+                        io.paradaux.chestshop.dialogs.ShopVariantsMenu.class)
                 .listeners(
                         IntegrationRegistrar.class,
                         io.paradaux.chestshop.integration.LegacyCompatibility.class,
-                        io.paradaux.chestshop.dialogs.FindResultsMenu.class,
                         SignBreakListener.class,
                         PhysicsBreakListener.class,
                         PaperBlockDestroyListener.class,
@@ -133,5 +136,7 @@ class ChestShopStartupTest {
 
         Injector injector = Guice.createInjector(modules);
         HiberniaStartupAssertion.assertRegisters(injector);
+        injector.getInstance(io.paradaux.hibernia.framework.curator.MenuManager.class)
+                .registerAll();
     }
 }

@@ -19,8 +19,8 @@ Every government account has three tiers of access (`VIEWER` < `MEMBER` < `AUTHO
   access.
 - **Members** can do everything a viewer can **and spend** from it (`/government pay`,
   `/government payout`).
-- **Authorizers** can do everything a member can, **plus manage who has access** — adding
-  and removing viewers, members and other authorizers.
+- **Authorizers** can do everything a member can. With `treasury.gov.account.manage`
+  they can manage viewers/members; only `treasury.gov.admin` can manage authorizers.
 
 Each tier includes the ones below it. Viewing is gated by viewer access, spending by
 membership, and managing access by authorizer status.
@@ -69,6 +69,9 @@ access with:
 > [!NOTE]
 > Managing **viewers** is gated like managing members — it needs
 > `treasury.gov.account.manage` (plus authorizer access on the account).
+
+Authorizer grants require an existing member grant for that same player/group.
+Add the member first, then the authorizer; verify each list afterward.
 
 ### Prefer groups
 

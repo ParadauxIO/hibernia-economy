@@ -309,6 +309,7 @@ class MarketServiceImplTest extends ServerTest {
         sword.setItemMeta(meta);
         when(items.getName(sword, 0)).thenReturn("nexo:excalibur#01");
         when(itemCodes.encode(sword, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("DIAMOND_SWORD");
+        when(itemCodes.encode(sword, 0)).thenReturn("DIAMOND_SWORD");
 
         Sign sign = signAt(0, 5, 0, "Owner", "1", "B 10", "Diamond Sword");
         ChestShopSaleRecord rec = market.sale(
@@ -339,6 +340,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = noMetaItem(Material.STONE);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
 
         Sign sign = signAt(1, 5, 1, "Owner", "1", "B 10", "Stone");
         MarketService.Owner admin = new MarketService.Owner(null, null, null, null, true);
@@ -357,6 +359,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 1);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
 
         Sign sign = mock(Sign.class);
         when(sign.getLocation()).thenReturn(new Location(null, 3, 4, 5));
@@ -383,6 +386,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 1);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
 
         Sign sign = signAt(2, 5, 2, "Owner", "16", "B 10 : S 5", "Stone");
         ChestShopShopRecord rec = market.shop(sign, stone, personalOwner(), 32, 100);
@@ -401,6 +405,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 1);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
 
         Sign sign = signAt(3, 5, 3, "Owner", "1", "S 5", "Stone"); // sell only -> buyPrice null
         MarketService.Owner admin = new MarketService.Owner(null, null, null, null, true);
@@ -417,6 +422,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 1);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
 
         Sign sign = signAt(6, 5, 6, "Owner", "1", "B 10", "Stone");
         ChestShopShopRecord rec = market.shop(sign, stone, personalOwner(), 1, 1);
@@ -429,6 +435,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 3);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
 
         Sign sign = signAt(4, 5, 4, "Owner", "abc", "B 10", "Stone"); // "abc" -> getQuantity throws
         ChestShopShopRecord rec = market.shop(sign, stone, personalOwner(), 1, 1);
@@ -440,6 +447,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 1);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
 
         Sign sign = mock(Sign.class);
         when(sign.getLocation()).thenReturn(new Location(null, 10, 20, 30));
@@ -475,6 +483,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 1); // no meta
         when(items.getName(stone, 0)).thenReturn("nexo:ruby_sword#02");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
         ChestShopSaleRecord rec = saleOf(stone);
         assertThat(rec.itemCustom()).isTrue();
         assertThat(rec.itemName()).isEqualTo("Ruby Sword"); // pretty(canonical), colon+hash stripped
@@ -486,6 +495,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = noMetaItem(Material.STONE);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE");
         ChestShopSaleRecord rec = saleOf(stone);
         assertThat(rec.itemCustom()).isFalse();
         assertThat(rec.itemName()).isEqualTo("Stone");
@@ -497,6 +507,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = item(Material.STONE, 1);
         when(items.getName(stone, 0)).thenThrow(new RuntimeException("no resolver")); // canonicalCode -> null
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE#3");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE#3");
         ChestShopSaleRecord rec = saleOf(stone);
         assertThat(rec.itemCustom()).isTrue(); // vanilla contains '#'
         assertThat(rec.itemKey()).isEqualTo("STONE#3"); // code null -> encode
@@ -511,6 +522,7 @@ class MarketServiceImplTest extends ServerTest {
         diamond.setItemMeta(meta);
         when(items.getName(diamond, 0)).thenReturn("DIAMOND");
         when(itemCodes.encode(diamond, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("DIAMOND");
+        when(itemCodes.encode(diamond, 0)).thenReturn("DIAMOND");
         ChestShopSaleRecord rec = saleOf(diamond);
         assertThat(rec.itemCustom()).isTrue(); // canonical==vanilla, no '#', but hasItemMeta
         assertThat(rec.itemName()).isEqualTo("Diamond");
@@ -521,6 +533,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = noMetaItem(Material.STONE);
         when(items.getName(stone, 0)).thenReturn("STONE");
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn(null); // vanilla null
+        when(itemCodes.encode(stone, 0)).thenReturn(null); // vanilla null
         ChestShopSaleRecord rec = saleOf(stone);
         assertThat(rec.itemCustom()).isFalse();
         assertThat(rec.itemKey()).isEqualTo("STONE");
@@ -531,6 +544,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = noMetaItem(Material.STONE);
         when(items.getName(stone, 0)).thenThrow(new RuntimeException("x")); // canonical null
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn(null); // vanilla null
+        when(itemCodes.encode(stone, 0)).thenReturn(null); // vanilla null
         ChestShopSaleRecord rec = saleOf(stone);
         assertThat(rec.itemCustom()).isFalse();
         assertThat(rec.itemKey()).isNull();
@@ -542,6 +556,7 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack stone = noMetaItem(Material.STONE);
         when(items.getName(stone, 0)).thenReturn("   "); // canonical present but blank
         when(itemCodes.encode(stone, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE#1");
+        when(itemCodes.encode(stone, 0)).thenReturn("STONE#1");
         ChestShopSaleRecord rec = saleOf(stone);
         assertThat(rec.itemCustom()).isTrue();
         assertThat(rec.itemName()).isEqualTo("Stone"); // blank canonical -> pretty(type)
@@ -554,11 +569,13 @@ class MarketServiceImplTest extends ServerTest {
         ItemStack a = noMetaItem(Material.STONE);
         when(items.getName(a, 0)).thenReturn("mymod:_sword");
         when(itemCodes.encode(a, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(a, 0)).thenReturn("STONE");
         assertThat(saleOf(a).itemName()).isEqualTo("Sword");
 
         ItemStack b = noMetaItem(Material.STONE);
         when(items.getName(b, 0)).thenReturn("mymod:_");
         when(itemCodes.encode(b, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(b, 0)).thenReturn("STONE");
         assertThat(saleOf(b).itemName()).isEqualTo("mymod:_"); // no usable words -> raw
     }
 
@@ -580,6 +597,7 @@ class MarketServiceImplTest extends ServerTest {
             String code = item.getType().name();
             when(items.getName(item, 0)).thenReturn(code);
             when(itemCodes.encode(item, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn(code);
+            when(itemCodes.encode(item, 0)).thenReturn(code);
             ChestShopSaleRecord record = saleOf(item);
             assertThat(record.itemCustom()).isTrue();
             assertThat(record.itemData()).isNotBlank();
@@ -597,6 +615,7 @@ class MarketServiceImplTest extends ServerTest {
         when(broken.serialize()).thenThrow(new RuntimeException("cannot serialize"));
         when(items.getName(broken, 0)).thenReturn("nexo:x#1");
         when(itemCodes.encode(broken, MaterialUtil.MAXIMUM_SIGN_WIDTH)).thenReturn("STONE");
+        when(itemCodes.encode(broken, 0)).thenReturn("STONE");
         ChestShopSaleRecord rec = saleOf(broken);
         assertThat(rec.itemCustom()).isTrue();
         assertThat(rec.itemData()).isNull(); // saveToString threw -> caught -> null

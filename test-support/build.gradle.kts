@@ -63,7 +63,7 @@ dependencies {
     // MockBukkit — the in-memory server a consumer boots to host the plugin under
     // test. `api` so a consumer's startup test can MockBukkit.mock() without adding
     // the coordinate itself (matches chestshop's existing coordinate/version).
-    api("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.116.3")
+    api("org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.118.0")
 
     // Shared MariaDB integration-test harness (io.paradaux.hibernia.testsupport.db).
     // compileOnly, not api: chestshop consumes this kit for its startup test only and

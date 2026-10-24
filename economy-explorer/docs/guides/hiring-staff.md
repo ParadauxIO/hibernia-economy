@@ -45,9 +45,9 @@ firm came with five roles ready to go, from most senior (rank 1) to most junior 
 
 | Role | Rank | Default permission | What it can do |
 |---|---|---|---|
-| **Proprietor** | 1 (top) | `ADMIN` | Everything: money, accounts, roles, and staff |
-| **Co-Proprietor** | 2 | `ADMIN` | Everything: money, accounts, roles, and staff |
-| **Manager** | 3 | `FINANCIAL` | Move the firm's money |
+| **Proprietor** | 1 (top) | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
+| **Co-Proprietor** | 2 | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
+| **Manager** | 3 | `FINANCIAL` | Read finances; spending also needs account authorization |
 | **Supervisor** | 4 | `CHESTSHOP` | Run the firm's ChestShops |
 | **Employee** | 5 (lowest) | `DEFAULT` | Basic membership — no special powers |
 
@@ -58,7 +58,7 @@ The four permissions any role can hold:
 
 | Permission | Lets the holder… |
 |---|---|
-| `ADMIN` | Manage the firm — roles, accounts, hiring and firing |
+| `ADMIN` | Manage staff/roles and authorized spending; not proprietor-only account controls |
 | `FINANCIAL` | Move the firm's money — deposit, withdraw, and pay |
 | `CHESTSHOP` | Create and use ChestShops that belong to the firm |
 | `DEFAULT` | Nothing special — just be a member |

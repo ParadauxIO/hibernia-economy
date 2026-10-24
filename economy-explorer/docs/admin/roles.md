@@ -102,3 +102,22 @@ Enable `reconciliation.enabled: true` in existing plugin configurations. Sync ru
 old memberships. Failed lookups do not publish partial results; unrefreshed LP grants
 expire after one hour. Changing or clearing an explorer group's LP source removes
 its old synced memberships immediately; manual grants remain.
+
+### Business and Realty memberships
+
+Server operators can also map a group to a Business firm or a Realty region.
+A firm mapping includes its proprietor and employees with **FINANCIAL** or
+**ADMIN** permission. A region mapping includes its title holder and current,
+unexpired tenant. Offline players are included. The group's selected roles apply
+to those members just as they do to manual members.
+
+These mappings are configured by the operator in `explorer_group_sync`, using a
+firm ID for `business` or `world-uuid/region-id` for `realty`. The group member list
+shows which source manages each membership. Business, Realty, LuckPerms and manual
+memberships can coexist; removing one source does not remove another's grant.
+
+Business and Realty refresh on the scheduled interval independently of LuckPerms.
+They also expire after one hour without a successful refresh. Changing or removing
+a mapping invalidates its old grants immediately. The `/treasuryapi ui sync`
+command refreshes LuckPerms only; allow the next scheduled pass for firm/property
+changes. Operators must apply database migration V37 before deploying this feature.

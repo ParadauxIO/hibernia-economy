@@ -17,8 +17,8 @@ Inside a **[firm](/docs/guides/setting-up-a-business)**, every employee has one
 
 | Permission | Lets the holder… |
 |---|---|
-| `ADMIN` | Manage the firm — roles, accounts, hiring and firing |
-| `FINANCIAL` | Move the firm's money — deposit, withdraw, and pay |
+| `ADMIN` | Manage staff/roles and authorized spending; not proprietor-only account controls |
+| `FINANCIAL` | Use financial commands; spending also requires authorization on the source account |
 | `CHESTSHOP` | Create and use ChestShops that belong to the firm |
 | `DEFAULT` | Nothing special — just be a member |
 
@@ -45,7 +45,8 @@ little by the kind of account:
   authorizers (view *and* spend), `FINANCIAL`-role staff become members (view only) — and
   the firm **owner** is the one who adjusts members and authorizers.
 - On a **government** account, **members** can view *and* spend, and **authorizers** can
-  also *manage* who has access.
+  manage viewers/members only with `treasury.gov.account.manage`. Managing
+  authorizers requires `treasury.gov.admin`; both need the base `treasury.gov` node.
 
 The common thread: each tier sees at least as much as the one below it, and the rights to
 *spend* and to *manage access* are kept to a trusted few.
@@ -54,13 +55,33 @@ The common thread: each tier sees at least as much as the one below it, and the 
 
 Some commands aren't for everyone:
 
-- **Government** commands only work if you've been added to the relevant department
-  account.
+- **Government** commands require their permission nodes and the appropriate
+  department-account relationship, unless a staff override applies.
 - **Operator** commands — like `/eco` (adjusting balances) and `/tax` — are for server
   admins and won't appear for normal players.
 
 Throughout the reference, these are flagged with notes like "needs the ADMIN role" or
 "operators only".
+
+## Website permissions
+
+Explorer roles are separate from firm roles and in-game command permissions.
+Everyone signed in receives the configured **player** baseline. Initially it lets
+you read your own information and accounts shared with you directly or through a
+synchronized LuckPerms group. Firm membership exposes the roster; proprietor or
+active FINANCIAL/ADMIN access is needed for firm financials.
+
+The initial **government** role adds department records for related accounts;
+**moderator** permits global read-only investigation; **admin** includes
+administrative actions. Administrators can change these bundles or create new
+roles, and roles combine. A role name alone does not guarantee an action: the
+stored permissions and, where required, account relationship determine access.
+The retired website `viewer` role now means player, not global investigation.
+
+Public balances and aggregate market data stay public. Private histories may be
+read by authorized staff as well as their owners and shared-account users. Linking
+your Minecraft identity lets Explorer check those relationships; it does not
+grant a staff role. See [Using the Explorer](/docs/guides/using-the-explorer).
 
 ## Where to go next
 

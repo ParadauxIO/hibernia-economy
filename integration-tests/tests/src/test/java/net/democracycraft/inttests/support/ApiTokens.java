@@ -45,6 +45,14 @@ public final class ApiTokens {
         return waitForLatestKey(uuid, "BUSINESS", TIMEOUT).withToken(token);
     }
 
+    /** Issue through the player command, retaining the account restriction added in PAR-448. */
+    public static IssuedKey issueBusinessAccount(MockPlayer player, String firmName, int accountId) {
+        String token = commandToken(player, "/treasuryapi business issue " + firmName + " " + accountId,
+                "Business API key");
+        Barrier.settle(player);
+        return waitForLatestKey(player.getUuid(), "BUSINESS", TIMEOUT).withToken(token);
+    }
+
     /** Reissue a PERSONAL key by id (rotates jti server-side). */
     public static IssuedKey reissuePersonal(String username, MockPlayer player, int keyId) {
         return reissue(username, player, "personal", keyId);

@@ -1,7 +1,7 @@
 name: DcDiag
 version: 2.0.0
 main: net.democracycraft.inttests.diag.DiagPlugin
-api-version: '1.21'
+api-version: '26.3'
 softdepend: [WorldGuard, WorldEdit, GriefPrevention, ChestShop]
 description: Test-only diagnostic plugin for the integration-tests harness — logs PlayerInteractEvent at MONITOR and exposes /diag commands for synthesizing clicks via the Bukkit API.
 commands:

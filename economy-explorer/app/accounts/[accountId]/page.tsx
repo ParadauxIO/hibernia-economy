@@ -1,3 +1,4 @@
+import { Pagination, BackLink } from '@democracycraft/design-system/next';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
@@ -16,17 +17,17 @@ import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
 import { hasElevatedRead, canViewAccount } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
-import { Pagination } from '@/components/Pagination';
+
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { Player } from '@/components/Player';
-import { BackLink } from '@/components/BackLink';
+
 import { BalanceLine, InOutChart } from '@/components/charts/AreaTimeline';
 import { ActivityCalendar } from '@/components/charts/ActivityCalendar';
 import { getAccountTrajectory } from '@/lib/sql/ledger';
 import { getAccountFirmContext } from '@/lib/services/accountContext';
 import { listPlayerFirmMemberships } from '@/lib/sql/firm';
 import { memo } from '@/lib/cache';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 const SP_SCHEMA = z.object({
   page: z.coerce.number().int().min(1).default(1),

@@ -1,36 +1,50 @@
 ---
 title: ChestShop configuration
 order: 13
-description: ChestShop's trade limits and rules — and why its sales tax is actually configured in Treasury.
+description: ChestShop trade rules, sales-tax rates, integrations, and recovery evidence.
 ---
 
 # ChestShop configuration
 
 ChestShop's settings live in `plugins/ChestShop/config.yml`. It's a large upstream file;
-below are the settings a DemocracyCraft operator actually cares about. After editing,
-reload the config with **`/chestshop reload`** (alias `/cs reload`) — a full
-restart isn't required.
+below are the main operating settings and their shipped defaults. Check your tenant's
+files for effective values. `/chestshop reload` (alias `/cs reload`) refreshes
+configuration; installing or changing optional integration plugins needs a restart.
 
 > [!IMPORTANT]
-> **ChestShop sales tax is NOT configured here.** Because Treasury is installed, ChestShop
-> hands tax off to Treasury's tax API, which collects it into Treasury's default tax
-> account (`DCGovernment`). The legacy `TAX_AMOUNT` and `SERVER_ECONOMY_ACCOUNT` keys are
-> **inert** on this server — leave them at `0` / empty. To change shop sales tax, edit
-> **[Treasury](/docs/admin/config-treasury)**. Tax *exemptions* are by permission:
-> `ChestShop.notax.buy`.
+> **ChestShop sets the rate; Treasury collects the tax.** Set `TAX_AMOUNT` for
+> ordinary shops and `SERVER_TAX_AMOUNT` for admin/server counterparties in this
+> file. Values are **percentages** (`5` means 5%), both default to `0`.
+> Treasury's `government.tax-income-account` selects the destination; Treasury's
+> source-income-tax settings do not set this sales-tax rate.
+
+Tax is deducted from the money recipient after the primary trade commits. It is
+best-effort: a tax failure logs a warning but does not undo the purchase. The
+market record contains the tax actually collected. The current Treasury adapter
+checks the initiating player's `ChestShop.notax.buy` exemption; do not assume
+`ChestShop.notax.sell` independently exempts a sale.
+
+`SERVER_ECONOMY_ACCOUNT` is also active: it identifies the account backing server
+shops when configured. It must resolve to a known player account;
+`SERVER_ECONOMY_ACCOUNT_UUID` supports explicit identity when name resolution is
+unavailable. Inspect startup warnings and restart after changing that identity.
+Blank uses ChestShop's internal system account for
+unlimited-shop money flows. Verify the recipient and tax with a small staging
+buy and sell after changing these settings.
 
 ## Trade limits & fees
 
 | Key | Default | What it does |
 |---|---|---|
 | `MAX_SHOP_AMOUNT` | `3456` | **Per-trade cap** — the most items one transaction can move (a double chest of stacks). |
-| `SHOP_CREATION_PRICE` | `0` | Fee to create a shop. `0` = free (the live value). |
+| `SHOP_CREATION_PRICE` | `0` | Fee to create a shop. `0` = free. |
 | `SHOP_REFUND_PRICE` | `0` | Money refunded when a shop sign is destroyed. |
 | `PRICE_PRECISION` | `2` | Max decimal places allowed on prices. |
 
 > [!NOTE]
-> Per-item min/max price caps live in a separate file, `priceLimits.yml`, enforced at shop
-> creation. It currently holds only example entries.
+> The upstream per-item `priceLimits.yml` and discount systems were removed from
+> this fork. Old files and `ChestShop.nolimit.*` nodes do not enforce or bypass
+> a native price-cap policy. The sell-above-buy check below remains active.
 
 ## Trade rules
 
@@ -43,6 +57,8 @@ restart isn't required.
 | `SHIFT_SELLS_EVERYTHING` | `false` | Shift-click trades all matching items at once. |
 | `SHOP_INTERACTION_INTERVAL` | `250` | Anti-spam cooldown between sign uses (ms). |
 | `IGNORE_CREATIVE_MODE` | `true` | Blocks creative-mode players from trading. **Keep on.** |
+| `ALLOW_FREE_SHOPS` | `false` | Reject free/zero-price shops when disabled. |
+| `USE_STOCK_COUNTER` | `false` | Enable stock/capacity observation; verify observation timestamps in the finder. |
 | `ALLOW_AUTO_ITEM_FILL` | `true` | Allows `?` on the item line to fill from the held item. |
 
 ## Admin shops & naming
@@ -51,7 +67,8 @@ restart isn't required.
 |---|---|---|
 | `ADMIN_SHOP_NAME` | `Admin Shop` | The owner-line text that marks a sign as an unlimited admin shop. |
 | `FORCE_UNLIMITED_ADMIN_SHOP` | `false` | Makes admin shops unlimited even with a container attached. |
-| `TAX_AMOUNT` / `SERVER_ECONOMY_ACCOUNT` | `0` / *(empty)* | **Inert on DC** — tax is handled by Treasury (see the note above). |
+| `TAX_AMOUNT` / `SERVER_TAX_AMOUNT` | `0` / `0` | Sales-tax percentages for ordinary / admin-server counterparties. |
+| `SERVER_ECONOMY_ACCOUNT` | *(empty)* | Optional server-shop account; blank uses the internal system account. |
 
 ## Protection
 
@@ -65,10 +82,11 @@ restart isn't required.
 
 ## Region gating
 
-`WORLDGUARD_INTEGRATION`, `GRIEFPREVENTION_INTEGRATION`, `REDPROTECT_INTEGRATION` and the
-related flags are all **off** on the live server (shops can be built anywhere allowed by
-normal build perms). Turn these on if you want to restrict shop creation to claims or
-regions.
+`WORLDGUARD_INTEGRATION`, `GRIEFPREVENTION_INTEGRATION` and their related flags
+control optional claim/region restrictions. `REDPROTECT_INTEGRATION` is not a
+supported setting in this fork. Check the installed
+plugins and your tenant configuration before changing them; normal build permissions
+and add-on restrictions can still reject shop creation or trades.
 
 ## Custom items (Nexo)
 
@@ -139,7 +157,7 @@ shop signs with Treasury: removed signs disappear from `/find` and lose their
 previews; pasted or restored shop signs are registered again. Cleanup is drained
 on the server thread in batches of at most 256 positions per second. If a chunk
 unloads first, cleanup waits for it to load; it never force-loads chunks. After a
-server restart interrupts pending cleanup, use `/find resync` on loaded chunks.
+server restart interrupts pending cleanup, use `/chestshop resync <chunks>` on loaded chunks.
 
 With WorldGuard installed, `%region-name%` is available in these plain-text
 `config.yml` templates (no PlaceholderAPI required):
@@ -165,10 +183,41 @@ you rely on its `shop.buy.<id>` / `shop.sell.<id>` policy and traded-item refres
 `plugins/ChestShop/find.yml` imports the old ChestShopDatabase presentation
 settings on first use: buy/sell/both result materials and MiniMessage templates,
 transit/GPS commands, preview scale and default preview visibility. Existing
-native settings win. `/chestshop reload` reloads the file. Navigation commands
+native settings win. `/chestshop reload` reloads the file and applies the new scale
+to existing previews without changing player visibility. Navigation commands
 run with the player's permissions. Java results expose both actions; Bedrock
 results use left/right clicks in an inventory menu. Quantity and remaining
 capacity appear in results.
+
+Java results include **Inspect item** for the stored name, enchantments and other
+metadata. Inventory results offer it on shift-right-click, or ordinary right-click
+when no right-click navigation command is configured. An empty left-click command
+disables transit; an empty right-click command selects inspection. Back returns
+to the same result page.
+
+### Search aliases
+
+`plugins/ChestShop/find-aliases.yml` imports
+`plugins/ChestShopDatabase/item-code-groupings.yml` once when the native file is
+absent. These aliases affect typed finder searches only; they do not change sign
+codes or item identity and are separate from `nexo.yml` aliases:
+
+```yaml
+groupings:
+  - item-code: DIAMOND
+    aliases: [diamonds, diamond_gem]
+```
+
+Use actual registry item codes. Alias matching is case-insensitive and codes with
+spaces remain supported. Back up the file, edit and run `/chestshop reload`.
+Malformed/conflicting entries reject the replacement alias map; inspect the error,
+restore the previous file and reload. Test both alias and original code, including
+an unknown alias. Item-code suggestions refresh every 30 seconds; new codes may
+not appear immediately. Native search ranks all matching shops before applying
+filters/sorting, rather than limiting candidates to the query API's default 500.
+
+Migrate effective legacy `csdb.*` permissions and explicit denials to the native
+nodes, including `ChestShop.find`. Command aliases do not migrate permissions.
 
 At startup, missing nonblank Utilities aliases merge into `ChestShop/nexo.yml`
 without replacing native aliases. Keep both original item databases and Nexo

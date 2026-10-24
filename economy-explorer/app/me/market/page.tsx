@@ -8,10 +8,10 @@ import { getViewer } from '@/lib/auth/viewer';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { listPlayerSales } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 
@@ -325,7 +325,6 @@ export default async function MyMarketPage({
     </>
   );
 }
-
 
 // Per-table export controls. Local to this page — the bought/sold and
 // buy-from/sell-to tables share two shapes, so two small wrappers keep the

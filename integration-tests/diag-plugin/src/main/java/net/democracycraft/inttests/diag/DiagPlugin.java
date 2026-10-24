@@ -103,7 +103,160 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 b.getX(), b.getY(), b.getZ(), e.isCancelled()));
     }
 
+    private final java.util.Map<UUID, long[]> menuEvents = new java.util.HashMap<>();
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void onMenuClick(org.bukkit.event.inventory.InventoryClickEvent event) {
+        long[] counts = menuEvents.computeIfAbsent(event.getWhoClicked().getUniqueId(), ignored -> new long[3]);
+        counts[0]++;
+        if (event.isCancelled()) counts[2]++;
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void onMenuDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
+        long[] counts = menuEvents.computeIfAbsent(event.getWhoClicked().getUniqueId(), ignored -> new long[3]);
+        counts[1]++;
+        if (event.isCancelled()) counts[2]++;
+    }
+
+    /** Test-only inventory observation and fixture setup. Clicks themselves always arrive over the wire. */
+    private boolean doMenuDiagnostic(CommandSender sender, String[] args) {
+        try {
+            if (args[0].equals("menusetting")) {
+                var cs = java.util.Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("ChestShop"));
+                var file = new java.io.File(cs.getDataFolder(), "find.yml");
+                var yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file);
+                if (!java.util.Set.of("shop-icon-left-click-command", "shop-icon-right-click-command").contains(args[1])) {
+                    throw new IllegalArgumentException("Unsupported finder setting");
+                }
+                yaml.set(args[1], args.length < 3 ? "" : String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
+                yaml.save(file);
+                var field = cs.getClass().getDeclaredField("injector");
+                field.setAccessible(true);
+                var loader = cs.getClass().getClassLoader();
+                var type = loader.loadClass("io.paradaux.chestshop.services.FindPresentation");
+                var service = loader.loadClass("io.paradaux.chestshop.Libs.guice.Injector")
+                        .getMethod("getInstance", Class.class).invoke(field.get(cs), type);
+                type.getMethod("reload").invoke(service);
+                sender.sendMessage("updated");
+                return true;
+            }
+            Player player = java.util.Objects.requireNonNull(Bukkit.getPlayerExact(args[1]), "player");
+            if (args[0].equals("menucursor")) {
+                player.setItemOnCursor(new ItemStack(Material.valueOf(args[2]), Integer.parseInt(args[3])));
+                sender.sendMessage("updated");
+            } else if (args[0].equals("menuplain")) {
+                var inventory = Bukkit.createInventory(null, 27, net.kyori.adventure.text.Component.text("Unrelated"));
+                inventory.setItem(0, new ItemStack(Material.DIAMOND, 7));
+                player.openInventory(inventory);
+                sender.sendMessage("opened");
+            } else {
+                var json = new com.google.gson.JsonObject();
+                var view = player.getOpenInventory();
+                if (args[0].equals("menuslot")) {
+                    ItemStack item = view.getTopInventory().getItem(Integer.parseInt(args[2]));
+                    json.addProperty("material", item == null ? "AIR" : item.getType().name());
+                    if (item != null) {
+                        json.addProperty("name", plain(item.effectiveName()));
+                        json.addProperty("lore", item.lore() == null ? "" : item.lore().stream()
+                                .map(DiagPlugin::plain).collect(java.util.stream.Collectors.joining(" | ")));
+                    }
+                } else {
+                    long[] events = menuEvents.getOrDefault(player.getUniqueId(), new long[3]);
+                    json.addProperty("clicks", events[0]);
+                    json.addProperty("drags", events[1]);
+                    json.addProperty("denied", events[2]);
+                    json.addProperty("tick", Bukkit.getCurrentTick());
+                    json.addProperty("title", plain(view.title()));
+                    json.addProperty("size", view.getTopInventory().getSize());
+                    json.addProperty("inventory", inventoryHash(player.getInventory().getContents()));
+                    json.addProperty("cursor", inventoryHash(new ItemStack[]{player.getItemOnCursor()}));
+                    json.addProperty("top", inventoryHash(view.getTopInventory().getContents()));
+                    json.addProperty("drops", player.getWorld().getEntitiesByClass(org.bukkit.entity.Item.class).size());
+                }
+                sender.sendMessage(json.toString());
+            }
+        } catch (Exception e) {
+            sender.sendMessage("menu diagnostic failed: " + e);
+        }
+        return true;
+    }
+
+    private static String plain(net.kyori.adventure.text.Component component) {
+        return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(component);
+    }
+
+    private static String inventoryHash(ItemStack[] items) throws java.security.NoSuchAlgorithmException {
+        var digest = java.security.MessageDigest.getInstance("SHA-256");
+        for (ItemStack item : items) {
+            if (item == null || item.getType().isAir()) digest.update((byte) 0);
+            else {
+                byte[] bytes = item.serializeAsBytes();
+                digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes.length).array());
+                digest.update(bytes);
+            }
+        }
+        return java.util.HexFormat.of().formatHex(digest.digest());
+    }
+
     // ---------------------------------------------------------------- commands
+
+    private boolean doVault(CommandSender sender, String[] args) {
+        if (args.length != 4 || !(args[1].equals("withdraw") || args[1].equals("deposit"))) {
+            sender.sendMessage("usage: diag vault <withdraw|deposit> <player-uuid> <amount>");
+            return true;
+        }
+        try {
+            var vault = java.util.Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("Vault"));
+            Class<?> economy = vault.getClass().getClassLoader().loadClass("net.milkbowl.vault.economy.Economy");
+            Object provider = java.util.Objects.requireNonNull(Bukkit.getServicesManager().load(economy));
+            Object response = economy.getMethod(args[1] + "Player", org.bukkit.OfflinePlayer.class, double.class)
+                    .invoke(provider, Bukkit.getOfflinePlayer(UUID.fromString(args[2])), Double.parseDouble(args[3]));
+            sender.sendMessage("provider=" + economy.getMethod("getName").invoke(provider)
+                    + " success=" + response.getClass().getMethod("transactionSuccess").invoke(response)
+                    + " balance=" + response.getClass().getField("balance").get(response)
+                    + " error=" + response.getClass().getField("errorMessage").get(response));
+        } catch (ReflectiveOperationException e) {
+            sender.sendMessage("Vault diagnostic failed: " + e);
+        }
+        return true;
+    }
+
+    private boolean doRealNexo(CommandSender sender, String[] args) {
+        if ((args[0].equals("nexostock") && args.length != 7 && args.length != 8)
+                || (args[0].equals("nexocount") && args.length != 3 && args.length != 4)) {
+            sender.sendMessage("usage: diag nexostock <world> <x> <y> <z> <id> <count> [hex-color] OR diag nexocount <player> <id> [hex-color]");
+            return true;
+        }
+        try {
+            var nexo = java.util.Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("Nexo"));
+            Class<?> api = nexo.getClass().getClassLoader().loadClass("com.nexomc.nexo.api.NexoItems");
+            if (args[0].equals("nexostock")) {
+                var chest = (org.bukkit.block.Chest) Bukkit.getWorld(args[1]).getBlockAt(
+                        Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4])).getState();
+                Object builder = api.getMethod("itemFromId", String.class).invoke(null, args[5]);
+                ItemStack item = (ItemStack) builder.getClass().getMethod("build").invoke(builder);
+                item.setAmount(Integer.parseInt(args[6]));
+                if (args.length == 8) {
+                    var meta = (org.bukkit.inventory.meta.LeatherArmorMeta) item.getItemMeta();
+                    meta.setColor(org.bukkit.Color.fromRGB(Integer.parseInt(args[7], 16)));
+                    item.setItemMeta(meta);
+                }
+                chest.getBlockInventory().setItem(0, item);
+                sender.sendMessage("nexostock " + args[5]);
+            } else {
+                Player player = java.util.Objects.requireNonNull(Bukkit.getPlayerExact(args[1]));
+                int count = 0;
+                for (ItemStack item : player.getInventory().getContents()) {
+                    if (item != null && args[2].equals(api.getMethod("idFromItem", ItemStack.class).invoke(null, item))
+                            && (args.length == 3 || (item.getItemMeta() instanceof org.bukkit.inventory.meta.LeatherArmorMeta meta
+                            && meta.getColor().asRGB() == Integer.parseInt(args[3], 16)))) count += item.getAmount();
+                }
+                sender.sendMessage("nexocount " + args[2] + " = " + count);
+            }
+        } catch (Exception e) { sender.sendMessage("real Nexo diagnostic failed: " + e); }
+        return true;
+    }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -119,6 +272,41 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
             return true;
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "nexostock":
+            case "nexocount":
+                return doRealNexo(sender, args);
+            case "taxschedule":
+                return doTaxSchedule(sender, args);
+            case "taxscheduledstate":
+                return doTaxScheduledState(sender, args);
+            case "worlduuid":
+                if (args.length != 2 || Bukkit.getWorld(args[1]) == null) {
+                    sender.sendMessage("usage: /diag worlduuid <loaded-world>");
+                    return true;
+                }
+                sender.sendMessage(Bukkit.getWorld(args[1]).getUID().toString());
+                return true;
+            case "itembytes":
+                if (args.length != 2 || org.bukkit.Material.matchMaterial(args[1]) == null) {
+                    sender.sendMessage("usage: /diag itembytes <material>");
+                    return true;
+                }
+                sender.sendMessage(java.util.Base64.getEncoder().encodeToString(
+                        new org.bukkit.inventory.ItemStack(org.bukkit.Material.matchMaterial(args[1])).serializeAsBytes()));
+                return true;
+            case "runtime":
+                sender.sendMessage("minecraft=" + Bukkit.getMinecraftVersion()
+                        + " online-mode=" + Bukkit.getOnlineMode());
+                return true;
+            case "plugin":
+                if (args.length != 2) {
+                    sender.sendMessage("usage: /diag plugin <name>");
+                    return true;
+                }
+                org.bukkit.plugin.Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
+                sender.sendMessage(plugin == null ? "missing" : "enabled=" + plugin.isEnabled()
+                        + " version=" + plugin.getDescription().getVersion());
+                return true;
             case "logon":
                 logging = true;
                 sender.sendMessage("DcDiag logging ON");
@@ -159,6 +347,15 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doCreateShop(sender, args);
             case "wgregion":
                 return doWgRegion(sender, args);
+            case "vault":
+                return doVault(sender, args);
+            case "wgowners":
+                if (args.length != 3) { sender.sendMessage("usage: diag wgowners <world> <region>"); return true; }
+                var manager = com.sk89q.worldguard.WorldGuard.getInstance().getPlatform().getRegionContainer()
+                        .get(com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(java.util.Objects.requireNonNull(Bukkit.getWorld(args[1]))));
+                var region = java.util.Objects.requireNonNull(java.util.Objects.requireNonNull(manager).getRegion(args[2]));
+                sender.sendMessage("owners=" + region.getOwners().getUniqueIds().stream().map(UUID::toString).sorted().toList());
+                return true;
             case "gpclaim":
                 return doGpClaim(sender, args);
             case "protclear":
@@ -167,6 +364,12 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doInteractions(sender, args);
             case "perm":
                 return doPerm(sender, args);
+            case "menustate":
+            case "menucursor":
+            case "menuslot":
+            case "menuplain":
+            case "menusetting":
+                return doMenuDiagnostic(sender, args);
             case "asyncidle":
                 return doAsyncIdle(sender, args);
             case "ingeststub":
@@ -553,6 +756,55 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
         java.lang.reflect.Method getInstance = injectorIface.getMethod("getInstance", Class.class);
         getInstance.setAccessible(true);
         return getInstance.invoke(injector, cfgCls);
+    }
+
+    /** Test fixture: run the real weekly Bukkit task with an explicit due period. */
+    private boolean doTaxSchedule(CommandSender sender, String[] args) {
+        try {
+            if (args.length != 2) throw new IllegalArgumentException("expected epoch seconds");
+            var treasury = Bukkit.getPluginManager().getPlugin("Treasury");
+            ClassLoader loader = treasury.getClass().getClassLoader();
+            Object injector = treasury.getClass().getMethod("getInjector").invoke(treasury);
+            var get = loader.loadClass("io.paradaux.libs.guice.Injector").getMethod("getInstance", Class.class);
+            Class<?> api = loader.loadClass("io.paradaux.treasury.api.TaxApi");
+            Class<?> registry = loader.loadClass("io.paradaux.treasury.services.TaxCycleRegistry");
+            Class<?> webhook = loader.loadClass("io.paradaux.treasury.services.TaxWebhookService");
+            Class<?> type = loader.loadClass("io.paradaux.treasury.tasks.TaxCycleTask");
+            Object task = type.getMethod("weekly", org.bukkit.plugin.Plugin.class, api, registry, webhook, int.class, int.class)
+                    .invoke(null, treasury, get.invoke(injector, api), get.invoke(injector, registry),
+                            get.invoke(injector, webhook), 0, 1);
+            var due = type.getDeclaredField("scheduledFire");
+            due.setAccessible(true);
+            due.set(task, java.time.Instant.ofEpochSecond(Long.parseLong(args[1])));
+            org.bukkit.scheduler.BukkitTask scheduled = ((org.bukkit.scheduler.BukkitRunnable) task)
+                    .runTaskLaterAsynchronously(treasury, 1);
+            sender.sendMessage("task=" + scheduled.getTaskId());
+        } catch (Exception error) {
+            sender.sendMessage("taxschedule failed: " + error);
+        }
+        return true;
+    }
+
+    private boolean doTaxScheduledState(CommandSender sender, String[] args) {
+        try {
+            if (args.length != 2) throw new IllegalArgumentException("expected task id");
+            int id = Integer.parseInt(args[1]);
+            var treasury = Bukkit.getPluginManager().getPlugin("Treasury");
+            ClassLoader loader = treasury.getClass().getClassLoader();
+            Object injector = treasury.getClass().getMethod("getInjector").invoke(treasury);
+            var get = loader.loadClass("io.paradaux.libs.guice.Injector").getMethod("getInstance", Class.class);
+            Class<?> registry = loader.loadClass("io.paradaux.treasury.services.TaxCycleRegistry");
+            Class<?> cycle = loader.loadClass("io.paradaux.treasury.model.tax.TaxCycleType");
+            Object weekly = java.util.Arrays.stream(cycle.getEnumConstants()).filter(c -> c.toString().equals("WEEKLY")).findFirst().orElseThrow();
+            var next = (java.util.Optional<?>) registry.getMethod("getNextFireTime", cycle)
+                    .invoke(get.invoke(injector, registry), weekly);
+            sender.sendMessage("queued=" + Bukkit.getScheduler().isQueued(id)
+                    + " running=" + Bukkit.getScheduler().isCurrentlyRunning(id)
+                    + " next=" + next.map(Object::toString).orElse("none"));
+        } catch (Exception error) {
+            sender.sendMessage("taxscheduledstate failed: " + error);
+        }
+        return true;
     }
 
     private boolean doBreak(CommandSender sender, String[] args) {

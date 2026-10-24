@@ -45,7 +45,7 @@ startup as unlimited faucet/sink accounts (their balance can go negative by desi
 |---|---|---|
 | `government.starting-balances-account` | `starting-balances` | Source account every new player's starting balance is paid from. |
 | `government.tax-income-account` | `DCGovernment` | The **default tax destination** — the fallback for any tax with no/missing destination. |
-| `government.fines-account` | `GovernmentFines` | Account `/fine` payments are credited to (and refunded from on revoke). |
+| `government.fines-account` | `GovernmentFines` | Default destination for API fines issued without an explicit account. `/fine issue` and `/fine firm` use their named account; revocation refunds from the account recorded on the fine. |
 
 > [!CAUTION]
 > **Don't rename these once the server is live.** Renaming creates a *new* empty account
@@ -90,11 +90,12 @@ marginal):
 | $500,000 | 1.8% |
 
 > [!WARNING]
-> **Bracket keys must be integers — decimal keys are silently broken.** Treasury loads the
+> **Bracket keys must be integers.** Treasury loads the
 > brackets via `getConfigurationSection("tax.balance.brackets").getKeys(false)` and parses
 > each key as the balance floor. Bukkit/SnakeYAML treats a `.` in a YAML mapping key as a
 > **path separator**, so a decimal key like `100000.00:` is read as a nested section
-> (`100000` → `00`) rather than a scalar key — its rate **never applies**. Always use whole
+> (`100000` → `00`) rather than a scalar key. Invalid bracket structure rejects
+> a strict reload; startup can skip invalid entries with warnings. Always use whole
 > integer threshold keys; the value is the **weekly rate** at that balance floor:
 >
 > ```yaml

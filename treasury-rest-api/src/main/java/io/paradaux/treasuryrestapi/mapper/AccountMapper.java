@@ -94,6 +94,11 @@ public interface AccountMapper {
     @Update("UPDATE accounts SET owner_uuid_bin = #{ownerUuid} WHERE account_id = #{accountId}")
     int updateOwner(@Param("accountId") long accountId, @Param("ownerUuid") UUID ownerUuid);
 
+    /** Revoke credentials that must not follow a PERSONAL account to a new owner. */
+    @Update("UPDATE api_keys SET revoked = 1 WHERE key_type = 'PERSONAL' "
+            + "AND account_id = #{accountId} AND owner_uuid_bin <> #{ownerUuid}")
+    int revokeFormerPersonalOwnerKeys(@Param("accountId") long accountId, @Param("ownerUuid") UUID ownerUuid);
+
     /** The account's type (PERSONAL|BUSINESS|GOVERNMENT|SYSTEM), or null if absent. */
     @Select("SELECT account_type FROM accounts WHERE account_id = #{accountId}")
     String findAccountType(@Param("accountId") long accountId);

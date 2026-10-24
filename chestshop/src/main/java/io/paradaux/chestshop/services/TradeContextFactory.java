@@ -15,4 +15,7 @@ public interface TradeContextFactory {
 
     /** Build the pending transaction for a click, or {@code null} (after messaging) if it can't trade. */
     PendingTransaction prepare(Sign sign, Player player, Action action);
+
+    /** Prepare an explicitly selected wildcard variation; reject items outside the sign pattern. */
+    PendingTransaction prepare(Sign sign, Player player, Action action, org.bukkit.inventory.ItemStack selected);
 }

@@ -1,6 +1,7 @@
 'use client';
-import { useState, type ReactElement } from 'react';
-import { useHydrated } from '@/components/useHydrated';
+import { useId, useState, type ReactElement } from 'react';
+import { TableWrap } from '@democracycraft/design-system';
+import { useHydrated } from '@democracycraft/design-system/use-hydrated';
 import { useMediaQuery } from '@/components/useMediaQuery';
 import {
   Area, AreaChart, Bar, BarChart,
@@ -35,31 +36,33 @@ function RC({ height, children, daily = false }: { height: number; children: Rea
 }
 
 interface VolumeTimelineProps {
+  countLabel?: 'Transactions' | 'Sales';
   data: { date: string; txn_count: number; total_volume: string }[];
 }
 
-export function VolumeTimeline({ data }: VolumeTimelineProps) {
+export function VolumeTimeline({ data, countLabel = 'Transactions' }: VolumeTimelineProps) {
   // Phones default to volume only (two axes don't fit); an explicit choice wins.
+  const chartId = useId().replaceAll(':', '');
   const narrow = useMediaQuery('(max-width: 720px)');
   const [chosen, setMetric] = useState<string | null>(null);
   const metric = chosen ?? (narrow ? 'volume' : 'both');
   if (data.length === 0) {
-    return <EmptyChart>No data yet.</EmptyChart>;
+    return <EmptyChart>No recorded activity in this period. Try another time window.</EmptyChart>;
   }
   const series = data.map((d) => ({ date: d.date, count: d.txn_count, volume: parseFloat(d.total_volume) }));
   return (
     <>
-    <label className="chart-series-control">Show <select aria-label="Chart series" value={metric} onChange={e => setMetric(e.target.value)}><option value="both">Volume and transactions</option><option value="volume">Volume</option><option value="count">Transactions</option></select></label>
-    <div className="chart-legend">{metric !== 'count' && <span style={{ color: 'var(--c-1)' }}>● Volume · right axis</span>}{metric !== 'volume' && <span style={{ color: 'var(--c-3)' }}>● Transactions · left axis</span>}</div>
+    <label className="chart-series-control">Show <select aria-label="Chart series" value={metric} onChange={e => setMetric(e.target.value)}><option value="both">Volume and {countLabel.toLowerCase()}</option><option value="volume">Volume</option><option value="count">{countLabel}</option></select></label>
+    <div className="chart-legend">{metric !== 'count' && <span><span aria-hidden style={{ color: 'var(--c-1)' }}>●</span> Volume · right axis</span>}{metric !== 'volume' && <span><span aria-hidden style={{ color: 'var(--c-3)' }}>●</span> {countLabel} · left axis</span>}</div>
     <p className="chart-subtitle">Daily buckets in UTC. The first and current day may be partial.</p>
     <RC height={230}>
       <AreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
-          <linearGradient id="gVol" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`${chartId}-volume`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--c-1)" stopOpacity={0.35} />
             <stop offset="100%" stopColor="var(--c-1)" stopOpacity={0} />
           </linearGradient>
-          <linearGradient id="gCnt" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`${chartId}-count`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--c-3)" stopOpacity={0.18} />
             <stop offset="100%" stopColor="var(--c-3)" stopOpacity={0} />
           </linearGradient>
@@ -84,12 +87,14 @@ export function VolumeTimeline({ data }: VolumeTimelineProps) {
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
           labelFormatter={(d) => fmtDate(String(d))}
-          formatter={(v: number, name: string) => name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), 'Txns']}
+          formatter={(v, name) => typeof v !== 'number' ? null : name === 'volume' ? [fmtAmtFull(v), 'Volume'] : [fmtN(v), countLabel]}
         />
-        <Area hide={metric === 'count'} yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill="url(#gVol)" dot={false} isAnimationActive={false} />
-        <Area hide={metric === 'volume'} yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill="url(#gCnt)" dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'count'} yAxisId="vol" type="monotone" dataKey="volume" name="volume" stroke="var(--c-1)" strokeWidth={2} fill={`url(#${chartId}-volume)`} dot={false} isAnimationActive={false} />
+        <Area hide={metric === 'volume'} yAxisId="cnt" type="monotone" dataKey="count" name="count" stroke="var(--c-3)" strokeWidth={1.5} fill={`url(#${chartId}-count)`} dot={false} isAnimationActive={false} />
       </AreaChart>
-    </RC></>
+    </RC>
+    <details className="chart-data"><summary>View chart data</summary><TableWrap label={`${countLabel} and volume by day`}><table className="data-table" aria-label={`${countLabel} and volume by day`}><thead><tr><th scope="col">Date (UTC)</th><th scope="col" className="amount">{countLabel}</th><th scope="col" className="amount">Volume</th></tr></thead><tbody>{data.map(row => <tr key={row.date}><th scope="row">{fmtDate(row.date)}</th><td className="amount">{fmtN(row.txn_count)}</td><td className="amount">{fmtAmtFull(row.total_volume)}</td></tr>)}</tbody></table></TableWrap></details>
+    </>
   );
 }
 
@@ -118,13 +123,13 @@ export function WealthDonut({ data }: DonutProps) {
       <RC height={230}>
         <PieChart>
           <Pie data={pie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={88} paddingAngle={3} stroke="var(--bg-card)" strokeWidth={2}>
-            {pie.map((d) => <Cell key={d.name} fill={d.fill} />)}
+            {pie.map((d) => <Cell key={d.name} fill={d.fill} role="img" aria-label={`${d.name}: ${fmtAmtFull(d.value)}, ${fmtN(d.accountCount)} accounts`} />)}
           </Pie>
           <Tooltip
             contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-            formatter={(value: number, _name, payload) => [
+            formatter={(value, _name, payload) => typeof value !== 'number' ? null : [
               `${fmtAmtFull(value)} · ${fmtN((payload as { payload?: { accountCount?: number } }).payload?.accountCount ?? 0)} accts`,
               'Balance',
             ]}
@@ -143,7 +148,7 @@ export function WealthDonut({ data }: DonutProps) {
   );
 }
 
-const PALETTE = ['var(--c-1)', 'var(--c-2)', 'var(--c-3)', 'var(--c-4)', 'var(--c-5)', 'var(--c-6)', 'var(--c-7)'];
+const PALETTE = ['var(--c-1)', 'var(--c-2)', 'var(--c-3)', 'var(--c-4)', 'var(--c-5)', 'var(--c-6)', 'var(--c-7)'] as const;
 
 interface DistProps {
   data: { bucket: string; bucket_label: string; account_count: number }[];
@@ -171,10 +176,10 @@ export function BalanceDistribution({ data }: DistProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number) => [`${fmtN(v)} accts`, 'Accounts']}
+          formatter={(v) => typeof v !== 'number' ? null : [`${fmtN(v)} accts`, 'Accounts']}
         />
         <Bar dataKey="account_count" name="Accounts" radius={[4, 4, 0, 0]}>
-          {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={0.85} />)}
+          {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length] ?? PALETTE[0]} fillOpacity={0.85} />)}
         </Bar>
       </BarChart>
     </RC>
@@ -196,7 +201,7 @@ export function TopAccountsBar({ data }: TopAccountsProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number) => [fmtAmtFull(v), 'Balance']}
+          formatter={(v) => typeof v !== 'number' ? null : [fmtAmtFull(v), 'Balance']}
         />
         <Bar dataKey="balance" name="Balance" radius={[0, 4, 4, 0]} fill="var(--c-1)" />
       </BarChart>
@@ -226,7 +231,7 @@ export function InOutChart({ data }: InOutProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number, name) => [fmtAmtFull(v), name === 'cr' ? 'In' : 'Out']}
+          formatter={(v, name) => typeof v !== 'number' ? null : [fmtAmtFull(v), name === 'cr' ? 'In' : 'Out']}
         />
         <Bar dataKey="cr" stackId="a" fill="var(--c-3)" radius={[3, 3, 0, 0]} />
         <Bar dataKey="dr" stackId="a" fill="var(--c-5)" radius={[3, 3, 0, 0]} />
@@ -263,7 +268,7 @@ export function BalanceLine({ data }: BalanceLineProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number) => [fmtAmtFull(v), 'Balance']}
+          formatter={(v) => typeof v !== 'number' ? null : [fmtAmtFull(v), 'Balance']}
         />
         <Area type="monotone" dataKey="balance" stroke="var(--c-2)" strokeWidth={2} fill="url(#gBalLine)" dot={false} isAnimationActive={false} />
       </AreaChart>
@@ -294,7 +299,7 @@ export function PriceLine({ data }: PriceLineProps) {
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}
           labelStyle={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 2 }}
           itemStyle={{ color: 'var(--fg-soft)' }}
-          formatter={(v: number, name) => name === 'price' ? [fmtAmtFull(v), 'Avg price'] : [fmtN(v), 'Sales']}
+          formatter={(v, name) => typeof v !== 'number' ? null : name === 'price' ? [fmtAmtFull(v), 'Avg price'] : [fmtN(v), 'Sales']}
         />
         <Line type="monotone" dataKey="price" stroke="var(--c-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
       </LineChart>
@@ -315,9 +320,9 @@ export function TaxRevenueTimeline({ data }: { data: ({ date: string } & Record<
         <CartesianGrid strokeDasharray="2 4" stroke={GRID_STROKE} vertical={false} />
         <XAxis dataKey="date" tickFormatter={fmtDate} tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={28} />
         <YAxis tickFormatter={v => fmtAmt(String(v))} tick={AXIS_TICK} tickLine={false} axisLine={false} width={60} />
-        <Tooltip labelFormatter={d => fmtDate(String(d))} formatter={(v: number) => fmtAmtFull(v)}
+        <Tooltip labelFormatter={d => fmtDate(String(d))} formatter={(v) => typeof v !== 'number' ? null : fmtAmtFull(v)}
           contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }} />
-        {TAX_KINDS.map((kind, i) => <Line key={kind} dataKey={kind} name={TAX_LABELS[kind]} stroke={PALETTE[i]} strokeWidth={2} dot={false} isAnimationActive={false} />)}
+        {TAX_KINDS.map((kind, i) => <Line key={kind} dataKey={kind} name={TAX_LABELS[kind]} stroke={PALETTE[i] ?? PALETTE[0]} strokeWidth={2} dot={false} isAnimationActive={false} />)}
       </LineChart>
     </RC>
   </>;

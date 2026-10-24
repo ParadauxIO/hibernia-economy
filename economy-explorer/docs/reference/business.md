@@ -34,6 +34,7 @@ answers to `/firm`, `/company`, `/db`, and `/democracybusiness`.
 | `/business list` | List the firms you're part of. |
 | `/business list <player>` | List a player's firms. |
 | `/business list all [page]` | List every firm on the server. |
+| `/business baltop [page]` | Rank firms by their collective live account balances (`business.baltop`, default everyone). |
 | `/business disband <firm>` | Ask to close a firm you own — prompts for confirmation first. |
 | `/business disband <firm> confirm` | Confirm and actually close the firm. Its money returns to you and the firm is archived. |
 | `/business attribute set hq <firm> <plot>` | Set the firm's headquarters to a plot you own. |
@@ -64,6 +65,7 @@ moderation — see [Permission nodes](#permission-nodes).
 | `/business admin set hq <firm> <plot>` | Set any firm's HQ plot. |
 | `/business admin set discord <firm> <url>` | Set any firm's Discord invite. |
 | `/business admin set proprietor <firm> <player>` | Reassign a firm's proprietor. |
+| `/business admin chatspy [firm]` | Toggle chat oversight for all firms or the named firm; requires CarbonChat and `business.admin.chatspy` (operator default). |
 
 ## Staff
 
@@ -103,7 +105,8 @@ roles, each seeded with a permission:
 New hires join as **Employee**, and a **lower** rank number is more senior. The four
 permissions are:
 
-- **`ADMIN`** — full control: manage staff, roles, accounts, and money.
+- **`ADMIN`** — manage staff/roles and authorized spending. Creating/archiving
+  accounts, selecting the default and changing account access remain proprietor-only.
 - **`FINANCIAL`** — spend from accounts they're an authorizer on (withdraw and pay out).
 - **`CHESTSHOP`** — create and manage the firm's ChestShops (enforced by the ChestShop
   plugin).
@@ -228,7 +231,8 @@ firm's books, not public.
 
 ## Chat
 
-A private, employee-only chat channel for a firm (like Factions' `/f chat`). Requires
+A firm-member chat channel (like Factions' `/f chat`); authorized staff can monitor
+it through `admin chatspy`. Requires
 CarbonChat; messages route through the firm's channel once selected.
 
 | Command | What it does |
@@ -303,3 +307,22 @@ in-firm role.
 > accounts and their access, regardless of LuckPerms nodes or in-firm role. The
 > `business.admin.*` overrides go the other way: they let operators act on any firm,
 > ignoring proprietorship and firm roles entirely.
+
+## Firm menu
+
+Use `/firm menu` to choose a firm you own or work for, or `/firm menu <firm>`
+(with a name or numeric ID) to open a firm's overview. The Curator chest dashboard shows
+its aggregate balance and opens paginated staff and account lists. Money actions
+and the **Manage** button on each list open Usher input dialogs. Staff forms
+send employment offers or fire employees; account forms create accounts or change
+the default account. Money forms support deposits, withdrawals and payments to a
+player, another firm, or the selected firm from your personal account.
+
+Choose an action, fill its required fields and press **Submit action**. Recipient
+names/IDs and new account names use one word per field. Actions run the existing
+commands with current server and firm-role permissions. An open menu does not
+retain permissions after they are revoked. Each menu session submits once; reopen
+`/firm menu` after an action to see updated data. **Refresh overview** reloads the
+selected firm. **Back** in a form reloads the dashboard without submitting; **Close**
+dismisses it. List arrows page through firms, staff and accounts. Menu icons are
+display controls and cannot be taken into your inventory.

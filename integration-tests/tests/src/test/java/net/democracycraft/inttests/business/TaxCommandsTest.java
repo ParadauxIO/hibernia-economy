@@ -7,6 +7,9 @@ import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -19,21 +22,41 @@ class TaxCommandsTest {
         return tag + Long.toHexString(Instant.now().toEpochMilli());
     }
 
-    @Test
-    void taxInfoShowsHeader() {
+    @ParameterizedTest
+    @ValueSource(strings = {"business", "firm", "company", "db", "democracybusiness"})
+    void taxInfoShowsExactFundedEstimateAndExemption(String root) {
         String owner = Usernames.fresh("TiO");
         String firm = freshFirmName("Tin");
-
         try (MockPlayer p = MockPlayer.connectLocal(owner)) {
             Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
             Ops.run(owner, () -> {
-                p.chatCommand("/business create " + firm);
+                p.chatCommand("/" + root + " create " + firm);
                 p.awaitMessageContaining("Successfully created", TIMEOUT);
-                BusinessLedger.waitForFirm(firm, TIMEOUT);
-
+                int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
+                int account = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
+                p.chatCommand("/eco give " + owner + " 100001");
+                p.awaitMessageContaining("Gave", TIMEOUT);
+                p.chatCommand("/paya account " + account + " 100001 TaxEstimate");
+                p.awaitMessageContaining("Paid", TIMEOUT);
                 Barrier.settle();
-                p.chatCommand("/business tax info " + firm);
-                p.awaitMessageContaining("Tax Information for " + firm, TIMEOUT);
+                long checkpoint = Ledger.transactionCheckpoint();
+                for (boolean exempt : new boolean[]{false, true, false}) {
+                    p.chatCommand("/" + root + " tax exempt " + firm + " " + exempt);
+                    p.awaitMessageContaining(firm + " is now", TIMEOUT);
+                    Barrier.settle();
+                    p.drainMessages();
+                    p.chatCommand("/" + root + " tax info " + firm);
+                    String text = p.awaitMessageContaining("Tax Information for " + firm, TIMEOUT);
+                    Barrier.settle();
+                    assertThat(text.lines().toList()).contains(
+                            "Tax Status: " + (exempt ? "Exempt" : "Not Exempt"),
+                            "Total Balance: $100,001.00", "Weekly Rate: 1%",
+                            "Estimated Weekly Tax: $1,000.01");
+                    assertThat(text).doesNotContain("<green>", "<red>", "</green>", "</red>");
+                }
+                assertThat(Ledger.accountBalanceById(account).orElseThrow()).isEqualByComparingTo("100001");
+                assertThat(Ledger.personalBalance(p.getUuid()).orElseThrow()).isEqualByComparingTo("10000");
+                assertThat(Ledger.transactionCheckpoint()).isEqualTo(checkpoint);
             });
         }
     }

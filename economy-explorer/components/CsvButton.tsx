@@ -3,6 +3,7 @@
 // functions can't cross the RSC→client boundary, so we accept the final
 // (header[], row-of-strings[][]) shape. Export is gated to logged-in viewers.
 
+import { Button } from '@democracycraft/design-system';
 import { useIsLoggedIn } from '@/components/ViewerContext';
 
 interface CsvButtonProps {
@@ -45,8 +46,8 @@ export function CsvButton({ filename, headers, rows, label = 'CSV' }: CsvButtonP
     URL.revokeObjectURL(url);
   }
   return (
-    <button type="button" className="btn" onClick={download} disabled={rows.length === 0} title="Download this page as CSV">
+    <Button onClick={download} disabled={rows.length === 0} title="Download this page as CSV">
       {label}
-    </button>
+    </Button>
   );
 }

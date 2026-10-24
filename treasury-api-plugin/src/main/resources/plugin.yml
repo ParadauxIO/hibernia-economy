@@ -1,9 +1,9 @@
 name: TreasuryAPI
 version: '${version}'
 main: io.paradaux.treasuryapi.TreasuryAPI
-api-version: '1.21'
+api-version: '26.3'
 depend: [ Treasury, Business ]
-softdepend: [ LuckPerms ]
+softdepend: [ LuckPerms, Realty ]
 
 commands:
     treasuryapi:

@@ -1,29 +1,26 @@
 package io.paradaux.chestshop.services;
-import io.paradaux.chestshop.utils.SignText;
-
-import io.paradaux.chestshop.utils.InventoryUtil;
-import io.paradaux.chestshop.utils.BlockUtil;
-import io.paradaux.chestshop.utils.QuantityUtil;
-import io.paradaux.chestshop.utils.StringUtil;
-import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.DoubleChest;
-import org.bukkit.block.Sign;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
-
-import java.util.Locale;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static io.paradaux.chestshop.utils.BlockUtil.getState;
 import static io.paradaux.chestshop.utils.MaterialUtil.DURABILITY;
 import static io.paradaux.chestshop.utils.MaterialUtil.METADATA;
+
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.utils.BlockUtil;
+import io.paradaux.chestshop.utils.InventoryUtil;
+import io.paradaux.chestshop.utils.QuantityUtil;
+import io.paradaux.chestshop.utils.SignText;
+import io.paradaux.chestshop.utils.StringUtil;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.DoubleChest;
+import org.bukkit.block.Sign;
+import org.bukkit.inventory.InventoryHolder;
 
 /**
  * @author Acrobot
@@ -44,19 +41,24 @@ public class SignService {
     public static final byte ITEM_LINE = 3;
 
     public static final Pattern[][] SHOP_SIGN_PATTERN = {
-            { Pattern.compile("^[1-9][0-9]{0,5}$"), QuantityUtil.QUANTITY_LINE_WITH_COUNTER_PATTERN },
-            {
-                Pattern.compile("(?i)^((\\d*([.e]\\d+)?)([KM])?|free)$"),
-                Pattern.compile("(?i)^([BS] *((\\d+([.e]\\d+)?([KM])?)|free))( *: *([BS] *((\\d+([.e]\\d+)?([KM])?)|free)))?$"),
-                Pattern.compile("(?i)^(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS])( *: *([BS] *((\\d+([.e]\\d+)?([KM])?)|free)))?$"),
-                Pattern.compile("(?i)^(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS]) *: *(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS])$"),
-                Pattern.compile("(?i)^([BS] *((\\d+([.e]\\d+)?([KM])?)|free)) *: *(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS])$"),
-            },
-            {
-                Pattern.compile("^\\?$"),
-                Pattern.compile("^[\\p{L}\\d_ \\-]+(" + DURABILITY.pattern() + ")?(" + METADATA.pattern() + ")?$"),
-                Pattern.compile("^[\\p{L}\\d_ \\-]+" + METADATA.pattern() + "(" + DURABILITY.pattern() + ")?$")
-            }
+        {Pattern.compile("^[1-9][0-9]{0,5}$"), QuantityUtil.QUANTITY_LINE_WITH_COUNTER_PATTERN},
+        {
+            Pattern.compile("(?i)^((\\d*([.e]\\d+)?)([KM])?|free)$"),
+            Pattern.compile(
+                    "(?i)^([BS] *((\\d+([.e]\\d+)?([KM])?)|free))( *: *([BS] *((\\d+([.e]\\d+)?([KM])?)|free)))?$"),
+            Pattern.compile(
+                    "(?i)^(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS])( *: *([BS] *((\\d+([.e]\\d+)?([KM])?)|free)))?$"),
+            Pattern.compile(
+                    "(?i)^(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS]) *: *(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS])$"),
+            Pattern.compile(
+                    "(?i)^([BS] *((\\d+([.e]\\d+)?([KM])?)|free)) *: *(((\\d+([.e]\\d+)?([KM] )?)|free) *[BS])$"),
+        },
+        {
+            Pattern.compile("^\\?$"),
+            WildcardItems.PATTERN,
+            Pattern.compile("^[\\p{L}\\d_ \\-]+(" + DURABILITY.pattern() + ")?(" + METADATA.pattern() + ")?$"),
+            Pattern.compile("^[\\p{L}\\d_ \\-]+" + METADATA.pattern() + "(" + DURABILITY.pattern() + ")?$")
+        }
     };
     public static final String AUTOFILL_CODE = "?";
 
@@ -64,7 +66,8 @@ public class SignService {
 
     public static boolean isBusinessAccount(String owner) {
         // Reserve malformed alias tokens too, so creation rejects them instead of using a player name.
-        return owner.regionMatches(true, 0, "B:@", 0, 3) || BUSINESS_PATTERN.matcher(owner).matches();
+        return owner.regionMatches(true, 0, "B:@", 0, 3)
+                || BUSINESS_PATTERN.matcher(owner).matches();
     }
 
     public static boolean isBusinessAccount(String[] lines) {
@@ -121,8 +124,7 @@ public class SignService {
 
         // Validate the owner as a player name unless it is blank (auto-filled), an admin
         // shop, or a business token (B:<base36 id> / legacy b:<FirmName>) resolved elsewhere.
-        if (!isAdminShop(ownerName) && !ownerName.isEmpty()
-                && !ownerName.regionMatches(true, 0, "B:", 0, 2)) {
+        if (!isAdminShop(ownerName) && !ownerName.isEmpty() && !ownerName.regionMatches(true, 0, "B:", 0, 2)) {
             Matcher withId = NAME_WITH_ID.matcher(ownerName);
             if (withId.matches()) {
                 // The name carries a disambiguation id — validate the part before the last ':'.
@@ -137,7 +139,8 @@ public class SignService {
         for (int i = 0; i < 3; i++) {
             boolean matches = false;
             for (Pattern pattern : SHOP_SIGN_PATTERN[i]) {
-                if (pattern.matcher(StringUtil.strip(StringUtil.stripColourCodes(lines[i + 1]))).matches()) {
+                if (pattern.matcher(StringUtil.strip(StringUtil.stripColourCodes(lines[i + 1])))
+                        .matches()) {
                     matches = true;
                     break;
                 }
@@ -182,7 +185,6 @@ public class SignService {
 
     // canAccess / hasPermission / isOwner (the account-access predicates) moved to
     // AccountService (PAR-282) — they were ledger logic living on a sign util.
-
 
     /**
      * Get the owner string of a shop sign

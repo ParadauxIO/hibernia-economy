@@ -40,6 +40,21 @@ class JwtTokenVerifierTest {
     private static final long ACC = 42L;
     private static final long FIRM = 9L;
 
+    @Test
+    void scopedBusinessToken_requiresExactPersistedAccountClaim() {
+        ApiKey key = businessKey();
+        key.setAccountId(42);
+        JwtTokenVerifier verifier = verifierFor(key);
+        VerifiedToken token = verifier.verify(businessToken(b -> b.claim("acc", 42)));
+        assertThat(token.accountId()).isEqualTo(42L);
+        assertThat(token.firmId()).isEqualTo(FIRM);
+        assertInvalid(verifier, businessToken(b -> {}), "INVALID_TOKEN");
+        assertInvalid(verifier, businessToken(b -> b.claim("acc", 43)), "INVALID_TOKEN");
+        assertInvalid(verifier, businessToken(b -> b.claim("acc", "42")), "INVALID_TOKEN");
+        assertInvalid(verifier, businessToken(b -> b.claim("acc", 42.5)), "INVALID_TOKEN");
+        assertInvalid(verifierFor(businessKey()), businessToken(b -> b.claim("acc", 42)), "INVALID_TOKEN");
+    }
+
     // ── happy paths ─────────────────────────────────────────────────────────────
 
     @Test

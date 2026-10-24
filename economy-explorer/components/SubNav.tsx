@@ -24,6 +24,7 @@ export function SubNav({ items }: { items: SubNavItem[] }) {
             key={it.href}
             href={it.href as Route}
             className={active ? 'active' : ''}
+            aria-current={active ? 'page' : undefined}
             prefetch={false}
           >
             {it.label}

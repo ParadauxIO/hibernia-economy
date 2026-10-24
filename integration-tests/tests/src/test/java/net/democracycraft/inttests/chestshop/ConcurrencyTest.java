@@ -71,6 +71,9 @@ class ConcurrencyTest {
             // the clicks concurrently from a barrier so they contend for the stock.
             for (int i = 0; i < buyers.length; i++) {
                 shop.positionClicker(mocks[i], buyers[i]);
+                mocks[i].useBlock(shop.signPos(), BlockFace.SOUTH);
+                Barrier.sync(mocks[i]);
+                assertThat(mocks[i].currentScreen()).as("buyer has a purchase offer").isPresent();
             }
 
             CountDownLatch ready = new CountDownLatch(buyers.length);
@@ -82,7 +85,7 @@ class ConcurrencyTest {
                     ready.countDown();
                     try {
                         go.await();
-                        b.useBlock(shop.signPos(), BlockFace.SOUTH);
+                        shop.confirmPurchase(b);
                     } catch (Throwable ex) {
                         failure.compareAndSet(null, ex);
                     }
@@ -97,9 +100,7 @@ class ConcurrencyTest {
             }
             assertThat(failure.get()).as("a buyer thread threw").isNull();
 
-            // Every buyer's click has been handled — and its trade, which ChestShop settles
-            // synchronously in the click handler, is final — once each connection's barrier
-            // round-trips.
+            // Confirmation helpers have waited for each deferred menu action to complete.
             Barrier.sync(mocks);
 
             BigDecimal sellerBalance = Ledger.personalBalance(s.getUuid()).orElseThrow();

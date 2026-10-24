@@ -47,9 +47,13 @@ class ShopFinderServiceImplTest extends ServerTest {
     }
 
     private ShopResult row(String world, int x) {
+        return row(world, x, UUID.randomUUID());
+    }
+
+    private ShopResult row(String world, int x, UUID worldUuid) {
         return new ShopResult(
                 world,
-                UUID.randomUUID(),
+                worldUuid,
                 x,
                 64,
                 0,
@@ -148,5 +152,18 @@ class ShopFinderServiceImplTest extends ServerTest {
                 .isInstanceOf(ExecutionException.class)
                 .hasRootCauseMessage("boom");
         assertThat(future.isCompletedExceptionally()).isTrue();
+    }
+
+    @Test
+    void query_excludesPreviousGenerationOfTheSameNamedWorld() {
+        UUID current = UUID.randomUUID();
+        FindState request =
+                new FindState(item(Material.DIAMOND, 1), "Diamond", "Diamond", "world", current, 0, 64, 0, true);
+        ShopQueryApi api = mock(ShopQueryApi.class);
+        when(market.shopQuery()).thenReturn(api);
+        when(api.searchShops(any(ShopSearchQuery.class)))
+                .thenReturn(
+                        List.of(row("world", 1, current), row("world", 2, UUID.randomUUID()), row("world", 3, null)));
+        assertThat(finder.query(request)).extracting(FoundShop::x).containsExactlyInAnyOrder(1, 3);
     }
 }

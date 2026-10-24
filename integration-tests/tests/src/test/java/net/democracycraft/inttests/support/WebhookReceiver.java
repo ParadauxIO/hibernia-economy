@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.ToIntFunction;
 import java.util.function.Predicate;
 
 /**
@@ -25,7 +27,8 @@ import java.util.function.Predicate;
  * so the SSRF guard lets deliveries through.
  *
  * <p>One receiver is shared by the whole test JVM and records every POST it
- * gets, answering 200. Tests pick out their own deliveries by subscription id.
+ * gets, answering 200 unless a test installs a path-scoped response rule.
+ * Tests pick out their own deliveries by subscription id.
  */
 public final class WebhookReceiver {
 
@@ -33,11 +36,12 @@ public final class WebhookReceiver {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static WebhookReceiver instance;
 
+    private final Map<String, ToIntFunction<JsonNode>> responses = new ConcurrentHashMap<>();
     private final int port;
     private final List<Delivery> received = new CopyOnWriteArrayList<>();
 
     /** One recorded POST: its headers and the raw body (what the signature covers). */
-    public record Delivery(Map<String, List<String>> headers, byte[] rawBody) {
+    public record Delivery(Map<String, List<String>> headers, byte[] rawBody, String path, int responseStatus) {
         public String header(String name) {
             return headers.entrySet().stream()
                     .filter(e -> e.getKey().equalsIgnoreCase(name))
@@ -109,13 +113,38 @@ public final class WebhookReceiver {
         return forSubscription(subscriptionId).stream().filter(d -> filter.test(d.json())).findFirst();
     }
 
+    /** Return a fixed failure on this test path until the scope closes. */
+    public AutoCloseable respondWith(String path, int status) {
+        String requestPath = "/" + path;
+        ToIntFunction<JsonNode> response = event -> status;
+        if (responses.putIfAbsent(requestPath, response) != null) {
+            throw new IllegalStateException("Response already configured for " + requestPath);
+        }
+        return () -> responses.remove(requestPath, response);
+    }
+
+    /** Fail once per delivery ID on this unique path, then acknowledge retries. */
+    public AutoCloseable failFirstAttempt(String path, int status) {
+        var seen = ConcurrentHashMap.<Long>newKeySet();
+        String requestPath = "/" + path;
+        ToIntFunction<JsonNode> response = event -> seen.add(event.path("deliveryId").asLong()) ? status : 200;
+        if (responses.putIfAbsent(requestPath, response) != null) {
+            throw new IllegalStateException("Response already configured for " + requestPath);
+        }
+        return () -> responses.remove(requestPath, response);
+    }
+
     private void handle(HttpExchange exchange) throws IOException {
         try (exchange) {
             byte[] body = exchange.getRequestBody().readAllBytes();
+            String path = exchange.getRequestURI().getPath();
+            int status = 200;
             if ("POST".equals(exchange.getRequestMethod())) {
-                received.add(new Delivery(Map.copyOf(exchange.getRequestHeaders()), body));
+                var response = responses.get(path);
+                if (response != null) status = response.applyAsInt(JSON.readTree(body));
+                received.add(new Delivery(Map.copyOf(exchange.getRequestHeaders()), body, path, status));
             }
-            exchange.sendResponseHeaders(200, -1);
+            exchange.sendResponseHeaders(status, -1);
         }
     }
 }

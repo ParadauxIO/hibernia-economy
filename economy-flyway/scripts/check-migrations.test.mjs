@@ -43,6 +43,7 @@ function fixture(t, { currentBase = false, differentBase = false } = {}) {
   for (const name of readdirSync(source)) copyFileSync(join(source, name), join(migrations, name));
   return {
     migrations,
+    git,
     run: (...args) => spawnSync(process.execPath, [script, 'HEAD', ...args], { encoding: 'utf8' }),
   };
 }
@@ -117,4 +118,71 @@ test('duplicate versions still fail', (t) => {
   const result = f.run();
   assert.equal(result.status, 1);
   assert.match(result.stderr, /duplicate version V18/);
+});
+
+// Recreate the exact merged collision tree using the unchanged SQL blobs.
+const collisionMoves = [
+  ['V38__firm_employment_history.sql', 'V39__firm_employment_history.sql'],
+  ['V38__global_name_namespace.sql', 'V40__global_name_namespace.sql'],
+];
+function collisionFixture(t, { differentBase = false } = {}) {
+  const f = fixture(t, { currentBase: true });
+  for (const [oldName, newName] of collisionMoves) {
+    renameSync(join(f.migrations, newName), join(f.migrations, oldName));
+  }
+  const later = readdirSync(source).filter(name => Number(/^V(\d+)__/.exec(name)?.[1]) > 40);
+  for (const name of later) rmSync(join(f.migrations, name));
+  if (differentBase) appendFileSync(join(f.migrations, v18), '\n-- different collision base\n');
+  f.git('add', '.');
+  f.git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'Colliding V38 migrations');
+  if (!differentBase) {
+    assert.equal(f.git('rev-parse', `HEAD:${migrationPath}`), '338af2234f3233d335f950ca31641550354db2df');
+  }
+  for (const [oldName, newName] of collisionMoves) {
+    renameSync(join(f.migrations, oldName), join(f.migrations, newName));
+  }
+  for (const name of later) copyFileSync(join(source, name), join(f.migrations, name));
+  return f;
+}
+
+test('only the exact V38 collision repair passes and excludes its pending base scripts', (t) => {
+  const f = collisionFixture(t);
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  const excludes = f.run('--upgrade-excludes');
+  assert.equal(excludes.status, 0, excludes.stderr);
+  assert.equal(excludes.stdout, collisionMoves.map(([oldName]) => oldName).join('\n') + '\n');
+  assert.equal(f.run('--upgrade-target').stdout, '');
+});
+
+for (const [oldName, newName] of collisionMoves) {
+  for (const change of ['edit', 'delete', 'rename']) {
+    test(`collision repair rejects ${change} of ${newName} before emitting exclusions`, (t) => {
+      const f = collisionFixture(t);
+      const path = join(f.migrations, newName);
+      if (change === 'edit') appendFileSync(path, '\n-- changed SQL\n');
+      if (change === 'delete') rmSync(path);
+      if (change === 'rename') renameSync(path, join(f.migrations, 'V41__other.sql'));
+      const result = f.run('--upgrade-excludes');
+      assert.equal(result.status, 1);
+      assert.ok(result.stderr.includes(oldName), result.stderr);
+      assert.equal(result.stdout, '');
+    });
+  }
+}
+
+test('a different collision base cannot use the rename exception', (t) => {
+  const result = collisionFixture(t, { differentBase: true }).run('--upgrade-excludes');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /renamed to/);
+  assert.equal(result.stdout, '');
+});
+
+test('normal bases exclude nothing and still reject edits to the renumbered migrations', (t) => {
+  const f = fixture(t, { currentBase: true });
+  const result = f.run('--upgrade-excludes');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
+  appendFileSync(join(f.migrations, collisionMoves[0][1]), '\n-- later edit\n');
+  assert.equal(f.run('--upgrade-excludes').status, 1);
 });

@@ -1,15 +1,14 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import io.paradaux.business.model.Firm;
+import io.paradaux.business.testsupport.IntegrationTestBase;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class FirmMapperIT extends IntegrationTestBase {
 
@@ -18,6 +17,39 @@ class FirmMapperIT extends IntegrationTestBase {
     @BeforeEach
     void openSession() {
         mapper = mapper(FirmMapper.class);
+    }
+
+    @Test
+    void staleDisbandCannotArchiveAfterOwnershipTransfer() {
+        UUID oldOwner = UUID.randomUUID(), newOwner = UUID.randomUUID();
+        Firm firm = newFirm("Transferred", oldOwner);
+        mapper.createFirm(firm);
+        Firm transfer = new Firm();
+        transfer.setFirmId(firm.getFirmId());
+        transfer.setProprietorUuid(newOwner.toString());
+        assertThat(mapper.updateFirm(transfer)).isEqualTo(1);
+        assertThat(mapper.archiveFirm(firm.getFirmId(), oldOwner.toString())).isZero();
+        Firm current = mapper.getFirmById(firm.getFirmId());
+        assertThat(current.getArchived()).isFalse();
+        assertThat(current.getProprietorUuid()).isEqualToIgnoringCase(newOwner.toString());
+        assertThat(mapper.archiveFirm(firm.getFirmId(), newOwner.toString())).isEqualTo(1);
+        transfer.setProprietorUuid(oldOwner.toString());
+        assertThat(mapper.updateFirm(transfer)).isZero();
+        assertThat(mapper.getFirmById(firm.getFirmId()).getProprietorUuid()).isEqualToIgnoringCase(newOwner.toString());
+    }
+
+    @Test
+    void archivedOwnerCannotBeReplacedByAPreloadedTransfer() {
+        UUID owner = UUID.randomUUID();
+        Firm firm = newFirm("Pinned", owner);
+        mapper.createFirm(firm);
+        Firm transfer = new Firm();
+        transfer.setFirmId(firm.getFirmId());
+        transfer.setProprietorUuid(UUID.randomUUID().toString());
+        mapper.archiveFirm(
+                firm.getFirmId(), mapper.getFirmById(firm.getFirmId()).getProprietorUuid());
+        mapper.updateFirm(transfer);
+        assertThat(mapper.getFirmById(firm.getFirmId()).getProprietorUuid()).isEqualToIgnoringCase(owner.toString());
     }
 
     @Test
@@ -100,8 +132,10 @@ class FirmMapperIT extends IntegrationTestBase {
     @Test
     void getFirmsOwnedByCount_excludesArchived() {
         UUID owner = UUID.randomUUID();
-        Firm a = newFirm("A", owner); mapper.createFirm(a);
-        Firm b = newFirm("B", owner); mapper.createFirm(b);
+        Firm a = newFirm("A", owner);
+        mapper.createFirm(a);
+        Firm b = newFirm("B", owner);
+        mapper.createFirm(b);
 
         Firm patch = new Firm();
         patch.setFirmId(a.getFirmId());
@@ -125,14 +159,18 @@ class FirmMapperIT extends IntegrationTestBase {
         mapper.createFirm(firm);
 
         assertThat(mapper.isProprietorByFirmName("Acme", owner.toString())).isTrue();
-        assertThat(mapper.isProprietorByFirmId(firm.getFirmId(), owner.toString())).isTrue();
-        assertThat(mapper.isProprietorByFirmName("Acme", UUID.randomUUID().toString())).isFalse();
+        assertThat(mapper.isProprietorByFirmId(firm.getFirmId(), owner.toString()))
+                .isTrue();
+        assertThat(mapper.isProprietorByFirmName("Acme", UUID.randomUUID().toString()))
+                .isFalse();
     }
 
     @Test
     void listAllFiltered_excludesArchivedByDefault() {
-        Firm a = newFirm("A", UUID.randomUUID()); mapper.createFirm(a);
-        Firm b = newFirm("B", UUID.randomUUID()); mapper.createFirm(b);
+        Firm a = newFirm("A", UUID.randomUUID());
+        mapper.createFirm(a);
+        Firm b = newFirm("B", UUID.randomUUID());
+        mapper.createFirm(b);
         Firm patch = new Firm();
         patch.setFirmId(a.getFirmId());
         patch.setArchived(true);
@@ -147,16 +185,16 @@ class FirmMapperIT extends IntegrationTestBase {
 
     @Test
     void listAllActive_returnsOnlyNotArchived() {
-        Firm a = newFirm("A", UUID.randomUUID()); mapper.createFirm(a);
-        Firm b = newFirm("B", UUID.randomUUID()); mapper.createFirm(b);
+        Firm a = newFirm("A", UUID.randomUUID());
+        mapper.createFirm(a);
+        Firm b = newFirm("B", UUID.randomUUID());
+        mapper.createFirm(b);
         Firm patch = new Firm();
         patch.setFirmId(a.getFirmId());
         patch.setArchived(true);
         mapper.updateFirm(patch);
 
-        assertThat(mapper.listAllActive())
-                .extracting(Firm::getDisplayName)
-                .containsExactly("B");
+        assertThat(mapper.listAllActive()).extracting(Firm::getDisplayName).containsExactly("B");
     }
 
     @Test
@@ -171,16 +209,15 @@ class FirmMapperIT extends IntegrationTestBase {
 
         // Insert a role + employment row directly so the OR-branch fires.
         try (var conn = dataSource.getConnection();
-             var st = conn.createStatement()) {
-            st.execute("INSERT INTO firm_role (firm_id, name, rank_order) VALUES ("
-                    + employer.getFirmId() + ", 'Employee', 1)");
-            try (var rs = st.executeQuery(
-                    "SELECT role_id FROM firm_role WHERE firm_id = " + employer.getFirmId())) {
+                var st = conn.createStatement()) {
+            st.execute("INSERT INTO firm_role (firm_id, name, rank_order) VALUES (" + employer.getFirmId()
+                    + ", 'Employee', 1)");
+            try (var rs = st.executeQuery("SELECT role_id FROM firm_role WHERE firm_id = " + employer.getFirmId())) {
                 rs.next();
                 int roleId = rs.getInt(1);
                 try (var ps = conn.prepareStatement(
-                        "INSERT INTO firm_employee (firm_id, player_uuid_bin, role_id, added_by_uuid_bin) " +
-                        "VALUES (?, uuid_to_bin(?), ?, uuid_to_bin(?))")) {
+                        "INSERT INTO firm_employee (firm_id, player_uuid_bin, role_id, added_by_uuid_bin) "
+                                + "VALUES (?, uuid_to_bin(?), ?, uuid_to_bin(?))")) {
                     ps.setInt(1, employer.getFirmId());
                     ps.setString(2, employee.toString());
                     ps.setInt(3, roleId);
@@ -208,9 +245,8 @@ class FirmMapperIT extends IntegrationTestBase {
         // column and suppresses the ON UPDATE CURRENT_TIMESTAMP bump — PAR-315.)
         java.time.LocalDateTime past = java.time.LocalDateTime.of(2020, 1, 1, 0, 0, 0);
         try (var conn = dataSource.getConnection();
-             var st = conn.createStatement()) {
-            st.executeUpdate("UPDATE firm SET updated_at = '2020-01-01 00:00:00' WHERE firm_id = "
-                    + firm.getFirmId());
+                var st = conn.createStatement()) {
+            st.executeUpdate("UPDATE firm SET updated_at = '2020-01-01 00:00:00' WHERE firm_id = " + firm.getFirmId());
         }
         assertThat(mapper.getFirmById(firm.getFirmId()).getUpdatedAt()).isEqualTo(past);
 
@@ -228,7 +264,8 @@ class FirmMapperIT extends IntegrationTestBase {
         Firm first = newFirm("Acme", oldOwner);
         mapper.createFirm(first);
         assertThat(mapper.releaseFirmName(first.getFirmId())).isZero();
-        mapper.archiveFirm(first.getFirmId());
+        mapper.archiveFirm(
+                first.getFirmId(), mapper.getFirmById(first.getFirmId()).getProprietorUuid());
         assertThat(mapper.getFirmsByNameCount("ACME")).isEqualTo(1);
         assertThatThrownBy(() -> mapper.createFirm(newFirm("ACME", UUID.randomUUID())))
                 .hasMessageContaining("uq_firm_reserved_display_name");
@@ -245,7 +282,8 @@ class FirmMapperIT extends IntegrationTestBase {
         assertThat(mapper.getFirmById(first.getFirmId()).getDisplayName()).isEqualTo("Acme");
         assertThat(mapper.secondsSinceLastCreation(oldOwner.toString())).isNotNull();
 
-        mapper.archiveFirm(second.getFirmId());
+        mapper.archiveFirm(
+                second.getFirmId(), mapper.getFirmById(second.getFirmId()).getProprietorUuid());
         assertThat(mapper.getFirmsByNameCount("Acme")).isEqualTo(1);
         assertThat(mapper.releaseFirmName(second.getFirmId())).isEqualTo(1);
         assertThat(mapper.getFirmByName("acme").getFirmId()).isEqualTo(second.getFirmId());
@@ -265,18 +303,16 @@ class FirmMapperIT extends IntegrationTestBase {
         Firm other = newFirm("Other", UUID.randomUUID());
         mapper.createFirm(other);
         other.setDisplayName("acme");
-        assertThatThrownBy(() -> mapper.updateFirm(other))
-                .hasMessageContaining("uq_firm_reserved_display_name");
+        assertThatThrownBy(() -> mapper.updateFirm(other)).hasMessageContaining("uq_firm_reserved_display_name");
 
-        mapper.archiveFirm(active.getFirmId());
-        assertThatThrownBy(() -> mapper.updateFirm(other))
-                .hasMessageContaining("uq_firm_reserved_display_name");
+        mapper.archiveFirm(
+                active.getFirmId(), mapper.getFirmById(active.getFirmId()).getProprietorUuid());
+        assertThatThrownBy(() -> mapper.updateFirm(other)).hasMessageContaining("uq_firm_reserved_display_name");
         mapper.releaseFirmName(active.getFirmId());
         mapper.updateFirm(other);
         assertThat(mapper.getFirmByName("Acme").getFirmId()).isEqualTo(other.getFirmId());
         active.setArchived(false);
-        assertThatThrownBy(() -> mapper.updateFirm(active))
-                .hasMessageContaining("uq_firm_reserved_display_name");
+        assertThatThrownBy(() -> mapper.updateFirm(active)).hasMessageContaining("uq_firm_reserved_display_name");
     }
 
     private Firm newFirm(String name, UUID owner) {

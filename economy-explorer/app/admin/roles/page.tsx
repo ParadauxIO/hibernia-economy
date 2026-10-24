@@ -3,7 +3,7 @@ import { getViewer, hasPermission } from '@/lib/auth';
 import { listRolesForAdmin } from '@/lib/services/role';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { RoleEditor } from './role-editor';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 export const dynamic = 'force-dynamic';
 export default async function RolesPage() {
   const viewer = await getViewer();
@@ -11,6 +11,7 @@ export default async function RolesPage() {
   const roles = await listRolesForAdmin();
   return <>
     <div className="page-heading"><h1>Roles</h1><span className="sub">Configure permissions and direct assignments. Groups can grant any defined role.</span></div>
+    {hasPermission(viewer, 'groups.read') && <p><Link href="/admin/role-grants">Browse user role grants and group provenance</Link></p>}
     <div className="card"><TableWrap label="Roles"><table className="data-table">
       <thead><tr><th>Role</th><th>Description</th><th>Permissions</th></tr></thead>
       <tbody>{roles.map(role => <tr key={role.key}>

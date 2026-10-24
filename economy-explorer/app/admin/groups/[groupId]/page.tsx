@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { PrivacyGate } from '@/components/PrivacyGate';
-import { BackLink } from '@/components/BackLink';
+import { BackLink } from '@democracycraft/design-system/next';
 import { getGroup, listGroupMembers } from '@/lib/services/group';
 import { listRoleDefinitions } from '@/lib/sql/role';
 import { CapabilitiesForm } from './capabilities-form';
@@ -54,7 +54,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
       </div>
 
       <div className="card">
-        <div className="card-title">LuckPerms source <span className="sub">members of this in-game group/permission are synced into this group by the reconciliation cron; blank = manual only</span></div>
+        <div className="card-title">LuckPerms source <span className="sub">members of this in-game group/permission are synced into this group by the reconciliation cron; blank disables LuckPerms sync</span></div>
         <LuckpermsNodeForm groupId={id} node={group.luckpermsNode} disabled={!delegable || !hasPermission(viewer, 'groups.sync.update')} />
       </div>
 

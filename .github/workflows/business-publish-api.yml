@@ -2,7 +2,7 @@ name: Business · Publish API
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ develop ]
     paths:
       - 'business/**'
       - '.github/workflows/business-publish-api.yml'
@@ -23,6 +23,7 @@ jobs:
   # definition ci.yml runs, narrowed to the Business projects (`:business:check`
   # includes testWithoutCarbon / testWithoutPlaceholderApi and the jacoco gate).
   test:
+    if: github.ref == 'refs/heads/develop'
     uses: ./.github/workflows/jvm-check.yml
     with:
       tasks: ':business:check :business:business-api:check'
@@ -35,8 +36,6 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write        # create tags + GitHub releases on main
 
     steps:
       - name: Checkout
@@ -53,20 +52,12 @@ jobs:
           BASE_VERSION="$(sh ./gradlew -q :business:business-api:properties | awk -F': ' '/^version:/ {print $2}' | head -n1)"
           echo "base=$BASE_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Compute publish version
+      # Main releases are published together by plugin-release.yml.
+      - name: Compute snapshot version
         id: pick
         env:
           BASE: ${{ steps.ver.outputs.base }}
-        run: |
-          CORE="${BASE%-SNAPSHOT}"
-
-          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
-            PUBLISH_VERSION="$CORE"
-          else
-            PUBLISH_VERSION="$CORE-SNAPSHOT"
-          fi
-
-          echo "version=$PUBLISH_VERSION" >> "$GITHUB_OUTPUT"
+        run: echo "version=${BASE%-SNAPSHOT}-SNAPSHOT" >> "$GITHUB_OUTPUT"
 
       - name: Build & publish business-api
         env:
@@ -74,24 +65,3 @@ jobs:
           REPO_PASS: ${{ secrets.REPO_PASS }}
           VERSION: ${{ steps.pick.outputs.version }}
         run: sh ./gradlew :business:business-api:clean :business:business-api:publish -Pversion="$VERSION"
-
-      # Cut a git tag + GitHub release for non-SNAPSHOT publishes (main only).
-      # Tagged per-artifact (business-api-v…) since this repo's release automation
-      # publishes the API jar, not the plugin shadowJar. Idempotent per version.
-      - name: Tag + GitHub release
-        if: github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.pick.outputs.version }}
-        run: |
-          TAG="business-api-v$VERSION"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — skipping."
-            exit 0
-          fi
-          mapfile -t ASSETS < <(ls business/business-api/build/libs/*.jar 2>/dev/null || true)
-          gh release create "$TAG" \
-            --target "$GITHUB_SHA" \
-            --title "business-api $VERSION" \
-            --generate-notes \
-            "${ASSETS[@]}"

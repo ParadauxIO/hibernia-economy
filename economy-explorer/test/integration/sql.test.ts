@@ -1,3 +1,4 @@
+import { listRoleGrants } from '@/lib/sql/role-grants';
 import { sql } from 'kysely';
 import { db, uuidToBin } from '@/lib/db';
 import { getViewer } from '@/lib/auth/viewer';
@@ -6,7 +7,7 @@ import { setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, r
 import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '@/lib/sql/role';
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { permissionsFor } from '../role-fixtures';
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { HAS_DB, resetDb, testDbOptions, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
 import { accountLabel, looksLikeUuid } from '@/lib/format';
 import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount } from '@/lib/sql/ledger';
@@ -16,6 +17,8 @@ import { listFinanceFirms } from '@/lib/sql/webhook';
 import { findCapabilities, findPlayerUuidByName } from '@/lib/sql/group';
 import { findAccountsForPlayer, getPlayerTotals } from '@/lib/sql/me';
 import { findIdentityBySub } from '@/lib/sql/identity';
+import { getDailyVolume, getActivityComparison } from '@/lib/sql/health';
+import { getTxnVolume } from '@/lib/sql/stats';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { listItemSales, getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
 import mysql from 'mysql2/promise';
@@ -65,7 +68,7 @@ d('account name resolution', () => {
 
   it('keeps a real business display name', async () => {
     const a = await findAccount(3);
-    expect(accountLabel(a!)).toBe('Acme Corp');
+    expect(accountLabel(a!)).toBe('Acme Corporate Account');
   });
 
   it('falls back to a short UUID for a player not in economy_players (Dave)', async () => {
@@ -82,7 +85,7 @@ d('transaction postings resolve names (the HIGH bug fix)', () => {
     expect(postings).toHaveLength(2);
     const labels = postings.map((p) => accountLabel(p));
     expect(labels).toContain('Alice');
-    expect(labels).toContain('Acme Corp');
+    expect(labels).toContain('Acme Corporate Account');
     for (const l of labels) expect(looksLikeUuid(l)).toBe(false);
   });
 });
@@ -184,6 +187,21 @@ d('money flow counts only clean cross-type transfers', () => {
     expect(edges).toHaveLength(1); // txn2 is same-type, txn3 is 3-leg
     expect(edges[0]).toMatchObject({ from_type: 'PERSONAL', to_type: 'BUSINESS', txn_count: 1 });
     expect(edges[0]?.amount).toBe('500.00');
+  });
+
+  it('filters by settlement time even when transaction IDs are out of time order', async () => {
+    try {
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 10 DAY WHERE txn_id = 1`.execute(db);
+      expect(await getMoneyFlow(7)).toEqual([]);
+      expect(await getMoneyFlow(30)).toEqual([
+        { from_type: 'PERSONAL', to_type: 'BUSINESS', amount: '500.00', amount_ex_seed: '500.00', txn_count: 1 },
+      ]);
+      // The oldest ID now settles after the other fixture transactions.
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() + INTERVAL 1 HOUR WHERE txn_id = 1`.execute(db);
+      expect((await getMoneyFlow(7))[0]?.amount).toBe('500.00');
+    } finally {
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() WHERE txn_id = 1`.execute(db);
+    }
   });
 });
 
@@ -696,6 +714,47 @@ d('reused firm names', () => {
 });
 
 d('public taxation ledger aggregates', () => {
+  it('bounds ledger reads to tax candidates, excluding old taxes and unrelated recent transfers', async () => {
+    const { getTaxRevenue } = await import('@/lib/sql/taxation');
+    await sql`INSERT INTO accounts (account_id, account_type, display_name, owner_uuid_bin)
+      VALUES (9301, 'GOVERNMENT', 'Tax performance fixture', UNHEX(REPEAT('00',16)))`.execute(db);
+    try {
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        SELECT 930000 + seq, IF(seq <= 5000 OR seq = 10001, 'Personal balance tax (fixture)', 'Ordinary transfer'),
+          'treasury', UNHEX(REPEAT('00',16)),
+          IF(seq <= 5000, UTC_TIMESTAMP() - INTERVAL 60 DAY, UTC_TIMESTAMP() - INTERVAL 1 DAY)
+        FROM seq_1_to_10001`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT 930000 + seq, 9301, 1.00 FROM seq_1_to_10001`.execute(db);
+      for (const days of [7, 30]) {
+        // Capture the actual production query, then measure rows visited rather
+        // than wall time (which varies with CI load and the buffer pool).
+        const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
+        let query;
+        try {
+          expect((await getTaxRevenue(days)).filter(row => row.account_id === 9301))
+            .toEqual([expect.objectContaining({ kind: 'personal', collected: '1.00', refunded: '0.00' })]);
+          query = executed.mock.calls[0]![0];
+        } finally {
+          executed.mockRestore();
+        }
+        const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
+        const plan: unknown = JSON.parse(analyzed.rows[0]!.ANALYZE);
+        const visited = (node: unknown): number => {
+          if (!node || typeof node !== 'object') return 0;
+          const entry = node as Record<string, unknown>;
+          const reads = 'table_name' in entry ? Number(entry.r_loops ?? 0) * Number(entry.r_rows ?? 0) : 0;
+          return reads + Object.values(entry).reduce<number>((sum, child) => sum + visited(child), 0);
+        };
+        expect(visited(plan)).toBeLessThan(500);
+      }
+    } finally {
+      await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 930001 AND 940001`.execute(db);
+      await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 930001 AND 940001`.execute(db);
+      await sql`DELETE FROM accounts WHERE account_id = 9301`.execute(db);
+    }
+  });
+
   it('counts government credits once, identifies writer tags, and dates fine refunds by settlement', async () => {
     const { getTaxRevenue } = await import('@/lib/sql/taxation');
     const { summarizeTaxRevenue } = await import('@/lib/taxation');
@@ -745,4 +804,250 @@ d('public taxation ledger aggregates', () => {
       await sql`DELETE FROM accounts WHERE account_id IN (9201, 9202)`.execute(db);
     }
   });
+});
+
+d('Business/Realty group leases (PAR-101)', () => {
+  it('accepts each configured source independently, rejects changed/expired leases, and preserves manual access', async () => {
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (901, 'PAR-101')`.execute(db);
+    await sql`INSERT INTO explorer_role_definition (role_key, name) VALUES ('par101_reader', 'PAR-101 reader')`.execute(db);
+    try {
+      await sql`INSERT INTO explorer_group_capability VALUES (901, 'par101_reader')`.execute(db);
+      await sql`INSERT INTO explorer_group_sync VALUES (901, 'business', '7'), (901, 'realty', 'world/Plot')`.execute(db);
+      for (const [source, selector] of [['business', '7'], ['realty', 'world/Plot']]) {
+        await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at, sync_selector)
+          VALUES (901, ${uuidToBin(BOB)}, ${source}, NOW(), ${selector})`.execute(db);
+        expect((await resolveAuthorization(BOB)).roles).toContain('par101_reader');
+        expect(await findCapabilities(BOB)).toContain('par101_reader');
+        await sql`UPDATE explorer_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE group_id = 901`.execute(db);
+        expect((await resolveAuthorization(BOB)).roles).not.toContain('par101_reader');
+        await sql`DELETE FROM explorer_group_member WHERE group_id = 901`.execute(db);
+      }
+      await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at, sync_selector)
+        VALUES (901, ${uuidToBin(BOB)}, 'realty', NOW(), 'world/plot')`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).not.toContain('par101_reader');
+      await sql`UPDATE explorer_group_member SET sync_selector = 'world/Plot' WHERE group_id = 901`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).toContain('par101_reader');
+      await sql`DELETE FROM explorer_group_sync WHERE group_id = 901`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).not.toContain('par101_reader');
+      await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source) VALUES (901, ${uuidToBin(BOB)}, 'manual')`.execute(db);
+      expect((await resolveAuthorization(BOB)).roles).toContain('par101_reader');
+    } finally {
+      await sql`DELETE FROM explorer_group WHERE group_id = 901`.execute(db);
+      await sql`DELETE FROM explorer_role_definition WHERE role_key = 'par101_reader'`.execute(db);
+    }
+  });
+});
+
+d('bridge analytics estimate (never persisted sale identity)', () => {
+  beforeAll(async () => {
+    await sql`INSERT INTO accounts (account_id, account_type, display_name, owner_uuid_bin)
+      VALUES (9501, 'SYSTEM', 'PAR159 clearing', UNHEX(REPEAT('01',16))),
+             (9502, 'SYSTEM', 'PAR159 other', UNHEX(REPEAT('02',16)))`.execute(db);
+  }, 60_000);
+  afterAll(async () => { await sql`DELETE FROM accounts WHERE account_id IN (9501, 9502)`.execute(db); });
+
+  let nextId = 9500;
+  async function transfer(src: number, dst: number, amount: string, message: string, plugin = 'ChestShop', ageSeconds = 3600) {
+    const id = ++nextId;
+    await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+      VALUES (${id}, ${message}, ${plugin}, UNHEX(REPEAT('00',16)), NOW() - INTERVAL ${ageSeconds} SECOND)`.execute(db);
+    await sql`INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES
+      (${id}, ${src}, ${'-' + amount}), (${id}, ${dst}, ${amount})`.execute(db);
+    return id;
+  }
+  async function totals(days = 7) {
+    const points = await getDailyVolume(days);
+    return { count: points.reduce((n, p) => n + p.txn_count, 0), volume: points.reduce((n, p) => n + Number(p.total_volume), 0) };
+  }
+  async function cleanup() {
+    await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db);
+    await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db);
+  }
+
+  it('counts a bridge once, removes phantom arrows, retains cross-type and atomic flow, and leaves ledger raw', async () => {
+    const before = await totals();
+    const raw = await sql<{ n: number }>`SELECT COUNT(*) n FROM ledger_txns`.execute(db);
+    try {
+      await transfer(1, 9501, '10.25', 'Vault withdraw (ChestShop)');
+      await transfer(9501, 2, '10.25', 'Vault deposit (ChestShop)'); // personal→personal disappears from cross-type flow
+      await transfer(1, 9501, '20.10', 'purchase');
+      await transfer(9501, 3, '20.10', 'purchase'); // personal→business appears once
+      await transfer(1, 3, '7.15', 'atomic');
+      expect(await totals()).toEqual({ count: before.count + 3, volume: before.volume + 37.5 });
+      expect(await getMoneyFlow(7)).toEqual([
+        { from_type: 'PERSONAL', to_type: 'BUSINESS', amount: '527.25', amount_ex_seed: '527.25', txn_count: 3 },
+      ]);
+      expect(await getTxnVolume(7)).toEqual(await getDailyVolume(7));
+      expect((await getActivityComparison(7)).current).toEqual({ transactions: before.count + 3, volume: before.volume + 37.5 });
+      expect(Number((await sql<{ n: number }>`SELECT COUNT(*) n FROM ledger_txns`.execute(db)).rows[0]!.n)).toBe(Number(raw.rows[0]!.n) + 5);
+      expect((await sql`SELECT * FROM ledger_postings WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db)).rows).toHaveLength(10);
+    } finally { await cleanup(); }
+  });
+
+  it.each([
+    ['unmatched claim-block sink', 'sink'], ['unmatched reward faucet', 'faucet'],
+    ['delayed escrow', 'delay'], ['unequal fee loop', 'amount'],
+    ['different plugin', 'plugin'], ['different message', 'message'],
+    ['different SYSTEM account', 'account'], ['intervening posting', 'intervene'],
+    ['backdated intervening posting', 'backdated'],
+    ['case-sensitive message', 'case'], ['reversed settlement order', 'reverse'],
+  ])('preserves %s', async (_label, kind) => {
+    const before = await totals();
+    try {
+      if (kind === 'sink') await transfer(1, 9501, '12.00', 'claim blocks', 'GriefPreventionUI');
+      else if (kind === 'faucet') await transfer(9501, 1, '12.00', 'reward', 'Exams');
+      else {
+        await transfer(1, 9501, '12.00', 'event', 'plugin', kind === 'delay' ? 3602 : 3600);
+        if (kind === 'intervene' || kind === 'backdated') await transfer(2, 9501, '1.00', 'other', 'plugin', kind === 'backdated' ? 60 * 86400 : 3600);
+        await transfer(kind === 'account' ? 9502 : 9501, 3, kind === 'amount' ? '11.00' : '12.00',
+          kind === 'message' ? 'another' : kind === 'case' ? 'EVENT' : 'event', kind === 'plugin' ? 'other' : 'plugin', kind === 'reverse' ? 3601 : 3600);
+      }
+      const count = kind === 'sink' || kind === 'faucet' ? 1 : kind === 'intervene' ? 3 : 2;
+      const volume = count === 1 ? 12 : kind === 'amount' ? 23 : kind === 'intervene' ? 25 : 24;
+      expect(await totals()).toEqual({ count: before.count + count, volume: before.volume + volume });
+      const edges = await getMoneyFlow(7);
+      expect(edges.some(e => e.from_type === 'SYSTEM' || e.to_type === 'SYSTEM')).toBe(true);
+    } finally { await cleanup(); }
+  });
+
+  it('does not collapse split postings or reuse a credit for repeated debits', async () => {
+    const before = await totals();
+    try {
+      const incoming = await transfer(1, 9501, '10.00', 'split');
+      await sql`UPDATE ledger_postings SET amount = -5 WHERE txn_id = ${incoming} AND account_id = 1`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES (${incoming}, 2, -5)`.execute(db);
+      await transfer(9501, 3, '10.00', 'split');
+      expect(await totals()).toEqual({ count: before.count + 2, volume: before.volume + 20 });
+      await transfer(1, 9501, '3.00', 'repeat');
+      await transfer(9501, 3, '3.00', 'repeat');
+      await transfer(9501, 3, '3.00', 'repeat');
+      expect(await totals()).toEqual({ count: before.count + 4, volume: before.volume + 26 });
+    } finally { await cleanup(); }
+  });
+
+  it('bounds reads to the reporting window and indexed predecessor probes, independent of old history', async () => {
+    try {
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        SELECT 960000 + seq, 'old', 'ChestShop', UNHEX(REPEAT('00',16)), NOW() - INTERVAL 60 DAY
+        FROM seq_1_to_10000`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT 960000 + seq, 9501, 1 FROM seq_1_to_10000`.execute(db);
+      await transfer(1, 9501, '4.00', 'recent');
+      await transfer(9501, 3, '4.00', 'recent');
+      for (const read of [() => getMoneyFlow(7), () => getDailyVolume(7), () => getActivityComparison(7)]) {
+        const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
+        let query;
+        try { await read(); query = executed.mock.calls[0]![0]; }
+        finally { executed.mockRestore(); }
+        const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
+        const visited = (node: unknown): number => {
+          if (!node || typeof node !== 'object') return 0;
+          const entry = node as Record<string, unknown>;
+          const reads = 'table_name' in entry ? Number(entry.r_loops ?? 0) * Number(entry.r_rows ?? 0) : 0;
+          return reads + Object.values(entry).reduce<number>((sum, child) => sum + visited(child), 0);
+        };
+        const plan = JSON.parse(analyzed.rows[0]!.ANALYZE);
+        expect(visited(plan)).toBeLessThan(1000);
+      }
+    } finally { await cleanup(); }
+  });
+
+  it('keeps a busy window linear when excluding both legs of 1,000 pairs', async () => {
+    const before = await totals();
+    try {
+      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
+        SELECT 970000 + seq, 'busy window', 'ChestShop', UNHEX(REPEAT('00',16)), NOW() - INTERVAL 1 HOUR
+        FROM seq_1_to_2000`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT 970000 + t.seq,
+          CASE WHEN MOD(t.seq, 2) = 1 THEN IF(leg.seq = 1, 1, 9501) ELSE IF(leg.seq = 1, 9501, 3) END,
+          IF(leg.seq = 1, -1, 1)
+        FROM seq_1_to_2000 t CROSS JOIN seq_1_to_2 leg ORDER BY t.seq, leg.seq`.execute(db);
+      expect(await totals()).toEqual({ count: before.count + 1000, volume: before.volume + 1000 });
+      const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
+      let query;
+      try {
+        expect((await getMoneyFlow(7)).find(e => e.to_type === 'BUSINESS')?.amount).toBe('1500.00');
+        query = executed.mock.calls[0]![0];
+      } finally { executed.mockRestore(); }
+      const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
+      const visited = (node: unknown): number => {
+        if (!node || typeof node !== 'object') return 0;
+        const entry = node as Record<string, unknown>;
+        const reads = 'table_name' in entry ? Number(entry.r_loops ?? 0) * Number(entry.r_rows ?? 0) : 0;
+        return reads + Object.values(entry).reduce<number>((sum, child) => sum + visited(child), 0);
+      };
+      // A per-transaction scan of all 1,000 pairs would visit millions of rows.
+      expect(visited(JSON.parse(analyzed.rows[0]!.ANALYZE))).toBeLessThan(250_000);
+    } finally { await cleanup(); }
+  });
+
+  it('uses the outgoing settlement date across day and reporting-window boundaries', async () => {
+    // Pin the DB clock for an exact rolling-window boundary (same pooled connection).
+    await sql`SET timestamp = ${Math.floor(Date.now() / 1000)}`.execute(db);
+    const before = await totals();
+    try {
+      const incoming = await transfer(1, 9501, '9.00', 'boundary');
+      const outgoing = await transfer(9501, 3, '9.00', 'boundary');
+      await sql`UPDATE ledger_txns SET settlement_time = DATE(NOW()) - INTERVAL 1 SECOND WHERE txn_id = ${incoming}`.execute(db);
+      await sql`UPDATE ledger_txns SET settlement_time = DATE(NOW()) WHERE txn_id = ${outgoing}`.execute(db);
+      expect(await totals()).toEqual({ count: before.count + 1, volume: before.volume + 9 });
+      const comparison = await getActivityComparison(7);
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 7 DAY - INTERVAL 1 SECOND WHERE txn_id = ${incoming}`.execute(db);
+      await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 7 DAY WHERE txn_id = ${outgoing}`.execute(db);
+      expect((await getActivityComparison(7)).current.volume).toBe(comparison.current.volume);
+      expect((await getMoneyFlow(7)).find(e => e.to_type === 'SYSTEM')).toBeUndefined();
+    } finally { await cleanup(); await sql`SET timestamp = 0`.execute(db); }
+  });
+});
+
+// Keep shared-database integration cases in one file: independent resets must not race.
+const PROVENANCE_USER = 'a1930000-1111-2222-3333-000000000001';
+d('role provenance', () => {
+  it('retains multiple sources and mirrors lease/source validity without inventing an inheritance path', async () => {
+    await sql`INSERT INTO explorer_role (player_uuid_bin, role) VALUES (${uuidToBin(PROVENANCE_USER)}, 'moderator')`.execute(db);
+    const ids: number[] = [];
+    for (const [name, node, age] of [['Inherited parent', 'parent', 0], ['Second group', 'group.second', 0], ['Expired group', 'old', 2], ['Disabled group', null, 0]] as const) {
+      const g = await sql`INSERT INTO explorer_group (name, luckperms_node) VALUES (${name}, ${node})`.execute(db);
+      const id = Number(g.insertId); ids.push(id);
+      await sql`INSERT INTO explorer_group_capability (group_id, capability) VALUES (${id}, 'moderator')`.execute(db);
+      await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at)
+        VALUES (${id}, ${uuidToBin(PROVENANCE_USER)}, 'luckperms', CURRENT_TIMESTAMP - INTERVAL ${age} HOUR)`.execute(db);
+    }
+    const result = await listRoleGrants({ q: PROVENANCE_USER, role: 'moderator' });
+    expect(result.rows).toHaveLength(5);
+    expect(result.rows.filter(r => r.active).map(r => r.source).sort()).toEqual(['direct', 'luckperms', 'luckperms']);
+    expect(result.rows.find(r => r.group === 'Inherited parent')).toMatchObject({ selector: 'parent', active: true });
+    expect((await resolveAuthorization(PROVENANCE_USER)).roles).toContain('moderator');
+    await sql`UPDATE explorer_group_member SET synced_at = NULL WHERE group_id = ${ids[3]}`.execute(db);
+    expect((await listRoleGrants({ q: 'Disabled group', status: 'inactive' })).rows).toHaveLength(1);
+    expect((await listRoleGrants({ q: 'Expired group', status: 'active' })).rows).toEqual([]);
+    expect((await listRoleGrants({ q: 'Expired group', status: 'inactive' })).rows).toHaveLength(1);
+    expect((await listRoleGrants({ q: 'Second', source: 'luckperms', role: 'moderator' })).rows).toHaveLength(1);
+    expect((await listRoleGrants({ q: "' OR 1=1 --" })).rows).toEqual([]);
+    expect((await listRoleGrants({ q: PROVENANCE_USER, source: 'baseline' })).rows).toHaveLength(1);
+    for (const id of ids) await sql`DELETE FROM explorer_group WHERE group_id = ${id}`.execute(db);
+    await sql`DELETE FROM explorer_role WHERE player_uuid_bin = ${uuidToBin(PROVENANCE_USER)} AND role = 'moderator'`.execute(db);
+  });
+  it('pages grant sources without losing rows and fences changed derived selectors', async () => {
+    const g = await sql`INSERT INTO explorer_group (name) VALUES ('Provenance pagination')`.execute(db);
+    const id = Number(g.insertId);
+    await sql`INSERT INTO explorer_group_capability VALUES (${id}, 'moderator')`.execute(db);
+    await sql`INSERT INTO explorer_group_sync VALUES (${id}, 'business', '7')`.execute(db);
+    for (let n = 1; n <= 51; n++) {
+      const uuid = `a1930000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+      await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at, sync_selector)
+        VALUES (${id}, ${uuidToBin(uuid)}, 'business', CURRENT_TIMESTAMP, '7')`.execute(db);
+    }
+    const first = await listRoleGrants({ q: 'Provenance pagination', source: 'business', status: 'active' });
+    const second = await listRoleGrants({ q: 'Provenance pagination', source: 'business', status: 'active', page: 2 });
+    expect(first.rows).toHaveLength(50); expect(first.hasMore).toBe(true);
+    expect(second.rows).toHaveLength(1); expect(second.hasMore).toBe(false);
+    expect(new Set([...first.rows, ...second.rows].map(r => r.uuid)).size).toBe(51);
+    await sql`UPDATE explorer_group_sync SET selector = '8' WHERE group_id = ${id}`.execute(db);
+    expect((await listRoleGrants({ q: 'Provenance pagination', status: 'active' })).rows).toEqual([]);
+    expect((await listRoleGrants({ q: 'Provenance pagination', status: 'inactive' })).hasMore).toBe(true);
+    await sql`DELETE FROM explorer_group WHERE group_id = ${id}`.execute(db);
+  });
+
 });

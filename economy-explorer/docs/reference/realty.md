@@ -23,7 +23,7 @@ base command is `/realty`.
 | Command | What it does |
 |---|---|
 | `/realty info [region]` | Show a plot's type, owner, price, and members. |
-| `/realty list [owned\|rented]` | List plots — yours by default, or someone else's with `--player <name>` (paginated with `--page <n>`). |
+| `/realty list [owned\|authority\|landlord\|rented] [name] [--page <n>]` | List your plots or the named party's; append a type flag for an account/group. The old `--player` flag is removed. |
 | `/realty me [--page <n>]` | List all the plots you own or rent. |
 | `/realty search` | Open the search dialog to browse available plots (filter by price, tags, type, occupancy). |
 | `/realty history [region]` | Show a plot's transaction history (filter with `--player`, `--event`, `--time`; paginate with `--page`). |
@@ -140,7 +140,9 @@ auctions and offers.
 | `/realty register leasehold <price> <duration> <maxExtensions> [--landlord <player>] [region]` | Register an existing region as a rentable plot. |
 | `/realty register freehold [--price <price>] [--titleholder <player>] [--authority <player>] [region]` | Register an existing region as a for-sale plot. |
 | `/realty delete <region> [includeworldguard]` | Remove a plot from Realty (optionally delete the WorldGuard region too). |
-| `/realty subregion quickcreate <parentRegion> <name> <price> <duration>` | Create a rentable sub-plot of a parent region. |
+| `/realty subregion wand` | Get the footprint selection wand. |
+| `/realty subregion clear` | Clear your selection. |
+| `/realty subregion confirm` | Open the height/creation dialog for the selected footprint. |
 | `/realty tp <region>` | Teleport to a plot. |
 | `/realty cleanup tags` | Remove unused tags. |
 | `/realty reload` | Reload configuration. |
@@ -161,12 +163,81 @@ is the only command with no permission — it's open to all.)
 | Managing a plot | `realty.command.set.price` · `.duration` · `.landlord` · `.authority` · `.titleholder` · `.tenant` · `.maxextensions`; `realty.command.unset.price` · `.titleholder` · `.tenant`; `realty.command.add` · `.remove` · `.transfer` |
 | Agents | `realty.command.agent.invite` · `.invite.accept` · `.invite.reject` · `.invite.withdraw` · `.remove` |
 | Tags & signs | `realty.command.tag.add` · `.remove` · `.list` · `.clear`; `realty.command.sign.place` · `.remove` · `.list` |
-| Staff & admin | `realty.command.create.leasehold` · `.create.freehold` · `.register.leasehold` · `.register.freehold` · `.delete` · `.subregion.quickcreate` · `.tp` · `.cleanup.tags` · `.reload` |
+| Staff & admin | `realty.command.create.leasehold` · `.create.freehold` · `.register.leasehold` · `.register.freehold` · `.delete` · `.subregion.wand` · `.subregion.confirm` · `.tp` · `.cleanup.tags` · `.reload` |
 
 > [!NOTE]
 > Several commands have an **`.others`** variant that lets staff act on plots they
 > don't own — e.g. `realty.command.set.price.others`, `realty.command.add.others`,
-> `realty.command.transfer.others` (and the same for the other `set`/`unset` nodes).
+> `realty.command.transfer.others` (where declared for the specific `set`/`unset` action). `set authority` is
+> gated by `realty.command.set.authority` alone; its old `.others` node is removed.
 > There are also bypass nodes: `realty.command.offer.toggle.bypass`,
-> `realty.command.subregion.quickcreate.bypass`, and
+> `realty.command.subregion.confirm.bypass`, and
 > `realty.command.delete.includeworldguard`.
+
+## Parties: players, accounts and groups
+
+Landlords and freehold authorities may be players, Treasury government/business/
+system accounts, or permission groups mapped to Treasury accounts. Tenants and
+titleholders remain players. A plain name is a player; append exactly one of
+`--government`, `--business`, `--system`, `--group` after the name and optional
+region to select another kind. For example:
+
+```text
+/realty set landlord GovSecurity myregion --government
+/realty list landlord GovSecurity --government
+/realty add builders myregion --group
+```
+
+The type flags also apply to create/register `--landlord` and `--authority`
+arguments. Government accounts resolve by name; business/system accounts can use
+`#<id>` or a name among the sender's accounts. The old `g:` group prefix is removed.
+Accounts must be live, non-personal and not require per-transfer authorization.
+Direct Treasury members/authorizers act according to `account-managers`;
+Treasury LP-group grants are not included in this Realty check.
+
+| Command | Permission / behavior |
+|---|---|
+| `/realty group map <group> <account> --government\|--business\|--system` | `realty.command.group`; map a permission group to its funding account. |
+| `/realty group unmap <group>` | Same permission; refused while contracts **or history** reference it. |
+| `/realty group list` | Same permission; inspect mappings and contract counts. |
+
+Acting for an authority can prevent buying, bidding, offering or acting as agent
+on its land. `realty.bypass.conflict-of-interest` is a staff override; dealing with
+oneself is still refused. See [Realty operations](/docs/admin/realty-operations)
+for upgrade/default-party recovery.
+
+## Changing occupied leases
+
+`set price`, `set duration` and `set maxextensions` accept `[--now]`. A landlord's
+normal change on an occupied lease waits until renewal; a tenant's change is a
+proposal requiring landlord acceptance. On vacant/freehold land the holder's
+change applies immediately. Holdership comes from Realty, not merely WorldGuard's
+owner list.
+
+| Command | Permission / behavior |
+|---|---|
+| `/realty modify accept [region]` | `realty.command.modify.accept`; landlord accepts a tenant proposal. |
+| `/realty modify reject [region]` | `.modify.reject`; reject the proposal. |
+| `/realty modify withdraw [region]` | `.modify.withdraw`; proposer withdraws. |
+| `/realty modify inbox` / `outbox` | `.modify.inbox` / `.modify.outbox`; inspect pending proposals. |
+| `/realty terminate [region] [--now]` | `realty.command.terminate`; schedule the configured notice, or immediate termination with `.terminate.now`. |
+| `/realty terminate cancel [region]` | `.terminate`; initiator cancels pending termination (staff override `.terminate.others`). |
+| `/realty rentable <true\|false> [region]` | `realty.command.rentable`; control future tenants without evicting the current one (`.rentable.others` overrides ownership). |
+
+`--now` on set/unset needs `realty.command.set.now`. A `.others` grant bypasses
+holdership, not the renewal wait. Occupied holder changes (`set landlord`,
+`tenant`, `titleholder`, `unset tenant`, `unset titleholder`) and unlimited
+`set maxextensions -1` require `--now`. `set authority` takes no `--now`.
+The removed `modify price|duration|maxextensions` commands are replaced by `set`.
+
+## Modules and property previews
+
+| Command | Permission / behavior |
+|---|---|
+| `/realty module list` | `realty.command.module.list`; list loaded modules. |
+| `/realty module reload <module>` | `.module.reload`; reload a module. Use matching versions. |
+| `/realty schematic capture [region] [--force]` | `realty.command.schematic.capture`; player-only region preview. `.capture.others` bypasses membership; `.capture.force` bypasses cooldown, not volume limits. |
+
+Schematic capture stores a hollow exterior preview in Realty's own format. It
+omits interior/world-position data, cannot be loaded by WorldEdit and is **not a
+backup or a restore facility**.

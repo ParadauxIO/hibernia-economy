@@ -19,10 +19,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * A protocol round trip on each player's own connection ({@link MockPlayer#sync}). World
  * interaction packets and the barrier's request share Paper's FIFO packet queue, so when
  * it returns every earlier packet has been handled on the main thread, including the
- * synchronous Bukkit events it fired. That covers ChestShop trades completely: the trade
- * — goods move and the Treasury transfer commit — runs synchronously inside the
- * {@code PlayerInteractEvent} handler (ChestShop's {@code TransactionService} main-thread
- * contract), so after the barrier the ledger and inventories are final.
+ * synchronous Bukkit events it fired. ChestShop sign clicks may open a purchase preview.
+ * Its confirmation is deferred by Curator until the next tick: use {@link #settle}
+ * after sending that menu action before asserting ledger or inventory results.
  *
  * <h2>{@link #settle} — slash-commands and the async work they start</h2>
  * Commands travel on a different server queue from interaction packets, and Hibernia

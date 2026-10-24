@@ -11,7 +11,7 @@ import { fmtN } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CreateWebhookForm } from './create-webhook-form';
 import { WebhookRowActions } from './webhook-row-actions';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 export const dynamic = 'force-dynamic';
 

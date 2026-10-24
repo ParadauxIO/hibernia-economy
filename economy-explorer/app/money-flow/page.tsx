@@ -1,3 +1,4 @@
+import { WindowTabs, InfoTip, TableWrap } from '@democracycraft/design-system';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
 import { z } from 'zod';
@@ -5,9 +6,6 @@ import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { memo } from '@/lib/cache';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { SectionTabs } from '@/components/SectionTabs';
-import { WindowTabs } from '@/components/WindowTabs';
-import { InfoTip } from '@/components/InfoTip';
-import { TableWrap } from '@/components/TableWrap';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(1).max(30).default(30) });
 
@@ -46,6 +44,8 @@ export default async function MoneyFlowPage({
         Money moving <strong>between different account types</strong> — personal, business,
         government, system (e.g. a player paying a business, or government issuing a grant).
         Transfers within the same type (personal&nbsp;→&nbsp;personal) are excluded.
+        Adjacent matching Vault bridge legs are estimated as one transfer; unmatched rewards and spending remain.
+        This estimate does not establish the identity of an audited payment.
       </p>
 
       <div className="kpi-grid">

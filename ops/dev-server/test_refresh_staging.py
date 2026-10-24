@@ -1,4 +1,5 @@
 """Run: MARIADB_HOME=/path/to/mariadb python3 -m unittest discover -s ops/dev-server -p 'test_*.py'."""
+from contextlib import ExitStack
 import importlib.util
 import json
 import base64
@@ -38,6 +39,17 @@ class Guards(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'SERVICE token'):
             refresh.service_identity_sql(token, secret)
 
+    def test_service_identity_uses_infisical_and_rejects_unsynchronized_cluster(self):
+        token, signing = service_token()
+        cluster = subprocess.CompletedProcess([], 0, json.dumps({
+            'data': {'TREASURY_ADMIN_TOKEN': base64.b64encode(token.encode()).decode()}}))
+        with patch.dict(os.environ, {'TREASURY_API_JWT': signing, 'TREASURY_ADMIN_TOKEN': token}), \
+                patch.object(refresh, 'run', return_value=cluster):
+            self.assertIn('INSERT INTO api_keys', refresh.load_service_identity(Path('/unused'), 'test'))
+            with patch.dict(os.environ, {'TREASURY_ADMIN_TOKEN': 'different-token'}):
+                with self.assertRaisesRegex(ValueError, 'differs from Infisical'):
+                    refresh.load_service_identity(Path('/unused'), 'test')
+
     def test_source_options_are_accepted_by_dump_client(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -50,13 +62,33 @@ class Guards(unittest.TestCase):
                 else:
                     config = {'url': f'mysql://db.example/{schema}', 'username': 'test', 'password': 'test'}
                 path.write_text(json.dumps(config))
-            work = root / 'connections'
-            work.mkdir()
-            connections = refresh.production_connections(root, work)
-            self.assertIn('port="3307"', connections['s80037_luckperms'].read_text())
-            for connection in connections.values():
-                subprocess.run(['mariadb-dump', f'--defaults-file={connection}', '--version'],
-                               check=True, capture_output=True)
+            with ExitStack() as resources:
+                connections = refresh.production_connections(root, resources)
+                options = Path(f'/proc/self/fd/{connections["s80037_luckperms"]}').read_text()
+                self.assertIn('port="3307"', options)
+                for connection in connections.values():
+                    subprocess.run(['mariadb-dump', f'--defaults-file=/proc/self/fd/{connection}', '--version'],
+                                   check=True, capture_output=True, pass_fds=(connection,))
+
+    def test_client_credentials_are_anonymous_and_closed_after_failure(self):
+        password = 'test secret#with"quotes\\and-slashes'
+        with self.assertRaisesRegex(RuntimeError, 'simulated failure'):
+            with ExitStack() as resources:
+                fd = refresh.cnf(resources, {'user': 'test', 'password': password})
+                path = Path(f'/proc/self/fd/{fd}')
+                self.assertTrue(os.readlink(path).startswith('/memfd:'))
+                self.assertEqual(os.fstat(fd).st_nlink, 0)
+                self.assertEqual(os.fstat(fd).st_mode & 0o777, 0o600)
+                self.assertFalse(os.get_inheritable(fd))
+                for client in ('mariadb', 'mariadb-dump', 'mariadb'):
+                    result = subprocess.run(
+                        [client, f'--defaults-file={path}', '--print-defaults'],
+                        check=True, capture_output=True, text=True, pass_fds=(fd,))
+                    self.assertIn('--password=' + password, result.stdout)
+                    self.assertNotIn(password, ' '.join(result.args))
+                raise RuntimeError('simulated failure')
+        with self.assertRaises(OSError):
+            os.fstat(fd)
 
     def test_definer_rewrite_does_not_change_insert_values(self):
         ddl = b'/*!50013 DEFINER=`prod`@`%` SQL SECURITY DEFINER */\n'
@@ -106,7 +138,9 @@ class RoundTrip(unittest.TestCase):
             f'--basedir={home}', f'--datadir={cls.root / "data"}',
             f'--socket={cls.root / "db.sock"}', f'--pid-file={cls.root / "db.pid"}',
             '--skip-networking', '--innodb-buffer-pool-size=32M'], stdout=cls.log, stderr=cls.log)
-        cls.connection = refresh.cnf(cls.root / 'client.cnf', {
+        cls.resources = ExitStack()
+        cls.addClassCleanup(cls.resources.close)
+        cls.connection = refresh.cnf(cls.resources, {
             'socket': cls.root / 'db.sock', 'user': 'root', 'skip-ssl': '1'})
         for _ in range(100):
             try:

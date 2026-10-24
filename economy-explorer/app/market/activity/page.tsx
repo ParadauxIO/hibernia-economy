@@ -1,6 +1,8 @@
+import { WindowTabs } from '@democracycraft/design-system';
 import { buildMetadata } from '@/lib/metadata';
 import { flattenSearchParams } from '@/lib/util/searchParams';
-import { getMarketActivity } from '@/lib/services/market';
+import { getMarketWindow, getMarketTotals } from '@/lib/services/market';
+import { Suspense } from 'react';
 import { z } from 'zod';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { SectionTabs } from '@/components/SectionTabs';
@@ -14,10 +16,17 @@ export const dynamic = 'force-dynamic';
 
 // Only short windows for now — there isn't yet 30 days of data, so 90/365 are
 // misleading.
-const WINDOWS = [7, 30];
 
 export async function generateMetadata() {
   return buildMetadata({ title: "Market", description: "ChestShop market overview for {server} — prices, volume and top-traded items.", path: "/market/activity" });
+}
+
+async function AllTime({ totals, field }: {
+  totals: ReturnType<typeof getMarketTotals>;
+  field: 'sales' | 'volume' | 'items';
+}) {
+  const data = await totals;
+  return <>{field === 'volume' ? fmtAmtFull(data.volume) : fmtN(data[field])} all-time</>;
 }
 
 export default async function MarketPage({
@@ -26,7 +35,8 @@ export default async function MarketPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
-  const [volume, totalSales, totalVolume, distinctItems, windowItems] = await getMarketActivity(sp.days);
+  const totals = getMarketTotals();
+  const [volume, windowItems] = await getMarketWindow(sp.days);
 
   const windowSales = volume.reduce((s, v) => s + v.sales, 0);
   const windowVolume = volume.reduce((s, v) => s + parseFloat(v.total_volume), 0);
@@ -36,11 +46,7 @@ export default async function MarketPage({
       <div className="page-heading">
         <h1>Market activity</h1>
         <span className="sub">ChestShop activity · last {sp.days} days</span>
-        <span className="window-tabs">
-          {WINDOWS.map((w) => (
-            <a key={w} href={`/market/activity?days=${w}`} className={w === sp.days ? 'active' : ''}>{w}d</a>
-          ))}
-        </span>
+        <WindowTabs basePath="/market/activity" days={sp.days} />
         <SectionTabs />
       </div>
 
@@ -48,17 +54,17 @@ export default async function MarketPage({
         <div className="kpi">
           <div className="kpi-label">Sales / {sp.days}d</div>
           <div className="kpi-value">{fmtN(windowSales)}</div>
-          <div className="kpi-meta">{fmtN(totalSales)} all-time</div>
+          <div className="kpi-meta"><Suspense fallback="— all-time"><AllTime totals={totals} field="sales" /></Suspense></div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Volume / {sp.days}d</div>
           <div className="kpi-value">{fmtAmtFull(windowVolume)}</div>
-          <div className="kpi-meta">{fmtAmtFull(totalVolume)} all-time</div>
+          <div className="kpi-meta"><Suspense fallback="— all-time"><AllTime totals={totals} field="volume" /></Suspense></div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Items traded</div>
           <div className="kpi-value">{fmtN(windowItems)}</div>
-          <div className="kpi-meta">{fmtN(distinctItems)} all-time</div>
+          <div className="kpi-meta"><Suspense fallback="— all-time"><AllTime totals={totals} field="items" /></Suspense></div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Avg sale</div>
@@ -85,7 +91,7 @@ export default async function MarketPage({
             </span>
           </span>
         </div>
-        <VolumeTimeline data={volume.map((v) => ({ date: v.date, txn_count: v.sales, total_volume: v.total_volume }))} />
+        <VolumeTimeline countLabel="Sales" data={volume.map((v) => ({ date: v.date, txn_count: v.sales, total_volume: v.total_volume }))} />
       </div>
 
     </>

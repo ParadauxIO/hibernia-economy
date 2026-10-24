@@ -15,15 +15,14 @@ import io.paradaux.treasuryrestapi.model.FirmEmployee;
 import io.paradaux.treasuryrestapi.model.FirmRole;
 import io.paradaux.treasuryrestapi.model.FirmRolePermissionRow;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 
 @Service
 public class FirmService {
@@ -56,27 +55,24 @@ public class FirmService {
                 firm.getDefaultAccountId(),
                 firm.isArchived(),
                 // ADT-119: null-guard rather than NPE into a 500 if created_at is ever null.
-                firm.getCreatedAt() != null ? firm.getCreatedAt().toInstant(ZoneOffset.UTC) : null
-        );
+                firm.getCreatedAt() != null ? firm.getCreatedAt().toInstant(ZoneOffset.UTC) : null);
     }
 
     public List<FirmEmployeeResponse> listEmployees(VerifiedToken verified) {
-        requireBusinessKey(verified);
+        requireWholeFirmKey(verified);
         return firmMapper.listFirmEmployees(verified.firmId()).stream()
                 .map(this::toEmployeeResponse)
                 .toList();
     }
 
     public List<FirmRoleResponse> listRoles(VerifiedToken verified) {
-        requireBusinessKey(verified);
+        requireWholeFirmKey(verified);
 
         List<FirmRole> roles = firmMapper.listFirmRoles(verified.firmId());
-        Map<Integer, List<String>> permsByRole = firmMapper.listFirmRolePermissions(verified.firmId())
-                .stream()
+        Map<Integer, List<String>> permsByRole = firmMapper.listFirmRolePermissions(verified.firmId()).stream()
                 .collect(Collectors.groupingBy(
                         FirmRolePermissionRow::getRoleId,
-                        Collectors.mapping(FirmRolePermissionRow::getPermission, Collectors.toList())
-                ));
+                        Collectors.mapping(FirmRolePermissionRow::getPermission, Collectors.toList())));
 
         return roles.stream()
                 .map(r -> new FirmRoleResponse(
@@ -84,8 +80,7 @@ public class FirmService {
                         r.getRankOrder(),
                         r.isProprietorLike(),
                         r.isDefaultRole(),
-                        permsByRole.getOrDefault(r.getRoleId(), List.of())
-                ))
+                        permsByRole.getOrDefault(r.getRoleId(), List.of())))
                 .toList();
     }
 
@@ -110,10 +105,12 @@ public class FirmService {
      * An empty string {@code ""} can be used to clear {@code discordUrl} or {@code hqRegion}.
      */
     public FirmResponse updateFirm(VerifiedToken verified, FirmUpdateRequest request) {
-        requireBusinessKey(verified);
+        requireWholeFirmKey(verified);
 
         if (request.discordUrl() == null && request.hqRegion() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "At least one field must be provided: discordUrl, hqRegion.");
         }
         // Validate against the column widths before touching the DB (ADT-120: shared
@@ -123,8 +120,10 @@ public class FirmService {
 
         Firm firm = loadFirm(verified.firmId());
 
-        String newDiscordUrl = request.discordUrl() != null ? FirmFieldLimits.emptyToNull(request.discordUrl()) : firm.getDiscordUrl();
-        String newHqRegion   = request.hqRegion()   != null ? FirmFieldLimits.emptyToNull(request.hqRegion())   : firm.getHqRegion();
+        String newDiscordUrl =
+                request.discordUrl() != null ? FirmFieldLimits.emptyToNull(request.discordUrl()) : firm.getDiscordUrl();
+        String newHqRegion =
+                request.hqRegion() != null ? FirmFieldLimits.emptyToNull(request.hqRegion()) : firm.getHqRegion();
 
         firmMapper.updateFirm(firm.getFirmId(), firm.getDisplayName(), newDiscordUrl, newHqRegion);
 
@@ -138,35 +137,54 @@ public class FirmService {
     public List<FirmAccountSummaryResponse> listAccounts(VerifiedToken verified) {
         requireBusinessKey(verified);
         List<FirmAccountSummary> accounts = firmMapper.listFirmAccounts(verified.firmId());
-        return accounts.stream().map(this::toAccountSummaryResponse).toList();
+        return accounts.stream()
+                .filter(a -> verified.accountId() == null || a.getAccountId() == verified.accountId())
+                .map(this::toAccountSummaryResponse)
+                .toList();
     }
 
     /**
      * Updates the display name of an account that belongs to the firm.
      * Returns the updated account summary.
      */
-    public FirmAccountSummaryResponse updateAccountDisplayName(VerifiedToken verified,
-                                                               long accountId,
-                                                               String displayName) {
+    public FirmAccountSummaryResponse updateAccountDisplayName(
+            VerifiedToken verified, long accountId, String displayName) {
         requireBusinessKey(verified);
 
         if (displayName == null || displayName.isBlank()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'displayName' must not be blank.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY", "Field 'displayName' must not be blank.");
         }
         if (displayName.strip().length() > MAX_DISPLAY_NAME_LENGTH) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "Field 'displayName' must be at most " + MAX_DISPLAY_NAME_LENGTH + " characters.");
         }
 
-        if (firmMapper.isFirmAccount(verified.firmId(), accountId) == 0) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN",
+        if ((verified.accountId() != null && verified.accountId().longValue() != accountId)
+                || firmMapper.isFirmAccount(verified.firmId(), accountId) == 0) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "FORBIDDEN",
                     "Account does not belong to the firm associated with this API key.");
         }
 
-        firmMapper.updateAccountDisplayName(accountId, displayName.strip());
-        log.info("Account display name updated: accountId={} firmId={} by keyId={}",
-                accountId, verified.firmId(), verified.keyId());
+        String normalized = displayName.strip();
+        boolean duplicate = firmMapper.listFirmAccounts(verified.firmId()).stream()
+                .anyMatch(account ->
+                        account.getAccountId() != accountId && normalized.equalsIgnoreCase(account.getDisplayName()));
+        if (duplicate) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "ACCOUNT_NAME_EXISTS",
+                    "Another account in this firm already has that display name.");
+        }
+        firmMapper.updateAccountDisplayName(accountId, normalized);
+        log.info(
+                "Account display name updated: accountId={} firmId={} by keyId={}",
+                accountId,
+                verified.firmId(),
+                verified.keyId());
 
         // Reload to return the current state (balance may have changed since the list was fetched)
         List<FirmAccountSummary> accounts = firmMapper.listFirmAccounts(verified.firmId());
@@ -174,16 +192,22 @@ public class FirmService {
                 .filter(a -> a.getAccountId() == accountId)
                 .map(this::toAccountSummaryResponse)
                 .findFirst()
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND",
-                        "Account not found."));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Account not found."));
     }
 
     // -------------------------------------------------------------------------
 
+    private void requireWholeFirmKey(VerifiedToken verified) {
+        requireBusinessKey(verified);
+        if (verified.accountId() != null) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN, "FORBIDDEN", "This endpoint requires a firm-wide BUSINESS API key.");
+        }
+    }
+
     private void requireBusinessKey(VerifiedToken verified) {
         if (!"BUSINESS".equals(verified.keyType())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN",
-                    "This endpoint requires a BUSINESS API key.");
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "This endpoint requires a BUSINESS API key.");
         }
     }
 
@@ -197,12 +221,7 @@ public class FirmService {
 
     private FirmResponse toResponse(Firm firm) {
         return new FirmResponse(
-                firm.getFirmId(),
-                firm.getDisplayName(),
-                firm.getDiscordUrl(),
-                firm.getHqRegion(),
-                firm.isArchived()
-        );
+                firm.getFirmId(), firm.getDisplayName(), firm.getDiscordUrl(), firm.getHqRegion(), firm.isArchived());
     }
 
     private FirmEmployeeResponse toEmployeeResponse(FirmEmployee e) {
@@ -211,8 +230,7 @@ public class FirmService {
                 e.getPlayerName(),
                 e.getRoleName(),
                 // ADT-119: null-guard rather than NPE into a 500 if joined_at is ever null.
-                e.getJoinedAt() != null ? e.getJoinedAt().toInstant(ZoneOffset.UTC) : null
-        );
+                e.getJoinedAt() != null ? e.getJoinedAt().toInstant(ZoneOffset.UTC) : null);
     }
 
     private FirmAccountSummaryResponse toAccountSummaryResponse(FirmAccountSummary a) {
@@ -221,7 +239,6 @@ public class FirmService {
                 a.getDisplayName(),
                 a.getAccountType(),
                 a.getBalance().toPlainString(),
-                a.isArchived()
-        );
+                a.isArchived());
     }
 }

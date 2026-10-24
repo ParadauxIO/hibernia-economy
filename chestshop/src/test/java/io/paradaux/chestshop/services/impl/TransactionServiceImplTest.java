@@ -15,6 +15,7 @@ import io.paradaux.chestshop.model.Transaction;
 import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.MetricsService;
 import io.paradaux.chestshop.services.PostTradeReactions;
+import io.paradaux.chestshop.services.SettledPurchasePublisher;
 import io.paradaux.chestshop.services.StockCounterService;
 import io.paradaux.chestshop.services.TradeContextFactory;
 import io.paradaux.chestshop.services.TradeSettlement;
@@ -55,6 +56,7 @@ class TransactionServiceImplTest {
     private StockCounterService stockCounter;
     private MarketSyncService market;
     private MetricsService metrics;
+    private SettledPurchasePublisher purchases;
 
     private TransactionServiceImpl service;
 
@@ -68,9 +70,10 @@ class TransactionServiceImplTest {
         stockCounter = mock(StockCounterService.class);
         market = mock(MarketSyncService.class);
         metrics = mock(MetricsService.class);
+        purchases = mock(SettledPurchasePublisher.class);
 
         service = new TransactionServiceImpl(
-                contextFactory, validator, settlement, postTrade, economy, stockCounter, market, metrics);
+                contextFactory, validator, settlement, postTrade, economy, stockCounter, market, metrics, purchases);
     }
 
     // ── builders ──────────────────────────────────────────────────────────────
@@ -191,6 +194,7 @@ class TransactionServiceImplTest {
         service.process(event);
 
         verify(settlement).execute(event);
+        verify(purchases).publish(event);
         verify(stockCounter).onTransaction(event);
         verify(postTrade).deleteEmptyShop(event);
         assertThat(economy.migrateCalls).isEqualTo(1);
@@ -215,6 +219,7 @@ class TransactionServiceImplTest {
 
         verify(settlement).execute(event);
         verify(stockCounter).onTransaction(event); // runs regardless of cancellation
+        verify(purchases, never()).publish(any());
         verify(postTrade, never()).deleteEmptyShop(any());
         verify(market, never()).onTransaction(any());
         verify(postTrade, never()).logTransaction(any());
@@ -240,6 +245,47 @@ class TransactionServiceImplTest {
         verify(postTrade).logTransaction(event);
         verify(postTrade).sendTransactionMessages(event);
         verify(metrics).onTransaction(event);
+    }
+
+    @Test
+    void committedPurchaseIsPublishedBeforeFailingLogOrMessages() {
+        for (boolean failLog : new boolean[] {true, false}) {
+            setUp();
+            Transaction event = sampleTransaction();
+            if (failLog)
+                org.mockito.Mockito.doThrow(new IllegalStateException("log unavailable"))
+                        .when(postTrade)
+                        .logTransaction(event);
+            else
+                org.mockito.Mockito.doThrow(new IllegalStateException("message unavailable"))
+                        .when(postTrade)
+                        .sendTransactionMessages(event);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.process(event))
+                    .isInstanceOf(IllegalStateException.class);
+            var order = org.mockito.Mockito.inOrder(settlement, purchases, postTrade);
+            order.verify(settlement).execute(event);
+            order.verify(purchases).publish(event);
+            order.verify(postTrade).deleteEmptyShop(event);
+        }
+    }
+
+    @Test
+    void failedSettlementDoesNotNotifyAndObserverFailureDoesNotStopReactions() {
+        Transaction failed = sampleTransaction();
+        org.mockito.Mockito.doThrow(new IllegalStateException("settlement failure"))
+                .when(settlement)
+                .execute(failed);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.process(failed))
+                .isInstanceOf(IllegalStateException.class);
+        verify(purchases, never()).publish(any());
+        Transaction successful = sampleTransaction();
+        org.mockito.Mockito.doThrow(new IllegalStateException("observer failure"))
+                .when(purchases)
+                .publish(successful);
+        service.process(successful);
+        verify(postTrade).logTransaction(successful);
+        verify(postTrade).sendTransactionMessages(successful);
+        verify(metrics).onTransaction(successful);
     }
 
     /**

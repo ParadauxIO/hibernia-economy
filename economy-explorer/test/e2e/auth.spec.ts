@@ -160,7 +160,7 @@ test('government accounts and fines have separate views with preserved filters',
   ]);
   await expect(status).toBeEnabled();
   await status.selectOption('revoked');
-  const week = main.getByRole('link', { name: '7d', exact: true });
+  const week = main.getByRole('link', { name: '7 days', exact: true });
   await expect(week).toHaveAttribute('href', /status=revoked/);
   await Promise.all([page.waitForURL(/days=7/), week.click()]);
   await expect(page).toHaveURL(/view=fines/);

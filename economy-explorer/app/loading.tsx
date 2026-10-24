@@ -1,4 +1,4 @@
-import { SkeletonLine, SkeletonTable } from '@/components/Skeleton';
+import { SkeletonLine, SkeletonTable } from '@democracycraft/design-system';
 
 // Root route-loading boundary. Shown immediately on navigation while the target
 // page's server component streams — so a click paints a skeleton at once instead

@@ -4,6 +4,7 @@
 // header. Auto-detects which tab list to show via usePathname; returns null
 // on pages that aren't in a section group.
 
+import { SectionNav } from '@democracycraft/design-system';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
@@ -16,7 +17,7 @@ export function SectionTabs() {
   const items = pickSubNav(path, permissions.includes('market.sales.read'));
   if (!items) return null;
   return (
-    <nav className="section-tabs" aria-label="Section">
+    <SectionNav>
       {items.map((it) => {
         const active = it.match ? it.match(path) : path === it.href;
         return (
@@ -24,12 +25,13 @@ export function SectionTabs() {
             key={it.href}
             href={it.href as Route}
             className={active ? 'active' : ''}
+            aria-current={active ? 'page' : undefined}
             prefetch={false}
           >
             {it.label}
           </Link>
         );
       })}
-    </nav>
+    </SectionNav>
   );
 }

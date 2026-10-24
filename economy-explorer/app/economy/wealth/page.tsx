@@ -4,7 +4,7 @@ import { buildMetadata } from '@/lib/metadata';
 import { getWealthData } from '@/lib/services/economy';
 import { accountLabel, fmtAmtFull, fmtN, fmtPct } from '@/lib/format';
 import { SectionTabs } from '@/components/SectionTabs';
-import { InfoTip } from '@/components/InfoTip';
+import { InfoTip } from '@democracycraft/design-system';
 import { WealthDonut, BalanceDistribution } from '@/components/charts/AreaTimeline';
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() { return buildMetadata({ title: 'Wealth', description: 'Wealth distribution and balances in the {server} economy.', path: '/economy/wealth' }); }
@@ -48,7 +48,6 @@ export default async function WealthPage() {
           </div>
         </div>
       </div>
-
 
     <div className="charts-grid">
       <div className="chart-card"><h2 className="chart-title">Personal balance distribution</h2><p className="chart-subtitle">Positive personal balances only</p><BalanceDistribution data={distribution} /></div>

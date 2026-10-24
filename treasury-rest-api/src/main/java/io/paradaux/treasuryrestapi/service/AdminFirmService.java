@@ -10,17 +10,16 @@ import io.paradaux.treasuryrestapi.mapper.FirmMapper;
 import io.paradaux.treasuryrestapi.model.Firm;
 import io.paradaux.treasuryrestapi.model.FirmAccountSummary;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Privileged, cross-firm admin operations (disband / rename) consumed by the
@@ -58,18 +57,20 @@ public class AdminFirmService {
      * Disbands a firm: sweep each live account's positive balance to the proprietor's
      * personal account (through the ledger), archive each account, soft-delete the
      * firm↔account link, then archive the firm. Atomic and idempotent — a firm that
-     * is already archived returns a no-op success, and a partially-applied run can
-     * never persist (single transaction).
+     * is already archived with no live account links returns a no-op success.
+     * Retained links from a partial Paper disband are recovered atomically;
+     * a partially-applied REST run can never persist (single transaction).
      */
     @Transactional
     public FirmDisbandResponse disband(VerifiedToken verified, long firmId) {
         requireServiceKey(verified);
 
-        Firm firm = firmMapper.findFirmById(firmId);
+        Firm firm = firmMapper.lockFirmById(firmId);
         if (firm == null) {
             throw new ApiException(HttpStatus.NOT_FOUND, "FIRM_NOT_FOUND", "Firm not found.");
         }
-        if (firm.isArchived()) {
+        List<FirmAccountSummary> accounts = firmMapper.listFirmAccounts(firmId); // live links only
+        if (firm.isArchived() && accounts.isEmpty()) {
             // Already disbanded — idempotent no-op so a retried request is safe.
             log.info("Disband no-op: firmId={} already archived", firmId);
             return new FirmDisbandResponse(firmId, firm.getDisplayName(), true, List.of());
@@ -79,10 +80,8 @@ public class AdminFirmService {
         // Resolve the proprietor's PERSONAL account lazily — only needed if there is a
         // positive balance to move. Unlike the plugin we never MINT one via REST (no
         // faucet exposure); a balance with no destination is a clean 422.
-        Long proprietorPersonal = proprietor == null
-                ? null : accountMapper.findPersonalAccountIdByOwner(proprietor);
+        Long proprietorPersonal = proprietor == null ? null : accountMapper.findPersonalAccountIdByOwner(proprietor);
 
-        List<FirmAccountSummary> accounts = firmMapper.listFirmAccounts(firmId); // live links only
         List<DisbandedAccount> results = new ArrayList<>(accounts.size());
 
         for (FirmAccountSummary account : accounts) {
@@ -97,9 +96,9 @@ public class AdminFirmService {
                 // UPDATE and returns null when the locked balance is zero-or-negative.
                 // No per-transfer idempotency key: the whole disband is one DB transaction
                 // (ledger + firm tables share this database), so a partial run can't
-                // persist and a retried disband is a no-op via the already-archived guard.
-                TransferResponse receipt = transferService.sweepAll(
-                        accountId, proprietorPersonal, DISBAND_MEMO, proprietor);
+                // persist and a completed disband has no live links left on retry.
+                TransferResponse receipt =
+                        transferService.sweepAll(accountId, proprietorPersonal, DISBAND_MEMO, proprietor);
                 if (receipt != null) {
                     swept = receipt.amount();
                     destination = proprietorPersonal;
@@ -112,7 +111,9 @@ public class AdminFirmService {
                 // account the way the in-game plugin can.
                 BigDecimal locked = transferService.lockedBalance(accountId);
                 if (locked != null && locked.signum() > 0) {
-                    throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "PROPRIETOR_NO_PERSONAL_ACCOUNT",
+                    throw new ApiException(
+                            HttpStatus.UNPROCESSABLE_CONTENT,
+                            "PROPRIETOR_NO_PERSONAL_ACCOUNT",
                             "Firm account " + accountId + " has a positive balance but the proprietor has no "
                                     + "personal account to receive it.");
                 }
@@ -124,8 +125,7 @@ public class AdminFirmService {
         }
 
         firmMapper.archiveFirm(firmId);
-        log.info("Disbanded firmId={} ({} account(s) processed) by keyId={}",
-                firmId, results.size(), verified.keyId());
+        log.info("Disbanded firmId={} ({} account(s) processed) by keyId={}", firmId, results.size(), verified.keyId());
 
         return new FirmDisbandResponse(firmId, firm.getDisplayName(), true, results);
     }
@@ -150,16 +150,15 @@ public class AdminFirmService {
         // Allow a no-op/case rename of the firm itself; reject collisions with a different firm.
         if (!newName.equalsIgnoreCase(firm.getDisplayName())
                 && firmMapper.countOtherFirmsByDisplayName(firmId, newName) > 0) {
-            throw new ApiException(HttpStatus.CONFLICT, "NAME_TAKEN",
-                    "A firm named '" + newName + "' already exists.");
+            throw new ApiException(HttpStatus.CONFLICT, "NAME_TAKEN", "A firm named '" + newName + "' already exists.");
         }
 
         firmMapper.renameFirm(firmId, newName);
         log.info("Renamed firmId={} to '{}' by keyId={}", firmId, newName, verified.keyId());
 
         firm.setDisplayName(newName);
-        return new FirmResponse(firm.getFirmId(), firm.getDisplayName(),
-                firm.getDiscordUrl(), firm.getHqRegion(), firm.isArchived());
+        return new FirmResponse(
+                firm.getFirmId(), firm.getDisplayName(), firm.getDiscordUrl(), firm.getHqRegion(), firm.isArchived());
     }
 
     /**
@@ -172,7 +171,9 @@ public class AdminFirmService {
     public FirmResponse updateDetails(VerifiedToken verified, long firmId, String discordUrl, String hqRegion) {
         requireServiceKey(verified);
         if (discordUrl == null && hqRegion == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "At least one of 'discordUrl' or 'hqRegion' must be provided.");
         }
         FirmFieldLimits.validate(discordUrl, hqRegion); // ADT-120: shared with FirmService
@@ -192,8 +193,7 @@ public class AdminFirmService {
 
     private void requireServiceKey(VerifiedToken verified) {
         if (verified == null || !"SERVICE".equals(verified.keyType())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN",
-                    "This endpoint requires a SERVICE API key.");
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "This endpoint requires a SERVICE API key.");
         }
     }
 
@@ -202,15 +202,19 @@ public class AdminFirmService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY", "Field 'newName' is required.");
         }
         if (name.length() < NAME_MIN || name.length() > NAME_MAX) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "Field 'newName' must be between " + NAME_MIN + " and " + NAME_MAX + " characters.");
         }
         if (Character.isDigit(name.charAt(0))) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
-                    "Field 'newName' must not start with a digit.");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "INVALID_BODY", "Field 'newName' must not start with a digit.");
         }
         if (!FIRM_NAME.matcher(name).matches()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_BODY",
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_BODY",
                     "Field 'newName' may only contain letters, digits, spaces, '_', '.' and '-'.");
         }
     }

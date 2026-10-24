@@ -1,12 +1,12 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { addGroupMemberAction, removeGroupMemberAction } from '@/lib/actions/admin';
-import { TableWrap } from '@/components/TableWrap';
+import { TableWrap } from '@democracycraft/design-system';
 
 interface Member {
   uuid: string;
   name: string | null;
-  source: 'manual' | 'luckperms';
+  source: 'manual' | 'luckperms' | 'business' | 'realty';
   syncActive: boolean;
 }
 
@@ -60,8 +60,8 @@ export function MemberManager({ groupId, members, disabled = false }: { groupId:
               <tr key={`${m.uuid}:${m.source}`}>
                 <td>{m.name ?? <span className="mono">{m.uuid}</span>}</td>
                 <td>
-                  {m.source === 'luckperms'
-                    ? <span className="badge">{m.syncActive ? 'synced' : 'sync expired'}</span>
+                  {m.source !== 'manual'
+                    ? <span className="badge">{m.source}: {m.syncActive ? 'synced' : 'sync expired'}</span>
                     : <span className="badge badge-active">manual</span>}
                 </td>
                 <td>

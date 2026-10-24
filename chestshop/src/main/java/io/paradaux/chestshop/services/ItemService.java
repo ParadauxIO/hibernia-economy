@@ -41,6 +41,11 @@ public interface ItemService {
     /** A comma-joined "count name" list for a set of stacks (used in trade/give messages). */
     String getItemList(ItemStack[] items);
 
+    /** Stable custom ID, or the full item code for ordinary items. */
+    default String wildcardName(ItemStack item) {
+        return getName(item);
+    }
+
     /** The item's full (untruncated) ChestShop name/code. */
     String getName(ItemStack itemStack);
 

@@ -83,6 +83,11 @@ public class PayAccountCommand implements CommandHandler {
 
         AccountResolver.Resolved target = accountResolver.resolve(sender, "target", type, account, true);
         if (target == null) return;
+        var targetAccount = accountService.getAccountById(target.accountId());
+        if (targetAccount == null || targetAccount.isArchived()) {
+            message.send(sender, "treasury.pay.target-archived");
+            return;
+        }
 
         int senderAccountId = accountService.getOrCreatePersonalAccountId(sender.getUniqueId());
         if (senderAccountId == target.accountId()) {

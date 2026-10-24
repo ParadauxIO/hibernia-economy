@@ -10,7 +10,7 @@ dependencies {
     // to raw packet handling. Keep this `api` so the transitive surface is
     // explicit; downgrade to `implementation` if we ever stabilise a wrapper-
     // only API and want to hide the underlying library.
-    api("org.geysermc.mcprotocollib:protocol:1.21.11-SNAPSHOT")
+    api("org.geysermc.mcprotocollib:protocol:26.3-SNAPSHOT")
 
     // ClientboundSystemChatPacket exposes content as Adventure Component;
     // the plain-text serializer turns it into something we can match on.

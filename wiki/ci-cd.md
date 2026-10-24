@@ -101,13 +101,15 @@ applies. Guard regression tests run in the Migrations job.
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `jvm-check` / `explorer-check` | `workflow_call` only | The reusable JVM and explorer test jobs. `ci.yml` calls them, and so do the publish/image workflows, so a release is gated on the same job definition as a merge. |
-| `treasury-publish-api` / `business-publish-api` | push to `main`/`develop` | `jvm-check` on that API's projects, then publish the `*-api` jar (snapshot or release) and tag/release on `main`. |
+| `treasury-publish-api` / `business-publish-api` | push to `develop` | `jvm-check` on that API's projects, then publish the `*-api` snapshot. Manual runs are restricted to `develop`. |
+| `plugin-release` | every push to `main`, manual on `main` | Full JVM build/check, then publish all four plugins and both API libraries with one generated version. |
 | `treasury-rest-api-docker` | push to `main`/`develop` | `jvm-check` on `:treasury-rest-api:check`, then build and push the image to **Harbor**. |
 | `economy-explorer-docker` | push to `main`/`develop`, manual | `explorer-check`, then build and push the image to **Harbor**. |
 | `economy-flyway-info` / `-migrate` / `-staging-clean` | manual (`workflow_dispatch`) | Gated schema operations (see [database.md](database.md)). Info's `flywayValidate` ignores pending migrations and fails on anything else. |
 | `dev-server-publish` | push to `develop` on a plugin or `economy-flyway/**` | Build the plugin bundle and replace the rolling `dev-latest` prerelease, which the dev server deploys (below). |
 
-The publish/image workflows keep **`paths:` filters**, which follow the Gradle
+Except for `plugin-release` (which releases every main push), the publish/image
+workflows keep **`paths:` filters**, which follow the Gradle
 `project(...)` edges, not just the module's own folder (`common/**`, the
 version catalog, `build-logic/**`…). When you add a `project(...)` dependency to
 a published module, add its path there. `ci.yml` needs no such list: it runs
@@ -119,7 +121,7 @@ a published module, add its path there. `ci.yml` needs no such list: it runs
   comment (`uses: actions/checkout@<sha> # v4.4.0`). Dependabot bumps both
   together (`.github/dependabot.yml`).
 - JVM jobs share [`.github/actions/setup-jvm`](../.github/actions/setup-jvm/action.yml)
-  after `actions/checkout`: wrapper validation, Temurin 21, `setup-gradle`.
+  after `actions/checkout`: wrapper validation, Temurin 25, `setup-gradle`.
   Invoke the wrapper as `sh ./gradlew` — it is committed without the exec bit.
 - Every job has a `timeout-minutes`, and permissions are least-privilege: the
   workflow default is `contents: read`, and jobs that write (checks, PR comments,
@@ -189,12 +191,38 @@ days) or the dev server's secrets change.
 
 - Work lands on **`develop`**. The published API snapshots and the development
   container images track `develop`.
-- A release is the **`develop` → `main`** pull request. Its body enumerates every
-  `PAR-…` (Tesks ref) shipping in the release; merging tags/releases the API jars
-  and promotes the `production` images.
-- Merging does **not** migrate the database or deploy the Paper plugins. A release
+- Merge to **`main`** whenever a change is ready to release. Every push runs
+  `plugin-release.yml`, which gates publication on the full reusable JVM check.
+- CI generates `YEAR.MONTH.RUN.ATTEMPT-gCOMMIT`, for example
+  `2026.10.142.1-gabc123def456`. The calendar uses UTC; RUN is the release
+  workflow's incrementing run number, ATTEMPT distinguishes retries, and COMMIT
+  is the first 12 characters of the main commit. Keep this workflow as the sole
+  owner of production versions; independent workflows have independent counters.
+- The four plugin filenames and embedded versions, plus the Maven versions of
+  `treasury-api` and `business-api`, share this value via Gradle's `-Pversion`.
+  No version-bump commit is needed. Local builds keep `2.3.0-SNAPSHOT`; API
+  snapshot publishing on develop is unchanged.
+- GitHub release `economy-v<VERSION>` contains the four plugins, API jars, and
+  `manifest.json`: full commit SHA, version, run ID, attempt, build time, plugin
+  filenames and their SHA-256 checksums. API sources/Javadoc jars are included.
+  Consumers use the manifest's `jars` list to select the deployable plugins.
+- Releases are uploaded as drafts and published only after all assets arrive.
+  Existing assets/tags are never overwritten. A failed publish may leave a
+  draft or partial Maven publication; rerun failed jobs to get a new attempt
+  version. Deploy a completed release, never a draft or partial publication.
+- Builds may finish out of order. They deliberately do not update GitHub's
+  `latest` pointer. Select an explicit release tag/commit for deployment; do not
+  infer deployment order from completion timestamps.
+- Develop plugin builds use `YEAR.MONTH.RUN.ATTEMPT-dev-gCOMMIT`. The existing
+  `dev-latest` prerelease remains a rolling pointer for the dev deploy agent;
+  the manifest's `jars` array remains compatible with that agent.
+- Production deployment should download the selected release, verify its
+  checksums, and install those exact jars without rebuilding. Retain old
+  releases for rollback when the database schema remains compatible.
+- Merging does **not** migrate the database or deploy the production Paper
+  plugins. Container image workflows still run independently on main. A release
   that changes the schema follows the [release runbook](release-runbook.md).
-- `main` exists only for these release tags — no day-to-day work happens there.
+  Coordinated production deployment is a separate step from artifact versioning.
 
 See [conventions.md](conventions.md) for the branch model and how Tesks issues move
 through their workflow.

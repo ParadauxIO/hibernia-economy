@@ -234,13 +234,22 @@ public final class ChestShopFixture implements AutoCloseable {
      * be placed with {@code /item replace}). Returns the {@code diag createshop} response.
      */
     public String createSellShopRaw(String creator, String signOwner, int qty, int price, String itemLine) {
+        return createShopRaw(creator, signOwner, qty, price + " B", itemLine);
+    }
+
+    /** Create a real shop that pays the clicking player for a custom item. */
+    public String createBuyShopRaw(String creator, String signOwner, int qty, int price, String itemLine) {
+        return createShopRaw(creator, signOwner, qty, price + " S", itemLine);
+    }
+
+    private String createShopRaw(String creator, String signOwner, int qty, String priceLine, String itemLine) {
         RconClient.send(String.format("setblock %d %d %d minecraft:stone",
                 chestPos.x(), chestPos.y() - 1, chestPos.z() + 1));
         RconClient.send(String.format("setblock %d %d %d minecraft:chest",
                 chestPos.x(), chestPos.y(), chestPos.z()));
         RconClient.send(String.format("setblock %d %d %d minecraft:oak_sign",
                 signPos.x(), signPos.y(), signPos.z()));
-        String lines = signOwner + "|" + qty + "|" + price + " B|" + itemLine;
+        String lines = signOwner + "|" + qty + "|" + priceLine + "|" + itemLine;
         return RconClient.send("diag createshop " + creator + " world "
                 + signPos.x() + " " + signPos.y() + " " + signPos.z() + " " + lines);
     }
@@ -305,12 +314,29 @@ public final class ChestShopFixture implements AutoCloseable {
     /**
      * Position the client, then right-click the sign — a buy on a {@code "B"} shop.
      *
-     * <p>Returns once the click has been fully processed: the trade, if any, is complete
-     * (see {@link #click}). Tests can assert balances and stock straight away.
+     * <p>Confirms the purchase preview when one opens, then waits for its deferred action.
+     * Rejected previews do not trade. Tests can assert balances and stock on return.
      */
     public void clickBuy(MockPlayer client, String name) {
         positionClicker(client, name);
         click(client, name, () -> client.useBlock(signPos, BlockFace.SOUTH));
+        confirmPurchase(client);
+    }
+
+    /** Confirm a previously opened offer, then wait for Curator's deferred action to finish. */
+    public void confirmPurchase(MockPlayer client) {
+        var screen = client.currentScreen().orElse(null);
+        if (screen != null && com.google.gson.JsonParser.parseString(RconClient.send("diag menustate " + client.getUsername()).trim())
+                .getAsJsonObject().get("title").getAsString().equals("Inspect your purchase")) {
+            var content = Await.until("purchase preview contents", () -> client.containerContent(screen.getContainerId()).orElse(null),
+                    value -> value != null, TIMEOUT);
+            client.sendPacket(new org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.inventory.ServerboundContainerClickPacket(
+                    screen.getContainerId(), content.getStateId(), 49,
+                    org.geysermc.mcprotocollib.protocol.data.game.inventory.ContainerActionType.CLICK_ITEM,
+                    org.geysermc.mcprotocollib.protocol.data.game.inventory.ClickItemAction.LEFT_CLICK, null, java.util.Map.of()));
+            // Curator dispatches actions on the next server tick; a packet barrier alone is insufficient.
+            Barrier.settle(client);
+        }
     }
 
     /** Position the client, then left-click the sign — a sell on an {@code "S"} shop. Same contract as {@link #clickBuy}. */
@@ -320,14 +346,30 @@ public final class ChestShopFixture implements AutoCloseable {
     }
 
     /**
+     * Dig a shop block from the caller's prepared position/game mode. A sign dig
+     * also enters trade handling, even when rejected, so subsequent trades must
+     * respect its interaction interval. No retries: assert actual event delivery.
+     */
+    public void digBlock(MockPlayer client, BlockPos target) {
+        String name = client.getUsername();
+        awaitInteractionInterval(name);
+        long before = interactions(name);
+        client.breakBlock(target);
+        client.sync(TIMEOUT);
+        LAST_CLICK_HANDLED.put(name, System.currentTimeMillis());
+        if (interactions(name) <= before) {
+            throw new AssertionError("dig by " + name + " at " + target + " never reached Bukkit as a PlayerInteractEvent");
+        }
+    }
+
+    /**
      * Send a click and return once the server has processed it, having proved it was
      * processed as an interaction at all.
      *
      * <ul>
      *   <li>{@link MockPlayer#sync} after the click: the click and the barrier share
-     *       Paper's FIFO packet queue, and ChestShop settles a trade synchronously inside
-     *       its {@code PlayerInteractEvent} handler (goods and the Treasury transfer, see
-     *       its {@code TransactionService}), so after the barrier the outcome is final.</li>
+     *       Paper's FIFO packet queue, so after the barrier the sign interaction has finished.
+     *       Purchases open a preview; {@link #confirmPurchase} separately waits for settlement.</li>
      *   <li>DcDiag's per-player {@code PlayerInteractEvent} counter (MONITOR, sees cancelled
      *       events too) must have moved. Without that, a "rejected trade changes nothing"
      *       test would pass if Paper silently dropped the packet (range, rate limit).</li>

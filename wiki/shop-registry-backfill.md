@@ -94,3 +94,66 @@ verify UUID/location sets before resuming. Resync alone can create new-name rows
 while leaving old-name rows behind. Unloaded worlds cannot be resolved by the
 legacy importer until loaded, even though their UUID remains stored. Cross-server
 world identity and automatic rename reconciliation remain outside this contract.
+
+## Repairing an existing analytics registry (PAR-496)
+
+An existing `chestshop_shop` table is not proof of a completed legacy backfill.
+Older trackers indexed activity after installation and retained destroyed-shop
+rows. Compare location sets and observation dates, separating active shops from
+inactive tombstones and accounting for different snapshot ages.
+
+New shops are indexed from the creation event's prepared text: during a sign
+change the block-state snapshot can still contain blank or previous text. Reading
+that snapshot used to record the previous quantity/prices, sometimes a quantity
+of one and no offered price. Restocking now rebuilds the full record from the live
+sign instead of updating only stock. This discovers previously unindexed shops
+and refreshes quantity, prices, UUID, stock and capacity while preserving owner
+visibility/hologram choices on an existing live shop in the same world.
+
+ChestShop also queues chunks already loaded at enable and each subsequent chunk
+load for reconciliation. There is one database lookup/scan in flight, with at
+least one tick between chunks. A repeating background dispatcher consumes query
+results on the server thread; it does not chain one-shot scheduler continuations
+that keep unrelated command-completion barriers permanently busy. It reads the
+registry asynchronously, then scans
+only that still-loaded chunk on the server thread. Valid signs are upserted;
+previously indexed locations without a valid sign become inactive. A failed
+lookup, unloaded chunk, or replaced world does not establish deletion. A valid
+sign whose owner or item cannot be resolved is retained for a later attempt.
+No chunks are forced to load. `/chestshop resync <chunks>` remains the explicit
+loaded-chunk repair command; automatic discovery does not replace imports for
+shops in chunks that have never loaded.
+
+### World replacement and defaults
+
+World names can be reused after a reset. Do not assign an unmatched old UUID to
+the current same-named world or import old-world records into a replacement.
+Search and floating previews reject a recorded UUID that differs from the current
+world. A preview lookup started before replacement is discarded when it returns.
+Live upserts with an explicitly changed UUID reset the old shop's visibility and
+hologram flags to new-shop defaults; same-world upserts preserve them. A caller
+without a UUID cannot erase a known identity.
+
+Pre-V25 rows have NULL UUID/capacity, default-visible/default-hologram flags, and
+no player preference migration. A NULL UUID remains compatible with legacy rows;
+it does **not** prove which world generation produced that row. Physical
+reconciliation captures the current UUID only for an observed shop. Audit unknown
+or unloaded rows separately, and retain rollback snapshots. Do not fabricate a
+UUID migration or delete a whole world based on name/age alone.
+
+### Cutover order
+
+1. Back up native registry/preferences and freeze/export the legacy source as
+   described above. Record snapshot dates and inventory old-world UUIDs.
+2. Deploy the creation/discovery repair, then reconcile loaded chunks. Verify real
+   signs' batch quantities and prices, including `Q ... : C ...` quantity lines.
+3. Import missing shops from known, original source worlds and import player
+   preferences with `/chestshop importpreferences` as described in the add-on
+   cutover guide. Both importers preserve existing native choices/tombstones.
+4. Reconcile existing-row differences using live signs; an insert-only replay
+   deliberately cannot overwrite stale existing metadata or restore legacy
+   visibility/hologram choices over native choices. Resolve such conflicts
+   explicitly rather than bulk resetting owner settings.
+5. Verify location sets, flags, item fidelity, rejected import lines and unresolved
+   worlds. Unloaded/unresolved records remain pending; raw row-count equality is
+   not a cutover acceptance criterion.

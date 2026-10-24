@@ -35,6 +35,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       // the session JWT. On later requests account/profile are absent and the value
       // already on the token is preserved.
       if (account && profile) {
+        // Auth.js creates a local user ID even without an adapter. Its default
+        // token.sub is therefore not the stable OIDC subject used by our identity
+        // links. providerAccountId comes from the verified provider response.
+        token.sub = account.providerAccountId;
         const p = profile as { minecraft_uuid?: unknown; minecraft_name?: unknown };
         if (typeof p.minecraft_uuid === 'string') token.minecraftUuid = p.minecraft_uuid;
         if (typeof p.minecraft_name === 'string') token.minecraftName = p.minecraft_name;

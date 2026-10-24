@@ -1,11 +1,10 @@
-import Link from 'next/link';
 import { buildMetadata } from '@/lib/metadata';
 import { getOverviewData } from '@/lib/services/economy';
 import { fmtAmt, fmtN } from '@/lib/format';
 import { VolumeTimeline } from '@/components/charts/AreaTimeline';
 import { Heatmap } from '@/components/charts/Heatmap';
 import { SectionTabs } from '@/components/SectionTabs';
-import { WindowTabs } from '@/components/WindowTabs';
+import { ChartCard, PageHeading, StatCard, WindowTabs } from '@democracycraft/design-system';
 import { AutoRefresh } from '@/components/AutoRefresh';
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() { return buildMetadata({ description: 'Activity and balances in the {server} economy.', path: '/' }); }
@@ -19,24 +18,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const days = raw.days === '7' ? 7 : 30;
   const { stats, volume, players, newPlayers, comparison, heat } = await getOverviewData(days);
   const { current, previous } = comparison;
+  const busiest = heat.reduce<(typeof heat)[number] | undefined>((peak, cell) => !peak || cell.txn_count > peak.txn_count ? cell : peak, undefined);
+  const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   return <>
-    <div className="page-heading"><h1>Economy</h1><WindowTabs basePath="/" days={days} /><AutoRefresh windowMs={60_000} /><SectionTabs /></div>
-    <p className="page-intro">A snapshot of player wealth and economic activity. Activity covers the last {days} days; balances show current holdings.</p>
-    <div className="kpi-grid">
-      <div className="kpi"><div className="kpi-label">Personal supply</div><div className="kpi-value">{fmtAmt(stats.personalSupply)}</div><div className="kpi-meta">Current player-held balances</div></div>
-      <div className="kpi"><div className="kpi-label">Active players / {days}d</div><div className="kpi-value">{fmtN(days === 7 ? players.active7d : players.active30d)}</div><div className="kpi-meta">{fmtN(newPlayers)} first seen in this period</div></div>
-      <div className="kpi"><div className="kpi-label">Transactions / {days}d</div><div className="kpi-value">{fmtN(current.transactions)}</div><div className="kpi-meta">{change(current.transactions, previous.transactions)}</div></div>
-      <div className="kpi"><div className="kpi-label">Volume / {days}d</div><div className="kpi-value">{fmtAmt(current.volume)}</div><div className="kpi-meta">{change(current.volume, previous.volume)}</div></div>
+    <PageHeading title="Economy"><SectionTabs /></PageHeading>
+    <div className="analytics-bar"><div><span>Activity: last {days} days · balances: current</span></div><div className="analytics-controls"><WindowTabs basePath="/" days={days} /><AutoRefresh windowMs={60_000} /></div></div>
+    <div className="kpi-grid overview-metrics">
+      <StatCard label="Personal supply" value={fmtAmt(stats.personalSupply)} meta="Current player-held balances" />
+      <StatCard label={`Active players / ${days}d`} value={fmtN(days === 7 ? players.active7d : players.active30d)} meta={`${fmtN(newPlayers)} first seen in this period`} />
+      <StatCard label={`Transactions / ${days}d`} value={fmtN(current.transactions)} meta={change(current.transactions, previous.transactions)} />
+      <StatCard label={`Volume / ${days}d`} value={fmtAmt(current.volume)} meta={change(current.volume, previous.volume)} />
     </div>
-    <div className="chart-card"><h2 className="chart-title">Transaction activity</h2><VolumeTimeline data={volume} /></div>
-    <div className="charts-grid">
-      <div className="chart-card"><h2 className="chart-title">When the economy moves</h2><p className="chart-subtitle">Hour of day × weekday · UTC · last {days} days · scroll for all hours</p><Heatmap cells={heat} /></div>
-      <div className="card"><h2 className="card-title">Explore the economy</h2>
-        <p><Link href="/economy/wealth">Wealth distribution →</Link><br />Balances, inequality and top accounts.</p>
-        <p><Link href="/money-flow">Money flow →</Link><br />Where money comes from and where it goes.</p>
-        <p><Link href="/market">Find an item or shop →</Link><br />Prices and places to trade.</p>
-        <p className="muted">{fmtN(stats.totalAccounts)} open accounts · {fmtN(players.registered)} registered players</p>
-      </div>
-    </div>
+    <p className="muted small">Volume and transaction counts estimate adjacent matching Vault bridge legs as one event. Unmatched rewards and spending remain; raw transaction history is unchanged.</p>
+    <ChartCard><div className="section-heading"><h2>Transaction activity</h2><span className="muted small">Last {days} days</span></div><VolumeTimeline data={volume} /></ChartCard>
+    <ChartCard>
+      <div className="section-heading"><h2>Activity by weekday and hour</h2><span className="muted small">Raw ledger transactions · UTC · last {days} days</span></div>
+      <Heatmap cells={heat} />
+      {busiest && busiest.txn_count > 0 && <p className="muted small">Busiest slot: {weekdays[busiest.dow0]} {String(busiest.hr).padStart(2, '0')}:00 UTC · {fmtN(busiest.txn_count)} transactions</p>}
+    </ChartCard>
+    <p className="muted small">{fmtN(stats.totalAccounts)} open accounts · {fmtN(players.registered)} registered players</p>
   </>;
 }

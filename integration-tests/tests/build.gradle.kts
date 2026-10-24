@@ -26,6 +26,9 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // External server/database state is not a Gradle input. A fresh disposable stack
+    // must never inherit an UP-TO-DATE result from a previous acceptance run.
+    outputs.upToDateWhen { false }
     // Forward the connection-override -D properties to the forked test JVM
     // (Gradle doesn't propagate them automatically). Env-var fallbacks still work
     // since the fork inherits the environment.
@@ -86,4 +89,31 @@ tasks.test {
             println("All timings: ${file.relativeTo(rootDir)}")
         }
     })
+}
+
+tasks.register<JavaExec>("preflight") {
+    group = "verification"
+    description = "Fail early when the disposable live acceptance profile lacks required capabilities."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.CapabilityPreflight")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
+}
+
+tasks.register<JavaExec>("explorerFixture") {
+    group = "verification"
+    description = "Create a real player payment for same-stack Explorer browser assertions."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.ExplorerFixture")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
+}
+
+tasks.register<JavaExec>("explorerTransfer") {
+    group = "verification"
+    description = "Transfer fixture ownership through real player commands while OIDC sessions stay open."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.ExplorerTransfer")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
 }
