@@ -27,15 +27,17 @@ public final class ShopVariantsMenu implements MenuHandler {
     @Screen
     public MenuView choices(@Model ShopVariantsService.Selection selection, MenuFlow flow) {
         var view = MenuView.chest(message.component("shop.variants.title"), 6)
-                .content(
-                        0,
-                        44,
-                        selection.variants().stream()
-                                .map(item -> MenuItem.button(item.clone(), "choose", item.clone()))
-                                .toList())
                 .slot(45, MenuItem.button(button(Material.BARRIER, "shop.purchase.cancel"), "cancel", null));
-        if (selection.variants().isEmpty())
+        if (selection.variants().isEmpty()) {
             view.slot(22, MenuItem.display(button(Material.BARRIER, "shop.variants.empty")));
+        } else {
+            view.content(
+                    0,
+                    44,
+                    selection.variants().stream()
+                            .map(item -> MenuItem.button(item.clone(), "choose", item.clone()))
+                            .toList());
+        }
         if (flow.page() > 0)
             view.slot(48, MenuItem.button(button(Material.ARROW, "find.button.prev"), "previous", null));
         if ((flow.page() + 1) * 45 < selection.variants().size())
