@@ -61,6 +61,21 @@ def source_state():
     return commit, digest.hexdigest()
 
 
+def runtime_artifacts(path):
+    """Missing/invalid startup evidence must never certify a successful pair."""
+    artifacts = json.loads(path.read_text())
+    if not isinstance(artifacts, dict) or not all(
+            any(name.startswith(prefix) for name in artifacts)
+            for prefix in ('paper/', 'plugins/', 'rest/')):
+        raise ValueError('Incomplete runtime artifact inventory')
+    for value in artifacts.values():
+        if (not isinstance(value, dict)
+                or not re.fullmatch(r'[0-9a-f]{64}', str(value.get('sha256', '')))
+                or not isinstance(value.get('bytes'), int) or value['bytes'] <= 0):
+            raise ValueError('Invalid runtime artifact fingerprint')
+    return artifacts
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runs', type=int, default=2)
@@ -74,6 +89,7 @@ def main():
     test_dir = Path(os.environ.get('IT_TESTS_DIR', ROOT / 'integration-tests')).resolve()
     work = Path(os.environ.get('IT_WORK_DIR', ROOT / 'build/integration')).resolve()
     expected_source = source_state()
+    expected_artifacts = None
     for number in range(1, args.runs + 1):
         commit, source_digest = source_state()
         if (commit, source_digest) != expected_source:
@@ -82,6 +98,8 @@ def main():
         dirty = subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True)
         target = output / f'run-{number}'
         target.mkdir(parents=True)
+        artifact_file = work / 'runtime-artifacts.json'
+        artifact_file.unlink(missing_ok=True)
         # Prevent build/preflight failure from collecting stale JUnit success.
         for report in (test_dir / 'tests/build/test-results/test').glob('TEST-*.xml'):
             report.unlink()
@@ -105,6 +123,16 @@ def main():
                     print(clean, end='', flush=True)
                 status = process.wait()
         report = collect_reports(test_dir, target, browser_report)
+        artifact_error = None
+        artifacts = None
+        try:
+            artifacts = runtime_artifacts(artifact_file)
+        except (OSError, ValueError) as error:
+            artifact_error = str(error)
+        artifacts_changed = expected_artifacts is not None and artifacts != expected_artifacts
+        if expected_artifacts is None:
+            expected_artifacts = artifacts
+        retain(artifact_file, target / 'runtime-artifacts.json')
         for name in ('bytebin.log', 'bytebin-captures.jsonl', 'server.log', 'server-restart.log', 'rest-api.log', 'rest-api-restart.log', 'mariadb.log', 'explorer.log', 'explorer-build.log', 'explorer-fixture.json'):
             retain(work / name, target / name)
         java_bin = str(Path(os.environ['JAVA_HOME']) / 'bin/java') if os.environ.get('JAVA_HOME') else 'java'
@@ -115,13 +143,17 @@ def main():
                       seconds=round(time.monotonic() - started, 2), exit_code=status,
                       java=java.stderr.strip(), command=command,
                       skip_build=os.environ.get('IT_SKIP_BUILD', '0'),
+                      runtime_artifacts=artifacts, artifact_error=artifact_error,
+                      artifacts_changed=artifacts_changed,
                       skip_explorer_build=os.environ.get('IT_SKIP_EXPLORER_BUILD', '0'))
         (target / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
         print(json.dumps(report), flush=True)
         # Fail closed if no tests ran, including a failed build or broken selection.
         if source_changed:
             print('Source changed during acceptance; this run cannot certify a single checkout.', flush=True)
-        if status or source_changed or report['failures'] or report['errors'] or report['tests'] == report['skipped']:
+        if artifacts_changed or artifact_error:
+            print('Runtime artifact evidence missing/invalid or changed between runs; this pair is not certified.', flush=True)
+        if status or source_changed or artifacts_changed or artifact_error or report['failures'] or report['errors'] or report['tests'] == report['skipped']:
             return status or 1
     print(f'Acceptance evidence: {output}', flush=True)
     return 0

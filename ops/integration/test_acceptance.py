@@ -4,12 +4,77 @@ from pathlib import Path
 import tempfile
 import subprocess
 import unittest
+import contextlib
+import io
+import json
 from unittest.mock import patch
 
 import acceptance
+import artifacts
 
 
 class AcceptanceEvidenceTest(unittest.TestCase):
+    def test_inventory_hashes_installed_bytes_and_excludes_secrets(self):
+        scratch = acceptance.ROOT / '.context/par-520'
+        scratch.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as directory:
+            root = Path(directory)
+            plugins = root / 'plugins'
+            plugins.mkdir()
+            paper, rest, plugin = root / 'paper.jar', root / 'rest.jar', plugins / 'Utilities.jar'
+            for path in (paper, rest, plugin):
+                path.write_bytes(b'original')
+            (plugins / 'config.yml').write_text('password: must-not-appear')
+            baseline = artifacts.inventory(paper, plugins, rest)
+            plugin.write_bytes(b'changed!')  # Same filename and byte count, different content.
+            changed = artifacts.inventory(paper, plugins, rest)
+            self.assertNotEqual(baseline['plugins/Utilities.jar']['sha256'], changed['plugins/Utilities.jar']['sha256'])
+            self.assertEqual(baseline['paper/paper.jar'], changed['paper/paper.jar'])
+            self.assertNotIn(directory, json.dumps(changed))
+            self.assertNotIn('config', json.dumps(changed))
+            plugin.write_bytes(b'')
+            with self.assertRaisesRegex(ValueError, 'Empty runtime artifact'):
+                artifacts.inventory(paper, plugins, rest)
+
+    def test_clean_pair_requires_matching_fresh_artifact_evidence(self):
+        # A real child shell supplies successful JUnit results. Its plugin bytes
+        # may change between runs even while the Git source stays fixed.
+        scratch = acceptance.ROOT / '.context/par-520'
+        scratch.mkdir(parents=True, exist_ok=True)
+        manifest = {name: {'sha256': 'a' * 64, 'bytes': 10} for name in
+                    ('paper/paper.jar', 'plugins/Utilities.jar', 'rest/rest.jar')}
+        for mode, expected in [('stable', 0), ('changed', 1), ('missing', 1)]:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory(dir=scratch) as directory:
+                root = Path(directory)
+                work, test_dir = root / 'work', root / 'integration-tests'
+                work.mkdir()
+                # A preflight failure must not reuse an earlier manifest.
+                (work / 'runtime-artifacts.json').write_text(json.dumps(manifest))
+                runner = root / 'ops/integration/run.sh'
+                runner.parent.mkdir(parents=True)
+                runner.write_text('''#!/bin/bash
+set -eu
+mkdir -p "$IT_TESTS_DIR/tests/build/test-results/test"
+echo '<testsuite name="fixture" tests="1" failures="0" errors="0" skipped="0"><testcase name="pass"/></testsuite>' > "$IT_TESTS_DIR/tests/build/test-results/test/TEST-fixture.xml"
+''' + ('' if mode == 'missing' else '''cat > "$IT_WORK_DIR/runtime-artifacts.json" <<'JSON'
+''' + json.dumps(manifest) + '''
+JSON
+''' + ('''if [ -f "$IT_WORK_DIR/ran" ]; then sed -i 's/aaaaaaaa/bbbbbbbb/g' "$IT_WORK_DIR/runtime-artifacts.json"; fi
+touch "$IT_WORK_DIR/ran"
+''' if mode == 'changed' else '')))
+                with patch.object(acceptance, 'ROOT', root), \
+                        patch.object(acceptance, 'source_state', return_value=('commit', 'source')), \
+                        patch.object(acceptance.subprocess, 'check_output', return_value=''), \
+                        patch.dict(os.environ, {'IT_WORK_DIR': str(work), 'IT_TESTS_DIR': str(test_dir)}), \
+                        patch('sys.argv', ['acceptance.py', '--runs', '2']), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(acceptance.main(), expected)
+                summaries = sorted(root.glob('build/integration-acceptance/*/run-*/summary.json'))
+                final = json.loads(summaries[-1].read_text())
+                self.assertEqual(final['artifacts_changed'], mode == 'changed')
+                self.assertEqual(final['artifact_error'] is not None, mode == 'missing')
+                self.assertEqual(len(summaries), 1 if mode == 'missing' else 2)
+
     def test_ci_rejects_real_nexo_before_build_or_runtime_start(self):
         for profile, artifact, ci, github in (
                 ('nexo', '', 'true', ''), ('providers', '', '1', ''),
