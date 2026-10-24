@@ -101,7 +101,10 @@ class ChestShopStartupTest {
                         ResyncCommand.class)
                 .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
                 .dialogs(FindDialog.class)
-                .menus(io.paradaux.chestshop.dialogs.FindResultsMenu.class)
+                .menus(
+                        io.paradaux.chestshop.dialogs.FindResultsMenu.class,
+                        io.paradaux.chestshop.dialogs.PurchasePreviewMenu.class,
+                        io.paradaux.chestshop.dialogs.ShopVariantsMenu.class)
                 .listeners(
                         IntegrationRegistrar.class,
                         io.paradaux.chestshop.integration.LegacyCompatibility.class,

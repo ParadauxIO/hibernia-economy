@@ -1,7 +1,7 @@
 name: Treasury
 version: '${version}'
 main: io.paradaux.treasury.Treasury
-api-version: '1.21'
+api-version: '26.3'
 softdepend:
   - Vault
   - LuckPerms

@@ -1,12 +1,17 @@
 package io.paradaux.treasury.api.impl;
 
-import io.paradaux.treasury.api.TaxApi;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.BalanceEntry;
-import io.paradaux.treasury.model.economy.LedgerPosting;
 import io.paradaux.treasury.model.economy.LedgerTxn;
 import io.paradaux.treasury.model.economy.TransactionEntry;
 import io.paradaux.treasury.model.economy.TransferRequest;
@@ -14,40 +19,43 @@ import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.DataExportService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class TreasuryApiImplTest {
 
-    @Mock AccountService accountService;
-    @Mock MembershipService membershipService;
-    @Mock LedgerService ledgerService;
-    @Mock DataExportService dataExportService;
-    @Mock TaxApiImpl taxApi;
+    @Mock
+    AccountService accountService;
+
+    @Mock
+    MembershipService membershipService;
+
+    @Mock
+    LedgerService ledgerService;
+
+    @Mock
+    DataExportService dataExportService;
+
+    @Mock
+    TaxApiImpl taxApi;
+
+    @Mock
+    io.paradaux.treasury.services.PlayerDirectoryService playerDirectory;
 
     private TreasuryApiImpl api;
 
     @BeforeEach
     void setUp() {
-        api = new TreasuryApiImpl(accountService, membershipService, ledgerService, dataExportService, taxApi);
+        api = new TreasuryApiImpl(
+                accountService, membershipService, ledgerService, dataExportService, taxApi, playerDirectory);
     }
 
     // ---- Balance ----
@@ -279,8 +287,7 @@ class TreasuryApiImplTest {
 
     @Test
     void transfer_delegates() {
-        TransferRequest req = new TransferRequest(1, 2, BigDecimal.ONE, "m",
-                UUID.randomUUID(), null, "p", null);
+        TransferRequest req = new TransferRequest(1, 2, BigDecimal.ONE, "m", UUID.randomUUID(), null, "p", null);
         when(ledgerService.transfer(req)).thenReturn(123L);
         assertThat(api.transfer(req)).isEqualTo(123L);
     }

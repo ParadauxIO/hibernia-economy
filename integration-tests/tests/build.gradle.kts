@@ -10,17 +10,17 @@ dependencies {
     testImplementation(project(":mock-client"))
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
-    testImplementation("org.assertj:assertj-core:3.26.3")
+    testImplementation("org.assertj:assertj-core:3.27.7")
 
     // Direct MariaDB access for state assertions — read balances, ledger
     // postings, firm rows, etc. Faster and more deterministic than scraping
     // chat output.
-    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.5.2")
+    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.5.10")
 
     // JSON for Treasury REST API tests — parse response bodies into JsonNode.
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
 
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.12")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -106,5 +106,14 @@ tasks.register<JavaExec>("explorerFixture") {
     dependsOn(tasks.testClasses)
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass.set("net.democracycraft.inttests.support.ExplorerFixture")
+    doFirst { systemProperties(tasks.test.get().systemProperties) }
+}
+
+tasks.register<JavaExec>("explorerTransfer") {
+    group = "verification"
+    description = "Transfer fixture ownership through real player commands while OIDC sessions stay open."
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("net.democracycraft.inttests.support.ExplorerTransfer")
     doFirst { systemProperties(tasks.test.get().systemProperties) }
 }

@@ -1,6 +1,8 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.PostTradeReactions;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.paradaux.chestshop.model.Transaction;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
@@ -8,6 +10,7 @@ import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.EconomyService;
 import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.services.ItemService;
+import io.paradaux.chestshop.services.PostTradeReactions;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.ShopService;
 import io.paradaux.chestshop.services.SignService;
@@ -24,11 +27,6 @@ import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 /**
  * The keep-chest branch of {@code deleteEmptyShop} (config REMOVE_EMPTY_CHESTS=false): when an empty
  * shop is removed, its sign is dropped back into the container as an item. Needs a real MockBukkit
@@ -44,13 +42,19 @@ class TransactionKeepChestTest extends ServerTest {
 
     @BeforeEach
     void wire() {
-        config = TestConfigs.with(TestConfigs.with(TestConfigs.defaults(),
-                "removeEmptyShops", true), "removeEmptyChests", false);
+        config = TestConfigs.with(
+                TestConfigs.with(TestConfigs.defaults(), "removeEmptyShops", true), "removeEmptyChests", false);
         signService = mock(SignService.class);
         shopBlockService = mock(ShopBlockService.class);
         service = new PostTradeReactionsImpl(
-                mock(EconomyService.class), mock(ShopService.class), mock(AccountService.class),
-                mock(Message.class), mock(ItemService.class), config, signService, shopBlockService,
+                mock(EconomyService.class),
+                mock(ShopService.class),
+                mock(AccountService.class),
+                mock(Message.class),
+                mock(ItemService.class),
+                config,
+                signService,
+                shopBlockService,
                 mock(InventoryService.class));
     }
 
@@ -73,7 +77,7 @@ class TransactionKeepChestTest extends ServerTest {
         when(event.getTransactionType()).thenReturn(Transaction.TransactionType.BUY);
         when(event.getSign()).thenReturn(sign);
         when(event.getOwnerInventory()).thenReturn(owner);
-        when(event.getStock()).thenReturn(new ItemStack[]{item(Material.DIAMOND, 1)});
+        when(event.getStock()).thenReturn(new ItemStack[] {item(Material.DIAMOND, 1)});
 
         deleteEmptyShop(event);
 
@@ -90,6 +94,7 @@ class TransactionKeepChestTest extends ServerTest {
         block.setType(Material.OAK_WALL_SIGN);
 
         Sign sign = mock(Sign.class);
+        when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "DIAMOND"});
         when(sign.getType()).thenReturn(Material.WATER); // not an item, no WALL_ prefix
         when(sign.getBlock()).thenReturn(block);
         when(sign.getWorld()).thenReturn(world);
@@ -102,7 +107,7 @@ class TransactionKeepChestTest extends ServerTest {
         when(event.getTransactionType()).thenReturn(Transaction.TransactionType.BUY);
         when(event.getSign()).thenReturn(sign);
         when(event.getOwnerInventory()).thenReturn(owner);
-        when(event.getStock()).thenReturn(new ItemStack[]{item(Material.DIAMOND, 1)});
+        when(event.getStock()).thenReturn(new ItemStack[] {item(Material.DIAMOND, 1)});
 
         deleteEmptyShop(event); // WATER has no item form -> logs, adds nothing
         assertThat(owner.isEmpty()).isTrue();
@@ -123,7 +128,7 @@ class TransactionKeepChestTest extends ServerTest {
         when(event.getTransactionType()).thenReturn(Transaction.TransactionType.BUY);
         when(event.getSign()).thenReturn(sign);
         when(event.getOwnerInventory()).thenReturn(owner);
-        when(event.getStock()).thenReturn(new ItemStack[]{item(Material.DIAMOND, 1)});
+        when(event.getStock()).thenReturn(new ItemStack[] {item(Material.DIAMOND, 1)});
 
         deleteEmptyShop(event); // removeEmptyChests && isEmpty(false) -> else branch (keep chest)
         assertThat(owner.contains(Material.OAK_SIGN)).isTrue();
@@ -143,7 +148,7 @@ class TransactionKeepChestTest extends ServerTest {
         when(event.getTransactionType()).thenReturn(Transaction.TransactionType.BUY);
         when(event.getSign()).thenReturn(sign);
         when(event.getOwnerInventory()).thenReturn(owner);
-        when(event.getStock()).thenReturn(new ItemStack[]{item(Material.DIAMOND, 1)});
+        when(event.getStock()).thenReturn(new ItemStack[] {item(Material.DIAMOND, 1)});
 
         deleteEmptyShop(event); // signType.isItem() true -> skips the WALL_ resolution
         assertThat(owner.contains(Material.OAK_SIGN)).isTrue();

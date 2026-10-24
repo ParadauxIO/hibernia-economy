@@ -15,6 +15,19 @@ class MockClientLifecycleTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     @Test
+    void repeatedMovementTicksKeepThePlayerConnected() {
+        try (MockPlayer player = MockPlayer.connectLocal(Usernames.fresh("Move"))) {
+            var position = player.getPosition().orElseThrow();
+            for (int tick = 0; tick < 5; tick++) {
+                player.sendPosition(position);
+                // A server-side packet barrier proves each move was handled.
+                player.sync(TIMEOUT);
+                assertThat(player.isConnected()).as("connected after movement tick %s", tick).isTrue();
+            }
+        }
+    }
+
+    @Test
     void waitingForLaterReplyPreservesEarlierReplyArrivingDuringWait() throws Exception {
         try (MockPlayer player = MockPlayer.connectLocal(Usernames.fresh("Buf"))) {
             Barrier.settle();

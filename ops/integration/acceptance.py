@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -48,10 +49,37 @@ def collect_reports(test_dir, output, browser_report=None):
     return dict(**totals, skipped_cases=skipped)
 
 
+def source_state():
+    """Identify the tested checkout, including edits and new source files."""
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    patch = subprocess.check_output(['git', 'diff', '--binary', 'HEAD'], cwd=ROOT)
+    untracked = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard', '-z'], cwd=ROOT)
+    digest = hashlib.sha256(commit.encode() + b'\0' + patch)
+    for name in sorted(filter(None, untracked.split(b'\0'))):
+        path = ROOT / os.fsdecode(name)
+        digest.update(name + b'\0' + path.read_bytes())
+    return commit, digest.hexdigest()
+
+
+def runtime_artifacts(path):
+    """Missing/invalid startup evidence must never certify a successful pair."""
+    artifacts = json.loads(path.read_text())
+    if not isinstance(artifacts, dict) or not all(
+            any(name.startswith(prefix) for name in artifacts)
+            for prefix in ('paper/', 'plugins/', 'rest/')):
+        raise ValueError('Incomplete runtime artifact inventory')
+    for value in artifacts.values():
+        if (not isinstance(value, dict)
+                or not re.fullmatch(r'[0-9a-f]{64}', str(value.get('sha256', '')))
+                or not isinstance(value.get('bytes'), int) or value['bytes'] <= 0):
+            raise ValueError('Invalid runtime artifact fingerprint')
+    return artifacts
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runs', type=int, default=2)
-    parser.add_argument('--profile', choices=('core', 'protection', 'restart', 'tax', 'groups', 'nexo', 'explorer', 'webhook-failure'), default='core')
+    parser.add_argument('--profile', choices=('core', 'protection', 'restart', 'crash', 'rest-restart', 'tax', 'groups', 'nexo', 'providers', 'realty', 'explorer', 'explorer-keycloak', 'webhook-failure'), default='core')
     parser.add_argument('--test', action='append', default=[], help='Gradle test filter; repeat for a focused run')
     args = parser.parse_args()
     if args.runs < 1:
@@ -60,15 +88,22 @@ def main():
     output = ROOT / 'build/integration-acceptance' / f'{stamp}-{os.getpid()}'
     test_dir = Path(os.environ.get('IT_TESTS_DIR', ROOT / 'integration-tests')).resolve()
     work = Path(os.environ.get('IT_WORK_DIR', ROOT / 'build/integration')).resolve()
-    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    dirty = subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True)
+    expected_source = source_state()
+    expected_artifacts = None
     for number in range(1, args.runs + 1):
+        commit, source_digest = source_state()
+        if (commit, source_digest) != expected_source:
+            print('Source changed between acceptance runs; start a new clean pair.', flush=True)
+            return 1
+        dirty = subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True)
         target = output / f'run-{number}'
         target.mkdir(parents=True)
+        artifact_file = work / 'runtime-artifacts.json'
+        artifact_file.unlink(missing_ok=True)
         # Prevent build/preflight failure from collecting stale JUnit success.
         for report in (test_dir / 'tests/build/test-results/test').glob('TEST-*.xml'):
             report.unlink()
-        browser_report = ROOT / 'economy-explorer/test-results/live-server.xml' if args.profile == 'explorer' else None
+        browser_report = ROOT / 'economy-explorer/test-results/live-server.xml' if args.profile in ('explorer', 'explorer-keycloak') else None
         if browser_report:
             browser_report.unlink(missing_ok=True)
         started = time.monotonic()
@@ -88,18 +123,37 @@ def main():
                     print(clean, end='', flush=True)
                 status = process.wait()
         report = collect_reports(test_dir, target, browser_report)
-        for name in ('bytebin.log', 'bytebin-captures.jsonl', 'server.log', 'server-restart.log', 'rest-api.log', 'mariadb.log', 'explorer.log', 'explorer-build.log', 'explorer-fixture.json'):
+        artifact_error = None
+        artifacts = None
+        try:
+            artifacts = runtime_artifacts(artifact_file)
+        except (OSError, ValueError) as error:
+            artifact_error = str(error)
+        artifacts_changed = expected_artifacts is not None and artifacts != expected_artifacts
+        if expected_artifacts is None:
+            expected_artifacts = artifacts
+        retain(artifact_file, target / 'runtime-artifacts.json')
+        for name in ('bytebin.log', 'bytebin-captures.jsonl', 'server.log', 'server-restart.log', 'rest-api.log', 'rest-api-restart.log', 'mariadb.log', 'explorer.log', 'explorer-build.log', 'explorer-fixture.json'):
             retain(work / name, target / name)
-        java = subprocess.run(['java', '-version'], capture_output=True, text=True)
+        java_bin = str(Path(os.environ['JAVA_HOME']) / 'bin/java') if os.environ.get('JAVA_HOME') else 'java'
+        java = subprocess.run([java_bin, '-version'], capture_output=True, text=True)
+        source_changed = source_state() != (commit, source_digest)
         report.update(commit=commit, working_tree=dirty, profile=args.profile, test_filters=args.test,
+                      source_sha256=source_digest, source_changed=source_changed,
                       seconds=round(time.monotonic() - started, 2), exit_code=status,
                       java=java.stderr.strip(), command=command,
                       skip_build=os.environ.get('IT_SKIP_BUILD', '0'),
+                      runtime_artifacts=artifacts, artifact_error=artifact_error,
+                      artifacts_changed=artifacts_changed,
                       skip_explorer_build=os.environ.get('IT_SKIP_EXPLORER_BUILD', '0'))
         (target / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
         print(json.dumps(report), flush=True)
         # Fail closed if no tests ran, including a failed build or broken selection.
-        if status or report['failures'] or report['errors'] or report['tests'] == report['skipped']:
+        if source_changed:
+            print('Source changed during acceptance; this run cannot certify a single checkout.', flush=True)
+        if artifacts_changed or artifact_error:
+            print('Runtime artifact evidence missing/invalid or changed between runs; this pair is not certified.', flush=True)
+        if status or source_changed or artifacts_changed or artifact_error or report['failures'] or report['errors'] or report['tests'] == report['skipped']:
             return status or 1
     print(f'Acceptance evidence: {output}', flush=True)
     return 0

@@ -99,7 +99,7 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         firmAccounts.insertFirmAccount(firmId, retained);
         firmAccounts.insertFirmAccount(firmId, removed);
         firmAccounts.removeFirmAccount(firmId, removed);
-        firms.archiveFirm(firmId);
+        firms.archiveFirm(firmId, firms.getFirmById(firmId).getProprietorUuid());
 
         assertThat(firmAccounts.listAccountsByFirm(firmId))
                 .extracting(FirmAccount::getAccountId)
@@ -137,7 +137,7 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         int account = insertStubAccount("Shop");
         firmAccounts.insertFirmAccount(firmId, account);
         firmAccounts.setShopAlias(firmId, account, "shopname");
-        firms.archiveFirm(firmId);
+        firms.archiveFirm(firmId, firms.getFirmById(firmId).getProprietorUuid());
         assertThat(firmAccounts.resolveShopAlias("shopname")).isNull();
         assertThat(firmAccounts.setShopAlias(firmId, account, "other")).isZero();
     }

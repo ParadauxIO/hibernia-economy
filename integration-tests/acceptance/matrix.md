@@ -64,14 +64,14 @@ names and automatically declaring a feature covered.
 | Shop metrics | `MetricsCommandTest`: exact live buy/sell counters and revoked permission through both aliases | 30-minute rollover and account count |
 | Container stock and ownership | `ContainerRestockTest`: actual quick-move/close updates registry 36→41→0; `OutsiderContainerAccessTest`: owner window vs outsider read-only response and zero windows | Business roles, bypass/config branches, other click modes and disconnect while carrying items |
 | Hopper automation | `HopperMinecartProtectionTest`: actual rail/cart, protected stock retained, same cart drains all stock after sign removal | Block-hopper placement, disabled protection, stock-counter automation branches |
-| Custom items | Core `NexoCustomItemTest` uses a stub; opt-in `nexo` profile runs `RealNexoCustomItemTest` with a supplied real plugin | Real-plugin purchase and ordinary-material rejection evidence is recorded in `results.md`; selling, metadata/dyes, pack rendering, reloads and Utilities/BreweryX/VaultStorage/Bolt combinations remain under [PAR-502](https://app.taskl.ie/w/paradaux/issues/PAR-502) and [PAR-496](https://app.taskl.ie/w/paradaux/issues/PAR-496) |
+| Custom items | Core uses a labeled Nexo stub; real `nexo` profile verifies native purchase/sale, base-material rejection, failed-payment inventory restoration and paired postings | Two clean Paper 26.3 runs passed. Metadata/dye variants, rendering, reloads and Utilities/BreweryX/VaultStorage/Bolt combinations remain under [PAR-502](https://app.taskl.ie/w/paradaux/issues/PAR-502) / [PAR-496](https://app.taskl.ie/w/paradaux/issues/PAR-496); see [evidence](par-502.md) |
 | REST tokens/transfers/auth/feed/webhooks/admin | `restapi/*Test` | Audit every indexed endpoint, scopes/expiry, both transfer engines, retries/idempotency, and cross-service read-after-write |
 | TreasuryAPI command | `restapi/TreasuryApiCommandTest` | Route/permission review against current source |
-| Ingest | `ingest/EssentialsXIngestTest` | **Disabled:** standalone TreasuryIngest plugin absent; DcDiag ingest stub is not real migration acceptance |
-| Vault/Realty | No real Realty plugin installed by runner | **Blocked on compatible isolated profile:** local Realty/VaultStorage artifacts require Java 25; the pinned suite uses Java 21. Real money/access flows remain under PAR-502. ADT-193 also records Realty disabled on staging |
-| Explorer | `explorer` profile: real player payment → same database → browser balance/history; sender/recipient vs anonymous/outsider; signed test sessions | Wider pages/roles, live role revocation, shop/business views, real Keycloak login. Standalone managed E2E resets its own DB; never use that reset on the Paper stack |
-| Lifecycle/dependency failures | Reconnect tests and `lifecycle/ServerRestartTest` in the dedicated `restart` profile: real graceful Paper restart preserves accounts/postings/world/items/shop and permits next trade | Crash recovery, REST restart, DB outage/recovery, schedules across downtime and configuration reload matrix remain open |
-| Java/Bedrock/runtime parity | Mock client `1.21.11-SNAPSHOT`, Paper `1.21.11-132`, Java 21 | [ADT-193](https://app.taskl.ie/w/paradaux/issues/ADT-193) staging is Paper 26.3-206/protocol 777/Java 25. This profile intentionally fails unsupported versions. Bedrock and licensed integrations remain unverified |
+| Retired standalone ingest | Removed `EssentialsXIngestTest` at the maintainer's request (PAR-502) | TreasuryIngest no longer exists; its three tests are removed from scope, not counted as passes. Core provider-dispatch tests remain. |
+| Vault/Realty | Real supplied `realty` profile: registration, buy permission denial, debit failure/recovery, exact Treasury settlement, WG ownership and scheduled title-holder publication; real Vault withdrawal/deposit | Passed twice on Java 25/Paper 26.3 after fixing the Vault rollback/cache defect. Contract/lease/provider combinations remain broader than these assertions; see [evidence](par-502.md) |
+| Explorer | Same-stack Chromium: payment privacy, firm account/activity, market prices/volume, fine totals, scheduled group grants and same-session revocation/expiry | Three cases passed twice. The separate `explorer-keycloak` profile also passed real login and same-session proprietor transfer/revocation twice. See [evidence](par-502.md) |
+| Lifecycle/dependency failures | `restart` and `crash` verify committed ledger/world/shop state and the next trade; `rest-restart` verifies persisted token revocation, idempotency and new settlement | Each passed twice. Crash evidence starts from an explicitly saved checkpoint. In-flight atomicity, DB outage/recovery, downtime schedules and remaining reload matrix stay open; see [evidence](par-502.md) |
+| Java/Bedrock/runtime parity | Mock client 26.3/protocol 777, Paper 26.3-206 and Java 25: core passed twice with 747 passes and 19 explicit skips | Reuses [PR #80](https://github.com/ParadauxIO/hibernia-economy/pull/80). This is disposable-runtime evidence, not a staging deployment or Bedrock certification. Exact source hashes/durations: [PAR-502 report](par-502.md) |
 
 Unannotated configuration fields, role combinations, registration wiring, external submodules,
 and Explorer routes are not exhaustively indexed by the Java annotation scanner.
@@ -403,3 +403,45 @@ and independent Business publication despite unavailable Realty. No balances or
 postings change. This supersedes the Business scheduler gap above; real Realty,
 binding edits/expiry/failure interleavings and browser authorization rendering still
 need dedicated live coverage. A controlled disabled-scheduler run failed waiting for the first required membership; the original configuration was restored before final reruns.
+
+### PAR-502 follow-up
+
+[PAR-502 implementation and execution evidence](par-502.md) supersedes the older
+runtime/group/browser/integration limitations where it supplies explicit tests.
+It records the stale-binding removal and Vault rollback-cache fixes, source
+fingerprints, failure history, clean pairs and remaining review work. PAR-499 and
+PAR-502 remain open; the source inventory and passing suite are not exhaustive
+branch acceptance. The saved-checkpoint crash and REST-restart profiles supplement
+the earlier graceful-restart evidence. Balance aliases now have exact offline
+amount and contextual permission assertions in `BalanceAccessTest`.
+
+The combined `providers` profile now loads real Nexo, Utilities, Bolt, BoltChestShop
+and BreweryX. Native trade/failure cases and startup Utilities item-permission
+denial/grant passed twice (3 passes, 1 explicit external reload-defect skip each).
+This does not establish every Bolt protection or BreweryX/VaultStorage branch.
+See [provider evidence and preserved failure](par-502.md#real-combined-provider-profile).
+
+
+The 2026-10-23 follow-up adds transactional same-selector group publication and
+rollback regressions, fixes tax-status markup, and verifies economy mutation
+permission/console/offline contracts. Core passed twice with 767 passes and 20
+named dedicated-profile skips per run. Local providers passed twice with 5 passes
+and the same explicit Utilities reload skip; named/hex Nexo leather dye metadata
+is now covered. Real Nexo execution is prohibited in CI. TreasuryIngest is retired,
+and its three disabled tests were removed. See the dated follow-up in
+[PAR-502](par-502.md#final-follow-up-verification-2026-10-23) for exact fingerprints,
+failure evidence and outstanding acceptance; these results do not close the queue.
+
+
+Owner-at-archive policy is now confirmed and enforced in both Paper and REST.
+Stale owner snapshots cannot archive, archived ownership cannot be replaced, and
+REST serializes owner selection with archival. Real MariaDB regressions reproduce
+the former wrong-recipient race; two final focused live runs passed 30 disband,
+transfer and recovery cases each. See [ownership policy evidence](par-502.md#owner-at-archive-disband-policy-2026-10-23).
+The earlier full-core pair predates this change; broader acceptance remains open.
+
+
+The PAR-519 reload repair supersedes the historical provider skip above for the
+corrected Utilities artifact. Two clean provider runs now pass all six cases with
+zero failures or skips, including changed restrictions after reload. The original
+installed JAR still fails; see [exact artifact and paired-run evidence](par-502.md#utilities-reload-repair-par-519-2026-10-23).

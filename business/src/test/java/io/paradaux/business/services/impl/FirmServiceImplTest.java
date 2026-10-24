@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
@@ -110,6 +111,40 @@ class FirmServiceImplTest {
         OfflinePlayer op = org.mockito.Mockito.mock(OfflinePlayer.class);
         org.mockito.Mockito.lenient().when(op.getName()).thenReturn(name);
         bukkit.when(() -> Bukkit.getOfflinePlayer(id)).thenReturn(op);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void rejectedArchiveCannotReportSuccessForAnActiveFirm(boolean changedOwner) {
+        UUID oldOwner = UUID.randomUUID();
+        Firm old = new Firm();
+        old.setFirmId(1);
+        old.setProprietorUuid(oldOwner.toString());
+        Firm current = new Firm();
+        current.setFirmId(1);
+        current.setProprietorUuid(changedOwner ? UUID.randomUUID().toString() : oldOwner.toString());
+        current.setArchived(false);
+        when(firms.getFirmByName("Acme")).thenReturn(old);
+        when(firms.isProprietorByFirmId(1, oldOwner.toString())).thenReturn(true);
+        when(firms.getFirmById(1)).thenReturn(current);
+        Account personal = new Account();
+        personal.setAccountId(99);
+        when(treasury.resolveOrCreatePersonal(oldOwner)).thenReturn(personal);
+        when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
+        assertThatThrownBy(() -> svc.disbandFirm("Acme", oldOwner))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("ownership changed");
+        verify(firms).archiveFirm(1, oldOwner.toString());
+        verify(treasury, never()).sweepAll(anyInt(), anyInt(), anyString(), any(), anyString());
+        verify(treasury, never()).archiveAccount(anyInt());
+        verify(accounts, never()).removeFirmAccount(anyInt(), anyInt());
+    }
+
+    @Test
+    void rejectedOwnershipWriteIsReportedToTransferCaller() {
+        assertThatThrownBy(() -> svc.updateProprietor(1, UUID.randomUUID()))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("archived");
     }
 
     @Test
@@ -356,7 +391,8 @@ class FirmServiceImplTest {
         when(accounts.listAccountsByFirm(1)).thenReturn(List.of(fa1, fa2));
 
         // This caller wins the atomic archive (1 row flipped), so it drains.
-        when(firms.archiveFirm(1)).thenReturn(1);
+        when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(1);
 
         svc.disbandFirm("Acme", proprietor);
 
@@ -374,7 +410,7 @@ class FirmServiceImplTest {
         verify(treasury).archiveAccount(11);
         verify(accounts).removeFirmAccount(1, 10);
         verify(accounts).removeFirmAccount(1, 11);
-        verify(firms).archiveFirm(1);
+        verify(firms).archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -398,11 +434,12 @@ class FirmServiceImplTest {
         // archived before any money moves) and the second account still drained.
         when(treasury.sweepAll(10, 99, "Firm disbanded", proprietor, "BusinessPlugin"))
                 .thenThrow(new RuntimeException("treasury down"));
-        when(firms.archiveFirm(1)).thenReturn(1);
+        when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(1);
 
         FirmService.DisbandResult result = svc.disbandFirm("Acme", proprietor);
 
-        verify(firms).archiveFirm(1);
+        verify(firms).archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString());
         verify(treasury).archiveAccount(11);
         verify(accounts).removeFirmAccount(1, 11);
         // The failed account is left linked for a later reconciliation.
@@ -448,7 +485,8 @@ class FirmServiceImplTest {
                 .doThrow(new RuntimeException("treasury down"))
                 .when(treasury)
                 .archiveAccount(12);
-        when(firms.archiveFirm(1)).thenReturn(1);
+        when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(1);
 
         FirmService.DisbandResult first = svc.disbandFirm("Acme", proprietor);
 
@@ -482,7 +520,8 @@ class FirmServiceImplTest {
         // ...the already-drained account is not touched a second time...
         verify(treasury, never()).sweepAll(eq(10), anyInt(), any(), any(), any());
         // ...and the firm is not re-archived, nor its chat re-invalidated.
-        verify(firms, times(1)).archiveFirm(1);
+        verify(firms, times(1))
+                .archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString());
         verify(chat, times(1)).membershipChanged(1);
     }
 
@@ -523,7 +562,7 @@ class FirmServiceImplTest {
         assertThat(result.resumed()).isTrue();
         verify(treasury).sweepAll(11, 99, "Firm disbanded", proprietor, "BusinessPlugin");
         verify(accounts).removeFirmAccount(1, 11);
-        verify(firms, never()).archiveFirm(anyInt());
+        verify(firms, never()).archiveFirm(anyInt(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -551,7 +590,8 @@ class FirmServiceImplTest {
         firm.setProprietorUuid(proprietor.toString());
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
-        when(firms.archiveFirm(1)).thenReturn(1);
+        when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(1);
 
         Account personal = new Account();
         personal.setAccountId(99);
@@ -591,9 +631,15 @@ class FirmServiceImplTest {
         FirmAccount fa1 = new FirmAccount(1, 10, null);
         when(accounts.listAccountsByFirm(1)).thenReturn(List.of(fa1));
 
+        Firm archived = new Firm();
+        archived.setFirmId(1);
+        archived.setProprietorUuid(proprietor.toString());
+        archived.setArchived(true);
+        when(firms.getFirmById(1)).thenReturn(archived);
         // This caller lost the race: the firm was already flipped to archived by
         // the winner, so the conditional UPDATE touches 0 rows.
-        when(firms.archiveFirm(1)).thenReturn(0);
+        when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(0);
 
         FirmService.DisbandResult result = svc.disbandFirm("Acme", proprietor);
 
@@ -632,7 +678,8 @@ class FirmServiceImplTest {
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         assertThatThrownBy(() -> svc.disbandFirm("Acme", proprietor)).isInstanceOf(BadCommandException.class);
         // Disband must be idempotent: no re-archive, no broadcast-triggering work.
-        verify(firms, never()).archiveFirm(org.mockito.ArgumentMatchers.anyInt());
+        verify(firms, never())
+                .archiveFirm(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyString());
         verify(treasury, never()).archiveAccount(org.mockito.ArgumentMatchers.anyInt());
     }
 
@@ -652,6 +699,7 @@ class FirmServiceImplTest {
 
     @Test
     void adminDisbandFirm_bypassesProprietorCheck() {
+        when(firms.archiveFirm(eq(1), anyString())).thenReturn(1);
         Firm firm = new Firm();
         firm.setFirmId(1);
         firm.setDisplayName("Acme");
@@ -661,7 +709,7 @@ class FirmServiceImplTest {
 
         svc.adminDisbandFirm("Acme");
 
-        verify(firms).archiveFirm(1);
+        verify(firms).archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString());
         // Proprietorship is never consulted on the admin path.
         verify(firms, never())
                 .isProprietorByFirmId(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyString());
@@ -680,7 +728,8 @@ class FirmServiceImplTest {
         firm.setArchived(true);
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         assertThatThrownBy(() -> svc.adminDisbandFirm("Acme")).isInstanceOf(BadCommandException.class);
-        verify(firms, never()).archiveFirm(org.mockito.ArgumentMatchers.anyInt());
+        verify(firms, never())
+                .archiveFirm(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -770,6 +819,7 @@ class FirmServiceImplTest {
 
     @Test
     void adminSetProprietor_updatesProprietorReassignsAccountsAndAudits() {
+        when(firms.updateFirm(any())).thenReturn(1);
         UUID oldOwner = UUID.randomUUID();
         UUID newOwner = UUID.randomUUID();
         UUID admin = UUID.randomUUID();
@@ -803,6 +853,7 @@ class FirmServiceImplTest {
 
     @Test
     void adminSetProprietor_whenAuditInsertFails_doesNotReassignAccounts() {
+        when(firms.updateFirm(any())).thenReturn(1);
         // ADT-11-class regression guard: the audit-row DB insert is ordered BEFORE the
         // un-rollback-able Treasury account reassignment. If recordAdminOverride throws,
         // the reassignment IPC must never have run — otherwise a rolled-back JDBC txn
@@ -824,6 +875,7 @@ class FirmServiceImplTest {
 
     @Test
     void adminSetProprietor_whenNewProprietorIsEmployee_resignsThemFirst() {
+        when(firms.updateFirm(any())).thenReturn(1);
         UUID newOwner = UUID.randomUUID();
         Firm firm = new Firm();
         firm.setFirmId(1);
@@ -1000,6 +1052,7 @@ class FirmServiceImplTest {
     @Test
     void updateProprietor_setsFirmIdAndProprietorUuid() {
         UUID newOwner = UUID.randomUUID();
+        when(firms.updateFirm(any())).thenReturn(1);
         svc.updateProprietor(11, newOwner);
 
         ArgumentCaptor<Firm> cap = ArgumentCaptor.forClass(Firm.class);
@@ -1079,7 +1132,8 @@ class FirmServiceImplTest {
         personal.setAccountId(99);
         when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
         when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
-        when(firms.archiveFirm(1)).thenReturn(1);
+        when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(1);
 
         svc.disbandFirm(1, proprietor);
 

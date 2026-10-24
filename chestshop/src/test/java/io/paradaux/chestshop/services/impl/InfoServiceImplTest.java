@@ -503,6 +503,24 @@ class InfoServiceImplTest extends ServerTest {
     }
 
     @Test
+    void showShopInfoWildcardShowsPatternAndTotalMatchingStock() {
+        Player p = mock(Player.class);
+        Sign sign = shopSign("Owner", "2", "B 10", "carlton_dry*");
+        when(signService.isValid(sign)).thenReturn(true);
+        when(accounts.resolveAccount("Owner")).thenReturn(new Account("Owner", java.util.UUID.randomUUID()));
+        Container container = mock(Container.class);
+        var inventory = chestWith(27, item(Material.PAPER, 7), item(Material.DIAMOND, 4));
+        when(container.getInventory()).thenReturn(inventory);
+        when(shopBlockService.findConnectedContainer(sign)).thenReturn(container);
+        when(items.wildcardName(any()))
+                .thenAnswer(call ->
+                        ((ItemStack) call.getArgument(0)).getType() == Material.PAPER ? "carlton_dry_bottle" : "other");
+        info.showShopInfo(p, sign);
+        assertThat(shopInfoValues()).containsEntry("item", "carlton_dry*").containsEntry("stock", "7");
+        verify(message, never()).send(p, "chestshop.INVALID_SHOP_DETECTED");
+    }
+
+    @Test
     void showShopInfo_full_withStock_bothPrices() {
         Player p = mock(Player.class);
         Sign sign = shopSign("Owner", "5", "B 10 : S 5", "Stone");

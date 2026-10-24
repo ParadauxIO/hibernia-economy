@@ -17,6 +17,8 @@ class DerivedGroupReconciliationTest {
         var property = new GroupSource(1, "realty", UUID.randomUUID() + "/plot");
         UUID owner = UUID.randomUUID(), stale = UUID.randomUUID();
         when(mapper.listSources()).thenReturn(List.of(firm, property));
+        when(mapper.lockSource(firm)).thenReturn(firm);
+        when(mapper.lockSource(property)).thenReturn(property);
         when(business.resolve("7"))
                 .thenThrow(new IllegalStateException("offline"))
                 .thenReturn(Set.of(owner));
@@ -32,6 +34,6 @@ class DerivedGroupReconciliationTest {
         service.reconcile();
         verify(mapper).refresh(firm, owner);
         verify(mapper).remove(firm, stale);
-        verify(mapper, times(2)).removeUnconfigured();
+        verify(mapper, times(2)).listUnconfigured();
     }
 }

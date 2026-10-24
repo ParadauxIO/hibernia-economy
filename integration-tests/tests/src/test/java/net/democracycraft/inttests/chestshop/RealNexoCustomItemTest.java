@@ -4,6 +4,7 @@ import io.paradaux.mockclient.MockPlayer;
 import net.democracycraft.inttests.support.Await;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Ledger;
+import net.democracycraft.inttests.support.LedgerFaults;
 import net.democracycraft.inttests.support.Inv;
 import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Usernames;
@@ -22,6 +23,81 @@ class RealNexoCustomItemTest {
     private static final BigDecimal STARTING = new BigDecimal("10000");
     private static final int QTY = 4;
     private static final int PRICE = 250;
+
+    @Test
+    void sellingRequiresNativeIdentityAndRestoresGoodsWhenPaymentFails() throws Exception {
+        try (var owner = MockPlayer.connectLocal(Usernames.fresh("NxOwn"));
+             var customer = MockPlayer.connectLocal(Usernames.fresh("NxCli"));
+             var supply = ChestShopFixture.create();
+             var demand = ChestShopFixture.create()) {
+            String seller = owner.getUsername();
+            String buyer = customer.getUsername();
+            Ledger.waitForPersonalBalance(owner.getUuid(), STARTING, TIMEOUT);
+            Ledger.waitForPersonalBalance(customer.getUuid(), STARTING, TIMEOUT);
+            assertThat(supply.createSellShopRaw(seller, seller, QTY, PRICE, "test_ruby")).contains("cancelled=false");
+            assertThat(demand.createBuyShopRaw(seller, seller, QTY, 100, "test_ruby")).contains("cancelled=false");
+            RconClient.send("diag warmname " + seller);
+            int ownerAccount = Ledger.personalAccountId(owner.getUuid()).orElseThrow();
+            int customerAccount = Ledger.personalAccountId(customer.getUuid()).orElseThrow();
+            int ownerPostings = Ledger.postingsCountForAccount(ownerAccount);
+            int customerPostings = Ledger.postingsCountForAccount(customerAccount);
+            long checkpoint = Ledger.transactionCheckpoint();
+
+            Inv.give(buyer, "DIAMOND", QTY);
+            Inv.waitForPlayerCount(buyer, "DIAMOND", QTY, TIMEOUT);
+            demand.clickSell(customer, buyer);
+            assertThat(Inv.playerCount(buyer, "DIAMOND")).isEqualTo(QTY);
+            assertThat(Inv.chestCount(demand.chestPos(), "DIAMOND")).isZero();
+            assertThat(Ledger.personalBalance(owner.getUuid()).orElseThrow()).isEqualByComparingTo(STARTING);
+            assertThat(Ledger.personalBalance(customer.getUuid()).orElseThrow()).isEqualByComparingTo(STARTING);
+            assertThat(Ledger.postingsCountForAccount(ownerAccount)).isEqualTo(ownerPostings);
+            assertThat(Ledger.postingsCountForAccount(customerAccount)).isEqualTo(customerPostings);
+
+            // Obtain native goods through a real purchase, preserving ordinary diamonds too.
+            assertThat(RconClient.send(String.format("diag nexostock world %d %d %d test_ruby %d",
+                    supply.chestPos().x(), supply.chestPos().y(), supply.chestPos().z(), QTY)))
+                    .contains("nexostock test_ruby");
+            supply.clickBuy(customer, buyer);
+            assertThat(RconClient.send("diag nexocount " + buyer + " test_ruby")).contains("nexocount test_ruby = 4");
+            assertThat(Inv.chestCount(supply.chestPos(), "DIAMOND")).isZero();
+            assertThat(Ledger.personalBalance(owner.getUuid()).orElseThrow()).isEqualByComparingTo("10250");
+            assertThat(Ledger.personalBalance(customer.getUuid()).orElseThrow()).isEqualByComparingTo("9750");
+            assertThat(Ledger.postingsCountForAccount(ownerAccount)).isEqualTo(ownerPostings + 1);
+            assertThat(Ledger.postingsCountForAccount(customerAccount)).isEqualTo(customerPostings + 1);
+
+            try (var fault = LedgerFaults.rejectDebits(ownerAccount)) {
+                demand.clickSell(customer, buyer);
+                assertThat(RconClient.send("diag nexocount " + buyer + " test_ruby")).contains("nexocount test_ruby = 4");
+                assertThat(Inv.playerCount(buyer, "DIAMOND")).isEqualTo(QTY * 2);
+                assertThat(Inv.chestCount(demand.chestPos(), "DIAMOND")).isZero();
+                assertThat(Ledger.personalBalance(owner.getUuid()).orElseThrow()).isEqualByComparingTo("10250");
+                assertThat(Ledger.personalBalance(customer.getUuid()).orElseThrow()).isEqualByComparingTo("9750");
+                assertThat(Ledger.postingsCountForAccount(ownerAccount)).isEqualTo(ownerPostings + 1);
+                assertThat(Ledger.postingsCountForAccount(customerAccount)).isEqualTo(customerPostings + 1);
+            }
+            demand.clickSell(customer, buyer);
+            assertThat(RconClient.send("diag nexocount " + buyer + " test_ruby")).contains("nexocount test_ruby = 0");
+            assertThat(Inv.playerCount(buyer, "DIAMOND")).isEqualTo(QTY);
+            assertThat(Inv.chestCount(demand.chestPos(), "DIAMOND")).isEqualTo(QTY);
+            assertThat(Ledger.personalBalance(owner.getUuid()).orElseThrow()).isEqualByComparingTo("10150");
+            assertThat(Ledger.personalBalance(customer.getUuid()).orElseThrow()).isEqualByComparingTo("9850");
+            assertThat(Ledger.postingsCountForAccount(ownerAccount)).isEqualTo(ownerPostings + 2);
+            assertThat(Ledger.postingsCountForAccount(customerAccount)).isEqualTo(customerPostings + 2);
+            pairedPayment(customer.getUuid(), checkpoint, customerAccount, ownerAccount, "250");
+            pairedPayment(owner.getUuid(), checkpoint, ownerAccount, customerAccount, "100");
+        }
+    }
+
+    private static void pairedPayment(java.util.UUID initiator, long checkpoint, int debit, int credit, String amount) {
+        var postings = Ledger.initiatedPostingsAfter(initiator, checkpoint);
+        assertThat(postings).hasSize(2);
+        assertThat(postings.get(0).transactionId()).isEqualTo(postings.get(1).transactionId());
+        assertThat(Ledger.initiatedTransactionCountAfter(initiator, checkpoint)).isEqualTo(1);
+        assertThat(postings.stream().filter(p -> p.accountId() == debit).toList()).singleElement()
+                .satisfies(p -> assertThat(p.amount()).isEqualByComparingTo(new BigDecimal(amount).negate()));
+        assertThat(postings.stream().filter(p -> p.accountId() == credit).toList()).singleElement()
+                .satisfies(p -> assertThat(p.amount()).isEqualByComparingTo(amount));
+    }
 
     @Test
     void buyResolvesAndDeliversANexoCustomItem() {

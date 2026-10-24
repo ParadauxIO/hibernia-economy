@@ -2093,3 +2093,30 @@ invariants using a new disposable database. The clone was not mutated. Evidence:
 `.context/par-499/final-reconciled-build.log` and `final-migration-rehearsal.log`.
 The upstream accessibility correction and its tests are retained unchanged.
 Final full core repeats and exact-head CI results are reported in PR #76.
+
+
+## PAR-502: Java 25/Paper 26.3 follow-up
+
+The [PAR-502 report](par-502.md) records the runtime-upgrade provenance, two newly
+fixed regressions, additional real integrations/browser/lifecycle coverage, exact
+source fingerprints and all retained failures. The complete core suite passed
+747 cases with 19 explicit skips in each of two clean runs (845.54s / 847.21s).
+Later focused additions are separately identified; neither parent nor follow-up
+acceptance is declared exhaustive or closed.
+
+The later real `providers` profile adds Utilities/Bolt/BoltChestShop/BreweryX
+coexistence and startup item-permission denial/grant. Its two runs each pass three
+cases with one explicit Utilities reload-defect skip. Exact fingerprints, failed
+probe and artifact hashes are in the [PAR-502 report](par-502.md#real-combined-provider-profile).
+
+The `explorer-keycloak` profile passed twice against the real Minecraft realm
+(1 browser journey, 0 skips each). It covers two real logins, signed claims and
+durable identity links, real in-game proprietor transfer, and access reversal in
+the unchanged sessions. It exposed and verified the stable-subject fix; the
+failed runs and final source fingerprint are in the [PAR-502 report](par-502.md#real-minecraft-realm-login-and-proprietorship-transfer).
+
+
+The PAR-519 reload repair supersedes the historical provider skip above for the
+corrected Utilities artifact. Two clean provider runs now pass all six cases with
+zero failures or skips, including changed restrictions after reload. The original
+installed JAR still fails; see [exact artifact and paired-run evidence](par-502.md#utilities-reload-repair-par-519-2026-10-23).

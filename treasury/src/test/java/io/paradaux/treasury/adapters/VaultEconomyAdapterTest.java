@@ -56,10 +56,59 @@ class VaultEconomyAdapterTest {
     private final UUID uuid = UUID.randomUUID();
     private VaultEconomyAdapter adapter;
 
+    @Mock
+    io.paradaux.treasury.services.PlayerDirectoryService playerDirectory;
+
     @BeforeEach
     void setUp() {
-        adapter = new VaultEconomyAdapter(accountService, ledgerService, TestConfigs.economy(), taxApi);
+        adapter =
+                new VaultEconomyAdapter(accountService, ledgerService, TestConfigs.economy(), taxApi, playerDirectory);
         lenient().when(player.getUniqueId()).thenReturn(uuid);
+    }
+
+    @Test
+    void unknownNameReadNeverCallsBukkit() {
+        try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            assertThat(adapter.hasAccount("Unknown")).isFalse();
+            bukkit.verifyNoInteractions();
+        }
+    }
+
+    @Test
+    void unknownNamesNeverReachBukkitOrLedger() {
+        try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            assertThat(adapter.hasAccount("Unknown")).isFalse();
+            assertThat(adapter.getBalance("Unknown")).isZero();
+            assertThat(adapter.has("Unknown", 1)).isFalse();
+            assertThat(adapter.createPlayerAccount("Unknown")).isFalse();
+            assertThat(adapter.depositPlayer("Unknown", 1).type).isEqualTo(EconomyResponse.ResponseType.FAILURE);
+            assertThat(adapter.withdrawPlayer("Unknown", 1).type).isEqualTo(EconomyResponse.ResponseType.FAILURE);
+            assertThat(adapter.depositPlayer("Unknown", "world", 1).type)
+                    .isEqualTo(EconomyResponse.ResponseType.FAILURE);
+            assertThat(adapter.withdrawPlayer("Unknown", "world", 1).type)
+                    .isEqualTo(EconomyResponse.ResponseType.FAILURE);
+            bukkit.verifyNoInteractions();
+            org.mockito.Mockito.verifyNoInteractions(ledgerService, accountService);
+        }
+    }
+
+    @Test
+    void storedNameUsesUuidAndPreservesGovernmentRedirectWithoutBukkit() {
+        when(playerDirectory.resolveUuidByName(".Known")).thenReturn(Optional.of(uuid));
+        when(accountService.findRedirectedAccount(uuid)).thenReturn(Optional.of(42));
+        when(accountService.getBalanceReadOnly(42)).thenReturn(new BigDecimal("123.00"));
+        try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            assertThat(adapter.hasAccount(".Known")).isTrue();
+            assertThat(adapter.getBalance(".Known")).isEqualTo(123D);
+            assertThat(adapter.createPlayerAccount(".Known")).isFalse();
+            assertThat(adapter.depositPlayer(".Known", 2).type).isEqualTo(EconomyResponse.ResponseType.SUCCESS);
+            assertThat(adapter.withdrawPlayer(".Known", 2).type).isEqualTo(EconomyResponse.ResponseType.SUCCESS);
+            verify(ledgerService).vaultDeposit(any(), eq(uuid), eq(new BigDecimal("2.00")), any(), any(), any(), any());
+            verify(ledgerService)
+                    .vaultWithdraw(any(), eq(uuid), eq(new BigDecimal("2.00")), any(), any(), any(), any());
+            verify(ledgerService, never()).resolveOrCreatePersonal(any());
+            bukkit.verifyNoInteractions();
+        }
     }
 
     @Test

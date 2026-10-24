@@ -22,6 +22,7 @@ import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.ShopService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.StockCounterService;
+import io.paradaux.chestshop.services.WildcardItems;
 import io.paradaux.chestshop.utils.BlockUtil;
 import io.paradaux.chestshop.utils.Colours;
 import io.paradaux.chestshop.utils.LocationUtil;
@@ -143,6 +144,15 @@ public class ShopServiceImpl implements ShopService {
     /** Resolve/normalise the item line; autofill from the chest, or reject an invalid item. */
     private void checkItem(ShopCreation ctx) {
         String itemCode = SignService.getItem(ctx.getSignLines());
+        if (WildcardItems.isPattern(itemCode)) {
+            Container container = shopBlockService.findConnectedContainer(ctx.getSign());
+            var variants =
+                    new WildcardItems(items).variants(itemCode, container == null ? null : container.getInventory());
+            if (variants.isEmpty() || StringUtil.getMinecraftStringWidth(itemCode) > MaterialUtil.MAXIMUM_SIGN_WIDTH) {
+                ctx.setOutcome(CreationOutcome.INVALID_ITEM);
+            }
+            return; // Preserve the pattern rather than normalising it to one arbitrary item.
+        }
         ItemStack item = items.parse(itemCode);
 
         if (item == null) {
@@ -335,6 +345,20 @@ public class ShopServiceImpl implements ShopService {
 
         String priceLine = SignService.getPrice(ctx.getSignLines());
         String itemLine = SignService.getItem(ctx.getSignLines());
+        if (WildcardItems.isPattern(itemLine)) {
+            Container container = shopBlockService.findConnectedContainer(ctx.getSign());
+            var variants =
+                    new WildcardItems(items).variants(itemLine, container == null ? null : container.getInventory());
+            if ((PriceUtil.hasBuyPrice(priceLine) && !adminBypass.has(player, Permissions.SHOP_CREATION_BUY))
+                    || (PriceUtil.hasSellPrice(priceLine)
+                            && !adminBypass.has(player, Permissions.SHOP_CREATION_SELL))) {
+                ctx.setOutcome(CreationOutcome.NO_PERMISSION);
+            }
+            for (ItemStack variant : variants) {
+                checkItemPermission(ctx, priceLine, items.getName(variant), variant);
+            }
+            return;
+        }
         ItemStack item = items.parse(itemLine);
 
         if (item == null) {
@@ -346,6 +370,11 @@ public class ShopServiceImpl implements ShopService {
             return;
         }
 
+        checkItemPermission(ctx, priceLine, itemLine, item);
+    }
+
+    private void checkItemPermission(ShopCreation ctx, String priceLine, String itemLine, ItemStack item) {
+        Player player = ctx.getPlayer();
         String matID = item.getType().toString().toLowerCase(Locale.ROOT);
         String[] parts = itemLine.split("#", 2);
         if (parts.length == 2
@@ -401,12 +430,8 @@ public class ShopServiceImpl implements ShopService {
                 } else {
                     account = accounts.resolveAccount(name);
                     if (account == null) {
-                        Player otherPlayer = ChestShop.getBukkitServer().getPlayer(name);
                         try {
-                            account = otherPlayer != null
-                                    ? accounts.getOrCreateAccount(otherPlayer)
-                                    : accounts.getOrCreateAccount(
-                                            ChestShop.getBukkitServer().getOfflinePlayer(name));
+                            account = accounts.resolveKnownPlayer(name);
                         } catch (IllegalArgumentException e) {
                             ctx.getPlayer().sendMessage(e.getMessage());
                         }

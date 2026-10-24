@@ -29,9 +29,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <StatCard label={`Transactions / ${days}d`} value={fmtN(current.transactions)} meta={change(current.transactions, previous.transactions)} />
       <StatCard label={`Volume / ${days}d`} value={fmtAmt(current.volume)} meta={change(current.volume, previous.volume)} />
     </div>
+    <p className="muted small">Volume and transaction counts estimate adjacent matching Vault bridge legs as one event. Unmatched rewards and spending remain; raw transaction history is unchanged.</p>
     <ChartCard><div className="section-heading"><h2>Transaction activity</h2><span className="muted small">Last {days} days</span></div><VolumeTimeline data={volume} /></ChartCard>
     <ChartCard>
-      <div className="section-heading"><h2>Activity by weekday and hour</h2><span className="muted small">UTC · last {days} days</span></div>
+      <div className="section-heading"><h2>Activity by weekday and hour</h2><span className="muted small">Raw ledger transactions · UTC · last {days} days</span></div>
       <Heatmap cells={heat} />
       {busiest && busiest.txn_count > 0 && <p className="muted small">Busiest slot: {weekdays[busiest.dow0]} {String(busiest.hr).padStart(2, '0')}:00 UTC · {fmtN(busiest.txn_count)} transactions</p>}
     </ChartCard>

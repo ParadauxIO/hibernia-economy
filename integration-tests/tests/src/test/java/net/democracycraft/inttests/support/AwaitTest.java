@@ -3,41 +3,60 @@ package net.democracycraft.inttests.support;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Unit tests for {@link Await} — no server needed. */
 class AwaitTest {
+    private final FakeTime time = new FakeTime();
+
+    private <T> T until(String what, Supplier<T> probe, Predicate<? super T> done, Duration timeout) {
+        return Await.until(what, probe, done, timeout, () -> time.nanos, time::sleep);
+    }
+
+    private static final class FakeTime {
+        long nanos;
+        final List<Long> sleeps = new ArrayList<>();
+
+        void sleep(long millis) {
+            sleeps.add(millis);
+            nanos += Duration.ofMillis(millis).toNanos();
+        }
+    }
 
     @Test
     void returnsTheFirstAcceptedValueWithoutWaitingWhenAlreadyTrue() {
         AtomicInteger reads = new AtomicInteger();
-        long start = System.nanoTime();
 
-        Integer v = Await.until("ready", () -> reads.incrementAndGet() * 10, x -> x >= 10, Duration.ofSeconds(5));
+        Integer v = until("ready", () -> reads.incrementAndGet() * 10, x -> x >= 10, Duration.ofSeconds(5));
 
         assertThat(v).isEqualTo(10);
         assertThat(reads).hasValue(1);
-        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofMillis(500));
+        assertThat(time.sleeps).isEmpty();
     }
 
     @Test
     void pollsUntilTheConditionHolds() {
         AtomicInteger reads = new AtomicInteger();
 
-        Integer v = Await.until("third read", reads::incrementAndGet, x -> x == 3, Duration.ofSeconds(5));
+        Integer v = until("third read", reads::incrementAndGet, x -> x == 3, Duration.ofSeconds(5));
 
         assertThat(v).isEqualTo(3);
         assertThat(reads).hasValue(3);
+        assertThat(time.sleeps).containsExactly(10L, 20L);
     }
 
     @Test
     void timeoutNamesWhatWasAwaitedAndTheLastObservedValue() {
         AtomicInteger reads = new AtomicInteger();
 
-        assertThatThrownBy(() -> Await.until("member count of account 7",
+        assertThatThrownBy(() -> until("member count of account 7",
                 () -> "count=" + reads.incrementAndGet(), s -> false, Duration.ofMillis(150)))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("member count of account 7")
@@ -47,7 +66,7 @@ class AwaitTest {
 
     @Test
     void timeoutReportsNullWhenNothingWasObserved() {
-        assertThatThrownBy(() -> Await.until("a row", () -> null, v -> v != null, Duration.ofMillis(50)))
+        assertThatThrownBy(() -> until("a row", () -> null, v -> v != null, Duration.ofMillis(50)))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("last observed: null");
     }
@@ -56,14 +75,14 @@ class AwaitTest {
     void readsAtLeastOnceEvenWithAZeroTimeout() {
         AtomicInteger reads = new AtomicInteger();
 
-        assertThat(Await.until("instant", reads::incrementAndGet, x -> true, Duration.ZERO)).isEqualTo(1);
+        assertThat(until("instant", reads::incrementAndGet, x -> true, Duration.ZERO)).isEqualTo(1);
         assertThatThrownBy(() -> Await.untilTrue("never", () -> false, Duration.ZERO))
                 .hasMessageContaining("1 reads in ");
     }
 
     @Test
     void untilEqualsDescribesTheExpectedValue() {
-        assertThatThrownBy(() -> Await.untilEquals("status", () -> "PENDING", "DONE", Duration.ofMillis(30)))
+        assertThatThrownBy(() -> Await.untilEquals("status", () -> "PENDING", "DONE", Duration.ZERO))
                 .hasMessageContaining("status to equal \"DONE\"")
                 .hasMessageContaining("last observed: \"PENDING\"");
     }
@@ -72,7 +91,7 @@ class AwaitTest {
     void probeExceptionsPropagateInsteadOfBeingRetried() {
         AtomicInteger reads = new AtomicInteger();
 
-        assertThatThrownBy(() -> Await.until("query", () -> {
+        assertThatThrownBy(() -> until("query", () -> {
             reads.incrementAndGet();
             throw new IllegalStateException("bad SQL");
         }, v -> true, Duration.ofSeconds(5)))
@@ -82,12 +101,28 @@ class AwaitTest {
     }
 
     @Test
+    void slowProbeConsumesTheTimeoutWithoutAnExtraSleep() {
+        AtomicInteger reads = new AtomicInteger();
+        assertThatThrownBy(() -> until("slow query", () -> {
+            reads.incrementAndGet();
+            time.nanos += Duration.ofSeconds(2).toNanos();
+            return false;
+        }, value -> value, Duration.ofSeconds(1)))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("1 reads in 2000 ms");
+        assertThat(time.sleeps).isEmpty();
+        assertThat(reads).hasValue(1);
+    }
+
+    @Test
     void backsOffBetweenReads() {
         AtomicInteger reads = new AtomicInteger();
 
-        assertThatThrownBy(() -> Await.until("never", reads::incrementAndGet, x -> false, Duration.ofMillis(1000)))
+        assertThatThrownBy(() -> until("never", reads::incrementAndGet, x -> false, Duration.ofMillis(1000)))
                 .isInstanceOf(AssertionError.class);
-        // 10, 20, 40, 80, 160, 200, 200, 200... ms → about 9 reads in a second, not 100.
-        assertThat(reads.get()).isBetween(5, 15);
+        // Exact backoff, capped at 200ms, with the last sleep bounded by the deadline.
+        assertThat(time.sleeps).containsExactly(10L, 20L, 40L, 80L, 160L, 200L, 200L, 200L, 90L);
+        assertThat(reads).hasValue(10);
+        assertThat(time.nanos).isEqualTo(Duration.ofSeconds(1).toNanos());
     }
 }

@@ -126,13 +126,13 @@ remaining reviews, disabled tests and unavailable integrations. Refresh the inde
 with `python3 integration-tests/acceptance/inventory.py`; use `--check` to detect drift.
 
 The runner executes `:tests:preflight` before selected tests. It requires offline
-Paper 1.21.11, enabled economy/protection plugins, a real login and starting balance,
+Paper 26.3, enabled economy/protection plugins, a real login and starting balance,
 and an authenticated REST boundary. It prints plugin versions. The protection
 profile also checks that both startup integration flags are enabled. Core Nexo coverage
 uses **a stub**; the opt-in `nexo` profile requires a real supplied plugin. Same-stack
 browser acceptance uses `explorer`; Realty, CarbonChat and Bedrock remain unverified.
-Paper 26.3 staging (ADT-193) needs a separate matching client/profile and is not
-certified by this run. Live tests always execute, even with unchanged class files,
+The isolated harness targets the same Paper 26.3 version as staging. Passing it
+does not certify the separately deployed staging server. Live tests always execute, even with unchanged class files,
 because Gradle cannot fingerprint external server/database state.
 
 ### Test catalogue
@@ -147,7 +147,7 @@ because Gradle cannot fingerprint external server/database state.
 
 Those are the foundations; the last full acceptance covered 94 classes (532 cases, including parameterized invocations and explicit skips) across
 `business/`, `chestshop/`, `treasury/`, `restapi/` (including the SERVICE-scoped admin API,
-`AdminApiTest`) and `ingest/`.
+`AdminApiTest`). The retired standalone TreasuryIngest plugin is no longer part of acceptance.
 
 **Runtime** (measured October 2026 on a shared 16-core box, `IT_SKIP_BUILD=1`): about
 4 minutes for the `:tests:test` task and 6 minutes for the whole of `run.sh` (stack
@@ -235,6 +235,15 @@ reuses the existing plugin jars and is recorded in the summary; use it only afte
 building the checkout. `python3 ops/integration/test_acceptance.py` checks evidence
 counting and redaction without starting a server.
 
+Before starting Paper or REST, the runner writes `runtime-artifacts.json` with
+the SHA-256 and size of the selected Paper/REST JARs and every installed top-level
+plugin JAR, including supplied providers. The repeated acceptance runner retains
+this inventory with each summary and rejects missing/invalid evidence or different
+artifacts between runs, even when the source SHA and JAR filenames are unchanged.
+No configurations, credentials or absolute artifact paths are included. Matching
+JARs do not certify private resource packs, graphical rendering or Bedrock behavior;
+those still need separate acceptance. A skipped build remains explicitly recorded.
+
 The script builds the plugins from the checkout, boots Paper (offline mode, RCON), a
 migrated MariaDB and the REST API, runs `:tests:test` and tears it all down.
 
@@ -270,8 +279,8 @@ Chat assertions still happen for **command response correctness** ("did the user
 
 ## Compatibility notes
 
-- **Built and tested against Paper 1.21.11.** MCProtocolLib pins protocol version, so changing the dev-server MC version may require bumping the `org.geysermc.mcprotocollib:protocol` snapshot version in `mock-client/build.gradle.kts`. The 1.21.11-SNAPSHOT version lives in OpenCollab's snapshot repo.
-- **Java 21 toolchain.** Tests JVM-fork at runtime — they'll use whatever JDK is in `JAVA_HOME`. Java 21 is fine; Java 25 also works.
+- **Targets Paper 26.3 build 206.** MCProtocolLib pins protocol version, so changing the dev-server MC version may require bumping the `org.geysermc.mcprotocollib:protocol` snapshot version in `mock-client/build.gradle.kts`. The 26.3-SNAPSHOT version lives in OpenCollab's snapshot repo.
+- **Java 25 toolchain.** Tests JVM-fork at runtime — they'll use whatever JDK is in `JAVA_HOME`. Set `JAVA_HOME` to a Java 25 JDK before running the harness.
 - **Online mode must be disabled** on the target server. The mock client does no authentication.
 - **RCON must be enabled** on the target server. Used by `RconClient` for admin-side seeding from inside tests.
 
@@ -388,7 +397,7 @@ tests and restores the default navigation commands afterward.
 bash ops/integration/run.sh -- --tests '*FindMenuE2ETest' --tests '*FindCommandTest'
 ```
 
-These are Java protocol tests on the harness's pinned Paper 1.21.11 build. They do
+These are Java protocol tests on the harness's pinned Paper 26.3 build. They do
 not render screenshots or simulate a Bedrock/Geyser client.
 
 ### Scheduled Explorer group profile
@@ -410,7 +419,9 @@ Avoid running a separate root build while the live runner assembles its server.
 
 ### Real Nexo profile
 
-Supply your own compatible Nexo plugin locally; no licensed JAR or existing server
+Real Nexo is prohibited in CI. The runner rejects `nexo`/`providers` profiles and
+`IT_NEXO_JAR` in CI, before starting Java or building anything. CI continues to use
+the diagnostic stub. Supply your own compatible Nexo plugin locally; no licensed JAR or existing server
 configuration is downloaded from the clone or redistributed by this repository:
 
 ```sh
@@ -426,8 +437,65 @@ a player click and checks exact balances, posting increments and remaining stock
 Item setup/identity observation uses the installed plugin's API; it does not
 replace ChestShop's parsing or trading path. Default core tests retain their stub.
 
-Verified runtime is recorded in `acceptance/results.md`. This narrow purchase and
-identity-rejection journey does not certify custom-item selling, metadata/dyes,
-resource-pack rendering, reloads, other providers or staging runtime parity.
+Verified runtime is recorded in `acceptance/results.md`. The profile also covers
+native-item selling, failed-payment inventory restoration and paired postings.
+Metadata/dye variants, resource-pack rendering, reloads, other providers and
+deployment acceptance require separate evidence.
 Missing `IT_NEXO_JAR` fails this profile; the real test is explicitly skipped in
 core and is not advertised as covered by ordinary CI.
+
+## PAR-502 acceptance additions
+
+PAR-502 adds same-stack browser checks for scheduled Business access, expired
+leases, firm finances, market trades and fine revenue. The browser profile uses
+signed Auth.js test sessions, not a real Keycloak login. Lease expiry is modeled
+by backdating the disposable membership row; other Business grants come from the
+production scheduler. The groups profile also exercises binding retarget/removal,
+provider-input failure and a scoped database write failure with recovery.
+
+The opt-in Realty profile requires `IT_REALTY_JAR` and `IT_VAULT_JAR` pointing to
+real supplied plugin JARs: `python3 ops/integration/acceptance.py --profile realty`.
+It uses the pinned Java 25/Paper runtime, creates a separate `realty_acceptance`
+schema in the runner-owned MariaDB, and generates fresh settings. External database
+mode is rejected for this profile. It exercises Realty registration/purchase through
+commands and the registered Vault economy service, including denial, payment
+failure and scheduled title-holder publication checks. Supplying an artifact does not imply that it passed startup or tests;
+consult the retained run evidence. Clone configuration and assets are never needed.
+
+The `rest-restart` profile stops and restarts only the runner-owned REST process,
+then checks that superseded tokens stay rejected, a committed idempotency key
+replays the original transaction without another debit, and a new payment settles.
+The `crash` profile uses the restart journey with SIGKILL after an explicit world
+save and committed trade. It verifies recovery from a durable checkpoint, not
+atomic recovery during an in-flight trade. The existing `restart` profile retains
+its graceful shutdown path. Both processes are cleaned up by their test and runner.
+
+`BalanceAccessTest` covers all three balance aliases with funded offline accounts,
+exact displayed amounts and a live world-context permission override. It checks
+that reads and denied queries leave balances, postings and transaction IDs unchanged.
+
+Acceptance summaries now include a fingerprint of HEAD, the tracked diff and
+untracked source contents. Changing the checkout during or between repeated runs
+fails certification; keep it fixed until the command finishes. Runtime Java
+evidence follows `JAVA_HOME`, as the runner does.
+
+### Combined real providers (PAR-502)
+
+`python3 ops/integration/acceptance.py --profile providers --runs 2` requires
+`IT_NEXO_JAR`, `IT_UTILITIES_JAR`, `IT_BOLT_JAR`, `IT_BOLT_CHESTSHOP_JAR`, and
+`IT_BREWERY_JAR`. It runs native buying/selling, failed-payment recovery and
+startup and reloaded Utilities permission denial/grant with fresh configuration.
+The reload regression is enabled and requires the corrected PAR-519 Utilities
+artifact; the original 3.0.0 JAR fails it. Select the corrected build by its
+recorded hash, since its version remains 3.0.0. See
+[artifact and paired-run evidence](acceptance/par-502.md#utilities-reload-repair-par-519-2026-10-23).
+
+### Real Minecraft-realm browser login
+
+`python3 ops/integration/acceptance.py --profile explorer-keycloak --runs 2`
+uses the existing public `treasury-explorer` client and localhost port 5173.
+Supply `IT_KEYCLOAK_CREDENTIALS` as a private JSON file for two disposable
+realm users. This profile drives real login and an in-game ownership transfer,
+checking old/new proprietor access in unchanged sessions. It does not inject
+signed cookies. Browser traces are disabled to avoid retaining credentials.
+See the [identity fixture requirements and evidence](acceptance/par-502.md#real-minecraft-realm-login-and-proprietorship-transfer).

@@ -1,9 +1,8 @@
 package io.paradaux.business.mappers;
 
 import io.paradaux.business.model.Firm;
-import org.apache.ibatis.annotations.*;
-
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 @Mapper
 public interface FirmMapper {
@@ -27,6 +26,7 @@ public interface FirmMapper {
     @Options(useGeneratedKeys = true, keyProperty = "firmId", keyColumn = "firm_id")
     void createFirm(Firm firm);
 
+    /** Archived ownership is the durable refund destination; unchanged-owner metadata remains writable. */
     @Lang(org.apache.ibatis.scripting.xmltags.XMLLanguageDriver.class)
     @Update("""
             <script>
@@ -41,15 +41,18 @@ public interface FirmMapper {
               updated_at = CURRENT_TIMESTAMP
             </set>
             WHERE firm_id = #{firmId}
+              <if test="proprietorUuid != null">
+                AND (is_archived = 0 OR proprietor_uuid_bin = uuid_to_bin(#{proprietorUuid}))
+              </if>
             </script>
             """)
-    void updateFirm(Firm firm);
+    int updateFirm(Firm firm);
 
     /**
-     * Archives a firm and explicitly clears its default_account_id. Used by
-     * {@code disbandFirm}, where the firm's accounts have just been archived
-     * in Treasury and removed from {@code firm_accounts}; leaving the
-     * default_account_id set would point at an archived account.
+     * Archives a firm only if its proprietor still matches the refund snapshot,
+     * and clears its default_account_id before the resumable account drain.
+     * Subsequent ownership changes are forbidden, pinning every resumed refund
+     * to this archived proprietor.
      *
      * <p>The {@code AND is_archived = 0} guard makes the transition atomic:
      * only the first caller to flip the flag sees a non-zero affected-row count,
@@ -64,8 +67,9 @@ public interface FirmMapper {
                 updated_at = CURRENT_TIMESTAMP
             WHERE firm_id = #{firmId}
               AND is_archived = 0
+              AND proprietor_uuid_bin = uuid_to_bin(#{expectedOwner})
             """)
-    int archiveFirm(@Param("firmId") int firmId);
+    int archiveFirm(@Param("firmId") int firmId, @Param("expectedOwner") String expectedOwner);
 
     /** Releases only an archived firm's reservation; active firms cannot be released. */
     @Update("""
@@ -113,9 +117,8 @@ public interface FirmMapper {
             ORDER BY firm_id DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
-    List<Firm> listAllFiltered(@Param("limit") int limit,
-                               @Param("offset") int offset,
-                               @Param("includeArchived") boolean includeArchived);
+    List<Firm> listAllFiltered(
+            @Param("limit") int limit, @Param("offset") int offset, @Param("includeArchived") boolean includeArchived);
 
     @Select("""
             SELECT COUNT(*) > 0
@@ -124,8 +127,7 @@ public interface FirmMapper {
               AND is_archived = 0
               AND proprietor_uuid_bin = uuid_to_bin(#{playerUuid})
             """)
-    boolean isProprietorByFirmName(@Param("firmName") String firmName,
-                                   @Param("playerUuid") String playerUuid);
+    boolean isProprietorByFirmName(@Param("firmName") String firmName, @Param("playerUuid") String playerUuid);
 
     @Select("""
             SELECT COUNT(*) > 0
@@ -133,8 +135,7 @@ public interface FirmMapper {
             WHERE firm_id = #{firmId}
               AND proprietor_uuid_bin = uuid_to_bin(#{playerUuid})
             """)
-    boolean isProprietorByFirmId(@Param("firmId") int firmId,
-                                 @Param("playerUuid") String playerUuid);
+    boolean isProprietorByFirmId(@Param("firmId") int firmId, @Param("playerUuid") String playerUuid);
 
     @Select("""
             SELECT COUNT(*)
@@ -212,5 +213,4 @@ public interface FirmMapper {
             ORDER BY firm_id
             """)
     List<Firm> listAllActive();
-
 }

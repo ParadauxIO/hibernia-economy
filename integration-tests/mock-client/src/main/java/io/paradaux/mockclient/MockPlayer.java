@@ -21,6 +21,7 @@ import org.geysermc.mcprotocollib.protocol.data.game.setting.ParticleStatus;
 import org.geysermc.mcprotocollib.protocol.data.game.setting.SkinPart;
 import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundClientInformationPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientCommandPacket;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientTickEndPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundPlayerLoadedPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundAwardStatsPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundLoginPacket;
@@ -110,11 +111,19 @@ public final class MockPlayer implements AutoCloseable {
      * the n-th response answers the n-th request.
      */
     private final Object syncLock = new Object();
+    private final Object movementLock = new Object();
     private long syncRequested;
     private long syncAnswered;
 
     /** Every player between a successful {@link #connect} and {@link #close}/disconnect. */
     private static final Set<MockPlayer> OPEN = ConcurrentHashMap.newKeySet();
+
+    private volatile org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundOpenScreenPacket currentScreen;
+
+    /** Latest server-opened screen, cleared on either side closing it. */
+    public Optional<org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundOpenScreenPacket> currentScreen() {
+        return Optional.ofNullable(currentScreen);
+    }
 
     private volatile Position currentPosition;
     private volatile boolean connected;
@@ -220,10 +229,7 @@ public final class MockPlayer implements AutoCloseable {
             Position pos = player.currentPosition;
             if (pos != null && session.isConnected()) {
                 try {
-                    session.send(new ServerboundMovePlayerPosRotPacket(
-                            true, false,
-                            pos.x(), pos.y(), pos.z(),
-                            pos.yaw(), pos.pitch()));
+                    player.sendMovementTick(pos);
                 } catch (Throwable ignored) {}
             }
         }, 200, 200, TimeUnit.MILLISECONDS);
@@ -414,13 +420,19 @@ public final class MockPlayer implements AutoCloseable {
      */
     public void sendPosition(Position pos) {
         Objects.requireNonNull(pos, "pos");
-        session.send(new ServerboundMovePlayerPosRotPacket(
-                true,                  // onGround — assume true; tests park players on a setblock'd platform
-                false,                 // horizontalCollision
-                pos.x(), pos.y(), pos.z(),
-                pos.yaw(), pos.pitch()));
+        sendMovementTick(pos);
         currentPosition = pos;
         LOG.debug("[{}] sent position {}", username, pos);
+    }
+
+    /** Paper 26.3 permits only one positional update per client tick. */
+    private void sendMovementTick(Position pos) {
+        synchronized (movementLock) {
+            session.send(new ServerboundMovePlayerPosRotPacket(
+                    true, false, pos.x(), pos.y(), pos.z(), pos.yaw(), pos.pitch()));
+            // Keep this pair together when the heartbeat races an explicit move.
+            session.send(ServerboundClientTickEndPacket.INSTANCE);
+        }
     }
 
     /**
@@ -511,12 +523,13 @@ public final class MockPlayer implements AutoCloseable {
             throw new IllegalArgumentException(
                     "sign update requires exactly 4 lines, got " + lines.length);
         }
-        session.send(new ServerboundSignUpdatePacket(pos.toVector3i(), lines, frontText));
+        session.send(new ServerboundSignUpdatePacket(pos.toVector3i(), java.util.List.of(lines), frontText));
         LOG.debug("[{}] sign-update at {} frontText={} lines={}", username, pos, frontText, List.of(lines));
     }
 
     /** Send a protocol packet, including deliberately stale/forged packets in adversarial tests. */
     public void sendPacket(Packet packet) {
+        if (packet instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.inventory.ServerboundContainerClosePacket) currentScreen = null;
         session.send(Objects.requireNonNull(packet, "packet"));
     }
 
@@ -626,8 +639,8 @@ public final class MockPlayer implements AutoCloseable {
      * this client sent before the call, and the client has received every packet the
      * server queued for it before handling them.
      *
-     * <p>Mechanism: a {@code ServerboundClientCommandPacket(STATS)} request, answered with
-     * a {@code ClientboundAwardStatsPacket}. Why that is a sound barrier on Paper 1.21.11:
+     * <p>Mechanism: a {@code ServerboundClientCommandPacket(REQUEST_STATS)} request, answered with
+     * a {@code ClientboundAwardStatsPacket}. Why that is a sound barrier on Paper 26.3:
      * <ul>
      *   <li>Netty decodes one connection's packets in order, and game packets that touch the
      *       world — {@code UseItemOn}, {@code PlayerAction} (dig/left-click), movement, sign
@@ -659,7 +672,7 @@ public final class MockPlayer implements AutoCloseable {
         synchronized (syncLock) {
             // Send under the lock so ticket order is wire order.
             ticket = ++syncRequested;
-            session.send(new ServerboundClientCommandPacket(ClientCommand.STATS));
+            session.send(new ServerboundClientCommandPacket(ClientCommand.REQUEST_STATS));
         }
         synchronized (syncLock) {
             while (syncAnswered < ticket) {
@@ -742,6 +755,8 @@ public final class MockPlayer implements AutoCloseable {
     private final class SessionListener extends SessionAdapter {
         @Override
         public void packetReceived(Session s, Packet p) {
+            if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundOpenScreenPacket screen) currentScreen = screen;
+            if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerClosePacket) currentScreen = null;
             if (p instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.inventory.ClientboundContainerSetContentPacket content) {
                 containers.put(content.getContainerId(), content);
             }
@@ -781,8 +796,9 @@ public final class MockPlayer implements AutoCloseable {
             // ServerboundAcceptTeleportationPacket arrives. MCProtocolLib's
             // default ClientListener does not auto-ack, so we do it here.
             if (p instanceof ClientboundPlayerPositionPacket pos) {
-                session.send(new ServerboundAcceptTeleportationPacket(pos.getId()));
                 Vector3d v = pos.getPosition();
+                session.send(new ServerboundAcceptTeleportationPacket(
+                        pos.getId(), v.getX(), v.getY(), v.getZ(), pos.getYRot(), pos.getXRot()));
                 currentPosition = new Position(v.getX(), v.getY(), v.getZ(), pos.getYRot(), pos.getXRot());
                 positionReceived.countDown();
                 // Mark the client as fully loaded once we have an initial

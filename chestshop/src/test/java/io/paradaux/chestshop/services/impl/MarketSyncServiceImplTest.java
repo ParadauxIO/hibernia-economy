@@ -101,6 +101,18 @@ class MarketSyncServiceImplTest {
         return new MarketService.Owner(1, "PERSONAL", null, UUID.randomUUID(), false);
     }
 
+    @Test
+    void wildcardRegistrationRemovesAnOldExactItemListing() {
+        Sign sign = mock(Sign.class);
+        when(sign.getLines()).thenReturn(new String[] {"Seller", "2", "B 10", "carlton_dry*"});
+        var location = location(world("world"), 1, 64, 2);
+        when(sign.getLocation()).thenReturn(location);
+        assertThat(sync.registerShop(sign)).isFalse();
+        verify(market).deactivateShop("world", 1, 64, 2);
+        verify(previews).destroy("world", 1, 64, 2);
+        verify(market, never()).upsertShop(any());
+    }
+
     // ─────────────────────────── onTransaction ───────────────────────────
 
     @Test
@@ -138,6 +150,7 @@ class MarketSyncServiceImplTest {
     void onTransaction_nonAdminBuy_recordsSaleAndUpsertsShop() {
         ItemStack item = mock(ItemStack.class);
         Sign sign = mock(Sign.class);
+        when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "STONE"});
         Player client = mock(Player.class);
         UUID clientUuid = UUID.randomUUID();
         Account ownerAccount = mock(Account.class);
@@ -180,6 +193,7 @@ class MarketSyncServiceImplTest {
     void onTransaction_adminShop_nullOwnerAccount_sell_hidesStockAndCapacity() {
         ItemStack item = mock(ItemStack.class);
         Sign sign = mock(Sign.class);
+        when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "STONE"});
         Player client = mock(Player.class);
         UUID clientUuid = UUID.randomUUID();
         MarketService.Owner owner = new MarketService.Owner(null, null, null, null, true);

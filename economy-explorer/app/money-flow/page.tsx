@@ -44,6 +44,8 @@ export default async function MoneyFlowPage({
         Money moving <strong>between different account types</strong> — personal, business,
         government, system (e.g. a player paying a business, or government issuing a grant).
         Transfers within the same type (personal&nbsp;→&nbsp;personal) are excluded.
+        Adjacent matching Vault bridge legs are estimated as one transfer; unmatched rewards and spending remain.
+        This estimate does not establish the identity of an audited payment.
       </p>
 
       <div className="kpi-grid">

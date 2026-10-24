@@ -288,3 +288,41 @@ resolves names or IDs; no production behavior was changed to force a pass.
 - Follow-up evidence: `build/integration-acceptance/20261021T214935Z-2518020/run-1`.
   Ranking, every pagination/search check and exact money/inventory assertions
   completed before the final vanilla/custom assertion failed again.
+
+
+## PAR-502 additional fixed regressions
+
+- Stale derived-group removal could delete a member published by a newer binding.
+  The mapper now fences deletion against the current source and binary selector.
+  A deterministic stale-binding regression failed before the fix and passes now.
+- The first rejected Vault withdrawal could roll back a newly created SYSTEM
+  wallet while leaving its ID in a process-wide cache. Later funded withdrawals
+  then failed with `Account not found`. Resolution now stays database-backed;
+  the database regression and real Vault rejection/recovery journey pass.
+
+See the [PAR-502 report](par-502.md) for red/green evidence, full build results,
+real-plugin hashes, exact scopes and remaining acceptance work. Fixture failures
+are recorded separately from these demonstrated product defects.
+
+### Utilities 3.0.0 item-permission reload (PAR-496 / PAR-502)
+
+Real supplied Utilities 3.0.0 reads changed YAML on `/utilities reload` but does
+not call `ShopPermissionManager.reload()`. Enabling `shopPermissions` at runtime
+therefore left a denied custom-item purchase allowed (stock 8 became 4).
+The original failed run is `20261022T095004Z-3048952`. PAR-519 now repairs the
+external provider, and `UtilitiesReloadTest` is enabled. The unmodified source
+build reproduces the same failure; two clean runs with the corrected artifact
+pass all six provider cases with zero skips. The old installed JAR remains
+defective: release selection must include the corrected artifact hash, not just
+the unchanged 3.0.0 version. See [repair and artifact evidence](par-502.md#utilities-reload-repair-par-519-2026-10-23).
+Tracking: [PAR-519](https://app.taskl.ie/w/paradaux/issues/PAR-519).
+
+### Fixed: Explorer used a generated Auth.js ID as the Keycloak subject
+
+Real login in `20261022T102228Z-3121706` returned a generated local ID as
+`keycloakSub`. Auth.js 5.0.0-beta.31 uses that generated user ID for its default
+JWT subject even without an adapter. The callback now stores the verified
+`account.providerAccountId` on initial sign-in. A focused unit test and two clean
+Minecraft-realm browser runs verify stable identity links and ownership revocation.
+Existing sessions adopt the corrected subject on fresh login. See the
+[PAR-502 report](par-502.md#real-minecraft-realm-login-and-proprietorship-transfer).

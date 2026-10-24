@@ -18,7 +18,7 @@
 # which this test would otherwise report as a checksum mismatch in step 2.
 #
 # Connection: DB_HOST (127.0.0.1), DB_PORT (3306), DB_USER (root), DB_PASSWORD,
-# DB_NAME (economy_upgrade — it is DROPPED). Needs Node 22, JDK 21 and a mariadb/mysql
+# DB_NAME (economy_upgrade — it is DROPPED). Needs Node 22, JDK 25 and a mariadb/mysql
 # client on PATH. CI runs this in the `migrations` job of .github/workflows/ci.yml.
 # =============================================================================
 set -euo pipefail
