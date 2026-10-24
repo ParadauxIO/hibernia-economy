@@ -484,9 +484,11 @@ evidence follows `JAVA_HOME`, as the runner does.
 `python3 ops/integration/acceptance.py --profile providers --runs 2` requires
 `IT_NEXO_JAR`, `IT_UTILITIES_JAR`, `IT_BOLT_JAR`, `IT_BOLT_CHESTSHOP_JAR`, and
 `IT_BREWERY_JAR`. It runs native buying/selling, failed-payment recovery and
-startup Utilities permission denial/grant with fresh configuration.
-Utilities 3.0.0 omits item permission refresh on reload; that failing probe is
-retained with an explicit PAR-496 skip. See [evidence and limits](acceptance/par-502.md#real-combined-provider-profile).
+startup and reloaded Utilities permission denial/grant with fresh configuration.
+The reload regression is enabled and requires the corrected PAR-519 Utilities
+artifact; the original 3.0.0 JAR fails it. Select the corrected build by its
+recorded hash, since its version remains 3.0.0. See
+[artifact and paired-run evidence](acceptance/par-502.md#utilities-reload-repair-par-519-2026-10-23).
 
 ### Real Minecraft-realm browser login
 
