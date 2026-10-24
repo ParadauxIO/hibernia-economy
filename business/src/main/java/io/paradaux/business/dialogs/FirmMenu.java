@@ -3,6 +3,7 @@ package io.paradaux.business.dialogs;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.usher.*;
 import io.paradaux.hibernia.framework.usher.annotations.*;
+import io.paradaux.hibernia.framework.usher.input.DialogInputSpec;
 import io.paradaux.hibernia.framework.usher.input.DialogInputSpec.OptionSpec;
 import io.paradaux.hibernia.framework.usher.spi.DialogHandler;
 import java.util.Arrays;
@@ -12,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Usher input forms opened from the Curator dashboard. Writes use the normal command dispatcher. */
 @Dialog("firm-menu")
 public final class FirmMenu implements DialogHandler {
-    public record Choice(String id, String name) {}
+    public record Choice(String id, String name, String owner, String headquarters) {}
 
     public static final class State {
         final List<Choice> choices;
@@ -60,8 +61,10 @@ public final class FirmMenu implements DialogHandler {
                         Operation.PAY_PLAYER,
                         Operation.PAY_FIRM,
                         Operation.PAY_INTO)
-                .text("amount", Text.key("business.menu.amount"))
-                .text("target", Text.key("business.menu.target-money"))
+                .input(DialogInputSpec.text("amount", Text.key("business.menu.amount"))
+                        .withWidth(240))
+                .input(DialogInputSpec.text("target", Text.key("business.menu.target-money"))
+                        .withWidth(240))
                 .body("business.menu.money-help")
                 .build();
     }
@@ -69,14 +72,16 @@ public final class FirmMenu implements DialogHandler {
     @Screen("staff")
     public DialogView staff(DialogFlow flow) {
         return form("business.menu.staff", flow, Operation.HIRE, Operation.FIRE)
-                .text("target", Text.key("business.menu.target-player"))
+                .input(DialogInputSpec.text("target", Text.key("business.menu.target-player"))
+                        .withWidth(240))
                 .build();
     }
 
     @Screen("accounts")
     public DialogView accounts(DialogFlow flow) {
         return form("business.menu.accounts", flow, Operation.CREATE_ACCOUNT, Operation.DEFAULT_ACCOUNT)
-                .text("target", Text.key("business.menu.target-account"))
+                .input(DialogInputSpec.text("target", Text.key("business.menu.target-account"))
+                        .withWidth(240))
                 .build();
     }
 
@@ -85,15 +90,17 @@ public final class FirmMenu implements DialogHandler {
                 .filter(o -> flow.player().hasPermission(o.permission))
                 .toList();
         var view = DialogView.multiAction(title)
+                .columns(2)
                 .button("business.menu.back", "back")
                 .exit("business.menu.close");
         if (allowed.isEmpty()) return view.body("business.general.no-permission");
-        return view.option(
-                        "operation",
-                        Text.key("business.menu.action"),
-                        allowed.stream()
-                                .map(o -> new OptionSpec(o.name(), Text.key(o.label), o == allowed.getFirst()))
-                                .toList())
+        return view.input(DialogInputSpec.option(
+                                "operation",
+                                Text.key("business.menu.action"),
+                                allowed.stream()
+                                        .map(o -> new OptionSpec(o.name(), Text.key(o.label), o == allowed.getFirst()))
+                                        .toList())
+                        .withWidth(240))
                 .button("business.menu.submit", "submit");
     }
 

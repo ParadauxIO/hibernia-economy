@@ -122,9 +122,14 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     public String wildcardName(ItemStack item) {
-        CustomItemResolver resolver = customItems;
-        String id = resolver != null ? resolver.itemId(item) : null;
+        String id = customItemId(item);
         return id != null ? id : getName(item);
+    }
+
+    @Override
+    public String customItemId(ItemStack item) {
+        CustomItemResolver resolver = customItems;
+        return resolver != null ? resolver.itemId(item) : null;
     }
 
     /** Resolve the material part of an item code (vanilla material lookup), or {@code null}. */

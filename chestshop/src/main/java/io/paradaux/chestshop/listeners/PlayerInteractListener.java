@@ -8,7 +8,6 @@ import static org.bukkit.event.block.Action.LEFT_CLICK_BLOCK;
 import static org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK;
 
 import com.google.inject.Inject;
-import io.paradaux.chestshop.dialogs.PurchasePreviewMenu;
 import io.paradaux.chestshop.dialogs.ShopVariantsMenu;
 import io.paradaux.chestshop.model.PendingTransaction;
 import io.paradaux.chestshop.model.Transaction;
@@ -18,7 +17,6 @@ import io.paradaux.chestshop.services.AdminBypassService;
 import io.paradaux.chestshop.services.InfoService;
 import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.ProtectionService;
-import io.paradaux.chestshop.services.PurchasePreviewService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.ShopVariantsService;
 import io.paradaux.chestshop.services.SignService;
@@ -72,7 +70,6 @@ public class PlayerInteractListener implements Listener {
     private final ShopBlockService shopBlockService;
 
     private final AdminBypassService adminBypass;
-    private final PurchasePreviewService previews;
     private final MenuManager menus;
     private final ShopVariantsService variants;
 
@@ -88,11 +85,9 @@ public class PlayerInteractListener implements Listener {
             SignService signService,
             ShopBlockService shopBlockService,
             AdminBypassService adminBypass,
-            PurchasePreviewService previews,
             MenuManager menus,
             ShopVariantsService variants) {
         this.variants = variants;
-        this.previews = previews;
         this.menus = menus;
         this.adminBypass = adminBypass;
         this.transactions = transactions;
@@ -247,13 +242,6 @@ public class PlayerInteractListener implements Listener {
             if (selection != null) menus.open(player, ShopVariantsMenu.class, selection);
             return;
         }
-        Action buy = config.isReverseButtons() ? LEFT_CLICK_BLOCK : RIGHT_CLICK_BLOCK;
-        if (action == buy) {
-            var offer = previews.preview(sign, player, action);
-            if (offer != null) menus.open(player, PurchasePreviewMenu.class, offer);
-            return;
-        }
-
         PendingTransaction pEvent = transactions.prepare(sign, player, action);
         if (pEvent == null) return;
 

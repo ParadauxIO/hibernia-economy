@@ -38,7 +38,7 @@ public final class ShopVariantsService {
         Action buy = config.isReverseButtons() ? Action.LEFT_CLICK_BLOCK : Action.RIGHT_CLICK_BLOCK;
         var container = shops.findConnectedContainer(sign);
         var source = action == buy ? (container == null ? null : container.getInventory()) : player.getInventory();
-        return new Selection(sign.getBlock(), pattern, action, wildcards.variants(pattern, source));
+        return new Selection(sign.getBlock(), pattern, action, wildcards.choices(pattern, source));
     }
 
     public PurchasePreviewService.Offer preview(Selection selection, Player player, ItemStack selected) {

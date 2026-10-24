@@ -184,3 +184,15 @@ Java results provide **Inspect item** to check the stored item's name,
 enchantments and metadata. In inventory results, shift-right-click opens the
 inspector; ordinary right-click also does so when GPS/navigation is unconfigured.
 Use **Back** to return to the same page. Inspection does not transfer the item.
+
+Ordinary item purchases complete on the buy click without a confirmation menu.
+Wildcard shops let you choose a specific item variant and confirm its purchase.
+
+To create a wildcard shop, put at least one matching item in the connected chest
+first. For example, stock an amethyst shard or block before using `amethyst*` on
+the item line. Patterns match a case-insensitive prefix followed by one `*`.
+
+The wildcard chooser shows one entry per unstackable custom item type, such as a
+Nexo wallet. Its purchase preview uses a real item from stock, preserving that
+item’s metadata. Obsolete holograms are removed within a second when their sign
+is deleted or edited, including edits made by another plugin.

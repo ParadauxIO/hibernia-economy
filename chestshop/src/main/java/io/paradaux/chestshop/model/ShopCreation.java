@@ -1,9 +1,8 @@
 package io.paradaux.chestshop.model;
 
+import javax.annotation.Nullable;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
-
-import javax.annotation.Nullable;
 
 /**
  * The mutable carrier threaded through the shop-creation validation steps run by
@@ -23,7 +22,9 @@ public class ShopCreation {
 
     // Computed by the creation steps: the outcome, the resolved owner account, and the
     // rewritten sign lines (owner-name/business-token resolution, autofill).
-    @Nullable private Account ownerAccount = null;
+    @Nullable
+    private Account ownerAccount = null;
+
     private CreationOutcome outcome = CreationOutcome.SHOP_CREATED_SUCCESSFULLY;
     private String[] signLines;
 
@@ -156,6 +157,7 @@ public class ShopCreation {
      */
     public enum CreationOutcome {
         INVALID_ITEM,
+        NO_MATCHING_WILDCARD_STOCK,
         INVALID_PRICE,
         INVALID_QUANTITY,
 
