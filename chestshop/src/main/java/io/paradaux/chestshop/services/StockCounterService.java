@@ -4,7 +4,6 @@ import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.model.Transaction;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -25,9 +24,6 @@ public interface StockCounterService {
 
     /** Recompute and (if changed) rewrite the counter on {@code sign} for {@code chestShopInventory}. */
     void updateCounterOnQuantityLine(Sign sign, Inventory chestShopInventory, ItemStack... extraItems);
-
-    /** Refresh the counter for the sign connected to the hopper destination taking {@code toAdd}. */
-    void updateCounterOnItemMoveEvent(ItemStack toAdd, InventoryHolder destinationHolder);
 
     /** Strip the {@code : C m} counter suffix back to a bare quantity on {@code sign}. */
     void removeCounterFromQuantityLine(Sign sign);

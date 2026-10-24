@@ -170,7 +170,14 @@ WORLDGUARD_USE_PROTECTION: false
 GRIEFPREVENTION_INTEGRATION: false
 
 # Add stock counter to quantity line?
+# Hopper changes are coalesced and refreshed in bounded batches across ticks.
+# Requires InventoryMoveItemEvent to be enabled in Paper and ListenerControl.
 USE_STOCK_COUNTER: false
+
+# Delay from the first hopper change before refreshing stock (100 ticks = 5 seconds at 20 TPS).
+# Pending work uses the current value after reload. Values below 1 are treated as 1.
+# Each tick processes at most 32 normal and 32 recovery containers, with separate 0.5 ms soft budgets.
+HOPPER_STOCK_REFRESH_INTERVAL_TICKS: 100
 
 # Exclude these item meta attributes from the similarity check when comparing items
 EXCLUDED_ITEM_ATTRIBUTES: []

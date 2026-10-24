@@ -24,7 +24,6 @@ import io.paradaux.chestshop.utils.SignText;
 import java.util.IllegalFormatConversionException;
 import java.util.IllegalFormatException;
 import java.util.List;
-import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
@@ -533,30 +532,6 @@ class StockCounterServiceImplTest {
                     never());
         }
         verify(sign, never()).update(true);
-    }
-
-    // ═══════════════════════════ updateCounterOnItemMoveEvent ═══════════════════════════
-
-    @Test
-    void updateCounterOnItemMoveEvent_resolvesSignAndDelegates() {
-        ItemStack toAdd = mock(ItemStack.class);
-        InventoryHolder destination = mock(InventoryHolder.class);
-        Block shopBlock = mock(Block.class);
-        Sign connected = mock(Sign.class);
-        Inventory inv = mock(Inventory.class);
-        when(signService.getShopBlock(destination)).thenReturn(shopBlock);
-        when(shopBlockService.getConnectedSign(shopBlock)).thenReturn(connected);
-        when(destination.getInventory()).thenReturn(inv);
-
-        try (MockedStatic<SignService> ss = mockStatic(SignService.class)) {
-            // The delegated updateCounterOnQuantityLine bails at the item==null guard.
-            ss.when(() -> SignService.getItem(connected)).thenReturn("Rubbish");
-            when(items.parse("Rubbish")).thenReturn(null);
-
-            service.updateCounterOnItemMoveEvent(toAdd, destination);
-        }
-        verify(signService).getShopBlock(destination);
-        verify(shopBlockService).getConnectedSign(shopBlock);
     }
 
     // ═══════════════════════════ removeCounterFromQuantityLine ═══════════════════════════
