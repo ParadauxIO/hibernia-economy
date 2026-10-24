@@ -369,7 +369,7 @@ public final class ChestShopFixture implements AutoCloseable {
      * <ul>
      *   <li>{@link MockPlayer#sync} after the click: the click and the barrier share
      *       Paper's FIFO packet queue, so after the barrier the sign interaction has finished.
-     *       Purchases open a preview; {@link #confirmPurchase} separately waits for settlement.</li>
+     *       Ordinary purchases settle immediately; {@link #confirmPurchase} waits for wildcard preview settlement.</li>
      *   <li>DcDiag's per-player {@code PlayerInteractEvent} counter (MONITOR, sees cancelled
      *       events too) must have moved. Without that, a "rejected trade changes nothing"
      *       test would pass if Paper silently dropped the packet (range, rate limit).</li>

@@ -71,9 +71,6 @@ class ConcurrencyTest {
             // the clicks concurrently from a barrier so they contend for the stock.
             for (int i = 0; i < buyers.length; i++) {
                 shop.positionClicker(mocks[i], buyers[i]);
-                mocks[i].useBlock(shop.signPos(), BlockFace.SOUTH);
-                Barrier.sync(mocks[i]);
-                assertThat(mocks[i].currentScreen()).as("buyer has a purchase offer").isPresent();
             }
 
             CountDownLatch ready = new CountDownLatch(buyers.length);
@@ -85,7 +82,8 @@ class ConcurrencyTest {
                     ready.countDown();
                     try {
                         go.await();
-                        shop.confirmPurchase(b);
+                        b.useBlock(shop.signPos(), BlockFace.SOUTH);
+                        Barrier.sync(b);
                     } catch (Throwable ex) {
                         failure.compareAndSet(null, ex);
                     }
@@ -100,7 +98,7 @@ class ConcurrencyTest {
             }
             assertThat(failure.get()).as("a buyer thread threw").isNull();
 
-            // Confirmation helpers have waited for each deferred menu action to complete.
+            // Every direct buy has passed its packet barrier; read the settled result.
             Barrier.sync(mocks);
 
             BigDecimal sellerBalance = Ledger.personalBalance(s.getUuid()).orElseThrow();
@@ -112,7 +110,12 @@ class ConcurrencyTest {
                 BigDecimal bal = Ledger.personalBalance(mocks[i].getUuid()).orElseThrow();
                 totalDebit = totalDebit.add(STARTING.subtract(bal));
                 assertThat(bal).as("buyer %s below zero", buyers[i]).isGreaterThanOrEqualTo(BigDecimal.ZERO);
-                totalBuyerDirt += Inv.playerCount(buyers[i], "DIRT");
+                int received = Inv.playerCount(buyers[i], "DIRT");
+                assertThat(received).isIn(0, QTY);
+                assertThat(STARTING.subtract(bal)).as("buyer pays exactly for their received batch")
+                        .isEqualByComparingTo(BigDecimal.valueOf((long) received * PRICE / QTY));
+                assertThat(mocks[i].currentScreen()).as("ordinary purchases do not open a preview").isEmpty();
+                totalBuyerDirt += received;
             }
 
             // Exactly two batches sold — no more, no fewer.
