@@ -10,6 +10,55 @@ import org.junit.jupiter.api.Test;
 
 class WildcardItemsTest extends ServerTest {
     @Test
+    void chooserGroupsUnstackableCustomItemsButRetainsTheExactFirstInstance() {
+        var items = mock(ItemService.class);
+        var matcher = new WildcardItems(items);
+        var first = item(Material.LEATHER, 1);
+        first.editMeta(meta -> {
+            meta.setMaxStackSize(1);
+            meta.getPersistentDataContainer()
+                    .set(
+                            new org.bukkit.NamespacedKey("nexo", "backpack"),
+                            org.bukkit.persistence.PersistentDataType.STRING,
+                            "first-wallet");
+        });
+        var second = first.clone();
+        second.editMeta(meta -> meta.getPersistentDataContainer()
+                .set(
+                        new org.bukkit.NamespacedKey("nexo", "backpack"),
+                        org.bukkit.persistence.PersistentDataType.STRING,
+                        "second-wallet"));
+        when(items.wildcardName(any())).thenReturn("leather_wallet");
+        when(items.customItemId(any())).thenReturn("leather_wallet");
+        var inventory = chestWith(9, first, second);
+        assertThat(matcher.variants("leather*", inventory)).hasSize(2);
+        var choices = matcher.choices("leather*", inventory);
+        assertThat(choices).hasSize(1);
+        assertThat(choices.getFirst().isSimilar(first)).isTrue();
+        assertThat(inventory.getItem(1).isSimilar(second)).isTrue();
+        inventory.setItem(0, null);
+        assertThat(matcher.choices("leather*", inventory).getFirst().isSimilar(second))
+                .isTrue();
+    }
+
+    @Test
+    void chooserKeepsDifferentCustomIdsAndVanillaMetadataVariants() {
+        var items = mock(ItemService.class);
+        var matcher = new WildcardItems(items);
+        var wallet = item(Material.LEATHER, 1);
+        wallet.editMeta(meta -> meta.setMaxStackSize(1));
+        var bag = wallet.clone();
+        bag.editMeta(meta -> meta.displayName(net.kyori.adventure.text.Component.text("Bag")));
+        when(items.wildcardName(any())).thenReturn("leather_item");
+        when(items.customItemId(wallet)).thenReturn("leather_wallet");
+        when(items.customItemId(bag)).thenReturn("leather_bag");
+        var inventory = chestWith(9, wallet, bag);
+        assertThat(matcher.choices("leather*", inventory)).hasSize(2);
+        when(items.customItemId(any())).thenReturn(null);
+        assertThat(matcher.choices("leather*", inventory)).hasSize(2);
+    }
+
+    @Test
     void matchesDrinkIdsLiterallyAndKeepsDistinctMetadata() {
         var items = mock(ItemService.class);
         var matcher = new WildcardItems(items);

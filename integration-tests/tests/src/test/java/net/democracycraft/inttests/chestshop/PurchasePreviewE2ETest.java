@@ -19,16 +19,43 @@ class PurchasePreviewE2ETest {
     private static final BigDecimal STARTING = new BigDecimal("10000");
 
     @Test
-    void closingPreviewLeavesItemsAndMoneyUntouched() {
+    void ordinaryPurchaseSettlesOnTheFirstClickWithoutOpeningAPreview() {
+        try (var seller = MockPlayer.connectLocal(Usernames.fresh("DrSlr"));
+             var buyer = MockPlayer.connectLocal(Usernames.fresh("DrByr"));
+             var shop = ChestShopFixture.create()) {
+            shop.setupSellShop(seller.getUsername(), 2, 10, "dirt");
+            Ledger.waitForPersonalBalance(buyer.getUuid(), STARTING, TIMEOUT);
+            Ledger.waitForPersonalBalance(seller.getUuid(), STARTING, TIMEOUT);
+            int initial = Inv.chestCount(shop.chestPos(), "DIRT");
+            shop.positionClicker(buyer, buyer.getUsername());
+            buyer.useBlock(shop.signPos(), BlockFace.SOUTH);
+            Barrier.sync(buyer);
+            Inv.waitForPlayerCount(buyer.getUsername(), "DIRT", 2, TIMEOUT);
+            assertThat(buyer.currentScreen()).isEmpty();
+            assertThat(Inv.chestCount(shop.chestPos(), "DIRT")).isEqualTo(initial - 2);
+            Ledger.waitForPersonalBalance(buyer.getUuid(), STARTING.subtract(BigDecimal.TEN), TIMEOUT);
+            Ledger.waitForPersonalBalance(seller.getUuid(), STARTING.add(BigDecimal.TEN), TIMEOUT);
+        }
+    }
+
+    @Test
+    void closingWildcardPreviewLeavesItemsAndMoneyUntouched() {
         try (var seller = MockPlayer.connectLocal(Usernames.fresh("PrSlr"));
              var buyer = MockPlayer.connectLocal(Usernames.fresh("PrByr"));
              var shop = ChestShopFixture.create()) {
             shop.setupSellShop(seller.getUsername(), 2, 10, "dirt");
+            RconClient.send(String.format("data modify block %d %d %d front_text.messages[3] set value 'dirt*'",
+                    shop.signPos().x(), shop.signPos().y(), shop.signPos().z()));
             Ledger.waitForPersonalBalance(buyer.getUuid(), STARTING, TIMEOUT);
             int initial = Inv.chestCount(shop.chestPos(), "DIRT");
             shop.positionClicker(buyer, buyer.getUsername());
-            var screen = buyer.awaitClientboundAfter(() -> buyer.useBlock(shop.signPos(), BlockFace.SOUTH),
+            var choices = buyer.awaitClientboundAfter(() -> buyer.useBlock(shop.signPos(), BlockFace.SOUTH),
                     ClientboundOpenScreenPacket.class, p -> true, TIMEOUT);
+            var contents = Await.until("wildcard choices", () -> buyer.containerContent(choices.getContainerId()).orElse(null),
+                    p -> p != null, TIMEOUT);
+            var screen = buyer.awaitClientboundAfter(() -> buyer.sendPacket(new ServerboundContainerClickPacket(
+                    choices.getContainerId(), contents.getStateId(), 0, ContainerActionType.CLICK_ITEM,
+                    ClickItemAction.LEFT_CLICK, null, Map.of())), ClientboundOpenScreenPacket.class, p -> true, TIMEOUT);
             Barrier.sync(buyer);
             assertThat(Inv.playerCount(buyer.getUsername(), "DIRT")).isZero();
             assertThat(Ledger.personalBalance(buyer.getUuid()).orElseThrow()).isEqualByComparingTo(STARTING);

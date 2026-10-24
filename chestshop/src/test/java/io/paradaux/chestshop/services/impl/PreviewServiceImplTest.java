@@ -2,6 +2,7 @@ package io.paradaux.chestshop.services.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -106,6 +107,12 @@ class PreviewServiceImplTest {
         });
         lenient().when(world.getName()).thenReturn("world");
         lenient().when(world.isChunkLoaded(1, 2)).thenReturn(true);
+        var signBlock = mock(org.bukkit.block.Block.class);
+        var liveSign = mock(org.bukkit.block.Sign.class);
+        lenient().when(world.isChunkLoaded(anyInt(), anyInt())).thenReturn(true);
+        lenient().when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(signBlock);
+        lenient().when(signBlock.getState()).thenReturn(liveSign);
+        lenient().when(liveSign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "Diamond"});
         preview = new PreviewServiceImpl(
                 plugin,
                 marketService,
@@ -116,6 +123,70 @@ class PreviewServiceImplTest {
     @org.junit.jupiter.api.AfterEach
     void tearDown() {
         MockBukkit.unmock();
+    }
+
+    @Test
+    void renderDoesNotLoadAnUnloadedChunk() {
+        when(world.isChunkLoaded(1, 2)).thenReturn(false);
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        verifySpawns(0);
+        verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
+    }
+
+    @Test
+    void cleanupDropsPreviewWhenItsChunkHasUnloaded() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        when(world.isChunkLoaded(1, 2)).thenReturn(false);
+        preview.pruneInvalid();
+        verify(display).remove();
+        // Only rendering read the block; cleanup never reloads it.
+        verify(world, times(1)).getBlockAt(16, 64, 32);
+    }
+
+    @Test
+    void cleanupIsScheduledOnceAndCancelledOnShutdown() {
+        var scheduler = server.getScheduler();
+        var task = mock(BukkitTask.class);
+        when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), eq(20L), eq(20L)))
+                .thenReturn(task);
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        preview.render("world", 17, 64, 33, new ItemStack(Material.DIAMOND));
+        verify(scheduler).runTaskTimer(eq(plugin), any(Runnable.class), eq(20L), eq(20L));
+        preview.destroyAll();
+        verify(task).cancel();
+    }
+
+    @Test
+    void deletedSignCannotBeResurrectedByAnInFlightLookup() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        registry("world", 1, 2, shopAt(16, 64, 32, true));
+        preview.refresh("world", 16, 64, 32);
+        asyncTasks.poll().run();
+        preview.destroy("world", 16, 64, 32);
+        when(world.getBlockAt(16, 64, 32).getState()).thenReturn(mock(org.bukkit.block.BlockState.class));
+        mainTasks.poll().run();
+        verifySpawns(1);
+    }
+
+    @Test
+    void externalSignEditRemovesOldPreviewAndWildcardDoesNotRenderFromStaleRegistry() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        var sign = (org.bukkit.block.Sign) world.getBlockAt(16, 64, 32).getState();
+        when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "amethyst*"});
+        preview.pruneInvalid();
+        verify(display).remove();
+        preview.render(shopAt(16, 64, 32, true));
+        verifySpawns(1);
+    }
+
+    @Test
+    void deletedSignIsPrunedWithoutABreakEventButUnchangedSignIsKept() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        preview.pruneInvalid();
+        verify(display, never()).remove();
+        when(world.getBlockAt(16, 64, 32).getState()).thenReturn(mock(org.bukkit.block.BlockState.class));
+        preview.pruneInvalid();
+        verify(display).remove();
     }
 
     // ── render(worldName,...) ─────────────────────────────────────────────────

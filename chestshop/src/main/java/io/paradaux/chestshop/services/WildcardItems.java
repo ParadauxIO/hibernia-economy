@@ -40,6 +40,17 @@ public final class WildcardItems {
         return count;
     }
 
+    /** UI representatives only: keep the real instance metadata for preview and purchase. */
+    public List<ItemStack> choices(String pattern, Inventory inventory) {
+        var seen = new java.util.HashSet<String>();
+        return variants(pattern, inventory).stream()
+                .filter(item -> {
+                    String id = item.getMaxStackSize() == 1 ? items.customItemId(item) : null;
+                    return id == null || seen.add(id);
+                })
+                .toList();
+    }
+
     /** One unmodified sample of each distinct metadata variant, in inventory order. */
     public List<ItemStack> variants(String pattern, Inventory inventory) {
         if (inventory == null) return List.of();

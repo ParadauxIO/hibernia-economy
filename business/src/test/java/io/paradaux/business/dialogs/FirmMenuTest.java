@@ -28,6 +28,7 @@ class FirmMenuTest {
     @Test
     void moneyJourneyDispatchesOnceAndIgnoresOldCallbacks() {
         assertThat(menu.money(flow).inputs()).extracting(i -> i.key()).contains("operation", "amount", "target");
+        assertThat(menu.money(flow).inputs()).extracting(i -> i.width()).containsOnly(240);
         menu.submit("PAY_PLAYER", "Alex", "10.25", state, flow);
         menu.submit("PAY_PLAYER", "Alex", "10.25", state, flow);
         menu.back(state, flow);

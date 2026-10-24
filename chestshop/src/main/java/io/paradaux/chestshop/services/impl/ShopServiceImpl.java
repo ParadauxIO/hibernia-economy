@@ -148,8 +148,10 @@ public class ShopServiceImpl implements ShopService {
             Container container = shopBlockService.findConnectedContainer(ctx.getSign());
             var variants =
                     new WildcardItems(items).variants(itemCode, container == null ? null : container.getInventory());
-            if (variants.isEmpty() || StringUtil.getMinecraftStringWidth(itemCode) > MaterialUtil.MAXIMUM_SIGN_WIDTH) {
+            if (StringUtil.getMinecraftStringWidth(itemCode) > MaterialUtil.MAXIMUM_SIGN_WIDTH) {
                 ctx.setOutcome(CreationOutcome.INVALID_ITEM);
+            } else if (variants.isEmpty()) {
+                ctx.setOutcome(CreationOutcome.NO_MATCHING_WILDCARD_STOCK);
             }
             return; // Preserve the pattern rather than normalising it to one arbitrary item.
         }
@@ -495,6 +497,7 @@ public class ShopServiceImpl implements ShopService {
         String messageKey = switch (ctx.getOutcome()) {
             case UNKNOWN_PLAYER -> "chestshop.PLAYER_NOT_FOUND";
             case INVALID_ITEM -> "chestshop.INCORRECT_ITEM_ID";
+            case NO_MATCHING_WILDCARD_STOCK -> "chestshop.NO_MATCHING_WILDCARD_STOCK";
             case INVALID_PRICE -> "chestshop.INVALID_SHOP_PRICE";
             case INVALID_QUANTITY -> "chestshop.INVALID_SHOP_QUANTITY";
             case SELL_PRICE_HIGHER_THAN_BUY_PRICE -> "chestshop.SELL_PRICE_HIGHER_THAN_BUY_PRICE";

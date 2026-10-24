@@ -27,7 +27,7 @@ public final class FirmDashboard implements MenuHandler {
     public MenuView main(@Model FirmMenu.State state, MenuFlow flow) {
         if (state.firmId == null) {
             var entries = state.choices.stream()
-                    .map(c -> MenuItem.button(icon(Material.BRICKS, Component.text(c.name())), "select", c.id()))
+                    .map(c -> MenuItem.button(firmIcon(c), "select", c.id()))
                     .toList();
             if (entries.isEmpty()) entries = List.of(MenuItem.display(button(Material.PAPER, "business.menu.empty")));
             var view =
@@ -158,6 +158,23 @@ public final class FirmDashboard implements MenuHandler {
             view.slot(50, MenuItem.button(button(Material.ARROW, "business.menu.next"), "next", null));
         return view.slot(53, MenuItem.button(button(Material.BARRIER, "business.menu.close"), "close", null))
                 .fill(MenuItem.display(filler()));
+    }
+
+    private ItemStack firmIcon(FirmMenu.Choice firm) {
+        var item = icon(
+                Material.BRICKS,
+                Component.text(firm.name()).color(net.kyori.adventure.text.format.TextColor.color(0xaabfff)));
+        var lore = new java.util.ArrayList<Component>();
+        lore.add(message.component("business.menu.firm-id", "id", firm.id()));
+        lore.add(message.component("business.menu.owner", "owner", firm.owner()));
+        if (firm.headquarters() != null && !firm.headquarters().isBlank())
+            lore.add(message.component("business.menu.headquarters", "hq", firm.headquarters()));
+        lore.add(Component.empty());
+        lore.add(message.component("business.menu.open-firm"));
+        item.editMeta(meta -> meta.lore(lore.stream()
+                .map(line -> line.decoration(TextDecoration.ITALIC, false))
+                .toList()));
+        return item;
     }
 
     private ItemStack button(Material material, String key) {

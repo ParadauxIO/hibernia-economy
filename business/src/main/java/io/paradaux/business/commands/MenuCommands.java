@@ -57,7 +57,14 @@ public final class MenuCommands implements CommandHandler {
             return;
         }
         var choices = firms.listOwnedOrMemberFirms(player.getUniqueId()).stream()
-                .map(f -> new FirmMenu.Choice(f.getFirmId().toString(), f.getDisplayName()))
+                .filter(f -> !Boolean.TRUE.equals(f.getArchived()))
+                .map(f -> new FirmMenu.Choice(
+                        f.getFirmId().toString(),
+                        f.getDisplayName(),
+                        players.findByUuid(f.getProprietorUuid())
+                                .map(p -> p.getCurrentName())
+                                .orElse(f.getProprietorUuid()),
+                        f.getHqRegion()))
                 .toList();
         show(player, new FirmMenu.State(choices));
     }

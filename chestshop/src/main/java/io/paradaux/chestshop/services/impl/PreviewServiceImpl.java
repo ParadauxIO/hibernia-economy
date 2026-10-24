@@ -52,7 +52,30 @@ public class PreviewServiceImpl implements PreviewService {
     private final ShopDisplayService displays;
 
     // chunkKey -> (posKey -> display)
-    private final Map<String, Map<String, ItemDisplay>> byChunk = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, TrackedPreview>> byChunk = new ConcurrentHashMap<>();
+
+    private record TrackedPreview(ItemDisplay display, World world, int x, int y, int z, List<String> lines) {
+        boolean current() {
+            if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
+            return world.getBlockAt(x, y, z).getState() instanceof org.bukkit.block.Sign sign
+                    && lines.equals(java.util.Arrays.asList(sign.getLines()));
+        }
+    }
+
+    private org.bukkit.scheduler.BukkitTask cleanupTask;
+
+    /** Sign editors can bypass Bukkit sign events, so reconcile tracked previews with live blocks. */
+    void pruneInvalid() {
+        for (var chunk : byChunk.values()) {
+            chunk.entrySet().removeIf(entry -> {
+                if (entry.getValue().current()) return false;
+                entry.getValue().display().remove();
+                return true;
+            });
+        }
+        byChunk.values().removeIf(Map::isEmpty);
+    }
+
     // players who have previews turned off (hidden for them only)
     private final Set<UUID> previewHidden = ConcurrentHashMap.newKeySet();
     // lookups waiting on the in-flight query; both are touched on the main thread only
@@ -96,6 +119,14 @@ public class PreviewServiceImpl implements PreviewService {
             return;
         }
         destroy(worldName, x, y, z); // replace any existing
+        if (!world.isChunkLoaded(x >> 4, z >> 4)
+                || !(world.getBlockAt(x, y, z).getState() instanceof org.bukkit.block.Sign sign)
+                || io.paradaux.chestshop.services.WildcardItems.isPattern(
+                        io.paradaux.chestshop.services.SignService.getItem(sign))) return;
+        List<String> lines = List.copyOf(java.util.Arrays.asList(sign.getLines()));
+        if (cleanupTask == null) {
+            cleanupTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pruneInvalid, 20L, 20L);
+        }
 
         Location loc = new Location(world, x + 0.5, y + 1, z + 0.5);
         String name = displays.previewName(worldName, x, y, z);
@@ -123,7 +154,7 @@ public class PreviewServiceImpl implements PreviewService {
             }
         }
         byChunk.computeIfAbsent(chunkKey(worldName, x >> 4, z >> 4), k -> new ConcurrentHashMap<>())
-                .put(posKey(x, y, z), display);
+                .put(posKey(x, y, z), new TrackedPreview(display, world, x, y, z, lines));
     }
 
     @Override
@@ -132,21 +163,21 @@ public class PreviewServiceImpl implements PreviewService {
     }
 
     private void remove(String chunkKey, String posKey) {
-        Map<String, ItemDisplay> chunk = byChunk.get(chunkKey);
+        Map<String, TrackedPreview> chunk = byChunk.get(chunkKey);
         if (chunk == null) {
             return;
         }
-        ItemDisplay display = chunk.remove(posKey);
-        if (display != null) {
-            display.remove();
+        TrackedPreview preview = chunk.remove(posKey);
+        if (preview != null) {
+            preview.display().remove();
         }
     }
 
     @Override
     public void destroyChunk(String worldName, int chunkX, int chunkZ) {
-        Map<String, ItemDisplay> chunk = byChunk.remove(chunkKey(worldName, chunkX, chunkZ));
+        Map<String, TrackedPreview> chunk = byChunk.remove(chunkKey(worldName, chunkX, chunkZ));
         if (chunk != null) {
-            chunk.values().forEach(ItemDisplay::remove);
+            chunk.values().forEach(preview -> preview.display().remove());
         }
     }
 
@@ -154,6 +185,10 @@ public class PreviewServiceImpl implements PreviewService {
     public void destroyAll() {
         forEachDisplay(ItemDisplay::remove);
         byChunk.clear();
+        if (cleanupTask != null) {
+            cleanupTask.cancel();
+            cleanupTask = null;
+        }
     }
 
     @Override
@@ -224,7 +259,7 @@ public class PreviewServiceImpl implements PreviewService {
         if (lookup.pos() != null) {
             remove(chunkKey, lookup.pos()); // re-rendered below if still registered with its hologram on
         }
-        Map<String, ItemDisplay> tracked = byChunk.getOrDefault(chunkKey, Map.of());
+        Map<String, TrackedPreview> tracked = byChunk.getOrDefault(chunkKey, Map.of());
         for (ShopResult shop : shops) {
             String pos = posKey(shop.signX(), shop.signY(), shop.signZ());
             if (lookup.pos() != null ? lookup.pos().equals(pos) : !tracked.containsKey(pos)) {
@@ -257,8 +292,8 @@ public class PreviewServiceImpl implements PreviewService {
     }
 
     private void forEachDisplay(java.util.function.Consumer<ItemDisplay> action) {
-        for (Map<String, ItemDisplay> chunk : byChunk.values()) {
-            chunk.values().forEach(action);
+        for (Map<String, TrackedPreview> chunk : byChunk.values()) {
+            chunk.values().forEach(preview -> action.accept(preview.display()));
         }
     }
 

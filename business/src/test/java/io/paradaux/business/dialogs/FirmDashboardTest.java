@@ -38,9 +38,30 @@ class FirmDashboardTest {
     }
 
     @Test
+    void firmHoverShowsOwnerHeadquartersAndOpenHintWithoutItalicText() {
+        when(message.component("business.menu.firm-id", "id", "42")).thenReturn(Component.text("Firm #42"));
+        when(message.component("business.menu.owner", "owner", "Alex")).thenReturn(Component.text("Owner: Alex"));
+        when(message.component("business.menu.headquarters", "hq", "town"))
+                .thenReturn(Component.text("Headquarters: town"));
+        var view = menu.main(new FirmMenu.State(List.of(new FirmMenu.Choice("42", "Acme", "Alex", "town"))), flow);
+        var lore = view.items(0).get(0).icon().lore();
+        assertThat(lore)
+                .containsExactly(
+                        Component.text("Firm #42")
+                                .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false),
+                        Component.text("Owner: Alex")
+                                .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false),
+                        Component.text("Headquarters: town")
+                                .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false),
+                        Component.empty().decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false),
+                        Component.text("business.menu.open-firm")
+                                .decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false));
+    }
+
+    @Test
     void chooserAndListingsPaginateWithoutMakingEntriesTransferableActions() {
         var choices = IntStream.range(1, 47)
-                .mapToObj(i -> new FirmMenu.Choice("" + i, "Firm" + i))
+                .mapToObj(i -> new FirmMenu.Choice("" + i, "Firm" + i, "Alex", "town"))
                 .toList();
         var chooser = menu.main(new FirmMenu.State(choices), flow);
         assertThat(chooser.pages()).isEqualTo(2);
@@ -96,7 +117,7 @@ class FirmDashboardTest {
 
     @Test
     void selectionRejectsPayloadsOutsideTheOfferedFirms() {
-        var selection = new FirmMenu.State(List.of(new FirmMenu.Choice("42", "Acme")));
+        var selection = new FirmMenu.State(List.of(new FirmMenu.Choice("42", "Acme", "Alex", null)));
         var click = mock(MenuContext.class);
         when(click.payload(String.class)).thenReturn("99");
         menu.select(click, selection, flow);

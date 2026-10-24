@@ -40,14 +40,14 @@ class FirmMenuTest {
             assertThat(Menus.state(player).get("title").getAsString()).isEqualTo(firm);
             var returnedList = Menus.click(player, returned, 15, ClickItemAction.LEFT_CLICK);
             NbtMap accounts = Dialogs.await(player, () -> click(player, returnedList, 49), d -> Dialogs.title(d).contains("Accounts"));
-            Dialogs.click(player, accounts, "Submit action", Map.of("operation", "CREATE_ACCOUNT", "target", "Reserve" + id));
+            Dialogs.click(player, accounts, "Submit", Map.of("operation", "CREATE_ACCOUNT", "target", "Reserve" + id));
             player.awaitMessageContaining("created account", TIMEOUT);
             Await.untilEquals("new account", () -> BusinessLedger.firmAccountCount(id), 2, TIMEOUT);
 
             var funded = Menus.open(player, () -> player.chatCommand("/firm menu " + id));
             NbtMap deposit = Dialogs.await(player, () -> click(player, funded, 11), d -> Dialogs.title(d).equals("Money"));
             var personal = Ledger.personalBalance(player.getUuid()).orElseThrow();
-            Dialogs.click(player, deposit, "Submit action", Map.of("operation", "DEPOSIT", "target", "", "amount", "1.25"));
+            Dialogs.click(player, deposit, "Submit", Map.of("operation", "DEPOSIT", "target", "", "amount", "1.25"));
             player.awaitMessageContaining("Deposited", TIMEOUT);
             BusinessLedger.waitForFirmDefaultBalance(id, new java.math.BigDecimal("1.25"), TIMEOUT);
             assertThat(Ledger.personalBalance(player.getUuid()).orElseThrow()).isEqualByComparingTo(personal.subtract(new java.math.BigDecimal("1.25")));
@@ -57,7 +57,7 @@ class FirmMenuTest {
             RconClient.send("lp user " + owner + " permission set business.finance false");
             Await.until("finance denied", () -> Perms.check(owner, "business.finance"), r -> r.contains("has=false"), TIMEOUT);
             var before = Ledger.personalBalance(player.getUuid()).orElseThrow();
-            Dialogs.click(player, money, "Submit action", Map.of("operation", "DEPOSIT", "target", "", "amount", "1.00"));
+            Dialogs.click(player, money, "Submit", Map.of("operation", "DEPOSIT", "target", "", "amount", "1.00"));
             player.awaitMessageContaining("permission", TIMEOUT);
             Barrier.settle();
             assertThat(Ledger.personalBalance(player.getUuid()).orElseThrow()).isEqualByComparingTo(before);
@@ -79,7 +79,7 @@ class FirmMenuTest {
             var main = Menus.open(player, () -> player.chatCommand("/firm menu " + id));
             var roster = Menus.click(player, main, 13, ClickItemAction.LEFT_CLICK);
             NbtMap staff = Dialogs.await(player, () -> click(player, roster, 49), d -> Dialogs.title(d).equals("Staff"));
-            Dialogs.click(player, staff, "Submit action", Map.of("operation", "HIRE", "target", recruit));
+            Dialogs.click(player, staff, "Submit", Map.of("operation", "HIRE", "target", recruit));
             player.awaitMessageContaining("job offer has sent", TIMEOUT);
             employee.chatCommand("/firm offer accept " + id);
             employee.awaitMessageContaining("accepted a job offer", TIMEOUT);
@@ -96,7 +96,7 @@ class FirmMenuTest {
             player.awaitMessageContaining("has been demoted to Supervisor", TIMEOUT);
             BusinessLedger.waitForEmployeeRole(id, employee.getUuid(), "Supervisor", TIMEOUT);
             var before = Ledger.personalBalance(employee.getUuid()).orElseThrow();
-            Dialogs.click(employee, employeeMoney, "Submit action", Map.of("operation", "WITHDRAW", "target", "", "amount", "1"));
+            Dialogs.click(employee, employeeMoney, "Submit", Map.of("operation", "WITHDRAW", "target", "", "amount", "1"));
             employee.awaitMessageContaining("permission", TIMEOUT);
             Barrier.settle();
             assertThat(Ledger.personalBalance(employee.getUuid()).orElseThrow()).isEqualByComparingTo(before);
@@ -104,7 +104,7 @@ class FirmMenuTest {
             var refreshed = Menus.open(player, () -> player.chatCommand("/firm menu " + id));
             var newRoster = Menus.click(player, refreshed, 13, ClickItemAction.LEFT_CLICK);
             NbtMap firing = Dialogs.await(player, () -> click(player, newRoster, 49), d -> Dialogs.title(d).equals("Staff"));
-            Dialogs.click(player, firing, "Submit action", Map.of("operation", "FIRE", "target", recruit));
+            Dialogs.click(player, firing, "Submit", Map.of("operation", "FIRE", "target", recruit));
             player.awaitMessageContaining("has been fired", TIMEOUT);
             Await.until("fire persisted", () -> BusinessLedger.isCurrentEmployee(id, employee.getUuid()), Boolean.FALSE::equals, TIMEOUT);
         }

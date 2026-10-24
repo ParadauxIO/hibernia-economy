@@ -175,6 +175,28 @@ class ShopServiceImplTest extends ServerTest {
         assertThat(create(lines.clone()).isCancelled()).isTrue();
     }
 
+    @Test
+    void amethystWildcardExplainsMissingStockAndAcceptsMatchingStock() {
+        when(adminBypass.has(player, Permissions.SHOP_CREATION_BUY)).thenReturn(true);
+        when(adminBypass.has(player, Permissions.SHOP_CREATION)).thenReturn(true);
+        String[] lines = {"Notch", "2", "B 5", "amethyst*"};
+        assertThat(create(lines.clone()).getOutcome()).isEqualTo(CreationOutcome.NO_MATCHING_WILDCARD_STOCK);
+        verify(message).send(player, "chestshop.NO_MATCHING_WILDCARD_STOCK");
+        verify(message, never()).send(player, "chestshop.INCORRECT_ITEM_ID");
+
+        container.getInventory().addItem(diamond.clone());
+        when(items.wildcardName(any())).thenReturn("Diamond");
+        assertThat(create(lines.clone()).getOutcome()).isEqualTo(CreationOutcome.NO_MATCHING_WILDCARD_STOCK);
+
+        container.getInventory().clear();
+        container.getInventory().addItem(item(Material.AMETHYST_SHARD, 1));
+        when(items.wildcardName(any())).thenReturn("AmethystShard");
+        when(items.getName(any())).thenReturn("AmethystShard");
+        var result = create(lines.clone());
+        assertThat(result.isCancelled()).isFalse();
+        assertThat(result.getSignLines()[3]).isEqualTo("amethyst*");
+    }
+
     // ---- checkItem --------------------------------------------------------------
 
     @Test
