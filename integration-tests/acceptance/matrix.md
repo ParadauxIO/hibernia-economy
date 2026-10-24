@@ -439,3 +439,9 @@ REST serializes owner selection with archival. Real MariaDB regressions reproduc
 the former wrong-recipient race; two final focused live runs passed 30 disband,
 transfer and recovery cases each. See [ownership policy evidence](par-502.md#owner-at-archive-disband-policy-2026-10-23).
 The earlier full-core pair predates this change; broader acceptance remains open.
+
+
+The PAR-519 reload repair supersedes the historical provider skip above for the
+corrected Utilities artifact. Two clean provider runs now pass all six cases with
+zero failures or skips, including changed restrictions after reload. The original
+installed JAR still fails; see [exact artifact and paired-run evidence](par-502.md#utilities-reload-repair-par-519-2026-10-23).
