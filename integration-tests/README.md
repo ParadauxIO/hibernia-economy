@@ -209,6 +209,30 @@ duration to `tests/build/reports/test-timings.txt`.
 - Setting balances during seed phase (`eco set <player> <amount>`)
 - Anything else the console can do
 
+### Affected tests in CI
+
+Pull requests select live test groups from the whole PR's merge-base diff. This is
+an explicit dependency map in `ops/integration/select_tests.py`, not dynamic Java
+coverage or a guarantee that only directly affected methods run:
+
+| Changed paths | Live tests selected |
+|---|---|
+| REST API or TreasuryAPI `src/` | REST API, Treasury, lifecycle, and top-level smoke tests |
+| ChestShop `src/` | ChestShop, REST API, Treasury, lifecycle, and top-level smoke tests |
+| A live `*Test.java` | Its whole package (or the individual top-level test) |
+| Treasury, Business, shared helpers, schema, build, harness, deleted tests, or unmapped paths | Full suite |
+
+Selections are combined for mixed PRs; any full-suite trigger overrides narrower
+selections. A missing base diff also falls back to the full suite. The existing
+CI path gate still skips live tests for unrelated changes such as documentation.
+Update the dependency map when introducing new cross-module consumers.
+
+Pushes to `develop`/`main`, nightly runs and unfiltered manual runs always run the
+full suite. The manual `test_filter` input remains available. Local `run.sh` is
+unchanged and runs everything unless you pass `--tests`. Inspect a PR selection
+locally with `python3 ops/integration/select_tests.py --base origin/develop`.
+CI prints the selection and its reason in the **Select affected live tests** step.
+
 ### Running
 
 From the repository root:

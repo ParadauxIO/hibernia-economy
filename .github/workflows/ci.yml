@@ -59,7 +59,7 @@ jobs:
       - name: Check schema compatibility guard
         run: node --test ops/dev-server/schema-guard.test.mjs
       - name: Check acceptance evidence tooling
-        run: python3 -m unittest discover -s ops/integration -p 'test_acceptance.py'
+        run: python3 -m unittest discover -s ops/integration -p 'test_*.py'
 
   changes:
     name: Changed paths
@@ -90,6 +90,14 @@ jobs:
               - 'treasury-api-plugin/**'
               - 'treasury-rest-api/**'
               - 'common/**'
+              - 'test-support/**'
+              - '.gitmodules'
+              - 'hibernia-framework'
+              - 'hibernia-framework/**'
+              - 'realty'
+              - 'realty/**'
+              - 'gradlew'
+              - 'gradlew.bat'
               - 'economy-flyway/**'
               - 'gradle/**'
               - 'gradle.properties'
@@ -374,7 +382,8 @@ jobs:
   # Boots a real Paper server with the plugins built from this commit, a migrated
   # MariaDB and the REST API, then runs the mock-client suite in
   # integration-tests/ against it. ops/integration/run.sh is the whole
-  # environment — the same script runs locally. ~6 minutes.
+  # environment — the same script runs locally. PRs select affected groups;
+  # pushes, nightly and unfiltered manual runs exercise the full suite.
   integration:
     name: Integration (live server)
     needs: changes
@@ -394,6 +403,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0  # merge-base diff covers the entire PR, including renames/deletions
+
+      - name: Select affected live tests
+        id: selection
+        env:
+          PR_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+        run: python3 ops/integration/select_tests.py --base "$PR_BASE" --github-output "$GITHUB_OUTPUT"
 
       - name: Set up JVM build
         uses: ./.github/actions/setup-jvm
@@ -412,10 +429,21 @@ jobs:
           IT_DB_USER: root
           IT_DB_PASSWORD: dev
           TEST_FILTER: ${{ inputs.test_filter }}
+          AFFECTED_FILTERS: ${{ steps.selection.outputs.filters }}
+        shell: python
         run: |
-          args=()
-          if [ -n "$TEST_FILTER" ]; then args=(-- --tests "$TEST_FILTER"); fi
-          bash ops/integration/run.sh "${args[@]}"
+          import json
+          import os
+          import subprocess
+
+          filters = ([os.environ['TEST_FILTER']] if os.environ['TEST_FILTER']
+                     else json.loads(os.environ['AFFECTED_FILTERS']))
+          args = ['bash', 'ops/integration/run.sh']
+          if filters:
+              args += ['--']
+              for pattern in filters:
+                  args += ['--tests', pattern]
+          subprocess.run(args, check=True)
 
       - name: Upload logs and test reports
         if: ${{ !cancelled() }}
