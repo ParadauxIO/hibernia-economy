@@ -66,6 +66,11 @@ fi
 
 case "$PROFILE" in
   core) PROFILE_ARGS=() ;;
+  hopper)
+    PROFILE_ARGS=()
+    export IT_HOPPER_PROFILE=true
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*HopperStockRefreshE2ETest' --tests '*HopperMinecartProtectionTest'); fi
+    ;;
   realty)
     PROFILE_ARGS=()
     for artifact in IT_REALTY_JAR IT_VAULT_JAR; do
@@ -133,7 +138,7 @@ case "$PROFILE" in
     PROFILE_ARGS=(-Dchestshop.integrations=true)
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ProtectionIntegrationCreationTest'); fi
     ;;
-  *) echo "unknown acceptance profile: $PROFILE (expected core, protection, restart, crash, rest-restart, tax, groups, nexo, providers, realty, webhook-failure or explorer)" >&2; exit 2 ;;
+  *) echo "unknown acceptance profile: $PROFILE (expected core, hopper, protection, restart, crash, rest-restart, tax, groups, nexo, providers, realty, webhook-failure or explorer)" >&2; exit 2 ;;
 esac
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
@@ -457,6 +462,10 @@ if [ "$PROFILE" = protection ]; then
   mkdir -p "$SERVER/plugins/ChestShop"
   printf 'WORLDGUARD_INTEGRATION: true\nGRIEFPREVENTION_INTEGRATION: true\n' \
     >"$SERVER/plugins/ChestShop/config.yml"
+fi
+if [ "$PROFILE" = hopper ]; then
+  mkdir -p "$SERVER/plugins/ChestShop"
+  printf 'USE_STOCK_COUNTER: true\n' >"$SERVER/plugins/ChestShop/config.yml"
 fi
 
 # Every mock player connects from 127.0.0.1; GriefPrevention's default of three

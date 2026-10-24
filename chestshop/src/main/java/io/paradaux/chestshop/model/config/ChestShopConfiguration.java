@@ -221,6 +221,9 @@ public class ChestShopConfiguration {
     @ConfigurationValue(path = "USE_STOCK_COUNTER", defaultValue = "false")
     private boolean useStockCounter;
 
+    @ConfigurationValue(path = "HOPPER_STOCK_REFRESH_INTERVAL_TICKS", defaultValue = "100")
+    private int hopperStockRefreshIntervalTicks;
+
     /** Stored as a string list; exposed as a {@code Set<String>} via {@link #getExcludedItemAttributes()}. */
     @ConfigurationValue(path = "EXCLUDED_ITEM_ATTRIBUTES", defaultValue = "")
     private List<String> excludedItemAttributesRaw;

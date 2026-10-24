@@ -19,11 +19,9 @@ import io.paradaux.chestshop.utils.QuantityUtil;
 import io.paradaux.chestshop.utils.SignText;
 import java.util.IllegalFormatException;
 import lombok.extern.slf4j.Slf4j;
-import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -177,9 +175,8 @@ public class StockCounterServiceImpl implements StockCounterService {
         }
 
         // Skip the forced block update when the counter text is unchanged. This
-        // runs per InventoryMoveItemEvent (every hopper tick into a shop), so
-        // avoiding a no-op sign.update(true) keeps busy hopper setups off the
-        // main-thread hot path.
+        // also applies to batched hopper refreshes: an attempted transfer need
+        // not have changed stock, and unrelated item movements should not write signs.
         String counterLine = String.format(PRICE_LINE_WITH_COUNT, quantity, numTradedItemsInChest);
         if (counterLine.equals(SignText.getLine(sign, QUANTITY_LINE))) {
             return;
@@ -187,14 +184,6 @@ public class StockCounterServiceImpl implements StockCounterService {
 
         SignText.setLine(sign, QUANTITY_LINE, counterLine);
         sign.update(true);
-    }
-
-    @Override
-    public void updateCounterOnItemMoveEvent(ItemStack toAdd, InventoryHolder destinationHolder) {
-        Block shopBlock = signService.getShopBlock(destinationHolder);
-        Sign connectedSign = shopBlockService.getConnectedSign(shopBlock);
-
-        updateCounterOnQuantityLine(connectedSign, destinationHolder.getInventory(), toAdd);
     }
 
     @Override
