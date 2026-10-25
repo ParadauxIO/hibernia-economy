@@ -40,16 +40,20 @@ public class PlayerDirectoryServiceImpl implements PlayerDirectoryService {
     public Long recordLogin(UUID playerUuid, String currentName, long epochSeconds) {
         Object lock = loginLocks[Math.floorMod(playerUuid.hashCode(), LOGIN_LOCK_STRIPES)];
         synchronized (lock) {
+            // Create/lock only this UUID before reading its login clock. The
+            // placeholder and update share this transaction, so a name conflict
+            // rolls back a newly created row as well.
+            economyPlayers.ensurePlayer(playerUuid);
+
             // Capture the previous login before overwriting it; the caller prorates
             // against this so it must be read and replaced as one atomic step. The
             // FOR UPDATE row lock serialises this across processes on a multi-writer
             // DB — the JVM monitor above only covers concurrent logins in this JVM.
             Long previousEpoch = economyPlayers.findLastLoginForUpdate(playerUuid);
 
-            // PAR-501: never evict another identity when Minecraft reuses a name.
-            // The database reservation rejects the login-name update atomically;
-            // both players' names and tax-proration epochs remain intact for admin resolution.
-            economyPlayers.upsertLogin(playerUuid, currentName, epochSeconds);
+            // The per-player name index rejects conflicts without updating the
+            // other identity's row or tax-proration epoch.
+            economyPlayers.updateLogin(playerUuid, currentName, epochSeconds);
 
             return previousEpoch;
         }

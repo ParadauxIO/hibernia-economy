@@ -9,7 +9,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -21,7 +20,7 @@ class SystemWalletPreparationIT extends IntegrationTestBase {
     private static final String MIGRATION = "db/migration/V42__stable_system_plugin_key.sql";
 
     @Test
-    void preV40CaptureSurvivesEveryPartialDdlRerunRenameAndNormalMigration() throws Exception {
+    void captureSurvivesEveryPartialDdlRerunRenameAndNormalMigration() throws Exception {
         String schema = "wallet_prep_" + UUID.randomUUID().toString().replace("-", "");
         try (Connection connection = dataSource.getConnection();
                 var statement = connection.createStatement()) {
@@ -42,25 +41,6 @@ class SystemWalletPreparationIT extends IntegrationTestBase {
                 statement.execute("INSERT INTO account_balances_mat(account_id,balance) VALUES (901,123.45)");
                 statement.execute("INSERT INTO economy_players(player_uuid_bin,current_name) "
                         + "VALUES (UNHEX(REPEAT('22',16)),'FixturePlugin')");
-                assertThatThrownBy(() -> Flyway.configure()
-                                .dataSource(dataSource)
-                                .schemas(schema)
-                                .defaultSchema(schema)
-                                .locations("classpath:db/migration")
-                                .target("40")
-                                .load()
-                                .migrate())
-                        .hasMessageContaining("unresolved global name collisions");
-                // Reproduce the failure shape: V40 history failed, guard only.
-                assertThat(number(
-                                connection,
-                                "SELECT COUNT(*) FROM flyway_schema_history WHERE version='40' AND success=0"))
-                        .isEqualTo(1);
-                assertThat(
-                                number(
-                                        connection,
-                                        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='global_name_claims'"))
-                        .isZero();
                 List<String> steps = preparationSteps();
                 // Reject malformed preparations rather than silently choosing keys.
                 statement.execute(steps.getFirst());
@@ -105,32 +85,26 @@ class SystemWalletPreparationIT extends IntegrationTestBase {
                 for (String step : steps) statement.execute(step);
                 assertWallet(connection, "Temporary wallet label");
                 executeSteps(connection, wrapperSteps());
-                // Repair only this scratch DB's known failed entry; successful
-                // V38/V39 checksums remain governed by the unmodified scripts.
                 Flyway latest = Flyway.configure()
                         .dataSource(dataSource)
                         .schemas(schema)
                         .defaultSchema(schema)
                         .locations("classpath:db/migration")
                         .load();
-                latest.repair();
                 latest.migrate();
                 latest.validate();
                 assertWallet(connection, "Temporary wallet label");
                 executeSteps(connection, wrapperSteps());
-                assertThat(
-                                number(
-                                        connection,
-                                        "SELECT COUNT(*) FROM global_name_claims WHERE source_kind='ACCOUNT' AND subject_id='901' AND name_key='Temporary wallet label'"))
+                statement.execute("UPDATE accounts SET display_name='FixturePlugin' WHERE account_id=901");
+                assertWallet(connection, "FixturePlugin");
+                assertThat(number(
+                                connection, "SELECT COUNT(*) FROM economy_players WHERE current_name='FixturePlugin'"))
                         .isEqualTo(1);
                 assertThat(
                                 number(
                                         connection,
-                                        "SELECT COUNT(*) FROM global_name_reservations WHERE name_key='FixturePlugin' AND entity_key LIKE 'P:%'"))
-                        .isEqualTo(1);
-                assertThatThrownBy(() -> statement.execute(
-                                "UPDATE accounts SET display_name='FixturePlugin' WHERE account_id=901"))
-                        .isInstanceOf(SQLException.class);
+                                        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('global_name_claims','global_name_reservations')"))
+                        .isZero();
             } finally {
                 connection.setCatalog(originalCatalog);
                 statement.execute("DROP DATABASE " + schema);

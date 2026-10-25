@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * The unified player directory ({@code economy_players}): UUID ↔ current name and
@@ -16,15 +17,22 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface EconomyPlayerMapper {
 
-    /** Upserts the player's current name + last-login epoch, bumping {@code last_seen}. */
+    /** Ensure a UUID row exists without resolving conflicts through another player's name. */
     @Insert("""
-            INSERT INTO economy_players (player_uuid_bin, current_name, last_login_epoch)
-            VALUES (#{playerUuid}, #{currentName}, #{epochSeconds})
-            ON DUPLICATE KEY UPDATE current_name     = VALUES(current_name),
-                                    last_login_epoch = VALUES(last_login_epoch),
-                                    last_seen        = CURRENT_TIMESTAMP
+            INSERT INTO economy_players (player_uuid_bin, current_name)
+            VALUES (#{playerUuid}, HEX(#{playerUuid}))
+            ON DUPLICATE KEY UPDATE player_uuid_bin = player_uuid_bin
             """)
-    void upsertLogin(
+    void ensurePlayer(@Param("playerUuid") UUID playerUuid);
+
+    /** Update only the specified UUID; the name index rejects another player's name. */
+    @Update("""
+            UPDATE economy_players
+               SET current_name = #{currentName}, last_login_epoch = #{epochSeconds},
+                   last_seen = CURRENT_TIMESTAMP
+             WHERE player_uuid_bin = #{playerUuid}
+            """)
+    void updateLogin(
             @Param("playerUuid") UUID playerUuid,
             @Param("currentName") String currentName,
             @Param("epochSeconds") long epochSeconds);

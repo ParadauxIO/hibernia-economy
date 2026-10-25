@@ -128,7 +128,11 @@ const collisionMoves = [
 function collisionFixture(t, { differentBase = false } = {}) {
   const f = fixture(t, { currentBase: true });
   for (const [oldName, newName] of collisionMoves) {
-    renameSync(join(f.migrations, newName), join(f.migrations, oldName));
+    if (newName.startsWith('V40__')) {
+      copyFileSync(join(scripts, 'fixtures/withdrawn-namespace', newName), join(f.migrations, oldName));
+    } else {
+      renameSync(join(f.migrations, newName), join(f.migrations, oldName));
+    }
   }
   const later = readdirSync(source).filter(name => Number(/^V(\d+)__/.exec(name)?.[1]) > 40);
   for (const name of later) rmSync(join(f.migrations, name));
@@ -139,7 +143,8 @@ function collisionFixture(t, { differentBase = false } = {}) {
     assert.equal(f.git('rev-parse', `HEAD:${migrationPath}`), '338af2234f3233d335f950ca31641550354db2df');
   }
   for (const [oldName, newName] of collisionMoves) {
-    renameSync(join(f.migrations, oldName), join(f.migrations, newName));
+    if (newName.startsWith('V40__')) rmSync(join(f.migrations, oldName));
+    else renameSync(join(f.migrations, oldName), join(f.migrations, newName));
   }
   for (const name of later) copyFileSync(join(source, name), join(f.migrations, name));
   return f;
@@ -155,7 +160,7 @@ test('only the exact V38 collision repair passes and excludes its pending base s
   assert.equal(f.run('--upgrade-target').stdout, '');
 });
 
-for (const [oldName, newName] of collisionMoves) {
+for (const [oldName, newName] of collisionMoves.filter(([, name]) => !name.startsWith('V40__'))) {
   for (const change of ['edit', 'delete', 'rename']) {
     test(`collision repair rejects ${change} of ${newName} before emitting exclusions`, (t) => {
       const f = collisionFixture(t);
@@ -186,3 +191,38 @@ test('normal bases exclude nothing and still reject edits to the renumbered migr
   appendFileSync(join(f.migrations, collisionMoves[0][1]), '\n-- later edit\n');
   assert.equal(f.run('--upgrade-excludes').status, 1);
 });
+
+function withdrawalFixture(t, { differentBase = false } = {}) {
+  const f = fixture(t, { currentBase: true });
+  for (const name of readdirSync(join(scripts, 'fixtures/withdrawn-namespace')).filter(name => name.endsWith('.sql'))) {
+    copyFileSync(join(scripts, 'fixtures/withdrawn-namespace', name), join(f.migrations, name));
+  }
+  if (differentBase) appendFileSync(join(f.migrations, v18), '\n-- another deployment\n');
+  f.git('add', '.');
+  f.git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'Before namespace withdrawal');
+  for (const name of readdirSync(join(scripts, 'fixtures/withdrawn-namespace')).filter(name => name.endsWith('.sql'))) rmSync(join(f.migrations, name));
+  return f;
+}
+
+test('exact staging-only namespace withdrawal excludes both scripts from upgrade rehearsal', (t) => {
+  const f = withdrawalFixture(t);
+  const result = f.run('--upgrade-excludes');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'V40__global_name_namespace.sql\nV41__allow_sole_name_claim_owner_change.sql\n');
+});
+
+test('withdrawal cannot exempt another base or changes to V42', (t) => {
+  const other = withdrawalFixture(t, { differentBase: true });
+  assert.match(other.run().stderr, /deleted/);
+  const exact = withdrawalFixture(t);
+  appendFileSync(join(exact.migrations, 'V42__stable_system_plugin_key.sql'), '\n-- changed\n');
+  assert.match(exact.run().stderr, /modified after it was merged/);
+});
+
+for (const version of [40, 41]) {
+  test(`withdrawn version V${version} cannot be reused`, (t) => {
+    const f = fixture(t, { currentBase: true });
+    writeFileSync(join(f.migrations, `V${version}__replacement.sql`), 'SELECT 1;\n');
+    assert.match(f.run().stderr, /is retired/);
+  });
+}

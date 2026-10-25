@@ -1,11 +1,9 @@
 package io.paradaux.treasuryrestapi.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
-import java.sql.SQLException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,11 +36,10 @@ class SystemWalletCompatibilityIT extends EmbeddedDbIT {
         accounts.archive(operator, 1L);
         accounts.unarchive(operator, 1L);
 
-        // The internal key is not a public namespace reservation: a player may
-        // own this spelling after the SYSTEM display label has been changed.
+        // Player and SYSTEM display names can overlap without changing routing.
         insertPlayer(UUID.randomUUID(), "FixturePlugin");
-        assertThatThrownBy(() -> accounts.rename(operator, 1L, "FixturePlugin"))
-                .hasRootCauseInstanceOf(SQLException.class);
+        assertThat(accounts.rename(operator, 1L, "FixturePlugin").getDisplayName())
+                .isEqualTo("FixturePlugin");
         try (var connection = dataSource.getConnection();
                 var statement = connection.createStatement();
                 var rows =
@@ -51,7 +48,7 @@ class SystemWalletCompatibilityIT extends EmbeddedDbIT {
             assertThat(rows.next()).isTrue();
             assertThat(rows.getInt(1)).isEqualTo(1);
             assertThat(rows.getString(2)).isEqualTo("AA".repeat(16));
-            assertThat(rows.getString(3)).isEqualTo("Renamed SYSTEM label");
+            assertThat(rows.getString(3)).isEqualTo("FixturePlugin");
             assertThat(rows.getString(4)).isEqualTo("FixturePlugin");
             assertThat(rows.next()).isFalse();
         }

@@ -2,8 +2,8 @@
 -- Run against a consistent restored snapshot with migrations through V35 or later.
 -- Emits one row per pair, with IDs/lifecycle information for human review.
 -- Uses existing utf8mb4_unicode_ci equality, plus a separately labelled surrounding-space
--- trim comparison used by V40. Does not apply blocked-term normalization.
--- For the actual V40 blocking rules use ops/name-namespace-preflight.sql.
+-- trim comparison. Does not apply blocked-term normalization.
+-- Global namespace enforcement is deferred; this report is informational.
 -- Includes released firms and historical shop aliases: flags describe existing
 -- lifecycle, not approval to reserve/release names under the future global policy.
 -- Same-owner PERSONAL/player pairs remain visible; no exemption is presumed.
