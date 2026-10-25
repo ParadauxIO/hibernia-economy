@@ -53,7 +53,7 @@ class AccountCommandsTest {
     }
 
     @Test
-    void crossFirmNameCollisionShowsSafeFeedbackAndPreservesAccounts() {
+    void crossFirmDuplicateNamesKeepSeparateAccounts() {
         String owner = Usernames.fresh("NcA");
         String otherOwner = Usernames.fresh("NcB");
         String firm = freshFirmName("NcFirmA");
@@ -72,7 +72,7 @@ class AccountCommandsTest {
             });
             int firstFirmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
             BusinessLedger.waitForFirmAccountCountAtLeast(firstFirmId, 2, TIMEOUT);
-            int reservedAccountId = BusinessLedger.firmAccountIdAt(firstFirmId, 1);
+            int originalAccountId = BusinessLedger.firmAccountIdAt(firstFirmId, 1);
             Ops.run(otherOwner, () -> {
                 second.chatCommand("/business create " + otherFirm);
                 second.awaitMessageContaining("Successfully created", TIMEOUT);
@@ -80,11 +80,12 @@ class AccountCommandsTest {
                 Barrier.settle();
                 second.drainMessages();
                 second.chatCommand("/business account create " + otherFirm + " " + accountName);
-                second.awaitMessageContaining("That name is reserved by another identity", TIMEOUT);
+                second.awaitMessageContaining("created account", TIMEOUT);
                 Barrier.settle();
-                assertThat(BusinessLedger.firmAccountCount(secondFirmId)).isEqualTo(1);
+                assertThat(BusinessLedger.firmAccountCount(secondFirmId)).isEqualTo(2);
                 assertThat(BusinessLedger.firmAccountCount(firstFirmId)).isEqualTo(2);
-                assertThat(BusinessLedger.firmAccountIdAt(firstFirmId, 1)).isEqualTo(reservedAccountId);
+                assertThat(BusinessLedger.firmAccountIdAt(firstFirmId, 1)).isEqualTo(originalAccountId);
+                assertThat(BusinessLedger.firmAccountIdAt(secondFirmId, 1)).isNotEqualTo(originalAccountId);
             });
         }
     }

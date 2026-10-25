@@ -84,13 +84,25 @@ const pendingCorrections = new Map([
 // (taxation) at V38 and permit only these byte-identical renames from the exact
 // broken tree. Flyway cannot migrate that tree because versions are duplicated.
 // The upgrade rehearsal excludes only the two pending collisions from its scratch
-// base, then applies V39/V40 normally. Never repair a deployed DB's history here.
+// base, then applies V39 normally; the namespace is now withdrawn.
+// Never repair a deployed DB's history here.
 const collisionBase = base.size > 0 &&
   git('-C', root, 'rev-parse', `${baseRef}:${migrationDir}`) === '338af2234f3233d335f950ca31641550354db2df';
 const collisionRenames = new Map([
   ['V38__firm_employment_history.sql', ['V39__firm_employment_history.sql', '827c49a4013635d951a7fb5629435d8ae16b7817']],
   ['V38__global_name_namespace.sql', ['V40__global_name_namespace.sql', '10353f218560a91888356b24e207376301530185']],
 ]);
+
+// V40/V41 were deployed only to disposable staging, which must be rebuilt
+// from a pre-V40 backup. Permit withdrawal only from this exact migration tree.
+// Keep both version numbers retired; V42 retains its original version/checksum.
+const namespaceBase = base.size > 0 &&
+  git('-C', root, 'rev-parse', `${baseRef}:${migrationDir}`) === '19edc6700e245645315bedc4a520c9dcbe74bfb8';
+const withdrawn = new Map([
+  ['V40__global_name_namespace.sql', '10353f218560a91888356b24e207376301530185'],
+  ['V41__allow_sole_name_claim_owner_change.sql', '8f09be6c1063b512095e946a001ca609e38489b2'],
+]);
+const retiredVersions = new Set([40, 41]);
 
 // ── Head side: the working tree ──────────────────────────────────────────────
 const absDir = join(root, migrationDir);
@@ -103,6 +115,9 @@ for (const [name, blob] of base) {
   if (!VERSIONED.test(name)) continue;
   const where = join(migrationDir, name);
   if (!headBlobs.has(name)) {
+    if (namespaceBase && withdrawn.get(name) === blob) continue;
+    if (collisionBase && name === 'V38__global_name_namespace.sql' &&
+        blob === withdrawn.get('V40__global_name_namespace.sql')) continue;
     const correction = collisionBase && collisionRenames.get(name);
     if (correction && blob === correction[1] && headBlobs.get(correction[0]) === blob) continue;
     const renamedTo = [...headBlobs].find(([, b]) => b === blob)?.[0];
@@ -133,7 +148,10 @@ for (const name of head) {
 }
 
 const byVersion = new Map();
-for (const [name, v] of headVersions) byVersion.set(v, [...(byVersion.get(v) ?? []), name]);
+for (const [name, v] of headVersions) {
+  byVersion.set(v, [...(byVersion.get(v) ?? []), name]);
+  if (retiredVersions.has(v)) fail(join(migrationDir, name), `V${v} is retired after namespace withdrawal; do not reuse it.`);
+}
 for (const [v, names] of byVersion) {
   if (names.length > 1) fail(join(migrationDir, names[1]), `duplicate version V${v}: ${names.join(', ')}.`);
 }
@@ -142,6 +160,7 @@ const baseMax = Math.max(0, ...versionsOf(base.keys()).values());
 const added = [...headVersions].filter(([name]) => !base.has(name)).sort((a, b) => a[1] - b[1]);
 let expected = baseMax + 1;
 for (const [name, v] of added) {
+  while (retiredVersions.has(expected)) expected++;
   if (v <= baseMax) {
     fail(join(migrationDir, name), `V${v} is new but ${baseRef} already reaches V${baseMax}; databases migrated from it would skip this as out-of-order. Renumber it to V${expected}.`);
   } else if (v !== expected && !(byVersion.get(v)?.length > 1)) {
@@ -163,6 +182,7 @@ if (errors.length) {
 }
 if (upgradeExcludes) {
   if (collisionBase) console.log([...collisionRenames.keys()].join('\n'));
+  if (namespaceBase) console.log([...withdrawn.keys()].join('\n'));
   process.exit(0);
 }
 if (upgradeTarget) {

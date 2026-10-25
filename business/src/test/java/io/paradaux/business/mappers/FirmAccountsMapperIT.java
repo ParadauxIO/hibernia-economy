@@ -121,10 +121,11 @@ class FirmAccountsMapperIT extends IntegrationTestBase {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "shopname"))
                 .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
         firmAccounts.setShopAlias(firmId, first, null);
-        // Clearing an alias does not release historical sign ownership, even
-        // when a writer uses the mapper directly instead of the service.
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> firmAccounts.setShopAlias(firmId, second, "shopname"))
-                .isInstanceOf(org.apache.ibatis.exceptions.PersistenceException.class);
+        // V35's index protects current aliases. Historical reservations are
+        // enforced by the service, rather than the withdrawn V40 triggers.
+        assertThat(firmAccounts.setShopAlias(firmId, second, "shopname")).isEqualTo(1);
+        assertThat(firmAccounts.resolveShopAlias("SHOPNAME")).isEqualTo(second);
+        firmAccounts.setShopAlias(firmId, second, null);
         firmAccounts.setShopAlias(firmId, first, "shopname");
         assertThat(firmAccounts.resolveShopAlias("SHOPNAME")).isEqualTo(first);
         firmAccounts.removeFirmAccount(firmId, first);

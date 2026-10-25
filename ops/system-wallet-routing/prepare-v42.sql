@@ -1,4 +1,4 @@
--- Explicit PRE-V40 preparation. Run from the repository root with mariadb,
+-- Optional pre-migration SYSTEM routing preparation. Run from the repository root with mariadb,
 -- ALL writers stopped, no --force. See wiki/system-wallet-routing.md.
 -- This wrapper deliberately makes no Flyway history changes or label renames.
 ALTER TABLE accounts
@@ -45,4 +45,4 @@ CALL assert_system_wallet_preparation()$$
 DROP PROCEDURE assert_system_wallet_preparation$$
 DELIMITER ;
 DROP TEMPORARY TABLE system_wallet_before_v42;
-SELECT 'SYSTEM routing preparation verified; keep maintenance paused for compatible bundle and V40' AS result;
+SELECT 'SYSTEM routing preparation verified; keep maintenance paused for compatible bundle and normal migration' AS result;

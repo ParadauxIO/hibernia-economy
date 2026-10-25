@@ -36,7 +36,7 @@ only way back.**
 Set the window from the **full V42 upgrade and restore rehearsal** on a recent
 representative snapshot. Include every tenant, coordinated backup, identity
 remediation, credential renewal and application verification. V42 replaces the
-SYSTEM routing index with `ALGORITHM=COPY`; V40 audits names and backfills claims.
+SYSTEM routing index with `ALGORITHM=COPY`.
 Do not assume the earlier timing covers those operations.
 
 Historical evidence only: a 2026-10-18 rehearsal on a 2026-10-17 production-copy
@@ -63,7 +63,8 @@ rebuilds indexes and must be timed separately.
      step is **fatal** for checksum mismatches, failed or missing migrations.
      An expected pending list does not make a failed workflow acceptable.
    - V17/V18 were edited before release, and the historical V38 collision was
-     reconciled to taxation V38, employment V39 and namespace V40. Inspect any
+     reconciled to taxation V38 and employment V39. V40/V41 are now withdrawn
+     and their version numbers retired; staging requires a pre-V40 rebuild. Inspect any
      previously applied version against the selected files. An older checksum or
      differently applied V38 needs a deliberate reconciliation, never a blanket
      repair, baseline or out-of-order migration.
@@ -95,20 +96,14 @@ rebuilds indexes and must be timed separately.
    ```
    V29 removes duplicate fine rows by itself; to see whether it will,
    `SELECT COUNT(*) FROM (SELECT 1 FROM government_fines GROUP BY txn_id HAVING COUNT(*) > 1) t;`
-4. **Audit V40 names on a restored clone.** With the clone migrated through V35
-   or later, run [the broad inventory](../ops/name-collision-inventory.sql) and
-   [the V40 blocker report](../ops/name-namespace-preflight.sql). The broad inventory
-   includes informational same-identity matches; the blocker report must return
-   zero rows after approved remediation. Review whitespace, released firms,
-   historical aliases and player placeholders according to [the namespace rules](name-namespace.md).
-   Never run these queries on a V15 layout or silently choose replacement names.
-5. **Rehearse the whole sequence and restoration.** If V40 would reject SYSTEM
-   labels, rehearse the writer-stop sequence at V39: capture original routing keys
-   with [V42 preparation](system-wallet-routing.md#existing-database-blocked-before-v40),
-   then apply reviewed label changes and migrate normally through V42. V42 running
-   after V40 is too late to preserve a label already renamed. Retain evidence that
-   IDs, owners, balances and routing survived. Do not run the all-pending production
-   workflow until its plan accounts for this checkpoint.
+4. **Check for withdrawn migrations.** V40/V41 must not be present in the
+   target history. They ran only on staging, which must be rebuilt using the
+   backup job and a pre-V40 backup before applying this release. See
+   [the staging rebuild requirement](name-namespace.md#staging-rebuild).
+5. **Rehearse the whole sequence and restoration.** Migrate the restored dataset
+   through the remaining scripts to V42. Retain evidence that IDs, owners,
+   balances and original SYSTEM routing keys survived. Global cross-kind name
+   duplicates no longer block the migration; existing per-table constraints remain.
 6. **Prepare matching artifacts and credentials.** A local rehearsal bundle is
    `./gradlew release -Pci=true`; the main publication workflow builds the versioned
    production bundle. Preserve previous images, jars and secret-store versions.
@@ -159,15 +154,10 @@ nothing old may run after destructive migration or SYSTEM label remediation.
    A dump file existing is not restore verification. Record player/access counts
    using the tenant's actual starting schema (legacy `firm_players` and active
    `account_members` only if they still exist), plus money/ownership invariants.
-2. If the reviewed plan requires name remediation, use the **rehearsed V39
-   checkpoint** before V40. The Migrate workflow applies all pending versions and
-   has no target-version input; it must not be used to reach this checkpoint.
-   The operator must use a reviewed targeted Flyway invocation from the frozen
-   checkout with the correct tenant connection. With all writers still stopped,
-   follow the exact [SYSTEM preparation procedure](system-wallet-routing.md#existing-database-blocked-before-v40)
-   before approved SYSTEM label changes, then verify the private identity map and
-   namespace blocker report. Inspect any failed history/partial objects before a
-   separately reviewed repair. Keep V42 at its normal version in Flyway history.
+2. Confirm the target has no V40/V41 history or namespace objects. Rebuild
+   staging from its pre-V40 backup before proceeding; do not use Flyway repair
+   to bypass withdrawn migrations. Preserve original SYSTEM labels until V42
+   has captured their routing keys.
 3. Run **Economy Flyway · Migrate** from the selected `main` release revision,
    `target` = tenant, `confirm_target` = the same name, `baseline` = **off**.
    Record the checkout SHA. Require every expected migration through V42 successful
@@ -230,7 +220,7 @@ secret (`common/…/JwtKeys.java`); they must be byte-identical.
 - **Money:** run `ops/money-invariants.sql` against each tenant; `status` must be `OK`.
 - **SYSTEM routing:** resolve original plugin keys to the recorded account IDs;
   verify owners, balances, balance-row counts and ledger invariants after any label
-  remediation. Confirm namespace conflicts still reject.
+  remediation. Confirm duplicate SYSTEM routing keys still reject.
 - **Player directory (when upgrading from the legacy layout):** `SELECT COUNT(*) FROM economy_players;` ≥ the pre-migration
   `firm_players` count. Rows whose `current_name` is a 32-character hex string are
   login-only players seeded by V17; they fix themselves on next login.

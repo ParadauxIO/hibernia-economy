@@ -58,9 +58,10 @@ sql -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\`;"
 
 if git -C "$ROOT" cat-file -e "$BASE_REF:$MIGRATIONS" 2>/dev/null; then
   git -C "$ROOT" archive "$BASE_REF" "$MIGRATIONS" | tar -x -C "$BASE_DIR"
-  # The guard emits filenames only for the exact known broken V38 tree, after
-  # validating byte-identical renames. Remove pending collisions in this scratch
-  # archive only; the real database and its Flyway history are never repaired.
+  # The guard emits filenames for pinned historical corrections, including
+  # staging-only V40/V41 withdrawal. This scratch archive models a restored
+  # pre-namespace database, not an in-place rollback of an applied V40 schema.
+  # The real database and its Flyway history are never repaired.
   while IFS= read -r migration; do
     if [ -n "$migration" ]; then rm -- "$BASE_DIR/$MIGRATIONS/$migration"; fi
   done <<<"$BASE_EXCLUDES"

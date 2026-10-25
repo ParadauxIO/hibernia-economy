@@ -26,13 +26,6 @@ class AccountOwnerResolutionTest {
             var shared = RestApi.call("PATCH", "/admin/accounts/" + account + "/display-name", service,
                     "{\"displayName\":\"" + owner.getUsername() + "\"}");
             assertThat(shared.status()).as(shared.body()).isEqualTo(200);
-            Await.until("player and account share their name", () -> claims(owner.getUsername()), n -> n == 2, Duration.ofSeconds(10));
-            // A player's name cannot be transferred to another identity under PAR-501.
-            denied(RestApi.call("PATCH", path, service, body(temporaryOwner.toString())), 409, "NAME_RESERVED");
-            unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
-            var renamed = RestApi.call("PATCH", "/admin/accounts/" + account + "/display-name", service,
-                    "{\"displayName\":\"" + Usernames.fresh("OrAls") + "\"}");
-            assertThat(renamed.status()).as(renamed.body()).isEqualTo(200);
             success(RestApi.call("PATCH", path, service, body(temporaryOwner.toString())), account, temporaryOwner);
             state(account, temporaryOwner);
             assertThat(Ledger.personalAccountId(owner.getUuid())).isEmpty();
@@ -64,13 +57,6 @@ class AccountOwnerResolutionTest {
                     body(owner.getUsername())), 404, "ACCOUNT_NOT_FOUND");
             unchanged(account, owner.getUuid(), other, peer.getUuid(), checkpoint);
         }
-    }
-    private static int claims(String name) {
-        try (var c = DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
-             var q = c.prepareStatement("SELECT claim_count FROM global_name_reservations WHERE name_key=?")) {
-            q.setString(1, name);
-            try (var r = q.executeQuery()) { return r.next() ? r.getInt(1) : 0; }
-        } catch (java.sql.SQLException e) { throw new IllegalStateException("read name claims", e); }
     }
     private static String body(String owner) { return "{\"owner\":\"" + owner + "\"}"; }
     private static void denied(RestApi.Response response, int status, String error) {

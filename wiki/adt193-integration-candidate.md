@@ -50,10 +50,11 @@ required command ordering, not staging execution or clearance:
    Stage the reviewed complete bundle under `dev-deploy/history/<sha>/` and run
    `ctl maintenance-install <sha>`. It records staged intent before copying; an
    interrupted copy/restart cannot auto-start. It stays paused and does not migrate.
-4. Follow [SYSTEM preparation](system-wallet-routing.md): capture stable keys
-   BEFORE approved SYSTEM label changes and beforeV40; review known failed history
-   and migrate normally throughV42. This step belongs to operations and must be
-   rehearsed against the actual dataset first. No script guesses collision policy.
+4. Rebuild staging from a pre-V40 backup as described in the
+   [namespace withdrawal notes](name-namespace.md), then migrate through the
+   remaining scripts to V42. Follow [SYSTEM routing](system-wallet-routing.md):
+   capture stable keys before any SYSTEM label changes. Rehearse this operation
+   against the actual dataset first.
 5. `ctl maintenance-boot <sha>` starts only approved complete hashes while remaining
    paused. Failure stops the candidate and leaves it installed, with no old-JAR
    rollback. Success records boot smoke only; polling/crash restart remain paused.

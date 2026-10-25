@@ -13,7 +13,7 @@ import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-/** PAR-144 remains defensive for pre-V40 data, which the migrated DB cannot insert. */
+/** PAR-144 rejects ambiguous names while retaining explicit UUID resolution. */
 class LegacyNameCollisionGuardTest {
     private final AccountMapper accounts = mock(AccountMapper.class);
     private final FirmMapper players = mock(FirmMapper.class);

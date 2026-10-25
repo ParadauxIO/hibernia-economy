@@ -1,7 +1,6 @@
 package io.paradaux.treasuryrestapi.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import io.paradaux.treasuryrestapi.dto.PlayerTransferRequest;
@@ -114,31 +113,27 @@ class TransferToPlayerIT extends EmbeddedDbIT {
     }
 
     @Test
-    void payByName_rejectedGovernmentCollisionCannotRedirectFunds() {
+    void payByName_governmentCollisionCannotRedirectFunds() {
         insertAccount(1, "PERSONAL", PAYER, PAYER.toString());
         insertAccount(2, "PERSONAL", PAYEE, "Treasury");
         insertPlayer(PAYEE, "Treasury");
+        insertAccount(3, "GOVERNMENT", null, "Treasury");
         seedBalance(1, "1000.00");
         seedBalance(2, "0.00");
-        assertThatThrownBy(() -> insertAccount(3, "GOVERNMENT", null, "Treasury"))
-                .isInstanceOf(RuntimeException.class)
-                .hasStackTraceContaining("GLOBAL_NAME_CONFLICT");
+        ApiException error = expectApiException(new PlayerTransferRequest(null, null, "treasury", "25.00", null));
+        assertThat(error.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(error.getErrorCode()).isEqualTo("AMBIGUOUS_NAME");
         assertThat(rowCount("ledger_txns")).isZero();
-
-        TransferResponse response = transferService.transferToPlayer(
-                personalToken(1, PAYER), new PlayerTransferRequest(null, null, "treasury", "25.00", null), null);
-        assertThat(response.toAccountId()).isEqualTo(2L);
-        assertThat(sumPostings(2)).isEqualByComparingTo("25.00");
-        assertThat(rowCount("accounts")).isEqualTo(2);
+        assertThat(sumPostings(2)).isEqualByComparingTo("0.00");
+        assertThat(rowCount("accounts")).isEqualTo(3);
     }
 
     @Test
-    void payByUuid_rejectedGovernmentCollisionDoesNotChangeTheWallet() {
+    void payByUuid_governmentCollisionDoesNotChangeTheWallet() {
         insertAccount(1, "PERSONAL", PAYER, PAYER.toString());
         insertAccount(2, "PERSONAL", PAYEE, "Treasury");
         insertPlayer(PAYEE, "Treasury");
-        assertThatThrownBy(() -> insertAccount(3, "GOVERNMENT", null, "Treasury"))
-                .isInstanceOf(RuntimeException.class);
+        insertAccount(3, "GOVERNMENT", null, "Treasury");
         seedBalance(1, "1000.00");
         seedBalance(2, "0.00");
         TransferResponse response = transferService.transferToPlayer(

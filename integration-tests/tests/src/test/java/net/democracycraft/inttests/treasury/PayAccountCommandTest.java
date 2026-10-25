@@ -19,8 +19,8 @@ class PayAccountCommandTest {
     @ValueSource(strings = {"player", "government", "gov", "business", "firm", "account", "id"})
     void typedPaymentSelectsRequestedAccount(String type) {
         String name = Usernames.fresh("Targ");
-        // PAR-501 forbids cross-kind name collisions. Keep all destination kinds
-        // present and verify the typed route changes only its selected ledger.
+        // Keep all destination kinds present and verify the typed route changes
+        // only its selected ledger.
         String governmentName = Usernames.fresh("Tgov");
         String firmName = Usernames.fresh("Tfirm");
         try (MockPlayer sender = MockPlayer.connectLocal(Usernames.fresh("Typed"))) {

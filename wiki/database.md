@@ -36,11 +36,13 @@ disband. Release changes no account links, balances or ownership.
 Deploy V33 together with the Business plugin, REST API and Explorer changes:
 older application versions assume names identify a single row even across archives.
 
-## Shared name namespace (PAR-501)
+## Global name namespace deferred (PAR-501)
 
-V40 enforces cross-kind reservations through database triggers. See
-[comparison, projection, lifecycle and rollout rules](name-namespace.md) before
-applying it to an existing dataset.
+V40 and V41 have been withdrawn; versions 40 and 41 are retired. Existing
+per-table uniqueness rules remain, but there is no global cross-kind reservation.
+Staging must be rebuilt from a pre-V40 backup; see [the withdrawal notes](name-namespace.md).
+This is a narrowly pinned exception to migration immutability, not a general
+permission to delete deployed migrations.
 
 ## Cross-kind name collision inventory (PAR-501)
 
@@ -54,7 +56,7 @@ projection decisions rather than hide them behind implicit exemptions.
 Each pair includes IDs, original spelling, owner UUIDs and lifecycle flags. The
 `comparison_basis` column distinguishes existing `utf8mb4_unicode_ci` equality
 from additional candidates that match only after trimming surrounding ASCII
-spaces, as required by V40. Existing whitespace cleanup still requires review. Punctuation
+spaces. This is an informational comparison; global enforcement is deferred. Punctuation
 is significant; blocked-term filtering is not used as a uniqueness rule. Null
 account display names are omitted because they do not identify a name claim.
 
@@ -213,11 +215,8 @@ no duplicate `current_space` database column or new migration is needed.
 
 ### V38 collision reconciliation (2026-10-22)
 
-Three independently merged branches used V38. Taxation retains V38; employment
-history is V39 and the global namespace is V40, with unchanged SQL. The project
-owner confirmed only the non-production clone had been deployed. Its history
-contained successful `V38__taxation_read_index.sql`; it needs no history rewrite.
-Do not apply a generic Flyway repair to any other database: inspect its history
-first. The migration guard permits only the exact two renames from the pinned
-invalid combined tree. Upgrade tests for that tree use its valid V37 prefix;
-normal migration history remains immutable.
+Three independently merged branches used V38. Taxation retains V38 and employment
+history is V39. The global namespace was initially renumbered to V40, then
+withdrawn together with V41 before production deployment. Staging must be rebuilt
+from a pre-V40 backup. The migration guard pins these historical exceptions to
+exact source trees and SQL blobs; normal migration history remains immutable.
