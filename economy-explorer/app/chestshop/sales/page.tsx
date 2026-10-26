@@ -14,7 +14,6 @@ import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { Pagination } from '@democracycraft/design-system/next';
 import { Toolbar } from '@/components/Toolbar';
-import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { TableWrap } from '@democracycraft/design-system';
@@ -89,7 +88,6 @@ export default async function SalesFeedPage({
       <div className="page-heading">
         <h1>Sales feed</h1>
         <span className="sub">{fmtN(total)} trades · admin/government view</span>
-        <SectionTabs />
       </div>
 
       <Toolbar

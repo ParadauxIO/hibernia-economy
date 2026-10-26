@@ -6,7 +6,6 @@ import { Suspense } from 'react';
 import { z } from 'zod';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { divRound, formatMoney, sumBy } from '@/lib/money';
-import { SectionTabs } from '@/components/SectionTabs';
 import { VolumeTimeline } from '@/components/charts/AreaTimeline';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
@@ -48,7 +47,6 @@ export default async function MarketPage({
         <h1>Market activity</h1>
         <span className="sub">ChestShop activity · last {sp.days} days</span>
         <WindowTabs basePath="/market/activity" days={sp.days} />
-        <SectionTabs />
       </div>
 
       <div className="kpi-grid">

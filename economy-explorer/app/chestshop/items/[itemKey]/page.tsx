@@ -14,7 +14,6 @@ import { bucketSamples, type CandleInterval } from '@/lib/derived';
 
 import { PriceLine } from '@/components/charts/AreaTimeline';
 import { Candlestick } from '@/components/charts/Candlestick';
-import { SectionTabs } from '@/components/SectionTabs';
 import { ItemIcon } from '@/components/market/ItemIcon';
 import { itemIconUrl } from '@/lib/itemIcon';
 import { CsvButton } from '@/components/CsvButton';
@@ -129,7 +128,6 @@ export default async function ItemDetailPage({
             {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '→'} {(Math.abs(changePct) * 100).toFixed(1)}% · 30d
           </span>
         )}
-        <SectionTabs />
       </div>
 
       <section aria-label="Observed shop offers">

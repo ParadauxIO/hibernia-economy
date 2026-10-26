@@ -1,6 +1,5 @@
 import { buildMetadata } from '@/lib/metadata';
 import { getPopularItems } from '@/lib/services/market';
-import { SectionTabs } from '@/components/SectionTabs';
 import { Button, Input, PageHeading, WindowTabs } from '@democracycraft/design-system';
 import { ItemTable } from '@/components/market/ItemTable';
 import { itemIconUrl } from '@/lib/itemIcon';
@@ -11,7 +10,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
   const days = sp.days === '7' ? 7 : 30;
   const items = await getPopularItems(days);
   return <>
-    <PageHeading title="Market"><SectionTabs /></PageHeading>
+    <PageHeading title="Market" />
     <form className="market-search" action="/chestshop" role="search" aria-label="Items">
       <label htmlFor="market-item-search" className="field-label">Find an item</label>
       <div className="market-search-controls"><Input id="market-item-search" name="q" type="search" placeholder="Search items or materials…" /><Button type="submit">Search all items</Button></div>

@@ -5,7 +5,6 @@ import { getShopOffers } from '@/lib/services/market';
 import { fmtN } from '@/lib/format';
 import { Toolbar, FilterSelect } from '@/components/Toolbar';
 import { Pagination } from '@democracycraft/design-system/next';
-import { SectionTabs } from '@/components/SectionTabs';
 import { ShopOffers } from '@/components/market/ShopOffers';
 import { resolveTheme } from '@/lib/theme';
 import { serverIdentity } from '@/lib/serverIdentity';
@@ -22,7 +21,7 @@ export default async function ShopsPage({ searchParams }: { searchParams: Promis
   const [[shops, total], theme] = await Promise.all([getShopOffers({ itemKey: sp.item ?? null, material: null, firmId: null, ownerUuid: null, buyable: false, direction: sp.direction, inStock: sp.direction === 'buy' && sp.inStock === 'true', search: sp.q ?? null, limit: sp.limit, offset: (sp.page - 1) * sp.limit }), resolveTheme()]);
   const returnTo = `/chestshop/shops?${new URLSearchParams(Object.entries(sp).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)]))}`;
   return <>
-    <div className="page-heading"><h1>Find shops</h1><span className="sub">{fmtN(total)} observed offers</span><SectionTabs /></div>
+    <div className="page-heading"><h1>Find shops</h1><span className="sub">{fmtN(total)} observed offers</span></div>
     <p className="page-intro">{sp.direction === 'buy' ? 'Buy from shops, ordered by lowest unit price (known insufficient stock last).' : 'Sell your items to shops, ordered by highest unit price.'} Prices and stock are last observed, not guaranteed live availability. A 64-item comparison is an estimate; trades use the sign batch and some items stack differently.</p>
 
     <Toolbar filterLabels={{ item: 'Item', inStock: 'Stock' }} searchPlaceholder="Search items or materials…" filters={<>

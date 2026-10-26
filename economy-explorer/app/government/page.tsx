@@ -13,7 +13,6 @@ import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
 import { formatMoney, sumBy } from '@/lib/money';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
-import { SectionTabs } from '@/components/SectionTabs';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(7).max(30).default(30), view: z.enum(['accounts', 'fines']).catch('accounts'), page: z.coerce.number().int().min(1).catch(1), q: z.string().optional(), status: z.enum(['active', 'revoked']).optional().catch(undefined) });
 
@@ -41,7 +40,6 @@ export default async function GovernmentPage({
         <h1>Government</h1>
         <span className="sub">government accounts and fines · last {sp.days} days</span>
         <WindowTabs basePath="/government" days={sp.days} params={{ view: sp.view, q: sp.q, status: sp.status }} />
-        <SectionTabs />
       </div>
 
       <div className="kpi-grid">

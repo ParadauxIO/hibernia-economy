@@ -7,7 +7,6 @@ import { taxationDays } from '@/lib/taxation';
 import { fmtAmtFull } from '@/lib/format';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 
-import { SectionTabs } from '@/components/SectionTabs';
 import { TaxRevenueTimeline } from '@/components/charts/AreaTimeline';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +25,6 @@ export default async function TaxationPage({ searchParams }: {
       <h1>Taxation</h1>
       <span className="sub">tax and fine revenue · last {days} days</span>
       <WindowTabs basePath="/economy/taxation" days={days} />
-      <SectionTabs />
     </div>
     <div className="kpi-grid">
       <div className="kpi"><div className="kpi-label">Collected</div><div className="kpi-value">{fmtAmtFull(data.totals.collected)}</div><div className="kpi-meta">taxes and fines</div></div>

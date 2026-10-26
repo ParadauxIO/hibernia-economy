@@ -1,15 +1,24 @@
 import '@democracycraft/design-system/styles.css';
 import './explorer.css';
 import './experience.css';
+import './shell.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Script from 'next/script';
+import { Suspense } from 'react';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import { Money } from '@democracycraft/design-system';
 import { serverIdentity } from '@/lib/serverIdentity';
+import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { parseMoney, abs } from '@/lib/money';
+import { getViewer, type Viewer } from '@/lib/auth/viewer';
+import { chromeViewer, personalBalance } from '@/lib/services/nav';
 import { HeaderSearch } from '@/components/HeaderSearch';
-import { HeaderNav } from '@/components/HeaderNav';
+import { HeaderNav, HeaderSectionNav } from '@/components/HeaderNav';
+import { HeaderMenu } from '@/components/HeaderMenu';
 import { HeaderAuth } from '@/components/HeaderAuth';
+import { CommandPalette } from '@/components/CommandPalette';
 import { ModeToggle } from '@/components/ModeToggle';
 import { Footer } from '@/components/Footer';
 import { ViewerProvider } from '@/components/ViewerContext';
@@ -40,14 +49,27 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // Theme/mode are derived from env (static, per-deployment) so the root layout
-  // reads NO cookies and resolves NO session — which is what lets it render
-  // statically and keeps getViewer() off the universal layout path. The
-  // `?theme=` / `mode` cookie overrides are applied client-side by the pre-paint
-  // script below (theme + mode) and the ModeToggle. Net effect: /docs and other
-  // static-eligible routes serve as static HTML, and authenticated pages no
-  // longer pay an auth round-trip in the layout on every request.
+// Compact above $100k so the chip stays narrow; the exact value is in the tooltip.
+const COMPACT_FROM_CENTS = 10_000_000n;
+
+/** The account chip's balance, streamed so the header never waits for it. */
+async function PersonalBalance({ viewer }: { viewer: Viewer }) {
+  const balance = await personalBalance(viewer);
+  if (balance === null) return null;
+  return <Money value={balance} compact={abs(parseMoney(balance)) >= COMPACT_FROM_CENTS} />;
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Every route is dynamic already, so resolving the viewer here costs nothing
+  // extra: getViewer() is React-cached, and the page's own call reuses it. The
+  // chrome then renders the right nav and account menu in the first HTML, with
+  // no /api/viewer round trip.
+  //
+  // Theme and mode stay env-derived on the server. The `?theme=` / `mode`
+  // cookie overrides are applied before first paint by the inline script below
+  // and by ModeToggle.
+  const viewer = await getViewer();
+  const chrome = await chromeViewer(viewer);
   const theme = (process.env.THEME ?? 'blue').toLowerCase().trim() === 'red' ? 'red' : 'blue';
   const mode = 'dark';
   const server = serverIdentity(theme);
@@ -59,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // Set per prod overlay (FARO_COLLECTOR_URL); unset in dev → no RUM emitted.
   const faroUrl = process.env.FARO_COLLECTOR_URL?.trim();
   const tenant = process.env.TENANT?.trim() || 'dev';
+  const balance = chrome.linked ? <Suspense fallback={<span className="shell-balance-pending" />}><PersonalBalance viewer={viewer} /></Suspense> : undefined;
   return (
     <html
       lang="en"
@@ -81,27 +104,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         <a href="#main-content" className="skip-link">Skip to content</a>
-        <div className="brand-stripe" aria-hidden />
-        <ViewerProvider>
-          <header className="explorer-header">
-            <div className="explorer-header-top">
-              <Link href="/" className="explorer-logo" prefetch={false}>
+        <ViewerProvider viewer={chrome}>
+          <header className="shell-header">
+            <div className="shell-bar">
+              <Link href="/" className="shell-brand" prefetch={false}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="mark" src={server.icon} alt={`${server.name} emblem`} width={34} height={34} />
-                <span className="explorer-logo-text">Economy <span className="explorer-logo-accent">Explorer</span></span>
+                <img src={server.icon} alt="" width={24} height={24} />
+                <span className="shell-brand-name">{server.name}</span>
+                <span className="shell-brand-product">Economy</span>
               </Link>
-              <div className="explorer-spacer"></div>
-              <HeaderSearch />
-              <ModeToggle />
-              <HeaderAuth />
-            </div>
-            <div className="explorer-header-nav">
               <HeaderNav />
+              <div className="shell-tools">
+                <HeaderSearch />
+                <ModeToggle className="shell-desktop-only" />
+                <HeaderAuth balance={balance} />
+                <HeaderMenu />
+              </div>
             </div>
+            <HeaderSectionNav />
           </header>
           <main id="main-content" className="explorer-main" tabIndex={-1}>{children}</main>
+          <CommandPalette serverIp={server.ip} currency={CURRENCY_SYMBOL} />
         </ViewerProvider>
-        <Footer theme={theme} />
+        <Footer server={server} />
         {umamiSrc && umamiId && (
           <Script src={umamiSrc} data-website-id={umamiId} strategy="afterInteractive" />
         )}

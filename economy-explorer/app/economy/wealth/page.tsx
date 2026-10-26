@@ -4,7 +4,6 @@ import { buildMetadata } from '@/lib/metadata';
 import { getWealthData } from '@/lib/services/economy';
 import { accountLabel, fmtAmtFull, fmtN, fmtPct } from '@/lib/format';
 import { divRound, formatMoney, parseMoney } from '@/lib/money';
-import { SectionTabs } from '@/components/SectionTabs';
 import { InfoTip } from '@democracycraft/design-system';
 import { WealthDonut, BalanceDistribution } from '@/components/charts/AreaTimeline';
 export const dynamic = 'force-dynamic';
@@ -12,7 +11,7 @@ export async function generateMetadata() { return buildMetadata({ title: 'Wealth
 export default async function WealthPage() {
   const { stats, distribution, giniValue, top1, top10 } = await getWealthData();
   return <>
-    <div className="page-heading"><h1>Wealth</h1><span className="sub">Current balances</span><SectionTabs /></div>
+    <div className="page-heading"><h1>Wealth</h1><span className="sub">Current balances</span></div>
     <p className="page-intro">How balances are distributed across open accounts. These are current holdings, not income or recent activity.</p>
       <div className="insight-strip">
         <div className="insight">

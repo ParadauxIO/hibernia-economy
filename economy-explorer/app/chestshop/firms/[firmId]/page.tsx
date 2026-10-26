@@ -7,7 +7,6 @@ import { notFound } from 'next/navigation';
 import { getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { BackLink } from '@democracycraft/design-system/next';
-import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -69,7 +68,6 @@ export default async function MarketFirmDetailPage({
       <div className="page-heading">
         <h1>{firm.display_name ?? `Firm #${firm.firm_id}`}</h1>
         <span className="mono" style={{ color: 'var(--fg-muted)', fontSize: 13 }}>#{firm.firm_id}</span>
-        <SectionTabs />
       </div>
 
       {!canSeeFinancials ? (
