@@ -1,7 +1,7 @@
 import 'server-only';
 import { getViewer } from '@/lib/auth/viewer';
-import { canViewAccount } from '@/lib/auth/access';
-import { getAccountFirmId, findFirmById } from '@/lib/sql/firm';
+import { canViewAccount, findFirmById } from '@/lib/auth/access';
+import { getAccountFirmId } from '@/lib/sql/firm';
 export async function getAccountFirmContext(accountId: number) {
   const viewer = await getViewer();
   if (!await canViewAccount(accountId, viewer)) return null;

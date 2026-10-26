@@ -1,4 +1,5 @@
 import type { TaxRevenueRow } from '@/lib/sql/taxation';
+import { parseMoney, toDbString, toNumber } from '@/lib/money';
 
 export const TAX_KINDS = ['personal', 'corporate', 'income', 'sales', 'fines'] as const;
 export type TaxKind = typeof TAX_KINDS[number];
@@ -7,15 +8,9 @@ export const TAX_LABELS: Record<TaxKind, string> = {
   income: 'Source / income tax', sales: 'ChestShop sales tax', fines: 'Fines',
 };
 
-// Keep every aggregate in integer cents; only chart coordinates become doubles.
-function cents(value: string): bigint {
-  const [whole = '0', fraction = ''] = value.split('.');
-  return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
-}
-function decimal(value: bigint): string {
-  const abs = value < 0n ? -value : value;
-  return `${value < 0n ? '-' : ''}${abs / 100n}.${String(abs % 100n).padStart(2, '0')}`;
-}
+// Keep every aggregate in integer cents (lib/money); only chart coordinates become doubles.
+const cents = parseMoney;
+const decimal = toDbString;
 const empty = () => ({ collected: 0n, refunded: 0n });
 const amounts = (value: ReturnType<typeof empty>) => ({
   collected: decimal(value.collected), refunded: decimal(value.refunded),
@@ -43,7 +38,7 @@ export function summarizeTaxRevenue(rows: TaxRevenueRow[], days: number, now: Da
     }
     accounts.set(row.account_id, account);
     const day = daily.get(row.date);
-    if (day) day[row.kind] += Number(collected - refunded) / 100;
+    if (day) day[row.kind] += toNumber(collected - refunded);
   }
   return {
     totals: amounts(totals),

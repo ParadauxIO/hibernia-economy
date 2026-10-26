@@ -5,6 +5,7 @@ import { getMarketWindow, getMarketTotals } from '@/lib/services/market';
 import { Suspense } from 'react';
 import { z } from 'zod';
 import { fmtAmtFull, fmtN } from '@/lib/format';
+import { divRound, formatMoney, sumBy } from '@/lib/money';
 import { SectionTabs } from '@/components/SectionTabs';
 import { VolumeTimeline } from '@/components/charts/AreaTimeline';
 import { CsvButton } from '@/components/CsvButton';
@@ -39,7 +40,7 @@ export default async function MarketPage({
   const [volume, windowItems] = await getMarketWindow(sp.days);
 
   const windowSales = volume.reduce((s, v) => s + v.sales, 0);
-  const windowVolume = volume.reduce((s, v) => s + parseFloat(v.total_volume), 0);
+  const windowVolume = sumBy(volume, (v) => v.total_volume);
 
   return (
     <>
@@ -58,7 +59,7 @@ export default async function MarketPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Volume / {sp.days}d</div>
-          <div className="kpi-value">{fmtAmtFull(windowVolume)}</div>
+          <div className="kpi-value">{formatMoney(windowVolume)}</div>
           <div className="kpi-meta"><Suspense fallback="— all-time"><AllTime totals={totals} field="volume" /></Suspense></div>
         </div>
         <div className="kpi">
@@ -68,7 +69,7 @@ export default async function MarketPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Avg sale</div>
-          <div className="kpi-value">{fmtAmtFull(windowSales > 0 ? windowVolume / windowSales : 0)}</div>
+          <div className="kpi-value">{formatMoney(windowSales > 0 ? divRound(windowVolume, windowSales) : 0n)}</div>
           <div className="kpi-meta">mean value per sale</div>
         </div>
       </div>

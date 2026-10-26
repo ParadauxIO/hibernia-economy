@@ -88,8 +88,24 @@ describe('SectionTabs', () => {
     navigation.pathname = '/economy/taxation';
     render(<SectionTabs />);
     const nav = screen.getByRole('navigation', { name: 'Section' });
-    expect(linkNames(nav)).toEqual(['Overview', 'Wealth', 'Money Flow', 'Taxation', 'Government']);
+    expect(linkNames(nav)).toEqual(['Overview', 'Wealth', 'Money Flow', 'Taxation']);
     expect(activeLinks(nav)).toEqual(['Taxation']);
+  });
+
+  it.each<[string, TestRole | ReturnType<typeof viewerWithPermissions>, boolean]>([
+    ['anon', 'anon', false],
+    ['player', 'player', false],
+    ['moderator (government.read.all)', 'moderator', true],
+    ['admin', 'admin', true],
+    ['government.read holder', viewerWithPermissions(['player.read', 'government.read']), true],
+    ['government.read.all holder', viewerWithPermissions(['government.read.all']), true],
+  ])('economy tabs for %s include Government: %s', (_label, viewer, hasGovernment) => {
+    setViewer(viewer);
+    navigation.pathname = '/government';
+    render(<SectionTabs />);
+    const nav = screen.getByRole('navigation', { name: 'Section' });
+    expect(linkNames(nav)).toEqual(['Overview', 'Wealth', 'Money Flow', 'Taxation', ...(hasGovernment ? ['Government'] : [])]);
+    expect(activeLinks(nav)).toEqual(hasGovernment ? ['Government'] : []);
   });
 
   it.each<[TestRole, boolean]>([

@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { getViewer } from '@/lib/auth/viewer';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { listPlayerSales } from '@/lib/sql/market';
-import { fmtAmtFull, fmtN } from '@/lib/format';
+import { fmtN } from '@/lib/format';
+import { compare, formatMoney, parseMoney, toDbString, type Cents } from '@/lib/money';
 import { BackLink } from '@democracycraft/design-system/next';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
@@ -47,8 +48,8 @@ export default async function MyMarketPage({
   const windowLabel = sp.window === 'all' ? 'all time' : `last ${sp.window} days`;
   const sales = await listPlayerSales(viewer.minecraftUuid, days);
 
-  interface Item { item_key: string; item_name: string | null; material: string | null; trades: number; qty: number; amount: number }
-  interface Partner { owner_name: string; firm_id: number | null; trades: number; amount: number }
+  interface Item { item_key: string; item_name: string | null; material: string | null; trades: number; qty: number; amount: Cents }
+  interface Partner { owner_name: string; firm_id: number | null; trades: number; amount: Cents }
 
   const bought = new Map<string, Item>();
   const sold = new Map<string, Item>();
@@ -56,11 +57,11 @@ export default async function MyMarketPage({
   const soldTo = new Map<string, Partner>();
   let boughtTrades = 0;
   let soldTrades = 0;
-  let totalSpent = 0;
-  let totalEarned = 0;
+  let totalSpent = 0n;
+  let totalEarned = 0n;
 
   for (const s of sales) {
-    const amount = parseFloat(s.total_price);
+    const amount = parseMoney(s.total_price);
     // Whether THIS player bought or sold depends on both their role and the
     // ChestShop direction (which is the customer's perspective):
     //   customer+BUY / owner+SELL → the player bought;
@@ -134,10 +135,10 @@ export default async function MyMarketPage({
     }
   }
 
-  const topBought = [...bought.values()].sort((a, b) => b.amount - a.amount).slice(0, ITEM_LIMIT);
-  const topSold = [...sold.values()].sort((a, b) => b.amount - a.amount).slice(0, ITEM_LIMIT);
-  const topBoughtFrom = [...boughtFrom.values()].sort((a, b) => b.amount - a.amount).slice(0, PARTNER_LIMIT);
-  const topSoldTo = [...soldTo.values()].sort((a, b) => b.amount - a.amount).slice(0, PARTNER_LIMIT);
+  const topBought = [...bought.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, ITEM_LIMIT);
+  const topSold = [...sold.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, ITEM_LIMIT);
+  const topBoughtFrom = [...boughtFrom.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, PARTNER_LIMIT);
+  const topSoldTo = [...soldTo.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, PARTNER_LIMIT);
 
   return (
     <>
@@ -158,18 +159,18 @@ export default async function MyMarketPage({
       <div className="kpi-grid">
         <div className="kpi">
           <div className="kpi-label">Spent</div>
-          <div className="kpi-value">{fmtAmtFull(totalSpent)}</div>
+          <div className="kpi-value">{formatMoney(totalSpent)}</div>
           <div className="kpi-meta">{fmtN(boughtTrades)} buys</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Earned</div>
-          <div className="kpi-value">{fmtAmtFull(totalEarned)}</div>
+          <div className="kpi-value">{formatMoney(totalEarned)}</div>
           <div className="kpi-meta">{fmtN(soldTrades)} sales</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Net</div>
-          <div className={`kpi-value ${totalEarned - totalSpent >= 0 ? 'pos' : 'neg'}`}>
-            {totalEarned - totalSpent >= 0 ? '+' : ''}{fmtAmtFull(totalEarned - totalSpent)}
+          <div className={`kpi-value ${totalEarned - totalSpent >= 0n ? 'pos' : 'neg'}`}>
+            {formatMoney(totalEarned - totalSpent, { sign: 'always' })}
           </div>
         </div>
         <div className="kpi">
@@ -209,7 +210,7 @@ export default async function MyMarketPage({
                   </td>
                   <td className="amount mono">{fmtN(i.trades)}</td>
                   <td className="amount mono">{fmtN(i.qty)}</td>
-                  <td className="amount neutral">{fmtAmtFull(i.amount)}</td>
+                  <td className="amount neutral">{formatMoney(i.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -247,7 +248,7 @@ export default async function MyMarketPage({
                   </td>
                   <td className="amount mono">{fmtN(i.trades)}</td>
                   <td className="amount mono">{fmtN(i.qty)}</td>
-                  <td className="amount neutral">{fmtAmtFull(i.amount)}</td>
+                  <td className="amount neutral">{formatMoney(i.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -284,7 +285,7 @@ export default async function MyMarketPage({
                     ) : p.owner_name}
                   </td>
                   <td className="amount mono">{fmtN(p.trades)}</td>
-                  <td className="amount neutral">{fmtAmtFull(p.amount)}</td>
+                  <td className="amount neutral">{formatMoney(p.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -315,7 +316,7 @@ export default async function MyMarketPage({
                 <tr key={`${p.firm_id}-${p.owner_name}-${i}`}>
                   <td>{p.owner_name}</td>
                   <td className="amount mono">{fmtN(p.trades)}</td>
-                  <td className="amount neutral">{fmtAmtFull(p.amount)}</td>
+                  <td className="amount neutral">{formatMoney(p.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -334,7 +335,7 @@ function ItemExport({
   basename,
   spendLabel,
 }: {
-  items: { item_key: string; item_name: string | null; material: string | null; trades: number; qty: number; amount: number }[];
+  items: { item_key: string; item_name: string | null; material: string | null; trades: number; qty: number; amount: Cents }[];
   basename: string;
   spendLabel: string;
 }) {
@@ -343,9 +344,9 @@ function ItemExport({
       <CsvButton
         filename={`${basename}.csv`}
         headers={['Item key', 'Item name', 'Material', 'Trades', 'Quantity', spendLabel]}
-        rows={items.map((i) => [i.item_key, i.item_name ?? '', i.material ?? '', i.trades, i.qty, i.amount])}
+        rows={items.map((i) => [i.item_key, i.item_name ?? '', i.material ?? '', i.trades, i.qty, toDbString(i.amount)])}
       />
-      <JsonButton filename={`${basename}.json`} data={items} />
+      <JsonButton filename={`${basename}.json`} data={items.map((i) => ({ ...i, amount: toDbString(i.amount) }))} />
     </span>
   );
 }
@@ -356,7 +357,7 @@ function PartnerExport({
   who,
   amountLabel,
 }: {
-  partners: { owner_name: string; firm_id: number | null; trades: number; amount: number }[];
+  partners: { owner_name: string; firm_id: number | null; trades: number; amount: Cents }[];
   basename: string;
   who: string;
   amountLabel: string;
@@ -366,9 +367,9 @@ function PartnerExport({
       <CsvButton
         filename={`${basename}.csv`}
         headers={[who, 'Firm ID', 'Trades', amountLabel]}
-        rows={partners.map((p) => [p.owner_name, p.firm_id ?? '', p.trades, p.amount])}
+        rows={partners.map((p) => [p.owner_name, p.firm_id ?? '', p.trades, toDbString(p.amount)])}
       />
-      <JsonButton filename={`${basename}.json`} data={partners} />
+      <JsonButton filename={`${basename}.json`} data={partners.map((p) => ({ ...p, amount: toDbString(p.amount) }))} />
     </span>
   );
 }

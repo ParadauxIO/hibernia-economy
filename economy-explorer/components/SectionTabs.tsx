@@ -14,7 +14,7 @@ import { useViewer } from '@/components/ViewerContext';
 export function SectionTabs() {
   const path = usePathname();
   const { permissions } = useViewer();
-  const items = pickSubNav(path, permissions.includes('market.sales.read'));
+  const items = pickSubNav(path, permissions);
   if (!items) return null;
   return (
     <SectionNav>

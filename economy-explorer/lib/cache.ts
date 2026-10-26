@@ -5,42 +5,106 @@ import { redis, tenantKey } from '@/lib/redis';
 // Shared-Redis cache for expensive tenant-global aggregates (the dashboard /
 // market / health full-table scans over ledger_txns + ledger_postings).
 //
-// Three properties the pages depend on:
+// Properties the pages depend on:
 //
 //  1. Epoch-aligned windows. The cache "resets" on fixed wall-clock boundaries
 //     (bucket = floor(now / windowMs)), NOT relative to first write. So every
 //     pod — and the client's AutoRefresh, which aligns to the same boundaries —
 //     agree on when fresh data appears. A 30s window resets at :00 and :30.
 //
-//  2. Stale-while-revalidate over a PERSISTENT last-known-good. The cached value
-//     is kept until a fresh compute REPLACES it — it is never dropped on a timer.
+//  2. Stale-while-revalidate over a last-known-good, bounded by `maxStaleMs`.
 //     A request in a new window is served the previous value immediately and
-//     triggers a background refresh; no user request ever blocks on the heavy
-//     query. Crucially this holds even on a low-traffic page: if nobody visits
-//     for many windows the value is still there, so the next visitor gets it
-//     instantly (and kicks the refresh) rather than hitting a cold compute. The
-//     only expiry is a long hygiene TTL so abandoned per-entity keys eventually
-//     clear; a key visited at least once within that window never goes cold.
+//     triggers a background refresh, so a busy key never blocks on the heavy
+//     query. A value older than `maxStaleMs` (default 60 windows: 1 h for a
+//     60 s window) is no longer served as-is: a quiet key gets one blocking
+//     recompute instead of showing data from days ago. If that recompute fails
+//     the old value is still served, because a stale page beats an error page.
+//     Redis keeps values for a 7-day hygiene TTL so abandoned per-entity keys
+//     eventually clear.
 //
-//  3. Cross-pod single-flight. The refresh runs under a Redis lock, so exactly
-//     ONE pod recomputes per window for the whole fleet (not one per pod, and
-//     never one per concurrent request — the stampede that took prod down).
+//  3. Cross-pod single-flight. Background refreshes AND cold misses run under a
+//     Redis lock, so ONE pod recomputes a key for the whole fleet. On a cold
+//     miss the other pods poll Redis for that pod's result until the lock
+//     expires, then compute themselves. Within a pod, concurrent requests share
+//     one run. Before this, every pod that saw a cold key ran the query at once,
+//     the queries slowed each other past the 15 s statement timeout, and the
+//     first request to `/` on a cold dev cache took ~18 s and then failed.
 //
-// An L1 in-process map absorbs the synchronized client burst (all tabs refresh
+//  4. Failures are never cached. A producer that throws stores nothing; the
+//     next request (or window) tries again.
+//
+// An L1 in-process LRU absorbs the synchronized client burst (all tabs refresh
 // at boundary+lag together): once a pod has the current window's value it serves
-// it without touching Redis. When Redis is absent (local dev) the whole thing
-// degrades to a per-pod in-memory SWR cache.
+// it without touching Redis. It is bounded by entry count and an approximate
+// byte size (the serialized length), so per-entity keys cannot grow it without
+// limit. When Redis is absent (local dev) the whole thing degrades to a per-pod
+// in-memory SWR cache with the same staleness rules.
 
-type Entry<T> = { bucket: number; value: T; at: number };
+export interface MemoOptions {
+  /** Never serve a value computed longer ago than this. Default: 60 windows. */
+  maxStaleMs?: number;
+  /**
+   * Cross-pod lock TTL, which is also how long other pods wait for a cold
+   * compute before computing themselves. Default 20 s: past the 15 s DB
+   * statement timeout, so a healthy compute finishes inside it.
+   */
+  lockMs?: number;
+}
 
-// The stored value is last-known-good: it persists until a fresh compute
-// overwrites it. This TTL is hygiene only — long enough that any key visited
-// within it never goes cold, short enough that abandoned per-entity keys (e.g. a
-// one-off account id) eventually clear from Redis. It is NOT a freshness window;
-// freshness is the epoch bucket, refreshed in the background on access.
-const PERSIST_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+type Entry<T> = { bucket: number; value: T; at: number; size: number };
 
-const l1 = new Map<string, Entry<unknown>>();
+const PERSIST_MS = 7 * 24 * 60 * 60 * 1000; // Redis hygiene TTL, not a freshness window
+const DEFAULT_LOCK_MS = 20_000;
+const DEFAULT_STALE_WINDOWS = 60;
+const L1_MAX_ENTRIES = 5_000;
+const L1_MAX_BYTES = 64 * 1024 * 1024;
+
+/** Map-order LRU: re-inserting on read moves a key to the young end. */
+class Lru {
+  private readonly map = new Map<string, Entry<unknown>>();
+  private bytes = 0;
+  constructor(
+    private maxEntries: number,
+    private maxBytes: number,
+  ) {}
+
+  get<T>(key: string): Entry<T> | undefined {
+    const e = this.map.get(key);
+    if (!e) return undefined;
+    this.map.delete(key);
+    this.map.set(key, e);
+    return e as Entry<T>;
+  }
+
+  set(key: string, e: Entry<unknown>): void {
+    const old = this.map.get(key);
+    if (old) {
+      this.bytes -= old.size;
+      this.map.delete(key);
+    }
+    if (e.size > this.maxBytes) return; // too big for L1; Redis still has it
+    this.map.set(key, e);
+    this.bytes += e.size;
+    while (this.map.size > this.maxEntries || this.bytes > this.maxBytes) {
+      const oldest = this.map.keys().next().value as string;
+      this.bytes -= this.map.get(oldest)!.size;
+      this.map.delete(oldest);
+    }
+  }
+
+  reset(maxEntries: number, maxBytes: number): void {
+    this.map.clear();
+    this.bytes = 0;
+    this.maxEntries = maxEntries;
+    this.maxBytes = maxBytes;
+  }
+
+  stats(): { entries: number; bytes: number; keys: string[] } {
+    return { entries: this.map.size, bytes: this.bytes, keys: [...this.map.keys()] };
+  }
+}
+
+const l1 = new Lru(L1_MAX_ENTRIES, L1_MAX_BYTES);
 const inflight = new Map<string, Promise<unknown>>();
 
 /** Per-pod single-flight: concurrent callers for the same key share one run. */
@@ -54,127 +118,241 @@ function once<T>(key: string, fn: () => Promise<T>): Promise<T> {
   return p;
 }
 
-export async function memo<T>(key: string, windowMs: number, producer: () => Promise<T>): Promise<T> {
-  const bucket = Math.floor(Date.now() / windowMs);
+interface Ctx<T> {
+  key: string;
+  ckey: string;
+  lockKey: string;
+  windowMs: number;
+  bucket: number;
+  maxStaleMs: number;
+  lockMs: number;
+  producer: () => Promise<T>;
+}
+
+export async function memo<T>(
+  key: string,
+  windowMs: number,
+  producer: () => Promise<T>,
+  options: MemoOptions = {},
+): Promise<T> {
+  const ctx: Ctx<T> = {
+    key,
+    ckey: tenantKey(`cache:${key}`),
+    lockKey: tenantKey(`lock:${key}`),
+    windowMs,
+    bucket: Math.floor(Date.now() / windowMs),
+    maxStaleMs: options.maxStaleMs ?? windowMs * DEFAULT_STALE_WINDOWS,
+    lockMs: options.lockMs ?? DEFAULT_LOCK_MS,
+    producer,
+  };
 
   // L1: this pod already has the current window — serve without hitting Redis.
-  const cached = l1.get(key) as Entry<T> | undefined;
-  if (cached && cached.bucket === bucket) return cached.value;
+  const cached = l1.get<T>(key);
+  if (cached && cached.bucket >= ctx.bucket) return cached.value;
 
   const r = redis();
-  if (!r) return memoLocal(key, windowMs, bucket, producer);
+  if (!r) return memoLocal(ctx, cached);
 
-  const ckey = tenantKey(`cache:${key}`);
   let raw: string | null;
   try {
-    raw = await r.get(ckey);
+    raw = await r.get(ctx.ckey);
   } catch {
-    return memoLocal(key, windowMs, bucket, producer);
+    return memoLocal(ctx, cached);
   }
 
-  if (raw) {
-    let parsed: Entry<T> | null = null;
-    try {
-      // superjson (not JSON) so Date/BigInt etc. in cached rows round-trip
-      // faithfully — a plain-JSON Date would come back as a string and break
-      // callers that expect a Date (e.g. .toISOString() in CSV exports).
-      const obj = superjson.parse(raw) as { bucket: number; value: T };
-      parsed = { bucket: obj.bucket, value: obj.value, at: Date.now() };
-    } catch {
-      parsed = null;
-    }
-    if (parsed) {
-      l1.set(key, parsed);
-      if (parsed.bucket < bucket) {
-        // Stale window → serve stale now, recompute once across the fleet.
-        revalidate(key, ckey, bucket, windowMs, producer).catch(() => {});
-      }
-      return parsed.value;
+  const stored = raw ? parseStored<T>(raw, windowMs) : null;
+  if (stored) l1.set(key, stored);
+  // L1 can outlive the Redis copy (eviction, flush); keep whichever is newer.
+  const entry = stored && (!cached || stored.at >= cached.at) ? stored : cached;
+  if (entry) {
+    if (entry.bucket >= ctx.bucket) return entry.value;
+    if (Date.now() - entry.at <= ctx.maxStaleMs) {
+      // Stale window → serve stale now, recompute once across the fleet.
+      once(`refresh:${key}`, () => revalidate(ctx)).catch(() => {});
+      return entry.value;
     }
   }
 
-  // Cold (no value at all — first ever, or after the 7-day hygiene TTL). This is
-  // the ONLY blocking path; once a value exists it persists, so subsequent gaps
-  // serve the last value instead of recomputing. Compute once per pod, publish.
-  return once(key, async () => {
-    const value = await producer();
-    await store(ckey, bucket, value);
-    l1.set(key, { bucket, value, at: Date.now() });
-    return value;
-  });
+  // Cold (never computed, past the hygiene TTL, or older than maxStaleMs). The
+  // only blocking path.
+  return coldCompute(ctx, entry ?? null);
+}
+
+function parseStored<T>(raw: string, windowMs: number): Entry<T> | null {
+  try {
+    // superjson (not JSON) so Date/BigInt etc. in cached rows round-trip
+    // faithfully — a plain-JSON Date would come back as a string and break
+    // callers that expect a Date (e.g. .toISOString() in CSV exports).
+    const obj = superjson.parse(raw) as { bucket?: unknown; value: T; at?: unknown } | null;
+    if (typeof obj?.bucket !== 'number') return null;
+    // Values written before `at` existed: assume computed at the start of their window.
+    const at = typeof obj.at === 'number' ? obj.at : obj.bucket * windowMs;
+    return { bucket: obj.bucket, value: obj.value, at, size: raw.length };
+  } catch {
+    return null;
+  }
+}
+
+/** A refresh or cold recompute failed and the previous value is being served. */
+function reportRefreshFailure(key: string, err: unknown): void {
+  // A recompute that keeps failing (e.g. a query past max_statement_time)
+  // otherwise serves the last good value with nothing to show why (PAR-407).
+  console.warn(`[cache] recompute of ${key} failed; serving the previous value:`, err);
+}
+
+type Lock = { token: string } | 'held' | 'unavailable';
+
+async function acquireLock(lockKey: string, lockMs: number): Promise<Lock> {
+  const r = redis();
+  if (!r) return 'unavailable';
+  const token = `${process.pid}:${Math.random().toString(36).slice(2)}`;
+  try {
+    // Self-expiring, so a dead holder can't wedge the key.
+    return (await r.set(lockKey, token, 'PX', lockMs, 'NX')) === 'OK' ? { token } : 'held';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+async function releaseLock(lockKey: string, lock: Lock): Promise<void> {
+  if (typeof lock === 'string') return;
+  const r = redis();
+  if (!r) return;
+  try {
+    // Only delete our own lock: if we overran the TTL another pod may hold it now.
+    if ((await r.get(lockKey)) === lock.token) await r.del(lockKey);
+  } catch {
+    /* lock will expire on its own */
+  }
+}
+
+/** Persist as last-known-good and keep it in L1. Storage is best effort. */
+async function publish<T>(ctx: Ctx<T>, value: T): Promise<void> {
+  const at = Date.now();
+  let serialized: string | null = null;
+  try {
+    serialized = superjson.stringify({ bucket: ctx.bucket, value, at });
+  } catch {
+    serialized = null;
+  }
+  l1.set(ctx.key, { bucket: ctx.bucket, value, at, size: serialized?.length ?? 1024 });
+  const r = redis();
+  if (!r || serialized === null) return;
+  try {
+    await r.set(ctx.ckey, serialized, 'PX', PERSIST_MS);
+  } catch {
+    /* a failed write just means the next request recomputes */
+  }
 }
 
 /** Background recompute for a stale window, guarded by a fleet-wide Redis lock. */
-async function revalidate<T>(
-  key: string,
-  ckey: string,
-  bucket: number,
-  windowMs: number,
-  producer: () => Promise<T>,
-): Promise<void> {
-  const r = redis();
-  if (!r) return;
-  const lockKey = tenantKey(`lock:${key}`);
-  let acquired = false;
+async function revalidate<T>(ctx: Ctx<T>): Promise<void> {
+  const lock = await acquireLock(ctx.lockKey, ctx.lockMs);
+  if (typeof lock === 'string') return; // another pod is refreshing, or Redis is down
   try {
-    // Token = bucket: one refresh per window. Lock self-expires so a dead holder
-    // can't wedge the next window.
-    const res = await r.set(lockKey, String(bucket), 'PX', Math.min(windowMs, 15_000), 'NX');
-    acquired = res === 'OK';
-  } catch {
-    return;
-  }
-  if (!acquired) return; // another pod is already refreshing this window
-  try {
-    const value = await producer();
-    await store(ckey, bucket, value);
-    l1.set(key, { bucket, value, at: Date.now() });
+    await publish(ctx, await ctx.producer());
   } catch (e) {
-    // Leave the stale value in place; the next window retries. Log it: a recompute
-    // that keeps failing (e.g. a query past max_statement_time) otherwise serves
-    // the last good value indefinitely with nothing to show why (PAR-407).
-    console.warn(`[cache] recompute of ${key} failed; serving the previous value:`, e);
+    reportRefreshFailure(ctx.key, e); // the stale value stays in place; the next window retries
   } finally {
-    try {
-      await r.del(lockKey);
-    } catch {
-      /* lock will expire on its own */
-    }
+    await releaseLock(ctx.lockKey, lock);
   }
 }
 
-/** Persist the value as last-known-good (replaced only by the next successful compute). */
-async function store<T>(ckey: string, bucket: number, value: T): Promise<void> {
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Another pod holds the compute lock: poll Redis for its result until the lock
+ * goes away or expires. Returns the published entry, or null to compute here.
+ */
+async function waitForPeer<T>(ctx: Ctx<T>, stale: Entry<T> | null): Promise<Entry<T> | null> {
   const r = redis();
-  if (!r) return;
+  if (!r) return null;
+  const pollMs = Math.max(25, Math.min(150, ctx.lockMs / 10));
+  let deadline = Date.now() + ctx.lockMs;
   try {
-    await r.set(ckey, superjson.stringify({ bucket, value }), 'PX', PERSIST_MS);
+    const ttl = await r.pttl(ctx.lockKey);
+    if (ttl > 0) deadline = Date.now() + Math.min(ttl, ctx.lockMs);
   } catch {
-    /* best effort — a failed write just means the next request recomputes */
+    return null;
   }
+  // A value newer than the one that sent us here, and still young enough to serve.
+  const readPublished = async (): Promise<Entry<T> | null> => {
+    const raw = await r.get(ctx.ckey);
+    const entry = raw ? parseStored<T>(raw, ctx.windowMs) : null;
+    if (!entry || (stale && entry.at <= stale.at) || Date.now() - entry.at > ctx.maxStaleMs) return null;
+    l1.set(ctx.key, entry);
+    return entry;
+  };
+  try {
+    for (;;) {
+      const entry = await readPublished();
+      if (entry) return entry;
+      // Lock gone: the holder either just published (re-read once to close the
+      // race between its write and its release) or failed without publishing.
+      if ((await r.exists(ctx.lockKey)) === 0) return await readPublished();
+      if (Date.now() >= deadline) return null;
+      await sleep(pollMs);
+    }
+  } catch {
+    return null;
+  }
+}
+
+function coldCompute<T>(ctx: Ctx<T>, stale: Entry<T> | null): Promise<T> {
+  return once(ctx.key, async () => {
+    let lock = await acquireLock(ctx.lockKey, ctx.lockMs);
+    if (lock === 'held') {
+      const peer = await waitForPeer(ctx, stale);
+      if (peer) return peer.value;
+      // Waited out the holder: compute here, taking the lock if it is free now
+      // so pods arriving later wait on us.
+      lock = await acquireLock(ctx.lockKey, ctx.lockMs);
+    }
+    try {
+      const value = await ctx.producer();
+      await publish(ctx, value);
+      return value;
+    } catch (e) {
+      if (!stale) throw e;
+      reportRefreshFailure(ctx.key, e);
+      return stale.value;
+    } finally {
+      await releaseLock(ctx.lockKey, lock);
+    }
+  });
 }
 
 /** Per-pod in-memory SWR fallback when Redis is unavailable. */
-async function memoLocal<T>(
-  key: string,
-  windowMs: number,
-  bucket: number,
-  producer: () => Promise<T>,
-): Promise<T> {
-  const cached = l1.get(key) as Entry<T> | undefined;
+async function memoLocal<T>(ctx: Ctx<T>, cached: Entry<T> | undefined): Promise<T> {
   if (cached) {
-    if (cached.bucket < bucket) {
-      once(key, async () => {
-        const value = await producer();
-        l1.set(key, { bucket, value, at: Date.now() });
-        return value;
-      }).catch((e) => console.warn(`[cache] recompute of ${key} failed; serving the previous value:`, e));
+    if (cached.bucket >= ctx.bucket) return cached.value;
+    if (Date.now() - cached.at <= ctx.maxStaleMs) {
+      once(`refresh:${ctx.key}`, async () => publish(ctx, await ctx.producer())).catch((e) =>
+        reportRefreshFailure(ctx.key, e),
+      );
+      return cached.value;
     }
-    return cached.value;
   }
-  return once(key, async () => {
-    const value = await producer();
-    l1.set(key, { bucket, value, at: Date.now() });
-    return value;
+  return once(ctx.key, async () => {
+    try {
+      const value = await ctx.producer();
+      await publish(ctx, value);
+      return value;
+    } catch (e) {
+      if (!cached) throw e;
+      reportRefreshFailure(ctx.key, e);
+      return cached.value;
+    }
   });
+}
+
+/** Test seam: empty this pod's L1 and in-flight map, optionally with smaller bounds. */
+export function resetCacheForTests(limits: { maxEntries?: number; maxBytes?: number } = {}): void {
+  l1.reset(limits.maxEntries ?? L1_MAX_ENTRIES, limits.maxBytes ?? L1_MAX_BYTES);
+  inflight.clear();
+}
+
+/** Test seam: L1 occupancy, oldest key first. */
+export function cacheStatsForTests(): { entries: number; bytes: number; keys: string[] } {
+  return l1.stats();
 }

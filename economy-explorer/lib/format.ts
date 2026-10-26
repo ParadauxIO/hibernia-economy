@@ -1,4 +1,4 @@
-import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { formatMoney, tryParseMoney, type Cents } from '@/lib/money';
 
 // Server-safe formatters. No DOM, no React, no recharts. Mirrors the
 // equivalents in treasury-ui/src/explorer/lib.tsx so a 1:1 port produces
@@ -8,24 +8,22 @@ export function fmtN(n: number): string {
   return n.toLocaleString('en-US');
 }
 
+// Money formatting lives in lib/money (exact cents). These keep the old call
+// signatures: DB decimal strings format exactly; numbers (chart coordinates and
+// other already-lossy values) are rounded to the nearest cent first.
+function toCents(s: string | number): Cents | null {
+  if (typeof s === 'string') return tryParseMoney(s);
+  return Number.isFinite(s) ? BigInt(Math.round(s * 100)) : null;
+}
+
 export function fmtAmt(s: string | number): string {
-  const v = typeof s === 'number' ? s : parseFloat(s);
-  if (!Number.isFinite(v)) return '—';
-  const abs = Math.abs(v);
-  if (abs >= 1_000_000_000) return `${v < 0 ? '−' : ''}${CURRENCY_SYMBOL}${(abs / 1_000_000_000).toFixed(2)}B`;
-  if (abs >= 1_000_000) return `${v < 0 ? '−' : ''}${CURRENCY_SYMBOL}${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${v < 0 ? '−' : ''}${CURRENCY_SYMBOL}${(abs / 1_000).toFixed(1)}K`;
-  return `${v < 0 ? '−' : ''}${CURRENCY_SYMBOL}${abs.toFixed(2)}`;
+  const cents = toCents(s);
+  return cents === null ? '—' : formatMoney(cents, { compact: true });
 }
 
 export function fmtAmtFull(s: string | number): string {
-  const v = typeof s === 'number' ? s : parseFloat(s);
-  if (!Number.isFinite(v)) return '—';
-  return (
-    (v < 0 ? '−' : '') +
-    CURRENCY_SYMBOL +
-    Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  );
+  const cents = toCents(s);
+  return cents === null ? '—' : formatMoney(cents);
 }
 
 export function fmtDate(d: string): string {

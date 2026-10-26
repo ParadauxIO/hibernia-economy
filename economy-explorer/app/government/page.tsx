@@ -10,6 +10,7 @@ import { getGovernmentDashboard } from '@/lib/services/government';
 import { getViewer, hasPermission } from '@/lib/auth';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
+import { formatMoney, sumBy } from '@/lib/money';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { SectionTabs } from '@/components/SectionTabs';
@@ -59,7 +60,7 @@ export default async function GovernmentPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Gov treasury</div>
-          <div className="kpi-value">{fmtAmtFull(govAccounts.reduce((s, g) => s + parseFloat(g.balance), 0))}</div>
+          <div className="kpi-value">{formatMoney(sumBy(govAccounts, (g) => g.balance))}</div>
         </div>
       </div>
 

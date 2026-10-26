@@ -8,6 +8,7 @@ import { getShopOffers, getItemHistory } from '@/lib/services/market';
 import { ShopOffers } from '@/components/market/ShopOffers';
 import { listItemSales, listSamplesInRange } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
+import { divRound, formatMoney, sumBy } from '@/lib/money';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { bucketSamples, type CandleInterval } from '@/lib/derived';
 
@@ -101,9 +102,9 @@ export default async function ItemDetailPage({
         shop_owner_uuid: s.shop_owner_uuid,
       }));
 
-  const last30Volume = byDay.reduce((s, d) => s + parseFloat(d.total_volume), 0);
+  const last30Volume = sumBy(byDay, (d) => d.total_volume);
   const last30Quantity = byDay.reduce((s, d) => s + d.total_quantity, 0);
-  const avgPrice = last30Quantity > 0 ? last30Volume / last30Quantity : null;
+  const avgPrice = last30Quantity > 0 ? divRound(last30Volume, last30Quantity) : null;
 
   // 30-day price movement (first vs last daily avg unit price).
   const firstDay = byDay.at(0);
@@ -150,11 +151,11 @@ export default async function ItemDetailPage({
         </div>
         <div className="kpi">
           <div className="kpi-label">Volume (30d)</div>
-          <div className="kpi-value">{fmtAmtFull(last30Volume)}</div>
+          <div className="kpi-value">{formatMoney(last30Volume)}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Avg price / unit (30d)</div>
-          <div className="kpi-value">{avgPrice !== null ? fmtAmtFull(avgPrice) : '—'}</div>
+          <div className="kpi-value">{avgPrice !== null ? formatMoney(avgPrice) : '—'}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Sellers</div>

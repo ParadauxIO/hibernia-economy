@@ -151,6 +151,7 @@ brackets and per-source income-tax overrides. If live rates cannot be read, it s
 unavailable; it never substitutes shipped defaults. Corporate and ChestShop rates
 are not published in this panel.
 
+The Government tab appears only if your role includes government access.
 Government opens with accounts you may view. Its Fines tab supports reason search,
 active/revoked filtering and pagination. Summary totals always cover the whole
 selected period for your permitted accounts, independent of the list filter.

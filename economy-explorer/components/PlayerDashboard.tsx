@@ -1,5 +1,5 @@
 import 'server-only';
-import { getViewer, requirePlayerRead, canViewAccount } from '@/lib/auth';
+import { getViewer, requirePlayerRead, readableAccountIds } from '@/lib/auth';
 import Link from 'next/link';
 import type { Route } from 'next';
 import {
@@ -27,8 +27,8 @@ export async function PlayerDashboard({ uuid, name, self = false }: { uuid: stri
   const viewer = await getViewer();
   requirePlayerRead(uuid, viewer);
   const candidates = await findAccountsForPlayer(uuid);
-  const allowed = await Promise.all(candidates.map(a => canViewAccount(a.account_id, viewer)));
-  const accounts = candidates.filter((_, index) => allowed[index]);
+  const readable = await readableAccountIds(viewer, candidates.map((a) => a.account_id));
+  const accounts = candidates.filter((a) => readable.has(a.account_id));
   const accountIds = accounts.map((a) => a.account_id);
   const [totals, txnCount, partners, recentTxns] = await Promise.all([
     getPlayerTotals(accountIds, DAYS),

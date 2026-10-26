@@ -203,6 +203,23 @@ export async function canReadAccount(accountId: number, viewerUuid: string): Pro
   return Number(result.rows[0]?.allowed ?? 0) === 1;
 }
 
+/** Batched ownership + relationship lookup: which of `accountIds` exist and are
+ * owned by, or readable through account_read_access_web for, the viewer. One
+ * round trip instead of findAccount + canReadAccount per id. Call
+ * Auth.readableAccountIds for the full RBAC + relationship decision. */
+export async function findReadableAccountIds(accountIds: readonly number[], viewerUuid: string): Promise<number[]> {
+  if (accountIds.length === 0) return [];
+  const bin = uuidToBin(viewerUuid);
+  const result = await sql<{ account_id: number }>`
+    SELECT a.account_id FROM accounts a
+     WHERE a.account_id IN (${sql.join([...new Set(accountIds)])})
+       AND (a.owner_uuid_bin = ${bin}
+         OR EXISTS (SELECT 1 FROM account_read_access_web ar
+                     WHERE ar.account_id = a.account_id AND ar.subject_uuid_bin = ${bin}))
+  `.execute(db);
+  return result.rows.map((r) => Number(r.account_id));
+}
+
 // ── Account-scoped postings ───────────────────────────────────────────────
 
 /** Mirrors LedgerExplorerMapper.listAccountTransactions (line 105-116). */

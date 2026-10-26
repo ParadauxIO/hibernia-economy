@@ -23,7 +23,7 @@ const data = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({
   getViewer: vi.fn(() => Promise.resolve({ anon: false })),
   requirePlayerRead: vi.fn(),
-  canViewAccount: vi.fn((id: number) => Promise.resolve(data.allowed.has(id))),
+  readableAccountIds: vi.fn((_viewer: unknown, ids: number[]) => Promise.resolve(new Set(ids.filter((id) => data.allowed.has(id))))),
 }));
 
 vi.mock('@/lib/sql/me', () => ({

@@ -1,14 +1,14 @@
 import { permissionsFor } from '../role-fixtures';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import type { Viewer } from '@/lib/auth/viewer';
-import { canViewAccount, canViewTransaction, canViewFirmFinancials, canViewFirmInternals, isStaff, hasElevatedRead, auditRole, requirePermission } from '@/lib/auth/access';
+import { canViewAccount, canViewTransaction, canViewFirmFinancials, canViewFirmInternals, isStaff, hasElevatedRead, auditRole, requirePermission, readableAccountIds } from '@/lib/auth/access';
 import { hasPermission, PERMISSIONS } from '@/lib/auth/policy';
 import { requireRole } from '@/lib/auth/requireRole';
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
-import { findAccount, canReadAccount, findTransactionAccountIds } from '@/lib/sql/ledger';
+import { findAccount, canReadAccount, findTransactionAccountIds, findReadableAccountIds } from '@/lib/sql/ledger';
 import { getAccountFirmId, hasFirmFinancialAccess, isFirmMember } from '@/lib/sql/firm';
-vi.mock('@/lib/sql/ledger', () => ({ findAccount: vi.fn(), canReadAccount: vi.fn(), findTransactionAccountIds: vi.fn() }));
-vi.mock('@/lib/sql/firm', () => ({ getAccountFirmId: vi.fn(), hasFirmFinancialAccess: vi.fn(), isFirmMember: vi.fn() }));
+vi.mock('@/lib/sql/ledger', () => ({ findAccount: vi.fn(), canReadAccount: vi.fn(), findTransactionAccountIds: vi.fn(), findReadableAccountIds: vi.fn() }));
+vi.mock('@/lib/sql/firm', () => ({ getAccountFirmId: vi.fn(), hasFirmFinancialAccess: vi.fn(), isFirmMember: vi.fn(), findFirmByDisplayName: vi.fn(), findFirmById: vi.fn() }));
 const anon: Viewer = { anon: true, role: null, capabilities: [], permissions: [], keycloakSub: null, minecraftUuid: null, minecraftName: null, linked: false };
 const base = { anon: false as const, keycloakSub: 's', minecraftUuid: 'u', minecraftName: 'n', linked: true };
 const player: Viewer = { ...base, role: 'player', capabilities: ['player', 'player'], permissions: permissionsFor('player', 'player') };
@@ -22,6 +22,17 @@ beforeEach(() => {
   vi.mocked(getAccountFirmId).mockResolvedValue(null);
   vi.mocked(hasFirmFinancialAccess).mockResolvedValue(false);
   vi.mocked(isFirmMember).mockResolvedValue(false);
+  // The batched query models the same rule as findAccount + canReadAccount, so the
+  // relationship tests below drive both paths (the SQL agreement is covered by the
+  // integration suite).
+  vi.mocked(findReadableAccountIds).mockImplementation(async (ids, uuid) => {
+    const out: number[] = [];
+    for (const id of ids) {
+      const account = await findAccount(id);
+      if (account && (account.owner_uuid === uuid || await canReadAccount(id, uuid))) out.push(id);
+    }
+    return out;
+  });
 });
 describe('RBAC', () => {
   it('the default admin bundle contains all permissions', () => {
@@ -102,6 +113,42 @@ describe('transaction relationships', () => {
   it('denies transactions with no participating accounts', async () => {
     vi.mocked(findTransactionAccountIds).mockResolvedValue([]);
     expect(await canViewTransaction(99, player)).toBe(false);
+  });
+});
+describe('readableAccountIds (batched)', () => {
+  it('returns only owned or related accounts, in one query', async () => {
+    vi.mocked(findReadableAccountIds).mockResolvedValue([12]);
+    expect(await readableAccountIds(player, [12, 13, 14])).toEqual(new Set([12]));
+    expect(findReadableAccountIds).toHaveBeenCalledTimes(1);
+    expect(findReadableAccountIds).toHaveBeenCalledWith([12, 13, 14], 'u');
+    expect(findAccount).not.toHaveBeenCalled();
+    expect(canReadAccount).not.toHaveBeenCalled();
+  });
+  it('agrees with canViewAccount id by id', async () => {
+    vi.mocked(findAccount).mockImplementation(async id => (id === 404 ? null : { owner_uuid: id === 1 ? 'u' : 'other' }) as Awaited<ReturnType<typeof findAccount>>);
+    vi.mocked(canReadAccount).mockImplementation(async id => id === 2);
+    const ids = [1, 2, 3, 404];
+    const batched = await readableAccountIds(player, ids);
+    for (const id of ids) expect(batched.has(id)).toBe(await canViewAccount(id, player));
+    expect(batched).toEqual(new Set([1, 2]));
+  });
+  it('global readers get every id without a lookup', async () => {
+    expect(await readableAccountIds(moderator, [5, 6])).toEqual(new Set([5, 6]));
+    expect(findReadableAccountIds).not.toHaveBeenCalled();
+  });
+  it.each([anon, { ...player, permissions: [] }, { ...player, minecraftUuid: null }])('is empty without authentication, permission or identity', async v => {
+    expect(await readableAccountIds(v, [1, 2])).toEqual(new Set());
+    expect(findReadableAccountIds).not.toHaveBeenCalled();
+  });
+  it('skips the query for an empty list', async () => {
+    expect(await readableAccountIds(player, [])).toEqual(new Set());
+    expect(findReadableAccountIds).not.toHaveBeenCalled();
+  });
+  it('canViewTransaction checks all participants in one batched query', async () => {
+    vi.mocked(findTransactionAccountIds).mockResolvedValue([12, 13, 14]);
+    vi.mocked(findReadableAccountIds).mockResolvedValue([14]);
+    expect(await canViewTransaction(1, player)).toBe(true);
+    expect(findReadableAccountIds).toHaveBeenCalledTimes(1);
   });
 });
 describe('firm relationships', () => {

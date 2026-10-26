@@ -6,16 +6,16 @@ import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import {
-  findAccount,
   listAccountTransactions,
   countAccountTransactions,
   getCounterparties,
   getAccountActivityCalendar,
 } from '@/lib/sql/ledger';
 import { accountLabel, fmtAmt, fmtAmtFull, fmtN, shortenUuid } from '@/lib/format';
+import { parseMoney, toNumber } from '@/lib/money';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { getViewer } from '@/lib/auth/viewer';
-import { hasElevatedRead, canViewAccount } from '@/lib/auth/access';
+import { hasElevatedRead, canViewAccount, findAccount } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -106,30 +106,32 @@ export default async function AccountDetailPage({
   // Derive a balance-over-time series: walk backwards from current balance
   // subtracting each posting amount. Newer-first → reverse so chart x-axis
   // ascends in time.
-  const currentBalance = parseFloat(account.balance);
+  const currentBalance = parseMoney(account.balance);
   const balanceSeries = (() => {
     if (txns.length === 0) return [] as { date: string; balance: number }[];
     let bal = currentBalance;
     const out: { date: string; balance: number }[] = [];
     for (const p of txns) {
       if (!p.settlement_time) continue;
-      out.push({ date: p.settlement_time.toISOString(), balance: bal });
-      bal -= parseFloat(p.amount);
+      out.push({ date: p.settlement_time.toISOString(), balance: toNumber(bal) });
+      bal -= parseMoney(p.amount);
     }
     return out.reverse();
   })();
   const inOutSeries = (() => {
     if (txns.length === 0) return [] as { day: string; cr: number; dr: number }[];
-    const map = new Map<string, { day: string; cr: number; dr: number }>();
+    // Sum in cents per day; only the finished chart points become numbers.
+    const map = new Map<string, { day: string; cr: bigint; dr: bigint }>();
     for (const p of txns) {
       if (!p.settlement_time) continue;
       const day = p.settlement_time.toISOString().slice(0, 10);
-      const v = parseFloat(p.amount);
+      const v = parseMoney(p.amount);
       let row = map.get(day);
-      if (!row) { row = { day, cr: 0, dr: 0 }; map.set(day, row); }
-      if (v >= 0) row.cr += v; else row.dr += -v;
+      if (!row) { row = { day, cr: 0n, dr: 0n }; map.set(day, row); }
+      if (v >= 0n) row.cr += v; else row.dr -= v;
     }
-    return Array.from(map.values()).sort((a, b) => a.day.localeCompare(b.day));
+    return Array.from(map.values()).sort((a, b) => a.day.localeCompare(b.day))
+      .map((r) => ({ day: r.day, cr: toNumber(r.cr), dr: toNumber(r.dr) }));
   })();
   const trajectorySeries = trajectory.length > 0
     ? (() => {
@@ -137,8 +139,8 @@ export default async function AccountDetailPage({
         let running = currentBalance;
         const eodByDate = new Map<string, number>();
         for (const day of [...trajectory].reverse()) {
-          eodByDate.set(day.date, running);
-          running -= parseFloat(day.net);
+          eodByDate.set(day.date, toNumber(running));
+          running -= parseMoney(day.net);
         }
         return trajectory.map((r) => ({ date: r.date, balance: eodByDate.get(r.date) ?? 0 }));
       })()
