@@ -12,7 +12,7 @@ const source = resolve(scripts, '../src/main/resources/db/migration');
 const v17 = 'V17__economy_players.sql';
 const v18 = 'V18__consolidate_account_access.sql';
 
-function fixture(t, { currentBase = false, differentBase = false } = {}) {
+function fixture(t, { currentBase = false, differentBase = false, baseMaxVersion = Infinity } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'migration-guard-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const migrations = join(root, migrationPath);
@@ -27,7 +27,7 @@ function fixture(t, { currentBase = false, differentBase = false } = {}) {
   git('config', 'core.autocrlf', 'false');
   for (const name of readdirSync(source)) {
     const version = Number(/^V(\d+)__/.exec(name)?.[1]);
-    if (currentBase || version <= 18) copyFileSync(join(source, name), join(migrations, name));
+    if ((currentBase && version <= baseMaxVersion) || version <= 18) copyFileSync(join(source, name), join(migrations, name));
   }
   if (!currentBase) {
     for (const name of [v17, v18]) {
@@ -192,14 +192,19 @@ test('normal bases exclude nothing and still reject edits to the renumbered migr
   assert.equal(f.run('--upgrade-excludes').status, 1);
 });
 
+// The guard recognises the withdrawal base by its exact tree (V1..V42 plus
+// V40/V41), so later migrations belong to the head, not the base.
 function withdrawalFixture(t, { differentBase = false } = {}) {
-  const f = fixture(t, { currentBase: true });
+  const f = fixture(t, { currentBase: true, baseMaxVersion: 42 });
+  const later = readdirSync(f.migrations).filter(name => Number(/^V(\d+)__/.exec(name)?.[1]) > 42);
+  for (const name of later) rmSync(join(f.migrations, name));
   for (const name of readdirSync(join(scripts, 'fixtures/withdrawn-namespace')).filter(name => name.endsWith('.sql'))) {
     copyFileSync(join(scripts, 'fixtures/withdrawn-namespace', name), join(f.migrations, name));
   }
   if (differentBase) appendFileSync(join(f.migrations, v18), '\n-- another deployment\n');
-  f.git('add', '.');
+  f.git('add', '-A');
   f.git('-c', 'commit.gpgsign=false', 'commit', '-qm', 'Before namespace withdrawal');
+  for (const name of later) copyFileSync(join(source, name), join(f.migrations, name));
   for (const name of readdirSync(join(scripts, 'fixtures/withdrawn-namespace')).filter(name => name.endsWith('.sql'))) rmSync(join(f.migrations, name));
   return f;
 }
