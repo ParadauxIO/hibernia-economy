@@ -3,6 +3,7 @@ import type { Route } from 'next';
 import { buildMetadata } from '@/lib/metadata';
 import { getWealthData } from '@/lib/services/economy';
 import { accountLabel, fmtAmtFull, fmtN, fmtPct } from '@/lib/format';
+import { divRound, formatMoney, parseMoney } from '@/lib/money';
 import { SectionTabs } from '@/components/SectionTabs';
 import { InfoTip } from '@democracycraft/design-system';
 import { WealthDonut, BalanceDistribution } from '@/components/charts/AreaTimeline';
@@ -67,14 +68,13 @@ export default async function WealthPage() {
             </thead>
             <tbody>
               {stats.byType.map((b) => {
-                const total = parseFloat(b.total_balance);
-                const avg = b.account_count > 0 ? total / b.account_count : 0;
+                const avg = b.account_count > 0 ? divRound(parseMoney(b.total_balance), b.account_count) : 0n;
                 return (
                   <tr key={b.account_type}>
-                    <td><span className={`badge badge-${b.account_type}`}>{b.account_type}</span><details className="mobile-only directory-details"><summary>Details</summary><p>{fmtN(b.account_count)} accounts · average {fmtAmtFull(avg)}</p></details></td>
+                    <td><span className={`badge badge-${b.account_type}`}>{b.account_type}</span><details className="mobile-only directory-details"><summary>Details</summary><p>{fmtN(b.account_count)} accounts · average {formatMoney(avg)}</p></details></td>
                     <td data-secondary="true" className="amount mono">{fmtN(b.account_count)}</td>
                     <td className="amount neutral">{fmtAmtFull(b.total_balance)}</td>
-                    <td data-secondary="true" className="amount neutral">{fmtAmtFull(avg)}</td>
+                    <td data-secondary="true" className="amount neutral">{formatMoney(avg)}</td>
                   </tr>
                 );
               })}

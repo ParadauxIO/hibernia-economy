@@ -4,7 +4,7 @@ import { useViewer } from '@/components/ViewerContext';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { disbandFirmAction, renameFirmAction, updateFirmDetailsAction } from '@/lib/actions/admin-firms';
-import { fmtAmt } from '@/lib/format';
+import { formatMoney, sum, tryParseMoney } from '@/lib/money';
 
 /**
  * Per-firm admin controls: rename, edit details (HQ/Discord), and a type-to-confirm
@@ -51,10 +51,10 @@ export function FirmAdminPanel({
       if (!r.ok) setMsg({ kind: 'err', text: r.error ?? 'Disband failed.' });
       else {
         const swept = (r.result?.accounts ?? []).filter((a) => a.sweptAmount);
-        const total = swept.reduce((s, a) => s + Number(a.sweptAmount), 0);
+        const total = sum(swept.map((a) => tryParseMoney(a.sweptAmount) ?? 0n));
         setMsg({
           kind: 'ok',
-          text: `Disbanded. ${r.result?.accounts.length ?? 0} account(s) archived; swept ${fmtAmt(total)} to the proprietor.`,
+          text: `Disbanded. ${r.result?.accounts.length ?? 0} account(s) archived; swept ${formatMoney(total, { compact: true })} to the proprietor.`,
         });
         setConfirm('');
         router.refresh();
@@ -85,7 +85,7 @@ export function FirmAdminPanel({
         <summary style={{ cursor: 'pointer', color: 'var(--bad)', fontSize: 13 }}>Disband this firm…</summary>
         <form onSubmit={doDisband} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 460 }}>
           <p className="muted small" style={{ margin: 0 }}>
-            Sweeps every account’s balance ({fmtAmt(totalBalance)}) to the proprietor, archives the accounts,
+            Sweeps every account’s balance ({formatMoney(totalBalance, { compact: true })}) to the proprietor, archives the accounts,
             and archives the firm. This cannot be undone. Type <strong>{name}</strong> to confirm.
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

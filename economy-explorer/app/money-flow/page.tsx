@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { memo } from '@/lib/cache';
 import { fmtAmtFull, fmtN } from '@/lib/format';
+import { formatMoney, sumBy } from '@/lib/money';
 import { SectionTabs } from '@/components/SectionTabs';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(1).max(30).default(30) });
@@ -28,7 +29,7 @@ export default async function MoneyFlowPage({
   const edges = await memo(`money-flow:${sp.days}`, 60_000, () => getMoneyFlow(sp.days));
 
   // Roll up totals per (from, to) pair for the header KPIs.
-  const totalAmount = edges.reduce((s, e) => s + parseFloat(e.amount), 0);
+  const totalAmount = sumBy(edges, (e) => e.amount);
   const totalTxns = edges.reduce((s, e) => s + e.txn_count, 0);
 
   return (
@@ -51,7 +52,7 @@ export default async function MoneyFlowPage({
       <div className="kpi-grid">
         <div className="kpi">
           <div className="kpi-label">Total flow</div>
-          <div className="kpi-value">{fmtAmtFull(totalAmount)}</div>
+          <div className="kpi-value">{formatMoney(totalAmount)}</div>
           <div className="kpi-meta">across {edges.length} type pairs</div>
         </div>
         <div className="kpi">
@@ -69,11 +70,11 @@ export default async function MoneyFlowPage({
 
       <section className="flow-summary" aria-label="Net movement by account type">
         {['PERSONAL', 'BUSINESS', 'GOVERNMENT', 'SYSTEM'].map(type => {
-          const sent = edges.filter(e => e.from_type === type).reduce((n, e) => n + Number(e.amount), 0);
-          const received = edges.filter(e => e.to_type === type).reduce((n, e) => n + Number(e.amount), 0);
+          const sent = sumBy(edges.filter(e => e.from_type === type), (e) => e.amount);
+          const received = sumBy(edges.filter(e => e.to_type === type), (e) => e.amount);
           return <div className="card" key={type}><h2 className="card-title">{type}</h2><dl>
-            <dt>Received</dt><dd>{fmtAmtFull(received)}</dd><dt>Sent</dt><dd>{fmtAmtFull(sent)}</dd>
-            <dt>Net received</dt><dd>{fmtAmtFull(received - sent)}</dd>
+            <dt>Received</dt><dd>{formatMoney(received)}</dd><dt>Sent</dt><dd>{formatMoney(sent)}</dd>
+            <dt>Net received</dt><dd>{formatMoney(received - sent)}</dd>
           </dl></div>;
         })}
       </section>
