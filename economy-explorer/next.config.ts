@@ -39,6 +39,11 @@ const config: NextConfig = {
       },
     ];
   },
+  // Keep server function names: explorer_db_query_seconds{fn} labels each query
+  // with the DAL function that ran it, read from the call stack (lib/metrics.ts).
+  // Minified names would all collapse to one-letter labels. Client bundles are
+  // still minified; this only affects the Node server output.
+  experimental: { serverMinification: false },
   poweredByHeader: false,
   reactStrictMode: true,
   // Re-enable once all pages from the migration plan exist (Phase 2).
