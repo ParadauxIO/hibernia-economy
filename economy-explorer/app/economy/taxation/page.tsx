@@ -9,7 +9,7 @@ import { change } from '@/lib/services/economy';
 import { getTaxationDashboard } from '@/lib/services/taxation';
 import { getTaxationRates } from '@/lib/services/taxationRates';
 import { TaxRevenueTimeline } from '@/components/charts/AreaTimeline';
-import { attempt, CoverageNote, SectionError, SectionSkeleton } from '../_components/coverage';
+import { attempt, CoverageNote, NotReady, notReady, SectionError, SectionSkeleton } from '../_components/coverage';
 
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() {
@@ -40,7 +40,7 @@ async function Totals({ range }: { range: DayRange }) {
     attempt('taxation', () => getTaxationDashboard(range)),
     attempt('taxation previous', () => getTaxationDashboard(previous)),
   ]);
-  const t = current.ok ? current.value.totals : null;
+  const t = current.ok && !notReady(current.value.coverage) ? current.value.totals : null;
   const p = before.ok && before.value.coverage.covered ? before.value.totals : null;
   const n = (s: string) => toNumber(parseMoney(s));
   const deltaLabel = p ? `vs previous ${rangeDays(range)} days` : t ? 'previous period not ready yet' : undefined;
@@ -51,7 +51,7 @@ async function Totals({ range }: { range: DayRange }) {
       delta={t && p ? change(n(t.refunded), n(p.refunded)) : t ? null : undefined} deltaLabel={deltaLabel} deltaTone="inverse" />
     <MetricCard label="Net revenue" value={t ? <Money value={t.net} compact /> : '—'} meta="Collected minus refunds"
       delta={t && p ? change(n(t.net), n(p.net)) : t ? null : undefined} deltaLabel={deltaLabel} />
-    <MetricCard label="Receiving accounts" value={<Num value={current.ok ? current.value.accounts.length : null} />} meta="Government accounts with revenue" />
+    <MetricCard label="Receiving accounts" value={<Num value={t ? (current.ok ? current.value.accounts.length : null) : null} />} meta="Government accounts with revenue" />
   </MetricRow>;
 }
 
@@ -61,7 +61,7 @@ async function Daily({ range, label }: { range: DayRange; label: string }) {
   const { daily, coverage } = result.value;
   return <Section title="Revenue by day" description={`Net revenue per day and type, ${label.toLowerCase()}. A refund counts on the day it settles, so a day can be negative.`}
     actions={<CoverageNote coverage={coverage} />}>
-    <TaxRevenueTimeline data={daily} />
+    {notReady(coverage) ? <NotReady height={300} /> : <TaxRevenueTimeline data={daily} />}
   </Section>;
 }
 

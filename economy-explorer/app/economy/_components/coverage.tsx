@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ErrorState, Section, SkeletonChart, SkeletonTable } from '@democracycraft/design-system';
 import { formatUtc } from '@democracycraft/design-system/format';
 import type { RangeCoverage } from '@/lib/services/rollup';
+import { ChartEmpty, ChartFrame } from '@/components/charts/ChartFrame';
 
 // Shared pieces of the economy pages (PAR-541): the rollup coverage line, a
 // per-section error boundary and the sized skeletons each <Suspense> shows.
@@ -33,6 +34,14 @@ export function CoverageNote({ coverage, snapshots = false }: { coverage: RangeC
     </p>;
   }
   return <p className="coverage-note">{updated ? <>Updated <time dateTime={coverage.updatedAt!} title={formatUtc(coverage.updatedAt!)}>{hhmm(coverage.updatedAt!)}</time></> : 'Up to date'}</p>;
+}
+
+/** Nothing computed yet for this range: true until the rollups reach any of its days. */
+export const notReady = (coverage: RangeCoverage) => !coverage.coveredFrom;
+
+/** In place of a chart while its rollup has no rows yet, at the chart's height. */
+export function NotReady({ height }: { height: number }) {
+  return <ChartFrame><ChartEmpty height={height}>Figures appear here once the first daily summary is ready.</ChartEmpty></ChartFrame>;
 }
 
 /**

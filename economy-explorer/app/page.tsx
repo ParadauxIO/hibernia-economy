@@ -10,7 +10,7 @@ import { change, overviewActivity, overviewHeatmap, overviewSources, personalSup
 import { BarChart, VolumeTimeline } from '@/components/charts/AreaTimeline';
 import { Heatmap } from '@/components/charts/Heatmap';
 import { AutoRefresh } from '@/components/AutoRefresh';
-import { attempt, CoverageNote, SectionError, SectionSkeleton } from './economy/_components/coverage';
+import { attempt, CoverageNote, NotReady, notReady, SectionError, SectionSkeleton } from './economy/_components/coverage';
 
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() { return buildMetadata({ description: 'Activity and balances in the {server} economy.', path: '/' }); }
@@ -53,9 +53,10 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
 
 async function Metrics({ range, previous, period }: { range: DayRange; previous: DayRange; period: string }) {
   const [supply, activity] = await Promise.all([attempt('personal supply', personalSupply), attempt('activity', () => overviewActivity(range, previous))]);
-  const a = activity.ok ? activity.value : null;
+  // No covered day yet (fresh deploy): show dashes, not zeros that look like a dead economy.
+  const a = activity.ok && !notReady(activity.value.coverage) ? activity.value : null;
   const prev = a?.previous ?? null;
-  const deltaLabel = prev ? `vs previous ${period}` : a ? 'previous period not ready yet' : undefined;
+  const deltaLabel = prev ? `vs previous ${period}` : a ? 'previous period not ready yet' : activity.ok ? 'history is being prepared' : undefined;
   const cents = (s: string) => toNumber(parseMoney(s));
   return <MetricRow label="Economy summary" className="overview-metrics">
     <MetricCard label="Personal money supply" value={supply.ok ? <Money value={supply.value} compact /> : '—'}
@@ -82,7 +83,7 @@ async function Activity({ range, label }: { range: DayRange; label: string }) {
   return <Section title="Activity" description={<>{label}. A Vault bridge transfer counts once.<InfoTip label="About bridge-adjusted figures">
     Some plugins move money through a system “bridge” account, which the ledger records as two transactions. Here a matching pair counts as one transaction with one amount. The ledger itself is unchanged.
   </InfoTip></>} actions={<CoverageNote coverage={coverage} />}>
-    <VolumeTimeline data={days.map((d) => ({ date: d.day, txn_count: d.txnCount, total_volume: d.volume }))} />
+    {notReady(coverage) ? <NotReady height={300} /> : <VolumeTimeline data={days.map((d) => ({ date: d.day, txn_count: d.txnCount, total_volume: d.volume }))} />}
   </Section>;
 }
 
@@ -92,7 +93,7 @@ async function WhenActive({ range, label }: { range: DayRange; label: string }) 
   const { cells, coverage } = result.value;
   const busiest = cells.reduce<(typeof cells)[number] | undefined>((peak, c) => (!peak || c.txn_count > peak.txn_count ? c : peak), undefined);
   return <Section title="When people trade" description={`Transactions by weekday and hour (UTC), ${label.toLowerCase()}.`} actions={<CoverageNote coverage={coverage} />}>
-    <Heatmap cells={cells} />
+    {notReady(coverage) ? <NotReady height={220} /> : <Heatmap cells={cells} />}
     {busiest && busiest.txn_count > 0 && <p className="econ-note">Busiest: {WEEKDAYS[busiest.dow0]}s at {String(busiest.hr).padStart(2, '0')}:00 UTC, {formatNum(busiest.txn_count)} transactions.</p>}
   </Section>;
 }
@@ -107,9 +108,9 @@ async function Sources({ range, label }: { range: DayRange; label: string }) {
     ...(parseMoney(other) > 0n ? [{ source: 'Everything else', volume: other }] : [])];
   return <Section title="Where the money moves" description={<>Money paid into accounts by each plugin, {label.toLowerCase()}. <Link href="/money-flow">See money flow by account type</Link></>}
     actions={<CoverageNote coverage={coverage} />}>
-    <BarChart data={rows} x="source" horizontal height={Math.max(160, rows.length * 32)} label="Money paid in by source"
+    {notReady(coverage) ? <NotReady height={200} /> : <BarChart data={rows} x="source" horizontal height={Math.max(160, rows.length * 32)} label="Money paid in by source"
       note="As recorded on the ledger: a bridge transfer appears once per leg."
       series={[{ key: 'volume', label: 'Paid in', format: 'money', color: 'var(--cat-1)' }]}
-      empty="No activity in this period yet." />
+      empty="No activity in this period yet." />}
   </Section>;
 }

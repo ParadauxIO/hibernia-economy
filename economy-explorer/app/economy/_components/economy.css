@@ -1,7 +1,7 @@
 /* Economy pages (overview, wealth, money flow, taxation). Tokens only. */
 
-.coverage-note { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--fg-muted); font-size: var(--text-xs); line-height: var(--leading-xs); }
-.coverage-note[data-state="preparing"]::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--warn); }
+.coverage-note { margin: 0; color: var(--fg-muted); font-size: var(--text-xs); line-height: var(--leading-xs); }
+.coverage-note[data-state="preparing"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: var(--space-2); vertical-align: middle; border-radius: var(--radius-pill); background: var(--warn); }
 .econ-note { margin: 0; max-width: 72ch; color: var(--fg-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .econ-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-4); }
 .econ-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--section-gap) var(--space-8); }

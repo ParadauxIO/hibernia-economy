@@ -6,7 +6,7 @@ import { parseMoney } from '@/lib/money';
 import { parseRange, rangeLabel, toDay, type DayRange } from '@/lib/range';
 import { ACCOUNT_TYPES, clampRange, MAX_FLOW_DAYS, moneyFlowMatrix, supplyChange, type AccountTypeKey, type FlowMatrix } from '@/lib/services/economy';
 import { TimeSeriesChart } from '@/components/charts/AreaTimeline';
-import { attempt, CoverageNote, SectionError, SectionSkeleton } from '../economy/_components/coverage';
+import { attempt, CoverageNote, NotReady, notReady, SectionError, SectionSkeleton } from '../economy/_components/coverage';
 
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() {
@@ -43,7 +43,7 @@ export default async function MoneyFlowPage({ searchParams }: { searchParams: Pr
 
 async function NetChange({ range }: { range: DayRange }) {
   const result = await attempt('supply change', () => supplyChange(range));
-  const byType = result.ok ? result.value.byType : null;
+  const byType = result.ok && !notReady(result.value.coverage) ? result.value.byType : null;
   return <MetricRow label="Net change by account type">
     {ACCOUNT_TYPES.map((type) => {
       const row = byType?.find((r) => r.type === type);
@@ -96,9 +96,9 @@ async function NetByDay({ range, label }: { range: DayRange; label: string }) {
   const { daily, coverage } = result.value;
   return <Section title="Net change by day" description={`Money gained (above zero) or lost by each account type per day, ${label.toLowerCase()}. The four lines always sum to zero.`}
     actions={<CoverageNote coverage={coverage} />}>
-    <TimeSeriesChart data={daily} kind="line" outliers={false} label="Net change by account type per day"
+    {notReady(coverage) ? <NotReady height={300} /> : <TimeSeriesChart data={daily} kind="line" outliers={false} label="Net change by account type per day"
       empty="No activity in this period yet."
-      series={ACCOUNT_TYPES.map((t) => ({ key: t, label: TYPE_LABEL[t], format: 'money' as const, color: TYPE_COLOR[t] }))} />
+      series={ACCOUNT_TYPES.map((t) => ({ key: t, label: TYPE_LABEL[t], format: 'money' as const, color: TYPE_COLOR[t] }))} />}
   </Section>;
 }
 
