@@ -155,6 +155,12 @@ test.describe('full exports', () => {
     expect(json.rows.map((r: { txn_id: number }) => r.txn_id)).toEqual([15, 14, 13, 12, 11, 10]);
     expect(json.rows[0]).toMatchObject({ amount: '0.20', from: 'Penny Wallet #9', to: 'Bob #2', plugin: 'treasury' });
 
+    // Every export is audited with action `export`, and the audit log exports too.
+    const audit = await (await context.request.get('/api/export/audit?format=json&f=action:in:export&f=targetId:eq:transactions')).json();
+    expect(audit.rows.length).toBeGreaterThan(0);
+    expect(audit.rows[0]).toMatchObject({ action: 'export', target_type: 'global', target_id: 'transactions', outcome: 200 });
+    expect(audit.rows[0].path).toContain('/api/export/transactions?');
+
     // The accounts directory's Export menu points at the same route with its filters.
     await visit(page, '/accounts?f=type:in:business');
     await page.getByRole('button', { name: 'Export' }).click();

@@ -4,5 +4,6 @@
 // cleanly.
 import 'server-only';
 import './accounts';
+import './audit';
 import './sales';
 import './transactions';

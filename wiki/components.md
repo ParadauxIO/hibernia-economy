@@ -434,7 +434,7 @@ Every table moves to one system (redesign spec §5.5). The accounts directory
   semi-join over the whole history.
 - **Full exports.** `GET /api/export/<dataset>?<page URL state>&format=csv|ndjson|json`
   streams up to 100k rows. The route handles sign-in, the per-viewer rate limit
-  (10 a minute, Redis), the `EXPORT` audit record and the row cap. To add a
+  (10 a minute, Redis), the audit record (action `export`) and the row cap. To add a
   dataset, create `lib/export/datasets/<id>.ts` calling `defineExport` (the
   pattern is in the header of `lib/export/registry.ts`), add one import line to
   `lib/export/datasets/index.ts`, and pass `exportHrefs(id, state, table)` from

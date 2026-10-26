@@ -33,7 +33,7 @@ cover at most 7 days).
 
 **Export → All results** downloads up to 100,000 rows of what the filters select,
 as CSV or JSON, with the same permission as the page. Each export is written to the
-audit log as method `EXPORT` with the dataset and filters in the path.
+audit log with action **Export**, the dataset as the target, and the filters in the path.
 Record transaction IDs, exact amounts and UTC times, rather than screenshots alone.
 Public balances do not imply access to private transaction histories.
 

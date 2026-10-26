@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const state = scope === 'page' ? parsed : { ...parsed, page: 1, cursor: null };
   const query = serializeTableState(state, table, scope === 'page' ? [['scope', 'page']] : []);
   const auditPath = `/api/export/${def.id}${query ? `?${query}` : ''}`.slice(0, 255);
-  const record = (outcome: number) => auditView(viewer, { method: 'EXPORT', path: auditPath, targetType: 'global', targetId: def.id, outcome });
+  const record = (outcome: number) => auditView(viewer, { method: 'GET', action: 'export', path: auditPath, targetType: 'global', targetId: def.id, outcome });
 
   if (!(await def.authorize(viewer, state))) {
     await record(403);
