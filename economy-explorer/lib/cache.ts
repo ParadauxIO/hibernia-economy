@@ -1,6 +1,7 @@
 import 'server-only';
 import superjson from 'superjson';
 import { redis, tenantKey } from '@/lib/redis';
+import { recordCacheResult, timedProducer } from '@/lib/metrics';
 
 // Shared-Redis cache for expensive tenant-global aggregates (the dashboard /
 // market / health full-table scans over ledger_txns + ledger_postings).
@@ -143,12 +144,15 @@ export async function memo<T>(
     bucket: Math.floor(Date.now() / windowMs),
     maxStaleMs: options.maxStaleMs ?? windowMs * DEFAULT_STALE_WINDOWS,
     lockMs: options.lockMs ?? DEFAULT_LOCK_MS,
-    producer,
+    producer: timedProducer(key, producer), // explorer_cache_refresh_seconds (PAR-531)
   };
 
   // L1: this pod already has the current window — serve without hitting Redis.
   const cached = l1.get<T>(key);
-  if (cached && cached.bucket >= ctx.bucket) return cached.value;
+  if (cached && cached.bucket >= ctx.bucket) {
+    recordCacheResult(key, 'hit_l1');
+    return cached.value;
+  }
 
   const r = redis();
   if (!r) return memoLocal(ctx, cached);
@@ -165,9 +169,13 @@ export async function memo<T>(
   // L1 can outlive the Redis copy (eviction, flush); keep whichever is newer.
   const entry = stored && (!cached || stored.at >= cached.at) ? stored : cached;
   if (entry) {
-    if (entry.bucket >= ctx.bucket) return entry.value;
+    if (entry.bucket >= ctx.bucket) {
+      recordCacheResult(key, 'hit_redis');
+      return entry.value;
+    }
     if (Date.now() - entry.at <= ctx.maxStaleMs) {
       // Stale window → serve stale now, recompute once across the fleet.
+      recordCacheResult(key, 'stale');
       once(`refresh:${key}`, () => revalidate(ctx)).catch(() => {});
       return entry.value;
     }
@@ -195,6 +203,7 @@ function parseStored<T>(raw: string, windowMs: number): Entry<T> | null {
 
 /** A refresh or cold recompute failed and the previous value is being served. */
 function reportRefreshFailure(key: string, err: unknown): void {
+  recordCacheResult(key, 'refresh_fail');
   // A recompute that keeps failing (e.g. a query past max_statement_time)
   // otherwise serves the last good value with nothing to show why (PAR-407).
   console.warn(`[cache] recompute of ${key} failed; serving the previous value:`, err);
@@ -299,6 +308,7 @@ async function waitForPeer<T>(ctx: Ctx<T>, stale: Entry<T> | null): Promise<Entr
 }
 
 function coldCompute<T>(ctx: Ctx<T>, stale: Entry<T> | null): Promise<T> {
+  recordCacheResult(ctx.key, 'miss');
   return once(ctx.key, async () => {
     let lock = await acquireLock(ctx.lockKey, ctx.lockMs);
     if (lock === 'held') {
@@ -327,12 +337,14 @@ async function memoLocal<T>(ctx: Ctx<T>, cached: Entry<T> | undefined): Promise<
   if (cached) {
     if (cached.bucket >= ctx.bucket) return cached.value;
     if (Date.now() - cached.at <= ctx.maxStaleMs) {
+      recordCacheResult(ctx.key, 'stale');
       once(`refresh:${ctx.key}`, async () => publish(ctx, await ctx.producer())).catch((e) =>
         reportRefreshFailure(ctx.key, e),
       );
       return cached.value;
     }
   }
+  recordCacheResult(ctx.key, 'miss');
   return once(ctx.key, async () => {
     try {
       const value = await ctx.producer();

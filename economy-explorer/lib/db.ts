@@ -2,6 +2,7 @@ import 'server-only';
 import { Kysely, MysqlDialect, type Generated } from 'kysely';
 import { createPool } from 'mysql2';
 import { withoutUndefined } from '@/lib/util/withoutUndefined';
+import { kyselyMetrics } from '@/lib/metrics';
 
 const pool = createPool({
   ...withoutUndefined({
@@ -33,8 +34,9 @@ pool.on('connection', (conn) => {
 
 // mysql2's pool is structurally compatible with kysely's MysqlPool at runtime;
 // the callback signatures differ in nullable-error types only.
+// kyselyMetrics() times and labels every query (explorer_db_query_seconds, PAR-531).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const db = new Kysely<DB>({ dialect: new MysqlDialect({ pool: pool as any }) });
+export const db = new Kysely<DB>({ dialect: new MysqlDialect({ pool: pool as any }), ...kyselyMetrics() });
 
 // Row-shape registry. Add interfaces as queries get ported. The empty {} on each
 // entry means "no typed columns yet"; queries that use raw sql`` template literals

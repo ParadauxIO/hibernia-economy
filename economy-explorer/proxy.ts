@@ -97,6 +97,8 @@ function handleRequest(req: NextRequest) {
 export const config = {
   matcher: [
     // Include auth endpoints so blocks precede session work. Keep liveness public.
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|healthz).*)',
+    // /metrics is bearer-token protected in its route handler; skipping the proxy
+    // keeps Prometheus scrapes out of the access log and the UA/IP denylist.
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|healthz|metrics).*)',
   ],
 };

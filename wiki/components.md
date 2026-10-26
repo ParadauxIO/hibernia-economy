@@ -212,7 +212,7 @@ The public, **read-only** web surface and the player/admin documentation site.
 - **Stack:** Next.js (App Router) · npm · MySQL (read) · Redis. Dockerized;
   multi-tenant by config.
 - **Layering:** Server Component pages (`app/**/page.tsx`) for reads → `lib/sql/*`
-  (Kysely query functions, pure DAL). Route handlers exist only for auth/health.
+  (Kysely query functions, pure DAL). Route handlers exist only for auth, health and metrics.
 - **Docs:** the user guide lives in `economy-explorer/docs/` (Markdown) and is
   served at **`/docs`** by `app/docs/[[...slug]]/page.tsx`. This is the canonical
   player/admin documentation.
@@ -314,6 +314,42 @@ into the browser's zone. Daily charts label this distinction.
   `readableAccountIds(viewer, ids)`, not a `canViewAccount` loop.
 - **Keyset cursors.** `lib/pagination/cursor.ts` encodes `(timestamp, id)` as
   an opaque base64url token for Newer / Older pagination on unbounded feeds.
+
+### Explorer metrics and Server-Timing (PAR-531)
+
+`instrumentation.ts` sets up Prometheus metrics (`lib/metrics.ts`) in the Node
+runtime. It also starts the rollup worker through `lib/rollup/start.ts`.
+`/metrics` serves them only with `Authorization: Bearer $METRICS_TOKEN`; without
+the token, or with no token set, it returns 404. The Grafana dashboard is
+`economy-explorer/ops/grafana/economy-explorer.json`, and the measured
+baseline is `economy-explorer/ops/perf-baseline.md`.
+
+| Metric | Labels | Source |
+|---|---|---|
+| `explorer_db_query_seconds`, `explorer_db_queries_total` | `fn`, `outcome` (`ok`, `error`, `timeout`) | Kysely plugin and `log` hook on `db` |
+| `explorer_cache_requests_total`, `explorer_cache_refresh_seconds` | `key_prefix`, `result` | `memo()` in `lib/cache.ts` |
+| `explorer_render_seconds`, `explorer_render_db_queries` | `route` (pattern), `kind` (`document`, `rsc`, `prefetch`) | HTTP server hook in `lib/requestTiming.ts` |
+| `explorer_request_errors_total` | `route`, `type` | `onRequestError` |
+
+- **Query labels.** `fn` is the name of the function that called `.execute*()`,
+  taken from the call stack. Server output is therefore built unminified
+  (`experimental.serverMinification: false`).
+  - Write DAL queries as named functions that call `.execute()` themselves; the
+    label then needs no extra code.
+  - Wrap a query in `withQueryLabel('name', () => …)` when it runs from an
+    anonymous callback or shared helper.
+  - Unlabelled queries fall back to `sql:<verb>:<first table>`.
+  - Another Kysely instance, such as a worker pool, gets the same metrics with
+    `new Kysely({ dialect, ...kyselyMetrics() })`.
+- **Cache keys** must start with a constant name before the first `:`. That
+  prefix becomes `key_prefix`.
+- **Server-Timing** (`total`, `db;dur=…;desc="n queries"`, `cache;desc=hit|miss`)
+  is written when Next sends the response head. Pages stream behind the root
+  `loading.tsx`, so it covers only the work done before the first byte.
+  - Streamed sections show up in `explorer_render_seconds` and
+    `explorer_render_db_queries`, which are measured to the last byte.
+  - `db;dur` is the sum of query times, so it can be larger than `total` when
+    queries run in parallel.
 
 ### Business and Realty Explorer membership sources
 
