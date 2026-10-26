@@ -12,6 +12,8 @@ export const PERMISSION_DESCRIPTIONS = {
   "firm.financials.read.all": "Read financials for any firm.",
   "government.read": "Read government records for related government accounts.",
   "government.read.all": "Read all government accounts and fines.",
+  "government.audit.read": "Read who moved money in or out of, and who viewed, the government accounts in your scope.",
+  "gov_units.manage": "Create government units and assign government accounts to them.",
   "transactions.read": "Read the global ledger and transaction details.",
   "market.sales.read": "Read trade-by-trade sales with customer attribution.",
   "market.figures.read": "Read seller-attributed figures and market leaderboards.",

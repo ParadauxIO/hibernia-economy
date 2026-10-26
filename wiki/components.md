@@ -331,7 +331,8 @@ into the browser's zone. Daily charts label this distinction.
   reads it. `/api/viewer` returns the same snapshot and is used only by
   `refreshViewer()` (back/forward-cache restores). The Government entry needs
   `government.read.all`, or `government.read` plus a GOVERNMENT account in the
-  viewer's ReBAC scope (`lib/sql/nav.ts`, memoised per player for 60 s). The
+  viewer's ReBAC scope (`lib/sql/nav.ts`, using `/gov`'s own
+  `governmentRelationship` predicate, memoised per player for 60 s). The
   account chip's balance is the sum of the PERSONAL accounts the player owns,
   memoised for 30 s and streamed behind Suspense. Both are presentation only.
 - **Breadcrumbs.** `components/Breadcrumbs.tsx` is a server component. Put it

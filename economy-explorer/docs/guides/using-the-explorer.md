@@ -105,7 +105,7 @@ section list on the left (a menu at the top on a phone):
   who pays you most and whom you pay most; and your latest activity.
 - **Accounts you can access**, grouped by whose money it is: **Mine**, accounts
   **shared with you** by other players, each **firm** you can see (with your
-  role there and the firm's own total), and **government** accounts. Each row
+  role there and the firm's own total), and **government** accounts grouped by unit (or Unassigned). Each row
   says why you can see it: owner, member, authorizer, viewer, firm finance
   (with your role) or a group. Firm and government money is never added to
   yours. A firm's money belongs to the firm, and the biggest firms are banks

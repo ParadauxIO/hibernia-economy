@@ -24,6 +24,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
   { href: '/admin/api-keys', title: 'API keys', permission: 'api_keys.read', desc: 'API keys and issuer rate limits.', group: 'Integrations' },
   { href: '/admin/webhooks', title: 'Webhooks', permission: 'webhooks.read.all', desc: 'Every transaction-feed webhook.', group: 'Integrations' },
   { href: '/admin/audit', title: 'Audit log', permission: 'audit.read', desc: 'Who viewed or changed what, with the values before and after.', group: 'Oversight' },
+  { href: '/admin/gov-units', title: 'Government units', permission: 'gov_units.manage', desc: 'Group government accounts into units for the government workspace.', group: 'Oversight' },
 ];
 
 /** True when the viewer holds every permission the tool's page checks. */

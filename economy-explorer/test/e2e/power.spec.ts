@@ -146,7 +146,8 @@ test.describe('full exports', () => {
     expect(csv.headers()['content-disposition']).toMatch(/attachment; filename="accounts-\d{8}-\d{4}\.csv"/);
     const lines = (await csv.text()).replace(/^﻿/, '').trimEnd().split('\n');
     expect(lines[0]).toBe('Account ID,Type,Name,Owner,Owner UUID,Balance,Archived,Created');
-    expect(lines.slice(1).map((l) => l.split(',')[0]).sort()).toEqual(['3', '5']);
+    // 201–205 and supplier 213 are the government workspace fixtures (gov-fixtures.ts).
+    expect(lines.slice(1).map((l) => l.split(',')[0]).sort()).toEqual(['201', '202', '203', '204', '205', '213', '3', '5']);
 
     await context.clearCookies();
     await as(context, 'admin');

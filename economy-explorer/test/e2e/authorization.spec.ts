@@ -184,15 +184,15 @@ test('direct and LP account relationships are scoped and revocable; government r
   await policy.conn.query('INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin, synced_at) VALUES (?, ?, NOW())', [policy.key, bin(policy.player)]);
   await visit(page, '/accounts/5');
   await expect(page.locator('.privacy-gate')).toHaveCount(0);
-  await visit(page, '/government');
+  await visit(page, '/gov/accounts');
   await expect(page.locator('.privacy-gate')).toBeVisible();
   await policy.conn.query("INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, 'government')", [bin(policy.player)]);
-  await visit(page, '/government');
+  await visit(page, '/gov/accounts');
   await expect(page.locator('.privacy-gate')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'City Hall #5', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^City Hall/ })).toBeVisible();
   await policy.conn.query('UPDATE explorer_lp_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE player_uuid_bin = ?', [bin(policy.player)]);
-  await visit(page, '/government');
-  await expect(page.getByRole('link', { name: 'City Hall #5', exact: true })).toHaveCount(0);
+  await visit(page, '/gov/accounts');
+  await expect(page.getByRole('link', { name: /^City Hall/ })).toHaveCount(0);
   await visit(page, '/accounts/5');
   await expect(page.locator('.privacy-gate')).toBeVisible();
 });
@@ -214,7 +214,7 @@ test('the Government entry needs government.read and a government account in sco
     await policy.conn.query("INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES (5, ?, 'VIEWER', ?)", [bin(scoped), bin(policy.admin)]);
     await signIn(context, scoped);
     await visit(page, '/');
-    await expect(primary.getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/government');
+    await expect(primary.getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/gov');
     // The account chip counts personal money only; this player owns no account.
     await expect(page.getByRole('button', { name: /TestPlayer/ })).not.toContainText('$');
   } finally {

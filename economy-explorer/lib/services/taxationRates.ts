@@ -1,5 +1,5 @@
 import 'server-only';
-import { memo } from '@/lib/cache';
-import { fetchTreasuryTaxRates } from '@/lib/treasuryTaxRates';
+import { getTaxConfig } from './taxRates';
 
-export const getTaxationRates = () => memo('taxation-rates:v1', 60_000, fetchTreasuryTaxRates);
+/** The taxation page's rates: the shared tax-rate source (lib/services/taxRates.ts). */
+export const getTaxationRates = getTaxConfig;
