@@ -58,6 +58,8 @@ export function exportStream<T extends AnyTable, R, C>(opts: StreamOptions<T, R,
   let started = false;
   let finished = false;
   let cancelled = false;
+  // Re-read after awaits: cancel() can run while a batch query is pending.
+  const isCancelled = () => cancelled;
 
   const head = (): string => {
     if (format === 'csv') return `﻿${csvLine(def.columns.map((c) => c.header))}\n`;
@@ -97,11 +99,11 @@ export function exportStream<T extends AnyTable, R, C>(opts: StreamOptions<T, R,
         // A filtered scan can find no rows while still having older history.
         // Only an exhausted cursor ends an all-results export.
         while (scope !== 'page' && batch.rows.length === 0 && batch.next !== null) {
-          if (cancelled) return;
+          if (isCancelled()) return;
           cursor = batch.next;
           batch = await def.rows(state, cursor, { ...ctx, limit });
         }
-        if (cancelled) return;
+        if (isCancelled()) return;
         const rows = batch.rows.slice(0, limit);
         for (const row of rows) {
           chunk += line(row);
