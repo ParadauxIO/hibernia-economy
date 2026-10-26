@@ -6,6 +6,10 @@ import { visit } from './helpers';
 // covered in test/unit/chart-kit.test.ts.
 
 async function box(l: Locator) {
+  // boundingBox() returns null for an element that is detached or not yet
+  // laid out; a chart swapping its skeleton for the real plot is briefly both.
+  // Wait for it to be visible rather than racing the swap.
+  await l.waitFor({ state: 'visible' });
   const b = await l.boundingBox();
   if (!b) throw new Error('not visible');
   return b;
