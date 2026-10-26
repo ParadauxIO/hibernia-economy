@@ -10,11 +10,13 @@ const config: NextConfig = {
   // keep the app out of search. The /docs documentation site is the deliberate
   // exception — it's public and indexable. Build-hashed assets must also be
   // excluded: overriding their immutable cache headers forces every visit to
-  // download the same JavaScript, CSS and fonts again.
+  // download the same JavaScript, CSS and fonts again. Player heads
+  // (/api/avatar) are excluded too: they set a 24 h public cache themselves.
   async headers() {
     return [
       {
-        source: '/((?!docs|_next/static).*)',
+        // /api/avatar sets its own 24 h public cache (player heads hold no private data).
+        source: '/((?!docs|_next/static|api/avatar/).*)',
         headers: [
           { key: 'Cache-Control', value: 'no-store' },
           { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
