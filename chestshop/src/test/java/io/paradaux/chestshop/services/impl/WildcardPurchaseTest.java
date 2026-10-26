@@ -157,6 +157,56 @@ class WildcardPurchaseTest extends ServerTest {
         assertThat(previews.confirm(original, buyer)).isTrue();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"0,OtherSeller", "1,3", "1,invalid", "3,other*"})
+    void quantityChangeRejectsReconfiguredShop(int line, String replacement) {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        sign.setLine(line, replacement);
+        sign.update();
+        assertThat(previews.resize(original, buyer, 3)).isNull();
+        assertThat(previews.confirm(original, buyer)).isFalse();
+        assertThat(count(stock, can)).isEqualTo(5);
+        assertThat(count(buyer.getInventory(), can)).isZero();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void quantityChangeRejectsRemovedShop() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        sign.getBlock().setType(Material.AIR);
+        assertThat(previews.resize(original, buyer, 3)).isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void onlyTheLatestQuantityOfferCanBeUsed() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        var replacement = previews.resize(original, buyer, 3);
+        assertThat(previews.resize(original, buyer, 4)).isNull();
+        assertThat(previews.confirm(replacement, buyer)).isTrue();
+        assertThat(previews.resize(replacement, buyer, 4)).isNull();
+        assertThat(count(buyer.getInventory(), can)).isEqualTo(3);
+        verify(economy, times(1)).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void explicitQuantityCannotEnableADisabledTradeDirection() {
+        sign.setLine(2, "S 6");
+        sign.update();
+        var trade = transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, can, 3);
+        assertThat(trade.getExactPrice()).isEqualByComparingTo(io.paradaux.chestshop.utils.PriceUtil.NO_PRICE);
+        transactions.validate(trade);
+        assertThat(trade.isCancelled()).isTrue();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void explicitQuantityRequiresASelectedVariation() {
+        assertThat(transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, null, 3))
+                .isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
     @Test
     void customSellUsesSellUnitPrice() {
         buyer.getInventory().addItem(can.clone());
