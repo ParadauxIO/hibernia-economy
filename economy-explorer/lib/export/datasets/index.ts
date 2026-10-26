@@ -4,3 +4,4 @@
 // cleanly.
 import 'server-only';
 import './accounts';
+import './transactions';
