@@ -1,312 +1,95 @@
-import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
-import type { Route } from 'next';
-import { notFound } from 'next/navigation';
-import { getViewer } from '@/lib/auth/viewer';
-import { canViewFirmFinancials, canViewFirmInternals, findFirmByDisplayName, hasElevatedRead, isFirmMember } from '@/lib/auth/access';
-import { auditView } from '@/lib/audit';
-import {
-  listFirmEmployees,
-  listFirmRoles,
-  listFirmRolePermissions,
-  listFirmAccounts,
-} from '@/lib/sql/firm';
-import { fmtAmtFull, fmtN } from '@/lib/format';
-import { formatMoney, sumBy } from '@/lib/money';
-import { LocalTimestamp } from '@/components/LocalTimestamp';
-import { Player } from '@/components/Player';
-import { BackLink } from '@democracycraft/design-system/next';
-import { PrivacyGate } from '@/components/PrivacyGate';
-import { getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
-import { TableWrap } from '@democracycraft/design-system';
+import { MetricCard, MetricRow, Money, Num, Section } from '@democracycraft/design-system';
+import { EntityLink } from '@democracycraft/design-system/next';
+import { DataTable, type Column } from '@democracycraft/design-system/table';
+import { CoverageNote } from '@/components/entity/bits';
+import { accountHref, itemHref, previewHref } from '@/lib/entityLinks';
+import { accountLabel } from '@/lib/format';
+import { itemIconUrl } from '@/lib/itemIcon';
+import { entityMetadata } from '@/lib/entityMetadata';
+import { sumBy } from '@/lib/money';
+import { change, type PeriodTotals } from '@/lib/services/account';
+import type { FirmPublic } from '@/lib/services/firm';
+import type { FirmAccountRow } from '@/lib/sql/firm';
+import { FirmHeader, loadFirm } from './shared';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: Promise<{ firmName: string }> }) {
+type Params = Promise<{ firmName: string }>;
+
+export async function generateMetadata({ params }: { params: Params }) {
   const { firmName } = await params;
   const name = decodeURIComponent(firmName);
-  return buildMetadata({ title: name, description: `Profile, accounts and activity for the {server} firm ${name}.`, path: `/firms/${firmName}` });
+  return entityMetadata({ title: name, description: `${name}, a firm on {server}: accounts, staff and activity.`, path: `/firms/${encodeURIComponent(name)}` }, `${name}, firm summary`);
 }
 
-export default async function FirmDetailPage({
-  params,
-}: {
-  params: Promise<{ firmName: string }>;
-}) {
+/** Spec §7.3, public: the firm's accounts and balances, staff, HQ, and 30-day activity across its accounts. */
+export default async function FirmPage({ params }: { params: Params }) {
   const { firmName } = await params;
-  const name = decodeURIComponent(firmName);
-  const firm = await findFirmByDisplayName(name);
-  if (!firm) notFound();
+  const loaded = await loadFirm(firmName, 'overview');
+  const { pub } = loaded;
+  const open = pub.accounts.filter((a) => !a.archived);
+  const activity = pub.activity;
 
-  // Public identity (name, HQ, founded, default account, archived flag) is
-  // always shown. Employees / roles / accounts are gated to: firm member ∨
-  // proprietor ∨ moderator ∨ admin.
-  //
-  // ChestShop sales/volume is financial drilldown — narrower than internals:
-  // only finance-role employees (FINANCIAL/ADMIN) + staff. A plain member can
-  // see the roster but not the books. The two checks are independent, so run
-  // them together; their shared lookups are deduped per request.
-  const viewer = await getViewer();
-  const [canSeeInternals, canSeeFinancials] = await Promise.all([
-    canViewFirmInternals(firm.firm_id, viewer),
-    canViewFirmFinancials(firm.firm_id, viewer),
-  ]);
+  return <>
+    <FirmHeader loaded={loaded} tab="overview" />
+    <MetricRow label="Firm summary">
+      <MetricCard label="Firm balance" value={<Money value={sumBy(open, (a) => a.balance)} />}
+        meta={`Across ${open.length} ${open.length === 1 ? 'account' : 'accounts'}`}
+        info="The firm’s own money, summed over its open accounts. It belongs to the firm, not to its proprietor or staff." />
+      {activity && <Totals label="Money in, 30 days" cur={activity.last30} prev={activity.prev30} field="inflow" />}
+      {activity && <Totals label="Money out, 30 days" cur={activity.last30} prev={activity.prev30} field="outflow" />}
+      {activity && <MetricCard label="Transactions, 30 days" value={<Num value={activity.last30.txnCount} />}
+        delta={change(activity.last30.txnCount, activity.prev30?.txnCount)} deltaLabel="vs previous 30 days" deltaTone="neutral"
+        spark={activity.months.length > 1 ? activity.months.map((m) => m.txnCount) : undefined} />}
+    </MetricRow>
+    {activity && <CoverageNote coverage={activity.coverage} />}
 
-  // Audit privileged inspection: a staff member using elevated access to view a
-  // firm's internals/financials when they aren't actually part of that firm.
-  if (hasElevatedRead(viewer)) {
-    const member = viewer.minecraftUuid ? await isFirmMember(firm.firm_id, viewer.minecraftUuid) : false;
-    if (!member) {
-      await auditView(viewer, { path: `/firms/${encodeURIComponent(firmName)}`, targetType: 'firm', targetId: String(firm.firm_id) });
-    }
-  }
-
-  const [accounts, employees, roles, perms] = canSeeInternals
-    ? await Promise.all([
-        listFirmAccounts(firm.firm_id),
-        listFirmEmployees(firm.firm_id),
-        listFirmRoles(firm.firm_id),
-        listFirmRolePermissions(firm.firm_id),
-      ])
-    : await Promise.all([
-        Promise.resolve<Awaited<ReturnType<typeof listFirmAccounts>>>([]),
-        Promise.resolve<Awaited<ReturnType<typeof listFirmEmployees>>>([]),
-        Promise.resolve<Awaited<ReturnType<typeof listFirmRoles>>>([]),
-        Promise.resolve<Awaited<ReturnType<typeof listFirmRolePermissions>>>([]),
-      ]);
-
-  const [marketFirm, marketItems] = canSeeFinancials
-    ? await Promise.all([getMarketFirm(firm.firm_id), listFirmMarketItems(firm.firm_id, 8, 0)])
-    : [null, [] as Awaited<ReturnType<typeof listFirmMarketItems>>];
-
-  const permsByRole = new Map<number, string[]>();
-  for (const p of perms) {
-    const arr = permsByRole.get(p.role_id) ?? [];
-    arr.push(p.permission);
-    permsByRole.set(p.role_id, arr);
-  }
-
-  const totalBalance = sumBy(accounts, (a) => a.balance);
-
-  return (
-    <>
-      <BackLink href="/firms" label="Firms" />
-
-      <div className="page-heading">
-        <h1>{firm.display_name}</h1>
-        <span className="mono" style={{ color: 'var(--fg-muted)', fontSize: 13 }}>#{firm.firm_id}</span>
-        {firm.archived ? <span className="badge badge-archived">Archived</span> : null}
-        {firm.exempt ? <span className="badge badge-exempt">Tax exempt</span> : null}
+    <div className="entity-layout">
+      <div className="entity-main">
+        <Section title="Accounts" description="Balances are public. Transfers between the firm’s own accounts aren’t counted as money in or out.">
+          <Accounts accounts={pub.accounts} />
+        </Section>
+        <Section title="Top items, last 30 days" description="What sells most at the firm’s shops, by number of trades" divider>
+          <TopItems items={pub.topItems} />
+        </Section>
       </div>
+      <aside className="entity-rail" aria-label="Related">
+        <Section level={3} title="Explore">
+          <ul className="entity-list">
+            <li><Link href={`/chestshop/firms/${loaded.firm.firm_id}`}>Market profile</Link></li>
+            <li><Link href="/firms">All firms</Link></li>
+            <li><Link href="/players">Players directory</Link></li>
+          </ul>
+        </Section>
+      </aside>
+    </div>
+  </>;
+}
 
-      <div className="kpi-grid">
-        <div className="kpi">
-          <div className="kpi-label">Proprietor</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>
-            {firm.proprietor_uuid
-              ? <Player name={firm.proprietor_name} uuid={firm.proprietor_uuid} />
-              : '—'}
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">HQ region</div>
-          <div className="kpi-value" style={{ fontSize: 18, paddingTop: 6 }}>
-            {firm.hq_region ?? '—'}
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Founded</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}><LocalTimestamp value={firm.created_at} /></div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Default account</div>
-          <div className="kpi-value" style={{ fontSize: 16, paddingTop: 6 }}>
-            {firm.default_account_id ? (
-              <Link href={`/accounts/${firm.default_account_id}` as Route} prefetch={false}>
-                #{firm.default_account_id}
-              </Link>
-            ) : '—'}
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Discord</div>
-          <div className="kpi-value" style={{ fontSize: 14, paddingTop: 6 }}>
-            {firm.discord_url ? (
-              <a href={firm.discord_url} target="_blank" rel="noopener noreferrer">link ↗</a>
-            ) : '—'}
-          </div>
-        </div>
-      </div>
+function Totals({ label, cur, prev, field }: { label: string; cur: PeriodTotals; prev: PeriodTotals | null; field: 'inflow' | 'outflow' }) {
+  return <MetricCard label={label} value={<Money value={cur[field]} compact />} delta={change(cur[field], prev?.[field])} deltaLabel="vs previous 30 days" deltaTone="neutral" />;
+}
 
-      {/* ChestShop activity is financial drilldown — only finance-role
-          employees + staff (canSeeFinancials gates the fetch above). */}
-      {marketFirm && marketFirm.sale_count > 0 && (
-        <div className="card">
-          <div className="card-title">
-            ChestShop activity{' '}
-            <span className="sub">
-              {fmtN(marketFirm.sale_count)} sales · {fmtAmtFull(marketFirm.total_volume)} volume ·{' '}
-              <Link href={`/chestshop/firms/${firm.firm_id}` as Route} className="rowlink" prefetch={false}>
-                see all →
-              </Link>
-            </span>
-          </div>
-          <TableWrap label="ChestShop activity">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Material</th>
-                  <th className="amount">Trades</th>
-                  <th className="amount">Quantity</th>
-                  <th className="amount">Volume</th>
-                </tr>
-              </thead>
-              <tbody>
-                {marketItems.map((i) => (
-                  <tr key={i.item_key}>
-                    <td>
-                      <Link href={`/chestshop/items/${encodeURIComponent(i.item_key)}` as Route} className="rowlink" prefetch={false}>
-                        {i.item_name ?? i.item_key}
-                      </Link>
-                    </td>
-                    <td><span className="mono small" style={{ color: 'var(--fg-muted)' }}>{i.material ?? '—'}</span></td>
-                    <td className="amount mono">{fmtN(i.trade_count)}</td>
-                    <td className="amount mono">{fmtN(i.total_quantity)}</td>
-                    <td className="amount neutral">{fmtAmtFull(i.total_volume)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
-        </div>
-      )}
+function Accounts({ accounts }: { accounts: FirmAccountRow[] }) {
+  const columns: Column<FirmAccountRow>[] = [
+    {
+      key: 'account', header: 'Account',
+      cell: (a) => <><EntityLink kind="account" href={accountHref(a.account_id)} name={accountLabel(a)} accountType={a.account_type} id={a.account_id}
+        preview={previewHref('account', a.account_id)} />{a.archived ? <span className="dt-sub"> · closed</span> : null}</>,
+    },
+    { key: 'balance', header: 'Balance', numeric: true, cell: (a) => <Money value={a.balance} /> },
+  ];
+  return <DataTable id="firm-accounts" label="Firm accounts" columns={columns} rows={accounts} rowKey={(a) => a.account_id}
+    empty={<p className="dt-empty-text">This firm has no accounts.</p>} />;
+}
 
-      {!canSeeInternals && (
-        <PrivacyGate
-          kind={viewer.anon ? 'login' : 'private'}
-          title="Firm internals are private"
-          hint="Employees, roles, and accounts require firm membership or permission to read all firms."
-        />
-      )}
-
-      {canSeeInternals && (
-        <>
-          {/* Accounts */}
-          <div className="card">
-            <div className="card-title">
-              Accounts <span className="sub">{fmtN(accounts.length)} active · total {formatMoney(totalBalance)}</span>
-            </div>
-            <TableWrap label="Accounts">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Account</th>
-                    <th>Type</th>
-                    <th className="amount">Balance</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {accounts.length === 0 && (
-                    <tr><td colSpan={4} className="empty">No accounts.</td></tr>
-                  )}
-                  {accounts.map((a) => (
-                    <tr key={a.account_id}>
-                      <td>
-                        <Link href={`/accounts/${a.account_id}` as Route} className="rowlink" prefetch={false}>
-                          <span style={{ fontWeight: 500 }}>{a.display_name ?? `Account #${a.account_id}`}</span>
-                          <span className="mono muted small">{` #${a.account_id}`}</span>
-                        </Link>
-                      </td>
-                      <td><span className={`badge badge-${a.account_type}`}>{a.account_type}</span></td>
-                      <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
-                      <td>
-                        {a.archived
-                          ? <span className="badge badge-archived">Archived</span>
-                          : <span className="badge badge-active">Active</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableWrap>
-          </div>
-
-          {/* Employees */}
-          <div className="card">
-            <div className="card-title">
-              Employees <span className="sub">{fmtN(employees.length)} active</span>
-            </div>
-            <TableWrap label="Employees">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Player</th>
-                    <th>Role</th>
-                    <th className="ts">Joined</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.length === 0 && (
-                    <tr><td colSpan={3} className="empty">No active employees.</td></tr>
-                  )}
-                  {employees.map((e) => (
-                    <tr key={`${e.player_uuid}-${e.joined_at?.toString()}`}>
-                      <td><Player name={e.player_name} uuid={e.player_uuid} /></td>
-                      <td><span className="badge">{e.role_name}</span></td>
-                      <td className="ts"><LocalTimestamp value={e.joined_at} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableWrap>
-          </div>
-
-          {/* Roles + permissions */}
-          <div className="card">
-            <div className="card-title">
-              Roles <span className="sub">{fmtN(roles.length)} role{roles.length === 1 ? '' : 's'}</span>
-            </div>
-            <TableWrap label="Roles">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th className="amount">Rank</th>
-                    <th>Flags</th>
-                    <th>Permissions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roles.length === 0 && (
-                    <tr><td colSpan={4} className="empty">No roles.</td></tr>
-                  )}
-                  {roles.map((r) => (
-                    <tr key={r.role_id}>
-                      <td><span style={{ fontWeight: 500 }}>{r.name}</span></td>
-                      <td className="amount mono">{r.rank_order}</td>
-                      <td>
-                        {r.proprietor_like ? <span className="badge">proprietor</span> : null}{' '}
-                        {r.default_role ? <span className="badge">default</span> : null}
-                      </td>
-                      <td>
-                        {(permsByRole.get(r.role_id) ?? []).length === 0 ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          (permsByRole.get(r.role_id) ?? []).map((p) => (
-                            <span key={p} className="mono small" style={{ background: 'var(--bg-soft)', padding: '2px 6px', borderRadius: 4, marginRight: 4, color: 'var(--fg-soft)' }}>{p}</span>
-                          ))
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableWrap>
-          </div>
-        </>
-      )}
-    </>
-  );
+function TopItems({ items }: { items: FirmPublic['topItems'] }) {
+  const columns: Column<FirmPublic['topItems'][number]>[] = [
+    { key: 'item', header: 'Item', cell: (i) => <EntityLink kind="item" href={itemHref(i.item_key)} name={i.item_name ?? i.item_key} icon={itemIconUrl(i.material, i.item_custom)} preview={previewHref('item', i.item_key)} /> },
+    { key: 'trades', header: 'Trades', numeric: true, cell: (i) => i.trades.toLocaleString('en-US') },
+    { key: 'qty', header: 'Items traded', numeric: true, secondary: true, cell: (i) => i.quantity.toLocaleString('en-US') },
+  ];
+  return <DataTable id="firm-items" label="Top items" columns={columns} rows={items} rowKey={(i) => i.item_key} density="compact"
+    empty={<p className="dt-empty-text">No shop trades in the last 30 days.</p>} />;
 }
