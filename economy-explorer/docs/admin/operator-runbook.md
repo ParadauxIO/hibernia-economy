@@ -56,6 +56,7 @@ section; it does not grant the permissions needed to perform the procedures.
 |---|---|---|
 | Plugin startup and error logs | Required plugins enabled; no repeated DB, settlement or reconciliation errors | Identify the first dependency error; [incident triage](/docs/admin/incidents) |
 | Explorer `/healthz` | HTTP 200 `ok` | Check process/proxy; this probe **does not query the DB** |
+| Explorer `/healthz?rollup=1` | JSON with `rollup.stale: false` and each job's `coverage` reaching today; always HTTP 200 | `stale: true` means no rollup step succeeded for 10 minutes: check that one pod reports `worker.leader: true`, `ROLLUP_WORKER` is not `off`, Redis is reachable, and the explorer log for `[rollup]` errors |
 | REST management `/actuator/health` | Healthy on the configured management port (prod default 8081) | Inspect service/DB health through private monitoring |
 | Explorer account/market page | Queries complete; observation timestamps make sense | Compare source timestamps, DB health and cache; avoid repeated restarts |
 | `/tax status` | Expected enabled cycles, participants and next-fire times | Check timezone/config/plugin registration; do not trigger tax as a health check |

@@ -267,6 +267,107 @@ export interface ExplorerRolePermission {
   roleKey: string;
 }
 
+export interface ExplorerRollupAccountDay {
+  accountId: number;
+  counterpartyType: Generated<string>;
+  day: Date;
+  inflow: Generated<Decimal>;
+  isInternal: Generated<number>;
+  outflow: Generated<Decimal>;
+  pluginKey: string;
+  taxKind: Generated<string>;
+  txnCount: Generated<number>;
+}
+
+export interface ExplorerRollupCoverage {
+  fromDay: Date;
+  historyComplete: Generated<number>;
+  job: string;
+  toDay: Date;
+  updatedAt: Generated<Date>;
+}
+
+export interface ExplorerRollupEconomyDay {
+  activePlayers: Generated<number>;
+  bridgePairs: Generated<number>;
+  day: Date;
+  newPlayers: Generated<number>;
+  rawTxnCount: Generated<number>;
+  rawVolume: Generated<Decimal>;
+  txnCount: Generated<number>;
+  volume: Generated<Decimal>;
+}
+
+export interface ExplorerRollupHourHeatmap {
+  day: Date;
+  hour: number;
+  txnCount: Generated<number>;
+  weekday: number;
+}
+
+export interface ExplorerRollupItemDay {
+  closeUnitPrice: Decimal;
+  day: Date;
+  direction: "BUY" | "SELL";
+  itemKey: string;
+  maxUnitPrice: Decimal;
+  minUnitPrice: Decimal;
+  openUnitPrice: Decimal;
+  qty: Generated<number>;
+  trades: Generated<number>;
+  volume: Generated<Decimal>;
+}
+
+export interface ExplorerRollupPairDay {
+  accountId: number;
+  counterpartyId: number;
+  day: Date;
+  inflow: Generated<Decimal>;
+  outflow: Generated<Decimal>;
+  txnCount: Generated<number>;
+}
+
+export interface ExplorerRollupPairMonth {
+  accountId: number;
+  counterpartyId: number;
+  inflow: Generated<Decimal>;
+  month: Date;
+  outflow: Generated<Decimal>;
+  txnCount: Generated<number>;
+}
+
+export interface ExplorerRollupRun {
+  day: Generated<Date | null>;
+  error: Generated<string | null>;
+  finishedAt: Generated<Date | null>;
+  job: string;
+  rowsWritten: Generated<number>;
+  runId: Generated<number>;
+  startedAt: Generated<Date>;
+}
+
+export interface ExplorerRollupTypeDay {
+  accountType: "BUSINESS" | "GOVERNMENT" | "PERSONAL" | "SYSTEM";
+  day: Date;
+  inflow: Generated<Decimal>;
+  outflow: Generated<Decimal>;
+  pluginKey: string;
+}
+
+export interface ExplorerSnapshotWealthDay {
+  day: Date;
+  gini: Generated<Decimal>;
+  holderBuckets: string;
+  personalHolders: Generated<number>;
+  supplyBusiness: Generated<Decimal>;
+  supplyGovernment: Generated<Decimal>;
+  supplyPersonal: Generated<Decimal>;
+  supplySystem: Generated<Decimal>;
+  takenAt: Generated<Date>;
+  top10Share: Generated<Decimal>;
+  top1Share: Generated<Decimal>;
+}
+
 export interface Firm {
   createdAt: Generated<Date>;
   defaultAccountId: Generated<number | null>;
@@ -498,6 +599,16 @@ export interface DB {
   explorerRole: ExplorerRole;
   explorerRoleDefinition: ExplorerRoleDefinition;
   explorerRolePermission: ExplorerRolePermission;
+  explorerRollupAccountDay: ExplorerRollupAccountDay;
+  explorerRollupCoverage: ExplorerRollupCoverage;
+  explorerRollupEconomyDay: ExplorerRollupEconomyDay;
+  explorerRollupHourHeatmap: ExplorerRollupHourHeatmap;
+  explorerRollupItemDay: ExplorerRollupItemDay;
+  explorerRollupPairDay: ExplorerRollupPairDay;
+  explorerRollupPairMonth: ExplorerRollupPairMonth;
+  explorerRollupRun: ExplorerRollupRun;
+  explorerRollupTypeDay: ExplorerRollupTypeDay;
+  explorerSnapshotWealthDay: ExplorerSnapshotWealthDay;
   firm: Firm;
   firmAccounts: FirmAccounts;
   firmCreationLock: FirmCreationLock;

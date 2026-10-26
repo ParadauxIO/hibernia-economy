@@ -83,6 +83,51 @@ transaction being written. Don't replace it with shared rollup rows (per hour or
 per day): every transfer would contend for the same row, and taking it after the
 ascending `FOR UPDATE` balance locks in `LedgerServiceImpl` can deadlock.
 
+## Explorer rollups (V43, PAR-532)
+
+The explorer's daily aggregates live in `explorer_rollup_*` and
+`explorer_snapshot_wealth_day`. They are derived data: no trigger maintains
+them, and every row can be deleted and recomputed from the ledger. A worker
+inside the explorer's own Node process (`economy-explorer/lib/rollup/`) writes
+them; nothing else does.
+
+- **One leader.** Each pod tries a Redis lease, `ee:<tenant>:rollup:leader`
+  (`SET NX PX 30000`, renewed every 10 s, released on shutdown). Only the
+  holder runs the worker. Without `REDIS_HOST` the single process always leads.
+  `ROLLUP_WORKER=off` disables it; it is off under Vitest and the e2e server
+  unless set to `on`.
+- **Whole-day recompute.** Every step deletes one UTC day of one table and
+  re-inserts it with a single `INSERT … SELECT … GROUP BY`, in one transaction.
+  The worker's own two-connection pool runs `READ COMMITTED` with
+  `time_zone = '+00:00'` and a 300 s statement timeout
+  (`ROLLUP_DB_STMT_TIMEOUT_S`). `READ COMMITTED` matters: InnoDB then reads the
+  ledger as a consistent snapshot, without the shared next-key locks that would
+  make ledger writers wait.
+- **Schedule.** Every minute: today and yesterday, plus any days missed while no
+  worker ran. Once a night (after 00:15 UTC): the 7 days before that, which
+  absorbs late `settlement_time` changes. In the rest of each minute: backfill,
+  newest-first, one day per transaction.
+- **Coverage.** `explorer_rollup_coverage(job, from_day, to_day,
+  history_complete)` is the contiguous range each job has computed, so a
+  restart resumes where it stopped. Readers in `lib/services/rollup.ts` return
+  only covered days and report the coverage, so a page can say "covered back to
+  <date>" instead of running a slow live query.
+- **Run log.** `explorer_rollup_run` has one row per step (job, day, rows,
+  error), pruned after 7 days. `/healthz?rollup=1` reports staleness (no
+  successful step in 10 minutes) and coverage, and still returns 200.
+  `/metrics` adds `explorer_rollup_step_seconds{job,pass}`,
+  `explorer_rollup_steps_total{job,pass,outcome}`,
+  `explorer_rollup_last_success_timestamp_seconds{job}`,
+  `explorer_rollup_leader` and `explorer_rollup_backfill_days_remaining{job}`;
+  rollup queries appear in `explorer_db_query_seconds` as `fn="rollup:<job>"`.
+- **Counterparties** are monthly (`explorer_rollup_pair_month`). The worker
+  stages them per day in `explorer_rollup_pair_day`, so recomputing a day
+  re-sums only the touched accounts' month rows instead of rescanning a month of
+  ledger. Staged days are pruned once their month can no longer change.
+- **Categories** are not stored: rows keep `plugin_key` and `tax_kind` (plus
+  counterparty type and an internal-transfer flag), and `lib/categories.ts`
+  maps them at read time. Changing the taxonomy never needs a backfill.
+
 ## Deploying a schema change
 
 Schema deploys are **manual and gated** — there is no automatic "migrate on push".
