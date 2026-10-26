@@ -101,7 +101,7 @@ export async function seedGovFixtures(): Promise<void> {
       [a.commerce, TRADER, '250.00', 'Selling without a licence', false],
       [a.commerce, MERCHANT, '75.00', 'Unlicensed stall at spawn', true],
       [a.commerceReserve, TRADER, '1200.00', 'Price fixing', false],
-      [a.interior, MERCHANT, '500.00', 'Trespass in the Interior archive', false],
+      [a.interior, MERCHANT, '450.00', 'Trespass in the Interior archive', false],
     ];
     for (const [i, [account, player, amount, reason, revoked]] of fines.entries()) {
       const when = at(2 + i, '18:00:00');

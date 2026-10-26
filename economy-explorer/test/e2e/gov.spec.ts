@@ -117,9 +117,9 @@ test.describe('government workspace scope and behaviour', () => {
     expect(csv).toContain('Price fixing');
     expect(csv).not.toContain('Trespass');
     const elsewhere = await (await context.request.get(`${baseURL}/api/export/fines?format=csv&f=account:in:204`)).text();
-    expect(elsewhere.split('\r\n').filter(Boolean)).toHaveLength(1); // the header only
+    expect(elsewhere.trimEnd().split(/\r?\n/).filter(Boolean)).toHaveLength(1); // the header only
     const ledger = await (await context.request.get(`${baseURL}/api/export/gov-transactions?format=csv`)).text();
-    expect(ledger.split('\r\n').filter(Boolean).length).toBeGreaterThan(1);
+    expect(ledger.trimEnd().split(/\r?\n/).filter(Boolean).length).toBeGreaterThan(1);
     for (const name of GOV_OUT_OF_SCOPE_NAMES) expect(ledger).not.toContain(name);
     // Choosing a unit outside the scope falls back to the official's own accounts.
     await visit(page, '/gov/accounts?unit=interior');
