@@ -1,3 +1,4 @@
+import '@/app/me/me.css';
 import 'server-only';
 import Link from 'next/link';
 import type { Route } from 'next';

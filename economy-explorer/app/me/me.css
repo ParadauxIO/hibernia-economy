@@ -16,7 +16,8 @@
 .me-groups { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
 .me-group-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-2); flex-wrap: wrap; }
 .me-group-title { margin: 0; font-size: var(--text-md); line-height: var(--leading-md); font-weight: 600; }
-.me-group-title a { color: inherit; }
+.me-group-title a { color: inherit; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+.me-group-title a:hover { text-decoration-color: currentColor; }
 .me-group-role { font-weight: 400; color: var(--fg-soft); }
 .me-group-sub { margin: 0; color: var(--fg-muted); font-size: var(--text-sm); }
 .me-group-total { display: grid; justify-items: end; gap: 2px; font-size: var(--text-lg); font-weight: 600; }
