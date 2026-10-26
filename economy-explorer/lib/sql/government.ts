@@ -2,14 +2,6 @@ import 'server-only';
 import { sql } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
 
-export interface FineCategoryRow {
-  category: string;
-  fine_count: number;
-  total_amount: string;
-  active_fine_count: number;
-  active_amount: string;
-}
-
 export interface FineRow {
   fine_id: number;
   player_uuid: string | null;
@@ -72,39 +64,6 @@ export async function getRecentFines(days: number, limit: number, accountIds: re
     issued_by_name: row.issuedByName,
     issued_at: row.issuedAt,
     revoked: row.revoked,
-  }));
-}
-
-/** Mirrors LedgerExplorerMapper.getFineCategorySummary (line 454-467). */
-export async function getFineCategorySummary(days: number, accountIds: readonly number[] | null = []): Promise<FineCategoryRow[]> {
-  const r = await sql<{
-    category: string | null;
-    fineCount: string | number;
-    totalAmount: string;
-    activeFineCount: string | number;
-    activeAmount: string;
-  }>`
-    SELECT category,
-           COUNT(*) AS fineCount,
-           COALESCE(SUM(amount), 0.00) AS totalAmount,
-           SUM(CASE WHEN revoked = 0 THEN 1 ELSE 0 END) AS activeFineCount,
-           COALESCE(SUM(CASE WHEN revoked = 0 THEN amount ELSE 0 END), 0.00) AS activeAmount
-    FROM (
-      SELECT amount, revoked,
-             SUBSTRING_INDEX(SUBSTRING_INDEX(TRIM(reason), ' ', 1), ',', 1) AS category
-      FROM government_fines
-      WHERE issued_at >= NOW() - INTERVAL ${days} DAY
-        AND ${accountIds === null ? sql`TRUE` : accountIds.length ? sql`gov_account_id IN (${sql.join(accountIds)})` : sql`FALSE`}
-    ) t
-    GROUP BY category
-    ORDER BY totalAmount DESC
-  `.execute(db);
-  return r.rows.map((row) => ({
-    category: row.category && row.category.length > 0 ? row.category : 'Other',
-    fine_count: Number(row.fineCount),
-    total_amount: row.totalAmount,
-    active_fine_count: Number(row.activeFineCount),
-    active_amount: row.activeAmount,
   }));
 }
 

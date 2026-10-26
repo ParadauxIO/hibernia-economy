@@ -443,15 +443,15 @@ d('RBAC relationship snapshots', () => {
     }
   });
   it('government queries filter both details and aggregate totals', async () => {
-    const { getGovernmentAccounts, getRecentFines, getFineCategorySummary } = await import('@/lib/sql/government');
+    const { getGovernmentAccounts, getRecentFines, getFineTotals } = await import('@/lib/sql/government');
     expect((await getGovernmentAccounts({ playerUuid: SECRETARY })).map(a => a.account_id)).toEqual([5]);
     expect(await getGovernmentAccounts({ playerUuid: DAVE })).toEqual([]);
     try {
       await issueFine({ reason: 'rbac-test', amount: 100 });
       expect(await getRecentFines(30, 100, [])).toEqual([]);
-      expect(await getFineCategorySummary(30, [])).toEqual([]);
+      expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
       expect((await getRecentFines(30, 100, [5])).some(f => f.reason === 'rbac-test')).toBe(true);
-      expect((await getFineCategorySummary(30, [5])).find(f => f.category === 'rbac-test')?.total_amount).toBe('100.00');
+      expect((await getFineTotals(30, [5])).activeAmount).toBe('100.00');
     } finally {
       await deleteFines('rbac-test');
     }
