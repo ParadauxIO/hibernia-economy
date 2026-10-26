@@ -17,7 +17,7 @@ New permission names require an explicit migration/grant; there is no wildcard.
 | player | Own player data; related accounts, firm rosters and finances; own authorized webhooks |
 | government | Related government accounts and fines, plus the player baseline |
 | moderator | Global read-only player/account/firm/government investigations, ledger and market figures/sales |
-| admin | All 44 initial permissions, plus `audit.read` (V45) |
+| admin | All 44 initial permissions, plus `audit.read` (V44) |
 
 Read, write, assignment and source-management operations have separate grants.
 For example `account.admin.read` opens the account tools, `account.rename` changes

@@ -7,7 +7,7 @@ import { AUDIT_ACTIONS, actionValue, auditTable, type AuditTableState } from '@/
 
 // explorer_audit reads for /admin/audit. Every filter is index-backed:
 //   actor   → idx_audit_actor (actor_uuid_bin, at)
-//   action  → idx_audit_action (action, at)            (V45)
+//   action  → idx_audit_action (action, at)            (V44)
 //   target  → idx_audit_target (target_type, target_id, at)
 //   time    → idx_audit_at (at)                        (V9)
 // and the feed is keyset-paged on (at, audit_id) so deep pages never OFFSET.

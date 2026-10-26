@@ -16,7 +16,7 @@ import {
   type ThrottleStore,
 } from '@/lib/auditThrottle';
 
-// The explorer's audit trail (explorer_audit, V3 + V45). Three kinds of row:
+// The explorer's audit trail (explorer_audit, V3 + V44). Three kinds of row:
 //   * views: privileged reads of other players' data (auditView), action 'view';
 //   * mutations: admin changes with the values before and after (auditMutation);
 //   * relationship reads: GOVERNMENT and BUSINESS accounts read through an

@@ -1,7 +1,7 @@
 import { defineTable, type TableState } from './core';
 
 /**
- * Every action explorer_audit records (V45 backfills older rows to these).
+ * Every action explorer_audit records (V44 backfills older rows to these).
  * URL values can't contain dots, so `value` is the action with `.` → `-`;
  * lib/sql/audit.ts maps it back.
  */
