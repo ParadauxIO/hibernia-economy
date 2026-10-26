@@ -37,7 +37,7 @@ defineExport<typeof firmTxnsExportTable, FirmRow, FirmCursor>({
       const account = await findAccount(accounts[pos.index]!.account_id);
       if (!account) continue;
       const batch = await exportAccountBatch(account, firmId, history, pos.at, limit);
-      if (batch.rows.length === 0) continue;
+      if (batch.rows.length === 0 && batch.next === null) continue;
       const name = account.display_name ?? `Account #${account.account_id}`;
       const next = batch.next ? { index: pos.index, at: batch.next } : pos.index + 1 < accounts.length ? { index: pos.index + 1, at: null } : null;
       return { rows: batch.rows.map((r) => ({ ...r, accountId: account.account_id, accountName: name })), next };

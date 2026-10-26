@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { MetricCard, MetricRow, Money, Num, Section } from '@democracycraft/design-system';
 import { EntityLink } from '@democracycraft/design-system/next';
 import { DataTable, type Column } from '@democracycraft/design-system/table';
@@ -24,8 +25,10 @@ export async function generateMetadata({ params }: { params: Params }) {
 }
 
 /** Spec §7.3, public: the firm's accounts and balances, staff, HQ, and 30-day activity across its accounts. */
-export default async function FirmPage({ params }: { params: Params }) {
+export default async function FirmPage({ params, searchParams }: { params: Params; searchParams: Promise<{ tab?: string }> }) {
   const { firmName } = await params;
+  const { tab } = await searchParams;
+  if (tab === 'financials' || tab === 'members') redirect(`/firms/${encodeURIComponent(decodeURIComponent(firmName))}/${tab}`);
   const loaded = await loadFirm(firmName, 'overview');
   const { pub } = loaded;
   const open = pub.accounts.filter((a) => !a.archived);

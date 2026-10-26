@@ -95,6 +95,21 @@ describe('exportStream', () => {
     expect(done).toEqual({ rows: 3, truncated: false });
   });
 
+  it('continues through empty filtered scan batches to older matches', async () => {
+    const cursors: (number | null)[] = [];
+    const sparse = {
+      ...dataset(1),
+      rows: async (_state: typeof state, cursor: number | null) => {
+        cursors.push(cursor);
+        const scan = cursor ?? 0;
+        return scan < 22 ? { rows: [], next: scan + 1 } : { rows: [{ n: 42, name: 'older match' }], next: null };
+      },
+    };
+    const result = JSON.parse(await read(exportStream({ def: sparse, state, format: 'json', scope: 'all', ctx })));
+    expect(result).toEqual({ dataset: 'widgets', rows: [{ n: 42, name: 'older match' }], truncated: false });
+    expect(cursors).toEqual([null, ...Array.from({ length: 22 }, (_, i) => i + 1)]);
+  });
+
   it('stops at the row cap and says so in each format', async () => {
     const csv = await read(exportStream({ def: dataset(10), state, format: 'csv', scope: 'all', ctx, cap: 4, batchSize: 3 }));
     expect(csv.trimEnd().split('\n')).toEqual(['﻿Number,Name', '0,w0', "1,'=evil()", '2,w2', '3,w3', `# ${capMessage(4)}`]);

@@ -327,15 +327,15 @@ export async function getTransactionsPage(
 
 // ── Exports ───────────────────────────────────────────────────────────────
 
-/** Scan windows one export batch may walk through before giving up on finding a match. */
+/** Scan windows one export batch may walk through before yielding its continuation cursor. */
 export const EXPORT_MAX_WINDOWS = 20;
 
 /**
  * One batch of an account's history for the export route (lib/export): the
  * same pages as the table, but larger, continuing from `cursor`. Filtered
  * exports keep scanning windows until rows turn up or the history ends, up to
- * EXPORT_MAX_WINDOWS windows (100k transactions) per batch; the route ends the
- * file at the first empty batch.
+ * EXPORT_MAX_WINDOWS windows (100k transactions) per batch. An empty batch
+ * retains its cursor so the stream can continue looking for older matches.
  */
 export async function exportAccountBatch(
   account: ExplorerAccountRow, firmId: number | null, state: AccountTxnsState, cursor: KeysetCursor | null, limit: number,
@@ -346,7 +346,7 @@ export async function exportAccountBatch(
     if (page.rows.length > 0 || !page.next) return { rows: page.rows, next: page.next };
     at = page.next;
   }
-  return { rows: [], next: null };
+  return { rows: [], next: at };
 }
 
 // ── Counterparty typeahead ────────────────────────────────────────────────

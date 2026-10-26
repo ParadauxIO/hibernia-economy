@@ -93,7 +93,15 @@ export function exportStream<T extends AnyTable, R, C>(opts: StreamOptions<T, R,
           chunk += head();
         }
         const limit = Math.min(batchSize, cap - emitted);
-        const batch = await def.rows(state, cursor, { ...ctx, limit });
+        let batch = await def.rows(state, cursor, { ...ctx, limit });
+        // A filtered scan can find no rows while still having older history.
+        // Only an exhausted cursor ends an all-results export.
+        while (scope !== 'page' && batch.rows.length === 0 && batch.next !== null) {
+          if (cancelled) return;
+          cursor = batch.next;
+          batch = await def.rows(state, cursor, { ...ctx, limit });
+        }
+        if (cancelled) return;
         const rows = batch.rows.slice(0, limit);
         for (const row of rows) {
           chunk += line(row);

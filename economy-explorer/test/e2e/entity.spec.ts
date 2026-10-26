@@ -113,6 +113,11 @@ test.describe('players', () => {
 });
 
 test.describe('firms', () => {
+  test('legacy financials links reach the gated financials page', async ({ page }) => {
+    await visit(page, '/firms/Acme%20Corp?tab=financials');
+    await expect(page).toHaveURL(/\/firms\/Acme%20Corp\/financials$/);
+    await expect(page.locator(GATE)).toContainText('Financials are private to the firm');
+  });
   test('public overview, gated members and financials', async ({ page }) => {
     await visit(page, '/firms/Acme%20Corp');
     await expect(page.locator('.page-header')).toContainText('Run by Alice, its proprietor.');
