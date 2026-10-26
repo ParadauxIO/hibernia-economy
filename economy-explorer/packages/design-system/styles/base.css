@@ -13,7 +13,7 @@ body {
     line-height: var(--leading-md);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "ss01", "cv02", "cv11";
+    font-optical-sizing: auto;
 }
 
 h1, h2, h3, h4 { font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); color: var(--fg); }

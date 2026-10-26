@@ -33,6 +33,8 @@ export function RangePicker({ value, presets = RANGE_PRESETS.map((p) => p.key), 
   const [pending, startTransition] = useTransition();
   const [from, setFrom] = useState(value.from);
   const [to, setTo] = useState(value.to);
+  const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
 
   const navigate = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params.toString());
@@ -43,24 +45,31 @@ export function RangePicker({ value, presets = RANGE_PRESETS.map((p) => p.key), 
   };
 
   const options = RANGE_PRESETS.filter((p) => presets.includes(p.key));
-  const customLabel = value.preset === 'custom' ? `${value.from} – ${value.to}` : 'Custom';
+  const customLabel = value.preset === 'custom' ? `${value.from} – ${value.to}` : 'Date range';
 
   return <div className="range-picker" aria-busy={pending || undefined}>
     <Segmented label="Time range" value={value.preset}
       items={options.map((p) => ({ value: p.key, label: <span title={p.title}>{p.label}</span> }))}
       onChange={(key) => navigate({ [RANGE_PARAMS.range]: key, [RANGE_PARAMS.from]: null, [RANGE_PARAMS.to]: null })} />
-    <Popover label="Custom range" placement="bottom-end" sheet trigger={<button type="button" className="btn btn-quiet range-custom" aria-pressed={value.preset === 'custom'}>{customLabel}</button>}>
+    <Popover open={open} onOpenChange={(next) => {
+      if (next) { setFrom(value.from); setTo(value.to); setError(''); }
+      setOpen(next);
+    }} label="Custom range" placement="bottom-end" sheet trigger={<button type="button" className="btn btn-quiet range-custom" aria-pressed={value.preset === 'custom'}>{customLabel}</button>}>
       {({ close }) => <form className="range-form" onSubmit={(event) => {
         event.preventDefault();
         if (!from || !to) return;
-        const [a, b] = from <= to ? [from, to] : [to, from];
+        if (from > to) { setError('End date must be on or after start date.'); return; }
         close();
-        navigate({ [RANGE_PARAMS.range]: 'custom', [RANGE_PARAMS.from]: a, [RANGE_PARAMS.to]: b });
+        navigate({ [RANGE_PARAMS.range]: 'custom', [RANGE_PARAMS.from]: from, [RANGE_PARAMS.to]: to });
       }}>
-        <label className="field"><span className="field-label">From</span><input type="date" className="input" value={from} min={min} max={max} onChange={(e) => setFrom(e.target.value)} required /></label>
-        <label className="field"><span className="field-label">To</span><input type="date" className="input" value={to} min={min} max={max} onChange={(e) => setTo(e.target.value)} required /></label>
+        <label className="field"><span className="field-label">From</span><input type="date" className="input" value={from} min={min} max={to || max} onChange={(e) => { setFrom(e.target.value); setError(''); }} required /></label>
+        <label className="field"><span className="field-label">To</span><input type="date" className="input" value={to} min={from || min} max={max} onChange={(e) => { setTo(e.target.value); setError(''); }} required /></label>
         <p className="range-form-note">Days are in UTC and include both ends.</p>
-        <button type="submit" className="btn btn-primary">Apply</button>
+        {error && <p role="alert">{error}</p>}
+        <div className="range-form-actions">
+          <button type="button" className="btn btn-quiet" onClick={close}>Cancel</button>
+          <button type="submit" className="btn btn-primary">Apply range</button>
+        </div>
       </form>}
     </Popover>
     {allowCompare && <button type="button" className="btn btn-quiet range-compare" aria-pressed={value.compare}
