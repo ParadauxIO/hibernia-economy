@@ -311,6 +311,13 @@ npm run typecheck && npm run lint
 npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
 
+`npm run typecheck` uses the native TypeScript 7 `tsc` executable, installed as
+the `@typescript/native` npm alias. The `typescript` package name aliases
+`@typescript/typescript6` so ESLint, Next.js, and code generation can still use
+the compiler API that TypeScript 7 does not provide. Keep both aliases when
+updating dependencies; `tsc --version` reports 7.x while
+`node -p 'require("typescript").version'` reports 6.x.
+
 The SQL integration suite and the Playwright end-to-end suite both need a
 **disposable** MariaDB — every table in it is dropped, rebuilt by applying the
 real `economy-flyway` migrations in version order (from Node; no JVM needed), and
