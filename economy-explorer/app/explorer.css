@@ -76,7 +76,6 @@ p a:not(.btn), .sub a { text-decoration: underline; text-decoration-thickness: 1
 .insight .body .label { color: var(--fg-muted); font-size: var(--text-xs); }
 .insight .body .value { color: var(--fg); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
 
-
 /* ───────────── privacy gate (components/PrivacyGate; new code uses AccessGate) ───────────── */
 .privacy-gate {
     display: flex;
@@ -95,8 +94,6 @@ p a:not(.btn), .sub a { text-decoration: underline; text-decoration-thickness: 1
 .privacy-gate-title { color: var(--fg); font-weight: var(--weight-semibold); font-size: var(--text-lg); line-height: var(--leading-lg); }
 .privacy-gate-hint { max-width: 540px; font-size: var(--text-md); }
 .privacy-gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin-top: var(--space-3); }
-
-/* ───────────── admin overview ───────────── */
 
 /* ───────────── directories (mobile rows), money flow, tax rates ───────────── */
 .mobile-only { display: none; }
