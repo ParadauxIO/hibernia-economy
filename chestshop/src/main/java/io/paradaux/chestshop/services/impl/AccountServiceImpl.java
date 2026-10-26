@@ -12,6 +12,7 @@ import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.AdminBypassService;
 import io.paradaux.chestshop.services.BusinessAccountService;
+import io.paradaux.chestshop.services.GovernmentAccountService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.NameUtil;
 import io.paradaux.chestshop.utils.NumberUtil;
@@ -47,6 +48,7 @@ public class AccountServiceImpl implements AccountService {
     // Business-account resolution / firm access checks delegate to the leaf
     // BusinessAccountService (no cycle — it depends on no other ChestShop service).
     private final BusinessAccountService businessAccounts;
+    private final GovernmentAccountService governmentAccounts;
 
     private final Object accountsLock = new Object();
 
@@ -68,12 +70,14 @@ public class AccountServiceImpl implements AccountService {
     public AccountServiceImpl(
             AccountMapper accounts,
             BusinessAccountService businessAccounts,
+            GovernmentAccountService governmentAccounts,
             ChestShopConfiguration config,
             SignService signService,
             AdminBypassService adminBypass) {
         this.adminBypass = adminBypass;
         this.accounts = accounts;
         this.businessAccounts = businessAccounts;
+        this.governmentAccounts = governmentAccounts;
         this.config = config;
         this.signService = signService;
         this.usernameToAccount = new SimpleCache<>(config.getCacheSize());
@@ -211,6 +215,10 @@ public class AccountServiceImpl implements AccountService {
         if (business != null) {
             return business;
         }
+        if (SignService.isGovernmentAccount(name)) {
+            // A G: token never names a player, so an unknown one must not fall through to one.
+            return governmentAccounts.resolveGovernmentAccount(name);
+        }
         return getLastAccountFromName(name);
     }
 
@@ -305,10 +313,10 @@ public class AccountServiceImpl implements AccountService {
             }
         }
 
-        boolean isBusinessAccount = SignService.isBusinessAccount(name);
+        boolean isBusinessAccount = SignService.isAccountToken(name);
 
-        // For business accounts, skip permission-based shortcuts — access is controlled
-        // solely by Treasury/Business via canAccess(). Only ChestShop admins bypass this.
+        // For firm and government accounts, skip permission-based shortcuts — access is controlled
+        // solely by canAccess() (firm staff or ChestShop.government.*). Only ChestShop admins bypass this.
         if (isBusinessAccount) {
             if (adminBypass.has(player, Permissions.ADMIN)) {
                 return true;
@@ -341,6 +349,9 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public boolean canAccess(Player player, Account account) {
         if (businessAccounts.canAccessBusinessAccount(player, account)) {
+            return true;
+        }
+        if (governmentAccounts.canAccessGovernmentAccount(player, account)) {
             return true;
         }
         if (player.getUniqueId().equals(account.getUuid())) {
@@ -378,9 +389,9 @@ public class AccountServiceImpl implements AccountService {
             return player.getName().equalsIgnoreCase(name);
         }
 
-        // For business accounts the UUID is synthetic and never matches a player UUID;
-        // delegate to canAccess so firm membership/ownership is checked via the API.
-        if (SignService.isBusinessAccount(name)) {
+        // For firm and government accounts the UUID is synthetic and never matches a player UUID;
+        // delegate to canAccess so firm staff or government permissions are checked.
+        if (SignService.isAccountToken(name)) {
             return canAccess(player, account);
         }
 

@@ -14,6 +14,7 @@ import io.paradaux.chestshop.services.BusinessAccountService;
 import io.paradaux.chestshop.services.EconomyService;
 import io.paradaux.chestshop.services.GiveService;
 import io.paradaux.chestshop.services.GoodsTransfer;
+import io.paradaux.chestshop.services.GovernmentAccountService;
 import io.paradaux.chestshop.services.InfoService;
 import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.services.ItemCodeService;
@@ -43,6 +44,7 @@ import io.paradaux.chestshop.services.impl.AdminBypassServiceImpl;
 import io.paradaux.chestshop.services.impl.BusinessAccountServiceImpl;
 import io.paradaux.chestshop.services.impl.EconomyServiceImpl;
 import io.paradaux.chestshop.services.impl.GiveServiceImpl;
+import io.paradaux.chestshop.services.impl.GovernmentAccountServiceImpl;
 import io.paradaux.chestshop.services.impl.InfoServiceImpl;
 import io.paradaux.chestshop.services.impl.InventoryServiceImpl;
 import io.paradaux.chestshop.services.impl.ItemCodeServiceImpl;
@@ -85,6 +87,9 @@ public class ChestShopModule extends AbstractModule {
         bind(AccountService.class).to(AccountServiceImpl.class).in(Singleton.class);
         bind(AdminBypassService.class).to(AdminBypassServiceImpl.class).in(Singleton.class);
         bind(BusinessAccountService.class).to(BusinessAccountServiceImpl.class).in(Singleton.class);
+        bind(GovernmentAccountService.class)
+                .to(GovernmentAccountServiceImpl.class)
+                .in(Singleton.class);
         bind(EconomyService.class).to(EconomyServiceImpl.class).in(Singleton.class);
         bind(GiveService.class).to(GiveServiceImpl.class).in(Singleton.class);
         bind(InfoService.class).to(InfoServiceImpl.class).in(Singleton.class);

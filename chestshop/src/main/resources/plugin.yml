@@ -103,6 +103,10 @@ permissions:
     description: Gives you the power to do access shops for all names.
   ChestShop.othername.access.(some name):
     description: Gives you the power to do access shops for (some name), for example your town.
+  ChestShop.government.*:
+    description: Create and run shops owned by any government account (G:<name> or G:#<id> signs).
+  ChestShop.government.(account name):
+    description: Create and run shops owned by that government account, lowercased (e.g. ChestShop.government.govjustice for G:GovJustice).
   ChestShop.nolimit.buy.min:
     description: Allows user to bypass the minimal buy price for all items
   ChestShop.nolimit.buy.min.(itemType):

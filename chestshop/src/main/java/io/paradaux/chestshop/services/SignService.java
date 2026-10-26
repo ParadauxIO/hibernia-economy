@@ -9,6 +9,7 @@ import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.utils.BlockUtil;
 import io.paradaux.chestshop.utils.InventoryUtil;
+import io.paradaux.chestshop.utils.MaterialUtil;
 import io.paradaux.chestshop.utils.QuantityUtil;
 import io.paradaux.chestshop.utils.SignText;
 import io.paradaux.chestshop.utils.StringUtil;
@@ -77,6 +78,30 @@ public class SignService {
         return isBusinessAccount(getOwner(lines));
     }
 
+    /**
+     * A Treasury government account: {@code G:<display name>}, or {@code G:#<base36 id>} (PAR-529).
+     * Every {@code G:} token is reserved, so a malformed one is refused rather than read as a player.
+     */
+    public static boolean isGovernmentAccount(String owner) {
+        return owner.regionMatches(true, 0, "G:", 0, 2);
+    }
+
+    /** Whether the owner line names a Treasury firm or government account rather than a player. */
+    public static boolean isAccountToken(String owner) {
+        return isBusinessAccount(owner) || isGovernmentAccount(owner);
+    }
+
+    /** The sign form of a government account: its name when that fits the line, else its base-36 id. */
+    public static String governmentAccountSignName(int accountId, String displayName) {
+        String named = "G:" + displayName;
+        if (!displayName.isBlank()
+                && !displayName.startsWith("#")
+                && StringUtil.getMinecraftStringWidth(named) <= MaterialUtil.MAXIMUM_SIGN_WIDTH) {
+            return named;
+        }
+        return "G:#" + Integer.toString(accountId, 36).toUpperCase(Locale.ROOT);
+    }
+
     public static int getBusinessAccountId(String owner) {
         return Integer.parseInt(owner.substring(2), 36);
     }
@@ -130,7 +155,7 @@ public class SignService {
         if (!isAdminShop(ownerName)
                 && !ownerName.isEmpty()
                 && !ownerName.regionMatches(true, 0, "B:", 0, 2)
-                && !isBusinessAccount(ownerName)) {
+                && !isAccountToken(ownerName)) {
             Matcher withId = NAME_WITH_ID.matcher(ownerName);
             if (withId.matches()) {
                 // The name carries a disambiguation id — validate the part before the last ':'.
