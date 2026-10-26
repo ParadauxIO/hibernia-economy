@@ -25,6 +25,11 @@ Plenty is public:
   Use the arrow keys and **Enter**, or click. Things you open from search are
   listed under **Recent** next time; they are kept only in your browser. The
   same box can copy the server address and switch between light and dark.
+  Suggestions match the start of a name. For a fuller search, choose **Search
+  everything**: the [search page](/search) also finds account, firm and item names
+  that contain your text anywhere, groups the results with a count for each
+  type, and has a tab per type. Player names always match from the first letter.
+  Type an account number (`#1204`) or a player's full UUID to go straight to it.
 
 ## Finding your way around
 
@@ -119,6 +124,13 @@ whole-economy transaction list still requires staff investigation permission.
 When you're signed in, tables on the **Market** and **My data** pages show **CSV** and
 **JSON** buttons that download what you're looking at. The buttons only appear once you're
 logged in.
+
+Tables with an **Export** menu (the accounts directory, and the transaction and
+sales lists for staff) can also download **all results**: every row your current
+search and filters select, not just the page on screen. A download stops at
+100,000 rows; the last line of the file says so when that happens, so narrow
+the filters to get the rest. You can start 10 exports a minute, and each export
+is recorded in the access log.
 
 ## Changing the look
 

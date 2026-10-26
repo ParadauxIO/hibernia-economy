@@ -15,7 +15,25 @@ Financial mutations require the [configured Treasury admin API](/docs/admin/conf
 **Players** requires `player.read.all`; account histories still obey account-read
 permissions. Search for the Minecraft name/UUID and inspect the relevant account,
 firm and date window. **Transactions** requires `transactions.read` and shows the
-global ledger; open a transaction to inspect its postings and counterparties.
+global ledger, newest first. Narrow it with filter chips: settled date, category
+(Taxes, or the recording plugin's category), plugin, account, initiator or
+authorizer, amount, and the type of the paying or receiving account. Type `#123`
+to find one transaction, or text to match messages. Select a row to see its
+postings in a panel without leaving the list. **Follow the money** in that panel
+lists what each receiving account did in the 1, 6, 24 or 72 hours either side.
+
+Every filter reads an index. Amount searches at most 31 days, and the account-type
+and message filters at most 7; without a **Settled** filter they cover the most
+recent days, and a longer Settled range is cut to its last days. A note under the
+filters says when that happened. The count stops at "1,000+": use **Older**,
+**Newer** and **Jump to** a date to move through the list. The **Sales** feed
+(`market.sales.read`) works the same way for ChestShop trades, filtered by item,
+customer, shop owner, firm, direction, price and date (price and item-name text
+cover at most 7 days).
+
+**Export → All results** downloads up to 100,000 rows of what the filters select,
+as CSV or JSON, with the same permission as the page. Each export is written to the
+audit log as method `EXPORT` with the dataset and filters in the path.
 Record transaction IDs, exact amounts and UTC times, rather than screenshots alone.
 Public balances do not imply access to private transaction histories.
 

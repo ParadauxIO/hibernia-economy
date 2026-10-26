@@ -28,6 +28,7 @@ import { findConfigByPrefix } from '@/lib/sql/economyConfig';
 import { parseTaxRates } from '@/lib/taxRates';
 import { accountsTableSuite } from './accountsTable';
 import { adminSuite } from './adminSuite';
+import { powerSuite } from './power';
 
 // Real queries against a real MariaDB (no mocking). Skipped unless RUN_INTEGRATION=1.
 const d = HAS_DB ? describe : describe.skip;
@@ -1108,3 +1109,4 @@ d('nav: government scope and personal balance (PAR-536)', () => {
 });
 
 adminSuite(d);
+powerSuite(d);
