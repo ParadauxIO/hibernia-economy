@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server';
 import { createRequestBlocker } from '@/lib/requestBlocking';
 import { auth } from '@/lib/auth/authjs';
+import { isQuietPath } from '@/lib/accessLog';
 
 const blockRequest = createRequestBlocker(process.env);
 
@@ -73,6 +74,7 @@ function handleRequest(req: NextRequest) {
   }
 
   const res = NextResponse.next();
+  if (isQuietPath(req.nextUrl.pathname)) return res;
 
   // Structured access log — one line, JSON, picked up by Loki/Grafana.
   console.log(
