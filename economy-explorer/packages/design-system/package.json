@@ -10,6 +10,7 @@
     "./format": "./src/format.ts",
     "./use-hydrated": "./src/useHydrated.ts",
     "./table": "./src/table/index.ts",
+    "./table/styles.css": "./src/table/table.css",
     "./styles.css": "./styles/index.css",
     "./tokens.css": "./styles/tokens.css"
   },

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FilterBar } from '@/components/FilterBar';
@@ -215,5 +215,44 @@ describe('FilterBar quick filters, columns and summary', () => {
   it('renders the export slot', () => {
     setup('', { exportSlot: <button type="button">CSV</button> });
     expect(screen.getByRole('button', { name: 'CSV' })).toBeInTheDocument();
+  });
+});
+
+
+describe('Search and date controls', () => {
+  it('only commits a draft when submitted, preserving filters and resetting pagination', async () => {
+    const { user, search } = setup('f=type:in:business&page=3&tab=all');
+    await user.type(search, 'Acme');
+    await user.tab();
+    expect(navigation.router.push).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+    expect(pushed().q).toBe('Acme');
+    expect(pushed().f).toEqual(['type:in:business']);
+    expect(pushed().params.get('tab')).toBe('all');
+    expect(pushed().params.has('page')).toBe(false);
+  });
+
+  it('clears search independently of active filters and restores focus', async () => {
+    const { user, search } = setup('q=Acme&f=type:in:business');
+    await user.click(screen.getByRole('button', { name: 'Clear search text' }));
+    expect(pushed().q).toBe(null);
+    expect(pushed().f).toEqual(['type:in:business']);
+    expect(search).toHaveFocus();
+  });
+
+  it('opens dates directly and rejects a reversed interval before applying a valid one', async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Created' }));
+    const from = screen.getByLabelText('From');
+    const to = screen.getByLabelText('To');
+    expect(from).toHaveAttribute('type', 'date');
+    fireEvent.change(from, { target: { value: '2026-10-20' } });
+    fireEvent.change(to, { target: { value: '2026-10-01' } });
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('End date must be on or after start date.');
+    expect(navigation.router.push).not.toHaveBeenCalled();
+    fireEvent.change(to, { target: { value: '2026-10-25' } });
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(pushed().f).toEqual(['created:between:2026-10-20,2026-10-25']);
   });
 });

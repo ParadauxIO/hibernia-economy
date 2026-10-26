@@ -6,7 +6,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import Script from 'next/script';
 import { Suspense } from 'react';
-import { GeistSans } from 'geist/font/sans';
+import localFont from 'next/font/local';
 import { GeistMono } from 'geist/font/mono';
 import { Money } from '@democracycraft/design-system';
 import { serverIdentity } from '@/lib/serverIdentity';
@@ -25,6 +25,13 @@ import { ViewerProvider } from '@/components/ViewerContext';
 import { ExplorerAnalytics } from '@/components/ExplorerAnalytics';
 import { FaroAnalytics } from '@/components/FaroAnalytics';
 import { brand, siteUrl } from '@/lib/metadata';
+
+const dmSans = localFont({
+  src: '../public/dm-sans.ttf',
+  variable: '--font-dm-sans',
+  display: 'swap',
+  weight: '100 1000',
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const id = await brand();
@@ -88,7 +95,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       lang="en"
       data-theme={theme}
       data-mode={mode}
-      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      className={`${dmSans.variable} ${GeistMono.variable}`}
       // The pre-paint script may rewrite data-mode (system → resolved OS pref);
       // suppress the resulting attribute mismatch on hydration.
       suppressHydrationWarning

@@ -11,6 +11,8 @@ import {
 } from '@/components/charts/AreaTimeline';
 import { Candlestick } from '@/components/charts/Candlestick';
 import { Heatmap } from '@/components/charts/Heatmap';
+import { FilterBar } from '@/components/FilterBar';
+import { accountsTable } from '@/lib/tables/accounts';
 import { parseRange } from '@/lib/range';
 import { DialogDemo, PopoverDemo, SegmentedButtonsDemo } from './demos';
 import * as f from './fixtures';
@@ -23,8 +25,8 @@ const TYPE_SCALE = [
   ['--text-2xl', 'Metric value', '24 / 32'],
   ['--text-xl', 'Section heading', '20 / 28'],
   ['--text-lg', 'Card title', '16 / 24'],
-  ['--text-md', 'Body text', '14 / 20'],
-  ['--text-sm', 'Table body, secondary text', '13 / 18'],
+  ['--text-md', 'Body text', '15 / 24'],
+  ['--text-sm', 'Table body, secondary text', '14 / 20'],
   ['--text-xs', 'Captions and axis labels', '12 / 16'],
 ] as const;
 
@@ -160,6 +162,9 @@ export default async function DesignSystemPage({ searchParams }: { searchParams:
         <SegmentedButtonsDemo />
       </div>
       <div className="ds-row ds-wrap"><PopoverDemo /><DialogDemo /><ExportMenu hrefs={{ page: { csv: '#csv' } }} /></div>
+      <h3>Table search and filters</h3>
+      <p className="muted">Try the controls below. The URL reflects your selection; the example rows are fixed fixtures.</p>
+      <FilterBar table={accountsTable} />
       <TableWrap label="Example accounts">
         <table className="data-table">
           <thead><tr><th scope="col">Account</th><th scope="col">Type</th><th scope="col" className="amount">Balance</th><th scope="col" className="amount">Last activity</th></tr></thead>

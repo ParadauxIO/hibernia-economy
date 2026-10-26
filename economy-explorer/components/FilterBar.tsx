@@ -4,6 +4,7 @@
 // this component reads it with parseTableState and writes it back with
 // tableHref, and the server page re-renders the DataTable.
 
+import '@democracycraft/design-system/table/styles.css';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useOptimistic, useRef, useState, useSyncExternalStore, useTransition, type KeyboardEvent, type ReactNode } from 'react';
 import { Popover } from '@democracycraft/design-system/popover';
@@ -55,6 +56,7 @@ export interface FilterBarProps {
 type Open =
   | { kind: 'add'; field: string | null }
   | { kind: 'chip'; field: string }
+  | { kind: 'date'; field: string }
   | { kind: 'columns' }
   | null;
 
@@ -223,23 +225,34 @@ export function FilterBar({
         <style>{hiddenColumns.filter((k) => SAFE_ID.test(k)).map((k) => `#${tableId} [data-col="${k}"]`).join(',\n') + '{display:none}'}</style>
       )}
       <div className="fb-row">
-        <div className="fb-search" role="search" aria-label={`Search and filter ${table.noun.many}`}>
-          <SearchIcon />
-          <input
-            ref={searchRef}
-            type="search"
-            aria-label={table.searchPlaceholder}
-            placeholder={table.searchPlaceholder}
-            value={text}
-            autoComplete="off"
-            spellCheck={false}
-            enterKeyHint="search"
-            onChange={(e) => onSearchChange(e.target.value)}
-            onKeyDown={onSearchKeyDown}
-            onBlur={() => { if (text.trim() !== state.q) commitSearch(); }}
-          />
-        </div>
+        <form className="fb-search" role="search" aria-label={`Search and filter ${table.noun.many}`} onSubmit={(event) => { event.preventDefault(); commitSearch(); }}>
+          <div className="fb-search-field">
+            <SearchIcon />
+            <input
+              ref={searchRef}
+              type="search"
+              aria-label={table.searchPlaceholder}
+              placeholder={table.searchPlaceholder}
+              value={text}
+              autoComplete="off"
+              spellCheck={false}
+              enterKeyHint="search"
+              onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={onSearchKeyDown}
+            />
+            {(text || state.q) && <button type="button" className="fb-search-clear" aria-label="Clear search text" onClick={() => { setText(''); go(withQuery(state, '')); searchRef.current?.focus(); }}>×</button>}
+          </div>
+          <button type="submit" className="fb-btn fb-search-submit">Search</button>
+        </form>
         <div className="fb-actions">
+          {Object.entries(fields).filter(([, field]) => field.kind === 'date').map(([key, field]) => (
+            <Popover key={key} sheet className="fb-popover" label={`Filter by ${field.label}`}
+              open={open?.kind === 'date' && open.field === key}
+              onOpenChange={(o) => setOpen(o ? { kind: 'date', field: key } : null)}
+              trigger={<button type="button" className="fb-btn" aria-pressed={state.filters.some((f) => f.field === key)}>{field.label}</button>}>
+              {({ close }) => editor(key, close)}
+            </Popover>
+          ))}
           <Popover
             sheet
             className="fb-popover"

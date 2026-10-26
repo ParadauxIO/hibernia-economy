@@ -27,15 +27,15 @@
 
 /* ══ A · scales, dark surfaces, blue · dark brand ══════════════════════════ */
 :root {
-    /* Fonts. Geist is self-hosted by the layout (next/font). Mono is for IDs,
+    /* Fonts. DM Sans is self-hosted by the layout (next/font). Mono is for IDs,
        code and coordinates only, never for figures. */
-    --sans: var(--font-geist-sans, system-ui), ui-sans-serif, -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    --sans: var(--font-dm-sans, system-ui), ui-sans-serif, -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
     --mono: var(--font-geist-mono, ui-monospace), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
     /* Type scale: size / line height. Weights 400, 500 and 600 only. */
     --text-xs: 12px;   --leading-xs: 16px;   /* captions, axis labels */
-    --text-sm: 13px;   --leading-sm: 18px;   /* table body, secondary text */
-    --text-md: 14px;   --leading-md: 20px;   /* body */
+    --text-sm: 14px;   --leading-sm: 20px;   /* table body, secondary text */
+    --text-md: 15px;   --leading-md: 24px;   /* body */
     --text-lg: 16px;   --leading-lg: 24px;   /* card titles */
     --text-xl: 20px;   --leading-xl: 28px;   /* section headings */
     --text-2xl: 24px;  --leading-2xl: 32px;  /* metric values */

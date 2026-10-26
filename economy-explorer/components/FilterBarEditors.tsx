@@ -173,6 +173,7 @@ function DateEditor({ fieldKey, field, current, onApply, onCancel, table }: Edit
       onRemove={() => onApply(null)}
       onSubmit={(e) => {
         e.preventDefault();
+        if (from && to && from > to) { setError('End date must be on or after start date.'); return; }
         const f = from && to ? normaliseFilter(table, fieldKey, 'between', [from, to])
           : from ? normaliseFilter(table, fieldKey, 'gte', [from])
             : to ? normaliseFilter(table, fieldKey, 'lte', [to]) : null;
@@ -180,6 +181,7 @@ function DateEditor({ fieldKey, field, current, onApply, onCancel, table }: Edit
         else onApply(f);
       }}
     >
+      <p className="fb-pop-hint">Choose either date or both. Dates include the full day in UTC.</p>
       <div className="fb-presets" role="group" aria-label="Presets">
         {DATE_PRESETS.map((p, i) => {
           const f = normaliseFilter(table, fieldKey, p.op, p.values(now));
@@ -201,11 +203,11 @@ function DateEditor({ fieldKey, field, current, onApply, onCancel, table }: Edit
       <div className="fb-pair">
         <label className="fb-field">
           From
-          <input className="fb-input" type="date" value={from} min="2000-01-01" max="2100-12-31" onChange={(e) => { setFrom(e.target.value); setError(null); }} />
+          <input className="fb-input" type="date" value={from} min="2000-01-01" max={to || "2100-12-31"} onChange={(e) => { setFrom(e.target.value); setError(null); }} />
         </label>
         <label className="fb-field">
           To
-          <input className="fb-input" type="date" value={to} min="2000-01-01" max="2100-12-31" onChange={(e) => { setTo(e.target.value); setError(null); }} />
+          <input className="fb-input" type="date" value={to} min={from || "2000-01-01"} max="2100-12-31" onChange={(e) => { setTo(e.target.value); setError(null); }} />
         </label>
       </div>
     </Frame>
