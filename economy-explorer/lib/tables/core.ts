@@ -186,7 +186,9 @@ const DATE_REL_RE = /^-([1-9]\d{0,3})([dwmy])$/;
 const NUMBER_RE = /^([+-]?)(\d{1,15})(?:\.(\d{1,6}))?$/;
 const UUID_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 const PLAYER_NAME_RE = /^\.?[A-Za-z0-9_]{1,32}$/;
-const ITEM_RE = /^[A-Za-z0-9_:.-]{1,64}$/;
+// ChestShop item keys are free text up to VARCHAR(190): `Diamond`, `Diamond Axe#7Gk`,
+// `Diamond Axe:1142`. Anything printable except a comma (the `in` value separator).
+const ITEM_RE = /^[^\u0000-\u001f\u007f,]{1,190}$/;
 const ID_RE = /^[1-9]\d{0,9}$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 
