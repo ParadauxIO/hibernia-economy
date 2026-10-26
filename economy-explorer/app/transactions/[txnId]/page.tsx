@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { PageHeader, When } from '@democracycraft/design-system';
+import { PageHeader } from '@democracycraft/design-system';
 import { BackLink } from '@democracycraft/design-system/next';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { auditView } from '@/lib/audit';
@@ -54,7 +54,6 @@ export default async function TransactionDetailPage({ params, searchParams }: {
         eyebrow={detail.txn.plugin_system ?? 'Ledger'}
         title={`Transaction #${detail.txn.txn_id}`}
         subtitle={detail.txn.message || undefined}
-        meta={<>Settled <When value={detail.txn.settlement_time} time relative={false} /></>}
       />
       <TxnDetailBody
         detail={detail}
