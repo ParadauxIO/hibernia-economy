@@ -4,7 +4,8 @@ version: '${bukkit.plugin.version}'
 author: Acrobot
 authors: ['https://github.com/ChestShop-authors/ChestShop-3/contributors']
 description: A chest shop for economy plugins.
-softdepend: [Treasury, Business, WorldEdit, FastAsyncWorldEdit, WorldGuard, GriefPrevention, Nexo, floodgate, Geyser-Spigot]
+depend: [Treasury]
+softdepend: [ Business, WorldEdit, FastAsyncWorldEdit, WorldGuard, GriefPrevention, Nexo, floodgate, Geyser-Spigot]
 api-version: '26.3'
 # Not Folia-ready: scheduling uses a plain ExecutorService and synchronous
 # callEvent, and shared singleton state (AccountService caches, MetricsModule counters)

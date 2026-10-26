@@ -38,6 +38,9 @@ dependencies {
     // Treasury API submodule
     implementation(project(":treasury:treasury-api"))
     implementation(project(":common"))
+    implementation(project(":economy-flyway"))
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.mysql)
 
     // Hibernia Framework
     implementation(libs.hibernia.framework)
@@ -108,7 +111,7 @@ dependencies {
     testRuntimeOnly(libs.slf4j.simple)
 
     // Integration tests build their schema by running the authoritative
-    // economy-flyway migrations (staged onto the test classpath below), so the
+    // economy-flyway migrations (bundled as a runtime dependency above), so the
     // tests and production share one source of schema truth — no bundled
     // schema.sql snapshot to drift. flyway-mysql handles the MySQL/MariaDB URL.
     testImplementation(libs.flyway.core)
@@ -118,14 +121,6 @@ dependencies {
     testFixturesImplementation(project(":treasury:treasury-api"))
     testFixturesImplementation(libs.guice)
     testFixturesImplementation(libs.hibernia.framework)
-}
-
-// Stage the economy-flyway migrations onto the test classpath (under db/migration)
-// so the IT harness can run them with Flyway (classpath:db/migration).
-tasks.named<Copy>("processTestResources") {
-    from(project(":economy-flyway").file("src/main/resources/db/migration")) {
-        into("db/migration")
-    }
 }
 
 // The paper-server conventions disable :jar so it can't overwrite the shaded plugin
@@ -162,6 +157,8 @@ val coverageExcludes = listOf(
 
 tasks {
     test {
+        dependsOn(shadowJar)
+        systemProperty("treasury.pluginJar", shadowJar.get().archiveFile.get().asFile.absolutePath)
         finalizedBy(jacocoTestReport)
     }
 
@@ -220,6 +217,9 @@ tasks {
     // Project-specific shaded-lib relocations. archiveClassifier + mergeServiceFiles
     // come from io.paradaux.paper-server-conventions.
     withType<ShadowJar> {
+        // Flyway discovers vendor support through ServiceLoader. Preserve all
+        // service entries until mergeServiceFiles combines them.
+        filesMatching("META-INF/services/**") { duplicatesStrategy = DuplicatesStrategy.INCLUDE }
         relocate("com.google.inject", "io.paradaux.libs.guice")
         relocate("javax.inject", "io.paradaux.libs.javax")
         relocate("org.aopalliance", "io.paradaux.libs.aopalliance")

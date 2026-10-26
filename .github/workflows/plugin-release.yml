@@ -10,7 +10,7 @@ permissions:
 
 # Every main push gets a release. No shared concurrency group: GitHub would
 # replace pending runs. Unique versions let builds finish independently; releases
-# never update a mutable latest pointer or trigger server deployment.
+# never update a mutable latest pointer. Staging jobs serialize per target.
 jobs:
   test:
     if: github.ref == 'refs/heads/main'
@@ -22,6 +22,8 @@ jobs:
       checks: write
 
   publish:
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -82,3 +84,40 @@ jobs:
             --draft --latest=false --target "$GITHUB_SHA" \
             --title "Economy $RELEASE_VERSION" --generate-notes
           gh release edit "$TAG" --draft=false --latest=false
+
+  stage:
+    name: Stage plugins for ${{ matrix.target }}
+    needs: publish
+    if: vars.ECONOMY_DEPLOY_TARGETS != '' && vars.ECONOMY_DEPLOY_TARGETS != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.ECONOMY_DEPLOY_TARGETS || '[]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ matrix.target }}
+    concurrency:
+      group: economy-stage-${{ matrix.target }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.publish.outputs.version }}
+    steps:
+      - name: Checkout deployment tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Download the exact published plugin bundle
+        run: >-
+          gh release download "economy-v$RELEASE_VERSION"
+          --dir release --pattern 'manifest.json' --pattern '*.jar'
+
+      - name: Stage verified plugins for the next restart
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ vars.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASS: ${{ secrets.SFTP_PASS }}
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+          SFTP_UPDATE_DIR: ${{ vars.SFTP_UPDATE_DIR }}
+        run: python3 ops/plugin-deploy/stage.py

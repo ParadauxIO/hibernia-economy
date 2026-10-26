@@ -27,6 +27,13 @@ public class DatabaseConfiguration {
     @ConfigurationValue(path = "database.password", defaultValue = "CHANGE_ME")
     private volatile String password;
 
+    // Empty pair uses the application credentials; a separate DDL user is recommended.
+    @ConfigurationValue(path = "database.migrations.username", defaultValue = "")
+    private volatile String migrationUsername;
+
+    @ConfigurationValue(path = "database.migrations.password", defaultValue = "")
+    private volatile String migrationPassword;
+
     // ---- Connection pool (HikariCP) ----
     // Sized for a busy server; raise maximum-size to match DB capacity (and never
     // above what the DB's max_connections can serve across all clients).
@@ -45,5 +52,4 @@ public class DatabaseConfiguration {
 
     @ConfigurationValue(path = "database.pool.keepalive-ms", defaultValue = "300000")
     private volatile String poolKeepaliveMs;
-
 }

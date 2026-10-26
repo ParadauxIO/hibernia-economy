@@ -3,16 +3,10 @@ package io.paradaux.treasury;
 import com.google.inject.*;
 import com.google.inject.Module;
 import com.zaxxer.hikari.HikariDataSource;
+import io.paradaux.common.DataSourceProvider;
 import io.paradaux.hibernia.framework.commander.CommandManager;
 import io.paradaux.hibernia.framework.events.ListenerManager;
 import io.paradaux.hibernia.framework.guice.HiberniaModule;
-import io.paradaux.treasury.commands.resolvers.PayTargetResolver;
-import io.paradaux.treasury.commands.*;
-import io.paradaux.treasury.events.FirstPlayerJoinEvent;
-import io.paradaux.treasury.events.OnlinePlayerRosterListener;
-import io.paradaux.treasury.events.PlayerLoginListener;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.adapters.VaultEconomyRegistrar;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.SalesQueryApi;
@@ -24,7 +18,11 @@ import io.paradaux.treasury.api.impl.SalesQueryApiImpl;
 import io.paradaux.treasury.api.impl.ShopQueryApiImpl;
 import io.paradaux.treasury.api.impl.TaxApiImpl;
 import io.paradaux.treasury.api.impl.TreasuryApiImpl;
-import io.paradaux.common.DataSourceProvider;
+import io.paradaux.treasury.commands.*;
+import io.paradaux.treasury.commands.resolvers.PayTargetResolver;
+import io.paradaux.treasury.events.FirstPlayerJoinEvent;
+import io.paradaux.treasury.events.OnlinePlayerRosterListener;
+import io.paradaux.treasury.events.PlayerLoginListener;
 import io.paradaux.treasury.guice.*;
 import io.paradaux.treasury.model.config.DatabaseConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
@@ -39,13 +37,14 @@ import io.paradaux.treasury.services.TaxWebhookService;
 import io.paradaux.treasury.tasks.SalaryTask;
 import io.paradaux.treasury.tasks.TaxCycleTask;
 import io.paradaux.treasury.utils.LoggingConfigurer;
+import java.util.ArrayList;
+import java.util.List;
+import javax.sql.DataSource;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import javax.sql.DataSource;
-import java.util.ArrayList;
-import java.util.List;
 
 @Slf4j
 // Non-final so the startup test can load it under MockBukkit (which subclasses the
@@ -56,8 +55,32 @@ public class Treasury extends JavaPlugin {
     @Getter
     private Injector injector;
 
+    private DataSource dataSource;
+
     @Override
     public void onEnable() {
+        try {
+            enableEconomy();
+        } catch (RuntimeException | LinkageError failure) {
+            getLogger()
+                    .log(
+                            java.util.logging.Level.SEVERE,
+                            "Economy startup failed; stopping the server. Resolve the release/schema failure before restarting.",
+                            failure);
+            try {
+                getServer().getPluginManager().disablePlugin(this);
+            } finally {
+                getServer().shutdown();
+            }
+            throw failure;
+        }
+    }
+
+    private void enableEconomy() {
+        io.paradaux.treasury.startup.ReleaseCohort.verify(getDescription().getVersion(), name -> {
+            var member = getServer().getPluginManager().getPlugin(name);
+            return member == null ? null : member.getDescription().getVersion();
+        });
         // 1) Build the framework module. HiberniaModule scans the config package and
         //    binds the plugin, ConfigurationLoader, every @ConfigurationComponent,
         //    Message, the command/resolver/listener multibinders, PapiSupport and the
@@ -79,10 +102,7 @@ public class Treasury extends JavaPlugin {
                         FineCommand.class,
                         TaxCommand.class)
                 .resolvers(PayTargetResolver.class)
-                .listeners(
-                        FirstPlayerJoinEvent.class,
-                        PlayerLoginListener.class,
-                        OnlinePlayerRosterListener.class)
+                .listeners(FirstPlayerJoinEvent.class, PlayerLoginListener.class, OnlinePlayerRosterListener.class)
                 .build();
 
         // Apply the configured log level before anything else spams the console.
@@ -106,12 +126,18 @@ public class Treasury extends JavaPlugin {
         if ("password".equals(dbPass) || "CHANGE_ME".equals(dbPass)) {
             throw new IllegalStateException(
                     "Refusing to start: the database password is still the placeholder default. "
-                    + "Set database.password in config.yml.");
+                            + "Set database.password in config.yml.");
         }
+
+        // Migrate before creating the application pool, injector, accounts or public services.
+        var migration = io.paradaux.treasury.startup.SchemaMigrator.configure(dbCfg)
+                .load()
+                .migrate();
+        getLogger().info("Economy schema ready: " + migration.migrationsExecuted + " migration(s) applied.");
 
         // 2) Build the Guice injector. VaultModule is only installed when Vault
         //    is on the classpath, so VaultEconomyAdapter is bound conditionally.
-        DataSource dataSource = DataSourceProvider.builder(
+        dataSource = DataSourceProvider.builder(
                         dbCfg.getHost(),
                         Integer.parseInt(dbCfg.getPort()),
                         dbCfg.getDatabase(),
@@ -139,7 +165,8 @@ public class Treasury extends JavaPlugin {
 
         // 3) Bootstrap primitive GOVERNMENT accounts (starting-balances, tax-income, fines).
         GovernmentConfiguration govCfg = injector.getInstance(GovernmentConfiguration.class);
-        log.info("Government accounts: starting-balances='{}', tax-income='{}', fines='{}'",
+        log.info(
+                "Government accounts: starting-balances='{}', tax-income='{}', fines='{}'",
                 govCfg.getStartingBalancesAccount(),
                 govCfg.getTaxIncomeAccount(),
                 govCfg.getFinesAccount());
@@ -184,18 +211,20 @@ public class Treasury extends JavaPlugin {
         }
         SalaryService salaryService = injector.getInstance(SalaryService.class);
         new SalaryTask(this, salaryService).schedule(salaryCfg.getIntervalSeconds());
-        log.info("Government salaries enabled (every {}s, {} group(s), from {})",
-                salaryCfg.getIntervalSeconds(), salaryCfg.getAmounts().size(), salaryCfg.getGovernmentAccount());
+        log.info(
+                "Government salaries enabled (every {}s, {} group(s), from {})",
+                salaryCfg.getIntervalSeconds(),
+                salaryCfg.getAmounts().size(),
+                salaryCfg.getGovernmentAccount());
     }
 
     @Override
     public void onDisable() {
-        if (injector != null) {
-            DataSource ds = injector.getInstance(DataSource.class);
-            if (ds instanceof HikariDataSource hds) {
-                hds.close();
-            }
+        if (dataSource instanceof HikariDataSource hds) {
+            hds.close();
         }
+        dataSource = null;
+        injector = null;
         log.info("Treasury disabled.");
     }
 
@@ -205,7 +234,9 @@ public class Treasury extends JavaPlugin {
         TreasuryApi api = injector.getInstance(TreasuryApiImpl.class);
         var existing = Bukkit.getServicesManager().getRegistration(TreasuryApi.class);
         if (existing != null) {
-            log.info("Replacing existing TreasuryApi provider: {}", existing.getPlugin().getName());
+            log.info(
+                    "Replacing existing TreasuryApi provider: {}",
+                    existing.getPlugin().getName());
             Bukkit.getServicesManager().unregister(existing.getProvider());
         }
         Bukkit.getServicesManager().register(TreasuryApi.class, api, this, ServicePriority.Highest);
@@ -220,20 +251,27 @@ public class Treasury extends JavaPlugin {
         TaxWebhookService webhook = injector.getInstance(TaxWebhookService.class);
 
         if (cycleCfg.isDailyEnabled()) {
-            TaxCycleTask.daily(this, taxApi, registry, webhook, cycleCfg.getDailyHour()).scheduleNext();
+            TaxCycleTask.daily(this, taxApi, registry, webhook, cycleCfg.getDailyHour())
+                    .scheduleNext();
             log.info("Daily tax cycle enabled (hour={})", cycleCfg.getDailyHour());
         }
         if (cycleCfg.isWeeklyEnabled()) {
-            TaxCycleTask.weekly(this, taxApi, registry, webhook,
-                    cycleCfg.getWeeklyHour(), cycleCfg.getWeeklyDayOfWeek()).scheduleNext();
-            log.info("Weekly tax cycle enabled (day={}, hour={})",
-                    cycleCfg.getWeeklyDayOfWeek(), cycleCfg.getWeeklyHour());
+            TaxCycleTask.weekly(
+                            this, taxApi, registry, webhook, cycleCfg.getWeeklyHour(), cycleCfg.getWeeklyDayOfWeek())
+                    .scheduleNext();
+            log.info(
+                    "Weekly tax cycle enabled (day={}, hour={})",
+                    cycleCfg.getWeeklyDayOfWeek(),
+                    cycleCfg.getWeeklyHour());
         }
         if (cycleCfg.isMonthlyEnabled()) {
-            TaxCycleTask.monthly(this, taxApi, registry, webhook,
-                    cycleCfg.getMonthlyHour(), cycleCfg.getMonthlyDayOfMonth()).scheduleNext();
-            log.info("Monthly tax cycle enabled (day-of-month={}, hour={})",
-                    cycleCfg.getMonthlyDayOfMonth(), cycleCfg.getMonthlyHour());
+            TaxCycleTask.monthly(
+                            this, taxApi, registry, webhook, cycleCfg.getMonthlyHour(), cycleCfg.getMonthlyDayOfMonth())
+                    .scheduleNext();
+            log.info(
+                    "Monthly tax cycle enabled (day-of-month={}, hour={})",
+                    cycleCfg.getMonthlyDayOfMonth(),
+                    cycleCfg.getMonthlyHour());
         }
     }
 

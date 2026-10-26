@@ -102,7 +102,7 @@ applies. Guard regression tests run in the Migrations job.
 |---|---|---|
 | `jvm-check` / `explorer-check` | `workflow_call` only | The reusable JVM and explorer test jobs. `ci.yml` calls them, and so do the publish/image workflows, so a release is gated on the same job definition as a merge. |
 | `treasury-publish-api` / `business-publish-api` | push to `develop` | `jvm-check` on that API's projects, then publish the `*-api` snapshot. Manual runs are restricted to `develop`. |
-| `plugin-release` | every push to `main`, manual on `main` | Full JVM build/check, then publish all four plugins and both API libraries with one generated version. |
+| `plugin-release` | every push to `main`, manual on `main` | Full JVM build/check, publish all four plugins and both API libraries with one generated version, then SFTP-stage enabled targets for their next restart. |
 | `treasury-rest-api-docker` | push to `main`/`develop` | `jvm-check` on `:treasury-rest-api:check`, then build and push the image to **Harbor**. |
 | `economy-explorer-docker` | push to `main`/`develop`, manual | `explorer-check`, then build and push the image to **Harbor**. |
 | `economy-flyway-info` / `-migrate` / `-staging-clean` | manual (`workflow_dispatch`) | Gated schema operations (see [database.md](database.md)). Info's `flywayValidate` ignores pending migrations and fails on anything else. |
@@ -219,10 +219,10 @@ days) or the dev server's secrets change.
 - Production deployment should download the selected release, verify its
   checksums, and install those exact jars without rebuilding. Retain old
   releases for rollback when the database schema remains compatible.
-- Merging does **not** migrate the database or deploy the production Paper
-  plugins. Container image workflows still run independently on main. A release
-  that changes the schema follows the [release runbook](release-runbook.md).
-  Coordinated production deployment is a separate step from artifact versioning.
+- Merging stages production plugins for configured SFTP targets. Activation and
+  bundled migrations wait for the next server startup; container image workflows
+  still run independently on main. See [production staging](#production-plugin-staging-on-merge)
+  and use the [release runbook](release-runbook.md) for destructive schema changes.
 
 See [conventions.md](conventions.md) for the branch model and how Tesks issues move
 through their workflow.
@@ -235,3 +235,94 @@ The build is a **single root Gradle build**. Every JVM job invokes the root wrap
 directory. Only the `economy-explorer` npm steps set `working-directory:`, which is
 correct (the explorer is a Node project outside the Gradle graph). New workflows
 should follow the `:<project>:<task>` form.
+
+## Production plugin staging on merge
+
+`plugin-release.yml` publishes an immutable release for each `main` push. Its
+`stage` jobs download that exact release and stage the four economy plugins via
+SFTP. They do not restart the server or connect to its database. Treasury applies
+its bundled `economy-flyway` migrations when the server next starts, before
+creating its application pool, injector, accounts or API registrations.
+
+### Configure targets once
+
+Set repository variable `ECONOMY_DEPLOY_TARGETS` to a JSON list of GitHub
+Environment names, for example `["democracycraft", "statecraft"]`. Leaving it
+unset (or `[]`) publishes releases without contacting servers. If a target is
+listed but required deployment settings are unset or empty, staging exits
+successfully with a notice listing the missing setting names and makes no SFTP
+connection. `SFTP_PORT` defaults to `22`. Invalid configured values, authentication
+failures, checksum failures and transfer errors still fail the staging job.
+Each named Environment needs:
+
+| Setting | Kind | Value |
+|---|---|---|
+| `SFTP_HOST` | secret | Server DNS name or IPv4 address |
+| `SFTP_USER` | secret | Deployment SFTP username |
+| `SFTP_PASS` | secret | SFTP password (same credential name as the existing Infisical-backed SFTP tools) |
+| `SFTP_PRIVATE_KEY` | secret | Optional unencrypted SSH private key instead of a password; authorize its public key on the server |
+| `SFTP_KNOWN_HOSTS` | secret | Host key verified through a trusted channel; use `[host]:port` for nonstandard ports |
+| `SFTP_PORT` | variable | SFTP port, default `22` |
+| `SFTP_UPDATE_DIR` | variable | Absolute path as seen by SFTP, e.g. `/plugins/update` or `/home/container/plugins/update` |
+
+Create the parent `plugins` directory beforehand. The update path must match
+Paper's `settings.update-folder` in `bukkit.yml`. The deployment account needs
+read/write/rename access there, including reading uploaded files back for hashing.
+Authentication supports the existing password-based SFTP setup or an SSH key.
+Host-key checking is strict for both. Supply deployment-scoped credentials through
+the Environment secrets; no local Infisical credentials are copied by this job.
+
+Before enabling automation, install the first complete release during a controlled
+restart and configure Treasury's database/migration credentials. Remove any old
+pending economy JARs from `plugins/update`: automation owns only `treasury.jar`,
+`business.jar`, `chestshop.jar` and `treasury-api-plugin.jar`, and never deletes
+unrelated plugins or historical version-named pending files. Keep a database
+backup and the previous complete release for recovery. The first upgrade from a
+Treasury version without the release check must not overlap an upload.
+
+### Staging and activation
+
+The job validates the release SHA, version, four-plugin manifest and local hashes.
+It uploads into a hidden per-release subdirectory of `plugins/update`, reads each
+file back and checks its SHA-256, then promotes the files to stable names in the
+update directory. Treasury is promoted last. Repeated merges replace the pending
+bundle rather than accumulating multiple versions. Abandoned hidden staging
+directories can be removed after their jobs finish; Paper does not load them.
+
+Staging jobs serialize per environment. Each checks that its commit is still the
+`main` tip before uploading and again before promotion, so a slower superseded
+build cannot overwrite a newer staged release. A newer merge that fails CI leaves
+the previously staged release in place.
+
+SFTP cannot atomically replace four files with respect to server startup. Treasury
+therefore checks all four installed plugin versions before migration and requests
+server shutdown if a plugin is missing or has a different version. Migration or
+other Treasury startup failures also request shutdown. An interrupted promotion
+can require restaging the complete current release before restarting. Avoid
+restarting during promotion to avoid this recoverable startup failure. This is
+staging for the next normal restart, not a hot reload or an automatic restart.
+
+After restart, check the four plugin versions and Treasury's `Economy schema ready`
+startup message. Workflow success means **staged**, not that the server has
+activated or health-checked the release. Production SFTP and real restart checks
+must be exercised when provisioning the target; unit tests cannot prove a host's
+SFTP permissions, update-folder behavior or startup configuration.
+
+### Shared schema and recovery
+
+Treasury bundles the SQL from the existing `economy-flyway` module unchanged and
+uses the existing `flyway_schema_history` table. The normal startup path never
+baselines, repairs or cleans. Applied checksum mismatches and databases newer than
+the bundled migrations fail startup. Supply both `database.migrations.username`
+and `database.migrations.password` for a separate migration user; leaving both
+empty uses the application credentials. Both connections target the same database.
+The migration user needs the DDL/trigger privileges required by the checked-in SQL.
+
+REST API and explorer deployments continue independently. Add schema before
+requiring it in those services; keep migrations compatible with their running
+versions and deploy destructive changes in a coordinated maintenance window.
+Do not automatically roll back JARs after a migration failure: MariaDB DDL can
+already have committed. Inspect schema/history, recover from a compatible backup
+when needed, and deploy a corrected complete release. The administrative Flyway
+workflows remain available for deliberate recovery and rehearsal, not as a second
+automatic migration owner.
