@@ -18,9 +18,15 @@ import {
   addManualMember as addManualMemberRow,
   removeManualMember as removeManualMemberRow,
   findPlayerUuidByName,
+  upsertGroupSync,
+  deleteGroupSync,
+  clearSourceMembers,
+  countGroupMembersBySource,
   type GroupSummary,
   type GroupMember,
+  type GroupSyncSource,
 } from '@/lib/sql/group';
+import { findFirmById } from '@/lib/sql/firm';
 
 /**
  * Group RBAC service. Owns the orchestration and validation for the group admin
@@ -30,7 +36,7 @@ import {
  * service rather than reaching the DAL directly.
  */
 
-export type { GroupSummary, GroupMember };
+export type { GroupSummary, GroupMember, GroupSyncSource };
 
 const UUID_RE =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -47,7 +53,7 @@ export async function createGroup(args: {
   name: string;
   description: string | null;
   createdBy: string | null;
-}): Promise<void> {
+}): Promise<number> {
   requirePermission(await getViewer(), 'groups.create');
   return createGroupRow(args);
 }
@@ -72,6 +78,48 @@ export async function setLuckpermsNode(groupId: number, node: string | null): Pr
     await setLuckpermsNodeRow(groupId, normalized, trx);
     await clearSyncedMembers(groupId, trx);
   });
+}
+
+const REALTY_SELECTOR = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/[^\s/][^\s]{0,200}$/;
+const FIRM_SELECTOR = /^[1-9]\d{0,9}$/;
+
+/**
+ * Validate a firm or region source selector, as the plugin will parse it:
+ * a firm id (BusinessGroupMembers) or `world-uuid/region-id` (RealtyGroupMembers).
+ * Region ids are case-sensitive and kept as typed.
+ */
+export async function normaliseSyncSelector(source: GroupSyncSource['source'], raw: string): Promise<string> {
+  const selector = raw.trim();
+  if (source === 'business') {
+    if (!FIRM_SELECTOR.test(selector)) throw new Error('Enter the firm id (a number), e.g. 7.');
+    if (!await findFirmById(Number(selector))) throw new Error(`No firm has id ${selector}.`);
+    return selector;
+  }
+  if (!REALTY_SELECTOR.test(selector)) throw new Error('Enter world-uuid/region-id, e.g. 2b7c…-…/market_plot.');
+  const [world = '', region = ''] = selector.split('/', 2);
+  return `${world.toLowerCase()}/${region}`;
+}
+
+/**
+ * Set or clear one firm/region source. Changing or clearing it removes the
+ * source's old synced members in the same transaction; manual and LuckPerms
+ * members are untouched. Gated by groups.sync.update and the delegation check
+ * on the group's roles, like the LuckPerms source.
+ */
+export async function setGroupSyncSource(groupId: number, source: GroupSyncSource['source'], selector: string | null): Promise<void> {
+  if (!['business', 'realty'].includes(source)) throw new Error('Unknown source.');
+  const value = selector === null || selector.trim() === '' ? null : await normaliseSyncSelector(source, selector);
+  await mutateGroup(groupId, 'groups.sync.update', async trx => {
+    const current = (await selectGroupById(groupId, trx))?.syncSources.find(s => s.source === source)?.selector ?? null;
+    if (current === value) return;
+    if (value === null) await deleteGroupSync(groupId, source, trx);
+    else await upsertGroupSync(groupId, source, value, trx);
+    await clearSourceMembers(groupId, source, trx);
+  });
+}
+
+export function groupMemberCountsBySource(groupId: number) {
+  return countGroupMembersBySource(groupId);
 }
 
 export function listGroupMembers(groupId: number): Promise<GroupMember[]> {
