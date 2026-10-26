@@ -71,7 +71,7 @@ export function querySearches(query: string): PaletteEntry[] {
   if (!q) return [];
   return [
     { id: 'search:all', type: 'link', kind: 'page', label: `Search everything for “${q}”`, href: `/search?q=${encodeURIComponent(q)}` },
-    { id: 'search:items', type: 'link', kind: 'item', label: `Find items matching “${q}”`, detail: 'Market', href: `/chestshop?q=${encodeURIComponent(q)}` },
+    { id: 'search:items', type: 'link', kind: 'item', label: `Find items matching “${q}”`, href: `/chestshop?q=${encodeURIComponent(q)}` },
   ];
 }
 

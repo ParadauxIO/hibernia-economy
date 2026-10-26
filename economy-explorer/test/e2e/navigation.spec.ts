@@ -82,7 +82,7 @@ test.describe('account menu', () => {
   test('shows the personal balance only, and the player pages', async ({ page, context }) => {
     await loginAs(context, 'player'); // Alice: personal #1 ($5,000.00) and business #3 ($25,000.00)
     await visit(page, '/');
-    const chip = page.getByRole('button', { name: /Alice, personal balance/ });
+    const chip = page.getByRole('button', { name: /Alice personal balance/ });
     await expect(chip).toContainText('$5,000.00');
     await expect(chip).not.toContainText('30,000');
     await chip.click();

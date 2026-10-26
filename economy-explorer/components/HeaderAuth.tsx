@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import type { Route } from 'next';
-import { useEffect, useState, useTransition, type ReactNode } from 'react';
+import { useTransition, type ReactNode } from 'react';
 import { PlayerHead } from '@democracycraft/design-system';
 import { Popover } from '@democracycraft/design-system/popover';
 import { useViewer } from '@/components/ViewerContext';
@@ -18,8 +18,6 @@ import { ACCOUNT_LINKS } from '@/lib/nav';
 export function HeaderAuth({ balance }: { balance?: ReactNode }) {
   const v = useViewer();
   const [loggingOut, startLogout] = useTransition();
-  const [open, setOpen] = useState(false);
-  useFirstItemFocus(open);
 
   if (v.anon) {
     return (
@@ -35,13 +33,13 @@ export function HeaderAuth({ balance }: { balance?: ReactNode }) {
     <button type="button" className="shell-account">
       <PlayerHead uuid={v.minecraftUuid} name={v.minecraftName} size={20} />
       <span className="shell-account-name">{name}</span>
-      {showBalance && <span className="shell-account-balance"><span className="sr-only">, personal balance</span>{' '}{balance}</span>}
+      {showBalance && <>{' '}<span className="shell-account-balance"><span className="sr-only">personal balance</span>{' '}{balance}</span></>}
       <ChevronDownIcon size={14} />
     </button>
   );
 
   return (
-    <Popover trigger={trigger} role="menu" open={open} onOpenChange={setOpen} label={`Account: ${name}`} placement="bottom-end" className="shell-account-menu">
+    <Popover trigger={trigger} role="menu" label={`Account: ${name}`} placement="bottom-end" className="shell-account-menu">
       {/* Repeats the trigger for sighted users; screen readers already heard it there. */}
       <div className="shell-account-head" aria-hidden="true">
         <PlayerHead uuid={v.minecraftUuid} name={v.minecraftName} size={32} />
@@ -90,20 +88,4 @@ export function HeaderAuth({ balance }: { balance?: ReactNode }) {
       </div>
     </Popover>
   );
-}
-
-/**
- * Put focus on the first menu item once the menu is visible. The design
- * system's Popover tries this in a layout effect, but its panel is still
- * `visibility: hidden` until positioned, so browsers ignore that focus call.
- */
-function useFirstItemFocus(open: boolean): void {
-  useEffect(() => {
-    if (!open) return;
-    const id = requestAnimationFrame(() => {
-      const panel = document.querySelector<HTMLElement>('.shell-account-menu');
-      if (panel && !panel.contains(document.activeElement)) panel.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [open]);
 }

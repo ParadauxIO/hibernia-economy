@@ -37,7 +37,7 @@ describe('account menu', () => {
     setViewer('player');
     render(<HeaderAuth balance={<span>$5,000.00</span>} />);
     const chip = screen.getByRole('button', { name: /Steve/ });
-    expect(chip).toHaveAccessibleName('Steve, personal balance $5,000.00');
+    expect(chip).toHaveAccessibleName('Steve personal balance $5,000.00');
     expect(chip).toHaveAttribute('aria-haspopup', 'menu');
     expect(chip.querySelector('img.player-head')).toHaveAttribute('src', expect.stringContaining('/api/avatar/00000000-0000-0000-0000-00000000a1ce'));
   });
