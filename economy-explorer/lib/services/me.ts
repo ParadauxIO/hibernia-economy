@@ -1,8 +1,10 @@
 import 'server-only';
+import { deriveBalances } from '@/lib/balances';
+export { deriveBalances } from '@/lib/balances';
 import { memo } from '@/lib/cache';
 import { hasPermission } from '@/lib/auth/policy';
 import type { Viewer } from '@/lib/auth/viewer';
-import { parseMoney, toDbString, type Cents } from '@/lib/money';
+import { parseMoney, toDbString } from '@/lib/money';
 import { addDays, utcDay, type DayRange } from '@/lib/rollup/days';
 import type { RollupJob } from '@/lib/rollup/steps';
 import { rollupCoverage, type CoverageMap, type RangeCoverage } from '@/lib/services/rollup';
@@ -103,23 +105,6 @@ export function coveredPart(c: RangeCoverage, range: DayRange): DayRange | null 
   const from = c.historyComplete || range.from > c.coveredFrom ? range.from : c.coveredFrom;
   const to = range.to < c.coveredTo ? range.to : c.coveredTo;
   return from <= to ? { from, to } : null;
-}
-
-/**
- * Closing balance per day for [range.from, range.to], derived like
- * lib/services/rollup balanceSeries: current balance minus the net of every
- * later day. `nets` must cover range.from + 1 through today.
- */
-export function deriveBalances(current: Cents, nets: readonly { day: string; net: string }[], range: DayRange): { day: string; balance: string }[] {
-  const netByDay = new Map(nets.map((n) => [n.day, parseMoney(n.net)]));
-  let balance = current;
-  for (const [day, net] of netByDay) if (day > range.to) balance -= net;
-  const out: { day: string; balance: string }[] = [];
-  for (let day = range.to; day >= range.from; day = addDays(day, -1)) {
-    out.push({ day, balance: toDbString(balance) });
-    balance -= netByDay.get(day) ?? 0n;
-  }
-  return out.reverse();
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────

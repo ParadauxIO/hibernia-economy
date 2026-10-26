@@ -1,16 +1,18 @@
 import 'server-only';
+import { deriveBalances } from '@/lib/balances';
+import { findTxnBounds } from '@/lib/sql/accountHistory';
 import { memo } from '@/lib/cache';
 import { PLUGIN_CATEGORIES } from '@/lib/categories';
 import { parseMoney, toDbString, type Cents } from '@/lib/money';
 import { addDays, rangeDays, type DayRange } from '@/lib/range';
 import { eachDay, monthEnd, monthStart, utcDay } from '@/lib/rollup/days';
 import type { RollupJob } from '@/lib/rollup/steps';
-import { balanceSeries, rollupCoverage, type BalancePoint, type CoverageMap, type RangeCoverage } from '@/lib/services/rollup';
+import { balanceSeries, rollupCoverage, type BalancePoint, type CoverageMap } from '@/lib/services/rollup';
 import {
   findPlayerNames, listFines, selectGovAccountDayNets, selectGovCounterparties, selectGovFlowGroups, selectGovLedger,
   selectGovMonthlyFlows, selectGovPluginOutflowDays, selectGovViews, selectLargestMovements, selectMoversByOfficial,
   selectSalaryBuckets, selectSalaryRecipients, selectTopFinePayers, selectTopTaxPayers, summariseFines,
-  summariseFinesForPeriod, topFineIssuers, txnIdAt,
+  summariseFinesForPeriod, topFineIssuers,
   type CounterpartyRow, type FineRow, type FineSummaryRow, type IssuerRow, type MovementRow, type OfficialRow, type PayerRow,
   type SalaryRecipientRow, type TxnWindow, type ViewRow,
 } from '@/lib/sql/government';
@@ -51,10 +53,6 @@ export function jobCoverage(map: CoverageMap, job: RollupJob, range: DayRange): 
   };
 }
 
-function fromRange(c: RangeCoverage): Coverage {
-  return { covered: c.covered, coveredFrom: c.historyComplete ? null : c.coveredFrom, updatedAt: c.updatedAt };
-}
-
 /** The part of `range` a raw ledger read may cover: its last RAW_MAX_DAYS days. */
 export function rawRange(range: DayRange): DayRange & { capped: boolean } {
   if (rangeDays(range) <= RAW_MAX_DAYS) return { ...range, capped: false };
@@ -70,7 +68,7 @@ export function bounds(range: DayRange): { fromTs: string; toTs: string } {
 /** The txn_id window of a day range, or null when no transaction settled in it. */
 export async function txnWindow(range: DayRange): Promise<TxnWindow | null> {
   const { fromTs, toTs } = bounds(range);
-  const [lo, end] = await Promise.all([txnIdAt(fromTs), txnIdAt(toTs)]);
+  const { first: lo, after: end } = await findTxnBounds(new Date(fromTs.replace(' ', 'T') + 'Z'), new Date(toTs.replace(' ', 'T') + 'Z'));
   if (lo === null) return null;
   if (end !== null && end <= lo) return null;
   return { lo, hi: end === null ? null : end - 1 };
@@ -206,22 +204,32 @@ function unitCards(scope: GovScope, selectionKey: string, nets: Map<number, Cent
 export async function getOverview(scope: GovScope, selection: { key: string; ids: number[] }, range: DayRange, query = ''): Promise<Overview> {
   const map = await rollupCoverage();
   const monthsRange = { from: monthStart(range.from), to: range.to };
-  const [flows, monthly, balance, movements, nets] = await Promise.all([
+  const balanceRange = { from: range.from, to: range.to > utcDay() ? range.to : utcDay() };
+  const [flows, monthly, movements, nets] = await Promise.all([
     govFlows(scope, selection.ids, range, map),
     selectGovMonthlyFlows(selection.ids, monthsRange.from, monthsRange.to),
-    balanceSeries(selection.ids, range),
     largestMovements(selection.ids, range),
-    selectGovAccountDayNets(scope.ids, range.from, range.to),
+    selectGovAccountDayNets(scope.ids, balanceRange.from, balanceRange.to),
   ]);
   const netByAccount = new Map<number, Cents>();
-  for (const r of nets) netByAccount.set(r.account_id, (netByAccount.get(r.account_id) ?? 0n) + parseMoney(r.net));
+  const netByDay = new Map<string, Cents>();
+  const selected = new Set(selection.ids);
+  for (const r of nets) {
+    const net = parseMoney(r.net);
+    if (r.day <= range.to) netByAccount.set(r.account_id, (netByAccount.get(r.account_id) ?? 0n) + net);
+    if (selected.has(r.account_id)) netByDay.set(r.day, (netByDay.get(r.day) ?? 0n) + net);
+  }
+  const coverage = jobCoverage(map, 'account_day', balanceRange);
+  const balance = coverage.covered && selection.ids.length > 0
+    ? deriveBalances(parseMoney(balanceOf(scope, selection.ids)), [...netByDay].map(([day, net]) => ({ day, net: toDbString(net) })), range)
+    : [];
   return {
     treasury: balanceOf(scope, selection.ids),
     accountCount: selection.ids.length,
     net: flows.net,
     flows,
     months: jobCoverage(map, 'account_day', monthsRange).covered ? monthBars(monthly) : [],
-    balance: { data: balance.data, coverage: fromRange(balance.coverage) },
+    balance: { data: balance, coverage },
     movements,
     units: unitCards(scope, selection.key, netByAccount, query),
   };

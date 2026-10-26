@@ -216,8 +216,8 @@ balances by design, so it can be negative. Nothing is hidden or netted off.
 government, system), how much each type gained or lost over the range, and the
 plugins behind those changes. Transfers between someone's own accounts are left
 out. The ledger is shown as it is: a payment routed through a system bridge
-account appears as money into and out of System. Money flow covers up to 90 days
-at a time.
+account appears as money into and out of System. Money flow covers up to 92 days
+at a time. Comparison with a previous period is not currently available.
 
 [Taxation](/economy/taxation) is public and shows collections, fine refunds,
 net revenue by type, revenue by day and the receiving government accounts for
@@ -234,10 +234,31 @@ brackets and per-source income-tax overrides. If live rates cannot be read, it s
 unavailable; it never substitutes shipped defaults. Corporate and ChestShop rates
 are not published in this panel.
 
-The Government tab appears only if your role includes government access.
-Government opens with accounts you may view. Its Fines tab supports reason search,
-active/revoked filtering and pagination. Summary totals always cover the whole
-selected period for your permitted accounts, independent of the list filter.
+## Government workspace
+
+The [Government workspace](/gov) opens only for people with government access.
+It starts with the accounts you are permitted to read. Choose a government unit
+and date range to narrow the overview, revenue, spending, payroll and fines.
+A **Partial** unit means you can read some of its accounts; the totals include
+only those accounts. Unit membership never grants access by itself.
+
+**Accounts** lists balances and recent activity. **Revenue** separates tax, fines
+and other income; **Spending** separates wages and other expenses. Top payment
+lists cover at most the last 31 days of the selected range. **Payroll** shows
+payments and unusual changes for review; a flag is not proof of wrongdoing.
+
+**Fines** supports reason search, active/revoked filters and pagination. Summary
+totals cover the selected period and permitted accounts, independently of the
+list filter. **Reports** provides monthly statements that can be printed or
+exported as CSV. **Audit** and **Manage units** appear only with their separate
+permissions.
+
+Compliance officers with the required firm-finance and transaction permissions
+can use the **Watchlist** and firm investigations. This permission is separate
+from government account access. A watchlist is personal to its viewer.
+
+If a chart says **Preparing history**, its summary data is still being built.
+The page does not substitute incomplete totals for a completed historical period.
 
 ## Account pages
 
