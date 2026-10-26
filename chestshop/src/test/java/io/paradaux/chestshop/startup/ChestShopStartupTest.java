@@ -100,7 +100,7 @@ class ChestShopStartupTest {
                         ShopToggleCommand.class,
                         ResyncCommand.class)
                 .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
-                .dialogs(FindDialog.class)
+                .dialogs(FindDialog.class, io.paradaux.chestshop.dialogs.PurchaseQuantityDialog.class)
                 .menus(
                         io.paradaux.chestshop.dialogs.FindResultsMenu.class,
                         io.paradaux.chestshop.dialogs.PurchasePreviewMenu.class,

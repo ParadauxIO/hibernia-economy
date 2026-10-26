@@ -20,9 +20,15 @@ public final class PurchasePreviewMenu implements MenuHandler {
     private final PurchasePreviewService previews;
     private final EconomyService economy;
     private final Message message;
+    private final com.google.inject.Provider<io.paradaux.hibernia.framework.usher.DialogManager> dialogs;
 
     @Inject
-    public PurchasePreviewMenu(PurchasePreviewService previews, EconomyService economy, Message message) {
+    public PurchasePreviewMenu(
+            PurchasePreviewService previews,
+            EconomyService economy,
+            Message message,
+            com.google.inject.Provider<io.paradaux.hibernia.framework.usher.DialogManager> dialogs) {
+        this.dialogs = dialogs;
         this.previews = previews;
         this.economy = economy;
         this.message = message;
@@ -48,11 +54,20 @@ public final class PurchasePreviewMenu implements MenuHandler {
                                 "confirm",
                                 null))
                 .slot(45, MenuItem.button(button(Material.BARRIER, "shop.purchase.cancel"), "cancel", null));
+        if (offer.adjustable())
+            view.slot(53, MenuItem.button(button(Material.PAPER, "shop.quantity.change"), "quantity", null));
         if (flow.page() > 0)
             view.slot(48, MenuItem.button(button(Material.ARROW, "find.button.prev"), "previous", null));
         if ((flow.page() + 1) * 45 < stock.length)
             view.slot(50, MenuItem.button(button(Material.ARROW, "find.button.next"), "next", null));
         return view.build();
+    }
+
+    @Action("quantity")
+    public void quantity(@Model PurchasePreviewService.Offer offer, MenuFlow flow) {
+        var player = flow.player();
+        flow.close();
+        dialogs.get().open(player, PurchaseQuantityDialog.class, offer);
     }
 
     @Action("confirm")

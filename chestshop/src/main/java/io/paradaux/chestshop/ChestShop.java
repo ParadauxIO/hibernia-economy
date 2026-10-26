@@ -115,7 +115,9 @@ public class ChestShop extends JavaPlugin {
                                 io.paradaux.chestshop.commands.ImportShopsCommand.class)
                         .resolvers(io.paradaux.chestshop.commands.resolvers.FindItemResolver.class)
                         // Usher dialog handlers — the /find search flow (first Usher use).
-                        .dialogs(io.paradaux.chestshop.dialogs.FindDialog.class)
+                        .dialogs(
+                                io.paradaux.chestshop.dialogs.FindDialog.class,
+                                io.paradaux.chestshop.dialogs.PurchaseQuantityDialog.class)
                         .menus(
                                 io.paradaux.chestshop.dialogs.FindResultsMenu.class,
                                 PurchasePreviewMenu.class,

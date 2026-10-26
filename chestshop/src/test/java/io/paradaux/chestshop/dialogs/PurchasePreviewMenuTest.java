@@ -102,7 +102,11 @@ class PurchasePreviewMenuTest extends ServerTest {
         when(economy.format(any())).thenReturn("$10");
         var manager = new MenuManager(
                 MockBukkit.createMockPlugin(),
-                Set.of(new PurchasePreviewMenu(service, economy, message)),
+                Set.of(new PurchasePreviewMenu(
+                        service,
+                        economy,
+                        message,
+                        () -> mock(io.paradaux.hibernia.framework.usher.DialogManager.class))),
                 mock(com.google.inject.Injector.class));
         manager.registerAll();
         return manager;

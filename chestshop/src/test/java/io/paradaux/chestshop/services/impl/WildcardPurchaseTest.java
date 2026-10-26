@@ -106,6 +106,78 @@ class WildcardPurchaseTest extends ServerTest {
         variants = new ShopVariantsService(new WildcardItems(items), shops, config, previews);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"1,5", "3,15", "4,20"})
+    void customQuantityIsPricedAndConfirmedWithoutReusingOldOffer(int amount, String price) {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        var resized = previews.resize(original, buyer, amount);
+        assertThat(resized.stock()[0].getAmount()).isEqualTo(amount);
+        assertThat(resized.price()).isEqualByComparingTo(price);
+        assertThat(resized.bundleQuantity()).isEqualTo(2);
+        assertThat(previews.confirm(original, buyer)).isFalse();
+        verify(economy, never()).settle(any(), any(), any(), any());
+        assertThat(previews.confirm(resized, buyer)).isTrue();
+        assertThat(previews.confirm(resized, buyer)).isFalse();
+        assertThat(count(buyer.getInventory(), can)).isEqualTo(amount);
+        assertThat(count(stock, can)).isEqualTo(5 - amount);
+        assertThat(count(stock, bottle)).isEqualTo(4);
+    }
+
+    @Test
+    void quantityAboveStockPreviewsPartialFillAndRejectsLaterStockChanges() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        var resized = previews.resize(original, buyer, 8);
+        assertThat(resized.stock()[0].getAmount()).isEqualTo(5);
+        assertThat(resized.price()).isEqualByComparingTo("25");
+        var reduced = can.clone();
+        reduced.setAmount(4);
+        stock.setItem(1, reduced);
+        assertThat(previews.confirm(resized, buyer)).isFalse();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void quantityChangeCannotAcceptChangedSignOrAnotherPlayer() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        assertThat(previews.resize(original, server.addPlayer("Other"), 3)).isNull();
+        sign.setLine(2, "B 100");
+        sign.update();
+        assertThat(previews.resize(original, buyer, 3)).isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, -1, Integer.MAX_VALUE})
+    void invalidQuantitiesCannotPrepareOrReplaceOffer(int amount) {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        assertThat(previews.resize(original, buyer, amount)).isNull();
+        assertThat(transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, can, amount))
+                .isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+        assertThat(previews.confirm(original, buyer)).isTrue();
+    }
+
+    @Test
+    void customSellUsesSellUnitPrice() {
+        buyer.getInventory().addItem(can.clone());
+        var original = previews.preview(sign, buyer, Action.LEFT_CLICK_BLOCK, can);
+        var resized = previews.resize(original, buyer, 3);
+        assertThat(resized.price()).isEqualByComparingTo("9");
+        assertThat(previews.confirm(resized, buyer)).isTrue();
+        assertThat(count(buyer.getInventory(), can)).isEqualTo(2);
+        assertThat(count(stock, can)).isEqualTo(8);
+    }
+
+    @Test
+    void customPriceRoundsOnceFromSignRatio() {
+        sign.setLine(1, "3");
+        sign.setLine(2, "B 10");
+        sign.update();
+        var trade = transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, can, 2);
+        assertThat(trade.getExactPrice()).isEqualByComparingTo("6.67");
+        assertThat(trade.getStock()[0].getAmount()).isEqualTo(2);
+    }
+
     @Test
     void selectionPreviewAndConfirmationTransferOnlyChosenVariation() {
         var selection = variants.choices(sign, buyer, Action.RIGHT_CLICK_BLOCK);

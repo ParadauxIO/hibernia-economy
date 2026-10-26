@@ -133,7 +133,11 @@ class ShopVariantsMenuTest extends ServerTest {
                 MockBukkit.createMockPlugin(),
                 Set.of(
                         new ShopVariantsMenu(variants, reference::get, message),
-                        new PurchasePreviewMenu(previews, economy, message)),
+                        new PurchasePreviewMenu(
+                                previews,
+                                economy,
+                                message,
+                                () -> mock(io.paradaux.hibernia.framework.usher.DialogManager.class))),
                 mock(com.google.inject.Injector.class));
         reference.set(manager);
         manager.registerAll();
