@@ -1,6 +1,7 @@
 import 'server-only';
-import { sql } from 'kysely';
+import { sql, type RawBuilder, type SqlBool } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
+import { afterCursor, orderByTime, readDir, type KeysetPage } from '@/lib/sql/keyset';
 
 // Ports of MarketReadMapper (~290 LOC of @Select). All public unless the
 // query selects customer_uuid_bin — those callers gate access in the page.
@@ -510,41 +511,97 @@ export async function listSamplesInRange(args: {
   }));
 }
 
-// ── Customer-side sales feed (admin/government only) ─────────────────────
+// ── Sales feed (/chestshop/sales, market.sales.read) ─────────────────────
+//
+// Keyset pages on (occurred_at, sale_id). Every chestshop_sale index is
+// (entity, occurred_at) with the primary key appended, so whichever entity
+// filter is present drives the page straight off its own index in feed order:
+//   customer → idx_cs_customer, owner → idx_cs_owner, firm → idx_cs_firm,
+//   item → idx_cs_item, otherwise idx_cs_time.
+// A multi-value chip is one ordered, LIMITed branch per value under UNION ALL
+// (a sale has one value per column, so branches never overlap). The other
+// filters are residual checks. Price and item-name text have no index, so the
+// service only sends them inside a bounded date window (SALES_SCAN_WINDOW_DAYS).
 
-/** Mirrors MarketReadMapper.listSales (line 258-274). Customer column included. */
-export async function listSalesFeed(args: {
-  customerUuid: string | null;
-  search: string | null;
-  limit: number;
-  offset: number;
-}): Promise<MarketSaleRow[]> {
-  const conds: ReturnType<typeof sql>[] = [];
-  if (args.customerUuid) conds.push(sql`cs.customer_uuid_bin = ${uuidToBin(args.customerUuid)}`);
-  if (args.search) {
-    conds.push(sql`(cs.item_name LIKE CONCAT('%', ${args.search}, '%')
-      OR cs.material LIKE CONCAT('%', ${args.search}, '%')
-      OR f.display_name LIKE CONCAT('%', ${args.search}, '%')
-      OR a.display_name LIKE CONCAT('%', ${args.search}, '%'))`);
-  }
-  const where = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
+export interface SalesFeedQuery {
+  customers?: readonly string[] | null;
+  owners?: readonly string[] | null;
+  firms?: readonly number[] | null;
+  items?: readonly string[] | null;
+  direction?: 'BUY' | 'SELL' | null;
+  /** Total price bounds, exact DECIMAL strings. */
+  price?: readonly { op: 'gt' | 'gte' | 'lt' | 'lte' | 'eq'; value: string }[] | null;
+  from?: Date | null;
+  to?: Date | null;
+  /** Literal substring of the item name. */
+  itemName?: string | null;
+}
 
+type SalesDriver = { column: RawBuilder<unknown>; values: readonly unknown[] } | null;
+
+const PRICE_OPS = { gt: '>', gte: '>=', lt: '<', lte: '<=', eq: '=' } as const;
+
+function salesDriver(q: SalesFeedQuery): { driver: SalesDriver; used: keyof SalesFeedQuery | null } {
+  if (q.customers?.length) return { driver: { column: sql`cs.customer_uuid_bin`, values: q.customers.map(uuidToBin) }, used: 'customers' };
+  if (q.owners?.length) return { driver: { column: sql`cs.shop_owner_uuid_bin`, values: q.owners.map(uuidToBin) }, used: 'owners' };
+  if (q.firms?.length) return { driver: { column: sql`cs.shop_firm_id`, values: q.firms }, used: 'firms' };
+  if (q.items?.length) return { driver: { column: sql`cs.item_key`, values: q.items }, used: 'items' };
+  return { driver: null, used: null };
+}
+
+function salesResiduals(q: SalesFeedQuery, used: keyof SalesFeedQuery | null): RawBuilder<SqlBool>[] {
+  const out: RawBuilder<SqlBool>[] = [];
+  if (used !== 'customers' && q.customers?.length) out.push(sql<SqlBool>`cs.customer_uuid_bin IN (${sql.join(q.customers.map(uuidToBin))})`);
+  if (used !== 'owners' && q.owners?.length) out.push(sql<SqlBool>`cs.shop_owner_uuid_bin IN (${sql.join(q.owners.map(uuidToBin))})`);
+  if (used !== 'firms' && q.firms?.length) out.push(sql<SqlBool>`cs.shop_firm_id IN (${sql.join([...q.firms])})`);
+  if (used !== 'items' && q.items?.length) out.push(sql<SqlBool>`cs.item_key IN (${sql.join([...q.items])})`);
+  if (q.direction) out.push(sql<SqlBool>`cs.direction = ${q.direction}`);
+  for (const b of q.price ?? []) out.push(sql<SqlBool>`cs.total_price ${sql.raw(PRICE_OPS[b.op])} CAST(${b.value} AS DECIMAL(19,2))`);
+  if (q.from) out.push(sql<SqlBool>`cs.occurred_at >= ${q.from}`);
+  if (q.to) out.push(sql<SqlBool>`cs.occurred_at < ${q.to}`);
+  if (q.itemName) out.push(sql<SqlBool>`cs.item_name LIKE ${'%' + q.itemName.replace(/[\\%_]/g, (c) => `\\${c}`) + '%'}`);
+  return out;
+}
+
+function salesBranches(q: SalesFeedQuery, page: KeysetPage | null, limit: number): RawBuilder<unknown> {
+  const dir = page ? readDir(page) : 'desc';
+  const { driver, used } = salesDriver(q);
+  const base = salesResiduals(q, used);
+  if (page?.cursor) base.push(afterCursor(sql`cs.occurred_at`, sql`cs.sale_id`, page.cursor, dir));
+  const branch = (extra: RawBuilder<SqlBool> | null) => {
+    const conds = extra ? [extra, ...base] : base;
+    return sql`SELECT cs.sale_id, cs.occurred_at FROM chestshop_sale cs
+      ${conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``}
+      ${orderByTime(sql`cs.occurred_at`, sql`cs.sale_id`, dir)} LIMIT ${limit}`;
+  };
+  if (!driver) return branch(null);
+  const branches = driver.values.map((v) => branch(sql<SqlBool>`${driver.column} = ${v}`));
+  if (branches.length === 1) return branches[0] as RawBuilder<unknown>;
+  return sql.join(branches.map((b) => sql`(${b})`), sql` UNION ALL `);
+}
+
+/**
+ * One keyset page of the sales feed with customer attribution, in read order
+ * (`inPageOrder` flips a prev page). Fetches `limit + 1` rows as a probe.
+ */
+export async function listSalesPage(q: SalesFeedQuery, page: KeysetPage): Promise<MarketSaleRow[]> {
+  const probe = page.limit + 1;
+  const dir = readDir(page);
   const r = await sql<RawSale & { customer_uuid_bin: Buffer | null; customer_name: string | null }>`
     SELECT cs.sale_id, cs.txn_id, cs.occurred_at, cs.direction, cs.quantity, cs.unit_price,
            cs.total_price, cs.tax_amount, cs.material, cs.item_key, cs.item_name, cs.item_custom,
            cs.is_admin_shop AS admin_shop, cs.shop_account_type, cs.shop_firm_id, cs.shop_owner_uuid_bin,
            COALESCE(f.display_name, fp.current_name, a.display_name) AS owner_name,
            cs.world, cs.sign_x, cs.sign_y, cs.sign_z, cs.shop_stock,
-           cs.customer_uuid_bin,
-           COALESCE(cfp.current_name, ca.display_name) AS customer_name
-    FROM chestshop_sale cs
+           cs.customer_uuid_bin, cfp.current_name AS customer_name
+    FROM (${salesBranches(q, page, probe)}) u
+    JOIN chestshop_sale cs ON cs.sale_id = u.sale_id
     LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
     LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
     LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
-    LEFT JOIN accounts ca ON ca.owner_uuid_bin = cs.customer_uuid_bin AND ca.account_type='PERSONAL'
     LEFT JOIN economy_players cfp ON cfp.player_uuid_bin = cs.customer_uuid_bin
-    ${where}
-    ORDER BY cs.occurred_at DESC, cs.sale_id DESC LIMIT ${args.limit} OFFSET ${args.offset}
+    ${orderByTime(sql`u.occurred_at`, sql`u.sale_id`, dir)}
+    LIMIT ${probe}
   `.execute(db);
   return r.rows.map((row) => ({
     ...toSaleRow(row),
@@ -553,27 +610,23 @@ export async function listSalesFeed(args: {
   }));
 }
 
-export async function countSalesFeed(args: {
-  customerUuid: string | null;
-  search: string | null;
-}): Promise<number> {
-  const conds: ReturnType<typeof sql>[] = [];
-  if (args.customerUuid) conds.push(sql`cs.customer_uuid_bin = ${uuidToBin(args.customerUuid)}`);
-  if (args.search) {
-    conds.push(sql`(cs.item_name LIKE CONCAT('%', ${args.search}, '%')
-      OR cs.material LIKE CONCAT('%', ${args.search}, '%')
-      OR f.display_name LIKE CONCAT('%', ${args.search}, '%')
-      OR a.display_name LIKE CONCAT('%', ${args.search}, '%'))`);
-  }
-  const where = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
-  const r = await sql<{ c: string | number }>`
-    SELECT COUNT(*) AS c FROM chestshop_sale cs
-    LEFT JOIN firm f ON f.firm_id = cs.shop_firm_id
-    LEFT JOIN accounts a ON a.account_id = cs.shop_account_id
-    LEFT JOIN economy_players fp ON fp.player_uuid_bin = cs.shop_owner_uuid_bin
-    ${where}
+/** Matching sales, counted no further than `cap + 1` ("1,000+"). */
+export async function countSalesPage(q: SalesFeedQuery, cap: number): Promise<{ count: number; capped: boolean }> {
+  const r = await sql<{ c: number | string }>`
+    SELECT COUNT(*) AS c FROM (SELECT u.sale_id FROM (${salesBranches(q, null, cap + 1)}) u LIMIT ${cap + 1}) capped
   `.execute(db);
-  return Number(r.rows[0]?.c ?? 0);
+  const n = Number(r.rows[0]?.c ?? 0);
+  return { count: Math.min(n, cap), capped: n > cap };
+}
+
+/** The first sale at or after `at` (idx_cs_time seek), for jump-to-date. */
+export async function findFirstSaleAtOrAfter(at: Date): Promise<{ sale_id: number; occurred_at: Date } | null> {
+  const r = await sql<{ sale_id: number | string; occurred_at: Date }>`
+    SELECT cs.sale_id, cs.occurred_at FROM chestshop_sale cs
+    WHERE cs.occurred_at >= ${at} ORDER BY cs.occurred_at, cs.sale_id LIMIT 1
+  `.execute(db);
+  const row = r.rows[0];
+  return row ? { sale_id: Number(row.sale_id), occurred_at: row.occurred_at } : null;
 }
 
 // ── Player market activity ───────────────────────────────────────────────

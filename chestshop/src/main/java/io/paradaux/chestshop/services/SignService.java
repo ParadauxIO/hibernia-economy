@@ -9,6 +9,7 @@ import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.utils.BlockUtil;
 import io.paradaux.chestshop.utils.InventoryUtil;
+import io.paradaux.chestshop.utils.MaterialUtil;
 import io.paradaux.chestshop.utils.QuantityUtil;
 import io.paradaux.chestshop.utils.SignText;
 import io.paradaux.chestshop.utils.StringUtil;
@@ -62,16 +63,43 @@ public class SignService {
     };
     public static final String AUTOFILL_CODE = "?";
 
-    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^B:(?:[0-9A-Z]+|@[A-Z]{1,12})$");
+    // B:<base36 account id>, or A:<alias> for a firm's letters-only shop alias.
+    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^(?:B:[0-9A-Z]+|A:[A-Z]{1,12})$");
 
     public static boolean isBusinessAccount(String owner) {
         // Reserve malformed alias tokens too, so creation rejects them instead of using a player name.
-        return owner.regionMatches(true, 0, "B:@", 0, 3)
+        // The retired B:@alias form stays reserved, so it fails loudly rather than becoming a personal shop.
+        return owner.regionMatches(true, 0, "A:", 0, 2)
+                || owner.regionMatches(true, 0, "B:@", 0, 3)
                 || BUSINESS_PATTERN.matcher(owner).matches();
     }
 
     public static boolean isBusinessAccount(String[] lines) {
         return isBusinessAccount(getOwner(lines));
+    }
+
+    /**
+     * A Treasury government account: {@code G:<display name>}, or {@code G:#<base36 id>} (PAR-529).
+     * Every {@code G:} token is reserved, so a malformed one is refused rather than read as a player.
+     */
+    public static boolean isGovernmentAccount(String owner) {
+        return owner.regionMatches(true, 0, "G:", 0, 2);
+    }
+
+    /** Whether the owner line names a Treasury firm or government account rather than a player. */
+    public static boolean isAccountToken(String owner) {
+        return isBusinessAccount(owner) || isGovernmentAccount(owner);
+    }
+
+    /** The sign form of a government account: its name when that fits the line, else its base-36 id. */
+    public static String governmentAccountSignName(int accountId, String displayName) {
+        String named = "G:" + displayName;
+        if (!displayName.isBlank()
+                && !displayName.startsWith("#")
+                && StringUtil.getMinecraftStringWidth(named) <= MaterialUtil.MAXIMUM_SIGN_WIDTH) {
+            return named;
+        }
+        return "G:#" + Integer.toString(accountId, 36).toUpperCase(Locale.ROOT);
     }
 
     public static int getBusinessAccountId(String owner) {
@@ -123,8 +151,11 @@ public class SignService {
         String ownerName = getOwner(lines);
 
         // Validate the owner as a player name unless it is blank (auto-filled), an admin
-        // shop, or a business token (B:<base36 id> / legacy b:<FirmName>) resolved elsewhere.
-        if (!isAdminShop(ownerName) && !ownerName.isEmpty() && !ownerName.regionMatches(true, 0, "B:", 0, 2)) {
+        // shop, or a business token (B:<base36 id> / A:<alias> / legacy b:<FirmName>) resolved elsewhere.
+        if (!isAdminShop(ownerName)
+                && !ownerName.isEmpty()
+                && !ownerName.regionMatches(true, 0, "B:", 0, 2)
+                && !isAccountToken(ownerName)) {
             Matcher withId = NAME_WITH_ID.matcher(ownerName);
             if (withId.matches()) {
                 // The name carries a disambiguation id — validate the part before the last ':'.

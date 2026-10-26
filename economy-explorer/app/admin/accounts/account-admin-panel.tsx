@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   renameAccountAction, changeAccountOwnerAction, archiveAccountAction, unarchiveAccountAction,
 } from '@/lib/actions/admin-accounts';
+import styles from '../admin.module.css';
 
 /** Per-account admin controls: rename, change owner, archive/unarchive. */
 export function AccountAdminPanel({
@@ -28,24 +29,37 @@ export function AccountAdminPanel({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} aria-label="Display name" placeholder="Display name" style={{ minWidth: 200 }} />
-        <button className="btn" disabled={!permissions.includes('account.rename') || pending || !name.trim() || name === (displayName ?? '')}
+    <div className={styles.stack}>
+      <div className={styles.row}>
+        <label className={`field ${styles.grow}`}>
+          <span className="field-label">Display name</span>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} aria-label="Display name" />
+        </label>
+        <button type="button" className="btn" disabled={!permissions.includes('account.rename') || pending || !name.trim() || name === (displayName ?? '')}
           onClick={() => act(renameAccountAction(accountId, name), 'Renamed.')}>Rename</button>
       </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="New owner" placeholder="New owner (player name or UUID)" style={{ minWidth: 240 }} />
-        <button className="btn" disabled={!permissions.includes('account.owner.change') || pending || !owner.trim()}
+      <div className={styles.row}>
+        <label className={`field ${styles.grow}`}>
+          <span className="field-label">New owner (player name or UUID)</span>
+          <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="New owner" />
+        </label>
+        <button type="button" className="btn" disabled={!permissions.includes('account.owner.change') || pending || !owner.trim()}
           onClick={() => act(changeAccountOwnerAction(accountId, owner), 'Owner changed.')}>Change owner</button>
+      </div>
+      <div className={`${styles.row} ${styles.dangerZone}`}>
+        <p className={styles.hint}>
+          {archived
+            ? 'This account is archived. Unarchiving lets it send and receive money again.'
+            : 'Archiving closes the account: it keeps its history but can no longer send or receive money.'}
+        </p>
         {archived ? (
-          <button className="btn" disabled={!permissions.includes('account.archive') || pending} onClick={() => act(unarchiveAccountAction(accountId), 'Unarchived.')}>Unarchive</button>
+          <button type="button" className="btn" disabled={!permissions.includes('account.archive') || pending} onClick={() => act(unarchiveAccountAction(accountId), 'Unarchived.')}>Unarchive</button>
         ) : (
-          <button className="btn" style={{ background: 'var(--bad)', color: '#fff' }} disabled={!permissions.includes('account.archive') || pending}
+          <button type="button" className={`btn ${styles.danger}`} disabled={!permissions.includes('account.archive') || pending}
             onClick={() => act(archiveAccountAction(accountId), 'Archived.')}>Archive</button>
         )}
       </div>
-      {msg && <span className={msg.kind === 'ok' ? 'state-ok' : 'state-error'} style={{ fontSize: 12 }}>{msg.text}</span>}
+      {msg && <p role={msg.kind === 'err' ? 'alert' : 'status'} className={`${msg.kind === 'ok' ? 'state-ok' : 'state-error'} ${styles.message}`}>{msg.text}</p>}
     </div>
   );
 }

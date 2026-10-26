@@ -7,13 +7,6 @@ export type ExplorerRole = string;
 export type RoleDefinition = { key: string; name: string; description: string | null; revision: number; permissions: Permission[] };
 export type Executor = Kysely<DB>;
 
-export async function findRoles(uuid: string): Promise<string[]> {
-  const result = await sql<{ role: string }>`SELECT r.role FROM explorer_role r
-    JOIN explorer_role_definition d ON d.role_key = r.role
-    WHERE r.player_uuid_bin = ${uuidToBin(uuid)}`.execute(db);
-  return result.rows.map(r => r.role);
-}
-
 /** Baseline plus direct and active source-scoped group roles, resolved per request. */
 export async function resolveAuthorization(uuid: string | null, executor: Executor = db) {
   const result = await sql<{ role_key: string; permission: string | null }>`

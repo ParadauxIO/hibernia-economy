@@ -1,9 +1,12 @@
 'use client';
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { adminCreateWebhookAction } from '@/lib/actions/webhooks';
 import { isDiscordWebhookUrl } from '@/lib/util/discord';
+import styles from '../admin.module.css';
 
 export function CreateAdminWebhookForm() {
+  const router = useRouter();
   const [pending, start] = useTransition();
   const [accountId, setAccountId] = useState('');
   const [url, setUrl] = useState('');
@@ -26,46 +29,32 @@ export function CreateAdminWebhookForm() {
         setUrl('');
         setAccountId('');
         setSecret(r.secret ?? null);
+        router.refresh();
       }
     });
   }
 
   return (
-    <>
-      <form onSubmit={onSubmit} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input
-          className="input"
-          type="number"
-          min="1"
-          placeholder="Account #"
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-          required
-          style={{ width: 120 }}
-        />
-        <input
-          className="input"
-          type="url"
-          placeholder="https://endpoint.example.com/hook"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          required
-          style={{ minWidth: 320, flex: 1 }}
-        />
+    <div className={styles.stack}>
+      <form onSubmit={onSubmit} className={styles.row}>
+        <label className="field">
+          <span className="field-label">Account</span>
+          <input className={`input ${styles.narrow}`} type="number" min="1" placeholder="Account #" value={accountId} onChange={(e) => setAccountId(e.target.value)} required />
+        </label>
+        <label className={`field ${styles.grow}`}>
+          <span className="field-label">Endpoint URL</span>
+          <input className="input" type="url" placeholder="https://endpoint.example.com/hook" value={url} onChange={(e) => setUrl(e.target.value)} required />
+        </label>
         <button className="btn" disabled={pending || !accountId || !url.trim()}>{pending ? 'Creating…' : 'Create'}</button>
-        {err && <span className="state-error" style={{ fontSize: 11 }}>{err}</span>}
       </form>
-      {isDiscordWebhookUrl(url) && (
-        <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>
-          ✨ Looks like a Discord webhook — deliveries to this URL are sent as a rich embed.
-        </p>
-      )}
+      {err && <p role="alert" className="state-error">{err}</p>}
+      {isDiscordWebhookUrl(url) && <p className={styles.hint}>This is a Discord webhook, so deliveries are sent as a rich embed.</p>}
       {secret && (
-        <div className="card" style={{ marginTop: 10 }}>
-          <div className="card-title">Signing secret <span className="sub">shown once — copy it now</span></div>
-          <code className="mono" style={{ display: 'block', wordBreak: 'break-all', userSelect: 'all' }}>{secret}</code>
+        <div className="field" role="status">
+          <span className="field-label">Signing secret, shown once. Copy it now.</span>
+          <code className="mono">{secret}</code>
         </div>
       )}
-    </>
+    </div>
   );
 }

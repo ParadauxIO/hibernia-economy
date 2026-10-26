@@ -108,8 +108,9 @@ describe('LimitDialog', () => {
     expect(screen.queryByText(/Rate limit ·/)).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Limit' }));
-    const backdrop = document.querySelector('.modal-backdrop');
-    if (!backdrop) throw new Error('no backdrop');
+    // A click on the <dialog> element itself (not its content) is a backdrop click.
+    const backdrop = document.querySelector('dialog');
+    if (!backdrop) throw new Error('no dialog');
     await user.click(backdrop);
     expect(screen.queryByText(/Rate limit ·/)).toBeNull();
     expect(setRateLimitAction).not.toHaveBeenCalled();

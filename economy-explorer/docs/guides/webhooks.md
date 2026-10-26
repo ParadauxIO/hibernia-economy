@@ -30,7 +30,7 @@ Each webhook is scoped to one of:
 ## Set one up on the site (no API key)
 
 1. Sign in and [link your Minecraft account](/docs/guides/using-the-explorer).
-2. Go to **[My data → Webhooks](/me/webhooks)**.
+2. Go to **[My finances → Developer → Webhooks](/me/developer/webhooks)**.
 3. Pick the **scope** (your personal account, or a firm you manage).
 4. Paste your endpoint — it must be a public **`https://`** URL.
 5. Click **Create**. The **signing secret is shown once** — copy it now (you'll need it
@@ -139,7 +139,7 @@ and the body is Discord's embed shape, not our event) — so don't expect one th
 
 ## Managing your webhooks
 
-On **[My data → Webhooks](/me/webhooks)** you can:
+On **[My finances → Developer → Webhooks](/me/developer/webhooks)** you can:
 
 - **Pause / Enable** a webhook (re-enabling clears the failure count).
 - **Rotate the secret** — issues a new signing secret (shown once); update your endpoint

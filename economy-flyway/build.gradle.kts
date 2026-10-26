@@ -7,7 +7,7 @@
 buildscript {
     repositories { mavenCentral() }
     dependencies {
-        classpath("org.flywaydb:flyway-mysql:13.10.0")
+        classpath("org.flywaydb:flyway-mysql:13.11.1")
         classpath("com.mysql:mysql-connector-j:26.10.0")
     }
 }
@@ -24,7 +24,7 @@ plugins {
     // Pinned to 12.9.0 to match the flyway library catalog (PAR-273): the 10.22.0
     // plugin referenced org.gradle.api.plugins.JavaPluginConvention, removed in
     // Gradle 9, so flywayMigrate failed under Gradle 9.6 (ADT — CI fix).
-    id("org.flywaydb.flyway") version "13.10.0"
+    id("org.flywaydb.flyway") version "13.11.1"
 }
 
 // group + version are set centrally by the root allprojects block (single

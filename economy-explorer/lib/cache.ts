@@ -206,7 +206,10 @@ function reportRefreshFailure(key: string, err: unknown): void {
   recordCacheResult(key, 'refresh_fail');
   // A recompute that keeps failing (e.g. a query past max_statement_time)
   // otherwise serves the last good value with nothing to show why (PAR-407).
-  console.warn(`[cache] recompute of ${key} failed; serving the previous value:`, err);
+  // The key is a constant format string's argument, never the format itself: keys
+  // can carry user text (search prefixes), and console treats % sequences in the
+  // first argument as directives.
+  console.warn('[cache] recompute of %s failed; serving the previous value:', key, err);
 }
 
 type Lock = { token: string } | 'held' | 'unavailable';

@@ -62,6 +62,10 @@ The [Explorer guide](/docs/guides/using-the-explorer) covers:
   shared government accounts, without opening unrelated private histories.
 - Local-time timestamps with UTC daily chart buckets, mobile directories,
   CSV/JSON exports and linked account dashboards.
+- A full search page with results grouped by type, and full-result exports of
+  filtered tables (up to 100,000 rows).
+- For staff, a filterable transaction explorer with a postings panel and
+  "follow the money", and a filterable ChestShop sales feed.
 - In-game password recovery for an existing linked account, where enabled.
 
 For daily play, `/economy` shows statistics and `/sales` shows personal shop sales.

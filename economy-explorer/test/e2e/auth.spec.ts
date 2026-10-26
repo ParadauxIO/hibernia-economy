@@ -74,7 +74,7 @@ test.describe('moderator investigations', () => {
     await visit(page, '/transactions');
     await expect(page.locator('.privacy-gate')).toHaveCount(0);
     await visit(page, '/admin/groups');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator('.access-gate')).toBeVisible();
   });
 });
 test.describe('government relationships', () => {
@@ -109,11 +109,11 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     await loginAs(context, key);
     await visit(page, '/admin/api-keys');
     await expect(page.getByRole('heading', { name: 'API keys', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Revoke|Rotate|Limit/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^(Revoke key|Rotate key|Limit$)/ })).toHaveCount(0);
     await visit(page, '/admin/groups');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator('.access-gate')).toBeVisible();
     await visit(page, '/admin/roles');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator('.access-gate')).toBeVisible();
 
     await loginAs(context, 'admin');
     await visit(page, `/admin/roles/${key}`);
@@ -126,7 +126,7 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     }).toBe(2);
     await loginAs(context, key);
     await visit(page, '/admin/api-keys');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator('.access-gate')).toBeVisible();
     await visit(page, '/chestshop/sales');
     await expect(page.locator('.privacy-gate')).toHaveCount(0);
 

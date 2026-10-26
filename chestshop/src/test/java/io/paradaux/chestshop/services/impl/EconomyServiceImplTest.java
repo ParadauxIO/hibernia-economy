@@ -1068,11 +1068,11 @@ class EconomyServiceImplTest extends ServerTest {
 
     @Test
     void migrate_keepsAliasVisibleAfterTrade() {
-        Sign sign = placeSign("B:@Acme", "Y");
+        Sign sign = placeSign("A:Acme", "Y");
         Transaction trade = mock(Transaction.class);
         when(trade.getSign()).thenReturn(sign);
-        when(trade.getOwnerAccount()).thenReturn(businessOwner("B:@Acme"));
+        when(trade.getOwnerAccount()).thenReturn(businessOwner("A:Acme"));
         service.migrateLegacyBusinessSign(trade);
-        assertThat(SignService.getOwner((Sign) sign.getBlock().getState())).isEqualTo("B:@Acme");
+        assertThat(SignService.getOwner((Sign) sign.getBlock().getState())).isEqualTo("A:Acme");
     }
 }

@@ -3,6 +3,7 @@ import { useState, useTransition } from 'react';
 import { PERMISSIONS, PERMISSION_DESCRIPTIONS, type Permission } from '@/lib/auth/policy';
 import type { RoleDefinition } from '@/lib/sql/role';
 import { createRoleAction, updateRoleAction, deleteRoleAction } from '@/lib/actions/roles';
+import styles from '../admin.module.css';
 
 export function RoleEditor({ role, actorPermissions }: { role?: RoleDefinition; actorPermissions: readonly Permission[] }) {
   const [key, setKey] = useState(role?.key ?? '');
@@ -39,34 +40,45 @@ export function RoleEditor({ role, actorPermissions }: { role?: RoleDefinition; 
       else window.location.assign('/admin/roles');
     });
   }
-  return <form onSubmit={save}>
-    <fieldset disabled={pending || !canSave} style={{ border: 0, padding: 0 }}>
-      <label style={{ display: 'block', marginBottom: 12 }}>Role key<br />
-        <input className="input" value={key} onChange={e => setKey(e.target.value)} readOnly={!!role} required pattern="[a-z][a-z0-9_-]{0,31}" maxLength={32} />
-      </label>
-      <label style={{ display: 'block', marginBottom: 12 }}>Display name<br />
-        <input className="input" value={name} onChange={e => setName(e.target.value)} required maxLength={64} />
-      </label>
-      <label style={{ display: 'block', marginBottom: 12 }}>Description<br />
-        <input className="input" value={description} onChange={e => setDescription(e.target.value)} maxLength={255} style={{ width: '100%' }} />
-      </label>
-      <p className="sub">Roles combine. Scoped read permissions still require an account or firm relationship. You can only grant permissions you hold.</p>
-      {groups.map(group => <fieldset key={group} style={{ marginBottom: 16, border: '1px solid var(--border)', padding: 12 }}>
+  return <form onSubmit={save} className={styles.stack}>
+    <fieldset disabled={pending || !canSave} className={`${styles.stack} ${styles.bare}`}>
+      <div className={styles.row}>
+        <label className="field">
+          <span className="field-label">Role key</span>
+          <input className="input mono" aria-label="Role key" value={key} onChange={e => setKey(e.target.value)} readOnly={!!role} required pattern="[a-z][a-z0-9_-]{0,31}" maxLength={32} />
+        </label>
+        <label className="field">
+          <span className="field-label">Display name</span>
+          <input className="input" aria-label="Display name" value={name} onChange={e => setName(e.target.value)} required maxLength={64} />
+        </label>
+        <label className={`field ${styles.grow}`}>
+          <span className="field-label">Description</span>
+          <input className="input" aria-label="Description" value={description} onChange={e => setDescription(e.target.value)} maxLength={255} />
+        </label>
+      </div>
+      <p className={styles.hint}>Roles combine. Scoped read permissions still require an account or firm relationship. You can only grant permissions you hold.</p>
+      {groups.map(group => <fieldset key={group} className={styles.permGroup}>
         <legend>{group.replaceAll('_', ' ')}</legend>
-        {PERMISSIONS.filter(p => p.startsWith(`${group}.`)).map(permission => <label key={permission} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'start' }}>
-          <input type="checkbox" checked={selected.has(permission)} disabled={!actorPermissions.includes(permission)} onChange={e => {
-            const checked = e.target.checked;
-            setSelected(previous => {
-              const next = new Set(previous); if (checked) next.add(permission); else next.delete(permission); return next;
-            });
-          }} />
-          <span><strong>{permission}</strong><br /><span className="sub">{PERMISSION_DESCRIPTIONS[permission]}</span></span>
-        </label>)}
+        <ul className={styles.checklist}>
+          {PERMISSIONS.filter(p => p.startsWith(`${group}.`)).map(permission => <li key={permission}>
+            <label className={styles.check}>
+              <input type="checkbox" checked={selected.has(permission)} disabled={!actorPermissions.includes(permission)} onChange={e => {
+                const checked = e.target.checked;
+                setSelected(previous => {
+                  const next = new Set(previous); if (checked) next.add(permission); else next.delete(permission); return next;
+                });
+              }} />
+              <span><span className="mono">{permission}</span><br /><span className={styles.hint}>{PERMISSION_DESCRIPTIONS[permission]}</span></span>
+            </label>
+          </li>)}
+        </ul>
       </fieldset>)}
-      <button type="submit" className="btn btn-primary">{pending ? 'Saving…' : role ? 'Save permissions' : 'Create role'}</button>
+      <div className={styles.row}>
+        <button type="submit" className="btn btn-primary">{pending ? 'Saving…' : role ? 'Save permissions' : 'Create role'}</button>
+      </div>
     </fieldset>
-    {canDelete && <button type="button" className="btn" disabled={pending} onClick={remove} style={{ marginTop: 16 }}>Delete role</button>}
-    {role?.key === 'player' && <p className="sub">Player is the signed-in baseline. Its permissions are editable; the role itself cannot be deleted.</p>}
+    {canDelete && <div className={styles.dangerZone}><button type="button" className={`btn ${styles.danger}`} disabled={pending} onClick={remove}>Delete role</button></div>}
+    {role?.key === 'player' && <p className={styles.hint}>Player is the signed-in baseline. Its permissions are editable; the role itself cannot be deleted.</p>}
     {error && <p role="alert" className="state-error">{error}</p>}
   </form>;
 }

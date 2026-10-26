@@ -170,8 +170,9 @@ WORLDGUARD_USE_PROTECTION: false
 GRIEFPREVENTION_INTEGRATION: false
 
 # Add stock counter to quantity line?
-# Hopper changes are coalesced and refreshed in bounded batches across ticks.
-# Requires InventoryMoveItemEvent to be enabled in Paper and ListenerControl.
+# Hopper changes are coalesced and refreshed in bounded batches across ticks. The same refresh
+# keeps /find stock current, even with this off. Requires InventoryMoveItemEvent to be enabled
+# in Paper and ListenerControl.
 USE_STOCK_COUNTER: false
 
 # Delay from the first hopper change before refreshing stock (100 ticks = 5 seconds at 20 TPS).
@@ -181,6 +182,13 @@ HOPPER_STOCK_REFRESH_INTERVAL_TICKS: 100
 
 # Exclude these item meta attributes from the similarity check when comparing items
 EXCLUDED_ITEM_ATTRIBUTES: []
+
+# Government accounts that can never own a G: shop, even for ChestShop.government.* or admins.
+# These are Treasury system accounts that create or absorb money; names are case-insensitive.
+GOVERNMENT_SHOP_BLOCKED_ACCOUNTS:
+  - starting-balances
+  - GovernmentFines
+  - TreasuryIngest
 
 # Native result locations and optional preview names (plain text).
 FIND_LOCATION_FORMAT: '%x%, %y%, %z%'

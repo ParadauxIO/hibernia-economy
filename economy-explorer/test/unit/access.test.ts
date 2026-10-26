@@ -3,7 +3,6 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import type { Viewer } from '@/lib/auth/viewer';
 import { canViewAccount, canViewTransaction, canViewFirmFinancials, canViewFirmInternals, isStaff, hasElevatedRead, auditRole, requirePermission, readableAccountIds } from '@/lib/auth/access';
 import { hasPermission, PERMISSIONS } from '@/lib/auth/policy';
-import { requireRole } from '@/lib/auth/requireRole';
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
 import { findAccount, canReadAccount, findTransactionAccountIds, findReadableAccountIds } from '@/lib/sql/ledger';
 import { getAccountFirmId, hasFirmFinancialAccess, isFirmMember } from '@/lib/sql/firm';
@@ -45,7 +44,6 @@ describe('RBAC', () => {
   it('moderator can investigate but cannot administer', () => {
     expect(isStaff(moderator)).toBe(true);
     expect(() => requirePermission(moderator, 'roles.update')).toThrow(ForbiddenError);
-    expect(() => requireRole(moderator, 'government')).toThrow(ForbiddenError);
     expect(auditRole(moderator as Extract<Viewer, { anon: false }>)).toBe('moderator');
   });
   it('government has no global oversight and roles combine without hierarchy', () => {

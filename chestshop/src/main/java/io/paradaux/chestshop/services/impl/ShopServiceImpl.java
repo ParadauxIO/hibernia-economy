@@ -413,13 +413,27 @@ public class ShopServiceImpl implements ShopService {
         }
     }
 
-    /** Resolve the owner account from the name line (player or B:&lt;id&gt; business). */
+    /** Resolve the owner account from the name line (player, B:/A: business or G: government). */
     private void resolveName(ShopCreation ctx) {
         String name = SignService.getOwner(ctx.getSignLines());
         Player player = ctx.getPlayer();
 
         if (SignService.isBusinessAccount(name)) {
-            resolveBusinessName(ctx, player, name);
+            resolveAccountName(
+                    ctx,
+                    player,
+                    name,
+                    "chestshop.BUSINESS_ACCOUNT_NOT_FOUND",
+                    "chestshop.BUSINESS_NO_CHESTSHOP_PERMISSION");
+            return;
+        }
+        if (SignService.isGovernmentAccount(name)) {
+            resolveAccountName(
+                    ctx,
+                    player,
+                    name,
+                    "chestshop.GOVERNMENT_ACCOUNT_NOT_FOUND",
+                    "chestshop.GOVERNMENT_NO_CHESTSHOP_PERMISSION");
             return;
         }
 
@@ -454,11 +468,13 @@ public class ShopServiceImpl implements ShopService {
     }
 
     /**
-     * Validate and resolve a business-account ({@code B:<base36>}) name: Treasury must be
-     * present, the account must exist, and (unless the creator is a ChestShop admin) the
-     * creator must hold the firm's CHESTSHOP permission.
+     * Validate and resolve a Treasury-account name (firm {@code B:<base36>} / {@code A:<alias>}, or
+     * government {@code G:<name>}): Treasury must be present, the account must exist, and (unless
+     * the creator is a ChestShop admin) the creator must hold the firm's CHESTSHOP permission or
+     * the account's {@code ChestShop.government.<name>} node.
      */
-    private void resolveBusinessName(ShopCreation ctx, Player player, String name) {
+    private void resolveAccountName(
+            ShopCreation ctx, Player player, String name, String notFoundKey, String noPermissionKey) {
         Account existing = ctx.getOwnerAccount();
         if (existing != null && existing.getShortName().equalsIgnoreCase(name)) {
             return; // already resolved on a previous pass
@@ -471,12 +487,12 @@ public class ShopServiceImpl implements ShopService {
         }
         Account account = accounts.resolveAccount(name);
         if (account == null) {
-            message.send(player, "chestshop.BUSINESS_ACCOUNT_NOT_FOUND");
+            message.send(player, notFoundKey);
             failName(ctx);
             return;
         }
         if (!adminBypass.has(player, Permissions.ADMIN) && !accounts.canAccess(player, account)) {
-            message.send(player, "chestshop.BUSINESS_NO_CHESTSHOP_PERMISSION");
+            message.send(player, noPermissionKey);
             failName(ctx);
             return;
         }

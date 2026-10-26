@@ -6,7 +6,7 @@ description: The admin webhooks console — list, search, and manage every webho
 
 # Webhooks (admin)
 
-Players manage their own webhooks at [My data → Webhooks](/me/webhooks). The admin
+Players manage their own webhooks at [My finances → Developer → Webhooks](/me/developer/webhooks). The admin
 console at **[Admin → Webhooks](/admin/webhooks)** is the fleet-wide view across **every**
 account and firm.
 
@@ -33,7 +33,7 @@ Enter an **account id** and a public `https://` URL, then **Create**. The webhoo
 account-scoped and attributed to that account's **owner**, so:
 
 - It behaves exactly like one the owner created themselves, and
-- the owner can also see and manage it under their own [My data → Webhooks](/me/webhooks).
+- the owner can also see and manage it under their own [My finances → Developer → Webhooks](/me/developer/webhooks).
 
 The signing secret is shown **once** on creation — copy it if the consumer needs it.
 A Discord webhook URL is auto-detected and delivered as a rich embed, same as anywhere
@@ -52,7 +52,7 @@ else.
 > [!CAUTION]
 > Creating, pausing, and deleting webhooks here are privileged actions and are written to
 > the [audit log](/docs/admin/explorer-administration#audit-evidence). Prefer pointing a player at their own
-> [My data → Webhooks](/me/webhooks) page when they can self-serve.
+> [My finances → Developer → Webhooks](/me/developer/webhooks) page when they can self-serve.
 
 ## Delivery incident procedure
 

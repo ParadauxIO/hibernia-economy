@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CreateWebhookForm } from '@/app/me/webhooks/create-webhook-form';
+import { CreateWebhookForm } from '@/app/me/developer/webhooks/create-webhook-form';
 import { createWebhookAction, type WebhookActionResult } from '@/lib/actions/webhooks';
 
 vi.mock('@/lib/actions/webhooks', () => ({ createWebhookAction: vi.fn() }));

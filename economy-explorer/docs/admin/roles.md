@@ -93,6 +93,13 @@ or configure a LuckPerms source. Bare names (`moderator`) and `group.moderator`
 refer to LP group inheritance. Dotted permission nodes use effective permission
 checks, including inherited grants and explicit denies.
 
+To give a department a set of tools, link its group to a role. For example, to give
+the Department of Commerce the compliance tools: open the explorer group whose
+LuckPerms source is the department's group (say `group.doc`), tick the
+**compliance** role under **Roles this group grants**, and save. Everyone in that
+LuckPerms group then gets the role on their next sync, and loses it when they leave
+the group. The group page shows the source node and its live member count.
+
 Sync resolves online and offline players using the server's static context.
 World-specific or another server's contextual grants do not become global web
 permissions. Manual membership survives LP sync and can coexist with synced
@@ -116,9 +123,11 @@ A firm mapping includes its proprietor and employees with **FINANCIAL** or
 unexpired tenant. Offline players are included. The group's selected roles apply
 to those members just as they do to manual members.
 
-These mappings are configured by the operator in `explorer_group_sync`, using a
-firm ID for `business` or `world-uuid/region-id` for `realty`. The group member list
-shows which source manages each membership. Business, Realty, LuckPerms and manual
+Set these on the group's page under **Membership sources** (needs `groups.sync.update`):
+the **Firm** source takes a firm ID, and the **Region** source takes
+`world-uuid/region-id` (the region ID is case-sensitive). Each source shows how many
+of its members are live now. The group member list shows which source manages each
+membership. Business, Realty, LuckPerms and manual
 memberships can coexist; removing one source does not remove another's grant.
 
 Business and Realty refresh on the scheduled interval independently of LuckPerms.

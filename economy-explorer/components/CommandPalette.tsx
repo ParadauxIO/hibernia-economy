@@ -26,9 +26,17 @@ export const SEARCH_DEBOUNCE_MS = 200;
 export const SEARCH_MIN_CHARS = 2;
 const RESULTS_PER_KIND = 4;
 
-/** The search call. Swappable in tests; POWER may later pass the signal through to a fetch. */
+/** The search call. Swappable in tests. */
 export type SearchFn = (query: string, limit: number, signal: AbortSignal) => Promise<SearchResult[]>;
-const defaultSearch: SearchFn = (query, limit) => searchPreview(query, limit);
+/**
+ * GET /api/search/preview (the searchPreview action's twin), so a superseded
+ * request is cancelled on the wire. Falls back to the action if the route fails.
+ */
+const defaultSearch: SearchFn = async (query, limit, signal) => {
+  const res = await fetch(`/api/search/preview?q=${encodeURIComponent(query)}&limit=${limit}`, { signal });
+  if (!res.ok) return searchPreview(query, limit);
+  return ((await res.json()) as { results: SearchResult[] }).results;
+};
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 

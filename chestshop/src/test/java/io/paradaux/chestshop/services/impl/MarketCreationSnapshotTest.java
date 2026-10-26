@@ -86,7 +86,8 @@ class MarketCreationSnapshotTest extends ServerTest {
                 mock(io.paradaux.chestshop.services.SignService.class),
                 mock(io.paradaux.chestshop.services.ShopBlockService.class),
                 mock(io.paradaux.chestshop.services.AccountService.class),
-                mock(io.paradaux.chestshop.services.PreviewService.class));
+                mock(io.paradaux.chestshop.services.PreviewService.class),
+                mock(io.paradaux.chestshop.services.ShopStockPublisher.class));
         sync.onShopCreated(new io.paradaux.chestshop.model.CreatedShop(
                 mock(org.bukkit.entity.Player.class), oldSnapshot, null, eventText, null));
         var captured = org.mockito.ArgumentCaptor.forClass(ChestShopShopRecord.class);

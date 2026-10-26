@@ -55,7 +55,7 @@ public class ItemMoveListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onChunkLoad(ChunkLoadEvent event) {
-        stockRefresh.reconcileChunk(
+        stockRefresh.loadChunk(
                 event.getWorld().getUID(),
                 event.getChunk().getX(),
                 event.getChunk().getZ());

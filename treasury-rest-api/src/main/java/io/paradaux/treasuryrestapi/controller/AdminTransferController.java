@@ -2,16 +2,19 @@ package io.paradaux.treasuryrestapi.controller;
 
 import io.paradaux.treasuryrestapi.dto.AdminTransferRequest;
 import io.paradaux.treasuryrestapi.dto.TransferResponse;
+import io.paradaux.treasuryrestapi.security.ActingPlayer;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.IdempotencyReplay;
 import io.paradaux.treasuryrestapi.service.TransferService;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,16 +48,27 @@ public class AdminTransferController {
     public ResponseEntity<TransferResponse> transfer(
             @AuthenticationPrincipal VerifiedToken verified,
             @Valid @RequestBody AdminTransferRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
-        log.info("POST /admin/transfers requested by keyId={} | from={} to={} amount={}",
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestAttribute(name = ActingPlayer.ATTRIBUTE, required = false) UUID actingPlayer) {
+        log.info(
+                "POST /admin/transfers requested by keyId={} actingPlayer={} | from={} to={} amount={}",
                 verified != null ? verified.keyId() : null,
-                request.fromAccountId(), request.toAccountId(), request.amount());
+                actingPlayer,
+                request.fromAccountId(),
+                request.toAccountId(),
+                request.amount());
         // Same check-then-insert idempotency race as the token path: adminTransfer
         // derives the same UNIQUE client_dedup_key, so two concurrent same-key admin
         // transfers can both pass the pre-check and the loser's insert 500s without
         // this retry-once replay. Shared with TransferController via IdempotencyReplay.
         TransferResponse response = IdempotencyReplay.withReplay(() -> transferService.adminTransfer(
-                verified, request.fromAccountId(), request.toAccountId(), request.amount(), request.memo(), idempotencyKey));
+                verified,
+                actingPlayer,
+                request.fromAccountId(),
+                request.toAccountId(),
+                request.amount(),
+                request.memo(),
+                idempotencyKey));
         return ResponseEntity.ok(response);
     }
 }

@@ -49,7 +49,7 @@ describe('account menu', () => {
     expect(itemNames(menu)).toEqual(['My finances', 'My transactions', 'Statements', 'My market', 'My firms', 'Webhooks and API', 'Link status', 'Log out']);
     expect(within(menu).getByRole('menuitem', { name: 'My finances' })).toHaveAttribute('href', '/me');
     expect(within(menu).getByRole('menuitem', { name: 'Statements' })).toHaveAttribute('href', '/me/statements');
-    expect(within(menu).getByRole('menuitem', { name: 'Webhooks and API' })).toHaveAttribute('href', '/me/webhooks');
+    expect(within(menu).getByRole('menuitem', { name: 'Webhooks and API' })).toHaveAttribute('href', '/me/developer');
     expect(within(menu).getByRole('menuitem', { name: 'Link status' })).toHaveAttribute('href', '/link');
   });
 

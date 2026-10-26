@@ -16,11 +16,13 @@ test.describe('anonymous browsing', () => {
     const errors = trackErrors(page);
     await visit(page, '/');
     await expect(page.getByRole('heading', { name: 'Economy', level: 1 })).toBeVisible();
-    await expect(page.getByText('Personal supply')).toBeVisible();
-    await expect(page.getByText('Active players / 30d', { exact: true })).toBeVisible();
-    await page.getByRole('link', { name: 'Wealth', exact: true }).click();
-    const gini = page.locator('.insight', { hasText: 'Gini' }).locator('.value');
-    await expect(gini).toHaveText(/^0\.\d+$/);
+    const summary = page.getByRole('group', { name: 'Economy summary' });
+    await expect(summary).toContainText('Personal money supply');
+    await expect(summary).toContainText('Daily active players');
+    await expect(summary).toContainText('vs previous 30 days');
+    await expect(page.getByText(/^Updated \d{2}:\d{2} UTC$/).first()).toBeVisible();
+    await page.getByRole('link', { name: 'Wealth', exact: true }).first().click();
+    await expect(page.getByRole('group', { name: 'Wealth concentration' }).locator('.metric', { hasText: 'Gini coefficient' }).locator('.metric-value')).toHaveText(/^0\.\d{3}$/);
     // Charts only mount client-side (useHydrated), so a rendered chart means the
     // wealth tree has committed — any hydration/render error has been reported.
     await expect(page.locator('.recharts-responsive-container').first()).toBeVisible();
@@ -77,10 +79,15 @@ test.describe('anonymous browsing', () => {
     await expect(dataTable(page)).toHaveCount(0);
   });
 
-  test('money-flow explains cross-type and offers window tabs', async ({ page }) => {
+  test('money flow shows type-to-type flows and net change from the rollups', async ({ page }) => {
     await visit(page, '/money-flow');
-    await expect(page.getByText(/between different account types/i)).toBeVisible();
-    await expect(page.locator('.window-tabs a')).toHaveCount(2);
+    await expect(page.getByRole('heading', { name: 'Money flow', level: 1 })).toBeVisible();
+    const matrix = page.getByRole('table', { name: 'Money paid between account types' });
+    await expect(matrix.getByRole('row', { name: /^Personal/ })).toContainText(/\d/);
+    await expect(page.getByRole('group', { name: 'Net change by account type' })).toContainText('Business');
+    await page.getByRole('button', { name: '7d' }).click();
+    await expect(page).toHaveURL(/range=7d/);
+    await expect(page.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('/me requires login', async ({ page }) => {
@@ -122,7 +129,7 @@ test('Health bookmarks preserve their window on the consolidated overview', asyn
   await expect(page).toHaveURL(/\?days=7$/);
   // React can retain a hidden streamed copy outside main while swapping the
   // live dashboard into place. Assert on the displayed page, not that source.
-  await expect(page.getByRole('main').getByText('Active players / 7d', { exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('group', { name: 'Economy summary' })).toContainText('vs previous 7 days');
 });
 
 test('shop discovery normalises batches and switches to selling', async ({ page }) => {
@@ -176,32 +183,36 @@ test('mobile account rows keep balances visible and expand secondary details', a
 });
 
 
-test('wealth labels chart slices and keeps signed balances visible on mobile', async ({ page }) => {
+test('wealth shows the ledger as it is, with signed balances visible on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await visit(page, '/economy/wealth');
-  for (const type of ['PERSONAL', 'BUSINESS', 'GOVERNMENT']) {
-    await expect(page.getByRole('img', { name: new RegExp(`^${type}: .+\\d, [\\d,]+ accounts$`) })).toBeVisible();
-  }
-  for (const table of await page.locator('.directory-table').all()) {
-    const balance = table.locator('tbody tr').first().locator('td.amount:visible').first();
+  const byType = page.getByRole('table', { name: 'Money by account type' });
+  // The SYSTEM mint holds a negative balance and is listed, not hidden.
+  await expect(byType.getByRole('row', { name: /^System/ })).toContainText('−$3,000.00');
+  await expect(byType.getByRole('button', { name: 'About negative government balances' })).toBeVisible();
+  for (const table of [byType, page.getByRole('table', { name: 'Largest accounts' })]) {
+    const balance = table.locator('tbody tr').first().locator('td.amount:visible').last();
     await expect(balance).toBeVisible();
     const box = await balance.boundingBox();
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
 
 test('taxation aggregates are public, bounded and responsive', async ({ page }) => {
   const errors = trackErrors(page);
-  await visit(page, '/economy/taxation?days=invalid');
+  await visit(page, '/economy/taxation?range=invalid');
   await expect(page.getByRole('heading', { name: 'Taxation', exact: true })).toBeVisible();
-  await expect(page.locator('.window-tabs a.active')).toHaveText('30 days');
+  await expect(page.getByRole('button', { name: '30d' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('group', { name: 'Tax revenue summary' })).toContainText('Net revenue');
   await expect(page.getByRole('heading', { name: 'Revenue by type' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Where it lands' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Rates in effect' })).toBeVisible();
-  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator('.privacy-gate, .access-gate')).toHaveCount(0);
   await expect(page.locator('a[href^="/transactions/"], a[href^="/players/"]')).toHaveCount(0);
-  await page.getByRole('link', { name: '7 days', exact: true }).click();
-  await expect(page.locator('.window-tabs a.active')).toHaveText('7 days');
+  await page.getByRole('button', { name: '7d' }).click();
+  await expect(page).toHaveURL(/range=7d/);
+  await expect(page.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('navigation', { name: 'Economy' }).getByRole('link', { name: 'Taxation' })).toHaveAttribute('aria-current', 'page');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   expect(errors.filter(e => /#\d+/.test(e))).toEqual([]);

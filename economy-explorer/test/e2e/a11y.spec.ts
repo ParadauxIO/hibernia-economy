@@ -28,27 +28,36 @@ const ROUTES: { path: string; viewers: Viewer[] }[] = [
   { path: '/chestshop/firms', viewers: ['anon'] },
   { path: '/chestshop/firms/1', viewers: ['anon', 'admin'] },
   { path: '/chestshop/sales', viewers: ['admin'] },
+  { path: '/chestshop/sales?f=direction:in:sell&f=item:in:DIAMOND', viewers: ['admin'] },
   { path: '/economy/wealth', viewers: ['anon'] },
   { path: '/economy/taxation', viewers: ['anon'] },
   { path: '/money-flow', viewers: ['anon'] },
   { path: '/government', viewers: ['anon', 'government'] },
   { path: '/government?view=fines', viewers: ['admin'] },
   { path: '/transactions', viewers: ['anon', 'moderator'] },
+  { path: '/transactions?f=plugin:in:treasury&f=amount:gt:50', viewers: ['moderator'] },
+  { path: '/transactions?txn=3', viewers: ['admin'] },
   { path: '/transactions/1', viewers: ['admin'] },
   { path: '/search?q=Alice', viewers: ['anon'] },
+  { path: '/search?q=acme&type=firms', viewers: ['anon'] },
   { path: '/me', viewers: ['anon', 'player'] },
   { path: '/me/market', viewers: ['player'] },
-  { path: '/me/webhooks', viewers: ['player'] },
+  { path: '/me/developer/webhooks', viewers: ['player'] },
   { path: '/link', viewers: ['player'] },
   { path: '/docs', viewers: ['anon'] },
   { path: '/docs/guides/tax', viewers: ['anon'] },
   { path: '/admin', viewers: ['admin'] },
   { path: '/admin/accounts', viewers: ['admin'] },
   { path: '/admin/api-keys', viewers: ['admin'] },
+  { path: '/admin/audit', viewers: ['admin', 'moderator'] },
   { path: '/admin/firms', viewers: ['admin'] },
+  { path: '/admin/firms?q=a', viewers: ['admin'] },
+  { path: '/admin/firms/1', viewers: ['admin'] },
   { path: '/admin/groups', viewers: ['admin'] },
   { path: '/admin/groups/1', viewers: ['admin'] },
   { path: '/admin/players', viewers: ['admin'] },
+  { path: '/admin/players/00000000-0000-0000-0000-00000000a1ce', viewers: ['admin'] },
+  { path: '/admin/role-grants', viewers: ['admin'] },
   { path: '/admin/roles', viewers: ['admin'] },
   { path: '/admin/roles/player', viewers: ['admin'] },
   { path: '/admin/webhooks', viewers: ['admin'] },
@@ -71,9 +80,9 @@ for (const route of ROUTES) {
       if (viewer !== 'anon') await context.addCookies([{ name: 'e2e_viewer', value: viewer, url: baseURL }]);
       await visit(page, route.path);
       // Recharts mounts after hydration. Include its slices in the wealth scan
-      // rather than occasionally checking only the empty server placeholder.
+      // rather than occasionally checking only the empty server placeholder (the balance bands).
       if (route.path === '/economy/wealth') {
-        await expect(page.locator('.recharts-pie-sector path')).toHaveCount(3);
+        await expect(page.locator('.recharts-bar-rectangle').first()).toBeVisible();
       }
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'])

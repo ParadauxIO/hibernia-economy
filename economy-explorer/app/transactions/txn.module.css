@@ -1,0 +1,14 @@
+/* Rhythm for the transaction detail, in the drawer and on its own page. */
+.body {
+    display: grid;
+    gap: var(--space-8);
+    min-width: 0;
+}
+.drawer {
+    margin-top: var(--space-5);
+}
+.follow {
+    display: grid;
+    gap: var(--space-6);
+    min-width: 0;
+}

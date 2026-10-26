@@ -42,6 +42,7 @@ class AccountServiceImplTest {
 
     private AccountMapper mapper;
     private FakeBusinessAccounts business;
+    private io.paradaux.treasury.api.TreasuryApi treasury;
     private SignService signService;
     private io.paradaux.chestshop.services.AdminBypassService adminBypass;
     private ChestShopConfiguration config;
@@ -59,7 +60,10 @@ class AccountServiceImplTest {
         lenient().when(config.getAdminShopName()).thenReturn("Server");
         lenient().when(config.getServerEconomyAccount()).thenReturn("");
         lenient().when(config.getServerEconomyAccountUuid()).thenReturn(new UUID(0, 0));
-        service = new AccountServiceImpl(mapper, business, config, signService, adminBypass);
+        treasury = mock(io.paradaux.treasury.api.TreasuryApi.class);
+        GovernmentAccountServiceImpl government = new GovernmentAccountServiceImpl(config);
+        government.bind(treasury);
+        service = new AccountServiceImpl(mapper, business, government, config, signService, adminBypass);
     }
 
     private Player player(String name, UUID id) {
@@ -529,6 +533,69 @@ class AccountServiceImplTest {
         business.resolve = name -> biz;
         business.canAccess = (pl, ac) -> true;
         assertThat(service.isOwner(p, signOwned("B:5"))).isTrue();
+    }
+
+    // ── government accounts (PAR-529) ─────────────────────────────────────────
+
+    private static io.paradaux.treasury.model.economy.Account governmentAccount(int id, String name) {
+        io.paradaux.treasury.model.economy.Account a = new io.paradaux.treasury.model.economy.Account();
+        a.setAccountId(id);
+        a.setDisplayName(name);
+        a.setAccountType(io.paradaux.treasury.model.economy.AccountType.GOVERNMENT);
+        return a;
+    }
+
+    @Test
+    void canUseName_governmentAccount_requiresThatAccountsNode() {
+        try (MockedStatic<ChestShop> cs = mockStatic(ChestShop.class)) {
+            Player p = player("Notch", UUID.randomUUID());
+            when(treasury.getGovernmentAccountByName("GovJustice")).thenReturn(governmentAccount(29862, "GovJustice"));
+
+            assertThat(service.canUseName(p, Permissions.OTHER_NAME_CREATE, "G:GovJustice"))
+                    .isFalse();
+            // Another department's node does not grant this one.
+            when(p.hasPermission("chestshop.government.govhealth")).thenReturn(true);
+            assertThat(service.canUseName(p, Permissions.OTHER_NAME_CREATE, "G:GovJustice"))
+                    .isFalse();
+
+            when(p.hasPermission("chestshop.government.govjustice")).thenReturn(true);
+            assertThat(service.canUseName(p, Permissions.OTHER_NAME_CREATE, "G:GovJustice"))
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void canUseName_governmentAccount_ignoresOtherNameShortcut() {
+        try (MockedStatic<ChestShop> cs = mockStatic(ChestShop.class)) {
+            // ChestShop.othername.* names players; it must not stand in for a government grant.
+            Player p = player("Notch", UUID.randomUUID());
+            when(adminBypass.otherName(any(Player.class), anyString(), anyString()))
+                    .thenReturn(true);
+            when(treasury.getGovernmentAccountByName("GovJustice")).thenReturn(governmentAccount(29862, "GovJustice"));
+
+            assertThat(service.canUseName(p, Permissions.OTHER_NAME_CREATE, "G:GovJustice"))
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void resolveAccount_unknownGovernmentTokenNeverFallsBackToAPlayer() {
+        Account player = new Account("G:Nobody", "G:Nobody", UUID.randomUUID());
+        lenient().when(mapper.findByShortName("G:Nobody")).thenReturn(player);
+
+        assertThat(service.resolveAccount("G:Nobody")).isNull();
+    }
+
+    @Test
+    void isOwner_governmentAccount_checksPermissionNotUuid() {
+        try (MockedStatic<ChestShop> cs = mockStatic(ChestShop.class)) {
+            Player p = player("Notch", UUID.randomUUID());
+            when(treasury.getGovernmentAccountByName("GovJustice")).thenReturn(governmentAccount(29862, "GovJustice"));
+            assertThat(service.isOwner(p, signOwned("G:GovJustice"))).isFalse();
+
+            when(p.hasPermission("ChestShop.government.*")).thenReturn(true);
+            assertThat(service.isOwner(p, signOwned("G:GovJustice"))).isTrue();
+        }
     }
 
     @Test

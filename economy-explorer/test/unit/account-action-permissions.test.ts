@@ -4,7 +4,8 @@ import { renameAccountAction, adminTransferAction, archiveAccountAction, changeA
 import { renameAccount, adminTransfer, archiveAccount, changeAccountOwner } from '@/lib/treasury';
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 vi.mock('@/lib/treasury', () => ({ renameAccount: vi.fn(), adminTransfer: vi.fn(), archiveAccount: vi.fn(), unarchiveAccount: vi.fn(), changeAccountOwner: vi.fn() }));
-vi.mock('@/lib/audit', () => ({ auditView: vi.fn() }));
+vi.mock('@/lib/audit', () => ({ auditView: vi.fn(), auditMutation: vi.fn() }));
+vi.mock('@/lib/sql/ledger', () => ({ findAccount: vi.fn(), canReadAccount: vi.fn(), findTransactionAccountIds: vi.fn(), findReadableAccountIds: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 beforeEach(() => {
   vi.resetAllMocks();
