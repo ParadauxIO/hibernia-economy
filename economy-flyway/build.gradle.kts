@@ -8,7 +8,7 @@ buildscript {
     repositories { mavenCentral() }
     dependencies {
         classpath("org.flywaydb:flyway-mysql:13.11.1")
-        classpath("com.mysql:mysql-connector-j:9.4.0")
+        classpath("com.mysql:mysql-connector-j:26.10.0")
     }
 }
 
