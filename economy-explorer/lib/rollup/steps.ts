@@ -137,7 +137,8 @@ async function pairMonth(trx: Executor, b: Bounds): Promise<number> {
 
 /**
  * Bridge-pair CTEs for outgoing legs settled in [start, end), ported from
- * lib/sql/bridgeAnalytics.ts (PAR-159) with an explicit upper bound instead of
+ * the live query of PAR-159 (now the test oracle in
+ * test/integration/reference/liveBridgeVolume.ts) with an explicit upper bound instead of
  * NOW(). The bound cannot change which pairs match: a posting settled after
  * `end` that sits between a credit and its debit is still found by
  * bridge_blocked, which probes every posting in the SYSTEM account.
