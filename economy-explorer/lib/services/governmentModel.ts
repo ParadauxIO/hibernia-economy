@@ -337,7 +337,7 @@ export interface PayrollRun {
   total: string;
   /** Minutes since the previous run started; null for the first. */
   gapMinutes: number | null;
-  status: 'ok' | 'late' | 'missed' | 'duplicate';
+  status: 'ok' | 'late' | 'missed' | 'duplicate' | 'resumed';
   /** Runs the gap before this one is long enough to have skipped. */
   missedBefore: number;
 }
@@ -348,17 +348,23 @@ export interface PayrollAnalysis {
   cadenceMinutes: number | null;
   missed: number;
   duplicates: number;
+  /** Gaps too long to be missed runs: payroll was paused (server down, nobody to pay). */
+  pauses: number;
 }
 
 const MINUTE_MS = 60_000;
+/** A gap longer than this many cadences is a pause, not a run of missed runs. */
+export const PAUSE_CADENCES = 12;
 
 /**
  * Groups salary payouts into runs and checks the cadence. Payouts in minutes
  * closer together than `joinMinutes` belong to one run (a run that straddles a
  * minute boundary). The cadence is the median gap between run starts; a gap
  * over 1.5× the cadence means runs were missed (⌊gap / cadence + 0.5⌋ − 1 of
- * them), and a run starting less than half a cadence after the previous one
- * is a duplicate. Fewer than three runs give no cadence and no verdicts.
+ * them), up to PAUSE_CADENCES: beyond that payroll was paused, and the run
+ * that ends the gap is "resumed" rather than counting hundreds of misses. A
+ * run starting less than half a cadence after the previous one is a
+ * duplicate. Fewer than three runs give no cadence and no verdicts.
  */
 export function analysePayroll(buckets: readonly PayoutBucket[], joinMinutes = 2): PayrollAnalysis {
   const sorted = [...buckets].sort((a, b) => a.at.localeCompare(b.at));
@@ -380,6 +386,7 @@ export function analysePayroll(buckets: readonly PayoutBucket[], joinMinutes = 2
   const cadence = gaps.length >= 2 ? median(gaps) : null;
   let missed = 0;
   let duplicates = 0;
+  let pauses = 0;
   const runs = grouped.map((r, i): PayrollRun => {
     const gap = i === 0 ? null : (gaps[i - 1] as number);
     let status: PayrollRun['status'] = 'ok';
@@ -388,6 +395,9 @@ export function analysePayroll(buckets: readonly PayoutBucket[], joinMinutes = 2
       if (gap < cadence * 0.5) {
         status = 'duplicate';
         duplicates++;
+      } else if (gap > cadence * PAUSE_CADENCES) {
+        status = 'resumed';
+        pauses++;
       } else if (gap > cadence * 1.5) {
         missedBefore = Math.max(1, Math.floor(gap / cadence + 0.5) - 1);
         status = 'missed';
@@ -401,7 +411,7 @@ export function analysePayroll(buckets: readonly PayoutBucket[], joinMinutes = 2
       total: toDbString(r.total), gapMinutes: gap === null ? null : Math.round(gap * 10) / 10, status, missedBefore,
     };
   });
-  return { runs, cadenceMinutes: cadence === null ? null : Math.round(cadence * 10) / 10, missed, duplicates };
+  return { runs, cadenceMinutes: cadence === null ? null : Math.round(cadence * 10) / 10, missed, duplicates, pauses };
 }
 
 function median(values: readonly number[]): number {

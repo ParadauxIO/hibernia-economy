@@ -120,6 +120,15 @@ describe('analysePayroll', () => {
     expect(a.duplicates).toBe(1);
   });
 
+  it('treats a gap of many cadences as a pause, not hundreds of missed runs', () => {
+    const a = analysePayroll([run(0), run(15), run(30), run(45), run(60 * 24), run(60 * 24 + 15), run(60 * 24 + 30)]);
+    expect(a.runs.find((r) => r.start === at(60 * 24))).toMatchObject({ status: 'resumed', missedBefore: 0 });
+    expect(a).toMatchObject({ missed: 0, pauses: 1, cadenceMinutes: 15 });
+    // Twelve cadences is still a run of misses (11 of them).
+    const edge = analysePayroll([run(0), run(15), run(30), run(45), run(45 + 180), run(45 + 195)]);
+    expect(edge).toMatchObject({ missed: 11, pauses: 0 });
+  });
+
   it('calls a slightly long gap late, not missed', () => {
     const a = analysePayroll([run(0), run(15), run(30), run(50), run(65), run(80)]);
     expect(a.runs.find((r) => r.start === at(50))?.status).toBe('late');

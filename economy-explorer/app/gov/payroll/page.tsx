@@ -16,7 +16,7 @@ export async function generateMetadata() {
 
 const RouterLink: LinkComponent = Link;
 const PAGE = 50;
-const STATUS_LABEL: Record<PayrollRun['status'], string> = { ok: 'On time', late: 'Late', missed: 'After missed runs', duplicate: 'Possible duplicate' };
+const STATUS_LABEL: Record<PayrollRun['status'], string> = { ok: 'On time', late: 'Late', missed: 'After missed runs', duplicate: 'Possible duplicate', resumed: 'Resumed after a pause' };
 
 const runColumns: Column<PayrollRun>[] = [
   { key: 'start', header: 'Run', cell: (r) => <When value={r.start} time relative={false} /> },
@@ -57,8 +57,8 @@ export default async function GovPayrollPage({ searchParams }: { searchParams: P
           <MetricCard label="Wages paid" value={<Money value={p.total} />} meta={page.range.label} />
           <MetricCard label="Payments" value={<Num value={p.payments} />} />
           <MetricCard label="Runs" value={<Num value={a.runs.length} />} meta={a.cadenceMinutes ? `about every ${a.cadenceMinutes} min` : 'cadence not established'} />
-          <MetricCard label="Missed runs" value={<Num value={a.missed} />} info="A gap between runs longer than one and a half times the usual cadence counts the runs that should have happened in it." />
-          <MetricCard label="Possible duplicates" value={<Num value={a.duplicates} />} info="A run that started less than half a cadence after the previous one." />
+          <MetricCard label="Missed runs" value={<Num value={a.missed} />} info="A gap between runs longer than one and a half times the usual cadence counts the runs that should have happened in it. Gaps of more than twelve cadences are pauses and are not counted." />
+          <MetricCard label="Possible duplicates" value={<Num value={a.duplicates} />} info="A run that started less than half a cadence after the previous one." meta={a.pauses ? `${a.pauses} pause${a.pauses === 1 ? '' : 's'} not counted as missed` : undefined} />
         </MetricRow>
 
         <Section title="Wages by day" description={<>Paid by the selected accounts. <Freshness coverage={p.coverage} /></>}>

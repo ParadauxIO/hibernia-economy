@@ -108,10 +108,10 @@ export function PartyRef({ row }: { row: { account_id: number; display_name: str
   if (row.account_type === 'PERSONAL') {
     return <span className="gov-party">
       <PlayerRef uuid={row.owner_uuid} name={row.owner_name} />
-      {row.account_id > 0 && <Link href={`/accounts/${row.account_id}` as Route} prefetch={false} className="dt-sub" title="Personal account">#{row.account_id}</Link>}
+      {row.account_id > 0 && <span className="dt-sub">· <Link href={`/accounts/${row.account_id}` as Route} prefetch={false}>account #{row.account_id}</Link></span>}
     </span>;
   }
   return <AccountRef id={row.account_id} name={row.display_name} type={row.account_type} />;
 }
 
-export const STATUS_TONE: Record<'ok' | 'late' | 'missed' | 'duplicate', 'neutral' | 'pos' | 'neg' | 'warn' | 'accent'> ={ ok: 'neutral', late: 'warn', missed: 'neg', duplicate: 'warn' };
+export const STATUS_TONE: Record<'ok' | 'late' | 'missed' | 'duplicate' | 'resumed', 'neutral' | 'pos' | 'neg' | 'warn' | 'accent'> = { ok: 'neutral', late: 'warn', missed: 'neg', duplicate: 'warn', resumed: 'accent' };
