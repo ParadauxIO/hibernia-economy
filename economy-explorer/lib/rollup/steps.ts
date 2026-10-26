@@ -88,12 +88,23 @@ async function accountDay(trx: Executor, b: Bounds): Promise<number> {
 // the day (before or after the rebuild) is then re-summed from pair_day, so a
 // recompute never rescans a month of ledger. Pairwise amounts are
 // LEAST(|own leg|, |other leg|), exact for two-leg transfers.
+//
+// The worker's DB user has DML only (no CREATE TEMPORARY TABLES, no DDL), so
+// the touched-account set is held in Node rather than in a temporary table. It
+// is bounded by the accounts active in one day and goes back to the database in
+// IN lists of at most PAIR_ACCOUNT_CHUNK ids, so no statement grows with it.
+const PAIR_ACCOUNT_CHUNK = 1000;
+
+async function pairDayAccounts(trx: Executor, day: string): Promise<number[]> {
+  const r = await sql<{ account_id: number }>`
+    SELECT DISTINCT account_id FROM explorer_rollup_pair_day WHERE day = ${day}`.execute(trx);
+  return r.rows.map((row) => Number(row.account_id));
+}
+
 async function pairMonth(trx: Executor, b: Bounds): Promise<number> {
   const month = monthStart(b.day);
   const last = monthEnd(b.day);
-  await sql`DROP TEMPORARY TABLE IF EXISTS rollup_pair_accounts`.execute(trx);
-  await sql`CREATE TEMPORARY TABLE rollup_pair_accounts (account_id INT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=MEMORY
-    SELECT DISTINCT account_id FROM explorer_rollup_pair_day WHERE day = ${b.day}`.execute(trx);
+  const touched = new Set(await pairDayAccounts(trx, b.day));
   await sql`DELETE FROM explorer_rollup_pair_day WHERE day = ${b.day}`.execute(trx);
   const rows = await run(trx, sql`
     INSERT INTO explorer_rollup_pair_day (account_id, day, counterparty_id, inflow, outflow, txn_count)
@@ -108,20 +119,19 @@ async function pairMonth(trx: Executor, b: Bounds): Promise<number> {
     WHERE t.settlement_time >= ${b.start} AND t.settlement_time < ${b.end} AND me.amount <> 0
     GROUP BY me.account_id, other.account_id
   `);
-  await sql`INSERT IGNORE INTO rollup_pair_accounts (account_id)
-    SELECT DISTINCT account_id FROM explorer_rollup_pair_day WHERE day = ${b.day}`.execute(trx);
-  await sql`DELETE pm FROM explorer_rollup_pair_month pm
-    JOIN rollup_pair_accounts touched ON touched.account_id = pm.account_id
-    WHERE pm.month = ${month}`.execute(trx);
-  await sql`
-    INSERT INTO explorer_rollup_pair_month (account_id, counterparty_id, month, inflow, outflow, txn_count)
-    SELECT pd.account_id, pd.counterparty_id, ${month}, SUM(pd.inflow), SUM(pd.outflow), SUM(pd.txn_count)
-    FROM rollup_pair_accounts touched
-    STRAIGHT_JOIN explorer_rollup_pair_day pd ON pd.account_id = touched.account_id
-      AND pd.day BETWEEN ${month} AND ${last}
-    GROUP BY pd.account_id, pd.counterparty_id
-  `.execute(trx);
-  await sql`DROP TEMPORARY TABLE IF EXISTS rollup_pair_accounts`.execute(trx);
+  for (const id of await pairDayAccounts(trx, b.day)) touched.add(id);
+  const accounts = [...touched].sort((x, y) => x - y);
+  for (let i = 0; i < accounts.length; i += PAIR_ACCOUNT_CHUNK) {
+    const ids = sql.join(accounts.slice(i, i + PAIR_ACCOUNT_CHUNK));
+    await sql`DELETE FROM explorer_rollup_pair_month WHERE month = ${month} AND account_id IN (${ids})`.execute(trx);
+    await sql`
+      INSERT INTO explorer_rollup_pair_month (account_id, counterparty_id, month, inflow, outflow, txn_count)
+      SELECT pd.account_id, pd.counterparty_id, ${month}, SUM(pd.inflow), SUM(pd.outflow), SUM(pd.txn_count)
+      FROM explorer_rollup_pair_day pd
+      WHERE pd.account_id IN (${ids}) AND pd.day BETWEEN ${month} AND ${last}
+      GROUP BY pd.account_id, pd.counterparty_id
+    `.execute(trx);
+  }
   return rows;
 }
 

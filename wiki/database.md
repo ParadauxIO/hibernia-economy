@@ -103,6 +103,11 @@ them; nothing else does.
   (`ROLLUP_DB_STMT_TIMEOUT_S`). `READ COMMITTED` matters: InnoDB then reads the
   ledger as a consistent snapshot, without the shared next-key locks that would
   make ledger writers wait.
+- **Privileges.** The worker needs `SELECT` on the ledger and economy tables
+  and `SELECT, INSERT, UPDATE, DELETE` on `explorer_*`, nothing else: no
+  temporary tables, DDL or locks. `pair_month` keeps its touched-account set in
+  Node and sends it back in `IN` lists of 1,000. `rollup.test.ts` runs the worker
+  as a user with exactly those grants.
 - **Schedule.** Tuned for the shared production database; every interval is an
   environment variable (see `.env.example`).
   - Every tick (`ROLLUP_TICK_MS`, default 5 minutes, so rollups lag by at most
