@@ -27,7 +27,7 @@ class SystemWalletCompatibilityIT extends EmbeddedDbIT {
 
         assertThat(accounts.rename(operator, 1L, "Renamed SYSTEM label").getDisplayName())
                 .isEqualTo("Renamed SYSTEM label");
-        var transfer = transfers.adminTransfer(operator, 1L, 2L, "40.00", "Compatibility fixture", null);
+        var transfer = transfers.adminTransfer(operator, null, 1L, 2L, "40.00", "Compatibility fixture", null);
         assertThat(transfer.fromAccountId()).isEqualTo(1L);
         assertThat(transfer.toAccountId()).isEqualTo(2L);
         assertThat(matBalance(1)).isEqualByComparingTo("60.00");
