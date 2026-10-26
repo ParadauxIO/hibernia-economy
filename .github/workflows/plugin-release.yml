@@ -12,19 +12,26 @@ permissions:
 # replace pending runs. Unique versions let builds finish independently; releases
 # never update a mutable latest pointer. Staging jobs serialize per target.
 jobs:
-  test:
+  ci:
+    name: Require full CI for release commit
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/jvm-check.yml
-    with:
-      check-name: Economy release tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
     permissions:
       contents: read
-      checks: write
+      actions: read
+    steps:
+      - name: Checkout CI gate tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Wait for this commit's full main-push CI and ci-gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ops/plugin-deploy/ci_gate.py
 
   publish:
     outputs:
       version: ${{ steps.release.outputs.version }}
-    needs: test
+    needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

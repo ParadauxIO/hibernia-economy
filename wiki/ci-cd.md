@@ -102,7 +102,7 @@ applies. Guard regression tests run in the Migrations job.
 |---|---|---|
 | `jvm-check` / `explorer-check` | `workflow_call` only | The reusable JVM and explorer test jobs. `ci.yml` calls them, and so do the publish/image workflows, so a release is gated on the same job definition as a merge. |
 | `treasury-publish-api` / `business-publish-api` | push to `develop` | `jvm-check` on that API's projects, then publish the `*-api` snapshot. Manual runs are restricted to `develop`. |
-| `plugin-release` | every push to `main`, manual on `main` | Full JVM build/check, publish all four plugins and both API libraries with one generated version, then SFTP-stage enabled targets for their next restart. |
+| `plugin-release` | every push to `main`, manual on `main` | Wait for the exact commit’s full main-push CI and `ci-gate`, publish all four plugins and both API libraries, then SFTP-stage enabled targets for their next restart. |
 | `treasury-rest-api-docker` | push to `main`/`develop` | `jvm-check` on `:treasury-rest-api:check`, then build and push the image to **Harbor**. |
 | `economy-explorer-docker` | push to `main`/`develop`, manual | `explorer-check`, then build and push the image to **Harbor**. |
 | `economy-flyway-info` / `-migrate` / `-staging-clean` | manual (`workflow_dispatch`) | Gated schema operations (see [database.md](database.md)). Info's `flywayValidate` ignores pending migrations and fails on anything else. |
@@ -238,8 +238,16 @@ should follow the `:<project>:<task>` form.
 
 ## Production plugin staging on merge
 
-`plugin-release.yml` publishes an immutable release for each `main` push. Its
-`stage` jobs download that exact release and stage the four economy plugins via
+`plugin-release.yml` waits for the exact commit's `ci.yml` **push to main** run
+and its `ci-gate` job to succeed before publishing an immutable release. This
+covers the full main CI pipeline, including JVM, mutation, explorer, migration
+and live integration suites. It replaces the release workflow's duplicate JVM-only
+check. PR runs, develop runs and filtered manual CI runs cannot authorize a release.
+Manual release runs and retries use the same gate. Failed/cancelled CI, missing or
+skipped gates, API errors and a 100-minute wait timeout block publication and
+staging. After fixing/rerunning CI, retry the release workflow for that commit.
+
+Its `stage` jobs download that exact release and stage the four economy plugins via
 SFTP. They do not restart the server or connect to its database. Treasury applies
 its bundled `economy-flyway` migrations when the server next starts, before
 creating its application pool, injector, accounts or API registrations.
