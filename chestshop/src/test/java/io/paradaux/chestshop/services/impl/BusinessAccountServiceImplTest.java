@@ -16,6 +16,7 @@ import io.paradaux.business.model.RolePermission;
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.utils.BusinessAccountUtil;
 import io.paradaux.treasury.api.TreasuryApi;
+import io.paradaux.treasury.model.economy.AccountType;
 import java.util.Locale;
 import java.util.UUID;
 import org.bukkit.entity.Player;
@@ -46,9 +47,15 @@ class BusinessAccountServiceImplTest {
     }
 
     private static io.paradaux.treasury.model.economy.Account treasuryAccount(int id, String display) {
+        return treasuryAccount(id, display, AccountType.BUSINESS);
+    }
+
+    private static io.paradaux.treasury.model.economy.Account treasuryAccount(
+            int id, String display, AccountType type) {
         io.paradaux.treasury.model.economy.Account a = new io.paradaux.treasury.model.economy.Account();
         a.setAccountId(id);
         a.setDisplayName(display);
+        a.setAccountType(type);
         return a;
     }
 
@@ -73,6 +80,39 @@ class BusinessAccountServiceImplTest {
         assertThat(account.getName()).isEqualTo("Acme Corp");
         assertThat(account.getShortName()).isEqualTo("B:1A");
         assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(
+            value = AccountType.class,
+            names = {"PERSONAL", "GOVERNMENT", "SYSTEM"})
+    void resolve_nativeIdRefusesNonBusinessAccounts(AccountType type) {
+        // ADT-220: B:<id> must not let a shop pay out of a player's or government's account.
+        service.bind(treasury, business);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "Victim", type));
+
+        assertThat(service.resolveBusinessAccount("B:1A")).isNull();
+    }
+
+    @Test
+    void resolve_nativeIdKeepsArchivedBusinessWalletForStockRecovery() {
+        service.bind(treasury, business);
+        var archived = treasuryAccount(46, "Disbanded");
+        archived.setArchived(true);
+        when(treasury.getAccountById(46)).thenReturn(archived);
+
+        assertThat(service.resolveBusinessAccount("B:1A")).isNotNull();
+    }
+
+    @Test
+    void resolve_legacyFirmNameRefusesNonBusinessDefaultAccount() {
+        service.bind(treasury, business);
+        Firm firm = mock(Firm.class);
+        when(firm.getDefaultAccountId()).thenReturn(7);
+        when(firms.getFirm("My Shop")).thenReturn(firm);
+        when(treasury.getAccountById(7)).thenReturn(treasuryAccount(7, "Someone", AccountType.PERSONAL));
+
+        assertThat(service.resolveBusinessAccount("B:My Shop")).isNull();
     }
 
     @Test
@@ -170,10 +210,10 @@ class BusinessAccountServiceImplTest {
         firm.setDefaultAccountId(99); // The shop wallet is not the firm's default account.
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
 
-        Account account = service.resolveBusinessAccount("B:@acme");
+        Account account = service.resolveBusinessAccount("A:acme");
 
         assertThat(account.getName()).isEqualTo("Acme Hardware");
-        assertThat(account.getShortName()).isEqualTo("B:@acme");
+        assertThat(account.getShortName()).isEqualTo("A:acme");
         assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
     }
 
@@ -273,9 +313,25 @@ class BusinessAccountServiceImplTest {
         UUID pid = UUID.randomUUID();
         when(staff.hasPermissionForAccount(anyInt(), any(), any())).thenReturn(false);
         when(firms.getFirmByAccountId(5)).thenReturn(null); // disbanded -> left accessible
+        when(treasury.getAccountById(5)).thenReturn(treasuryAccount(5, "Disbanded"));
 
         assertThat(service.canAccessBusinessAccount(player(pid), businessAccount(5)))
                 .isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(
+            value = AccountType.class,
+            names = {"PERSONAL", "GOVERNMENT", "SYSTEM"})
+    void access_unownedFallbackRefusesNonBusinessAccounts(AccountType type) {
+        // ADT-220: no firm owns a personal or government account; that must not read as "disbanded".
+        service.bind(treasury, business);
+        when(staff.hasPermissionForAccount(anyInt(), any(), any())).thenReturn(false);
+        when(firms.getFirmByAccountId(5)).thenReturn(null);
+        when(treasury.getAccountById(5)).thenReturn(treasuryAccount(5, "Victim", type));
+
+        assertThat(service.canAccessBusinessAccount(player(UUID.randomUUID()), businessAccount(5)))
+                .isFalse();
     }
 
     @Test
@@ -325,33 +381,55 @@ class BusinessAccountServiceImplTest {
         service.bind(treasury, business);
         when(firms.resolveShopAlias("acme")).thenReturn(46);
         when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "Acme"));
-        Account result = service.resolveBusinessAccount("b:@acme");
-        assertThat(result.getShortName()).isEqualTo("B:@acme");
+        Account result = service.resolveBusinessAccount("a:acme");
+        assertThat(result.getShortName()).isEqualTo("A:acme");
         assertThat(result.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
         when(firms.resolveShopAlias("missing")).thenReturn(null);
-        assertThat(service.resolveBusinessAccount("B:@missing")).isNull();
+        assertThat(service.resolveBusinessAccount("A:missing")).isNull();
         org.mockito.Mockito.verify(firms, org.mockito.Mockito.never()).getFirm(any());
     }
 
     @Test
     void resolve_aliasRequiresBusinessAndLiveAccount() {
         service.bind(treasury, null);
-        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        assertThat(service.resolveBusinessAccount("A:acme")).isNull();
         service.bind(treasury, business);
         when(firms.resolveShopAlias("acme")).thenReturn(46);
-        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        assertThat(service.resolveBusinessAccount("A:acme")).isNull();
         var account = treasuryAccount(46, "Acme");
         account.setArchived(true);
         when(treasury.getAccountById(46)).thenReturn(account);
-        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        assertThat(service.resolveBusinessAccount("A:acme")).isNull();
     }
 
     @Test
     void resolve_aliasRejectsDigitsAndPunctuationBeforeLookup() {
         service.bind(treasury, business);
         for (String alias : java.util.List.of("123", "acme1", "ac1me", "1acme", "acme-shop", "acme_shop", "")) {
-            assertThat(service.resolveBusinessAccount("B:@" + alias)).isNull();
+            assertThat(service.resolveBusinessAccount("A:" + alias)).isNull();
         }
         org.mockito.Mockito.verifyNoInteractions(firms, treasury);
+    }
+
+    @Test
+    void resolve_retiredAtAliasFormNoLongerResolves() {
+        // PAR-528: B:@alias was replaced by A:alias outright.
+        service.bind(treasury, business);
+        lenient().when(firms.resolveShopAlias("acme")).thenReturn(46);
+        lenient().when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "Acme"));
+
+        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        org.mockito.Mockito.verify(firms, org.mockito.Mockito.never()).resolveShopAlias(any());
+    }
+
+    @Test
+    void access_grantedForAliasAccountByFirmStaffPermission() {
+        service.bind(treasury, business);
+        UUID pid = UUID.randomUUID();
+        when(staff.hasPermissionForAccount(eq(46), eq(pid), eq(RolePermission.CHESTSHOP)))
+                .thenReturn(true);
+
+        Account alias = new Account("Acme", "A:acme", BusinessAccountUtil.toBusinessUuid(46));
+        assertThat(service.canAccessBusinessAccount(player(pid), alias)).isTrue();
     }
 }

@@ -1,8 +1,7 @@
 package io.paradaux.chestshop.utils;
 
-import org.bukkit.command.CommandSender;
-
 import java.util.Locale;
+import org.bukkit.command.CommandSender;
 
 /**
  * ChestShop permission nodes + the pure permission helpers the framework's command
@@ -35,6 +34,8 @@ public final class Permissions {
     public static final String OTHER_NAME_DESTROY = "ChestShop.othername.destroy";
     public static final String OTHER_NAME_ACCESS = "ChestShop.othername.access";
     public static final String GROUP = "ChestShop.group.";
+    /** Prefix of the per-account government shop nodes: {@code ChestShop.government.<account name>} (PAR-529). */
+    public static final String GOVERNMENT = "ChestShop.government.";
 
     public static final String NOFEE = "ChestShop.nofee";
     public static final String NO_BUY_TAX = "ChestShop.notax.buy";
@@ -58,7 +59,7 @@ public final class Permissions {
      */
     public static boolean isGated(String node) {
         String n = node.toLowerCase(Locale.ROOT);
-        return n.startsWith("chestshop.admin")      // admin + adminshop
+        return n.startsWith("chestshop.admin") // admin + adminshop
                 || n.startsWith("chestshop.mod")
                 || n.startsWith("chestshop.name")
                 || n.startsWith("chestshop.othername")
@@ -70,6 +71,7 @@ public final class Permissions {
 
     public static boolean hasPermissionSetFalse(CommandSender sender, String permission) {
         return (sender.isPermissionSet(permission) && !sender.hasPermission(permission))
-                || (sender.isPermissionSet(permission.toLowerCase(Locale.ROOT)) && !sender.hasPermission(permission.toLowerCase(Locale.ROOT)));
+                || (sender.isPermissionSet(permission.toLowerCase(Locale.ROOT))
+                        && !sender.hasPermission(permission.toLowerCase(Locale.ROOT)));
     }
 }

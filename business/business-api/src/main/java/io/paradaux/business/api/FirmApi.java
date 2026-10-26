@@ -15,7 +15,7 @@ import org.jetbrains.annotations.Nullable;
 public interface FirmApi {
 
     /**
-     * Resolve a shop alias (without B:@) to a live firm's unarchived Treasury account.
+     * Resolve a shop alias (without the A: sign prefix) to a live firm's unarchived Treasury account.
      * Returns null for an unknown or inactive alias. Aliases are 1–12 ASCII letters, case-insensitive; existing API
      * implementations without alias support return null.
      */

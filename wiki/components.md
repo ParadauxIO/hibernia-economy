@@ -136,7 +136,7 @@ rather than silently reporting an incomplete list. No migration is needed.
 
 `FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's
 shop alias, or null. Business owns alias persistence and proprietor-only management;
-ChestShop resolves `B:@alias` through this API, checks normal shop access, and keeps
+ChestShop resolves `A:alias` through this API, checks normal shop access, and keeps
 that alias as the account's sign name. Its synthetic UUID still encodes the Treasury
 account ID for payments. Aliases contain 1–12 ASCII letters only. Changing or clearing
 an alias stops old signs from resolving; `firm_shop_alias_reservations` permanently

@@ -12,6 +12,7 @@ import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.services.ShopStockPublisher;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.services.WildcardItems;
 import io.paradaux.chestshop.utils.PriceUtil;
@@ -50,6 +51,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
     private final ShopBlockService shopBlockService;
     private final AccountService accounts;
     private final PreviewService previews;
+    private final ShopStockPublisher stockPublisher;
 
     @Inject
     public MarketSyncServiceImpl(
@@ -59,7 +61,8 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             SignService signService,
             ShopBlockService shopBlockService,
             AccountService accounts,
-            PreviewService previews) {
+            PreviewService previews,
+            ShopStockPublisher stockPublisher) {
         this.plugin = plugin;
         this.marketService = marketService;
         this.items = items;
@@ -67,6 +70,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
         this.shopBlockService = shopBlockService;
         this.accounts = accounts;
         this.previews = previews;
+        this.stockPublisher = stockPublisher;
     }
 
     // Invoked directly by TransactionService#process (was a @MONITOR Transaction listener).
@@ -101,6 +105,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
                     event.getSettlementTxnId()));
             if (!hideWildcard(sign, SignService.getItem(sign))) {
                 market.upsertShop(marketService.shop(sign, item, owner, shopStock, capacity));
+                stockPublisher.recorded(sign.getLocation(), shopStock, capacity);
             }
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
@@ -139,6 +144,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
                             SignService.getQuantity(lines),
                             stock,
                             capacity));
+            stockPublisher.recorded(sign.getLocation(), stock, capacity);
             Location l = sign.getLocation();
             previews.refresh(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
         } catch (Throwable t) {
@@ -154,6 +160,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             Location l = event.getSign().getLocation();
             previews.destroy(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
             marketService.market().deactivateShop(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
+            stockPublisher.forget(l);
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
         }
@@ -210,6 +217,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             Integer stock = inventory != null ? marketService.stockOf(item, inventory) : null;
             Integer capacity = inventory != null ? marketService.capacityOf(item, inventory) : null;
             marketService.market().upsertShop(marketService.shop(sign, item, owner, stock, capacity));
+            stockPublisher.recorded(sign.getLocation(), stock, capacity);
             return true;
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
@@ -233,6 +241,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
             }
             previews.destroy(world, x, y, z);
             marketService.market().deactivateShop(world, x, y, z);
+            stockPublisher.forget(world, x, y, z);
         } catch (Throwable t) {
             log.debug("market analytics hook failed (non-fatal)", t);
         }
@@ -250,6 +259,7 @@ public class MarketSyncServiceImpl implements MarketSyncService {
         Location l = sign.getLocation();
         previews.destroy(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
         marketService.market().deactivateShop(worldName(l), l.getBlockX(), l.getBlockY(), l.getBlockZ());
+        stockPublisher.forget(l);
         return true;
     }
 

@@ -58,8 +58,8 @@ buy and sell after changing these settings.
 | `SHOP_INTERACTION_INTERVAL` | `250` | Anti-spam cooldown between sign uses (ms). |
 | `IGNORE_CREATIVE_MODE` | `true` | Blocks creative-mode players from trading. **Keep on.** |
 | `ALLOW_FREE_SHOPS` | `false` | Reject free/zero-price shops when disabled. |
-| `USE_STOCK_COUNTER` | `false` | Show stock counts on shop signs. Hopper refreshes do not update finder/market database observations. |
-| `HOPPER_STOCK_REFRESH_INTERVAL_TICKS` | `100` | Wait from the first hopper change before recounting stock (about five seconds at 20 TPS). Batches drain across ticks, with at most 32 normal and 32 recovery containers per tick and separate 0.5 ms soft budgets. Values below 1 use 1; reload applies the interval to pending work. |
+| `USE_STOCK_COUNTER` | `false` | Show stock counts on shop signs. Hopper transfers also keep `/find` stock current whether or not this is on. |
+| `HOPPER_STOCK_REFRESH_INTERVAL_TICKS` | `100` | Wait from the first hopper change before recounting stock for the sign and `/find` (about five seconds at 20 TPS). Batches drain across ticks, with at most 32 normal and 32 recovery containers per tick and separate 0.5 ms soft budgets. Values below 1 use 1; reload applies the interval to pending work. |
 | `ALLOW_AUTO_ITEM_FILL` | `true` | Allows `?` on the item line to fill from the held item. |
 
 ## Admin shops & naming
@@ -70,6 +70,7 @@ buy and sell after changing these settings.
 | `FORCE_UNLIMITED_ADMIN_SHOP` | `false` | Makes admin shops unlimited even with a container attached. |
 | `TAX_AMOUNT` / `SERVER_TAX_AMOUNT` | `0` / `0` | Sales-tax percentages for ordinary / admin-server counterparties. |
 | `SERVER_ECONOMY_ACCOUNT` | *(empty)* | Optional server-shop account; blank uses the internal system account. |
+| `GOVERNMENT_SHOP_BLOCKED_ACCOUNTS` | `starting-balances`, `GovernmentFines`, `TreasuryIngest` | Government accounts that can never own a `G:` shop, whatever the creator's permissions. Use it for Treasury system accounts that create or absorb money. Names are case-insensitive. |
 
 ## Protection
 
