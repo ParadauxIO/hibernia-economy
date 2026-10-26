@@ -1,6 +1,6 @@
 // A firm's monthly statements (12 months, by category) as CSV or JSON. Same
-// gate as the Financials tab. TODO(POWER PAR-540): also register a
-// `firm-transactions` dataset with the export registry once it exists.
+// gate as the Financials tab. The firm's transactions export through the
+// registry instead (lib/export/datasets/firm-transactions.ts).
 import { canViewFirmFinancials, findFirmByDisplayName } from '@/lib/auth/access';
 import { getViewer } from '@/lib/auth/viewer';
 import { toCsv } from '@/lib/entityExport';

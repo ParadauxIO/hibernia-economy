@@ -31,6 +31,9 @@ import {
 import { getActivity, getAccountContext, getTransactionsPage, effectiveState } from '@/lib/services/account';
 import { getFirmFinancials, monthlyStatements } from '@/lib/services/firm';
 import { getPreview } from '@/lib/services/preview';
+import { getExport, resolveTable } from '@/lib/export/registry';
+import '@/lib/export/datasets/account-transactions';
+import '@/lib/export/datasets/firm-transactions';
 import { accountTxnsTable } from '@/lib/tables/accountTxns';
 import { playersTable } from '@/lib/tables/players';
 import { firmsTable } from '@/lib/tables/firms';
@@ -356,6 +359,44 @@ d('market', () => {
     expect((await listShopDirectory(state(shopsTable, 'f=owner:in:player'), 10, 0)).map((s) => s.sign_x)).toEqual([300]);
     expect((await listNewestShops(1))[0]?.sign_x).toBe(301);
     expect(await findShopItemsByPrefix('emer', 5)).toEqual([{ item_key: 'EMERALD', item_name: 'Emerald' }]);
+  });
+});
+
+d('export datasets', () => {
+  const viewer = (uuid: string, permissions: string[]) => ({
+    anon: false as const, keycloakSub: `t-${uuid.slice(-4)}`, minecraftUuid: uuid, minecraftName: null, linked: true,
+    role: 'player' as const, capabilities: ['player'], permissions,
+  }) as unknown as Parameters<NonNullable<ReturnType<typeof getExport>>['authorize']>[0];
+
+  it('exports an account’s filtered history to the people who can read it', async () => {
+    const def = getExport('account-transactions')!;
+    const table = await resolveTable(def);
+    const s = parseTableState(new URLSearchParams(`f=account:in:${ACCOUNT}&f=category:in:wages`), table);
+    expect(await def.authorize(viewer(ERIN, ['account.read']), s)).toBe(true);
+    expect(await def.authorize(viewer(BOB, ['account.read']), s)).toBe(false);
+    expect(await def.authorize(viewer(ERIN, ['account.read']), parseTableState(new URLSearchParams(''), table))).toBe(false);
+    const first = await def.rows(s, null, { limit: 5, viewer: viewer(ERIN, ['account.read']) });
+    expect(first.rows.map((r: { txnId: number }) => r.txnId)).toEqual([7030, 7028, 7026, 7024, 7022]);
+    const second = await def.rows(s, first.next, { limit: 50, viewer: viewer(ERIN, ['account.read']) });
+    expect(second.rows.every((r: { category: string }) => r.category === 'wages')).toBe(true);
+    expect(second.next).toBeNull();
+  });
+
+  it('exports a firm’s accounts one after another, for its finance staff', async () => {
+    const def = getExport('firm-transactions')!;
+    const s = parseTableState(new URLSearchParams('f=firm:in:1'), await resolveTable(def));
+    expect(await def.authorize(viewer(BOB, ['firm.financials.read']), s)).toBe(true);
+    expect(await def.authorize(viewer(CAROL, ['firm.financials.read']), s)).toBe(false);
+    const rows: { accountId: number; txnId: number }[] = [];
+    let cursor = null;
+    do {
+      const batch = await def.rows(s, cursor, { limit: 3, viewer: viewer(BOB, ['firm.financials.read']) });
+      rows.push(...batch.rows);
+      cursor = batch.next;
+    } while (cursor);
+    expect(rows.map((r) => r.accountId)).toEqual([...rows.filter((r) => r.accountId === 3), ...rows.filter((r) => r.accountId === 41)].map((r) => r.accountId));
+    expect(rows.filter((r) => r.accountId === 41).map((r) => r.txnId)).toEqual([7101]);
+    expect(rows.some((r) => r.accountId === 3 && r.txnId === 7015)).toBe(true);
   });
 });
 

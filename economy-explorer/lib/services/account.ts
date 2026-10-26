@@ -4,7 +4,7 @@ import { CATEGORY_LABELS, categorize, type AccountType, type Category } from '@/
 import { accountLabel } from '@/lib/format';
 import { parseMoney, toDbString } from '@/lib/money';
 import { addDays, utcDay, type DayRange } from '@/lib/rollup/days';
-import { decodeCursor, type KeysetCursor } from '@/lib/pagination/cursor';
+import { decodeCursor, encodeCursor, type KeysetCursor } from '@/lib/pagination/cursor';
 import {
   findAccountLabels, findNewerCursor, findScanEdge, findTxnBounds, historyIsFiltered, listAccountHistory,
   listTransactionLegs, sumPostingsSince, type HistoryLeg, type HistoryWindow,
@@ -323,6 +323,30 @@ export async function getTransactionsPage(
   if (cursor) newer = newerId === null ? 'first' : { at: cursor.at, id: newerId };
 
   return { rows: views, next, newer, searchedBackTo, implicitDays, runningBalance: base !== null, entityLabels };
+}
+
+// ── Exports ───────────────────────────────────────────────────────────────
+
+/** Scan windows one export batch may walk through before giving up on finding a match. */
+export const EXPORT_MAX_WINDOWS = 20;
+
+/**
+ * One batch of an account's history for the export route (lib/export): the
+ * same pages as the table, but larger, continuing from `cursor`. Filtered
+ * exports keep scanning windows until rows turn up or the history ends, up to
+ * EXPORT_MAX_WINDOWS windows (100k transactions) per batch; the route ends the
+ * file at the first empty batch.
+ */
+export async function exportAccountBatch(
+  account: ExplorerAccountRow, firmId: number | null, state: AccountTxnsState, cursor: KeysetCursor | null, limit: number,
+): Promise<{ rows: TxnView[]; next: KeysetCursor | null }> {
+  let at = cursor;
+  for (let i = 0; i < EXPORT_MAX_WINDOWS; i++) {
+    const page = await getTransactionsPage(account, firmId, { ...state, cursor: at ? encodeCursor(at) : null, limit });
+    if (page.rows.length > 0 || !page.next) return { rows: page.rows, next: page.next };
+    at = page.next;
+  }
+  return { rows: [], next: null };
 }
 
 // ── Counterparty typeahead ────────────────────────────────────────────────

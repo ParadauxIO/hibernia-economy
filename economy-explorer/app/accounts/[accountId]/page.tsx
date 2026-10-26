@@ -24,14 +24,15 @@ import { buildMetadata } from '@/lib/metadata';
 import { entityMetadata } from '@/lib/entityMetadata';
 import { toNumber, parseMoney } from '@/lib/money';
 import { payCommand } from '@/lib/payCommand';
-import { parseRange, rangeToParams, type ParsedRange } from '@/lib/range';
+import { parseRange, type ParsedRange } from '@/lib/range';
 import {
   change, getAccountContext, getActivity, getRangeHistory, getTransactionsPage,
   type AccountActivity, type AccountContext,
 } from '@/lib/services/account';
 import type { ExplorerAccountRow } from '@/lib/sql/ledger';
-import { accountTxnsTable, type AccountTxnsState } from '@/lib/tables/accountTxns';
-import { foreignParams, parseTableState, serializeTableState } from '@/lib/tables/core';
+import { accountTxnsExportTable, accountTxnsTable, type AccountTxnsState } from '@/lib/tables/accountTxns';
+import { exportHref, exportHrefs } from '@/lib/export/href';
+import { foreignParams, parseTableState } from '@/lib/tables/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,10 +125,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pa
       actions={<div className="entity-actions">
         <CopyButton value={path} label="Copy link" />
         {pay && <CopyButton value={pay} label="Copy /pay command" className="btn" title={pay} />}
-        {canSeeHistory && <ExportMenu hrefs={{
-          page: { csv: `${path}/export?${exportQuery(state, 'csv', sp)}`, json: `${path}/export?${exportQuery(state, 'json', sp)}` },
-          // TODO(POWER PAR-540): `all` from the export registry's account-transactions dataset.
-        }} />}
+        {canSeeHistory && <ExportMenu hrefs={exportLinks(id, state)} allDescription="Every transaction these filters select" />}
       </div>}
     />
 
@@ -162,9 +160,12 @@ export default async function AccountPage({ params, searchParams }: { params: Pa
   </>;
 }
 
-function exportQuery(state: AccountTxnsState, format: 'csv' | 'json', sp: Record<string, string | string[] | undefined>): string {
-  const qs = serializeTableState(state, accountTxnsTable);
-  return [qs, `format=${format}`, ...Object.entries(rangeToParams(parseRange(sp))).map(([k, v]) => `${k}=${encodeURIComponent(v)}`)].filter(Boolean).join('&');
+/** The export registry's account-transactions dataset, for this page and for every result (lib/export). */
+function exportLinks(id: number, state: AccountTxnsState) {
+  const exportState = { ...state, filters: [...state.filters, { field: 'account' as const, op: 'in' as const, values: [String(id)] }] };
+  const all = exportHrefs('account-transactions', exportState, accountTxnsExportTable).all;
+  const page = { csv: exportHref('account-transactions', exportState, accountTxnsExportTable, 'csv', 'page'), json: exportHref('account-transactions', exportState, accountTxnsExportTable, 'json', 'page') };
+  return { page, all };
 }
 
 /** Who holds the account. On business pages the firm comes first; the proprietor is a role, never the owner of the funds. */

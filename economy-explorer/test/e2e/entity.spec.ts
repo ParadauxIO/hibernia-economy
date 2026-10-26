@@ -51,7 +51,7 @@ test.describe('account page, logged out', () => {
   });
 
   test('exports need access', async ({ request }) => {
-    expect((await request.get('/accounts/1/export?format=csv')).status()).toBe(401);
+    expect((await request.get('/api/export/account-transactions?f=account:in:1&format=csv')).status()).toBe(401);
   });
 });
 
@@ -81,9 +81,11 @@ test.describe('account page, with access', () => {
     await expect(table.locator('tbody tr').first()).toContainText('−$500.00');
     await expect(page.getByRole('link', { name: 'Newer' })).toBeVisible();
 
-    const csv = await page.request.get('/accounts/1/export?format=csv');
+    // The Export menu goes through the export registry; another player's account is refused.
+    const csv = await page.request.get('/api/export/account-transactions?f=account:in:1&format=csv');
     expect(csv.status()).toBe(200);
-    expect(await csv.text()).toMatch(/^txn_id,settled_at,amount,balance_after,category/);
+    expect(await csv.text()).toMatch(/^\ufeff?Transaction,Settled \(UTC\),Amount,Balance after,Category/);
+    expect((await page.request.get('/api/export/account-transactions?f=account:in:2&format=csv')).status()).toBe(403);
   });
 });
 

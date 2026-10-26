@@ -16,6 +16,9 @@ import { parseRange, rangeToParams } from '@/lib/range';
 import { getFirmFinancials, type FirmFinancials, type MonthStatement } from '@/lib/services/firm';
 import type { FirmItemRow } from '@/lib/sql/firm';
 import { FirmHeader, loadFirm } from '../shared';
+import { exportHrefs } from '@/lib/export/href';
+import { firmTxnsExportTable } from '@/lib/tables/accountTxns';
+import { parseTableState } from '@/lib/tables/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +59,11 @@ export default async function FirmFinancialsPage({ params, searchParams }: { par
   const month = typeof sp.month === 'string' && fin.statements.some((s) => s.month === sp.month) ? sp.month : fin.statements[0]?.month ?? null;
   const statement = fin.statements.find((s) => s.month === month) ?? null;
   const rangeQs = new URLSearchParams(rangeToParams(range)).toString();
+  // The firm's transactions for this range, through the export registry (one account after another).
+  const txnExportState = { ...parseTableState({}, firmTxnsExportTable), filters: [
+    { field: 'firm' as const, op: 'in' as const, values: [String(loaded.firm.firm_id)] },
+    { field: 'date' as const, op: 'between' as const, values: [range.range.from, range.range.to] },
+  ] };
   const cats = fin.range.categories.data.filter((c) => c.category !== 'internal' && (c.inflow !== '0.00' || c.outflow !== '0.00'));
 
   return <>
@@ -70,7 +78,8 @@ export default async function FirmFinancialsPage({ params, searchParams }: { par
         empty="No money moved in this range." />
     </Section>
 
-    <Section title="Money in and out" description={range.label} divider>
+    <Section title="Money in and out" description={range.label} divider
+      actions={<ExportMenu label="Export transactions" hrefs={exportHrefs('firm-transactions', txnExportState, firmTxnsExportTable)} allDescription={`Every transaction on the firm's accounts, ${range.label.toLowerCase()}`} />}>
       <CoverageNote coverage={fin.range.days.coverage} />
       <InOutChart data={fin.range.days.data.map((d) => ({ day: d.day, cr: d.inflow, dr: d.outflow }))} />
     </Section>
