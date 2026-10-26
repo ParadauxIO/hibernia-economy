@@ -240,7 +240,7 @@ test('government account members can open related transactions from My data; rev
     await visit(page, '/me');
     await page.getByRole('link', { name: accountName, exact: true }).click();
     await page.getByRole('link', { name: `#${txnId}`, exact: true }).click();
-    await expect(page.getByRole('heading', { name: `Txn #${txnId}` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await expect(page.getByRole('link', { name: accountName, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Bob #2', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: '← My data', exact: true })).toBeVisible();
@@ -256,7 +256,7 @@ test('government account members can open related transactions from My data; rev
     await policy.conn.query("INSERT INTO account_group_access (account_id, lp_group, level, added_by_uuid_bin) VALUES (?, ?, 'VIEWER', ?)", [accountId, policy.key, bin(policy.admin)]);
     await policy.conn.query('INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin, synced_at) VALUES (?, ?, NOW())', [policy.key, bin(policy.player)]);
     await visit(page, `/transactions/${txnId}`);
-    await expect(page.getByRole('heading', { name: `Txn #${txnId}` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await policy.conn.query('UPDATE explorer_lp_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE player_uuid_bin = ?', [bin(policy.player)]);
     await visit(page, `/transactions/${txnId}`);
     await expect(page.locator('.privacy-gate')).toBeVisible();

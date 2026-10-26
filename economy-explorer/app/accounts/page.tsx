@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { DataTable, TableEmpty, TablePager, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
-import { CsvButton } from '@/components/CsvButton';
+import { ExportMenuForViewer } from '@/components/ExportMenuForViewer';
 import { FilterBar } from '@/components/FilterBar';
-import { JsonButton } from '@/components/JsonButton';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { CURRENCY_SYMBOL } from '@/lib/currency';
 import { accountLabel, fmtAmtFull, looksLikeUuid, shortenUuid } from '@/lib/format';
+import { exportHrefs } from '@/lib/export/href';
 import { buildMetadata } from '@/lib/metadata';
 import { getAccountsDirectory } from '@/lib/services/accountsDirectory';
 import type { ExplorerAccountRow } from '@/lib/sql/ledger';
@@ -99,24 +99,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
         columns={columnOptions(columns)}
         tableId={TABLE_ID}
         currency={CURRENCY_SYMBOL}
-        exportSlot={
-          <span className="toolbar-export">
-            <CsvButton
-              filename={`accounts-page-${state.page}.csv`}
-              headers={['Account ID', 'Type', 'Name', 'Owner', 'Owner UUID', 'Balance', 'Created']}
-              rows={rows.map((a) => [
-                a.account_id,
-                a.account_type,
-                accountLabel(a),
-                a.owner_name ?? '',
-                a.owner_uuid ?? '',
-                a.balance,
-                a.created_at.toISOString(),
-              ])}
-            />
-            <JsonButton filename={`accounts-page-${state.page}.json`} data={rows} />
-          </span>
-        }
+        exportSlot={<ExportMenuForViewer hrefs={exportHrefs('accounts', state, accountsTable)} allDescription={`${total.toLocaleString('en-US')} accounts`} />}
       />
 
       <DataTable

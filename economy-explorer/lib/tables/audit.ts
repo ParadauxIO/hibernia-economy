@@ -36,6 +36,7 @@ export const AUDIT_ACTIONS = [
   { action: 'role.delete', label: 'Role: delete' },
   { action: 'role.assign', label: 'Role: assign' },
   { action: 'role.unassign', label: 'Role: remove assignment' },
+  { action: 'export', label: 'Export' },
   { action: 'other', label: 'Other' },
 ] as const;
 

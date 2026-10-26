@@ -3,12 +3,13 @@ import type { Route } from 'next';
 import { PageHeader, Tag, When } from '@democracycraft/design-system';
 import { CursorPager } from '@democracycraft/design-system/next';
 import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
-import { CsvButton } from '@/components/CsvButton';
+import { ExportMenuForViewer } from '@/components/ExportMenuForViewer';
 import { FilterBar } from '@/components/FilterBar';
 import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { searchAdminPlayersAction } from '@/lib/actions/admin-audit';
+import { exportHrefs } from '@/lib/export/href';
 import { buildMetadata } from '@/lib/metadata';
 import { getAuditLog } from '@/lib/services/audit';
 import type { AuditEntry } from '@/lib/sql/audit';
@@ -127,20 +128,7 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
         searchEntity={searchAdminPlayersAction}
         columns={columnOptions(columns)}
         tableId={TABLE_ID}
-        exportSlot={
-          // TODO(PAR-540): full export through lib/export/registry.ts, dataset id `audit`,
-          // once POWER lands it. Until then this exports the page shown.
-          <span className="toolbar-export">
-            <CsvButton
-              filename="audit-page.csv"
-              headers={['Entry', 'Time (UTC)', 'Actor', 'Actor UUID', 'Role', 'Action', 'Method', 'Path', 'Target type', 'Target id', 'Outcome']}
-              rows={log.rows.map((e) => [
-                e.audit_id, e.at.toISOString(), e.actor_name ?? '', e.actor_uuid ?? '', e.actor_role ?? '', e.action,
-                e.method ?? '', e.path ?? '', e.target_type ?? '', e.target_id ?? '', e.outcome,
-              ])}
-            />
-          </span>
-        }
+        exportSlot={<ExportMenuForViewer hrefs={exportHrefs('audit', state, auditTable)} allDescription="Every matching entry, up to 100,000" />}
       />
 
       <DataTable
