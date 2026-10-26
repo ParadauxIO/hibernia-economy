@@ -182,12 +182,15 @@ export interface EconomyPlayers {
 }
 
 export interface ExplorerAudit {
+  action: Generated<string>;
   actorName: Generated<string | null>;
   actorRole: Generated<string | null>;
   actorSub: string;
   actorUuidBin: Generated<Buffer | null>;
+  afterJson: Generated<string | null>;
   at: Generated<Date>;
   auditId: Generated<number>;
+  beforeJson: Generated<string | null>;
   method: string;
   outcome: number;
   path: string;
