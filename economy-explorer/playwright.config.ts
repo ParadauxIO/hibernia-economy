@@ -62,9 +62,14 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
+  // The seeded DB starts with empty rollups, like a fresh deploy: fresh-deploy
+  // checks the economy pages in that state, then rollups.setup.ts builds the
+  // rollups every other spec reads (PAR-541).
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'fresh-deploy', testMatch: /fresh-deploy\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'rollups', testMatch: /rollups\.setup\.ts/, dependencies: ['fresh-deploy'] },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, dependencies: ['rollups'], testIgnore: /fresh-deploy\.spec\.ts/ },
     // Chromium-based phone preset: the iPhone presets need WebKit, which we don't install.
-    { name: 'mobile', use: { ...devices['Pixel 7'] } },
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, dependencies: ['rollups'], testIgnore: /fresh-deploy\.spec\.ts/ },
   ],
 });

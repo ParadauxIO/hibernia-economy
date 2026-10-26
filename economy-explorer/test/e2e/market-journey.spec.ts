@@ -45,8 +45,9 @@ test('chart data is readable without interpreting the visual chart', async ({ pa
   await expect(table).toBeVisible();
   await expect(table.getByRole('columnheader', { name: 'Transactions' })).toBeVisible();
   await expect(table.locator('tbody tr')).not.toHaveCount(0);
-  await page.getByRole('link', { name: '7 days' }).click();
-  await expect(page.getByRole('main').getByText('Active players / 7d', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '7d' }).click();
+  await expect(page).toHaveURL(/range=7d/);
+  await expect(page.getByRole('main').getByRole('group', { name: 'Economy summary' })).toContainText('vs previous 7 days');
 });
 
 test('keyboard users can skip the global navigation', async ({ page }) => {
