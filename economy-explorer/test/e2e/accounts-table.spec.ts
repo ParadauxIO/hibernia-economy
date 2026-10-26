@@ -21,8 +21,8 @@ test('typed tokens become chips, filter the rows, and live in the URL', async ({
   await expect(chips(page)).toHaveCount(1);
   await expect(chips(page).first()).toContainText('Business');
   await expect(searchBox(page)).toHaveValue('');
-  await expect.poll(() => rowNames(page)).toEqual(['Acme Corporate Account']);
-  await expect(page.getByRole('status')).toHaveText('1 account');
+  await expect.poll(() => rowNames(page)).toEqual(['Government supplier', 'Acme Corporate Account']);
+  await expect(page.getByRole('status')).toHaveText('2 accounts');
 
   // Backspace in the empty box removes the last chip.
   await searchBox(page).press('Backspace');
@@ -45,7 +45,7 @@ test('a chip reopens its popover to edit, and Escape returns focus to it', async
   await dialog.getByRole('checkbox', { name: /Government/ }).check();
   await dialog.getByRole('button', { name: 'Apply' }).click();
   await expect(page).toHaveURL(/f=type:in:business,government/);
-  await expect.poll(async () => (await rowNames(page)).sort()).toEqual(['Acme Corporate Account', 'City Hall', ...GOV_FIXTURE_ACCOUNTS].sort());
+  await expect.poll(async () => (await rowNames(page)).sort()).toEqual(['Acme Corporate Account', 'Government supplier', 'City Hall', ...GOV_FIXTURE_ACCOUNTS].sort());
 });
 
 test('the + Filter menu adds a balance filter; the empty state names the filters and removes one', async ({ page }) => {
@@ -76,7 +76,7 @@ test('sort headers are links with aria-sort, and a second click reverses', async
 test('old ?type= links still filter, as a chip', async ({ page }) => {
   await visit(page, '/accounts?type=BUSINESS');
   await expect(chips(page)).toHaveCount(1);
-  await expect.poll(() => rowNames(page)).toEqual(['Acme Corporate Account']);
+  await expect.poll(() => rowNames(page)).toEqual(['Government supplier', 'Acme Corporate Account']);
 });
 
 test('chips scroll sideways and popovers open as bottom sheets on phones', async ({ page }) => {
