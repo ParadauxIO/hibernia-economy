@@ -37,8 +37,8 @@ export interface NavSection {
 const under = (prefix: string) => (p: string) => p === prefix || p.startsWith(`${prefix}/`);
 const has = (permission: Permission) => (v: NavViewer) => v.permissions.includes(permission);
 
-/** /gov is built by the GOV workstream; until it lands the section links to the current page. */
-export const GOVERNMENT_HREF = '/government';
+/** The government workspace (spec §10). /government redirects here. */
+export const GOVERNMENT_HREF = '/gov';
 
 export const NAV_SECTIONS: readonly NavSection[] = [
   {

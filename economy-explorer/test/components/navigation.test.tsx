@@ -51,7 +51,7 @@ describe('HeaderNav visibility', () => {
   it('links Government to the government workspace and Investigate to the ledger', () => {
     setViewer('admin');
     render(<HeaderNav />);
-    expect(within(primary()).getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/government');
+    expect(within(primary()).getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/gov');
     expect(within(primary()).getByRole('link', { name: 'Investigate' })).toHaveAttribute('href', '/transactions');
     expect(within(primary()).getByRole('link', { name: 'Directory' })).toHaveAttribute('href', '/accounts');
   });
@@ -73,7 +73,8 @@ describe('HeaderNav active section', () => {
     ['/players/Alice', 'Directory', 'true'],
     ['/chestshop/shops', 'Market', 'true'],
     ['/market/activity', 'Market', 'true'],
-    ['/government', 'Government', 'page'],
+    ['/gov', 'Government', 'page'],
+    ['/government', 'Government', 'true'],
     ['/gov/revenue', 'Government', 'true'],
     ['/transactions/9', 'Investigate', 'true'],
     ['/docs/api', 'Docs', 'true'],
@@ -177,7 +178,7 @@ describe('AdminNav', () => {
     ['anon', ['Overview']],
     ['player', ['Overview']],
     ['moderator', ['Overview', 'Players', 'Transactions']],
-    ['admin', ['Overview', 'Players', 'Accounts', 'Firms', 'Transactions', 'Groups', 'Roles', 'Role grants', 'API keys', 'Webhooks', 'Audit log']],
+    ['admin', ['Overview', 'Players', 'Accounts', 'Firms', 'Transactions', 'Groups', 'Roles', 'Role grants', 'API keys', 'Webhooks', 'Audit log', 'Government units']],
   ])('lists only the tools the %s viewer holds', (role, expected) => {
     setViewer(role);
     navigation.pathname = '/admin';
