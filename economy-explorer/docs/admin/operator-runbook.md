@@ -18,6 +18,8 @@ section; it does not grant the permissions needed to perform the procedures.
 | Install/configure services; diagnose missing dependencies | [Service configuration](/docs/admin/config-services) |
 | Check players, accounts, firms, transfers and audit records | [Explorer administration](/docs/admin/explorer-administration) |
 | Grant/revoke roles, groups or account access | [Explorer access](/docs/admin/roles), [government accounts](/docs/admin/government-accounts) |
+| Explain a user's effective roles or stale group sources | [Role grant provenance](/docs/admin/role-provenance) |
+| Compare estimated volume with raw ledger records | [Vault bridge analytics](/docs/admin/bridge-analytics) |
 | Recover a login; issue, revoke or rotate API/SERVICE credentials | [Access and credentials](/docs/admin/access-and-credentials) |
 | Set issuer limits or investigate API errors | [Access and credentials](/docs/admin/access-and-credentials#api-errors-and-rate-limits) |
 | Change tax, salaries, shop rules or property settings | [Configuration](/docs/admin/configuration), [operator commands](/docs/admin/operator-commands) |

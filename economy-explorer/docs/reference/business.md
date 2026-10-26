@@ -51,6 +51,12 @@ answers to `/firm`, `/company`, `/db`, and `/democracybusiness`.
 > `disband` is permanent. Make sure the firm's accounts are emptied the way you want
 > first — see [Accounts](#accounts).
 
+If a payout fails, the firm can already be archived while the affected account
+remains linked. The command reports an incomplete disband rather than success.
+Have staff investigate the reported accounts, then rerun the disband to resume
+remaining payouts. Use the firm's numeric ID if its name has since been released
+and reused. Do not manually duplicate a payout that already settled.
+
 ### Staff overrides
 
 A handful of commands let server staff (operators / the DOC) act on **any** firm,

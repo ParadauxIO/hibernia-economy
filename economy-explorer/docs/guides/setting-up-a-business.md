@@ -21,15 +21,15 @@ Everything below uses the `/business` command. It also answers to `/firm` and
 
 ## Choose an available name
 
-Business names, account names, player names and shop aliases share one namespace.
-Changing case or accents does not make a taken name available; surrounding spaces
-are ignored, while punctuation remains significant. Owning another entity does
-not let you reuse its name. Your personal wallet can share your own player name.
+Firm names must be available among active firms and disbanded firms whose names
+have not been released. Disbanding keeps the name reserved until an administrator
+explicitly releases it. The server can also reject names through its configured
+blocked-name list.
 
-Disbanding a firm keeps its name reserved until an administrator explicitly
-releases it. Archived account names and old shop aliases also remain reserved.
-A Minecraft name-change conflict requires administrator help; it never transfers
-another player's wallet or changes your UUID.
+There is no shared reservation namespace across firms, players, account labels
+and shop aliases. Account labels can repeat; use account IDs to distinguish them.
+Shop aliases have their own uniqueness and permanent reservation rules, described
+in [ChestShops for your firm](/docs/guides/chestshop-business#shop-aliases).
 
 ## Create your firm
 

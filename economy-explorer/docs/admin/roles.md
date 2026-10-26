@@ -10,6 +10,11 @@ A role determines **what** someone may do. Their relationship to an account or f
 determines **where** they may do it. Linking connects the website login to the
 Minecraft UUID used by both checks.
 
+To explain a user's current access, use
+[Role grant provenance](/docs/admin/role-provenance). It shows direct, baseline and
+group-derived role sources, including synchronization freshness. It requires both
+`roles.read` and `groups.read`; it is not an immutable historical audit trail.
+
 These are the initial role settings; administrators can change their permissions.
 
 | Role | Initial access |

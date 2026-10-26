@@ -45,6 +45,11 @@ There's also a fourth, behind-the-scenes type: **system** accounts. You won't cr
 see these in normal play — they're used internally by the server and plugins (for
 example, the Vault bridge and ChestShop settlement account). They're listed here only for completeness.
 
+Each SYSTEM wallet has a stable internal plugin-routing key, separate from its
+editable display label. Renaming that label does not create a new wallet or change
+the account ID, balance or ledger used by the plugin. The key is not another name
+players can use as a payment destination.
+
 ## How money moves
 
 A payment is always a transfer: the amount leaves one account and arrives in another at

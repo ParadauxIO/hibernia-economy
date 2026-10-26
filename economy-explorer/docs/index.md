@@ -15,6 +15,9 @@ These docs cover in-game commands, the website, and integrations. See
 [Using the Explorer](/docs/guides/using-the-explorer) to browse balances, markets,
 and money flow, or return to the [Economy Explorer](/).
 
+Returning after the update? **[What's new](/docs/whats-new)** links the new shopping,
+firm-management, Explorer and integration features to their guides.
+
 ## New here? Start with the basics
 
 Business, Treasury, ChestShop, and TreasuryAPI use light blue for plugin names,

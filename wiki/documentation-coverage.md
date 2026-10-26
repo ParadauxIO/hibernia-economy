@@ -92,6 +92,42 @@ are the maintenance points when changing a corresponding feature.
 
 ## Keeping it current
 
+### PR #2 follow-up — 26 October 2026
+
+Reviewed PR #2 at head **177c1d4baa1999c4a7749f4ee01284d9687b3578** against
+base **36d7d90aa9e9eb1e4e193051f215a37dec1c0cbc** (705 commits). The earlier
+coverage map remains the baseline; the follow-up checked subsequent feature
+history, existing site coverage and current implementations. The PR description
+still describes V40/V41 global reservations, so the current migration set and
+implementation take precedence over that stale release text.
+
+| Feature/change since the earlier audit | Site coverage / action in this pass |
+|---|---|
+| Firm dashboard, staff/account lists and money forms | Existing Business reference; linked from new What's new page |
+| Purchase confirmation, wildcard variations and quantity selection | Existing ChestShop guide/reference; surfaced in What's new |
+| Hopper stock batching and custom-item discovery | Existing ChestShop configuration; no claim that hopper refreshes update market observations |
+| Account-scoped business API keys and issuer limits | Existing API guide and TreasuryAPI reference |
+| Known offline/Bedrock identities and linking | API ambiguity/UUID guidance and explicit Floodgate linking guidance |
+| Disband concurrency/recovery and employment history | Added incomplete-payout/resume explanation to Business reference |
+| Global namespace withdrawal | Corrected firm/account naming guides; documented retired V40/V41 and pre-V40 staging restore |
+| Stable SYSTEM wallet identity | Added account concept and V42 release/rollback requirements |
+| Settled purchase notification | Added event contract, receipt limits and consumer/Typewriter boundaries to API guide |
+| Role provenance and Business/Realty sources | Existing role/provenance docs; added discovery from admin landing, roles and operator runbook |
+| Estimated Vault bridge volume and historical sale linking | Added player-facing estimate explanation and separate backfill incident guidance; linked existing admin analytics page |
+| Explorer request blocking | Existing service configuration documents proxy trust, IP/UA controls and effective settings |
+| Java 25/Paper 26.3, versioned bundles and coordinated V42 cutover | Updated release page with runtime, manifest, migration range, rehearsal and credential requirements |
+| Dependency/build/test changes and runtime secret loading | Existing repository build/CI/staging procedures remain authoritative; no separate player workflow |
+
+The public `/docs/whats-new` page is linked from the docs landing page and is
+automatically included in the public navigation tree. Admin-only procedures remain
+behind the existing permission gate. This pass changes documentation only and
+does not deploy the site or execute migration/recovery procedures.
+
+Validation: the existing documentation renderer/link/anchor checks, live-block
+tests and sidebar permission/navigation tests passed (16 tests). These checks
+render all site pages, including What's new; they do not exercise a live game
+server or establish production release readiness.
+
 For a command, permission, default, endpoint or migration change, update both the
 player-facing explanation and affected operator procedure. Read commands and
 implementations rather than relying on old comments or release-plan documents.
