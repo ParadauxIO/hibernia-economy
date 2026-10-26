@@ -10,6 +10,7 @@ import {
   listTransactionLegs, sumPostingsSince, type HistoryLeg, type HistoryWindow,
 } from '@/lib/sql/accountHistory';
 import { findFirmForAccount, listFirmAccounts, type FirmAccountRow, type FirmSummary } from '@/lib/sql/firm';
+import { govUnitsForAccounts } from '@/lib/sql/govUnits';
 import type { ExplorerAccountRow } from '@/lib/sql/ledger';
 import { listOwnedAccounts, listPlayerFirmRoles, type OwnedAccountRow, type PlayerFirmRole } from '@/lib/sql/players';
 import {
@@ -36,6 +37,7 @@ const FIVE_MINUTES = 5 * 60_000;
 // ── Context ───────────────────────────────────────────────────────────────
 
 export interface AccountContext {
+  governmentUnit?: { id: number; name: string } | null;
   /** BUSINESS: the firm holding the account. */
   firm: FirmSummary | null;
   /** BUSINESS: every open account of that firm, including this one. */
@@ -52,6 +54,10 @@ export function getAccountContext(account: ExplorerAccountRow): Promise<AccountC
     if (account.account_type === 'BUSINESS') {
       const firm = await findFirmForAccount(account.account_id);
       return { firm, firmAccounts: firm ? await listFirmAccounts(firm.firm_id) : [], siblings: [], ownerFirms: [] };
+    }
+    if (account.account_type === 'GOVERNMENT') {
+      const units = await govUnitsForAccounts([account.account_id]);
+      return { firm: null, firmAccounts: [], siblings: [], ownerFirms: [], governmentUnit: units.get(account.account_id) ?? null };
     }
     if (!account.owner_uuid) return { firm: null, firmAccounts: [], siblings: [], ownerFirms: [] };
     const [siblings, ownerFirms] = await Promise.all([

@@ -182,8 +182,8 @@ function Holder({ account, context }: { account: ExplorerAccountRow; context: Ac
     return <>Personal account of <EntityLink kind="player" href={playerHref(account.owner_name, account.owner_uuid)} name={playerName(account.owner_name, account.owner_uuid)}
       uuid={account.owner_uuid} preview={previewHref('player', account.owner_uuid)} />.</>;
   }
-  // TODO(GOV PAR-539): name the account's government unit once explorer_gov_unit lands.
-  if (account.account_type === 'GOVERNMENT') return <>A government account.</>;
+  if (account.account_type === 'GOVERNMENT') return context.governmentUnit
+    ? <>Held by {context.governmentUnit.name}.</> : <>A government account.</>;
   return <>A system account used by server plugins.</>;
 }
 

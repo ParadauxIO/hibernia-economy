@@ -401,6 +401,15 @@ d('export datasets', () => {
 });
 
 d('public context and previews', () => {
+  it('names the government unit holding an account', async () => {
+    await sql`INSERT INTO explorer_gov_unit (unit_id, slug, name) VALUES (991, 'city', 'City department')`.execute(db);
+    await sql`INSERT INTO explorer_gov_unit_account (unit_id, account_id) VALUES (991, 5)`.execute(db);
+    try {
+      expect((await getAccountContext((await findAccount(5))!)).governmentUnit).toEqual({ id: 991, name: 'City department' });
+    } finally {
+      await sql`DELETE FROM explorer_gov_unit WHERE unit_id = 991`.execute(db);
+    }
+  });
   it('relates a business account to its firm and a personal one to its owner’s firms', async () => {
     const biz = await getAccountContext((await findAccount(3))!);
     expect(biz.firm?.display_name).toBe('Acme Corp');
