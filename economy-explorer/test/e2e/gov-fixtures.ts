@@ -33,7 +33,7 @@ const MERCHANT = bin('00000000-0000-0000-0000-0000000fa101');
 const TRADER = bin('00000000-0000-0000-0000-0000000fa102');
 const MERCHANT_ACCOUNT = 211;
 const TRADER_ACCOUNT = 212;
-const ACME = 3;
+const SUPPLIER_ACCOUNT = 213;
 
 const dayAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 const at = (n: number, time: string) => `${dayAgo(n)} ${time}`;
@@ -60,6 +60,8 @@ export async function seedGovFixtures(): Promise<void> {
     await conn.query(`INSERT INTO account_balances_mat (account_id, balance) VALUES
       (?, 60000.00), (?, 60000.00), (?, 250000.00), (?, 90000.00), (?, 12000.00), (?, 40000.00), (?, -100000.00)`,
     [MERCHANT_ACCOUNT, TRADER_ACCOUNT, a.commerce, a.commerceReserve, a.commerceAnnex, a.interior, a.mint]);
+    await conn.query("INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name) VALUES (?, 'BUSINESS', ?, 'Government supplier')", [SUPPLIER_ACCOUNT, MERCHANT]);
+    await conn.query('INSERT INTO account_balances_mat (account_id, balance) VALUES (?, 60000.00)', [SUPPLIER_ACCOUNT]);
     await conn.query("INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, 'government')", [bin(GOV_OFFICIAL)]);
     for (const id of GOV_IN_SCOPE) {
       await conn.query("INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES (?, ?, 'VIEWER', ?)", [id, bin(GOV_OFFICIAL), ALICE]);
@@ -72,7 +74,7 @@ export async function seedGovFixtures(): Promise<void> {
     for (let day = 40; day >= 1; day--) {
       const tax = (20 + day).toFixed(2);
       await txn(at(day, '09:00:00'), 'ChestShop', 'ChestShop sales tax (diamond)', [[MERCHANT_ACCOUNT, `-${tax}`], [a.commerce, tax]]);
-      await txn(at(day, '09:30:00'), 'business', 'Weekly Corporate Balance Tax', [[ACME, '-35.00'], [a.commerce, '35.00']]);
+      await txn(at(day, '09:30:00'), 'business', 'Weekly Corporate Balance Tax', [[SUPPLIER_ACCOUNT, '-35.00'], [a.commerce, '35.00']]);
       await txn(at(day, '10:00:00'), 'treasury', 'Personal balance tax (24h 0m @ 1.0%/wk)', [[TRADER_ACCOUNT, '-12.50'], [a.interior, '12.50']]);
       if (day % 3 === 0) {
         for (const time of ['12:00:00', '12:15:00', '12:30:00']) {
@@ -80,10 +82,10 @@ export async function seedGovFixtures(): Promise<void> {
         }
       }
     }
-    await txn(at(6, '14:00:00'), 'Treasury-Core', 'Admin transfer: market stall grant', [[a.commerce, '-2500.00'], [ACME, '2500.00']], ALICE, CAROL);
+    await txn(at(6, '14:00:00'), 'Treasury-Core', 'Admin transfer: market stall grant', [[a.commerce, '-2500.00'], [SUPPLIER_ACCOUNT, '2500.00']], ALICE, CAROL);
     await txn(at(5, '15:00:00'), 'treasury', 'reserve top-up', [[a.commerce, '-10000.00'], [a.commerceReserve, '10000.00']], bin(GOV_OFFICIAL));
     await txn(at(4, '16:00:00'), 'Treasury-Core', 'mint', [[a.mint, '-75000.00'], [a.commerce, '75000.00']]);
-    await txn(at(3, '11:00:00'), 'treasury', 'Interior expenses', [[a.interior, '-900.00'], [ACME, '900.00']]);
+    await txn(at(3, '11:00:00'), 'treasury', 'Interior expenses', [[a.interior, '-900.00'], [SUPPLIER_ACCOUNT, '900.00']]);
     const fines: [number, Buffer, string, string, boolean][] = [
       [a.commerce, TRADER, '250.00', 'Selling without a licence', false],
       [a.commerce, MERCHANT, '75.00', 'Unlicensed stall at spawn', true],
