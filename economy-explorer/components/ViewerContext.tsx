@@ -1,64 +1,33 @@
 'use client';
-// Client viewer state for the header and propless client components (the nav,
-// SectionTabs, export buttons). Fetched once per document from /api/viewer rather
-// than seeded by the layout — that's what keeps the root layout free of the
-// session cookie, so static pages (e.g. /docs) can render as static HTML.
+// Client viewer state for the chrome and propless client components (the nav,
+// the account menu, the palette, export buttons). The root layout resolves the
+// viewer on the server with the cached getViewer() and passes the snapshot in,
+// so the first render already knows who is looking: no /api/viewer round trip
+// per document and no logged-out flash in the header.
 //
-// `loading` is true until the fetch resolves; consumers render the anonymous
-// baseline until then (a brief header settle, never a content gate — page-level
-// access is still decided server-side via getViewer in each page).
+// The server value lives in a context. It only changes when the server sends a
+// new one (router.refresh, a server action), never during hydration, so it
+// cannot force Suspense boundaries that are still hydrating to client-render.
 //
-// Why an external store and not a React context: the fetch usually resolves while
-// the page body is still streaming in or waiting for React's batched Suspense
-// reveal. A context value change at the root propagates into every
-// not-yet-hydrated Suspense boundary, and React's only option there is to throw
-// the server HTML away and client-render the boundary — the old reveal briefly
-// left a second (hidden, inert) copy of the page in the DOM and could swallow a
-// navigation started in that window. A useSyncExternalStore update only
-// re-renders components that have already hydrated and subscribed; a boundary
-// that hydrates later reads the server snapshot first, then catches up.
-import type { Permission } from '@/lib/auth/policy';
-import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
+// refreshViewer() re-reads /api/viewer for the cases where the server value
+// can be stale without a new render: a page restored from the back/forward
+// cache after logging out (or in) elsewhere. Its result overrides the server
+// value until the server sends a newer one.
+import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { ANON_VIEWER, type ViewerCtx } from '@/lib/viewerSnapshot';
 
-export interface ViewerCtx {
-  anon: boolean;
-  loggedIn: boolean;
-  isAdmin: boolean;
-  // Global read-only investigations (moderator/admin).
-  canInvestigate: boolean;
-  role: string | null;
-  permissions: readonly Permission[];
-  minecraftName: string | null;
-  loading: boolean;
-}
+export { ANON_VIEWER, type ViewerCtx };
 
-export const ANON_VIEWER: ViewerCtx = {
-  anon: true,
-  loggedIn: false,
-  isAdmin: false,
-  canInvestigate: false,
-  role: null,
-  permissions: [],
-  minecraftName: null,
-  loading: true,
-};
+const ServerViewer = createContext<ViewerCtx>(ANON_VIEWER);
 
-let viewer: ViewerCtx = ANON_VIEWER;
-let requested = false;
+/** A client-side value, and the server value it was fetched over. 'any' applies regardless (tests). */
+type Override = { value: ViewerCtx; over: ViewerCtx | 'any' } | null;
+let override: Override = null;
 const listeners = new Set<() => void>();
 
-function publish(next: ViewerCtx): void {
-  viewer = next;
+function publish(next: Override): void {
+  override = next;
   for (const listener of listeners) listener();
-}
-
-function load(): void {
-  if (requested) return;
-  requested = true;
-  fetch('/api/viewer', { cache: 'no-store' })
-    .then((r) => (r.ok ? (r.json() as Promise<Omit<ViewerCtx, 'loading'>>) : Promise.reject(new Error(String(r.status)))))
-    .then((d) => publish({ ...d, loading: false }))
-    .catch(() => publish({ ...ANON_VIEWER, loading: false }));
 }
 
 function subscribe(listener: () => void): () => void {
@@ -68,17 +37,37 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-const getSnapshot = () => viewer;
-const getServerSnapshot = () => ANON_VIEWER;
+const getSnapshot = () => override;
+const getServerSnapshot = (): Override => null;
 
-/** Starts the one /api/viewer fetch for this document once the shell has hydrated. */
-export function ViewerProvider({ children }: { children: ReactNode }) {
-  useEffect(load, []);
-  return children;
+/** Re-read the viewer from /api/viewer, e.g. after a login or logout in another tab. */
+export async function refreshViewer(over: ViewerCtx | 'any' = 'any'): Promise<void> {
+  try {
+    const r = await fetch('/api/viewer', { cache: 'no-store' });
+    if (!r.ok) return;
+    publish({ value: (await r.json()) as ViewerCtx, over });
+  } catch {
+    /* keep what we have; the next server render corrects it */
+  }
+}
+
+export function ViewerProvider({ viewer, children }: { viewer: ViewerCtx; children: ReactNode }) {
+  useEffect(() => {
+    // Back/forward cache restores the old DOM and JS heap without a request.
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) void refreshViewer(viewer);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, [viewer]);
+  return <ServerViewer.Provider value={viewer}>{children}</ServerViewer.Provider>;
 }
 
 export function useViewer(): ViewerCtx {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const server = useContext(ServerViewer);
+  const local = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  if (local && (local.over === 'any' || local.over === server)) return local.value;
+  return server;
 }
 
 export function useIsAdmin(): boolean {
@@ -89,8 +78,7 @@ export function useIsLoggedIn(): boolean {
   return useViewer().loggedIn;
 }
 
-/** Test seam: reset the module-level store between component tests. */
-export function resetViewerStoreForTests(next: ViewerCtx = ANON_VIEWER, fetched = false): void {
-  viewer = next;
-  requested = fetched;
+/** Test seam: render as `next` without a provider (null restores the anonymous default). */
+export function resetViewerStoreForTests(next: ViewerCtx | null = null): void {
+  override = next ? { value: next, over: 'any' } : null;
 }
