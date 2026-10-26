@@ -29,6 +29,31 @@ export type Viewer =
       permissions: readonly Permission[];
     };
 
+/**
+ * The `player` role as seeded by V31. Used only when the database cannot tell us
+ * the live baseline, so a signed-in player keeps their ordinary reads during a
+ * DB blip instead of dropping below the anonymous-plus-login baseline. Keep in
+ * step with the V31 seed; admins may narrow the live baseline, which is why the
+ * error path asks the database first.
+ */
+export const SEEDED_PLAYER_PERMISSIONS: readonly Permission[] = [
+  'player.read',
+  'account.read',
+  'firm.read',
+  'firm.financials.read',
+  'webhooks.read',
+  'webhooks.manage',
+];
+
+/** The live player baseline when the role tables answer, else the V31 seed. Never anything elevated. */
+async function playerBaseline(): Promise<readonly Permission[]> {
+  try {
+    return await permissionsForRoles(['player']);
+  } catch {
+    return SEEDED_PLAYER_PERMISSIONS;
+  }
+}
+
 const ANON: Viewer = {
   anon: true,
   role: null,
@@ -141,8 +166,8 @@ export const getViewer = cache(async (): Promise<Viewer> => {
       minecraftName: claimName ?? null,
       linked: false,
       role: 'player',
-      capabilities: [],
-      permissions: [],
+      capabilities: ['player'],
+      permissions: await playerBaseline(),
     };
   }
 });
