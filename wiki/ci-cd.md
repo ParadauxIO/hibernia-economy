@@ -269,7 +269,8 @@ Each named Environment needs:
 | `SFTP_USER` | secret | Deployment SFTP username |
 | `SFTP_PASS` | secret | SFTP password (same credential name as the existing Infisical-backed SFTP tools) |
 | `SFTP_PRIVATE_KEY` | secret | Optional unencrypted SSH private key instead of a password; authorize its public key on the server |
-| `SFTP_KNOWN_HOSTS` | secret | Host key verified through a trusted channel; use `[host]:port` for nonstandard ports |
+| `SFTP_KNOWN_HOSTS` | secret | Trusted host key, required unless host-key checking is disabled; use `[host]:port` for nonstandard ports |
+| `SFTP_STRICT_HOST_KEY_CHECKING` | variable | `yes` by default; set `no` for targets with rotating Pterodactyl host keys |
 | `SFTP_PORT` | variable | SFTP port, default `22` |
 | `SFTP_UPDATE_DIR` | variable | Absolute path as seen by SFTP, e.g. `/plugins/update` or `/home/container/plugins/update` |
 
@@ -277,7 +278,9 @@ Create the parent `plugins` directory beforehand. The update path must match
 Paper's `settings.update-folder` in `bukkit.yml`. The deployment account needs
 read/write/rename access there, including reading uploaded files back for hashing.
 Authentication supports the existing password-based SFTP setup or an SSH key.
-Host-key checking is strict for both. Supply deployment-scoped credentials through
+Host-key checking defaults to strict for both. DemocracyCraft uses `no` because
+its Pterodactyl host keys rotate; this disables server identity verification and
+requires no `SFTP_KNOWN_HOSTS` secret. Supply deployment-scoped credentials through
 the Environment secrets; no local Infisical credentials are copied by this job.
 
 Before enabling automation, install the first complete release during a controlled

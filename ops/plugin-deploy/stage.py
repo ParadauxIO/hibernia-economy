@@ -84,8 +84,13 @@ def stage(directory, version, sha, update_dir, transfer, current=is_current):
 
 
 def main():
-    required = ('SFTP_HOST', 'SFTP_USER', 'SFTP_KNOWN_HOSTS', 'SFTP_UPDATE_DIR',
+    strict = os.environ.get('SFTP_STRICT_HOST_KEY_CHECKING') or 'yes'
+    if strict not in ('yes', 'no'):
+        raise ValueError('SFTP_STRICT_HOST_KEY_CHECKING must be yes or no')
+    required = ('SFTP_HOST', 'SFTP_USER', 'SFTP_UPDATE_DIR',
                 'RELEASE_VERSION', 'GITHUB_SHA', 'GITHUB_REPOSITORY')
+    if strict == 'yes':
+        required += ('SFTP_KNOWN_HOSTS',)
     missing = [name for name in required if not os.environ.get(name, '').strip()]
     if not (os.environ.get('SFTP_PASS') or os.environ.get('SFTP_PRIVATE_KEY', '').strip()):
         missing.append('SFTP_PASS or SFTP_PRIVATE_KEY')
@@ -107,7 +112,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix='economy-sftp-') as temporary:
         key = Path(temporary) / 'key'
         hosts = Path(temporary) / 'known_hosts'
-        hosts.write_text(os.environ['SFTP_KNOWN_HOSTS'] + '\n')
+        if strict == 'yes':
+            hosts.write_text(os.environ['SFTP_KNOWN_HOSTS'] + '\n')
+            host_options = ['-oStrictHostKeyChecking=yes', f'-oUserKnownHostsFile={hosts}']
+        else:
+            host_options = ['-oStrictHostKeyChecking=no', '-oUserKnownHostsFile=/dev/null',
+                            '-oGlobalKnownHostsFile=/dev/null']
         child_env = {k: v for k, v in os.environ.items() if not k.startswith('SFTP_')}
         if os.environ.get('SFTP_PRIVATE_KEY'):
             key.write_text(os.environ['SFTP_PRIVATE_KEY'] + '\n')
@@ -130,9 +140,9 @@ def main():
         def transfer(commands):
             # Authentication options precede -b: SSH uses the first BatchMode value.
             subprocess.run(['sftp', *auth, '-q', '-b', '-', '-P', port,
-                            '-oStrictHostKeyChecking=yes', '-oConnectTimeout=20',
+                            *host_options, '-oConnectTimeout=20',
                             '-oServerAliveInterval=15', '-oServerAliveCountMax=3',
-                            f'-oUserKnownHostsFile={hosts}', f'{user}@{host}'],
+                            f'{user}@{host}'],
                            input='\n'.join(commands) + '\n', text=True, check=True, env=child_env)
 
         stage('release', os.environ['RELEASE_VERSION'], os.environ['GITHUB_SHA'],

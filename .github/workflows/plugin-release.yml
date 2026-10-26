@@ -125,6 +125,7 @@ jobs:
           SFTP_USER: ${{ secrets.SFTP_USER }}
           SFTP_PASS: ${{ secrets.SFTP_PASS }}
           SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+          SFTP_STRICT_HOST_KEY_CHECKING: ${{ vars.SFTP_STRICT_HOST_KEY_CHECKING }}
           SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
           SFTP_UPDATE_DIR: ${{ vars.SFTP_UPDATE_DIR }}
         run: python3 ops/plugin-deploy/stage.py

@@ -119,6 +119,9 @@ class AuthenticationTest(unittest.TestCase):
             self.assertNotIn(password, str(argv))
             self.assertNotIn(password, kwargs['input'])
             self.assertLess(argv.index('-oBatchMode=no'), argv.index('-b'))
+            self.assertIn('-oStrictHostKeyChecking=yes', argv)
+            host_file = next(arg.split('=', 1)[1] for arg in argv if arg.startswith('-oUserKnownHostsFile='))
+            self.assertEqual(Path(host_file).read_text(), env['SFTP_KNOWN_HOSTS'] + '\n')
             child_env = kwargs['env']
             self.assertFalse(any(key.startswith('SFTP_') for key in child_env))
             result = real_run([child_env['SSH_ASKPASS']], env=child_env, capture_output=True, text=True, check=True)
@@ -153,6 +156,24 @@ class AuthenticationTest(unittest.TestCase):
                 self.assertIn('Plugin staging skipped', output.getvalue())
                 self.assertIn(missing, output.getvalue())
                 self.assertNotIn('private-password', output.getvalue())
+
+    def test_host_key_checking_can_be_disabled_without_known_hosts(self):
+        env = dict(SFTP_HOST='test.invalid', SFTP_USER='user.id', SFTP_PASS='password',
+                   SFTP_STRICT_HOST_KEY_CHECKING='no', SFTP_UPDATE_DIR='/plugins/update',
+                   RELEASE_VERSION='release', GITHUB_SHA='a' * 40, GITHUB_REPOSITORY='owner/repo')
+        with patch.dict(os.environ, env, clear=True), patch.object(stage.subprocess, 'run') as run:
+            with patch.object(stage, 'stage', side_effect=lambda directory, version, sha, path, transfer: transfer(['pwd'])):
+                stage.main()
+            run.assert_called_once()
+            argv = run.call_args.args[0]
+            self.assertIn('-oStrictHostKeyChecking=no', argv)
+            self.assertIn('-oUserKnownHostsFile=/dev/null', argv)
+            self.assertIn('-oGlobalKnownHostsFile=/dev/null', argv)
+
+    def test_unknown_host_key_mode_is_rejected(self):
+        with patch.dict(os.environ, {'SFTP_STRICT_HOST_KEY_CHECKING': 'typo'}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'must be yes or no'):
+                stage.main()
 
     def test_invalid_configured_port_still_fails(self):
         env = dict(SFTP_HOST='test.invalid', SFTP_USER='user.id', SFTP_PASS='private-password',
