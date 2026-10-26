@@ -1,16 +1,5 @@
 package io.paradaux.treasuryrestapi.controller;
 
-import io.paradaux.treasuryrestapi.dto.AdminTransferRequest;
-import io.paradaux.treasuryrestapi.dto.TransferResponse;
-import io.paradaux.treasuryrestapi.security.VerifiedToken;
-import io.paradaux.treasuryrestapi.service.TransferService;
-import org.junit.jupiter.api.Test;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.http.ResponseEntity;
-
-import java.time.Instant;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -18,6 +7,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.treasuryrestapi.dto.AdminTransferRequest;
+import io.paradaux.treasuryrestapi.dto.TransferResponse;
+import io.paradaux.treasuryrestapi.security.VerifiedToken;
+import io.paradaux.treasuryrestapi.service.TransferService;
+import java.time.Instant;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.ResponseEntity;
 
 /**
  * Regression test for treasury-rest-api/behaviour/0001: the SERVICE-scoped admin
@@ -50,34 +49,32 @@ class AdminTransferControllerIdempotencyTest {
     void concurrentSameKeyRace_replaysOnce_insteadOf500() {
         TransferService service = mock(TransferService.class);
         // First call loses the insert race; the retry finds the committed row and replays.
-        when(service.adminTransfer(any(), eq(10L), eq(20L), eq("100.00"), eq("memo"), eq("idem-key")))
+        when(service.adminTransfer(any(), any(), eq(10L), eq(20L), eq("100.00"), eq("memo"), eq("idem-key")))
                 .thenThrow(new DuplicateKeyException("Duplicate entry for key 'client_dedup_key'"))
                 .thenReturn(response());
 
         AdminTransferController controller = new AdminTransferController(service);
 
-        ResponseEntity<TransferResponse> result =
-                controller.transfer(serviceToken(), request(), "idem-key");
+        ResponseEntity<TransferResponse> result = controller.transfer(serviceToken(), request(), "idem-key", null);
 
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().txnId()).isEqualTo(777L);
         // Exactly one retry: the original attempt plus one replay.
         verify(service, times(2))
-                .adminTransfer(any(), eq(10L), eq(20L), eq("100.00"), eq("memo"), eq("idem-key"));
+                .adminTransfer(any(), any(), eq(10L), eq(20L), eq("100.00"), eq("memo"), eq("idem-key"));
     }
 
     @Test
     void happyPath_callsServiceExactlyOnce() {
         TransferService service = mock(TransferService.class);
-        when(service.adminTransfer(any(), any(), any(), any(), any(), any()))
+        when(service.adminTransfer(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(response());
 
         AdminTransferController controller = new AdminTransferController(service);
 
-        ResponseEntity<TransferResponse> result =
-                controller.transfer(serviceToken(), request(), "idem-key");
+        ResponseEntity<TransferResponse> result = controller.transfer(serviceToken(), request(), "idem-key", null);
 
         assertThat(result.getBody().txnId()).isEqualTo(777L);
-        verify(service, times(1)).adminTransfer(any(), any(), any(), any(), any(), any());
+        verify(service, times(1)).adminTransfer(any(), any(), any(), any(), any(), any(), any());
     }
 }

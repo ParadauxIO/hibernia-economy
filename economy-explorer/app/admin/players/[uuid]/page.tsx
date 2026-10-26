@@ -1,11 +1,13 @@
-import { hasPermission } from '@/lib/auth/policy';
-import { buildMetadata } from '@/lib/metadata';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { PageHeader, PlayerHead } from '@democracycraft/design-system';
+import { BackLink } from '@democracycraft/design-system/next';
+import { PlayerDashboard } from '@/components/PlayerDashboard';
+import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
+import { buildMetadata } from '@/lib/metadata';
 import { findPlayerName } from '@/lib/sql/me';
-import { PlayerDashboard } from '@/components/PlayerDashboard';
+import { AdminGate } from '../../_components/AdminGate';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,24 +23,23 @@ export default async function AdminPlayerDataPage({ params }: { params: Promise<
   const uuid = raw.toLowerCase();
   if (!UUID_RE.test(uuid)) notFound();
 
-  // The /admin layout already gated to admin; this is a privileged inspection of
-  // another player's private financial dashboard, so audit it against the player.
+  // A privileged inspection of another player's private financial dashboard, so
+  // it is audited against the player.
   const viewer = await getViewer();
-  if (!hasPermission(viewer, 'player.read.all')) return null; // layout renders the access gate
+  if (!hasPermission(viewer, 'player.read.all')) return <AdminGate viewer={viewer} title="Player lookup access required" permission="player.read.all" />;
   await auditView(viewer, { path: '/admin/players/[uuid]', targetType: 'player', targetId: uuid });
 
   const name = await findPlayerName(uuid);
 
   return (
     <>
-      <div className="page-heading">
-        <h1>{name ?? 'Unknown player'}</h1>
-        <span className="sub mono">{uuid} · last 90 days</span>
-        <Link href="/admin/players" className="btn" prefetch={false} style={{ marginLeft: 'auto' }}>
-          ← Players
-        </Link>
-      </div>
-
+      <BackLink href="/admin/players" label="Players" />
+      <PageHeader
+        avatar={<PlayerHead uuid={uuid} size={40} name={name ?? undefined} />}
+        title={name ?? 'Unknown player'}
+        subtitle="Personal economy data for the last 90 days. This view is recorded in the audit log."
+        meta={<span className="mono">{uuid}</span>}
+      />
       <PlayerDashboard uuid={uuid} name={name} />
     </>
   );

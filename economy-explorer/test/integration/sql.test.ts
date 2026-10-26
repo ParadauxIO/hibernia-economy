@@ -14,7 +14,8 @@ import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, ca
 import { getPersonalBalances, getBalanceDistribution } from '@/lib/sql/stats';
 import { isFirmMember, hasFirmFinancialAccess, getAccountFirmId, getFirmStats, findFirmByDisplayName } from '@/lib/sql/firm';
 import { listFinanceFirms } from '@/lib/sql/webhook';
-import { findCapabilities, findPlayerUuidByName } from '@/lib/sql/group';
+import { findPlayerUuidByName } from '@/lib/sql/group';
+import { activeGroupMembership } from '@/lib/sql/group-membership';
 import { findAccountsForPlayer, getPlayerTotals } from '@/lib/sql/me';
 import { findIdentityBySub } from '@/lib/sql/identity';
 import { getDailyVolume, getActivityComparison } from '@/lib/sql/health';
@@ -23,14 +24,25 @@ import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { listItemSales, getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
 import mysql from 'mysql2/promise';
 import { gini } from '@/lib/derived';
-import { audit } from '@/lib/audit';
-import { listAudit } from '@/lib/sql/audit';
 import { findConfigByPrefix } from '@/lib/sql/economyConfig';
 import { parseTaxRates } from '@/lib/taxRates';
 import { accountsTableSuite } from './accountsTable';
+import { adminSuite } from './adminSuite';
 
 // Real queries against a real MariaDB (no mocking). Skipped unless RUN_INTEGRATION=1.
 const d = HAS_DB ? describe : describe.skip;
+
+/** Roles a player holds through active group membership alone (no baseline, no direct grants). */
+async function findCapabilities(playerUuid: string): Promise<string[]> {
+  const r = await sql<{ capability: string }>`
+    SELECT DISTINCT gc.capability
+    FROM explorer_group_member gm
+    JOIN explorer_group_capability gc ON gc.group_id = gm.group_id
+    WHERE gm.player_uuid_bin = ${uuidToBin(playerUuid)}
+      AND ${activeGroupMembership}
+  `.execute(db);
+  return r.rows.map((row) => row.capability);
+}
 
 /**
  * Record a fine the way GovServiceImpl does: each fine points at its own debit
@@ -222,24 +234,6 @@ d('group capabilities', () => {
   it('returns nothing for a player in no groups', async () => {
     // The government-account secretary has account_access but no explorer_group.
     expect(await findCapabilities(SECRETARY)).toEqual([]);
-  });
-});
-
-d('audit logging records privileged access', () => {
-  it('persists an audit row that listAudit reads back', async () => {
-    await audit({
-      viewer: { anon: false, keycloakSub: 'e2e-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['player', 'admin'], permissions: permissionsFor('player', 'admin') },
-      method: 'GET',
-      path: '/transactions',
-      targetType: 'global',
-      targetId: null,
-      outcome: 200,
-      sourceIp: '203.0.113.7',
-    });
-    const rows = await listAudit({ actor: null, targetType: null, limit: 50, offset: 0 });
-    const row = rows.find((r) => r.path === '/transactions');
-    expect(row).toBeTruthy();
-    expect(row!.actor_role).toBe('admin');
   });
 });
 
@@ -1112,3 +1106,5 @@ d('nav: government scope and personal balance (PAR-536)', () => {
     expect(await findPersonalBalances(SECRETARY)).toEqual([]);
   });
 });
+
+adminSuite(d);

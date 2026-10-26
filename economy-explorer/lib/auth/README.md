@@ -4,7 +4,7 @@ Access is `authenticated AND permission AND resource relationship`. Explicit
 `*.read.all` permissions bypass the relationship for that resource only. Roles
 are database records, combined as sets; role names confer no implicit powers.
 
-`policy.ts` defines 44 stable, typed permission names and descriptions.
+`policy.ts` defines 45 stable, typed permission names and descriptions.
 `explorer_role_definition` and `explorer_role_permission` store editable bundles.
 V31 seeds player, government, moderator and admin; Admin → Roles can create,
 edit and delete other roles, edit defaults, and assign roles to players directly.
@@ -17,7 +17,7 @@ New permission names require an explicit migration/grant; there is no wildcard.
 | player | Own player data; related accounts, firm rosters and finances; own authorized webhooks |
 | government | Related government accounts and fines, plus the player baseline |
 | moderator | Global read-only player/account/firm/government investigations, ledger and market figures/sales |
-| admin | All 44 initial permissions |
+| admin | All 44 initial permissions, plus `audit.read` (V44) |
 
 Read, write, assignment and source-management operations have separate grants.
 For example `account.admin.read` opens the account tools, `account.rename` changes
@@ -35,8 +35,7 @@ requirePermission(viewer, 'account.rename'); // throws 401/403
 
 Use `canViewFirmInternals`, `canViewFirmFinancials`, `requireAccountRead`, or
 `requirePlayerRead` for resource-scoped decisions. A permission check alone is
-insufficient for account or firm reads. `requireRole` is a compatibility wrapper;
-new gates should name the action, not a role. The displayed `viewer.role` is only
+insufficient for account or firm reads. Gates name the action, not a role. The displayed `viewer.role` is only
 the highest-priority label; `capabilities` contains every effective role grant.
 
 `canViewTransaction` permits global `transactions.read` or read access to at

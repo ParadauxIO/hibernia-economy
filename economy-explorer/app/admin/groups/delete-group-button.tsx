@@ -7,7 +7,7 @@ export function DeleteGroupButton({ groupId, name }: { groupId: number; name: st
   const [err, setErr] = useState<string | null>(null);
 
   function onClick() {
-    if (!confirm(`Delete group "${name}"? Its capabilities and memberships are removed. This cannot be undone.`)) return;
+    if (!confirm(`Delete group "${name}"? Its role grants and memberships are removed. This cannot be undone.`)) return;
     setErr(null);
     start(async () => {
       const r = await deleteGroupAction(groupId);
@@ -17,8 +17,8 @@ export function DeleteGroupButton({ groupId, name }: { groupId: number; name: st
 
   return (
     <>
-      <button className="btn" disabled={pending} onClick={onClick}>{pending ? 'Deleting…' : 'Delete'}</button>
-      {err && <div className="state-error" style={{ fontSize: 11 }}>{err}</div>}
+      <button type="button" className="btn btn-quiet" disabled={pending} onClick={onClick}>{pending ? 'Deleting…' : 'Delete'}</button>
+      {err && <span role="alert" className="state-error small">{err}</span>}
     </>
   );
 }

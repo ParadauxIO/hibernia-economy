@@ -82,6 +82,12 @@ function createMetrics() {
       labelNames: ['route', 'type'] as const,
       registers: [registry],
     }),
+    auditWrites: new Counter({
+      name: 'explorer_audit_writes_total',
+      help: 'explorer_audit inserts by kind (view, mutation, relationship) and outcome (ok, error, throttled). The log is fail-open, so errors are only visible here.',
+      labelNames: ['kind', 'outcome'] as const,
+      registers: [registry],
+    }),
   };
 }
 
@@ -329,6 +335,14 @@ export function observeRequest(route: string, kind: RequestKind, seconds: number
   const m = metrics();
   m.renderSeconds.observe({ route, kind }, seconds);
   m.renderQueries.observe({ route, kind }, dbQueries);
+}
+
+export type AuditWriteKind = 'view' | 'mutation' | 'relationship';
+export type AuditWriteOutcome = 'ok' | 'error' | 'throttled';
+
+/** Count one audit write attempt (lib/audit.ts). */
+export function recordAuditWrite(kind: AuditWriteKind, outcome: AuditWriteOutcome): void {
+  metrics().auditWrites.inc({ kind, outcome });
 }
 
 /** Count one error reported through instrumentation's onRequestError. */

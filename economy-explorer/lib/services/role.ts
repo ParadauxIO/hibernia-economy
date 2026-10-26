@@ -8,7 +8,7 @@ import { isPermission, type Permission } from '@/lib/auth/policy';
 import { ForbiddenError } from '@/lib/errors';
 import { listRoleDefinitions, permissionsForRoles, resolveAuthorization, type Executor } from '@/lib/sql/role';
 import { assertCanGrantRoles, withPolicyMutation } from '@/lib/auth/delegation';
-import { auditView } from '@/lib/audit';
+import { auditMutation, auditView } from '@/lib/audit';
 
 const roleKey = z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/);
 const roleInput = z.object({
@@ -26,20 +26,44 @@ export async function listRolesForAdmin() {
   return listRoleDefinitions();
 }
 
-async function mutate<T>(permission: Permission, key: string, operation: (trx: Executor, actor: Viewer) => Promise<T>): Promise<T> {
+/** A role as recorded before and after a change. */
+async function roleSnapshot(key: string, executor: Executor = db) {
+  const role = (await listRoleDefinitions(executor)).find(r => r.key === key);
+  return role ? { name: role.name, description: role.description, permissions: [...role.permissions].sort() } : null;
+}
+
+async function directGrant(key: string, uuid: string, executor: Executor = db): Promise<boolean> {
+  const r = await sql`SELECT 1 FROM explorer_role WHERE player_uuid_bin = ${uuidToBin(uuid)} AND role = ${key}`.execute(executor);
+  return r.rows.length > 0;
+}
+
+/**
+ * Run a role change under the policy lock, then record it with its values
+ * before and after (read inside the same transaction, so they are exact).
+ */
+async function mutate<T>(
+  permission: Permission,
+  key: string,
+  audit: { action: string; snapshot: (trx: Executor) => Promise<unknown> },
+  operation: (trx: Executor, actor: Viewer) => Promise<T>,
+): Promise<T> {
+  let before: unknown = null;
+  let after: unknown = null;
   const result = await withPolicyMutation(permission, async (trx, actor) => {
+    before = await audit.snapshot(trx);
     const result = await operation(trx, actor);
     const remaining = await permissionsForRoles(actor.capabilities, trx);
     if (!remaining.includes(permission)) throw new ForbiddenError('This change would remove your own access to manage it. Grant another role first.');
+    after = await audit.snapshot(trx);
     return result;
   });
-  await auditView(await getViewer(), { method: 'POST', path: `/admin/roles/${permission}`, targetType: 'global', targetId: `role:${key}` });
+  await auditMutation(await getViewer(), { action: audit.action, path: `/admin/roles/${key}`, targetType: 'role', targetId: key, before, after });
   return result;
 }
 
 export async function createRole(input: RoleInput): Promise<void> {
   const value = roleInput.parse(input);
-  await mutate('roles.create', value.key, async (trx, actor) => {
+  await mutate('roles.create', value.key, { action: 'role.create', snapshot: trx => roleSnapshot(value.key, trx) }, async (trx, actor) => {
     if (value.permissions.some(p => !actor.permissions.includes(p as Permission))) throw new ForbiddenError('You can only grant permissions you hold.');
     const found = await sql`SELECT 1 FROM explorer_role_definition WHERE role_key = ${value.key}`.execute(trx);
     if (found.rows.length) throw new Error('A role with that key already exists.');
@@ -53,7 +77,7 @@ export async function createRole(input: RoleInput): Promise<void> {
 export async function updateRole(input: RoleInput, revision: number): Promise<void> {
   z.number().int().positive().parse(revision);
   const value = roleInput.parse(input);
-  await mutate('roles.update', value.key, async (trx, actor) => {
+  await mutate('roles.update', value.key, { action: 'role.update', snapshot: trx => roleSnapshot(value.key, trx) }, async (trx, actor) => {
     await assertCanGrantRoles(actor, [value.key], trx);
     if (value.permissions.some(p => !actor.permissions.includes(p as Permission))) throw new ForbiddenError('You can only grant permissions you hold.');
     const changed = await sql`UPDATE explorer_role_definition SET name = ${value.name}, description = ${value.description}, revision = revision + 1
@@ -70,7 +94,7 @@ export async function deleteRole(key: string, revision: number): Promise<void> {
   roleKey.parse(key);
   z.number().int().positive().parse(revision);
   if (key === 'player') throw new Error('The player baseline cannot be deleted; its permissions can be edited.');
-  await mutate('roles.delete', key, async (trx, actor) => {
+  await mutate('roles.delete', key, { action: 'role.delete', snapshot: trx => roleSnapshot(key, trx) }, async (trx, actor) => {
     await assertCanGrantRoles(actor, [key], trx);
     const result = await sql`DELETE FROM explorer_role_definition WHERE role_key = ${key} AND revision = ${revision}`.execute(trx);
     if (Number(result.numAffectedRows) !== 1) throw new Error('This role changed since you opened it. Refresh before deleting.');
@@ -93,7 +117,10 @@ export async function listDirectRoleMembers(key: string) {
 export async function setDirectRoleMember(key: string, uuid: string, grant: boolean): Promise<void> {
   roleKey.parse(key);
   z.string().uuid().parse(uuid);
-  await mutate('roles.assign', key, async (trx, actor) => {
+  await mutate('roles.assign', key, {
+    action: grant ? 'role.assign' : 'role.unassign',
+    snapshot: async trx => ({ player: uuid.toLowerCase(), directGrant: await directGrant(key, uuid, trx) }),
+  }, async (trx, actor) => {
     await assertCanGrantRoles(actor, [key], trx);
     if (grant) {
       await sql`INSERT IGNORE INTO explorer_role (player_uuid_bin, role, granted_by_uuid_bin)

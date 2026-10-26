@@ -49,7 +49,7 @@ class AdminToolsIT extends EmbeddedDbIT {
         seedBalance(1, "500.00");
         seedBalance(2, "0.00");
 
-        TransferResponse r = transfers.adminTransfer(service(), 1L, 2L, "200.00", "admin move", null);
+        TransferResponse r = transfers.adminTransfer(service(), null, 1L, 2L, "200.00", "admin move", null);
 
         assertThat(r.fromAccountId()).isEqualTo(1L);
         assertThat(r.toAccountId()).isEqualTo(2L);
@@ -61,7 +61,7 @@ class AdminToolsIT extends EmbeddedDbIT {
     @Test
     void adminTransfer_requiresServiceKey() {
         ApiException ex = catchThrowableOfType(
-                () -> transfers.adminTransfer(personal(), 1L, 2L, "10.00", "x", null), ApiException.class);
+                () -> transfers.adminTransfer(personal(), null, 1L, 2L, "10.00", "x", null), ApiException.class);
         assertThat(ex).isNotNull();
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
     }

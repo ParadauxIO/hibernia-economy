@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminTransferAction } from '@/lib/actions/admin-accounts';
+import styles from '../admin.module.css';
 
 /** Admin tool: move money between any two accounts with a memo. */
 export function MoveMoneyPanel({ disabled }: { disabled: boolean }) {
@@ -31,17 +32,27 @@ export function MoveMoneyPanel({ disabled }: { disabled: boolean }) {
   }
 
   return (
-    <div className="card">
-      <div className="card-title">Move money between accounts</div>
-      <form onSubmit={submit} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input className="input" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="From account #" inputMode="numeric" style={{ width: 130 }} />
-        <span aria-hidden>→</span>
-        <input className="input" value={to} onChange={(e) => setTo(e.target.value)} placeholder="To account #" inputMode="numeric" style={{ width: 130 }} />
-        <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" inputMode="decimal" style={{ width: 120 }} />
-        <input className="input" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Memo" style={{ minWidth: 200 }} />
-        <button className="btn" disabled={disabled || pending || !from || !to || !amount.trim()}>{pending ? 'Working…' : 'Transfer'}</button>
-        {msg && <span className={msg.kind === 'ok' ? 'state-ok' : 'state-error'} style={{ fontSize: 12 }}>{msg.text}</span>}
-      </form>
-    </div>
+    <form onSubmit={submit} className={styles.stack}>
+      <div className={styles.row}>
+        <label className="field">
+          <span className="field-label">From account</span>
+          <input className={`input ${styles.narrow}`} value={from} onChange={(e) => setFrom(e.target.value)} placeholder="From account #" inputMode="numeric" />
+        </label>
+        <label className="field">
+          <span className="field-label">To account</span>
+          <input className={`input ${styles.narrow}`} value={to} onChange={(e) => setTo(e.target.value)} placeholder="To account #" inputMode="numeric" />
+        </label>
+        <label className="field">
+          <span className="field-label">Amount</span>
+          <input className={`input ${styles.narrow}`} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" inputMode="decimal" />
+        </label>
+        <label className={`field ${styles.grow}`}>
+          <span className="field-label">Memo</span>
+          <input className="input" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Memo" />
+        </label>
+        <button className="btn btn-primary" disabled={disabled || pending || !from || !to || !amount.trim()}>{pending ? 'Working…' : 'Transfer'}</button>
+      </div>
+      {msg && <p role={msg.kind === 'err' ? 'alert' : 'status'} className={`${msg.kind === 'ok' ? 'state-ok' : 'state-error'} ${styles.message}`}>{msg.text}</p>}
+    </form>
   );
 }

@@ -12,4 +12,5 @@ next-env.d.ts.bak
 /playwright-report
 /test-results
 /.playwright
-audit/
+# Root-level audit output only; app/admin/audit is a route.
+/audit/
