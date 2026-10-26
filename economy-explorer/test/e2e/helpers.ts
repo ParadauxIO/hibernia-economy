@@ -33,4 +33,4 @@ export async function submitReload(page: Page, button: Locator): Promise<void> {
  * Private-content gates: the design system's AccessGate and the legacy
  * PrivacyGate, while pages move from one to the other.
  */
-export const GATE = '.access-gate, .privacy-gate';
+export const GATE = '.access-gate, .privacy-gate:not(:has(.access-gate))';
