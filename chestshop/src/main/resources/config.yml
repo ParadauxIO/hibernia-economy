@@ -170,8 +170,9 @@ WORLDGUARD_USE_PROTECTION: false
 GRIEFPREVENTION_INTEGRATION: false
 
 # Add stock counter to quantity line?
-# Hopper changes are coalesced and refreshed in bounded batches across ticks.
-# Requires InventoryMoveItemEvent to be enabled in Paper and ListenerControl.
+# Hopper changes are coalesced and refreshed in bounded batches across ticks. The same refresh
+# keeps /find stock current, even with this off. Requires InventoryMoveItemEvent to be enabled
+# in Paper and ListenerControl.
 USE_STOCK_COUNTER: false
 
 # Delay from the first hopper change before refreshing stock (100 ticks = 5 seconds at 20 TPS).

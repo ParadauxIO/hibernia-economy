@@ -2,12 +2,14 @@ package net.democracycraft.inttests.chestshop;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.mockclient.BlockPos;
 import io.paradaux.mockclient.MockPlayer;
 import java.time.Duration;
 import net.democracycraft.inttests.support.Await;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Inv;
 import net.democracycraft.inttests.support.Ledger;
+import net.democracycraft.inttests.support.Market;
 import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -44,11 +46,14 @@ class HopperStockRefreshE2ETest {
                 Inv.waitForChestCount(c, "DIRT", 17, TIMEOUT);
                 Await.until("hopper restock counter", () -> counter(sign),
                         text -> text.contains("Q 1 : C 17"), TIMEOUT);
+                // PAR-544: /find stock follows the same transfers, with nobody opening the chest.
+                Await.untilEquals("hopper restock /find stock", () -> findStock(s), 17, TIMEOUT);
                 // RCON placement bypasses placement protection, exercising permitted block pulls.
                 RconClient.send("setblock " + output + " minecraft:hopper[facing=down]");
                 Inv.waitForChestCount(c, "DIRT", 0, TIMEOUT);
                 Await.until("hopper drain counter", () -> counter(sign),
                         text -> text.contains("Q 1 : C 0"), TIMEOUT);
+                Await.untilEquals("hopper drain /find stock", () -> findStock(s), 0, TIMEOUT);
                 assertThat(RconClient.send("data get block " + output + " Items[0].count").trim())
                         .endsWith(": 17");
                 assertThat(Ledger.personalBalance(owner.getUuid()).orElseThrow())
@@ -59,6 +64,12 @@ class HopperStockRefreshE2ETest {
                 if (doubleChest) RconClient.send("setblock " + secondHalf + " minecraft:air");
             }
         }
+    }
+
+    private static Integer findStock(BlockPos sign) {
+        return Market.shopAt("world", sign.x(), sign.y(), sign.z())
+                .map(Market.Shop::currentStock)
+                .orElse(null);
     }
 
     private static String counter(String position) {

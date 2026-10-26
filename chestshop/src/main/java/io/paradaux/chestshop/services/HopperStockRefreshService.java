@@ -6,8 +6,10 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -30,6 +32,10 @@ import org.bukkit.scheduler.BukkitTask;
  * (or is not) a shop. This also handles signs pasted by editors without stale membership
  * caches. Ordinary sorter containers pay for discovery once per batch, not per item.
  * Protection deliberately remains a separate, immediate live-world check.
+ *
+ * <p>Each refresh also hands the shop's measured stock to {@link ShopStockPublisher}, so
+ * {@code /find} follows hopper transfers too (PAR-544). Work dropped when a chunk unloads is kept
+ * and re-queued when that chunk loads; chunk loads alone queue nothing.
  */
 @Singleton
 public final class HopperStockRefreshService {
@@ -56,6 +62,12 @@ public final class HopperStockRefreshService {
     // Overflow is represented by loaded chunk coordinates, never by more item events.
     private final Map<ChunkKey, Long> reconciliation = new LinkedHashMap<>();
     private final ArrayDeque<Position> recovery = new ArrayDeque<>();
+    // Work dropped at chunk unload, restored on that chunk's next load. Positions are capped at
+    // MAX_PENDING; past that, or for overflow reconciliation, the whole chunk is recounted instead.
+    private final Map<ChunkKey, Set<Position>> deferred = new HashMap<>();
+    private final Set<ChunkKey> deferredChunks = new LinkedHashSet<>();
+    private int deferredPositions;
+    private final ShopStockPublisher stock;
     private BukkitTask task;
     private long tick;
 
@@ -65,8 +77,9 @@ public final class HopperStockRefreshService {
             ChestShopConfiguration config,
             ShopBlockService blocks,
             SignService signs,
-            StockCounterService counters) {
-        this(plugin, config, blocks, signs, counters, System::nanoTime);
+            StockCounterService counters,
+            ShopStockPublisher stock) {
+        this(plugin, config, blocks, signs, counters, stock, System::nanoTime);
     }
 
     HopperStockRefreshService(
@@ -75,8 +88,10 @@ public final class HopperStockRefreshService {
             ShopBlockService blocks,
             SignService signs,
             StockCounterService counters,
+            ShopStockPublisher stock,
             LongSupplier nanoTime) {
         this.plugin = plugin;
+        this.stock = stock;
         this.config = config;
         this.blocks = blocks;
         this.signs = signs;
@@ -94,12 +109,16 @@ public final class HopperStockRefreshService {
         if (task != null) task.cancel();
         task = null;
         clear();
+        stock.flush();
     }
 
     private void clear() {
         pending.clear();
         reconciliation.clear();
         recovery.clear();
+        deferred.clear();
+        deferredChunks.clear();
+        deferredPositions = 0;
     }
 
     /** No sign search, inventory scan, database call or task allocation on the transfer path. */
@@ -109,6 +128,10 @@ public final class HopperStockRefreshService {
     }
 
     private boolean enabled() {
+        return countersEnabled() || stock.enabled();
+    }
+
+    private boolean countersEnabled() {
         return config.isUseStockCounter() && config.getMaxShopAmount() <= 99999;
     }
 
@@ -122,13 +145,16 @@ public final class HopperStockRefreshService {
             enqueue(chest.getLeftSide(false));
             enqueue(chest.getRightSide(false));
         } else if (holder instanceof Container container) {
-            Position pos = position(container);
-            if (pending.containsKey(pos)) return;
-            if (pending.size() < MAX_PENDING) {
-                pending.put(pos, tick);
-            } else {
-                reconcileChunk(pos.world(), pos.x() >> 4, pos.z() >> 4);
-            }
+            enqueue(position(container));
+        }
+    }
+
+    private void enqueue(Position pos) {
+        if (pending.containsKey(pos)) return;
+        if (pending.size() < MAX_PENDING) {
+            pending.put(pos, tick);
+        } else {
+            reconcileChunk(pos.world(), pos.x() >> 4, pos.z() >> 4);
         }
     }
 
@@ -136,17 +162,48 @@ public final class HopperStockRefreshService {
         if (enabled()) reconciliation.putIfAbsent(new ChunkKey(world, x, z), tick);
     }
 
-    public void unloadChunk(UUID world, int x, int z) {
+    /** Re-queue only what this chunk's unload dropped, so exploring players add no work. */
+    public void loadChunk(UUID world, int x, int z) {
         ChunkKey key = new ChunkKey(world, x, z);
-        pending.keySet().removeIf(pos -> pos.chunk().equals(key));
-        reconciliation.remove(key);
-        recovery.removeIf(pos -> pos.chunk().equals(key));
+        Set<Position> positions = deferred.remove(key);
+        if (positions != null) deferredPositions -= positions.size();
+        if (!enabled()) return;
+        if (deferredChunks.remove(key)) reconcileChunk(world, x, z);
+        if (positions != null) positions.forEach(this::enqueue);
+    }
+
+    public void unloadChunk(UUID world, int x, int z) {
+        World loaded = plugin.getServer().getWorld(world);
+        if (loaded != null) stock.unloadChunk(loaded.getName(), x, z);
+        ChunkKey key = new ChunkKey(world, x, z);
+        Set<Position> dropped = new LinkedHashSet<>();
+        pending.keySet().removeIf(pos -> pos.chunk().equals(key) && dropped.add(pos));
+        recovery.removeIf(pos -> pos.chunk().equals(key) && dropped.add(pos));
+        boolean reconcile = reconciliation.remove(key) != null;
+        if (dropped.isEmpty() && !reconcile) return;
+        if (reconcile || deferredPositions + dropped.size() > MAX_PENDING) {
+            // Recount the whole chunk on load. Past the cap the update is lost until the next change.
+            if (deferredChunks.size() < MAX_PENDING) deferredChunks.add(key);
+        } else {
+            Set<Position> kept = deferred.computeIfAbsent(key, ignored -> new LinkedHashSet<>());
+            int before = kept.size();
+            kept.addAll(dropped);
+            deferredPositions += kept.size() - before;
+        }
     }
 
     public void unloadWorld(UUID world) {
+        World loaded = plugin.getServer().getWorld(world);
+        if (loaded != null) stock.unloadWorld(loaded.getName());
         pending.keySet().removeIf(pos -> pos.world().equals(world));
         reconciliation.keySet().removeIf(key -> key.world().equals(world));
         recovery.removeIf(pos -> pos.world().equals(world));
+        deferred.entrySet().removeIf(entry -> {
+            if (!entry.getKey().world().equals(world)) return false;
+            deferredPositions -= entry.getValue().size();
+            return true;
+        });
+        deferredChunks.removeIf(key -> key.world().equals(world));
     }
 
     void drain() {
@@ -198,10 +255,14 @@ public final class HopperStockRefreshService {
         var block = world.getBlockAt(pos.x(), pos.y(), pos.z());
         if (!blocks.couldBeShopContainer(block) || !(block.getState(false) instanceof Container container)) return;
         Inventory inventory = container.getInventory();
+        boolean counting = countersEnabled();
         for (Sign sign : blocks.findConnectedShopSigns(getHolder(inventory, false))) {
-            if (config.isForceUnlimitedAdminShop() && signs.isAdminShop(sign)) continue;
+            boolean admin = signs.isAdminShop(sign);
+            if (config.isForceUnlimitedAdminShop() && admin) continue;
             if (refreshedSigns.add(position(sign))) {
-                counters.updateCounterOnQuantityLine(sign, inventory);
+                if (counting) counters.updateCounterOnQuantityLine(sign, inventory);
+                // The registry records no stock for admin shops.
+                if (!admin) stock.publish(sign, inventory);
             }
         }
     }

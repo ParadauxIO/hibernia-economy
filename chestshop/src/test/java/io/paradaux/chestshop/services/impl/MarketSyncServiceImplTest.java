@@ -77,7 +77,14 @@ class MarketSyncServiceImplTest {
         shopBlockService = mock(ShopBlockService.class);
         market = mock(MarketApi.class);
         sync = new MarketSyncServiceImpl(
-                plugin, marketService, items, signService, shopBlockService, accounts, previews);
+                plugin,
+                marketService,
+                items,
+                signService,
+                shopBlockService,
+                accounts,
+                previews,
+                mock(io.paradaux.chestshop.services.ShopStockPublisher.class));
         lenient().when(marketService.enabled()).thenReturn(true);
         lenient().when(marketService.market()).thenReturn(market);
     }
