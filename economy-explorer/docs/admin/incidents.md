@@ -123,6 +123,18 @@ defaults. Existing native settings win over imported legacy settings. Keep origi
 item databases and validate old aliases against installed Nexo IDs; do not guess
 replacements for missing item definitions. [Configuration details](/docs/admin/config-chestshop).
 
+### Historical sales without transaction links
+
+New settled sales record their primary transaction ID. Older sales can have a
+NULL `chestshop_sale.txn_id`; this alone does not establish a missing payment.
+The [historical sale-link backfill](https://github.com/ParadauxIO/hibernia-economy/blob/develop/ops/sale-ledger-backfill/README.md)
+is a separate bounded operator tool, not a startup repair or Flyway migration.
+Start with its read-only dry-run and review each proposed link before applying.
+For legacy two-hop trades, the canonical link is the seller-credit transaction
+(the customer's credit for SELL). Ambiguous or unmatched sales remain unlinked
+with audit reasons. Do not use the Explorer's Vault bridge estimates as evidence
+for a persisted sale link.
+
 ## Realty property operations
 
 Use [Realty commands](/docs/reference/realty) and the pinned plugin's

@@ -10,8 +10,37 @@ Choose one release SHA and a compatible set of plugin jars, REST/Explorer images
 configurations and schema migrations. Record the current and target versions for
 **every tenant**. The detailed repository
 [release runbook](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/release-runbook.md)
-contains the V15 cutover preflight SQL and rollout holds; use its version at your
-release SHA. Its historical timings and starting schema are not universal targets.
+contains the coordinated cutover through V42 and rollout holds; use its version at
+your release SHA. V15 is a historical baseline, not a verified current tenant state.
+The plugin bundle requires Java 25 and Paper 26.3. Verify installed integrations
+against that runtime before choosing the maintenance window.
+
+## Current migration scope
+
+Inspect each tenant's history to determine which scripts are pending:
+
+| Versions | Changes to account for |
+|---|---|
+| V16–V22 | Firm fines, shared player directory, unified account access and read-access views; legacy access/player tables are removed. |
+| V23–V29 | Stored-token erasure, SYSTEM constraints, native shop discovery/preferences, proprietor audit and fine deduplication. |
+| V30–V35 | Explorer roles/relationships, published tax configuration, explicit firm-name release, creation locks and shop aliases. |
+| V36–V39 | Transaction-volume aggregates, Business/Realty group sources, taxation index and employment history. |
+| V40–V41 | Withdrawn; these version numbers remain retired. Global name reservations are not part of this release. |
+| V42 | Stable SYSTEM plugin-routing keys, independent of editable wallet labels. |
+
+**A target that applied V40/V41 needs a pre-V40 restore.** These migrations ran only
+on staging. Stop staging writers, rebuild from a verified pre-V40 backup and apply
+the remaining scripts through V42 with the matching bundle. Confirm that neither
+the withdrawn history nor namespace tables, routines or triggers remain. Deleting
+history rows or running Flyway `repair` does not remove their enforcement. See the
+[staging rebuild procedure](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/name-namespace.md#staging-rebuild).
+
+V42 must capture original SYSTEM identities before display labels are renamed.
+Verify the plugin-to-account mappings, IDs, owners and balances before and after
+migration. Do not infer a missing original key from an already-renamed label or
+combine wallets to resolve a conflict. The optional preparation procedure and its
+DDL/rollback constraints are in
+[SYSTEM wallet routing](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/system-wallet-routing.md).
 
 ## Backup and restore prerequisites
 
@@ -40,10 +69,13 @@ server owner before a production maintenance window.
    release. Reconcile checksum/version problems before proceeding. Never use
    `baseline`, `repair` or `clean` as a generic fix for a failed migration.
 2. Rehearse migrations and application acceptance on an isolated snapshot. Allow
-   space/time for V36's `ledger_txn_volume` backfill and rollback. Use current row
-   counts and measured rehearsal timings.
-3. Build the release bundle from the selected SHA (`./gradlew release`), record
-   image tags and retain the prior compatible artifacts/configuration.
+   space/time for V36's `ledger_txn_volume` backfill and V42's index replacement.
+   Measure the full upgrade and restore; the older V16–V36 rehearsal does not
+   establish V42 timing or readiness.
+3. Build a local rehearsal bundle from the selected SHA (`./gradlew release -Pci=true`).
+   Production publication uses **Economy · Release plugins and APIs**. Retain its
+   `release/manifest.json`, plugin hashes, immutable image tags/digests and the prior
+   compatible artifacts/configuration.
 4. Hold automatic deployment/image updates. Stop game servers, REST and Explorer
    for every tenant affected by the shared images. Confirm no application writers
    remain, then take and verify the coordinated backups.
@@ -51,12 +83,16 @@ server owner before a production maintenance window.
    revision and matching `confirm_target`. Existing managed databases should not
    be baselined. Require all expected migrations successful and none pending.
 6. If all tenants are ready, replace plugin jars and deploy matching images/configs.
-   Apply any coordinated credential changes and [SERVICE renewal](/docs/admin/access-and-credentials).
+   Coordinate the planned signing-secret rotation across TreasuryAPI and REST,
+   [renew the Explorer SERVICE credential](/docs/admin/access-and-credentials), and
+   arrange personal/business token reissue. Existing tokens stop working after
+   rotation; newly issued tokens are shown once and must be copied securely.
    Start dependencies and applications, then perform the checks below.
 
 Old and new versions are not necessarily schema-compatible. In particular the
-V15 upgrade replaces/drops tables and invalidates stored-token assumptions; it
-requires the full-stop procedure, not a rolling mix of old and new binaries.
+upgrade from the historical V15 baseline replaces/drops tables and invalidates
+stored-token assumptions. The cutover requires a full stop. After a SYSTEM label
+rename, old code would route using the label; a JAR-only rollback is insufficient.
 
 ## Acceptance before reopening
 

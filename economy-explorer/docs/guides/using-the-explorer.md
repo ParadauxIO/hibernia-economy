@@ -60,6 +60,10 @@ Signing in proves who you are on the *website*; linking connects that to your
 
 4. Come back and refresh — you're linked.
 
+Bedrock/Floodgate players use this same in-game linking flow. Run the command
+while signed in as the Minecraft player whose records you want to access; the
+link uses that player's UUID, including Floodgate identities.
+
 > [!NOTE]
 > The code expires after 5 minutes. If it lapses, just generate a new one and run the
 > command again.
@@ -126,6 +130,12 @@ here. Wealth contains current distribution, inequality and account rankings.
 Money Flow shows received, sent and net received amounts for each account type.
 Only attributable transfers between different types are counted, including initial
 player funding. Daily chart buckets use UTC; the first and current day can be partial.
+
+Volume, transaction counts and Money Flow estimate matching adjacent Vault bridge
+legs as one economic event. These figures are labelled estimates: they do not
+establish who paid whom. Unmatched reward faucets and money sinks remain included.
+Your transaction history and raw API feed retain the original ledger records,
+so their counts can differ from these aggregates.
 
 [Taxation](/economy/taxation) is public and shows 7- or 30-day collections,
 fine refunds, net revenue by type, and receiving government accounts. It counts

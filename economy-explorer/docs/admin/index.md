@@ -28,6 +28,10 @@ routine checklist and procedures by task.
 
 - **[Managing Explorer access](/docs/admin/roles)** — grant or revoke admin, government,
   moderator and custom-role access for the website.
+- **[Role grant provenance](/docs/admin/role-provenance)** — search the sources of a
+  user's roles and inspect synchronization freshness.
+- **[Vault bridge analytics](/docs/admin/bridge-analytics)** — understand estimated
+  volume/counts and why they differ from raw ledger history.
 - **[Government account access](/docs/admin/government-accounts)** — grant access to
   department accounts by individual player or LuckPerms group, and the permission nodes
   behind it.

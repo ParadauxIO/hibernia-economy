@@ -173,6 +173,11 @@ exact bodies, query filters and response schemas.
 The service administrative endpoints are for the Explorer backend and require a
 SERVICE token. Do not embed such a credential in a player application.
 
+If a player name also matches a government account, a bare-name lookup or transfer
+can return `AMBIGUOUS_NAME`. Resolve the intended player by UUID instead of guessing
+which wallet the name denotes. A known offline or Bedrock player can be resolved
+from the stored player directory; an unknown name is not proof of an existing account.
+
 ## Safe transfers and retries
 
 Use a distinct `Idempotency-Key` header for each logical transfer and retain it
@@ -225,3 +230,23 @@ Upgrade the provider with the library: an older provider's default `getAccountId
 throws rather than returning an incomplete list. Use
 `FirmApi.resolveShopAlias(alias)` for live business shop aliases and preserve
 normal access checks before spending.
+
+### Reacting to a settled shop purchase
+
+ChestShop publishes `io.paradaux.chestshop.api.events.ChestShopPurchaseEvent`
+after a customer's successful **BUY**, including a free purchase. This synchronous,
+non-cancellable Bukkit event does not fire for SELL, cancelled or failed settlement.
+`getPlayer()` identifies the buyer; `getReceipt()` returns an immutable receipt with
+`tradeId()`, `buyerId()`, exact `price()` and `items()` containing material and actual
+quantity. It does not expose custom-item metadata, shop ownership or ledger linkage.
+
+Use this single notification path for a purchase objective; also consuming legacy
+transaction or sale events can count the same purchase twice. The trade UUID can
+help a consumer deduplicate, but delivery is in-process with no durable replay or
+exactly-once reward guarantee. A listener failure cannot undo settled funds.
+
+Keep the integration optional and use a compile-only dependency. ChestShop does
+not install Typewriter quests: the separate consumer must check active quest
+criteria, persist completion and reset state for new attempts. See the
+[settled purchase API contract](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/integrations/settled-purchases.md)
+for receipt and consumer lifecycle details.
