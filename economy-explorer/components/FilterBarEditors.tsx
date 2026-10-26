@@ -28,20 +28,16 @@ export interface EditorProps {
 }
 
 /**
- * Move focus to the `[data-autofocus]` control (or the first control) once the
- * popover panel is visible. The panel is placed in a layout effect and stays
- * `visibility: hidden` until then, so a synchronous focus() would be dropped.
- * It also covers an editor that replaces the + Filter menu inside a popover
- * that is already open.
+ * An editor that replaces the + Filter menu inside a popover that is already
+ * open takes focus itself: the clicked menu item has just unmounted. When the
+ * editor opens with its popover, this call lands while the panel is still
+ * hidden and is ignored; the Popover base then focuses `[data-autofocus]`.
  */
-export function useFocusOnMount(ref: RefObject<HTMLElement | null>): void {
+function useFocusWhenSwappedIn(ref: RefObject<HTMLElement | null>): void {
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      const root = ref.current;
-      const target = root?.querySelector<HTMLElement>('[data-autofocus]') ?? root?.querySelector<HTMLElement>('input, select, button');
-      target?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
+    const root = ref.current;
+    const target = root?.querySelector<HTMLElement>('[data-autofocus]') ?? root?.querySelector<HTMLElement>('input, select, button');
+    target?.focus({ preventScroll: true });
   }, [ref]);
 }
 
@@ -67,7 +63,7 @@ function Frame({ title, hint, error, onSubmit, onCancel, children, applyLabel = 
 }) {
   const titleId = useId();
   const formRef = useRef<HTMLFormElement>(null);
-  useFocusOnMount(formRef);
+  useFocusWhenSwappedIn(formRef);
   return (
     <form ref={formRef} className="fb-pop" onSubmit={onSubmit} aria-labelledby={titleId} noValidate>
       <p className="fb-pop-title" id={titleId}>{title}</p>
