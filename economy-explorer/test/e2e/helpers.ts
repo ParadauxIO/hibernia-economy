@@ -28,3 +28,9 @@ export async function submitReload(page: Page, button: Locator): Promise<void> {
   await Promise.all([page.waitForEvent('load'), button.click()]);
   await expect(page.locator('[aria-busy="true"], div[hidden][id^="S:"]')).toHaveCount(0);
 }
+
+/**
+ * Private-content gates: the design system's AccessGate and the legacy
+ * PrivacyGate, while pages move from one to the other.
+ */
+export const GATE = '.access-gate, .privacy-gate:not(:has(.access-gate))';

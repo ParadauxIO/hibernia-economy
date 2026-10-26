@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dataTable, visit } from './helpers';
+import { dataTable, visit, GATE } from './helpers';
 
 // Collect page (hydration / runtime) errors so any React #418 etc. fails the test.
 function trackErrors(page: Page): string[] {
@@ -47,7 +47,7 @@ test.describe('anonymous browsing', () => {
 
   test('the whole-economy transactions firehose is gated', async ({ page }) => {
     await visit(page, '/transactions');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await expect(dataTable(page)).toHaveCount(0);
   });
 
@@ -58,11 +58,12 @@ test.describe('anonymous browsing', () => {
     await expect(tabs.filter({ hasText: 'Market firms' })).toHaveAttribute('href', '/chestshop/firms');
     await expect(tabs.filter({ hasText: 'Sales' })).toHaveCount(0);
     await page.getByLabel('Find an item', { exact: true }).fill('Diamond');
-    await page.getByRole('button', { name: 'Search all items' }).click();
+    await page.getByRole('button', { name: 'Search items' }).click();
     await expect(page).toHaveURL(/chestshop\?q=Diamond/);
-    await expect(page.getByRole('heading', { name: 'Browse items' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Items', level: 1 })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Items' }).getByRole('link', { name: /Diamond/ })).toBeVisible();
     await page.getByRole('link', { name: 'Activity', exact: true }).click();
-    await expect(page.getByText('Avg sale', { exact: true })).toBeVisible();
+    await expect(page.getByText('Average trade', { exact: true })).toBeVisible();
   });
 
   test('per-firm financials are private to anonymous viewers', async ({ page }) => {
@@ -70,12 +71,12 @@ test.describe('anonymous browsing', () => {
     // seed.sql gives Acme Corp (firm 1) ChestShop sales, so it is always listed.
     const firmLink = page.locator('a[href="/chestshop/firms/1"]').first();
     await firmLink.click();
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
   });
 
   test('government dashboard requires a role and relationship', async ({ page }) => {
     await visit(page, '/gov');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await expect(dataTable(page)).toHaveCount(0);
   });
 
@@ -92,7 +93,7 @@ test.describe('anonymous browsing', () => {
 
   test('/me requires login', async ({ page }) => {
     await visit(page, '/me');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
   });
 
   test('a missing route shows the styled 404', async ({ page }) => {
@@ -132,26 +133,22 @@ test('Health bookmarks preserve their window on the consolidated overview', asyn
   await expect(page.getByRole('main').getByRole('group', { name: 'Economy summary' })).toContainText('vs previous 7 days');
 });
 
-test('shop discovery normalises batches and switches to selling', async ({ page }) => {
-  await visit(page, '/chestshop/shops?item=DIAMOND');
-  await expect(page.locator('.offer-price').first()).toContainText('$1.00');
-  await page.getByLabel('Trade direction', { exact: true }).selectOption('sell');
-  await expect(page).toHaveURL(/direction=sell/);
-  await expect(page.locator('.offer-price').first()).toContainText('$1.50');
-  await page.getByLabel('Price units').selectOption('64');
-  await expect(page.locator('.offer-price').first()).toContainText('$96.00');
+test('shop discovery quotes per item, cheapest first, and switches to selling', async ({ page }) => {
+  await visit(page, '/chestshop/shops?f=item:in:DIAMOND');
+  const rows = page.getByRole('table', { name: 'Shops' }).locator('tbody tr');
+  // 64.00 for a batch of 64 is 1.00 per item, cheaper than 2.00 for one.
+  await expect(rows.first()).toContainText('$1.00');
+  await visit(page, '/chestshop/shops?f=item:in:DIAMOND&f=direction:in:sell');
+  await expect(page).toHaveURL(/sort=-price/);
+  await expect(rows.first()).toContainText('$1.50');
 });
 
-test('item pages put observed offers before optional advanced history', async ({ page }) => {
+test('item pages show candles, offers both ways and map links', async ({ page }) => {
   await visit(page, '/chestshop/items/DIAMOND');
-  await expect(page.getByRole('heading', { name: 'Where to trade' })).toBeVisible();
-  await expect(page.locator('.offer-card')).toHaveCount(2);
-  await expect(page.getByText('Candles', { exact: true })).toHaveCount(0);
-  await Promise.all([
-    page.waitForURL(/advanced=true/),
-    page.getByRole('link', { name: 'Show advanced candlesticks' }).click(),
-  ]);
-  await expect(page.getByRole('link', { name: 'Hide advanced candlesticks' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Price', level: 2, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where to buy' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Shops selling Diamond' }).locator('tbody tr')).toHaveCount(2);
+  await expect(page.getByRole('table', { name: 'Shops buying Diamond' }).locator('tbody tr')).toHaveCount(2);
 });
 
 test('mobile search opens the palette, focuses it and closes with Escape', async ({ page }) => {
@@ -208,7 +205,7 @@ test('taxation aggregates are public, bounded and responsive', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Revenue by type' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Where it lands' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Rates in effect' })).toBeVisible();
-  await expect(page.locator('.privacy-gate, .access-gate')).toHaveCount(0);
+  await expect(page.locator(GATE)).toHaveCount(0);
   await expect(page.locator('a[href^="/transactions/"], a[href^="/players/"]')).toHaveCount(0);
   await page.getByRole('button', { name: '7d' }).click();
   await expect(page).toHaveURL(/range=7d/);

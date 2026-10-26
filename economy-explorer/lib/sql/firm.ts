@@ -1,6 +1,8 @@
 import 'server-only';
-import { sql } from 'kysely';
+import { sql, type SqlBool } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
+import { firmsTable, type FirmsTableState } from '@/lib/tables/firms';
+import { compileTableState, defineColumnMap, likeContains } from '@/lib/sql/tableState';
 
 export interface FirmRow {
   firm_id: number;
@@ -335,4 +337,223 @@ export async function getFirmStats(): Promise<FirmStats> {
     activeEmployees,
     avgEmployees: activeFirms > 0 ? activeEmployees / activeFirms : 0,
   };
+}
+
+// ── Firm summaries (PAR-537) ──────────────────────────────────────────────
+
+/** A firm as public pages show it: identity, proprietor (as a role), size. Never a balance. */
+export interface FirmSummary {
+  firm_id: number;
+  display_name: string;
+  proprietor_uuid: string | null;
+  proprietor_name: string | null;
+  hq_region: string | null;
+  discord_url: string | null;
+  default_account_id: number | null;
+  archived: number;
+  created_at: Date;
+  staff_count: number;
+  account_count: number;
+}
+
+interface RawFirmSummary {
+  firm_id: number;
+  display_name: string;
+  proprietor_uuid_bin: Buffer | null;
+  proprietor_name: string | null;
+  hq_region: string | null;
+  discord_url: string | null;
+  default_account_id: number | null;
+  archived: number;
+  created_at: Date;
+  staff_count: number | string;
+  account_count: number | string;
+}
+
+const FIRM_SUMMARY_COLUMNS = sql`
+  f.firm_id, f.display_name, f.proprietor_uuid_bin, pp.current_name AS proprietor_name, f.hq_region, f.discord_url,
+  f.default_account_id, f.is_archived AS archived, f.created_at,
+  (SELECT COUNT(*) FROM firm_employee fe WHERE fe.firm_id = f.firm_id AND fe.left_at IS NULL) AS staff_count,
+  (SELECT COUNT(*) FROM firm_accounts fc WHERE fc.firm_id = f.firm_id AND fc.removed_at IS NULL) AS account_count`;
+
+function toFirmSummary(r: RawFirmSummary): FirmSummary {
+  return {
+    firm_id: r.firm_id,
+    display_name: r.display_name,
+    proprietor_uuid: r.proprietor_uuid_bin ? binToUuid(r.proprietor_uuid_bin) : null,
+    proprietor_name: r.proprietor_name,
+    hq_region: r.hq_region,
+    discord_url: r.discord_url,
+    default_account_id: r.default_account_id,
+    archived: r.archived,
+    created_at: r.created_at,
+    staff_count: Number(r.staff_count),
+    account_count: Number(r.account_count),
+  };
+}
+
+/** The firm holding a business account (firm_accounts.uq_account_once), or null. */
+export async function findFirmForAccount(accountId: number): Promise<FirmSummary | null> {
+  const r = await sql<RawFirmSummary>`
+    SELECT ${FIRM_SUMMARY_COLUMNS}
+    FROM firm_accounts fa
+    JOIN firm f ON f.firm_id = fa.firm_id
+    LEFT JOIN economy_players pp ON pp.player_uuid_bin = f.proprietor_uuid_bin
+    WHERE fa.account_id = ${accountId} AND fa.removed_at IS NULL
+    LIMIT 1
+  `.execute(db);
+  return r.rows[0] ? toFirmSummary(r.rows[0]) : null;
+}
+
+export async function findFirmSummary(firmId: number): Promise<FirmSummary | null> {
+  const r = await sql<RawFirmSummary>`
+    SELECT ${FIRM_SUMMARY_COLUMNS}
+    FROM firm f
+    LEFT JOIN economy_players pp ON pp.player_uuid_bin = f.proprietor_uuid_bin
+    WHERE f.firm_id = ${firmId}
+  `.execute(db);
+  return r.rows[0] ? toFirmSummary(r.rows[0]) : null;
+}
+
+// ── Firms directory (spec §5.5) ───────────────────────────────────────────
+
+/**
+ * The directory reads one row per firm (about 7k) with its account total,
+ * account count and staff count from two grouped passes over firm_accounts and
+ * firm_employee, then filters and sorts that. Bounded by the firm table; the
+ * default views are cached by the service.
+ */
+const FIRM_DIRECTORY_FROM = sql`(
+  SELECT f.firm_id, f.display_name, f.hq_region, f.discord_url, f.default_account_id,
+         f.is_archived AS archived, f.created_at, f.proprietor_uuid_bin, pp.current_name AS proprietor_name,
+         COALESCE(b.total, 0.00) AS total_balance, COALESCE(b.n, 0) AS account_count, COALESCE(e.n, 0) AS staff_count
+  FROM firm f
+  LEFT JOIN economy_players pp ON pp.player_uuid_bin = f.proprietor_uuid_bin
+  LEFT JOIN (
+    SELECT fa.firm_id, SUM(COALESCE(abm.balance, 0.00)) AS total, COUNT(*) AS n
+    FROM firm_accounts fa LEFT JOIN account_balances_mat abm ON abm.account_id = fa.account_id
+    WHERE fa.removed_at IS NULL GROUP BY fa.firm_id
+  ) b ON b.firm_id = f.firm_id
+  LEFT JOIN (
+    SELECT firm_id, COUNT(*) AS n FROM firm_employee WHERE left_at IS NULL GROUP BY firm_id
+  ) e ON e.firm_id = f.firm_id
+) x`;
+
+export const firmsColumnMap = defineColumnMap({
+  table: firmsTable,
+  filters: {
+    balance: { column: sql`x.total_balance` },
+    staff: { column: sql`x.staff_count` },
+    hq: { column: sql`x.hq_region` },
+    created: { column: sql`x.created_at` },
+    archived: { column: sql`x.archived` },
+  },
+  sorts: { name: sql`x.display_name`, balance: sql`x.total_balance`, staff: sql`x.staff_count`, created: sql`x.created_at` },
+  tiebreak: { column: sql`x.firm_id`, dir: 'desc' },
+  search: (q) => {
+    const like = likeContains(q.trim());
+    return sql<SqlBool>`(x.display_name LIKE ${like} OR x.hq_region LIKE ${like})`;
+  },
+});
+
+export interface FirmDirectoryRow {
+  firm_id: number;
+  display_name: string;
+  hq_region: string | null;
+  discord_url: string | null;
+  default_account_id: number | null;
+  archived: number;
+  created_at: Date;
+  proprietor_uuid: string | null;
+  proprietor_name: string | null;
+  total_balance: string;
+  account_count: number;
+  staff_count: number;
+}
+
+function firmDirectoryWhere(state: FirmsTableState, now: Date) {
+  const c = compileTableState(state, firmsColumnMap, now);
+  const conds = [...c.conditions];
+  if (!state.filters.some((f) => f.field === 'archived')) conds.unshift(sql<SqlBool>`x.archived = 0`);
+  return { where: conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``, orderBy: c.orderBy };
+}
+
+export async function listFirmDirectory(state: FirmsTableState, limit: number, offset: number, now: Date = new Date()): Promise<FirmDirectoryRow[]> {
+  const { where, orderBy } = firmDirectoryWhere(state, now);
+  const r = await sql<Omit<FirmDirectoryRow, 'proprietor_uuid' | 'account_count' | 'staff_count'> & { proprietor_uuid_bin: Buffer | null; account_count: number | string; staff_count: number | string }>`
+    SELECT x.* FROM ${FIRM_DIRECTORY_FROM} ${where} ${orderBy} LIMIT ${limit} OFFSET ${offset}
+  `.execute(db);
+  return r.rows.map(({ proprietor_uuid_bin, ...row }) => ({
+    ...row,
+    proprietor_uuid: proprietor_uuid_bin ? binToUuid(proprietor_uuid_bin) : null,
+    account_count: Number(row.account_count),
+    staff_count: Number(row.staff_count),
+  }));
+}
+
+export async function countFirmDirectory(state: FirmsTableState, now: Date = new Date()): Promise<number> {
+  const { where } = firmDirectoryWhere(state, now);
+  const r = await sql<{ c: number | string }>`SELECT COUNT(*) AS c FROM ${FIRM_DIRECTORY_FROM} ${where}`.execute(db);
+  return Number(r.rows[0]?.c ?? 0);
+}
+
+// ── Firm market and financials ────────────────────────────────────────────
+
+export interface FirmItemRow {
+  item_key: string;
+  item_name: string | null;
+  material: string;
+  item_custom: number;
+  trades: number;
+  quantity: number;
+  /** What customers paid the firm's shops (BUY: the customer bought), and what the shops paid customers (SELL). */
+  sold_volume: string;
+  bought_volume: string;
+}
+
+/**
+ * ChestShop trades at a firm's shops by item over [from, to), from
+ * idx_cs_firm (shop_firm_id, occurred_at): bounded by the firm and the window.
+ */
+export async function listFirmItems(firmId: number, from: Date, to: Date, limit: number): Promise<FirmItemRow[]> {
+  const r = await sql<{ item_key: string; item_name: string; material: string; item_custom: number; trades: number | string; quantity: number | string; sold_volume: string; bought_volume: string }>`
+    SELECT s.item_key, MAX(s.item_name) AS item_name, MAX(s.material) AS material, MAX(s.item_custom) AS item_custom,
+           COUNT(*) AS trades, SUM(s.quantity) AS quantity,
+           COALESCE(SUM(CASE WHEN s.direction = 'BUY' THEN s.total_price END), 0.00) AS sold_volume,
+           COALESCE(SUM(CASE WHEN s.direction = 'SELL' THEN s.total_price END), 0.00) AS bought_volume
+    FROM chestshop_sale s
+    WHERE s.shop_firm_id = ${firmId} AND s.occurred_at >= ${from} AND s.occurred_at < ${to}
+    GROUP BY s.item_key
+    ORDER BY COUNT(*) DESC, s.item_key
+    LIMIT ${limit}
+  `.execute(db);
+  return r.rows.map((row) => ({ ...row, trades: Number(row.trades), quantity: Number(row.quantity) }));
+}
+
+export interface FirmMonthFlowRow {
+  month: string;
+  plugin_key: string;
+  tax_kind: string;
+  counterparty_type: string;
+  is_internal: number;
+  inflow: string;
+  outflow: string;
+}
+
+/**
+ * A set of accounts' flows by calendar month and the categorisation inputs,
+ * from explorer_rollup_account_day (PK prefix account_id, day). Days are
+ * 'YYYY-MM-DD', inclusive. Callers check rollup coverage first.
+ */
+export async function selectMonthlyFlows(accountIds: readonly number[], fromDay: string, toDay: string): Promise<FirmMonthFlowRow[]> {
+  if (accountIds.length === 0) return [];
+  const r = await sql<FirmMonthFlowRow & { is_internal: number | string }>`
+    SELECT DATE_FORMAT(day, '%Y-%m-01') AS month, plugin_key, tax_kind, counterparty_type, is_internal,
+           SUM(inflow) AS inflow, SUM(outflow) AS outflow
+    FROM explorer_rollup_account_day
+    WHERE account_id IN (${sql.join(accountIds)}) AND day BETWEEN ${fromDay} AND ${toDay}
+    GROUP BY month, plugin_key, tax_kind, counterparty_type, is_internal
+    ORDER BY month
+  `.execute(db);
+  return r.rows.map((row) => ({ ...row, is_internal: Number(row.is_internal) }));
 }

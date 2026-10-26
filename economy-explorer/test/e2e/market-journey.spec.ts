@@ -1,40 +1,37 @@
 import { test, expect } from '@playwright/test';
 import { visit } from './helpers';
 
-test('search, compare and return keeps the item results and page size', async ({ page }) => {
-  await visit(page, '/chestshop?q=Diamond&limit=25');
-  await page.locator('.catalogue-table tbody .rowlink').first().click();
-  await expect(page.getByRole('heading', { name: 'Where to trade' })).toBeVisible();
-  await page.getByRole('link', { name: 'I want to sell', exact: true }).click();
-  await expect(page.locator('.offer-price').first()).toContainText('$1.50');
-  await page.getByRole('link', { name: 'Show advanced candlesticks' }).click();
-  await expect(page.getByRole('link', { name: 'Hide advanced candlesticks' })).toBeVisible();
-  await page.locator('.offer-identity h2 a').first().click();
-  await expect(page.getByRole('link', { name: 'I want to sell', exact: true })).toHaveAttribute('aria-current', 'true');
-  await page.getByRole('link', { name: 'Back to item results' }).click();
-  await expect(page.getByRole('searchbox', { name: 'Search items, materials, keys…' })).toHaveValue('Diamond');
-  const url = new URL(page.url());
-  expect(url.searchParams.get('limit')).toBe('25');
-  expect(url.searchParams.get('page')).toBe('1');
-  await expect(page.locator('.catalogue-table tbody .rowlink')).not.toHaveCount(0);
+test('search, open an item, compare it and see where to trade', async ({ page }) => {
+  await visit(page, '/chestshop?q=Diamond');
+  await page.getByRole('table', { name: 'Items' }).getByRole('link', { name: /Diamond/ }).click();
+  await expect(page.getByRole('heading', { name: 'Diamond', level: 1 })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Diamond');
+  // The seed's second Diamond sign pays 1.50 for one item.
+  await expect(page.getByRole('table', { name: 'Shops buying Diamond' })).toContainText('$1.50');
+  // The location column folds into row details on phones, so check the link itself.
+  await expect(page.getByRole('table', { name: 'Shops selling Diamond' }).locator('a[href*="#world:101:64:101:"]').first()).toBeAttached();
+  await page.getByRole('link', { name: '+ Iron Ingot' }).click();
+  await expect(page).toHaveURL(/compare=IRON_INGOT/);
+  await expect(page.getByRole('link', { name: 'Remove Iron Ingot' })).toBeVisible();
+  await page.getByRole('link', { name: 'Remove Iron Ingot' }).click();
+  await expect(page).not.toHaveURL(/compare=/);
 });
 
-test('empty search offers a working fresh start', async ({ page }) => {
+test('an empty search says what filtered it and offers a way back', async ({ page }) => {
   await visit(page, '/chestshop?q=no-such-item-joy-check');
-  await expect(page.getByRole('heading', { name: 'No items found' })).toBeVisible();
-  await page.getByRole('link', { name: 'Browse all items' }).click();
-  await expect(page.getByRole('searchbox', { name: 'Search items, materials, keys…' })).toHaveValue('');
-  await expect(page.locator('.catalogue-table tbody .rowlink')).not.toHaveCount(0);
+  await expect(page.getByText(/No items match/)).toBeVisible();
+  await page.getByRole('link', { name: /^Remove/ }).click();
+  await expect(page.getByRole('searchbox')).toHaveValue('');
+  await expect(page.getByRole('table', { name: 'Items' }).locator('tbody tr')).not.toHaveCount(0);
 });
 
-test('clearing shop filters preserves trade direction and comparison units', async ({ page }) => {
-  await visit(page, '/chestshop/shops?item=DIAMOND&direction=sell&units=64');
-  await page.getByRole('button', { name: 'Clear filters' }).click();
-  await expect(page.getByLabel('Trade direction', { exact: true })).toHaveValue('sell');
-  await expect(page.getByLabel('Price units', { exact: true })).toHaveValue('64');
-  await expect(page.getByRole('button', { name: 'Remove Item: DIAMOND filter' })).toHaveCount(0);
-  expect(new URL(page.url()).searchParams.has('item')).toBe(false);
-  await expect(page.locator('.offer-price').first()).toContainText('/ 64 items');
+test('old shop links become filter chips, and selling compares buy-back prices', async ({ page }) => {
+  await visit(page, '/chestshop/shops?item=DIAMOND&direction=sell');
+  await expect(page.getByText('Shops that buy items from you', { exact: false })).toBeVisible();
+  const table = page.getByRole('table', { name: 'Shops' });
+  await expect(table.locator('tbody tr')).toHaveCount(2);
+  await expect(table.locator('tbody tr').first()).toContainText('$1.50');
+  await expect(table.getByRole('columnheader', { name: 'Space', includeHidden: true })).toHaveCount(1);
 });
 
 test('chart data is readable without interpreting the visual chart', async ({ page }) => {
@@ -80,7 +77,7 @@ test('keyboard help survives focus scrolling and stays inside a narrow viewport'
 for (const width of [390, 1280]) {
   test(`dashboard data is visible on arrival at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
-    for (const [path, selector] of [['/', '.overview-metrics'], ['/market', '.market-table tbody tr'], ['/chestshop', '.catalogue-table tbody tr']] as const) {
+    for (const [path, selector] of [['/', '.overview-metrics'], ['/market', '.metric-row'], ['/chestshop', '#items-table tbody tr']] as const) {
       await visit(page, path);
       await expect(page.locator(selector).first()).toBeInViewport({ ratio: 1 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
@@ -92,10 +89,11 @@ test('phone market rows retain secondary trading data', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await visit(page, '/market');
   const row = page.getByRole('table', { name: 'Most traded items' }).locator('tbody tr').first();
-  await row.getByText('Trading details', { exact: true }).click();
-  await expect(row.locator('details')).toContainText('trades');
-  await expect(row.locator('details').getByText(/Volume:/)).toBeVisible();
-  await row.getByRole('link').click();
-  await page.getByRole('link', { name: 'Back to Market' }).click();
+  await row.getByText('Details', { exact: true }).click();
+  await expect(row.locator('details')).toContainText('Items');
+  await expect(row.locator('details')).toContainText('Average price');
+  await row.getByRole('link').first().click();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Market' }).click();
   await expect(page.getByRole('table', { name: 'Most traded items' })).toBeVisible();
 });

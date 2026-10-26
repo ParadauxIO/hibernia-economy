@@ -3,8 +3,10 @@
 // one import line here. Keep the list alphabetical so parallel additions merge
 // cleanly.
 import 'server-only';
+import './account-transactions';
 import './accounts';
 import './audit';
+import './firm-transactions';
 import './gov';
 import './me';
 import './sales';

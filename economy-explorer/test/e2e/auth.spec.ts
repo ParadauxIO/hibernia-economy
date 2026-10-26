@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
 import mysql from 'mysql2/promise';
-import { dataTable, visit, submitReload } from './helpers';
+import { dataTable, visit, submitReload, GATE } from './helpers';
 import { testDbOptions } from '../integration/db';
 
 // These require the app running with E2E_TEST_AUTH=1 against the seeded test DB
@@ -19,13 +19,13 @@ test.describe('admin', () => {
 
   test('can open the whole-economy transactions list', async ({ page }) => {
     await visit(page, '/transactions');
-    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+    await expect(page.locator(GATE)).toHaveCount(0);
     await expect(dataTable(page)).toBeVisible();
   });
 
   test('can open admin API keys', async ({ page }) => {
     await visit(page, '/admin/api-keys');
-    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+    await expect(page.locator(GATE)).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'API keys' })).toBeVisible();
   });
 
@@ -55,7 +55,7 @@ test.describe('player own-data', () => {
 
   test('sees their own account history', async ({ page }) => {
     await visit(page, '/accounts/1');
-    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+    await expect(page.locator(GATE)).toHaveCount(0);
     // account-detail renders several tables (txns, counterparties, …) when
     // history is visible — assert at least one is present.
     await expect(dataTable(page).first()).toBeVisible();
@@ -63,7 +63,7 @@ test.describe('player own-data', () => {
 
   test('cannot see another account’s history', async ({ page }) => {
     await visit(page, '/accounts/2'); // Bob's account
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
   });
 });
 
@@ -72,18 +72,18 @@ test.describe('moderator investigations', () => {
   test.beforeEach(({ context }) => loginAs(context, 'moderator'));
   test('can investigate but cannot open administrative controls', async ({ page }) => {
     await visit(page, '/transactions');
-    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+    await expect(page.locator(GATE)).toHaveCount(0);
     await visit(page, '/admin/groups');
-    await expect(page.locator('.access-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
   });
 });
 test.describe('government relationships', () => {
   test.beforeEach(({ context }) => loginAs(context, 'government'));
   test('cannot inspect unrelated players or the global sales feed', async ({ page }) => {
     await visit(page, '/accounts/2');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await visit(page, '/chestshop/sales');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
   });
 });
 
@@ -111,9 +111,9 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     await expect(page.getByRole('heading', { name: 'API keys', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^(Revoke key|Rotate key|Limit$)/ })).toHaveCount(0);
     await visit(page, '/admin/groups');
-    await expect(page.locator('.access-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await visit(page, '/admin/roles');
-    await expect(page.locator('.access-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
 
     await loginAs(context, 'admin');
     await visit(page, `/admin/roles/${key}`);
@@ -126,9 +126,9 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     }).toBe(2);
     await loginAs(context, key);
     await visit(page, '/admin/api-keys');
-    await expect(page.locator('.access-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await visit(page, '/chestshop/sales');
-    await expect(page.locator('.privacy-gate')).toHaveCount(0);
+    await expect(page.locator(GATE)).toHaveCount(0);
 
     await loginAs(context, 'admin');
     await visit(page, `/admin/roles/${key}`);
@@ -139,7 +139,7 @@ test('configures custom roles and enforces changes in the admin tools', async ({
     expect(grants).toHaveLength(0);
     await loginAs(context, key);
     await visit(page, '/chestshop/sales');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
   } finally {
     await conn.query('DELETE FROM explorer_role_definition WHERE role_key = ?', [key]);
     await conn.end();

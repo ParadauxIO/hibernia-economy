@@ -181,7 +181,7 @@ the positive-net-balance chart excludes types whose total is zero or negative.
 Market items traded counts every distinct item traded in the selected window,
 not just the featured cards. Government fine totals cover all non-revoked fines
 in the selected window and your permitted accounts; the fines list is paginated.
-The item catalogue is ordered by item key for predictable browsing.
+The item catalogue is ordered by trades in the last 30 days; sort by any column instead.
 
 ## Economy pages
 
@@ -239,39 +239,88 @@ Government opens with accounts you may view. Its Fines tab supports reason searc
 active/revoked filtering and pagination. Summary totals always cover the whole
 selected period for your permitted accounts, independent of the list filter.
 
+## Account pages
+
+Every account has a page at `/accounts/<number>`, which is where links from the
+game lead. Anyone can see:
+
+- **Who holds it.** A personal account shows its owner. A business account shows
+  the **firm** that holds it, and its proprietor as the firm's proprietor: a
+  firm's money belongs to the firm, not to the person who runs it.
+- **Its balance**, when the account was opened, and what kind of account it is.
+- For **business and government accounts**, money in, money out and the number of
+  transactions over the last 30 days, with a 12-month trend. Individual
+  transactions stay private.
+- **Related** links: the owner or firm, the firm's other accounts, and other
+  accounts of the same owner.
+
+Use **Copy link** to share the page, or **Copy /pay command** to get the in-game
+command that pays this account.
+
+If you can read the account's history (it is yours, it is shared with you, or
+you run its firm's finances), you also get a balance chart, money in and out by
+category, a year-long activity calendar, the top counterparties and the full
+transaction list. Pick a period with the range buttons at the top. The
+transaction list has the same filter chips as the directories: **Category**,
+**Direction**, **Counterparty**, **Amount**, **Date** and **Message**. Use
+**Older** and **Newer** to page through it; **Balance after** shows the balance
+right after each transaction.
+
+Filters look at 5,000 transactions at a time, so a busy account stays fast. If
+nothing matches in that stretch, the table says how far back it looked; press
+**Older** to keep looking. Searching message text without a Date filter covers
+the last 30 days.
+
+Charts and totals come from summaries that update every few minutes. While the
+explorer is still building older history after an update, a section says
+**Preparing history** and how far back it is covered.
+
+## Player profiles
+
+Each player has a profile at `/players/<name>` (any capitalisation works). It
+shows when they first and last played, their personal account and balance, the
+firms they run or work for with their role, and their own shops. It never shows a
+firm's money or adds up a player's accounts. The **[Players](/players)**
+directory lists everyone, newest activity first, with filters for first seen,
+last seen and firm membership.
+
+## Firm pages
+
+A firm's page shows its proprietor, staff count, headquarters, its accounts and
+their balances, 30 days of money in and out across those accounts (moves between
+the firm's own accounts are left out) and the items its shops sell most.
+**Members** lists staff and roles, for the firm's own people. **Financials**
+shows revenue and costs by category, payroll, shop performance by item and a
+printable monthly statement with CSV export, for the people who run the firm's
+money.
+
 ## Finding items
 
-Market starts with a search across the full catalogue and popular items for 7 or
-30 days. Browse Items includes the complete alphabetical catalogue; Find Shops
-lists observed shops; Activity contains market-wide totals and charts. Item cards
-show historical daily average prices per item, not guaranteed shop offers.
+**Market** opens with a search box, this week's price movers, the most traded
+items and the newest shops. **Items** lists everything traded in the last 30 days
+with its average price, trades and volume; search by name and filter or sort by
+any of them. Average prices come from real trades, not shop quotes.
+
+An item's page shows daily price candles, trades per day, the average price
+shops charge and pay with the spread between them, and where to buy or sell it
+now. Pick a period with the range buttons. Under **Compare**, add up to three
+other items to plot their average prices together.
 
 ## Comparing shops
 
-Choose **I want to buy** to buy from shops at the lowest unit price, or **I want to
-sell** to sell your items to the highest bidder. Prices on signs are for a batch;
-the Explorer divides by that batch quantity for a fair per-item comparison. The
-optional 64-item view is an estimate, not a promise that the item stacks to 64.
-Check the sign batch, stock observation time and shop observation time before
-travelling. Copy location copies the world and coordinates; the map link opens
-the server map. Offers show both observed stock and space available: the number
-of additional items of that type the container can accept. Zero space means the
-container is full for that item. Admin shops show unlimited stock and space;
-unknown observations stay unknown. Stock and space share the observation time
-and may have changed since the last check.
-
-Item pages show observed offers before historical averages. The simple daily
-price chart is followed by an optional advanced candlestick view. Historical
-sellers do not necessarily still have an active shop. Private sales figures retain
-their existing permission requirements.
+**Find shops** lists shop signs, cheapest first. Add **I want to: Sell** to see
+shops that buy from you, best price first. Prices on signs are for a batch; the
+explorer shows the price per item. **Stock** (or **Space**, when selling) shows
+the last observation: **Below one batch** or **Recheck** means check before you
+travel, and admin shops are unlimited. The location opens the server map.
 
 ## Search and directories on a phone
 
 Use **Search** in the header to find accounts, firms and players. Escape closes
 search and returns focus to its button. Account and firm directories keep names
 and balances together on narrow screens; expand **Details** for other columns.
-The firms directory has sort presets (Richest, Newest, Name A–Z, Largest employers).
-The selected sort is shown above the table and stays in the URL with your filters.
+The players, firms, items and shops directories use the same search and filter chips
+as the accounts directory below, and keep them in the page address.
 
 ## Filter the accounts directory
 
@@ -300,8 +349,6 @@ Click a column heading to sort by it, and click it again to reverse the order.
   choice on this device.
 - Filters are part of the page address, so you can bookmark or share a filtered
   view.
-Account details show a single current balance; owner UUIDs are expandable.
-Authorised viewers can follow a business account back to its firm.
 
 ## Recover your website password
 
