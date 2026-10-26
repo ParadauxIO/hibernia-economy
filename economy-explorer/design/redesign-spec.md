@@ -216,7 +216,7 @@ The rollup worker runs **inside the economy explorer's own Node process**, follo
   - Readers check coverage. A section whose range is not covered yet shows a "Preparing history: covered back to <date>" state, never a slow live query. This is a single code path, not a fallback to the old queries.
   - On production the backfill runs once at release. D1 measures how long it takes on the dev clone and records the figure in the release runbook.
 - **Cost:** about 35k transactions and 70k postings per day. The worker reads them through the `settlement_time` / `ledger_txn_volume` indexes.
-- **Freshness contract:** rollups lag by at most about 1 minute.
+- **Freshness contract:** rollups lag by at most about 5 minutes (`ROLLUP_TICK_MS`).
   - Pages that use them say "updated hh:mm".
   - "Today so far" views may add a cheap live tail query for after the last rollup run.
 - **Health:** the worker writes `explorer_rollup_run(job, day, started_at, finished_at, rows, error)`.
