@@ -27,6 +27,8 @@ import { parseTaxRates } from '@/lib/taxRates';
 import { accountsTableSuite } from './accountsTable';
 import { adminSuite } from './adminSuite';
 import { powerSuite } from './power';
+import { parseTableState } from '@/lib/tables/core';
+import { finesTable } from '@/lib/tables/fines';
 
 // Real queries against a real MariaDB (no mocking). Skipped unless RUN_INTEGRATION=1.
 const d = HAS_DB ? describe : describe.skip;
@@ -55,6 +57,13 @@ async function issueFine(fine: { reason: string; amount: number; payer?: string;
   const row = await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked)
     VALUES (${uuidToBin(fine.payer ?? BOB)}, ${fine.govAccountId ?? 5}, ${fine.amount}, ${fine.reason}, ${txn.insertId}, ${uuidToBin(ALICE)}, ${fine.revoked ? 1 : 0})`.execute(db);
   return Number(row.insertId);
+}
+
+/** A /gov fines query over the last 30 days with the given table params. */
+function finesQuery(accountIds: number[], qs: string) {
+  const now = Date.now();
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return { accountIds, fromTs: `${day(now - 29 * 86_400_000)} 00:00:00`, toTs: `${day(now + 86_400_000)} 00:00:00`, state: parseTableState(new URLSearchParams(qs), finesTable) };
 }
 
 /** Remove fines issued by issueFine, then their debit txns (fk_fines_txn is RESTRICT). */
@@ -401,15 +410,15 @@ d('RBAC relationship snapshots', () => {
     }
   });
   it('government queries filter both details and aggregate totals', async () => {
-    const { getGovernmentAccounts, getRecentFines, getFineTotals } = await import('@/lib/sql/government');
+    const { getGovernmentAccounts, listFines, summariseFines } = await import('@/lib/sql/government');
     expect((await getGovernmentAccounts({ playerUuid: SECRETARY })).map(a => a.account_id)).toEqual([5]);
     expect(await getGovernmentAccounts({ playerUuid: DAVE })).toEqual([]);
     try {
       await issueFine({ reason: 'rbac-test', amount: 100 });
-      expect(await getRecentFines(30, 100, [])).toEqual([]);
-      expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
-      expect((await getRecentFines(30, 100, [5])).some(f => f.reason === 'rbac-test')).toBe(true);
-      expect((await getFineTotals(30, [5])).activeAmount).toBe('100.00');
+      expect(await listFines(finesQuery([], 'q=rbac-test'), 100, 0)).toEqual([]);
+      expect(await summariseFines(finesQuery([], 'q=rbac-test'))).toEqual({ count: 0, total: '0.00', revoked: 0, revoked_total: '0.00' });
+      expect((await listFines(finesQuery([5], 'q=rbac-test'), 100, 0)).some(f => f.reason === 'rbac-test')).toBe(true);
+      expect((await summariseFines(finesQuery([5], 'q=rbac-test&f=status:in:active'))).total).toBe('100.00');
     } finally {
       await deleteFines('rbac-test');
     }
@@ -597,28 +606,29 @@ d('explorer summary regressions', () => {
   });
 
   it('fine totals include more than the recent-list cap and respect scope', async () => {
-    const { getFineTotals, getRecentFines } = await import('@/lib/sql/government');
-    const before = await getFineTotals(30, [5]);
+    const { summariseFines, listFines } = await import('@/lib/sql/government');
+    const before = await summariseFines(finesQuery([5], 'f=status:in:active'));
     try {
       for (let i = 0; i < 105; i++) await issueFine({ reason: 'audit-total', amount: 2.5 });
-      const total = await getFineTotals(30, [5]);
-      expect(total.activeCount).toBe(before.activeCount + 105);
-      expect(Number(total.activeAmount)).toBe(Number(before.activeAmount) + 262.5);
-      expect(await getRecentFines(30, 100, [5])).toHaveLength(100);
-      expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
+      const total = await summariseFines(finesQuery([5], 'f=status:in:active'));
+      expect(total.count).toBe(before.count + 105);
+      expect(total.total).toBe((Number(before.total) + 262.5).toFixed(2));
+      expect(await listFines(finesQuery([5], ''), 100, 0)).toHaveLength(100);
+      expect((await summariseFines(finesQuery([], ''))).count).toBe(0);
     } finally { await deleteFines('audit-total'); }
   });
 });
 
 d('government fine browsing', () => {
   it('filters and paginates within the permitted account set', async () => {
-    const { getRecentFines, countFines } = await import('@/lib/sql/government');
+    const { listFines, summariseFines } = await import('@/lib/sql/government');
     try {
       for (let i = 0; i < 3; i++) await issueFine({ reason: 'audit-page', amount: 1, revoked: i === 2 });
-      expect(await countFines(30, [5], { q: 'audit-page', status: 'active' })).toBe(2);
-      expect(await countFines(30, [], { q: 'audit-page' })).toBe(0);
-      const first = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active' });
-      const second = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active', offset: 1 });
+      expect((await summariseFines(finesQuery([5], 'q=audit-page&f=status:in:active'))).count).toBe(2);
+      expect((await summariseFines(finesQuery([5], 'q=audit-page'))).revoked).toBe(1);
+      expect((await summariseFines(finesQuery([], 'q=audit-page'))).count).toBe(0);
+      const first = await listFines(finesQuery([5], 'q=audit-page&f=status:in:active'), 1, 0);
+      const second = await listFines(finesQuery([5], 'q=audit-page&f=status:in:active'), 1, 1);
       expect(first).toHaveLength(1);
       expect(second).toHaveLength(1);
       expect(first[0]?.fine_id).not.toBe(second[0]?.fine_id);
