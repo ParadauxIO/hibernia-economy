@@ -295,6 +295,26 @@ Daily SQL aggregates remain UTC buckets: `fmtDate` and activity calendar date
 arithmetic must stay in UTC, rather than shifting already aggregated dates
 into the browser's zone. Daily charts label this distinction.
 
+### Explorer money, cache and request dedupe (PAR-535)
+
+- **Money is exact.** `lib/money.ts` parses DB decimal strings to integer cents
+  (`bigint`), sums them, and formats them; `fmtAmt`/`fmtAmtFull` delegate to it.
+  Never add amounts with `parseFloat` or `Number`. `toNumber` and `ratio` exist
+  only for chart coordinates and percentages.
+- **`memo(key, windowMs, producer, { maxStaleMs, lockMs })`** in `lib/cache.ts`
+  is stale-while-revalidate with a bounded L1 (5,000 entries, about 64 MiB).
+  A value older than `maxStaleMs` (default 60 windows) is recomputed before it
+  is served, falling back to the old value only if that recompute fails. Cold
+  misses take a Redis lock: one pod computes and the others poll for its result
+  until the lock TTL (default 20 s) ends. Failures are never stored.
+- **Request dedupe.** `lib/auth/access.ts` exports React `cache()` wrappers of
+  `findAccount`, `canReadAccount`, `findFirmByDisplayName`, `findFirmById`,
+  `isFirmMember` and `hasFirmFinancialAccess`. Pages import those rather than
+  the raw `lib/sql` functions. Check many accounts at once with
+  `readableAccountIds(viewer, ids)`, not a `canViewAccount` loop.
+- **Keyset cursors.** `lib/pagination/cursor.ts` encodes `(timestamp, id)` as
+  an opaque base64url token for Newer / Older pagination on unbounded feeds.
+
 ### Business and Realty Explorer membership sources
 
 TreasuryAPI reconciles optional per-group Business and Realty bindings independently
