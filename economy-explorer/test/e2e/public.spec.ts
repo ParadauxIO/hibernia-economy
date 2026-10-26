@@ -39,7 +39,7 @@ test.describe('anonymous browsing', () => {
     await visit(page, '/accounts?type=PERSONAL');
     await expect(dataTable(page)).toBeVisible();
     await expect(page.locator('th', { hasText: 'Status' })).toHaveCount(0);
-    const firstLabel = (await page.locator('.rowlink span').first().textContent())?.trim() ?? '';
+    const firstLabel = (await page.locator('.dt-rowlink span').first().textContent())?.trim() ?? '';
     expect(firstLabel).not.toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/i);
   });
 
@@ -163,14 +163,16 @@ test('mobile global search opens, focuses and closes with Escape', async ({ page
 test('mobile account rows keep balances visible and expand secondary details', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await visit(page, '/accounts?sort=balance&dir=DESC');
-  const first = page.locator('.directory-table tbody tr').first();
-  await expect(first.locator('td.amount')).toBeVisible();
-  const box = await first.locator('td.amount').boundingBox();
+  const first = page.locator('#accounts-table tbody tr').first();
+  await expect(first.locator('td[data-col="balance"]')).toBeVisible();
+  const box = await first.locator('td[data-col="balance"]').boundingBox();
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  await expect(first.locator('td[data-col="created"]')).toBeHidden();
   await first.locator('summary').click();
   await expect(first.locator('details')).toHaveAttribute('open', '');
-  await page.getByRole('link', { name: 'Newest', exact: true }).click();
-  await expect(page).toHaveURL(/sort=created/);
+  await expect(first.locator('details [data-col="created"] time')).toBeVisible();
+  await page.getByRole('columnheader', { name: /^Account/ }).getByRole('link').click();
+  await expect(page).toHaveURL(/sort=name/);
 });
 
 

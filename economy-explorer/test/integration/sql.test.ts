@@ -27,6 +27,7 @@ import { audit } from '@/lib/audit';
 import { listAudit } from '@/lib/sql/audit';
 import { findConfigByPrefix } from '@/lib/sql/economyConfig';
 import { parseTaxRates } from '@/lib/taxRates';
+import { accountsTableSuite } from './accountsTable';
 
 // Real queries against a real MariaDB (no mocking). Skipped unless RUN_INTEGRATION=1.
 const d = HAS_DB ? describe : describe.skip;
@@ -1075,3 +1076,5 @@ d('role provenance', () => {
   });
 
 });
+
+accountsTableSuite(d);

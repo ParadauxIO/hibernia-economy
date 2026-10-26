@@ -187,8 +187,36 @@ their existing permission requirements.
 Use **Search** in the header to find accounts, firms and players. Escape closes
 search and returns focus to its button. Account and firm directories keep names
 and balances together on narrow screens; expand **Details** for other columns.
-Sort presets include Richest, Newest, Name A–Z and Largest employers (firms).
+The firms directory has sort presets (Richest, Newest, Name A–Z, Largest employers).
 The selected sort is shown above the table and stays in the URL with your filters.
+
+## Filter the accounts directory
+
+The **[Accounts](/accounts)** directory is sorted by balance, highest first.
+Click a column heading to sort by it, and click it again to reverse the order.
+
+- **Search** matches account names and owner names. Type a full player UUID to
+  find that player's accounts, or `#123` to jump to account number 123.
+- **+ Filter** adds a filter on type, balance, created date, firm or archived
+  state. Each filter shows as a chip under the search box: click a chip to change
+  it, or **×** to remove it. **Clear all** removes every filter.
+- You can also type filters straight into the search box, and they turn into
+  chips when you press space or Enter:
+
+  | Type this | To get |
+  |---|---|
+  | `type:business` | Business accounts |
+  | `type:business,government` | Business or government accounts |
+  | `balance:>10k` | Balances over 10,000 (`<`, `>=`, `<=` work too) |
+  | `balance:1k..50k` | Balances from 1,000 to 50,000 |
+  | `created:2026` or `created:2026-03` | Opened in that year or month |
+  | `archived:yes` | Archived accounts, which are otherwise hidden |
+
+- Backspace in an empty search box removes the last chip.
+- **Columns** hides the Type and Created columns. The explorer remembers your
+  choice on this device.
+- Filters are part of the page address, so you can bookmark or share a filtered
+  view.
 Account details show a single current balance; owner UUIDs are expandable.
 Authorised viewers can follow a business account back to its firm.
 

@@ -15,6 +15,8 @@ type Viewer = 'anon' | 'player' | 'moderator' | 'government' | 'admin';
 const ROUTES: { path: string; viewers: Viewer[] }[] = [
   { path: '/', viewers: ['anon', 'admin'] },
   { path: '/accounts', viewers: ['anon'] },
+  { path: '/accounts?f=type:in:business,government&f=balance:gt:1000&f=created:gte:-1y', viewers: ['anon'] },
+  { path: '/accounts?f=type:in:system&f=balance:gt:1b', viewers: ['anon'] },
   { path: '/accounts/1', viewers: ['anon', 'player'] },
   { path: '/firms', viewers: ['anon'] },
   { path: '/firms/Acme%20Corp', viewers: ['anon', 'player'] },
