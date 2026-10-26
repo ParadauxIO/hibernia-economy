@@ -105,7 +105,8 @@ them; nothing else does.
   make ledger writers wait.
 - **Schedule.** Tuned for the shared production database; every interval is an
   environment variable (see `.env.example`).
-  - Every tick (`ROLLUP_TICK_MS`, default 60 s): today, plus any days missed
+  - Every tick (`ROLLUP_TICK_MS`, default 5 minutes, so rollups lag by at most
+    about 5 minutes): today, plus any days missed
     while no worker ran (oldest first).
   - Yesterday is recomputed every tick only for the first hour after 00:00 UTC
     (`ROLLUP_YESTERDAY_WINDOW_MS`, default 60 min), while late settlements and

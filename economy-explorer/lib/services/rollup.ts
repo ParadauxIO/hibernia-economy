@@ -16,7 +16,7 @@ import {
 // Ranges are inclusive UTC days, `{ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }`
 // (compatible with lib/range.ts). Every helper returns `{ data, coverage }`:
 //
-//   * Freshness: the worker recomputes today every tick (default a minute),
+//   * Freshness: the worker recomputes today every tick (default 5 minutes),
 //     so today lags the ledger by about one tick. Yesterday is final after the
 //     first hour past 00:00 UTC; later settlement_time changes reach older days
 //     with the nightly pass. Wealth snapshots refresh every 15 minutes.

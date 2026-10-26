@@ -11,8 +11,8 @@ import {
   prunePairDays, pruneRuns, readCoverage, recomputeDay, snapshotWealth,
 } from './steps';
 
-// The in-process scheduler (spec §4.2). Every tick (ROLLUP_TICK_MS, default a
-// minute) the leader:
+// The in-process scheduler (spec §4.2). Every tick (ROLLUP_TICK_MS, default 5
+// minutes) the leader:
 //   1. recomputes today (UTC), plus any days missed while no worker ran, oldest
 //      first so coverage stays contiguous. Yesterday is recomputed every tick
 //      only for the first hour after 00:00 UTC (ROLLUP_YESTERDAY_WINDOW_MS),
@@ -38,8 +38,15 @@ type Pass = 'fresh' | 'nightly' | 'backfill';
 const NIGHTLY_AFTER_MINUTES = 15;
 const NIGHTLY_DAYS = 7;
 const RUN_LOG_KEEP_DAYS = 7;
-/** Leave this much of each tick (at most) for the next tick's fresh-day pass. */
-const BACKFILL_MARGIN_MS = 10_000;
+/**
+ * Backfill stops this long before the next tick is due (a fifth of the tick, at
+ * most a minute: 60 s of a 5-minute tick), and never starts a day it does not
+ * expect to finish by then, so a backfill day cannot run into the next tick and
+ * make it skip today's recompute.
+ */
+export function backfillMarginMs(tickMs: number): number {
+  return Math.min(60_000, tickMs / 5);
+}
 const DAY_MS = 86_400_000;
 
 export interface WorkerDeps {
@@ -66,6 +73,8 @@ export class RollupWorker {
   private readonly now: () => Date;
   private readonly config: RollupConfig;
   private lastWealthAt: number | null = null;
+  /** Duration of the last backfilled day, to avoid starting one that overruns the tick. */
+  private lastBackfillMs = 0;
   private readonly log: Pick<Console, 'info' | 'warn'>;
   private tickTimer: NodeJS.Timeout | null = null;
   private renewTimer: NodeJS.Timeout | null = null;
@@ -109,8 +118,7 @@ export class RollupWorker {
   /** One scheduling round. Overlapping calls share the round in progress. */
   tick(deadline?: number): Promise<TickResult> {
     if (!this.running) {
-      const margin = Math.min(BACKFILL_MARGIN_MS, this.config.tickMs / 6);
-      this.running = this.round(deadline ?? this.now().getTime() + this.config.tickMs - margin)
+      this.running = this.round(deadline ?? this.now().getTime() + this.config.tickMs - backfillMarginMs(this.config.tickMs))
         .finally(() => { this.running = null; });
     }
     return this.running;
@@ -139,12 +147,15 @@ export class RollupWorker {
       result.errors += await this.nightly(today);
     }
 
-    while (this.active() && this.lease.held && this.now().getTime() < deadline) {
+    // Start another day only if the last one would still fit before the deadline.
+    while (this.active() && this.lease.held && this.now().getTime() + this.lastBackfillMs < deadline) {
+      const started = this.now().getTime();
       const day = await this.backfillOne(today);
       if (!day) break;
+      this.lastBackfillMs = this.now().getTime() - started;
       result.backfilled.push(day.day);
       result.errors += day.errors;
-      // A failed day is retried next minute, not hammered in this one.
+      // A failed day is retried next tick, not hammered in this one.
       if (day.errors > 0) break;
       await new Promise((resolve) => setTimeout(resolve, this.config.backfillPauseMs));
     }

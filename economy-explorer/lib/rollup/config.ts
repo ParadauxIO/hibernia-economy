@@ -5,7 +5,7 @@
 // after that only by the nightly 7-day pass.
 
 export interface RollupConfig {
-  /** How often the leader runs a round (ROLLUP_TICK_MS, default 60 s). */
+  /** How often the leader runs a round, and so how far rollups lag (ROLLUP_TICK_MS, default 5 min). */
   tickMs: number;
   /** Minimum time between wealth snapshots; today's row is refreshed in place (ROLLUP_WEALTH_EVERY_MS, default 15 min). */
   wealthEveryMs: number;
@@ -16,7 +16,7 @@ export interface RollupConfig {
 }
 
 export const DEFAULT_ROLLUP_CONFIG: RollupConfig = {
-  tickMs: 60_000,
+  tickMs: 5 * 60_000,
   wealthEveryMs: 15 * 60_000,
   yesterdayWindowMs: 60 * 60_000,
   backfillPauseMs: 250,
