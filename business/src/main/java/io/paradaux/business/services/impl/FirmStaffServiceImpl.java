@@ -1,11 +1,13 @@
 package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
+import com.google.inject.Provider;
 import com.google.inject.Singleton;
 
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.InternalException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
 import io.paradaux.business.model.Firm;
@@ -29,13 +31,17 @@ public class FirmStaffServiceImpl implements FirmStaffService {
     private final FirmRoleMapper roles;
     private final FirmStaffMapper staff;
     private final FirmAccountService accounts;
+    /** Lazy-injected to break the FirmStaffService ↔ FirmChatService cycle. */
+    private final Provider<FirmChatService> chatProvider;
 
     @Inject
-    public FirmStaffServiceImpl(FirmService firms, FirmRoleMapper roles, FirmStaffMapper staff, FirmAccountService accounts) {
+    public FirmStaffServiceImpl(FirmService firms, FirmRoleMapper roles, FirmStaffMapper staff, FirmAccountService accounts,
+                                Provider<FirmChatService> chatProvider) {
         this.firms = firms;
         this.roles = roles;
         this.staff = staff;
         this.accounts = accounts;
+        this.chatProvider = chatProvider;
     }
 
     /**
@@ -49,8 +55,15 @@ public class FirmStaffServiceImpl implements FirmStaffService {
 
     @Override
     public void fireEmployee(String firmName, UUID playerId, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        fireEmployee(firms.getFirmByNameOrId(firmName), playerId, actorId);
+    }
 
+    @Override
+    public void fireEmployee(int firmId, UUID playerId, UUID actorId) {
+        fireEmployee(firms.getFirmById(firmId), playerId, actorId);
+    }
+
+    private void fireEmployee(Firm firm, UUID playerId, UUID actorId) {
         if (firm == null) {
             throw new BadCommandException("No such firm");
         }
@@ -68,14 +81,17 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         }
 
         int rows = staff.endCurrentEmployment(firm.getFirmId(), playerId.toString(), actorId.toString());
+        if (rows == 0) throw new BadCommandException("That player isn't employed by " + firm.getDisplayName() + ".");
         if (rows != 1) throw new InternalException("Failed to end this employment.");
 
+        // A fired employee must stop posting to the firm's chat straight away.
+        chatProvider.get().membershipChanged(firm.getFirmId());
         accounts.syncAllFirmAccounts(firm.getFirmId());
     }
 
     @Override
-    public void hireEmployee(Integer firmId, UUID playerId, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmId.toString());
+    public void hireEmployee(int firmId, UUID playerId, UUID actorId) {
+        Firm firm = firms.getFirmById(firmId);
         if (firm == null) throw new BadCommandException("No such firm");
 
         // Public-API contract: caller must hold ADMIN on the firm. The invite-
@@ -88,8 +104,8 @@ public class FirmStaffServiceImpl implements FirmStaffService {
     }
 
     @Override
-    public void hireEmployeeFromInvite(Integer firmId, UUID playerId, UUID inviter) {
-        Firm firm = firms.getFirmByNameOrId(firmId.toString());
+    public void hireEmployeeFromInvite(int firmId, UUID playerId, UUID inviter) {
+        Firm firm = firms.getFirmById(firmId);
         if (firm == null) throw new BadCommandException("No such firm");
         // Permission check skipped: the invite row is the artifact of the
         // inviter's INVITE-time permission. See FirmStaffService Javadoc.
@@ -114,7 +130,15 @@ public class FirmStaffServiceImpl implements FirmStaffService {
 
     @Override
     public String promoteEmployee(String firmName, UUID playerId, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        return promoteEmployee(firms.getFirmByNameOrId(firmName), playerId, actorId);
+    }
+
+    @Override
+    public String promoteEmployee(int firmId, UUID playerId, UUID actorId) {
+        return promoteEmployee(firms.getFirmById(firmId), playerId, actorId);
+    }
+
+    private String promoteEmployee(Firm firm, UUID playerId, UUID actorId) {
         if (firm == null) {
             throw new BadCommandException("No such firm");
         }
@@ -159,7 +183,15 @@ public class FirmStaffServiceImpl implements FirmStaffService {
 
     @Override
     public String demoteEmployee(String firmName, UUID playerId, UUID actorId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        return demoteEmployee(firms.getFirmByNameOrId(firmName), playerId, actorId);
+    }
+
+    @Override
+    public String demoteEmployee(int firmId, UUID playerId, UUID actorId) {
+        return demoteEmployee(firms.getFirmById(firmId), playerId, actorId);
+    }
+
+    private String demoteEmployee(Firm firm, UUID playerId, UUID actorId) {
         if (firm == null) {
             throw new BadCommandException("No such firm");
         }
@@ -204,8 +236,15 @@ public class FirmStaffServiceImpl implements FirmStaffService {
 
     @Override
     public void resignFromFirm(String firmName, UUID playerId) {
-        Firm firm = firms.getFirmByNameOrId(firmName);
+        resignFromFirm(firms.getFirmByNameOrId(firmName), playerId);
+    }
 
+    @Override
+    public void resignFromFirm(int firmId, UUID playerId) {
+        resignFromFirm(firms.getFirmById(firmId), playerId);
+    }
+
+    private void resignFromFirm(Firm firm, UUID playerId) {
         if (firm == null) {
             throw new BadCommandException("No such firm");
         }
@@ -216,32 +255,49 @@ public class FirmStaffServiceImpl implements FirmStaffService {
 
         staff.endCurrentEmployment(firm.getFirmId(), playerId.toString(), playerId.toString());
 
+        chatProvider.get().membershipChanged(firm.getFirmId());
         accounts.syncAllFirmAccounts(firm.getFirmId());
     }
 
+    @Override
     public List<FirmEmployee> getCurrentEmployees(String firmName) {
+        return getCurrentEmployees(firms.getAnyFirmByNameOrId(firmName));
+    }
+
+    @Override
+    public List<FirmEmployee> getCurrentEmployees(int firmId) {
+        return getCurrentEmployees(firms.getAnyFirmById(firmId));
+    }
+
+    private List<FirmEmployee> getCurrentEmployees(Firm firm) {
         // Archived-inclusive: listing a roster is a read, so a defunct firm's staff can
         // still be inspected (consistent with /firm info). Mutating staff goes through
         // the active-only paths instead (PAR-87).
-        Firm firm = firms.getAnyFirmByNameOrId(firmName);
-
         if (firm == null) {
             throw new BadCommandException("No such firm");
         }
 
         List<FirmEmployee> employees = staff.listCurrentEmployeesByFirm(firm.getFirmId());
-        employees.addFirst(getProprietorAsEmployee(firmName));
+        employees.addFirst(getProprietorAsEmployee(firm));
 
         return employees;
     }
 
     @Override
     public List<Player> getOnlineEmployees(String firmName) {
-        return getCurrentEmployees(firmName).stream()
+        return toOnline(getCurrentEmployees(firmName));
+    }
+
+    @Override
+    public List<Player> getOnlineEmployees(int firmId) {
+        return toOnline(getCurrentEmployees(firmId));
+    }
+
+    private static List<Player> toOnline(List<FirmEmployee> employees) {
+        return employees.stream()
                 .map(e -> Bukkit.getPlayer(UUID.fromString(e.getPlayerUuid())))
                 .filter(Objects::nonNull)
                 .toList();
-
     }
 
     public boolean hasPermission(Integer firmId, UUID playerId, RolePermission permission) {
@@ -251,7 +307,7 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         String roleName = getCurrentRole(firmId, playerId);
         if (roleName == null || roleName.isBlank()) return false;
 
-        List<FirmRolePermission> perms = roles.listPermissionsByRole(firmId, Objects.requireNonNull(roleName, "roleName must not be null").trim());
+        List<FirmRolePermission> perms = roles.listPermissionsByRole(firmId, roleName.trim());
 
         for (FirmRolePermission rp : perms) {
             if (rp.getPermission() == permission) return true;
@@ -272,8 +328,16 @@ public class FirmStaffServiceImpl implements FirmStaffService {
 
     @Override
     public FirmEmployee getProprietorAsEmployee(String firmName) {
+        return getProprietorAsEmployee(firms.getAnyFirmByNameOrId(firmName));
+    }
+
+    @Override
+    public FirmEmployee getProprietorAsEmployee(int firmId) {
+        return getProprietorAsEmployee(firms.getAnyFirmById(firmId));
+    }
+
+    private FirmEmployee getProprietorAsEmployee(Firm firm) {
         // Archived-inclusive read; guard against an unknown firm rather than NPE'ing.
-        Firm firm = firms.getAnyFirmByNameOrId(firmName);
         if (firm == null) {
             throw new BadCommandException("No such firm");
         }

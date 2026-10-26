@@ -16,6 +16,38 @@ import java.util.List;
 public interface FirmAccountsMapper {
 
     @Insert("""
+        INSERT INTO firm_shop_alias_reservations (alias, account_id) VALUES (#{alias}, #{accountId})
+        ON DUPLICATE KEY UPDATE alias = alias
+        """)
+    void reserveShopAlias(@Param("alias") String alias, @Param("accountId") int accountId);
+
+    @Select("SELECT account_id FROM firm_shop_alias_reservations WHERE alias = #{alias}")
+    Integer getShopAliasReservation(@Param("alias") String alias);
+
+
+    @Select("""
+        SELECT fa.account_id FROM firm_accounts fa
+        JOIN firm f ON f.firm_id = fa.firm_id
+        WHERE fa.shop_alias = #{alias} AND fa.removed_at IS NULL AND f.is_archived = 0
+        """)
+    Integer resolveShopAlias(@Param("alias") String alias);
+
+    @Select("""
+        SELECT shop_alias FROM firm_accounts
+        WHERE firm_id = #{firmId} AND account_id = #{accountId} AND removed_at IS NULL
+        """)
+    String getShopAlias(@Param("firmId") int firmId, @Param("accountId") int accountId);
+
+    @Update("""
+        UPDATE firm_accounts fa JOIN firm f ON f.firm_id = fa.firm_id
+        SET fa.shop_alias = #{alias}
+        WHERE fa.firm_id = #{firmId} AND fa.account_id = #{accountId}
+          AND fa.removed_at IS NULL AND f.is_archived = 0
+        """)
+    int setShopAlias(@Param("firmId") int firmId, @Param("accountId") int accountId,
+                     @Param("alias") String alias);
+
+    @Insert("""
         INSERT INTO firm_accounts (firm_id, account_id)
         VALUES (#{firmId}, #{accountId})
         ON DUPLICATE KEY UPDATE removed_at = NULL
@@ -80,4 +112,17 @@ public interface FirmAccountsMapper {
         LIMIT 1
         """)
     Integer getFirmIdByAccountId(@Param("accountId") Integer accountId);
+
+    /**
+     * Every live firm-↔-account link across all firms, in one query. Backs the
+     * firm balance leaderboard (/firm baltop), which sums each firm's account
+     * balances; doing this per-firm would be N+1. {@code added_at} is left unset.
+     */
+    @Select("""
+        SELECT firm_id    AS firmId,
+               account_id AS accountId
+        FROM firm_accounts
+        WHERE removed_at IS NULL
+        """)
+    List<FirmAccount> listActiveAccountLinks();
 }

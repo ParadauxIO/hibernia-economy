@@ -1,0 +1,73 @@
+# Dependency updates. Dependabot needs no app install, and its PRs run through
+# ci.yml like any other, so `ci-gate` decides whether a bump is mergeable.
+#
+# Volume control: per ecosystem, every minor + patch update lands as ONE grouped
+# PR per week; majors still come one PR each, since those are the ones that need
+# reading. PRs target develop (the default branch), per the release flow.
+#
+# github-actions: Dependabot bumps the full-SHA pins in place and rewrites the
+# trailing `# vX.Y.Z` comment, so the pinning convention survives updates. The
+# composite action lives outside .github/workflows, so it is listed explicitly.
+# The mariadb:10.11 service images in the workflows are deliberately not
+# covered: they track production's major, which is changed by hand.
+
+version: 2
+
+updates:
+  # Root build (incl. gradle/libs.versions.toml, the wrapper and the plugins
+  # block), the build-logic included build, and the separate integration-tests
+  # build.
+  - package-ecosystem: gradle
+    directories:
+      - /
+      - /build-logic
+      - /integration-tests
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build(deps)
+    groups:
+      gradle-minor-patch:
+        update-types: [ minor, patch ]
+
+  - package-ecosystem: npm
+    directory: /economy-explorer
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build(deps)
+    groups:
+      npm-minor-patch:
+        update-types: [ minor, patch ]
+
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/setup-jvm
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions-minor-patch:
+        update-types: [ minor, patch ]
+
+  - package-ecosystem: docker
+    directories:
+      - /economy-explorer
+      - /treasury-rest-api
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: build(deps)
+    groups:
+      docker-minor-patch:
+        update-types: [ minor, patch ]

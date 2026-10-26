@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * One row of {@code account_redirects}: a legacy "player" UUID that Vault calls
  * should route onto the canonical {@code account_id}. Loaded in bulk by
- * {@link io.paradaux.treasury.utils.AccountRedirectCache}.
+ * {@link io.paradaux.treasury.services.cache.AccountRedirectCache}.
  */
 @Getter
 @Setter

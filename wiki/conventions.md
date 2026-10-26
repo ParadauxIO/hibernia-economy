@@ -68,6 +68,25 @@ running business logic inline) is a defect.
   surrounding file's style for readability, but you don't need to preserve upstream
   idioms.
 
+## Plugin message colours
+
+Keep the four plugin `messages.properties` files on the same chat palette:
+
+| Role | Colour | Contrast on `#404040` |
+|---|---|---|
+| Brand, headings, commands, highlighted values | `#aabfff` | 5.73:1 |
+| Labels and metadata | `#b8b8b8` | 5.23:1 |
+| Errors, rejection, deductions | `#ff9999` | 5.07:1 |
+| Success and money | `<green>` (`#55ff55`) | 7.81:1 |
+| Warnings and caution | `<yellow>` (`#ffff55`) | 9.72:1 |
+
+Use `{secbegin}` / `{secend}` for ordinary highlights. Keep warning colours
+meaningful; navigation links, identifiers, and ordinary headings use the blue
+accent. Preserve click/hover actions and explanatory text when adjusting colours.
+These ratios assume opaque text against a solid dark-grey background, not every
+possible Minecraft scene or chat-opacity setting. Check changes in-game when a
+client is available. Server-customized locale files may need the same updates.
+
 ## Documentation
 
 - **Player/admin-facing** behaviour changes → update the user guide in

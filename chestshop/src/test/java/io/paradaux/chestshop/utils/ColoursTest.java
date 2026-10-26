@@ -1,0 +1,21 @@
+package io.paradaux.chestshop.utils;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
+
+class ColoursTest {
+
+    @Test
+    void constants_areTheExpectedSectionCodes() {
+        assertThat(Colours.SECTION_CHAR).isEqualTo('§');
+        assertThat(Colours.RED).isEqualTo("§c");
+        assertThat(Colours.GREEN).isEqualTo("§a");
+        assertThat(Colours.DARK_GREEN).isEqualTo("§2");
+        assertThat(Colours.AQUA).isEqualTo("§b");
+        assertThat(Colours.YELLOW).isEqualTo("§e");
+        assertThat(Colours.GRAY).isEqualTo("§7");
+        assertThat(Colours.DARK_GRAY).isEqualTo("§8");
+        assertThat(Colours.BOLD).isEqualTo("§l");
+    }
+}

@@ -41,8 +41,10 @@ import java.util.UUID;
  * <p>Every throttled and allowed request is counted into Micrometer
  * ({@code treasury_api_key_requests_total}) for the admin dashboard / Grafana.
  *
- * <p>Fails OPEN: if the rate-limit backend (Redis) errors, the request is
- * allowed rather than 500'd, so a Redis blip can't take the API down.
+ * <p>Backend-error behaviour is per-endpoint (see {@link RateLimit#failClosed()}):
+ * public reads <em>fail open</em> (a Redis blip can't take the API down), while
+ * money-mutating endpoints <em>fail closed</em> with {@code 503} so stressing the
+ * limiter backend can't strip the throttle off the transfer path.
  *
  * <p>Endpoints without {@code @RateLimit}, or anonymous traffic on an endpoint
  * whose {@code anonymousPerMinute} is left at the default {@code 0}, are not
@@ -86,6 +88,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     private boolean throttleAuthenticated(HttpServletResponse response, RateLimit ann,
                                           String routeKey, VerifiedToken token) throws Exception {
+        boolean failClosed = ann.failClosed();
         UUID issuer = token.ownerUuid();
         String issuerKey = issuer != null ? issuer.toString() : ("key:" + token.keyId());
 
@@ -98,7 +101,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
         // Limit is part of the key so a multiplier change re-buckets immediately.
         String bucketKey = issuerKey + ":" + routeKey + ":" + limit;
-        return consume(response, routeKey, bucketKey, limit, token, issuerKey);
+        return consume(response, routeKey, bucketKey, limit, token, issuerKey, failClosed);
     }
 
     private boolean throttleAnonymous(HttpServletRequest request, HttpServletResponse response,
@@ -108,7 +111,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         String issuerKey = "anon:" + ip;
         // Limit is part of the key for the same reason as the authenticated path.
         String bucketKey = issuerKey + ":" + routeKey + ":" + limit;
-        return consume(response, routeKey, bucketKey, limit, null, issuerKey);
+        return consume(response, routeKey, bucketKey, limit, null, issuerKey, ann.failClosed());
     }
 
     /**
@@ -118,23 +121,33 @@ public class RateLimitInterceptor implements HandlerInterceptor {
      */
     private boolean consume(HttpServletResponse response, String routeKey,
                             String bucketKey, int limit,
-                            VerifiedToken token, String issuerKey) throws Exception {
+                            VerifiedToken token, String issuerKey, boolean failClosed) throws Exception {
         ConsumptionProbe probe;
         try {
             Bucket bucket = bucketProvider.bucketFor(bucketKey, limit);
             probe = bucket.tryConsumeAndReturnRemaining(1);
         } catch (RuntimeException e) {
-            // Fail open: a Redis/backend error must not take down the API.
+            if (failClosed) {
+                // A money-mutating endpoint whose limit can't be checked is
+                // rejected, not waved through — stressing Redis must not strip
+                // the throttle off the transfer path.
+                log.warn("Rate-limit backend error on {} — failing CLOSED (request rejected): {}",
+                        routeKey, e.toString());
+                count(token, "backend_error");
+                writeBackendUnavailable(response);
+                return false;
+            }
+            // Fail open: a Redis/backend error must not take down public reads.
             log.warn("Rate-limit backend error on {} — failing open (request allowed): {}",
                     routeKey, e.toString());
-            count(token, issuerKey, "allowed");
+            count(token, "allowed");
             return true;
         }
 
         if (probe.isConsumed()) {
             response.setHeader("X-RateLimit-Limit", Integer.toString(limit));
             response.setHeader("X-RateLimit-Remaining", Long.toString(probe.getRemainingTokens()));
-            count(token, issuerKey, "allowed");
+            count(token, "allowed");
             return true;
         }
 
@@ -143,7 +156,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 issuerKey, routeKey,
                 token != null ? token.keyType() : "ANONYMOUS",
                 limit, retryAfterSeconds);
-        count(token, issuerKey, "throttled");
+        count(token, "throttled");
 
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -158,11 +171,31 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         return false;
     }
 
-    private void count(VerifiedToken token, String issuerKey, String outcome) {
+    /** 503 written when a fail-closed endpoint can't reach the rate-limit backend. */
+    private void writeBackendUnavailable(HttpServletResponse response) throws Exception {
+        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Retry-After", "5");
+        objectMapper.writeValue(response.getWriter(), new ErrorResponse(
+                "RATE_LIMIT_BACKEND_UNAVAILABLE",
+                "Rate limiting is temporarily unavailable; this request was rejected as a "
+                        + "safety measure. Retry shortly."));
+    }
+
+    private void count(VerifiedToken token, String outcome) {
+        // Only LOW-cardinality, non-identifying labels go on the metric (ADT-122/123):
+        //   - key_id / issuer-UUID are deliberately NOT labels. They grow one series
+        //     per API key / per human issuer (high cardinality → heap + scrape cost),
+        //     and the Prometheus actuator endpoint is permitAll, so exposing them
+        //     would leak which keys/issuers are active and their request volumes to
+        //     anyone who can scrape it. Per-issuer/route detail already lives in the
+        //     structured throttle log line for debugging.
+        //   - the raw client IP is likewise never a label (rotating anon IPs are
+        //     unbounded); anonymous traffic collapses to key_type=ANONYMOUS.
+        // The per-key/per-IP bucket KEY used for actual throttling is unaffected.
         try {
             metrics.counter(METRIC,
-                    "key_id", token != null ? Long.toString(token.keyId()) : "0",
-                    "issuer", issuerKey,
                     "key_type", token != null
                             ? (token.keyType() != null ? token.keyType() : "unknown")
                             : "ANONYMOUS",
@@ -173,14 +206,36 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * First hop of {@code X-Forwarded-For}, falling back to the socket remote
-     * address. Spring's {@code server.forward-headers-strategy=framework} (set in
-     * prod/uat) makes XFF the canonical client identity when behind the cluster
-     * ingress.
+     * The trusted client IP for anonymous bucketing (ADT-15).
+     *
+     * <p>Prefers {@code X-Envoy-External-Address}. The cluster's Cilium gateway runs
+     * Envoy with {@code use_remote_address: true} (verified in the live
+     * {@code cilium-gateway-paradaux} CiliumEnvoyConfig), so Envoy resolves the client
+     * from the real downstream TCP connection — hostNetwork, direct client connections,
+     * no LB in front — and writes it to this header, <em>overwriting</em> any value a
+     * client sends. It is therefore unforgeable.
+     *
+     * <p>We must <strong>not</strong> trust {@code X-Forwarded-For} / {@code getRemoteAddr()}
+     * here: the gateway is configured with the default {@code xff_num_trusted_hops: 0}
+     * and {@code skip_xff_append: false}, so it <em>appends</em> the real client to XFF
+     * without stripping client-supplied entries — and under {@code
+     * forward-headers-strategy: framework} the app reads the leftmost (client-controlled)
+     * XFF entry. Keying the anon bucket on that let an attacker rotate XFF for a fresh
+     * bucket per request.
+     *
+     * <p>Falls back to {@code getRemoteAddr()} when the header is absent (local/dev, or
+     * in-cluster traffic that didn't traverse the gateway). This fallback is safe because
+     * {@code clientIp} keys only the <em>anonymous</em> rate-limit buckets on the public
+     * ChestShop read endpoints — no money path and no authenticated request keys on it
+     * (those use the issuer key derived from the JWT). The worst case of a forged/absent
+     * header is coarser throttling of public reads. It relies on the network policy that
+     * the pod is not externally reachable off the Envoy gateway; keep that invariant.
      */
     private static String clientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        String envoyClient = request.getHeader("X-Envoy-External-Address");
+        if (envoyClient != null && !envoyClient.isBlank()) {
+            return envoyClient.trim();
+        }
         return request.getRemoteAddr();
     }
 }

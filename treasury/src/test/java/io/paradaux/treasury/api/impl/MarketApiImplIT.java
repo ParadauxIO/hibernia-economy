@@ -1,11 +1,15 @@
 package io.paradaux.treasury.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.ChestShopShopRecord;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
@@ -15,15 +19,11 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Integration test for the ChestShop write side: {@link MarketApiImpl} delegating
@@ -41,11 +41,65 @@ class MarketApiImplIT extends IntegrationTestBase {
     @BeforeEach
     void setUpMarket() throws Exception {
         market = injector.getInstance(MarketApiImpl.class);
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
             st.execute(CREATE_SALE);
             st.execute(CREATE_SHOP);
             st.execute("TRUNCATE TABLE chestshop_sale");
             st.execute("TRUNCATE TABLE chestshop_shop");
+        }
+        // The records below reference txn 42, shop accounts 100/200 and firm 7;
+        // seed those parents so the V20 market FKs stay enforced.
+        seedMarketReferences(new long[] {42L}, new int[] {100, 200}, new int[] {7});
+    }
+
+    @Test
+    void importPreviewPreference_isInsertOnlyAndPreservesNewerChoices() throws Exception {
+        try (Connection c = dataSource.getConnection();
+                Statement st = c.createStatement()) {
+            st.execute(
+                    "CREATE TABLE IF NOT EXISTS chestshop_preview_preference (player_uuid_bin BINARY(16) PRIMARY KEY, visible BOOLEAN NOT NULL)");
+            st.execute("TRUNCATE TABLE chestshop_preview_preference");
+        }
+        UUID player = UUID.randomUUID();
+        market.importPreviewPreference(player, false);
+        assertEquals(
+                0,
+                ((Number) query("SELECT visible FROM chestshop_preview_preference")
+                                .getFirst()
+                                .get("visible"))
+                        .intValue());
+        market.setPreviewPreference(player, true);
+        market.importPreviewPreference(player, false);
+        market.importPreviewPreference(player, false);
+        var rows = query("SELECT visible FROM chestshop_preview_preference");
+        assertEquals(1, rows.size());
+        assertEquals(1, ((Number) rows.getFirst().get("visible")).intValue());
+    }
+
+    @Test
+    void legacyPreferenceExportProducesStrictJsonBooleansAndSkipsUnsetChoices() throws Exception {
+        java.nio.file.Path export = java.nio.file.Path.of("ops/export-legacy-preferences.sql");
+        if (!java.nio.file.Files.exists(export)) export = java.nio.file.Path.of("../ops/export-legacy-preferences.sql");
+        String sql = java.nio.file.Files.readString(export)
+                .lines()
+                .filter(line -> !line.startsWith("--"))
+                .collect(java.util.stream.Collectors.joining("\n"));
+        try (Connection c = dataSource.getConnection();
+                Statement statement = c.createStatement()) {
+            statement.execute("CREATE TEMPORARY TABLE PreviewPreference (player_id UUID PRIMARY KEY, visible BOOLEAN)");
+            statement.execute(
+                    "INSERT INTO PreviewPreference VALUES ('00000000-0000-0000-0000-000000000001',false), ('00000000-0000-0000-0000-000000000002',true), ('00000000-0000-0000-0000-000000000003',NULL)");
+            try (ResultSet rows = statement.executeQuery(sql)) {
+                int count = 0;
+                while (rows.next()) {
+                    var json = com.google.gson.JsonParser.parseString(rows.getString(1))
+                            .getAsJsonObject();
+                    assertTrue(json.getAsJsonPrimitive("visible").isBoolean());
+                    count++;
+                }
+                assertEquals(2, count);
+            }
         }
     }
 
@@ -56,10 +110,28 @@ class MarketApiImplIT extends IntegrationTestBase {
         UUID customer = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         ChestShopSaleRecord sale = new ChestShopSaleRecord(
-                42L, "BUY", customer, 100, "PERSONAL", null, owner, false,
-                "DIAMOND", "DIAMOND", "Diamond", false, null,
-                3, new BigDecimal("5.0000"), new BigDecimal("15.00"), new BigDecimal("0.30"),
-                "world", 10, 64, -20, 61);
+                42L,
+                "BUY",
+                customer,
+                100,
+                "PERSONAL",
+                null,
+                owner,
+                false,
+                "DIAMOND",
+                "DIAMOND",
+                "Diamond",
+                false,
+                null,
+                3,
+                new BigDecimal("5.0000"),
+                new BigDecimal("15.00"),
+                new BigDecimal("0.30"),
+                "world",
+                10,
+                64,
+                -20,
+                61);
 
         market.recordSale(sale);
 
@@ -90,10 +162,28 @@ class MarketApiImplIT extends IntegrationTestBase {
     @Test
     void recordSale_businessSell_setsFirmId() throws Exception {
         market.recordSale(new ChestShopSaleRecord(
-                null, "SELL", UUID.randomUUID(), 200, "BUSINESS", 7, null, false,
-                "IRON_INGOT", "IRON_INGOT", "Iron Ingot", false, null,
-                64, new BigDecimal("1.0000"), new BigDecimal("64.00"), BigDecimal.ZERO,
-                "world", 1, 2, 3, 0));
+                null,
+                "SELL",
+                UUID.randomUUID(),
+                200,
+                "BUSINESS",
+                7,
+                null,
+                false,
+                "IRON_INGOT",
+                "IRON_INGOT",
+                "Iron Ingot",
+                false,
+                null,
+                64,
+                new BigDecimal("1.0000"),
+                new BigDecimal("64.00"),
+                BigDecimal.ZERO,
+                "world",
+                1,
+                2,
+                3,
+                0));
 
         Map<String, Object> r = query("SELECT * FROM chestshop_sale").get(0);
         assertNull(r.get("txn_id"));
@@ -107,10 +197,28 @@ class MarketApiImplIT extends IntegrationTestBase {
     @Test
     void recordSale_adminShop_nullsOwnerAndStock() throws Exception {
         market.recordSale(new ChestShopSaleRecord(
-                null, "BUY", UUID.randomUUID(), null, null, null, null, true,
-                "DIRT", "DIRT", "Dirt", false, null,
-                1, new BigDecimal("1.0000"), new BigDecimal("1.00"), BigDecimal.ZERO,
-                "world", 0, 0, 0, null));
+                null,
+                "BUY",
+                UUID.randomUUID(),
+                null,
+                null,
+                null,
+                null,
+                true,
+                "DIRT",
+                "DIRT",
+                "Dirt",
+                false,
+                null,
+                1,
+                new BigDecimal("1.0000"),
+                new BigDecimal("1.00"),
+                BigDecimal.ZERO,
+                "world",
+                0,
+                0,
+                0,
+                null));
 
         Map<String, Object> r = query("SELECT * FROM chestshop_sale").get(0);
         assertEquals(1, ((Number) r.get("is_admin_shop")).intValue());
@@ -124,10 +232,28 @@ class MarketApiImplIT extends IntegrationTestBase {
     @Test
     void recordSale_customItem_storesItemData() throws Exception {
         market.recordSale(new ChestShopSaleRecord(
-                null, "BUY", UUID.randomUUID(), 100, "PERSONAL", null, UUID.randomUUID(), false,
-                "DIAMOND_SWORD", "DIAMOND_SWORD#abc123", "Excalibur", true, "yaml: blob\ncustom: true",
-                1, new BigDecimal("999.0000"), new BigDecimal("999.00"), BigDecimal.ZERO,
-                "world", 5, 5, 5, 1));
+                null,
+                "BUY",
+                UUID.randomUUID(),
+                100,
+                "PERSONAL",
+                null,
+                UUID.randomUUID(),
+                false,
+                "DIAMOND_SWORD",
+                "DIAMOND_SWORD#abc123",
+                "Excalibur",
+                true,
+                "yaml: blob\ncustom: true",
+                1,
+                new BigDecimal("999.0000"),
+                new BigDecimal("999.00"),
+                BigDecimal.ZERO,
+                "world",
+                5,
+                5,
+                5,
+                1));
 
         Map<String, Object> r = query("SELECT * FROM chestshop_sale").get(0);
         assertEquals(1, ((Number) r.get("item_custom")).intValue());
@@ -139,9 +265,28 @@ class MarketApiImplIT extends IntegrationTestBase {
     void recordSale_failsSoft_onConstraintViolation() {
         // material is NOT NULL — passing null triggers a DB error that must be swallowed.
         ChestShopSaleRecord bad = new ChestShopSaleRecord(
-                null, "BUY", UUID.randomUUID(), null, null, null, null, true,
-                null, "k", "n", false, null,
-                1, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ZERO, "w", 0, 0, 0, null);
+                null,
+                "BUY",
+                UUID.randomUUID(),
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                "k",
+                "n",
+                false,
+                null,
+                1,
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                BigDecimal.ZERO,
+                "w",
+                0,
+                0,
+                0,
+                null);
         assertDoesNotThrow(() -> market.recordSale(bad));
         assertEquals(0, query("SELECT * FROM chestshop_sale").size());
     }
@@ -150,9 +295,28 @@ class MarketApiImplIT extends IntegrationTestBase {
     void recordSale_multiple_accumulate() {
         for (int i = 0; i < 5; i++) {
             market.recordSale(new ChestShopSaleRecord(
-                    null, "BUY", UUID.randomUUID(), 100, "PERSONAL", null, UUID.randomUUID(), false,
-                    "DIAMOND", "DIAMOND", "Diamond", false, null,
-                    1, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ZERO, "world", i, 0, 0, i));
+                    null,
+                    "BUY",
+                    UUID.randomUUID(),
+                    100,
+                    "PERSONAL",
+                    null,
+                    UUID.randomUUID(),
+                    false,
+                    "DIAMOND",
+                    "DIAMOND",
+                    "Diamond",
+                    false,
+                    null,
+                    1,
+                    BigDecimal.ONE,
+                    BigDecimal.ONE,
+                    BigDecimal.ZERO,
+                    "world",
+                    i,
+                    0,
+                    0,
+                    i));
         }
         assertEquals(5, query("SELECT * FROM chestshop_sale").size());
     }
@@ -161,8 +325,18 @@ class MarketApiImplIT extends IntegrationTestBase {
 
     @Test
     void upsertShop_insertsNewRow() throws Exception {
-        market.upsertShop(shop("world", 1, 2, 3, "PERSONAL", null, UUID.randomUUID(),
-                new BigDecimal("10.00"), new BigDecimal("8.00"), 16, 128));
+        market.upsertShop(shop(
+                "world",
+                1,
+                2,
+                3,
+                "PERSONAL",
+                null,
+                UUID.randomUUID(),
+                new BigDecimal("10.00"),
+                new BigDecimal("8.00"),
+                16,
+                128));
 
         Map<String, Object> r = query("SELECT * FROM chestshop_shop").get(0);
         assertEquals("world", r.get("world"));
@@ -177,14 +351,32 @@ class MarketApiImplIT extends IntegrationTestBase {
     @Test
     void upsertShop_onDuplicateLocation_updatesInPlace() throws Exception {
         UUID owner = UUID.randomUUID();
-        market.upsertShop(shop("world", 1, 2, 3, "PERSONAL", null, owner,
-                new BigDecimal("10.00"), null, 16, 100));
-        long firstId = ((Number) query("SELECT shop_id FROM chestshop_shop").get(0).get("shop_id")).longValue();
+        market.upsertShop(shop("world", 1, 2, 3, "PERSONAL", null, owner, new BigDecimal("10.00"), null, 16, 100));
+        long firstId =
+                ((Number) query("SELECT shop_id FROM chestshop_shop").get(0).get("shop_id")).longValue();
 
         // Same location, new price/stock/item → updates the existing row, same shop_id.
-        market.upsertShop(new ChestShopShopRecord("world", 1, 2, 3, false, null, "PERSONAL", null, owner,
-                "EMERALD", "EMERALD", "Emerald", false, null,
-                new BigDecimal("12.50"), new BigDecimal("9.00"), 8, 64));
+        market.upsertShop(new ChestShopShopRecord(
+                "world",
+                1,
+                2,
+                3,
+                false,
+                null,
+                "PERSONAL",
+                null,
+                owner,
+                "EMERALD",
+                "EMERALD",
+                "Emerald",
+                false,
+                null,
+                new BigDecimal("12.50"),
+                new BigDecimal("9.00"),
+                8,
+                64,
+                128,
+                null));
 
         List<Map<String, Object>> rows = query("SELECT * FROM chestshop_shop");
         assertEquals(1, rows.size(), "upsert must not create a second row for the same location");
@@ -199,9 +391,27 @@ class MarketApiImplIT extends IntegrationTestBase {
 
     @Test
     void upsertShop_nullStock_leavesStockAtNull() throws Exception {
-        market.upsertShop(new ChestShopShopRecord("world", 9, 9, 9, true, null, null, null, null,
-                "DIRT", "DIRT", "Dirt", false, null,
-                new BigDecimal("1.00"), null, 64, null));
+        market.upsertShop(new ChestShopShopRecord(
+                "world",
+                9,
+                9,
+                9,
+                true,
+                null,
+                null,
+                null,
+                null,
+                "DIRT",
+                "DIRT",
+                "Dirt",
+                false,
+                null,
+                new BigDecimal("1.00"),
+                null,
+                64,
+                null,
+                null,
+                null));
         Map<String, Object> r = query("SELECT * FROM chestshop_shop").get(0);
         assertEquals(1, ((Number) r.get("is_admin_shop")).intValue());
         assertNull(r.get("current_stock"));
@@ -210,22 +420,120 @@ class MarketApiImplIT extends IntegrationTestBase {
 
     @Test
     void upsertShop_reactivatesDeactivatedShop() throws Exception {
-        market.upsertShop(shop("world", 4, 4, 4, "PERSONAL", null, UUID.randomUUID(),
-                new BigDecimal("5.00"), null, 1, 10));
+        market.upsertShop(
+                shop("world", 4, 4, 4, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 10));
         market.deactivateShop("world", 4, 4, 4);
         assertEquals(0, activeFlag("world", 4, 4, 4));
 
-        market.upsertShop(shop("world", 4, 4, 4, "PERSONAL", null, UUID.randomUUID(),
-                new BigDecimal("5.00"), null, 1, 20));
+        market.upsertShop(
+                shop("world", 4, 4, 4, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 20));
         assertEquals(1, activeFlag("world", 4, 4, 4), "re-creating a shop sign must reactivate the row");
+    }
+
+    // ── owner flags (visible / hologram) across upserts ──────────────────────────
+
+    @Test
+    void upsertShop_onLiveShop_keepsOwnerFlags() throws Exception {
+        market.upsertShop(
+                shop("world", 6, 6, 6, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 10));
+        market.setShopVisibility("world", 6, 6, 6, false);
+        market.setShopHologram("world", 6, 6, 6, false);
+
+        // a restock / price-change upsert on the same live shop
+        market.upsertShop(
+                shop("world", 6, 6, 6, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("6.00"), null, 1, 20));
+
+        assertEquals(1, flag("active", "world", 6, 6, 6));
+        assertEquals(0, flag("visible", "world", 6, 6, 6), "an upsert must not reset the owner's /find choice");
+        assertEquals(0, flag("hologram", "world", 6, 6, 6), "an upsert must not reset the owner's hologram choice");
+    }
+
+    @Test
+    void upsertShop_revivingDestroyedShop_resetsOwnerFlags() throws Exception {
+        market.upsertShop(
+                shop("world", 7, 7, 7, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 10));
+        market.setShopVisibility("world", 7, 7, 7, false);
+        market.setShopHologram("world", 7, 7, 7, false);
+        market.deactivateShop("world", 7, 7, 7);
+        // the tombstone keeps the destroyed shop's flags
+        assertEquals(0, flag("visible", "world", 7, 7, 7));
+        assertEquals(0, flag("hologram", "world", 7, 7, 7));
+
+        // a NEW shop placed at the same location must not inherit them
+        market.upsertShop(
+                shop("world", 7, 7, 7, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 20));
+
+        assertEquals(1, flag("active", "world", 7, 7, 7));
+        assertEquals(1, flag("visible", "world", 7, 7, 7), "a new shop on a tombstone starts visible");
+        assertEquals(1, flag("hologram", "world", 7, 7, 7), "a new shop on a tombstone starts with its hologram");
+    }
+
+    @Test
+    void setShopFlags_missingLocation_storeNothing() {
+        // Plain UPDATEs: with no registry row there is nothing to write to (ChestShop registers
+        // the shop before toggling for exactly this reason).
+        assertDoesNotThrow(() -> market.setShopVisibility("nowhere", 0, 0, 0, false));
+        assertDoesNotThrow(() -> market.setShopHologram("nowhere", 0, 0, 0, false));
+        assertEquals(0, query("SELECT * FROM chestshop_shop").size());
+    }
+
+    private ChestShopShopRecord shopWithWorldUuid(UUID uuid) {
+        return new ChestShopShopRecord(
+                "world",
+                8,
+                8,
+                8,
+                false,
+                null,
+                "PERSONAL",
+                null,
+                UUID.randomUUID(),
+                "STONE",
+                "STONE",
+                "Stone",
+                false,
+                null,
+                new BigDecimal("5.00"),
+                null,
+                1,
+                10,
+                20,
+                uuid);
+    }
+
+    @Test
+    void upsertShop_newWorldGeneration_resetsOldWorldOwnerFlags() {
+        market.upsertShop(shopWithWorldUuid(UUID.randomUUID()));
+        market.setShopVisibility("world", 8, 8, 8, false);
+        market.setShopHologram("world", 8, 8, 8, false);
+        market.upsertShop(shopWithWorldUuid(UUID.randomUUID()));
+        assertEquals(1, flag("visible", "world", 8, 8, 8));
+        assertEquals(1, flag("hologram", "world", 8, 8, 8));
+    }
+
+    @Test
+    void upsertShop_sameWorldGeneration_preservesFlagsAndKnownUuid() {
+        UUID uuid = UUID.randomUUID();
+        market.upsertShop(shopWithWorldUuid(uuid));
+        market.setShopVisibility("world", 8, 8, 8, false);
+        market.setShopHologram("world", 8, 8, 8, false);
+        market.upsertShop(shopWithWorldUuid(uuid));
+        market.upsertShop(shopWithWorldUuid(null));
+        assertEquals(0, flag("visible", "world", 8, 8, 8));
+        assertEquals(0, flag("hologram", "world", 8, 8, 8));
+        assertEquals(
+                uuid.toString().replace("-", "").toUpperCase(java.util.Locale.ROOT),
+                query("SELECT HEX(world_uuid) AS uuid FROM chestshop_shop")
+                        .getFirst()
+                        .get("uuid"));
     }
 
     // ── deactivate / updateStock ─────────────────────────────────────────────────
 
     @Test
     void deactivateShop_setsInactiveByLocation() throws Exception {
-        market.upsertShop(shop("world", 1, 1, 1, "PERSONAL", null, UUID.randomUUID(),
-                new BigDecimal("5.00"), null, 1, 10));
+        market.upsertShop(
+                shop("world", 1, 1, 1, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 10));
         market.deactivateShop("world", 1, 1, 1);
         assertEquals(0, activeFlag("world", 1, 1, 1));
     }
@@ -238,51 +546,184 @@ class MarketApiImplIT extends IntegrationTestBase {
 
     @Test
     void updateShopStock_updatesStockAndTimestamp() throws Exception {
-        market.upsertShop(shop("world", 2, 2, 2, "PERSONAL", null, UUID.randomUUID(),
-                new BigDecimal("5.00"), null, 1, 10));
-        market.updateShopStock("world", 2, 2, 2, 99);
+        market.upsertShop(
+                shop("world", 2, 2, 2, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 10));
+        market.updateShopStock("world", 2, 2, 2, 99, 27);
 
         Map<String, Object> r = query("SELECT * FROM chestshop_shop").get(0);
         assertEquals(99, ((Number) r.get("current_stock")).intValue());
+        assertEquals(27, ((Number) r.get("estimated_capacity")).intValue());
         assertNotNull(r.get("stock_at"));
     }
 
     @Test
     void updateShopStock_nullStock_clearsValue() throws Exception {
-        market.upsertShop(shop("world", 3, 3, 3, "PERSONAL", null, UUID.randomUUID(),
-                new BigDecimal("5.00"), null, 1, 10));
-        market.updateShopStock("world", 3, 3, 3, null);
+        market.upsertShop(
+                shop("world", 3, 3, 3, "PERSONAL", null, UUID.randomUUID(), new BigDecimal("5.00"), null, 1, 10));
+        market.updateShopStock("world", 3, 3, 3, null, null);
         Map<String, Object> r = query("SELECT * FROM chestshop_shop").get(0);
         assertNull(r.get("current_stock"));
     }
 
     @Test
     void updateShopStock_missingLocation_isNoOp() {
-        assertDoesNotThrow(() -> market.updateShopStock("nowhere", 0, 0, 0, 5));
+        assertDoesNotThrow(() -> market.updateShopStock("nowhere", 0, 0, 0, 5, 3));
         assertEquals(0, query("SELECT * FROM chestshop_shop").size());
+    }
+
+    @Test
+    void importShop_preservesSnapshotAndSecondRunIsNoOp() throws Exception {
+        UUID owner = UUID.randomUUID();
+        java.time.Instant observed = java.time.Instant.parse("2025-01-02T03:04:05Z");
+        for (int i = 0; i < 100; i++) {
+            market.importShop(
+                    shop("world", i, 64, -2, "PERSONAL", null, owner, new BigDecimal("12.34"), null, 16, i),
+                    false,
+                    false,
+                    observed);
+        }
+        List<Map<String, Object>> before = query("SELECT * FROM chestshop_shop ORDER BY shop_id");
+        assertEquals(100, before.size());
+        for (var row : before) {
+            assertEquals(0, ((Number) row.get("visible")).intValue());
+            assertEquals(0, ((Number) row.get("hologram")).intValue());
+            assertEquals(java.sql.Timestamp.from(observed), row.get("stock_at"));
+            assertEquals(java.sql.Timestamp.from(observed), row.get("last_seen"));
+            assertEquals(50, ((Number) row.get("estimated_capacity")).intValue());
+            assertEquals(row.get("sign_x"), row.get("current_stock"));
+            assertEquals(16, ((Number) row.get("batch_qty")).intValue());
+            assertEquals(new BigDecimal("12.34"), row.get("buy_price"));
+            assertNull(row.get("sell_price"));
+            assertEquals("DIAMOND", row.get("item_key"));
+            assertEquals("PERSONAL", row.get("shop_account_type"));
+            assertEquals(owner, bytesToUuid((byte[]) row.get("shop_owner_uuid_bin")));
+        }
+        for (int i = 0; i < 100; i++) {
+            market.importShop(
+                    shop("world", i, 64, -2, "PERSONAL", null, owner, new BigDecimal("12.34"), null, 16, i),
+                    false,
+                    false,
+                    observed);
+        }
+        assertRowsEqual(before, query("SELECT * FROM chestshop_shop ORDER BY shop_id"));
+    }
+
+    @Test
+    void importShop_neverOverwritesLiveRowsOrRevivesTombstones() throws Exception {
+        var record = shop("world", 1, 2, 3, "PERSONAL", null, UUID.randomUUID(), BigDecimal.TEN, null, 1, 10);
+        market.upsertShop(record);
+        var before = query("SELECT * FROM chestshop_shop");
+        market.importShop(record, false, false, java.time.Instant.parse("2000-01-01T00:00:00Z"));
+        assertRowsEqual(before, query("SELECT * FROM chestshop_shop"));
+        market.deactivateShop("world", 1, 2, 3);
+        before = query("SELECT * FROM chestshop_shop");
+        market.importShop(record, false, false, java.time.Instant.parse("2000-01-01T00:00:00Z"));
+        assertRowsEqual(before, query("SELECT * FROM chestshop_shop"));
+    }
+
+    @Test
+    void importShop_unknownObservationDoesNotInventStockTimestamp_andErrorsPropagate() {
+        market.importShop(
+                shop("world", 1, 2, 3, "PERSONAL", null, UUID.randomUUID(), BigDecimal.ONE, null, 1, 10),
+                true,
+                true,
+                null);
+        assertNull(query("SELECT * FROM chestshop_shop").get(0).get("stock_at"));
+        var bad = new ChestShopShopRecord(
+                "world",
+                9,
+                9,
+                9,
+                true,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "DIRT",
+                "Dirt",
+                false,
+                null,
+                BigDecimal.ONE,
+                null,
+                1,
+                null,
+                null,
+                null);
+        org.junit.jupiter.api.Assertions.assertThrows(
+                RuntimeException.class, () -> market.importShop(bad, true, true, null));
+        assertEquals(1, query("SELECT * FROM chestshop_shop").size());
+    }
+
+    @Test
+    void resync_unchangedUnknownStockRefreshesLastSeen_andClearsOldStockTimestamp() throws Exception {
+        var record = shop("world", 1, 2, 3, "PERSONAL", null, UUID.randomUUID(), BigDecimal.ONE, null, 1, null);
+        market.upsertShop(record);
+        try (var c = dataSource.getConnection();
+                var st = c.createStatement()) {
+            st.execute("UPDATE chestshop_shop SET last_seen='2001-01-01', stock_at='2001-01-01'");
+        }
+        market.upsertShop(record);
+        var row = query("SELECT * FROM chestshop_shop").get(0);
+        assertNull(row.get("stock_at"));
+        assertTrue(((java.sql.Timestamp) row.get("last_seen"))
+                .toInstant()
+                .isAfter(java.time.Instant.parse("2020-01-01T00:00:00Z")));
+        market.updateShopStock("world", 1, 2, 3, 10, 20);
+        assertNotNull(query("SELECT * FROM chestshop_shop").get(0).get("stock_at"));
+        market.updateShopStock("world", 1, 2, 3, null, null);
+        assertNull(query("SELECT * FROM chestshop_shop").get(0).get("stock_at"));
+    }
+
+    private static void assertRowsEqual(List<Map<String, Object>> expected, List<Map<String, Object>> actual) {
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            for (String key : expected.get(i).keySet()) {
+                Object value = expected.get(i).get(key);
+                if (value instanceof byte[] bytes) {
+                    org.junit.jupiter.api.Assertions.assertArrayEquals(
+                            bytes, (byte[]) actual.get(i).get(key));
+                } else {
+                    assertEquals(value, actual.get(i).get(key), key);
+                }
+            }
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static ChestShopShopRecord shop(String world, int x, int y, int z, String type,
-                                            Integer firmId, UUID owner, BigDecimal buy, BigDecimal sell,
-                                            int batch, Integer stock) {
-        return new ChestShopShopRecord(world, x, y, z, false, 100, type, firmId, owner,
-                "DIAMOND", "DIAMOND", "Diamond", false, null, buy, sell, batch, stock);
+    private static ChestShopShopRecord shop(
+            String world,
+            int x,
+            int y,
+            int z,
+            String type,
+            Integer firmId,
+            UUID owner,
+            BigDecimal buy,
+            BigDecimal sell,
+            int batch,
+            Integer stock) {
+        return new ChestShopShopRecord(
+                world, x, y, z, false, 100, type, firmId, owner, "DIAMOND", "DIAMOND", "Diamond", false, null, buy,
+                sell, batch, stock, 50, null);
     }
 
     private int activeFlag(String world, int x, int y, int z) {
-        List<Map<String, Object>> rows = query(
-                "SELECT active FROM chestshop_shop WHERE world='" + world + "' AND sign_x=" + x
-                        + " AND sign_y=" + y + " AND sign_z=" + z);
+        return flag("active", world, x, y, z);
+    }
+
+    private int flag(String column, String world, int x, int y, int z) {
+        List<Map<String, Object>> rows = query("SELECT " + column + " FROM chestshop_shop WHERE world='" + world
+                + "' AND sign_x=" + x + " AND sign_y=" + y + " AND sign_z=" + z);
         assertFalse(rows.isEmpty());
-        return ((Number) rows.get(0).get("active")).intValue();
+        return ((Number) rows.get(0).get(column)).intValue();
     }
 
     private List<Map<String, Object>> query(String sql) {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+                PreparedStatement ps = c.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
             List<Map<String, Object>> out = new ArrayList<>();
             int cols = rs.getMetaData().getColumnCount();
             while (rs.next()) {
@@ -292,7 +733,7 @@ class MarketApiImplIT extends IntegrationTestBase {
                     // MariaDB maps TINYINT(1) -> Boolean; normalise to 0/1 so the
                     // flag-column assertions can read them as Numbers.
                     if (v instanceof Boolean b) v = b ? 1 : 0;
-                    row.put(rs.getMetaData().getColumnLabel(i).toLowerCase(), v);
+                    row.put(rs.getMetaData().getColumnLabel(i).toLowerCase(Locale.ROOT), v);
                 }
                 out.add(row);
             }
@@ -355,7 +796,11 @@ class MarketApiImplIT extends IntegrationTestBase {
               sell_price DECIMAL(19,2) NULL,
               batch_qty INT NOT NULL,
               current_stock INT NULL,
+              estimated_capacity INT NULL,
+              world_uuid BINARY(16) NULL,
               active TINYINT(1) NOT NULL DEFAULT 1,
+              visible TINYINT(1) NOT NULL DEFAULT 1,
+              hologram TINYINT(1) NOT NULL DEFAULT 1,
               created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
               stock_at TIMESTAMP NULL,
               last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -363,4 +808,15 @@ class MarketApiImplIT extends IntegrationTestBase {
               UNIQUE KEY uq_shop_location (world, sign_x, sign_y, sign_z)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """;
+
+    static final String CREATE_PREVIEW = """
+            CREATE TABLE IF NOT EXISTS chestshop_preview_preference (
+              player_uuid_bin BINARY(16) NOT NULL,
+              visible TINYINT(1) NOT NULL DEFAULT 1,
+              PRIMARY KEY (player_uuid_bin)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """;
+
+    static final String CREATE_SHOP_DDL = CREATE_SHOP;
+    static final String CREATE_SALE_DDL = CREATE_SALE;
 }

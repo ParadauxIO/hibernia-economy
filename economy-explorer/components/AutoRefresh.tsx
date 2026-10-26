@@ -1,14 +1,18 @@
 'use client';
-// Polls the current RSC page via router.refresh(). The page keeps its full SSR
-// semantics — refresh triggers the server to re-render with new data; no client
-// fetches.
+// Re-renders the current page from the server (router.refresh()) once per
+// cache window, so live figures stay current without client fetching.
 //
-// Ticks are aligned to wall-clock boundaries of `windowMs` (not relative to
-// mount), so the refresh lands in lockstep with the server's epoch-aligned cache
-// reset (lib/cache). `lagMs` lets the new window's value be computed before we
-// fetch it. Because every client refreshes on the same boundary, the resulting
-// request burst hits the warm shared cache (cheap reads) — the heavy query ran
-// once for the window, under the cache's cross-pod lock.
+// Timing (spec §4.3):
+//  - Aligned to wall-clock window boundaries, like lib/cache's epoch-aligned
+//    windows, so a refresh asks for a window the server has (or is computing).
+//  - Jittered by ±10 s around a point 10 s after boundary + lag, so tabs don't
+//    all arrive in the same instant, and none arrives before the new window exists.
+//  - Skipped while the tab is hidden. When it becomes visible again and the
+//    data is older than one window, it refreshes promptly.
+// The "updated" label re-renders every 30 s, not every second.
+//
+// Refreshing only the live sections instead of the whole tree is ECON's
+// change (§4.3); this keeps router.refresh().
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -19,44 +23,70 @@ interface AutoRefreshProps {
   label?: string;
 }
 
+export const JITTER_MS = 10_000;
+const LABEL_TICK_MS = 30_000;
+
+/** Delay until the next refresh: the next boundary + lag, then a jitter of up to ±JITTER_MS around +JITTER_MS. */
+export function nextRefreshDelay(now: number, windowMs: number, lagMs: number, random: () => number = Math.random): number {
+  // The jitter span can't exceed what's left of the window after the lag.
+  const half = Math.max(0, Math.min(JITTER_MS, (windowMs - lagMs) / 2 - 500));
+  const offset = half + (random() * 2 - 1) * half; // in [0, 2·half]
+  return windowMs - (now % windowMs) + lagMs + offset;
+}
+
 export function AutoRefresh({ windowMs = 30_000, lagMs = 1_500, label = 'Live' }: AutoRefreshProps) {
   const router = useRouter();
-  const [lastTick, setLastTick] = useState<number>(Date.now());
-  const [now, setNow] = useState<number>(Date.now());
+  const [lastTick, setLastTick] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
-  // Schedule each refresh at the next window boundary + lag, then re-arm.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let last = Date.now();
+    const refresh = () => {
+      router.refresh();
+      last = Date.now();
+      setLastTick(last);
+      setNow(last);
+    };
     const arm = () => {
-      const ms = Date.now();
-      const delay = windowMs - (ms % windowMs) + lagMs;
       timer = setTimeout(() => {
-        router.refresh();
-        setLastTick(Date.now());
+        if (document.visibilityState === 'visible') refresh();
         arm();
-      }, delay);
+      }, nextRefreshDelay(Date.now(), windowMs, lagMs));
+    };
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      setNow(Date.now());
+      if (Date.now() - last >= windowMs) {
+        clearTimeout(timer);
+        refresh();
+        arm();
+      }
     };
     arm();
-    return () => clearTimeout(timer);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [router, windowMs, lagMs]);
 
-  // Tick clock so the "Xs ago" label updates without re-rendering the parent.
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), LABEL_TICK_MS);
     return () => clearInterval(id);
   }, []);
 
-  const secs = Math.max(0, Math.floor((now - lastTick) / 1000));
   return (
-    <span className="updated-pill" title={`refreshes every ${windowMs / 1000}s`}>
-      <span className="updated-dot" /> {label} · {fmtAgo(secs)}
+    <span className="live-status" title={`Refreshes about every ${Math.round(windowMs / 1000)} seconds while this tab is open`}>
+      <span className="live-dot" aria-hidden="true" /> {label} · updated {fmtAgo(now - lastTick)}
     </span>
   );
 }
 
-function fmtAgo(s: number): string {
-  if (s < 5) return 'just now';
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  return `${m}m ago`;
+export function fmtAgo(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} h ago`;
 }

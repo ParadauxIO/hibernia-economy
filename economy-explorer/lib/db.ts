@@ -1,13 +1,17 @@
 import 'server-only';
-import { Kysely, MysqlDialect } from 'kysely';
+import { Kysely, MysqlDialect, type Generated } from 'kysely';
 import { createPool } from 'mysql2';
+import { withoutUndefined } from '@/lib/util/withoutUndefined';
+import { kyselyMetrics } from '@/lib/metrics';
 
 const pool = createPool({
-  host: process.env.DB_HOST,
+  ...withoutUndefined({
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+  }),
   port: Number(process.env.DB_PORT ?? 3306),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USERNAME,
-  password: process.env.DB_PASSWORD,
   connectionLimit: Number(process.env.DB_POOL ?? 100),
   timezone: 'Z',
   dateStrings: false,
@@ -30,19 +34,23 @@ pool.on('connection', (conn) => {
 
 // mysql2's pool is structurally compatible with kysely's MysqlPool at runtime;
 // the callback signatures differ in nullable-error types only.
+// kyselyMetrics() times and labels every query (explorer_db_query_seconds, PAR-531).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const db = new Kysely<DB>({ dialect: new MysqlDialect({ pool: pool as any }) });
+export const db = new Kysely<DB>({ dialect: new MysqlDialect({ pool: pool as any }), ...kyselyMetrics() });
 
 // Row-shape registry. Add interfaces as queries get ported. The empty {} on each
 // entry means "no typed columns yet"; queries that use raw sql`` template literals
 // pass their own row interface and don't depend on this registry.
 export interface DB {
+  explorer_role_definition: { role_key: string; name: string; description: string | null; revision: Generated<number> };
+  explorer_role_permission: { role_key: string; permission: string };
   explorer_role: { player_uuid_bin: Buffer; role: string; granted_at: Date; granted_by_uuid_bin: Buffer | null };
   explorer_identity: {
     keycloak_sub: string;
     player_uuid_bin: Buffer;
     minecraft_name: string | null;
-    linked_at: Date;
+    // NOT NULL DEFAULT CURRENT_TIMESTAMP (V3): DB-generated, so optional on insert.
+    linked_at: Generated<Date>;
     linked_by: string | null;
   };
   explorer_link_code: {
@@ -60,11 +68,15 @@ export interface DB {
     created_at: Date;
     created_by_uuid_bin: Buffer | null;
   };
+  explorer_group_sync: { group_id: number; source: 'business' | 'realty'; selector: string };
+  explorer_lp_group_member: { lp_group: string; player_uuid_bin: Buffer; synced_at: Date };
   explorer_group_capability: { group_id: number; capability: string };
   explorer_group_member: {
     group_id: number;
     player_uuid_bin: Buffer;
-    source: 'manual' | 'luckperms';
+    source: 'manual' | 'luckperms' | 'business' | 'realty';
+    synced_at: Date | null;
+    sync_selector: string | null;
     added_at: Date;
     added_by_uuid_bin: Buffer | null;
   };

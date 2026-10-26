@@ -1,181 +1,229 @@
 'use server';
 import { revalidatePath } from 'next/cache';
-import { randomUUID } from 'node:crypto';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
+import { getViewer } from '@/lib/auth/viewer';
 import {
-  setApiKeyRevoked,
-  findApiKeyForRotate,
-  rotateApiKeyRow,
-} from '@/lib/sql/apiKey';
-import {
-  upsertRateLimitOverride,
-  deleteRateLimitOverride,
-} from '@/lib/sql/rateLimitOverride';
-import { signApiKeyJwt, jwtSigningConfigured } from '@/lib/jwt';
-import { ForbiddenError } from '@/lib/errors';
-import { auditView } from '@/lib/audit';
+  setRateLimitOverride,
+  clearRateLimitOverride,
+  revokeApiKey,
+  rotateApiKey,
+} from '@/lib/treasury';
+import { auditMutation } from '@/lib/audit';
 import {
   createGroup,
   deleteGroup,
+  getGroup,
+  listGroupMembers,
   setGroupCapabilities,
+  setGroupSyncSource,
   setLuckpermsNode,
   addManualMember,
   removeManualMember,
   resolvePlayerUuid,
+  type GroupSummary,
 } from '@/lib/services/group';
-import { isCapability } from '@/lib/auth/capabilities';
+import { findAdminApiKey, findRateLimitOverride } from '@/lib/sql/admin';
+import { requirePermission } from '@/lib/auth/access';
 
-const TOKEN_LIFETIME_DAYS = 180;
+// Every action records an audit row with the values before and after the change
+// (lib/audit.ts auditMutation). The before value is read just before the write;
+// the after value is what the write returned or a fresh read of the same thing.
 
-function requireAdmin(viewer: Viewer): asserts viewer is Extract<Viewer, { anon: false }> {
-  if (viewer.anon || viewer.role !== 'admin') {
-    throw new ForbiddenError('Admin only.');
-  }
+type ActionResult = { ok: boolean; error?: string };
+
+function failure(e: unknown): ActionResult {
+  return { ok: false, error: e instanceof Error ? e.message : String(e) };
+}
+
+/** The parts of a group an admin can change, as recorded in the audit log. */
+function groupSnapshot(g: GroupSummary | null) {
+  if (!g) return null;
+  return {
+    name: g.name,
+    description: g.description,
+    roles: g.capabilities,
+    luckpermsNode: g.luckpermsNode,
+    syncSources: Object.fromEntries(g.syncSources.map((s) => [s.source, s.selector])),
+    members: g.memberCount,
+  };
+}
+
+async function isManualMember(groupId: number, uuid: string): Promise<boolean> {
+  return (await listGroupMembers(groupId)).some((m) => m.uuid === uuid && m.source === 'manual');
 }
 
 // ---- Group RBAC management -------------------------------------------------
 
-type ActionResult = { ok: boolean; error?: string };
-
 export async function createGroupAction(args: { name: string; description: string | null }): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.create');
   try {
     const name = args.name.trim();
     if (!name) return { ok: false, error: 'Name is required.' };
-    await createGroup({ name, description: args.description?.trim() || null, createdBy: viewer.minecraftUuid });
-    await auditView(viewer, { method: 'POST', path: '/admin/groups/create', targetType: 'global', targetId: `group:${name}` });
+    const description = args.description?.trim() || null;
+    const groupId = await createGroup({ name, description, createdBy: viewer.minecraftUuid });
+    await auditMutation(viewer, {
+      action: 'group.create', path: '/admin/groups/create', targetType: 'group', targetId: groupId || name,
+      before: null, after: { name, description },
+    });
     revalidatePath('/admin/groups');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
   }
 }
 
 export async function deleteGroupAction(groupId: number): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.delete');
   try {
+    const before = groupSnapshot(await getGroup(groupId));
     await deleteGroup(groupId);
-    await auditView(viewer, { method: 'POST', path: '/admin/groups/delete', targetType: 'global', targetId: `group:${groupId}` });
+    await auditMutation(viewer, { action: 'group.delete', path: '/admin/groups/delete', targetType: 'group', targetId: groupId, before, after: null });
     revalidatePath('/admin/groups');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
   }
 }
 
 export async function setGroupCapabilitiesAction(groupId: number, capabilities: string[]): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.roles.update');
   try {
-    const valid = capabilities.filter(isCapability);
-    await setGroupCapabilities(groupId, valid);
-    await auditView(viewer, { method: 'POST', path: '/admin/groups/capabilities', targetType: 'global', targetId: `group:${groupId}` });
+    const before = (await getGroup(groupId))?.capabilities ?? null;
+    await setGroupCapabilities(groupId, capabilities);
+    await auditMutation(viewer, {
+      action: 'group.roles.update', path: '/admin/groups/capabilities', targetType: 'group', targetId: groupId,
+      before: before && { roles: before }, after: { roles: [...new Set(capabilities)].sort() },
+    });
     revalidatePath(`/admin/groups/${groupId}`);
     revalidatePath('/admin/groups');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
   }
 }
 
 export async function setLuckpermsNodeAction(groupId: number, node: string | null): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.sync.update');
   try {
+    const before = await getGroup(groupId);
     await setLuckpermsNode(groupId, node?.trim() || null);
-    await auditView(viewer, { method: 'POST', path: '/admin/groups/luckperms-node', targetType: 'global', targetId: `group:${groupId}` });
+    const after = await getGroup(groupId);
+    await auditMutation(viewer, {
+      action: 'group.sync.update', path: '/admin/groups/luckperms-node', targetType: 'group', targetId: groupId,
+      before: before && { luckpermsNode: before.luckpermsNode, syncedMembers: before.luckpermsMemberCount },
+      after: after && { luckpermsNode: after.luckpermsNode, syncedMembers: after.luckpermsMemberCount },
+    });
     revalidatePath(`/admin/groups/${groupId}`);
     revalidatePath('/admin/groups');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
+  }
+}
+
+/** Set or clear a group's firm (`business`) or region (`realty`) source. */
+export async function setGroupSyncSourceAction(groupId: number, source: 'business' | 'realty', selector: string | null): Promise<ActionResult> {
+  const viewer = await getViewer();
+  requirePermission(viewer, 'groups.sync.update');
+  try {
+    const pick = (g: GroupSummary | null) => g?.syncSources.find((s) => s.source === source)?.selector ?? null;
+    const before = pick(await getGroup(groupId));
+    await setGroupSyncSource(groupId, source, selector);
+    const after = pick(await getGroup(groupId));
+    await auditMutation(viewer, {
+      action: 'group.source.update', path: '/admin/groups/sync-source', targetType: 'group', targetId: groupId,
+      before: { source, selector: before }, after: { source, selector: after },
+    });
+    revalidatePath(`/admin/groups/${groupId}`);
+    revalidatePath('/admin/groups');
+    return { ok: true };
+  } catch (e) {
+    return failure(e);
   }
 }
 
 export async function addGroupMemberAction(groupId: number, identifier: string): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.members.update');
   try {
     const uuid = await resolvePlayerUuid(identifier);
     if (!uuid) return { ok: false, error: `No player found for "${identifier}".` };
+    const was = await isManualMember(groupId, uuid);
     await addManualMember(groupId, uuid, viewer.minecraftUuid);
-    await auditView(viewer, { method: 'POST', path: '/admin/groups/member-add', targetType: 'player', targetId: uuid });
+    await auditMutation(viewer, {
+      action: 'group.member.add', path: '/admin/groups/member-add', targetType: 'group', targetId: groupId,
+      before: { player: uuid, manualMember: was }, after: { player: uuid, manualMember: true },
+    });
     revalidatePath(`/admin/groups/${groupId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
   }
 }
 
 export async function removeGroupMemberAction(groupId: number, playerUuid: string): Promise<ActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'groups.members.update');
   try {
+    const was = await isManualMember(groupId, playerUuid);
     await removeManualMember(groupId, playerUuid);
-    await auditView(viewer, { method: 'POST', path: '/admin/groups/member-remove', targetType: 'player', targetId: playerUuid });
+    await auditMutation(viewer, {
+      action: 'group.member.remove', path: '/admin/groups/member-remove', targetType: 'group', targetId: groupId,
+      before: { player: playerUuid, manualMember: was }, after: { player: playerUuid, manualMember: false },
+    });
     revalidatePath(`/admin/groups/${groupId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
   }
+}
+
+// ---- API keys and issuer limits -------------------------------------------
+
+function keySnapshot(k: Awaited<ReturnType<typeof findAdminApiKey>>) {
+  return k && { revoked: k.revoked === 1, expiresAt: k.expires_at?.toISOString() ?? null, owner: k.owner_uuid, type: k.key_type };
 }
 
 export async function revokeApiKeyAction(keyId: number): Promise<{ ok: boolean; error?: string }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'api_keys.revoke');
   try {
-    await setApiKeyRevoked(keyId);
-    await auditView(viewer, { method: 'POST', path: '/admin/api-keys/revoke', targetType: 'global', targetId: `key:${keyId}` });
+    const before = keySnapshot(await findAdminApiKey(keyId));
+    // ADT-14: route through the REST admin API (kysely stays read-only).
+    await revokeApiKey(keyId);
+    await auditMutation(viewer, {
+      action: 'api_key.revoke', path: '/admin/api-keys/revoke', targetType: 'api_key', targetId: keyId,
+      before, after: keySnapshot(await findAdminApiKey(keyId)),
+    });
     revalidatePath('/admin/api-keys');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
   }
 }
 
 /**
- * Admin force-rotate: mints a new JWT, invalidates the old token, returns
- * only the new expiry (never the token — same security choice as Spring's
- * adminForceRotate). The owner must re-export the new token in-game.
+ * Admin force-rotate via the REST admin API (ADT-14). The REST side
+ * (AuthService.adminForceRotate) replaces the jti to invalidate the current
+ * token and returns only the new expiry — it never mints/persists a token
+ * (ADT-6), so the explorer no longer signs JWTs itself. The owner reissues
+ * the new token in-game.
  */
 export async function rotateApiKeyAction(keyId: number): Promise<{ ok: boolean; expiresAt?: string; error?: string }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
-
-  if (!jwtSigningConfigured()) {
-    return { ok: false, error: 'JWT signing is not configured in this environment (missing JWT_SECRET).' };
-  }
-
+  requirePermission(viewer, 'api_keys.rotate');
   try {
-    const row = await findApiKeyForRotate(keyId);
-    if (!row) return { ok: false, error: 'API key not found.' };
-    if (row.revoked) return { ok: false, error: 'Key is revoked; revoked keys cannot be rotated.' };
-    if (!row.owner_uuid) return { ok: false, error: 'Key has no owner UUID — cannot rotate.' };
-
-    const jti = randomUUID();
-    const iat = new Date();
-    const exp = new Date(iat.getTime() + TOKEN_LIFETIME_DAYS * 24 * 60 * 60 * 1000);
-
-    const token = await signApiKeyJwt({
-      keyId: row.key_id,
-      ownerUuid: row.owner_uuid,
-      keyType: row.key_type,
-      accountId: row.account_id,
-      firmId: row.firm_id,
-      jti,
-      iat,
-      exp,
+    const before = keySnapshot(await findAdminApiKey(keyId));
+    const { expiresAt } = await rotateApiKey(keyId);
+    await auditMutation(viewer, {
+      action: 'api_key.rotate', path: '/admin/api-keys/rotate', targetType: 'api_key', targetId: keyId,
+      before, after: before && { ...before, expiresAt, tokenReplaced: true },
     });
-
-    const affected = await rotateApiKeyRow({ keyId, jti, token, issuedAt: iat, expiresAt: exp });
-    if (affected !== 1) {
-      return { ok: false, error: 'Rotation failed (key revoked concurrently).' };
-    }
-    await auditView(viewer, { method: 'POST', path: '/admin/api-keys/rotate', targetType: 'global', targetId: `key:${keyId}` });
     revalidatePath('/admin/api-keys');
-    return { ok: true, expiresAt: exp.toISOString() };
+    return { ok: true, expiresAt };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -192,24 +240,26 @@ export async function setRateLimitAction(args: {
   note: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'rate_limits.update');
   try {
     const mult = clamp(args.multiplier, 0.1, 1000);
-    if (mult === 1 && (!args.note || !args.note.trim())) {
-      await deleteRateLimitOverride(args.ownerUuid);
+    const note = args.note?.trim() || null;
+    const before = (await findRateLimitOverride(args.ownerUuid)) ?? { multiplier: '1.00', note: null };
+    // Route the write through the REST admin API (ADT-14) — kysely stays read-only.
+    const cleared = mult === 1 && !note;
+    if (cleared) {
+      await clearRateLimitOverride(args.ownerUuid);
     } else {
-      await upsertRateLimitOverride({
-        ownerUuid: args.ownerUuid,
-        multiplier: mult.toFixed(2),
-        note: args.note?.trim() || null,
-        updatedBy: viewer.minecraftUuid,
-      });
+      await setRateLimitOverride(args.ownerUuid, mult.toFixed(2), note);
     }
-    await auditView(viewer, { method: 'POST', path: '/admin/api-keys/rate-limit', targetType: 'player', targetId: args.ownerUuid });
+    await auditMutation(viewer, {
+      action: 'rate_limit.update', path: '/admin/api-keys/rate-limit', targetType: 'player', targetId: args.ownerUuid,
+      before, after: cleared ? { multiplier: '1.00', note: null } : { multiplier: mult.toFixed(2), note },
+    });
     revalidatePath('/admin/api-keys');
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return failure(e);
   }
 }
 

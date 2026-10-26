@@ -30,7 +30,7 @@ See all of the firm's accounts:
 ```
 
 Each row shows the account's **ID**, whether it's the default, and a short **shop
-code** (you'll use that to point a ChestShop at the account — see
+code** highlighted in light blue (you'll use that to point a ChestShop at the account — see
 [ChestShops for your firm](/docs/guides/chestshop-business)).
 
 Open another account, and switch the default if you like:
@@ -41,6 +41,12 @@ Open another account, and switch the default if you like:
 ```
 
 Use the account ID from `account list` wherever a command asks for `<accountId>`.
+
+Account display names can repeat, including across firms. Choose a descriptive
+label such as `Wages`, then use the account's numeric ID to select the right wallet.
+Labels do not reserve names across players, firms or shop aliases. Shop aliases
+have separate rules: clearing an old alias keeps it reserved to the same account
+so old signs cannot be redirected to someone else's wallet.
 
 ## Move money to and from a specific account
 

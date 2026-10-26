@@ -26,9 +26,14 @@ public class TransactionRow {
     private LocalDateTime settlementTime;
     /** Decoded from BINARY(16) via UuidTypeHandler. */
     private UUID initiatorUuidBin;
-    /** Player name resolved via {@code LEFT JOIN firm_players ON player_uuid_bin = initiator_uuid_bin}. */
+    /** Player name resolved via {@code LEFT JOIN economy_players ON player_uuid_bin = initiator_uuid_bin}. */
     private String initiatorName;
     private String pluginSystem;
     /** The posting's account — populated by the dispatcher tail query; 0 on the per-account history query. */
     private long accountId;
+    /** The other leg's account — populated by the history and feed queries; null if there is no other leg. */
+    private Long counterpartyAccountId;
+    private String counterpartyAccountType;
+    private String counterpartyDisplayName;
+    private UUID counterpartyOwnerUuidBin;
 }

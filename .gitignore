@@ -1,4 +1,5 @@
 .gradle/
+__pycache__/
 **/build/
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -25,8 +26,6 @@ bin/
 *.rar
 !**/gradle/wrapper/gradle-wrapper.jar
 !**/.mvn/wrapper/maven-wrapper.jar
-# ChestShop's vendored plugin jars (Maven-layout local repo) — must be committed.
-!chestshop/repo/**
 HELP.md
 node_modules/
 .next/
@@ -38,6 +37,9 @@ coverage/
 /test-results
 /.playwright
 audit/
+# Except the explorer's /admin/audit and /gov/audit routes.
+!economy-explorer/app/admin/audit/
+!economy-explorer/app/gov/audit/
 .env
 .env*.local
 run/

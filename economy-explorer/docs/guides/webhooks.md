@@ -30,7 +30,7 @@ Each webhook is scoped to one of:
 ## Set one up on the site (no API key)
 
 1. Sign in and [link your Minecraft account](/docs/guides/using-the-explorer).
-2. Go to **[My data → Webhooks](/me/webhooks)**.
+2. Go to **[My finances → Developer → Webhooks](/me/developer/webhooks)**.
 3. Pick the **scope** (your personal account, or a firm you manage).
 4. Paste your endpoint — it must be a public **`https://`** URL.
 5. Click **Create**. The **signing secret is shown once** — copy it now (you'll need it
@@ -41,7 +41,9 @@ That's it. The next settled transaction on that account/firm will arrive at your
 > [!TIP]
 > Prefer to manage webhooks programmatically? You can also create them through the REST
 > API (`/api/v1/webhooks`, scoped to an API key) — see
-> [Using the economy API](/docs/guides/api) and the Swagger reference.
+> [Using the economy API](/docs/guides/api) and the Swagger reference. A business key
+> restricted to one account subscribes only to that account; a firm-wide key
+> subscribes to all live linked accounts.
 
 ## Send it to Discord (the easy way)
 
@@ -72,12 +74,22 @@ For a normal (non-Discord) endpoint, the body is JSON:
     "message": "siven01 sold x8 Feather to GovInterior",
     "settledAt": "2026-06-14T12:30:57Z",
     "initiatorUuid": "f7e6…",
-    "pluginSystem": "ChestShop"
+    "pluginSystem": "ChestShop",
+    "counterparty": {
+      "accountId": 812,
+      "accountType": "GOVERNMENT",
+      "displayName": "GovInterior",
+      "ownerUuid": "0c4a…"
+    }
   }
 }
 ```
 
 `amount` is the signed change to **your** account (positive = money in, negative = out).
+`counterparty` is the account on the other side of the transaction: its id, type
+(`PERSONAL`, `BUSINESS`, `GOVERNMENT` or `SYSTEM`), display name and owner UUID. It is
+`null` only if the transaction has no other side. The same `counterparty` object appears on
+every item from the transaction history and feed endpoints.
 The request also carries these headers:
 
 | Header | Meaning |
@@ -98,7 +110,10 @@ import crypto from 'node:crypto';
 function isValid(rawBody, signatureHeader, secret) {
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   // constant-time compare
-  return crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(expected));
+  if (typeof signatureHeader !== 'string') return false;
+  const actual = Buffer.from(signatureHeader);
+  const wanted = Buffer.from(expected);
+  return actual.length === wanted.length && crypto.timingSafeEqual(actual, wanted);
 }
 ```
 
@@ -118,11 +133,13 @@ and the body is Discord's embed shape, not our event) — so don't expect one th
 - **Auto-disable.** After many consecutive failures a webhook is automatically paused so
   a dead endpoint doesn't pile up forever. Fix your endpoint and **re-enable** it.
 - **At-least-once.** A delivery can, rarely, arrive more than once — use the
-  `deliveryId` (or `txnId`) to de-duplicate on your side.
+  `deliveryId` to de-duplicate on your side. A firm subscription can receive
+  multiple account postings for the same transaction; `txnId` alone would drop
+  valid events.
 
 ## Managing your webhooks
 
-On **[My data → Webhooks](/me/webhooks)** you can:
+On **[My finances → Developer → Webhooks](/me/developer/webhooks)** you can:
 
 - **Pause / Enable** a webhook (re-enabling clears the failure count).
 - **Rotate the secret** — issues a new signing secret (shown once); update your endpoint

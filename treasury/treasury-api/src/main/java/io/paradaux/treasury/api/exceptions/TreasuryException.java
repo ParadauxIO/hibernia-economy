@@ -7,6 +7,7 @@ package io.paradaux.treasury.api.exceptions;
  * specific failure modes without scraping {@code getMessage()}.
  */
 public abstract class TreasuryException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
     protected TreasuryException(String message) { super(message); }
     protected TreasuryException(String message, Throwable cause) { super(message, cause); }
 }

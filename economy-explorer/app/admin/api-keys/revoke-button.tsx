@@ -1,8 +1,10 @@
 'use client';
 import { useTransition, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { revokeApiKeyAction } from '@/lib/actions/admin';
 
 export function RevokeButton({ keyId }: { keyId: number }) {
+  const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
@@ -11,15 +13,16 @@ export function RevokeButton({ keyId }: { keyId: number }) {
     start(async () => {
       const r = await revokeApiKeyAction(keyId);
       if (!r.ok) setErr(r.error ?? 'Failed');
+      else router.refresh();
     });
   }
 
   return (
     <>
-      <button className="btn" disabled={pending} onClick={onClick}>
+      <button type="button" className="btn btn-quiet" disabled={pending} onClick={onClick} aria-label={`Revoke key ${keyId}`}>
         {pending ? 'Revoking…' : 'Revoke'}
       </button>
-      {err && <div className="state-error" style={{ fontSize: 11 }}>{err}</div>}
+      {err && <span role="alert" className="state-error small">{err}</span>}
     </>
   );
 }

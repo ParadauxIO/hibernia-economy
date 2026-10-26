@@ -2,6 +2,8 @@ package io.paradaux.business.model;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -53,5 +55,19 @@ class RolePermissionTest {
     void nullThrows() {
         assertThatThrownBy(() -> RolePermission.fromString(null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void dottedLowercaseIResolvesLocaleIndependently() {
+        // "financial" uppercased under a Turkish locale would yield "FİNANCİAL"
+        // and fail to match. Locale.ROOT keeps it deterministic (ADT-35).
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("tr", "TR"));
+            assertThat(RolePermission.fromString("financial")).isEqualTo(RolePermission.FINANCIAL);
+            assertThat(RolePermission.fromString("admin")).isEqualTo(RolePermission.ADMIN);
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 }

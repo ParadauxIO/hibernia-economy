@@ -5,7 +5,10 @@ import java.time.Instant;
 /**
  * One live shop sign. Money fields are plain-string decimals; {@code buyPrice}/
  * {@code sellPrice} are null when that side isn't offered. {@code currentStock}
- * is null for admin/infinite shops. {@code ownerName} is null for admin shops.
+ * is null for admin/infinite shops. {@code currentSpace} is the observed number
+ * of additional units of this item that fit; null means admin/infinite or unknown.
+ * Zero means full, and {@code stockAt} timestamps both stock and space.
+ * {@code ownerName} is null for admin shops.
  */
 public record ChestShopShopResponse(long shopId,
                                     String world,
@@ -25,5 +28,6 @@ public record ChestShopShopResponse(long shopId,
                                     String sellPrice,
                                     int batchQty,
                                     Integer currentStock,
+                                    Integer currentSpace,
                                     Instant stockAt,
                                     Instant lastSeen) {}

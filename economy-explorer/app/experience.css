@@ -1,0 +1,59 @@
+/* Overview and market screen composition. Controls and tokens live in the design
+   system; chart styles in components/charts/charts.css. */
+.section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-4); }
+.section-heading h2 { margin: 0; font-size: var(--text-xl); line-height: var(--leading-xl); }
+.section-heading p { margin: var(--space-1) 0 0; color: var(--fg-muted); font-size: var(--text-sm); }
+.chart-card > .section-heading { margin-bottom: var(--space-3); }
+.chart-card > .section-heading h2 { font-size: var(--text-lg); line-height: var(--leading-lg); }
+.analytics-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+.analytics-bar > div > span { color: var(--fg-muted); font-size: var(--text-xs); }
+.analytics-controls { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.overview-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* Market search and item catalogue. */
+.market-search label { display: block; margin-bottom: var(--space-2); }
+.market-search-controls { display: flex; gap: var(--space-2); }
+.market-search-controls input { flex: 1; min-width: 0; }
+.market-price-note { margin: 0 0 var(--space-4); color: var(--fg-muted); font-size: var(--text-xs); }
+.market-table .item-trend { width: 120px; }
+.market-table .item-trend svg { width: 100px; max-width: 100%; }
+.market-table .item-name { font-weight: var(--weight-medium); }
+
+/* Shop offers (components/market/ShopOffers). */
+.offer-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+.offer-card { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3) var(--space-6); min-width: 0; margin: 0; padding: var(--space-4); overflow-wrap: anywhere; }
+.offer-identity .card-title { display: block; margin: 6px 0; font-size: var(--text-lg); }
+.offer-identity .card-title a { color: var(--fg); }
+.offer-identity p { margin: var(--space-1) 0 0; color: var(--fg-soft); font-size: var(--text-xs); }
+.offer-identity strong { font-weight: var(--weight-medium); }
+.offer-price { margin: 5px 0; font-size: var(--text-2xl); line-height: var(--leading-2xl); font-weight: var(--weight-semibold); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.offer-price .small { display: inline-block; letter-spacing: 0; font-weight: var(--weight-regular); }
+.offer-availability { align-self: center; }
+.offer-availability p { margin: var(--space-1) 0; color: var(--fg-muted); font-size: var(--text-xs); }
+.availability { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.availability > span { font-size: 8px; }
+.availability-positive { color: var(--good); }
+.availability-warning { color: var(--warn); }
+.availability-neutral { color: var(--fg-soft); }
+.offer-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border-soft); }
+.offer-location { margin: 0; color: var(--fg-soft); font: var(--text-xs) var(--mono); }
+.offer-action-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.offer-action-buttons [role="status"] { color: var(--fg-soft); font-size: var(--text-xs); }
+.offer-details { grid-column: 1 / -1; }
+.offer-details summary { width: fit-content; color: var(--fg-muted); font-size: var(--text-xs); cursor: pointer; }
+.offer-details dl { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3); max-width: 620px; margin: var(--space-4) 0 0; font-size: var(--text-xs); }
+.offer-details dt { color: var(--fg-muted); }
+.offer-details dd { margin: 0; text-align: left; }
+.offer-compare { display: flex; justify-content: flex-end; margin-top: var(--space-4); }
+
+@media (max-width: 720px) {
+  .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analytics-controls { width: 100%; justify-content: space-between; }
+  .market-search input { flex: 1; min-width: 0; font-size: 16px; }
+  .market-search .btn { min-height: 44px; }
+  .offer-card { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .offer-actions { align-items: stretch; }
+  .offer-location, .offer-action-buttons { width: 100%; }
+  .offer-action-buttons .btn { flex: 1; }
+  .offer-details summary { min-height: 40px; padding: var(--space-2) 0; }
+}

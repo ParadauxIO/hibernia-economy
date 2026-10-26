@@ -34,6 +34,7 @@ answers to `/firm`, `/company`, `/db`, and `/democracybusiness`.
 | `/business list` | List the firms you're part of. |
 | `/business list <player>` | List a player's firms. |
 | `/business list all [page]` | List every firm on the server. |
+| `/business baltop [page]` | Rank firms by their collective live account balances (`business.baltop`, default everyone). |
 | `/business disband <firm>` | Ask to close a firm you own — prompts for confirmation first. |
 | `/business disband <firm> confirm` | Confirm and actually close the firm. Its money returns to you and the firm is archived. |
 | `/business attribute set hq <firm> <plot>` | Set the firm's headquarters to a plot you own. |
@@ -50,6 +51,12 @@ answers to `/firm`, `/company`, `/db`, and `/democracybusiness`.
 > `disband` is permanent. Make sure the firm's accounts are emptied the way you want
 > first — see [Accounts](#accounts).
 
+If a payout fails, the firm can already be archived while the affected account
+remains linked. The command reports an incomplete disband rather than success.
+Have staff investigate the reported accounts, then rerun the disband to resume
+remaining payouts. Use the firm's numeric ID if its name has since been released
+and reused. Do not manually duplicate a payout that already settled.
+
 ### Staff overrides
 
 A handful of commands let server staff (operators / the DOC) act on **any** firm,
@@ -59,10 +66,12 @@ moderation — see [Permission nodes](#permission-nodes).
 | Command | What it does |
 |---|---|
 | `/business admin disband <firm>` | Force-disband a firm (no owner confirmation). |
+| `/business admin releasename <firmId>` | Release a disbanded firm's reserved name for reuse; preserves its history. Requires the numeric ID. |
 | `/business admin rename <firm> <newname>` | Rename a firm. |
 | `/business admin set hq <firm> <plot>` | Set any firm's HQ plot. |
 | `/business admin set discord <firm> <url>` | Set any firm's Discord invite. |
 | `/business admin set proprietor <firm> <player>` | Reassign a firm's proprietor. |
+| `/business admin chatspy [firm]` | Toggle chat oversight for all firms or the named firm; requires CarbonChat and `business.admin.chatspy` (operator default). |
 
 ## Staff
 
@@ -102,7 +111,8 @@ roles, each seeded with a permission:
 New hires join as **Employee**, and a **lower** rank number is more senior. The four
 permissions are:
 
-- **`ADMIN`** — full control: manage staff, roles, accounts, and money.
+- **`ADMIN`** — manage staff/roles and authorized spending. Creating/archiving
+  accounts, selecting the default and changing account access remain proprietor-only.
 - **`FINANCIAL`** — spend from accounts they're an authorizer on (withdraw and pay out).
 - **`CHESTSHOP`** — create and manage the firm's ChestShops (enforced by the ChestShop
   plugin).
@@ -136,6 +146,8 @@ spend from it.
 
 | Command | What it does |
 |---|---|
+| `/business account alias <firm> <accountId> <alias>` | Set a unique, letters-only shop alias for an account (proprietor only). Use `A:alias` when creating a shop. |
+| `/business account clearalias <firm> <accountId>` | Clear an account’s shop alias (proprietor only); signs using that alias stop working until updated. |
 | `/business account list <firm>` | List the firm's accounts with IDs and shop codes. |
 | `/business account create <firm> <name>` | Open a new account. |
 | `/business account setdefault <firm> <accountId>` | Choose which account the short money commands use. |
@@ -210,14 +222,42 @@ Handing the firm to someone else is a confirmed, two-sided handshake:
 | `/business tax info <firm>` | Show the firm's tax status and estimated weekly tax. |
 | `/business tax exempt <firm> <on\|off>` | Set or clear tax exemption (admin). Accepts any on/off token — `true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`, `enable`/`disable`. |
 
+## Sales
+
+Read-only reporting over the firm's ChestShop sales. Viewing is gated to the firm's
+**proprietor** or staff with the **FINANCIAL** or **ADMIN** role — sales figures are the
+firm's books, not public.
+
+| Command | What it does |
+|---|---|
+| `/business sales <firm> [page]` | List the firm's recent ChestShop sales (paginated). |
+| `/business sales summary <firm> [days]` | Aggregate sales report — totals, top items, top customers (default 30 days). |
+| `/business sales export <firm> <days>` | Get an Economy Explorer link to the firm's sales report for the last `<days>` days (capped by `sales.max-export-days`). The page shows the window it is filtered to, with a link to switch to all time. |
+| `/business sales toggle <firm>` | Turn real-time sale notifications on/off for the firm (owner/admin). |
+
+## Chat
+
+A firm-member chat channel (like Factions' `/f chat`); authorized staff can monitor
+it through `admin chatspy`. Requires
+CarbonChat; messages route through the firm's channel once selected.
+
+| Command | What it does |
+|---|---|
+| `/business chat` | Enter your firm's chat channel (joins your only firm). |
+| `/business chat <firm>` | Enter a specific firm's chat when you're in several. |
+| `/business chat off` | Leave firm chat. |
+
 ## Permission nodes
 
 Business uses **two** layers of access:
 
-1. **LuckPerms node** — gates the command itself. Only `business.pay` defaults to
-   everyone; **every other node — including `business.use`, which the base `/business`
-   command needs — is operator-only until you grant it** (these are normally granted to
-   all players so they can run businesses).
+1. **LuckPerms node** — gates the command itself. **Almost every `business.*` node defaults
+   to everyone (`default: true`)** — including `business.use`, which the base `/business`
+   command needs. The only exceptions are the staff-override nodes `business.admin.*`
+   (disband / rename / attribute / proprietor / reload) and `business.tax.exempt`, which
+   default to operator-only. Real authorisation for everyday commands is enforced at the
+   in-firm role layer below, so the node only governs whether a player may *attempt* the
+   command at all.
 2. **In-firm role permission** — for actions on a specific firm, the plugin then checks
    the actor's [role permission](#roles) (`ADMIN` / `FINANCIAL`). The firm **owner
    (proprietor) bypasses this layer entirely**.
@@ -232,7 +272,7 @@ in-firm role.
 | `/business info` | `business.info` | — |
 | `/business list` · `list <player>` · `list all` | `business.list` · `business.list.other` · `business.list.all` | — |
 | `/business deposit` · `balance` · `withdraw` · `pay player` · `pay business` · `send` · `transactions` | `business.finance` | `ADMIN` or `FINANCIAL` |
-| `/business pay` (into a firm) | `business.pay` *(default: everyone)* | — |
+| `/business pay` (into a firm) | `business.pay` | — |
 | `/business offer` / `hire` · `offer rescind` | `business.staff.offer` · `business.staff.offer.rescind` | `ADMIN` |
 | `/business offer accept` · `reject` | `business.staff.offer.accept` · `business.staff.offer.reject` | — (the invitee) |
 | `/business fire` | `business.staff.fire` | `ADMIN` |
@@ -246,25 +286,50 @@ in-firm role.
 | `/business account sync` | `business.account.sync` | — (operator) |
 | `/business account addmember` · `removemember` · `addauthorizer` · `removeauthorizer` | `business.account.addmember` · `.removemember` · `.addauthorizer` · `.removeauthorizer` | **owner only** |
 | `/business account list` · `members` · `authorizers` | `business.account.list` · `.members` · `.authorizers` | — |
-| `/business account pay into` | `business.pay` *(default: everyone)* | — |
+| `/business account pay into` | `business.pay` | — |
 | `/business account deposit` · `withdraw` · `pay player` · `pay business` · `balance` · `transactions` | `business.account.finance` | `ADMIN` or `FINANCIAL` |
 | `/business transfer begin` · `confirm` · `cancel` | `business.transfer.begin` · `.confirm` · `.cancel` | owner only |
 | `/business transfer complete` · `reject` | `business.transfer.complete` · `.reject` | — (the recipient) |
 | `/business attribute set hq` · `discord` | `business.attribute.hq` · `business.attribute.discord` | `ADMIN` |
 | `/business tax info` | `business.tax.info` | — |
 | `/business tax exempt` | `business.tax.exempt` | operator action |
+| `/business sales` · `sales summary` | `business.sales` | proprietor / `ADMIN` / `FINANCIAL` |
+| `/business sales export` | `business.sales.export` | proprietor / `ADMIN` / `FINANCIAL` |
+| `/business sales toggle` | `business.sales.toggle` | owner / `ADMIN` |
+| `/business chat` | `business.chat` | firm member |
 | `/business admin disband` | `business.admin.disband` | — (operator, bypasses firm roles) |
+| `/business admin releasename` | `business.admin.releasename` | — (operator; disbanded firms only) |
 | `/business admin rename` | `business.admin.rename` | — (operator, bypasses firm roles) |
 | `/business admin set hq` · `set discord` | `business.admin.attribute` | — (operator, bypasses firm roles) |
 | `/business admin set proprietor` | `business.admin.proprietor` | — (operator, bypasses firm roles) |
 | `/business reload` | `business.admin.reload` | — (operator) |
 
 > [!NOTE]
-> The base `/business` command itself needs `business.use`. Only `business.pay` defaults
-> to everyone; **everything else — including `business.use` — is operator-only in
-> `plugin.yml`**, so a server normally grants the everyday `business.*` nodes to all
-> players via LuckPerms and keeps the `business.admin.*` nodes for staff. The "owner only"
+> The base `/business` command itself needs `business.use`. In `plugin.yml` **almost every
+> `business.*` node defaults to everyone (`default: true`)** — including `business.use` —
+> so players can run businesses out of the box; only the staff-override nodes
+> `business.admin.*` and `business.tax.exempt` default to operator-only. The "owner only"
 > rows are enforced in the plugin itself — only a firm's **proprietor** can manage its
 > accounts and their access, regardless of LuckPerms nodes or in-firm role. The
 > `business.admin.*` overrides go the other way: they let operators act on any firm,
 > ignoring proprietorship and firm roles entirely.
+
+## Firm menu
+
+Use `/firm menu` to choose an active firm you own or work for. Archived firms are hidden;
+hover over a firm to see its ID, owner and headquarters (when set). Use `/firm menu <firm>`
+(with a name or numeric ID) to open a firm's overview. The Curator chest dashboard shows
+its aggregate balance and opens paginated staff and account lists. Money actions
+and the **Manage** button on each list open Usher input dialogs. Staff forms
+send employment offers or fire employees; account forms create accounts or change
+the default account. Money forms support deposits, withdrawals and payments to a
+player, another firm, or the selected firm from your personal account.
+
+Choose an action, fill its required fields and press **Submit**. Enter ordinary decimal amounts such as `10.50`. Recipient
+names/IDs and new account names use one word per field. Actions run the existing
+commands with current server and firm-role permissions. An open menu does not
+retain permissions after they are revoked. Each menu session submits once; reopen
+`/firm menu` after an action to see updated data. **Refresh overview** reloads the
+selected firm. **Back** in a form reloads the dashboard without submitting; **Close**
+dismisses it. List arrows page through firms, staff and accounts. Menu icons are
+display controls and cannot be taken into your inventory.

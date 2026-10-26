@@ -1,61 +1,64 @@
 'use client';
-// Primary nav. Lights up the active section so users see where they are.
-// Active match is inclusive — /accounts/* keeps Accounts highlighted, etc.
+// Primary navigation (the six sections of spec §6.1) and the section nav under
+// the top bar. Both are driven by lib/nav from the current path: a page never
+// declares its section, and never renders its own section tabs.
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
-import { useIsAdmin } from '@/components/ViewerContext';
-
-interface NavLink {
-  href: Route;
-  label: string;
-  match: (path: string) => boolean;
-}
+import { useViewer } from '@/components/ViewerContext';
+import { itemMatches, sectionForPath, sectionItems, visibleSections } from '@/lib/nav';
 
 export function HeaderNav() {
   const path = usePathname();
-  const isAdmin = useIsAdmin();
-  const links: NavLink[] = [
-    {
-      href: '/',
-      label: 'Economy',
-      match: (p) =>
-        p === '/' ||
-        p.startsWith('/economy/health') ||
-        p.startsWith('/money-flow') ||
-        p.startsWith('/government'),
-    },
-    { href: '/accounts', label: 'Accounts', match: (p) => p.startsWith('/accounts') },
-    { href: '/firms', label: 'Firms', match: (p) => p.startsWith('/firms') },
-    {
-      href: '/market',
-      label: 'Market',
-      match: (p) => p.startsWith('/market') || p.startsWith('/chestshop'),
-    },
-    { href: '/docs', label: 'Docs', match: (p) => p.startsWith('/docs') },
-  ];
-  if (isAdmin) {
-    // Single entry → the /admin section, which carries its own sub-navbar
-    // (components/AdminNav) for the individual tools. /transactions is an
-    // admin-gated tool that lives under the admin section too.
-    links.push({ href: '/admin', label: 'Admin', match: (p) => p.startsWith('/admin') || p.startsWith('/transactions') });
-  }
+  const viewer = useViewer();
+  const active = sectionForPath(path);
   return (
-    <nav className="explorer-nav" aria-label="Primary">
-      {links.map((l) => (
-        <Link
-          key={l.href}
-          href={l.href}
-          className={l.match(path) ? 'active' : ''}
-          // Default prefetch (prop omitted): Next prefetches only the static shell
-          // up to each route's loading.tsx, not the dynamic DB data — top-level nav
-          // feels instant without prefetch hammering the ledger. Content links
-          // elsewhere stay prefetch={false} per the anti-scraping posture.
-        >
-          {l.label}
-        </Link>
-      ))}
+    <nav className="shell-nav" aria-label="Primary">
+      {visibleSections(viewer).map((section) => {
+        const current = active?.id === section.id;
+        return (
+          <Link
+            key={section.id}
+            href={section.href as Route}
+            className="shell-nav-link"
+            aria-current={current ? (path === section.href ? 'page' : 'true') : undefined}
+            // Default prefetch: Next prefetches only the static shell up to each
+            // route's loading.tsx, never the DB data, so top-level nav feels
+            // instant without prefetch hammering the ledger.
+          >
+            {section.label}
+          </Link>
+        );
+      })}
     </nav>
+  );
+}
+
+/** The active section's pages, as a row under the top bar. Renders nothing for single-page sections. */
+export function HeaderSectionNav() {
+  const path = usePathname();
+  const viewer = useViewer();
+  const found = sectionItems(path, viewer);
+  if (!found) return null;
+  return (
+    <div className="shell-subbar">
+      <nav className="shell-subnav" aria-label={found.section.label}>
+        {found.items.map((item) => {
+          const current = itemMatches(item, path);
+          return (
+            <Link
+              key={item.href}
+              href={item.href as Route}
+              prefetch={false}
+              className="shell-subnav-link"
+              aria-current={current ? (path === item.href ? 'page' : 'true') : undefined}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }

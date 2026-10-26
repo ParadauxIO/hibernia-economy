@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import org.mybatis.guice.transactional.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -76,6 +77,15 @@ public class MembershipServiceImpl implements MembershipService {
         return isMember(accountId, uuid) || isViewer(accountId, uuid);
     }
 
+    @Override
+    @Transactional
+    public boolean canSpend(int accountId, UUID uuid) {
+        // Per-account spend gate: a member or an authorizer of the account may move
+        // its money. Read-only viewers do not qualify. Global permission nodes and
+        // the console/RCON bypass are handled by the command layer before this.
+        return isMember(accountId, uuid) || isAuthorizer(accountId, uuid);
+    }
+
     // ── Individual UUID CRUD ──
 
     @Override
@@ -122,6 +132,13 @@ public class MembershipServiceImpl implements MembershipService {
     }
 
     // ── LP Group CRUD ──
+
+    @Override
+    public boolean isKnownGroup(String lpGroup) {
+        if (luckPerms == null || lpGroup == null) return true;
+        // LuckPerms group names are always lower-case; every group is loaded.
+        return luckPerms.getGroupManager().getGroup(lpGroup.toLowerCase(Locale.ROOT)) != null;
+    }
 
     @Override
     @Transactional

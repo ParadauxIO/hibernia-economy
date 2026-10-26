@@ -16,10 +16,11 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @OpenAPIDefinition(
-        info = @Info(
-                title = "Treasury REST API",
-                version = "v1",
-                description = """
+        info =
+                @Info(
+                        title = "Treasury REST API",
+                        version = "v1",
+                        description = """
                         HTTP surface for the DemocracyCraft Treasury economy. Players issue an \
                         API key in-game with `/treasuryapi`, then use the token to authenticate \
                         every call here.
@@ -29,7 +30,8 @@ import org.springframework.context.annotation.Configuration;
                           the player's PERSONAL account.
                         - **BUSINESS** — JWT carries a `firm` claim. The caller picks one of the \
                           firm's accounts to debit via the `fromAccountId` body field; the firm \
-                          ownership check happens server-side.
+                          ownership check happens server-side. An optional `acc` claim restricts the key \
+                          to that single account, including subaccounts.
 
                         **Money is always a decimal string.** Never JSON `number` — IEEE 754 \
                         rounding will silently corrupt amounts at scale.
@@ -37,16 +39,14 @@ import org.springframework.context.annotation.Configuration;
                         **Errors share a flat envelope** `{ "error": "SNAKE_CASE_CODE", "message": "..." }`. \
                         The `error` code is stable across versions; the message is informational.
                         """,
-                contact = @Contact(name = "DemocracyCraft", url = "https://democracycraft.net"),
-                license = @License(name = "Proprietary")
-        ),
+                        contact = @Contact(name = "DemocracyCraft", url = "https://democracycraft.net"),
+                        license = @License(name = "Proprietary")),
         // No explicit `servers`: springdoc derives the base URL from the request
         // (honouring X-Forwarded-* via forward-headers-strategy: framework), so it
         // resolves to the externally-visible base — root in UAT, /economy in prod.
         // An explicit "/api/v1" double-prefixed the already-/api/v1 paths and broke
         // Swagger "Try it out".
-        security = @SecurityRequirement(name = "BearerJWT")
-)
+        security = @SecurityRequirement(name = "BearerJWT"))
 @SecurityScheme(
         name = "BearerJWT",
         type = SecuritySchemeType.HTTP,
@@ -57,6 +57,5 @@ import org.springframework.context.annotation.Configuration;
                 Pass the full JWT issued by `/treasuryapi personal issue` or \
                 `/treasuryapi business issue` in the `Authorization: Bearer <jwt>` \
                 header.
-                """
-)
+                """)
 public class OpenApiConfig {}

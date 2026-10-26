@@ -9,8 +9,6 @@ import java.util.UUID;
 
 public interface FirmPlayerService {
 
-    void touch(UUID uuid, String currentName);
-
     Optional<FirmPlayer> findByUuid(UUID uuid);
     Optional<FirmPlayer> findByUuid(String uuid);
     Optional<FirmPlayer> findByName(String name);

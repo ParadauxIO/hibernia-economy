@@ -3,62 +3,87 @@ package io.paradaux.business.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
-
+import io.paradaux.business.chat.FirmChatService;
+import io.paradaux.business.mappers.FirmAccountsMapper;
+import io.paradaux.business.mappers.FirmMapper;
+import io.paradaux.business.mappers.FirmRequestMapper;
+import io.paradaux.business.mappers.FirmRoleMapper;
+import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.FirmAccount;
+import io.paradaux.business.model.FirmRole;
+import io.paradaux.business.model.FirmRoleDefaults;
+import io.paradaux.business.model.FirmRolePermission;
+import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.services.FirmAccountService;
+import io.paradaux.business.services.FirmAreaShopService;
+import io.paradaux.business.services.FirmService;
+import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.utils.NameValidator;
+import io.paradaux.common.NameReservationErrors;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import io.paradaux.hibernia.framework.utils.StringUtils;
-import io.paradaux.business.mappers.FirmMapper;
-import io.paradaux.business.mappers.FirmRoleMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmRole;
-import io.paradaux.business.model.FirmRolePermission;
-import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.mappers.FirmAccountsMapper;
-import io.paradaux.business.model.config.FirmConfiguration;
-import io.paradaux.business.services.FirmService;
-import io.paradaux.business.services.FirmStaffService;
-import io.paradaux.business.utils.NameValidator;
-import io.paradaux.business.utils.RoleUtils;
-import io.paradaux.business.model.FirmAccount;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
-import io.paradaux.treasury.model.economy.TransferRequest;
-import org.mybatis.guice.transactional.Transactional;
-
-import org.jetbrains.annotations.Nullable;
-
-import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.jetbrains.annotations.Nullable;
+import org.mybatis.guice.transactional.Transactional;
 
 @Singleton
 public class FirmServiceImpl implements FirmService {
 
     private static final int FIRM_NAME_LENGTH_LIMIT = 32;
+    private static final Logger LOG = Logger.getLogger("Business");
 
     private final FirmMapper firms;
     private final TreasuryApi treasury;
     private final FirmAccountsMapper accounts;
     private final FirmRoleMapper roles;
+    private final FirmRequestMapper requests;
     /** Lazy-injected to break the FirmService ↔ FirmStaffService cycle. */
     private final Provider<FirmStaffService> staffProvider;
+    /** Lazy-injected to break the FirmService ↔ FirmAccountService cycle. */
+    private final Provider<FirmAccountService> firmAccountServiceProvider;
+
     private final FirmConfiguration firmConfig;
+    private final FirmAreaShopService areas;
+    /** Lazy-injected to break the FirmService ↔ FirmChatService cycle. */
+    private final Provider<FirmChatService> chatProvider;
+
+    /** Firms with a disband drain currently running in this JVM (see disbandInternal). */
+    private final Set<Integer> draining = ConcurrentHashMap.newKeySet();
 
     @Inject
-    public FirmServiceImpl(FirmMapper firms,
-                           TreasuryApi treasury,
-                           FirmAccountsMapper accounts,
-                           FirmRoleMapper roles,
-                           Provider<FirmStaffService> staffProvider,
-                           FirmConfiguration firmConfig) {
+    public FirmServiceImpl(
+            FirmMapper firms,
+            TreasuryApi treasury,
+            FirmAccountsMapper accounts,
+            FirmRoleMapper roles,
+            FirmRequestMapper requests,
+            Provider<FirmStaffService> staffProvider,
+            Provider<FirmAccountService> firmAccountServiceProvider,
+            FirmConfiguration firmConfig,
+            FirmAreaShopService areas,
+            Provider<FirmChatService> chatProvider) {
         this.firms = firms;
         this.treasury = treasury;
         this.accounts = accounts;
         this.roles = roles;
+        this.requests = requests;
         this.staffProvider = staffProvider;
+        this.firmAccountServiceProvider = firmAccountServiceProvider;
         this.firmConfig = firmConfig;
+        this.areas = areas;
+        this.chatProvider = chatProvider;
     }
 
     private boolean canAdministerFirm(int firmId, UUID actorId) {
@@ -70,16 +95,31 @@ public class FirmServiceImpl implements FirmService {
      *
      * <p>Wrapped in a JDBC transaction so the local-DB writes (firm, roles,
      * permissions, firm_accounts, default_account_id update) are atomic. The
-     * Treasury account-creation calls in the middle are external IPC and
-     * cannot participate in a JDBC transaction — if the DB rolls back after
-     * a successful Treasury account creation, the Treasury account is left
-     * orphaned (still owned by the actor, no firm linkage). Operators should
-     * watch for that pattern in Treasury logs and clean up manually if needed.
+     * Treasury account creation is external IPC that can't join the JDBC
+     * transaction, so if a later DB write fails and the transaction rolls back,
+     * the just-created Treasury account would be orphaned. Runtime exceptions
+     * inside the guarded block trigger a best-effort archive before the
+     * exception propagates and the transaction unwinds (ADT-11).
+     *
+     * <p>This is not crash-safe (ADT-92): from Treasury's account commit until
+     * the Business transaction commits, a JVM/process crash can leave an active
+     * BUSINESS account without a firm or firm_accounts link. A commit failure
+     * in the transaction interceptor, after this method returns, also bypasses
+     * compensation. Linked-account membership reconciliation cannot discover
+     * these orphans; operator investigation and cleanup are required. Role and
+     * permission writes run before Treasury creation to reduce this window,
+     * but remain uncommitted until the entire Business transaction completes.
      */
     @Transactional
     @Override
     public Firm createFirm(String name, UUID actorId) {
+        name = name == null ? null : name.replaceAll("^ +| +$", "");
         validateFirmName(name);
+
+        // Acquire before any reads so a waiting create sees the previous
+        // transaction's committed firm, including its count and creation time.
+        // A DB row lock also serializes callers on different server instances.
+        firms.lockCreationForOwner(actorId.toString());
 
         // Create a blank firm
         Firm firm = new Firm();
@@ -88,7 +128,8 @@ public class FirmServiceImpl implements FirmService {
 
         // Validation checks, name uniqueness / ownership limit
         if (firms.getFirmsByNameCount(name) > 0) {
-            throw new ExceedsLimitException("Firm with name '" + name + "' already exists");
+            // Archived firms reserve their names until an administrator explicitly releases them.
+            throw new ExceedsLimitException("The name '" + name + "' is already taken");
         }
 
         if (firmConfig.hasOwnedFirmLimit()
@@ -106,95 +147,246 @@ public class FirmServiceImpl implements FirmService {
         }
 
         // Put it into the DB to get an ID
-        firms.createFirm(firm);
+        try {
+            firms.createFirm(firm);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                throw new BadCommandException(message);
+            });
+            throw e;
+        }
 
-        // Create a treasury account via the TreasuryApi
-        Account account = treasury.createAccount(AccountType.BUSINESS, actorId, name + " Corporate Account");
-
-        // Auto-add the owner as a member + authorizer on the treasury account
-        treasury.addMember(account.getAccountId(), actorId, actorId);
-        treasury.addAuthorizer(account.getAccountId(), actorId, actorId);
-
-        // Create a record of the firm owning this account
-        accounts.insertFirmAccount(firm.getFirmId(), account.getAccountId());
-
-        // Set it as the firm's default treasury account.
-        firm.setDefaultAccountId(account.getAccountId());
-
+        // Finish writes that do not need the account ID before external IPC.
+        // Failure here rolls back locally without creating a Treasury orphan.
         // Add the default roles
-        for (FirmRole role : RoleUtils.getDefaultRoles(firm.getFirmId())) {
+        for (FirmRole role : FirmRoleDefaults.getDefaultRoles(firm.getFirmId())) {
             roles.insertRole(role);
         }
 
         // Add the default permissions for every role
-        for (FirmRolePermission permission : RoleUtils.getDefaultPermissions(firm.getFirmId())) {
+        for (FirmRolePermission permission : FirmRoleDefaults.getDefaultPermissions(firm.getFirmId())) {
             roles.addRolePermission(permission);
         }
 
-        // Update the firm with the updated default account.
-        firms.updateFirm(firm);
+        // Create a treasury account via the TreasuryApi
+        Account account;
+        String generatedName = name + " Corporate Account";
+        try {
+            account = treasury.createAccount(AccountType.BUSINESS, actorId, generatedName);
+        } catch (RuntimeException conflict) {
+            if (!NameReservationErrors.isConflict(conflict)) throw conflict;
+            // The generated account name is not the user-selected firm name.
+            // Released firms may retain their old financial identity; preserve it
+            // and use the new firm's ID for one bounded fallback attempt.
+            account = treasury.createAccount(
+                    AccountType.BUSINESS, actorId, generatedName + " (" + firm.getFirmId() + ")");
+        }
+
+        // Best-effort compensation for exceptions inside this block only.
+        // Process death and interceptor commit failures bypass it (see ADT-92 above).
+        try {
+            // Auto-add the owner as a member + authorizer on the treasury account
+            treasury.addMember(account.getAccountId(), actorId, actorId);
+            treasury.addAuthorizer(account.getAccountId(), actorId, actorId);
+
+            // Create a record of the firm owning this account
+            accounts.insertFirmAccount(firm.getFirmId(), account.getAccountId());
+
+            // Set it as the firm's default treasury account.
+            firm.setDefaultAccountId(account.getAccountId());
+
+            // Update the firm with the updated default account.
+            firms.updateFirm(firm);
+        } catch (RuntimeException ex) {
+            compensateOrphanedAccount(account.getAccountId(), ex);
+            throw ex;
+        }
         return firm;
     }
 
-    @Transactional
+    /**
+     * Best-effort archive of a Treasury account left orphaned when firm creation
+     * fails after the account was created. A failure to compensate is logged and
+     * attached to the original cause rather than masking it.
+     */
+    private void compensateOrphanedAccount(int accountId, RuntimeException cause) {
+        try {
+            treasury.archiveAccount(accountId);
+        } catch (RuntimeException cleanupFailure) {
+            cause.addSuppressed(cleanupFailure);
+            LOG.log(
+                    Level.SEVERE,
+                    "Failed to archive orphaned Treasury account " + accountId
+                            + " after firm creation rolled back; manual cleanup required.",
+                    cleanupFailure);
+        }
+    }
+
+    // Not @Transactional: the firm-archive DB write must commit BEFORE any
+    // money moves (see disbandInternal), which a single enclosing JDBC
+    // transaction would prevent (ADT-11).
     @Override
-    public void disbandFirm(String firmName, UUID actorId) {
+    public DisbandResult disbandFirm(String firmName, UUID actorId) {
         // Archived-inclusive: a disbanded firm must report "already disbanded", not "not found".
-        Firm firm = getAnyFirmByNameOrId(firmName);
+        return disbandFirm(getAnyFirmByNameOrId(firmName), actorId);
+    }
+
+    @Override
+    public DisbandResult disbandFirm(int firmId, UUID actorId) {
+        return disbandFirm(getAnyFirmById(firmId), actorId);
+    }
+
+    private DisbandResult disbandFirm(Firm firm, UUID actorId) {
         if (firm == null) {
-            throw new BadCommandException("Firm not found: " + firmName);
+            throw new BadCommandException("Firm not found.");
         }
-        if (Boolean.TRUE.equals(firm.getArchived())) {
-            throw new BadCommandException("Firm already disbanded: " + firmName);
-        }
+        requireNotFullyDisbanded(firm, firm.getDisplayName());
+        // Applies to a resumed disband too: only the proprietor may finish draining
+        // their archived firm (the proprietor lookup is archived-inclusive).
         if (!isProprietor(firm.getFirmId(), actorId)) {
             throw new NoPermissionException("Only the proprietor can disband a firm.");
         }
-        disbandInternal(firm);
+        return disbandInternal(firm);
     }
 
-    @Transactional
     @Override
-    public void adminDisbandFirm(String firmName) {
+    public DisbandResult adminDisbandFirm(String firmName) {
         Firm firm = getAnyFirmByNameOrId(firmName);
         if (firm == null) {
             throw new BadCommandException("Firm not found: " + firmName);
         }
-        if (Boolean.TRUE.equals(firm.getArchived())) {
-            throw new BadCommandException("Firm already disbanded: " + firmName);
-        }
-        disbandInternal(firm);
+        requireNotFullyDisbanded(firm, firmName);
+        return disbandInternal(firm);
     }
 
-    /** Shared disband mechanics: drains balances to the proprietor and archives the firm. */
-    private void disbandInternal(Firm firm) {
+    @Override
+    public Firm adminReleaseFirmName(int firmId) {
+        Firm firm = getAnyFirmById(firmId);
+        if (firm == null) {
+            throw new BadCommandException("Firm not found: " + firmId);
+        }
+        if (!Boolean.TRUE.equals(firm.getArchived())) {
+            throw new BadCommandException("Only disbanded firms can have their names released.");
+        }
+        if (firms.releaseFirmName(firmId) == 0) {
+            throw new BadCommandException(
+                    "Firm name is already released or the firm is no longer disbanded: " + firmId);
+        }
+        return firm;
+    }
+
+    @Override
+    public boolean isDisbandIncomplete(Firm firm) {
+        return Boolean.TRUE.equals(firm.getArchived())
+                && !accounts.listAccountsByFirm(firm.getFirmId()).isEmpty();
+    }
+
+    /**
+     * An archived firm with no accounts left is done — reject it. An archived firm
+     * that still has linked accounts is a disband that failed partway through
+     * draining, and must stay disbandable or its money is stranded for good.
+     */
+    private void requireNotFullyDisbanded(Firm firm, String label) {
+        if (Boolean.TRUE.equals(firm.getArchived()) && !isDisbandIncomplete(firm)) {
+            throw new BadCommandException("Firm already disbanded: " + label);
+        }
+    }
+
+    /**
+     * Shared disband mechanics. The firm is marked disbanded <em>first</em> and
+     * that write commits before any balance is moved, so a failure partway
+     * through draining can never leave the firm looking alive while its accounts
+     * are emptied. Each account is drained, archived, and unlinked
+     * independently; a step that fails leaves that account still linked with its
+     * balance intact and is reported in the result, never swallowed as success
+     * (ADT-11).
+     *
+     * <p>The drain is resumable: disbanding an already-archived firm that still
+     * has linked accounts re-runs it over whatever is left. Every step is
+     * idempotent — sweepAll moves the account's balance as read under its row
+     * lock, so sweeping an already-emptied account moves nothing; archiving an
+     * archived account and unlinking an unlinked one are no-ops — so a retry, or
+     * two drains racing each other, can never pay the proprietor twice.
+     */
+    private DisbandResult disbandInternal(Firm firm) {
+        int firmId = firm.getFirmId();
+        // One drain per firm at a time in this JVM. Not needed for conservation (see
+        // above), but two interleaved drains would each report the other's
+        // half-finished accounts as failures.
+        if (!draining.add(firmId)) {
+            throw new BadCommandException("A disband of " + firm.getDisplayName() + " is already in progress.");
+        }
+        try {
+            return drain(firm);
+        } finally {
+            draining.remove(firmId);
+        }
+    }
+
+    private DisbandResult drain(Firm firm) {
         UUID proprietorUuid = UUID.fromString(firm.getProprietorUuid());
+        boolean resumed = Boolean.TRUE.equals(firm.getArchived());
+
+        // Snapshot the linked accounts and resolve the payout target before any
+        // destructive step — a failure here aborts cleanly with no money moved
+        // and the firm still active.
+        List<FirmAccount> firmAccountList = accounts.listAccountsByFirm(firm.getFirmId());
         Account personal = treasury.resolveOrCreatePersonal(proprietorUuid);
 
-        // Withdraw balances and archive every firm account
-        List<FirmAccount> firmAccountList = accounts.listAccountsByFirm(firm.getFirmId());
-        for (FirmAccount fa : firmAccountList) {
-            BigDecimal balance = treasury.getBalanceByAccountId(fa.getAccountId());
-            if (balance.compareTo(BigDecimal.ZERO) > 0) {
-                TransferRequest req = new TransferRequest(
-                        fa.getAccountId(),
-                        personal.getAccountId(),
-                        balance,
-                        "Firm disbanded",
-                        proprietorUuid,
-                        proprietorUuid,
-                        "BusinessPlugin",
-                        null
-                );
-                treasury.transfer(req);
+        // Mark disbanded first (auto-commits — this method isn't @Transactional)
+        // so money only ever moves once the firm is durably archived. The archive
+        // is a conditional UPDATE (WHERE is_archived = 0), so this is also the
+        // atomic gate that serialises concurrent first-time disbands: whoever flips
+        // the flag (1 row affected) owns the drain; a loser that sees 0 rows
+        // short-circuits here, before touching any balance, and leaves it to the
+        // winner (business/behaviour/0002). A resumed disband skips the gate — the
+        // flag was flipped by the run it is finishing. The owner comparison rejects
+        // stale snapshots; archived ownership stays fixed for every resumed sweep.
+        if (!resumed) {
+            if (firms.archiveFirm(firm.getFirmId(), firm.getProprietorUuid()) == 0) {
+                Firm current = firms.getFirmById(firm.getFirmId());
+                if (current == null
+                        || !Boolean.TRUE.equals(current.getArchived())
+                        || !proprietorUuid.toString().equalsIgnoreCase(current.getProprietorUuid())) {
+                    throw new BadCommandException("Firm ownership changed; disband was not performed. Try again.");
+                }
+                LOG.log(
+                        Level.FINE,
+                        "Firm {0} was already archived by a concurrent disband; skipping drain.",
+                        firm.getFirmId());
+                return new DisbandResult(true, List.of());
             }
-            treasury.archiveAccount(fa.getAccountId());
-            accounts.removeFirmAccount(firm.getFirmId(), fa.getAccountId());
+            // The firm no longer exists for its members: drop them out of its chat.
+            chatProvider.get().membershipChanged(firm.getFirmId());
         }
 
-        // Atomically flip is_archived and clear default_account_id so the firm
-        // doesn't dangle a reference to a now-archived account.
-        firms.archiveFirm(firm.getFirmId());
+        List<Integer> undrained = new ArrayList<>();
+        for (FirmAccount fa : firmAccountList) {
+            try {
+                // Sweep the account's FRESHLY LOCKED balance rather than a
+                // read-snapshot-then-transfer: sweepAll reads the amount under the same
+                // FOR UPDATE lock that guards the move, so a credit landing after a
+                // snapshot can't leave a residual behind in the archived firm account
+                // (conservation stays exact). Mirrors the treasury-rest-api disband
+                // sweep (TransferService.sweepAll) so both engines drain identically
+                // (business/behaviour/0003).
+                treasury.sweepAll(
+                        fa.getAccountId(), personal.getAccountId(), "Firm disbanded", proprietorUuid, "BusinessPlugin");
+                treasury.archiveAccount(fa.getAccountId());
+                accounts.removeFirmAccount(firm.getFirmId(), fa.getAccountId());
+            } catch (RuntimeException ex) {
+                // Leave this account linked so re-running the disband can finish
+                // draining it; don't strand the rest. Reported to the caller below.
+                undrained.add(fa.getAccountId());
+                LOG.log(
+                        Level.WARNING,
+                        "Failed to drain/archive account " + fa.getAccountId()
+                                + " while disbanding firm " + firm.getFirmId()
+                                + "; it stays linked until the disband is re-run.",
+                        ex);
+            }
+        }
+        return new DisbandResult(resumed, List.copyOf(undrained));
     }
 
     @Transactional
@@ -210,7 +402,9 @@ public class FirmServiceImpl implements FirmService {
     public List<Firm> listAllFirms(int page, int pageSize) {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 25; // sane default
-        int offset = (page - 1) * pageSize;
+        long requestedOffset = (long) (page - 1) * pageSize;
+        if (requestedOffset > Integer.MAX_VALUE) return List.of();
+        int offset = (int) requestedOffset;
         return firms.listAllFiltered(pageSize, offset, false);
     }
 
@@ -221,12 +415,27 @@ public class FirmServiceImpl implements FirmService {
 
     @Override
     public void updateFirmHq(String firmName, String plotName, UUID actorId) {
-        Firm firm = getFirmByNameOrId(firmName);
+        updateFirmHq(getFirmByNameOrId(firmName), plotName, actorId);
+    }
+
+    @Override
+    public void updateFirmHq(int firmId, String plotName, UUID actorId) {
+        updateFirmHq(getFirmById(firmId), plotName, actorId);
+    }
+
+    private void updateFirmHq(Firm firm, String plotName, UUID actorId) {
         if (firm == null) {
-            throw new BadCommandException("Firm not found: " + firmName);
+            throw new BadCommandException("Firm not found.");
         }
         if (!canAdministerFirm(firm.getFirmId(), actorId)) {
             throw new NoPermissionException("You don't have permission to manage this firm.");
+        }
+        // Reject HQ regions the region provider (Realty) doesn't recognise so
+        // firms can't claim arbitrary/nonexistent plots. Fails open when no
+        // provider is installed (ADT-37). The admin override (adminSetHq) is
+        // intentionally exempt.
+        if (!areas.isValidPlot(plotName)) {
+            throw new BadCommandException("'" + plotName + "' is not a valid HQ region.");
         }
         Firm updatedFirm = new Firm();
         updatedFirm.setFirmId(firm.getFirmId());
@@ -236,12 +445,27 @@ public class FirmServiceImpl implements FirmService {
 
     @Override
     public void updateFirmDiscord(String firmName, String url, UUID actorId) {
-        Firm firm = getFirmByNameOrId(firmName);
+        updateFirmDiscord(getFirmByNameOrId(firmName), url, actorId);
+    }
+
+    @Override
+    public void updateFirmDiscord(int firmId, String url, UUID actorId) {
+        updateFirmDiscord(getFirmById(firmId), url, actorId);
+    }
+
+    private void updateFirmDiscord(Firm firm, String url, UUID actorId) {
         if (firm == null) {
-            throw new BadCommandException("Firm not found: " + firmName);
+            throw new BadCommandException("Firm not found.");
         }
         if (!canAdministerFirm(firm.getFirmId(), actorId)) {
             throw new NoPermissionException("You don't have permission to manage this firm.");
+        }
+        // Validate server-side too (ADT discord-url-unvalidated-to-ui): this value is
+        // read directly from the DB and rendered by the explorer + /firm info, so an
+        // unvalidated string (javascript: URL, MiniMessage/HTML) would be a stored
+        // injection vector. A blank value clears the link.
+        if (url != null && !url.isBlank() && !url.matches(NameValidator.DISCORD_INVITE_REGEX)) {
+            throw new BadCommandException("Invalid Discord invite URL — must be https://discord.gg/<code>.");
         }
         Firm updatedFirm = new Firm();
         updatedFirm.setFirmId(firm.getFirmId());
@@ -260,7 +484,11 @@ public class FirmServiceImpl implements FirmService {
         Firm firm = new Firm();
         firm.setFirmId(firmId);
         firm.setProprietorUuid(playerId.toString());
-        firms.updateFirm(firm);
+        if (firms.updateFirm(firm) == 0) {
+            throw new BadCommandException("Cannot transfer ownership of an archived or missing firm.");
+        }
+        // The outgoing proprietor is no longer a member: re-check the firm's chat.
+        chatProvider.get().membershipChanged(firmId);
     }
 
     // ---- Staff/DOC administrative overrides (PAR-11) -------------------------
@@ -268,6 +496,7 @@ public class FirmServiceImpl implements FirmService {
     @Transactional
     @Override
     public Firm renameFirm(String firmName, String newName) {
+        newName = newName == null ? null : newName.replaceAll("^ +| +$", "");
         Firm firm = getFirmByNameOrId(firmName);
         if (firm == null) {
             throw new BadCommandException("Firm not found: " + firmName);
@@ -280,7 +509,14 @@ public class FirmServiceImpl implements FirmService {
         Firm update = new Firm();
         update.setFirmId(firm.getFirmId());
         update.setDisplayName(newName);
-        firms.updateFirm(update);
+        try {
+            firms.updateFirm(update);
+        } catch (RuntimeException e) {
+            NameReservationErrors.userMessage(e).ifPresent(message -> {
+                throw new BadCommandException(message);
+            });
+            throw e;
+        }
         firm.setDisplayName(newName);
         return firm;
     }
@@ -303,10 +539,59 @@ public class FirmServiceImpl implements FirmService {
         firms.updateFirm(update);
     }
 
+    /**
+     * Admin-forced proprietor change. This is the direct-override analog of a
+     * player transfer, so it must do everything the transfer-accept flow does
+     * besides the request gating: hand the firm's treasury accounts to the new
+     * proprietor and re-sync access. Without the reassignment the account
+     * owner/authorizers stay on the previous proprietor and the new one is locked
+     * out of the firm's money — the exact stranding the transfer flow prevents at
+     * FirmRequestServiceImpl#completeTransferProprietorship (PAR-141).
+     *
+     * <p>The Treasury account reassignment is cross-plugin IPC and cannot enrol in
+     * this JDBC {@code @Transactional}, so every DB write must happen <em>before</em>
+     * it — otherwise a DB write that throws after the IPC would roll the firm row
+     * back while the account owner change stays committed in Treasury, diverging
+     * ownership from money (the ADT-11 class). So the order is: DB proprietor update,
+     * cancel any in-flight transfer, record the audit row, and only then the IPC —
+     * mirroring the transfer-accept flow, which is deliberately ordered IPC-last for
+     * the same reason. (This closes the DB-write-after-IPC window; it does not close
+     * the pre-existing multi-account partial-IPC window inside the reassignment loop,
+     * which is shared with the consent-transfer path.)
+     */
+    @Transactional
     @Override
-    public void adminSetProprietor(String firmName, UUID newProprietor) {
+    public void adminSetProprietor(String firmName, UUID newProprietor, UUID actorId) {
         Firm firm = requireFirm(firmName);
+        // Capture the outgoing proprietor before the update for the audit row.
+        UUID previousProprietor = UUID.fromString(firm.getProprietorUuid());
+
+        // A proprietor cannot also occupy an employee slot (mirrors the transfer flow).
+        if (staffProvider.get().isEmployedBy(firm.getFirmId(), newProprietor)) {
+            staffProvider.get().resignFromFirm(firmName, newProprietor);
+        }
+
         updateProprietor(firm.getFirmId(), newProprietor);
+
+        // Cancel any in-flight (PENDING/CONFIRMED) player transfer for this firm, so a
+        // transfer the previous proprietor had started can't later be completed and
+        // re-hand the firm to a third party after this override (PAR-315).
+        requests.cancelActiveTransfers(firm.getFirmId());
+
+        // Audit the forced handover in the same log as consent transfers, so a
+        // staff/DOC override is traceable (who did it, from whom, to whom) instead
+        // of an invisible proprietor change (PAR-315). Recorded before the IPC so no
+        // DB write follows the un-rollback-able Treasury reassignment below.
+        requests.recordAdminOverride(
+                firm.getFirmId(),
+                previousProprietor.toString(),
+                newProprietor.toString(),
+                actorId.toString(),
+                StringUtils.random32());
+
+        // Hand the firm's Treasury accounts to the new proprietor and re-sync access.
+        // Cross-plugin IPC — kept last so nothing that can throw follows it.
+        firmAccountServiceProvider.get().reassignAccountsToNewProprietor(firm.getFirmId(), newProprietor);
     }
 
     private Firm requireFirm(String firmName) {
@@ -317,7 +602,7 @@ public class FirmServiceImpl implements FirmService {
         return firm;
     }
 
-    /** Format + length checks shared by {@link #createFirm} and {@link #renameFirm}. */
+    /** Format, length and moderation checks shared by create and rename. */
     private void validateFirmName(String name) {
         if (name == null || name.length() > FIRM_NAME_LENGTH_LIMIT) {
             throw new BadCommandException("This firm name is too long");
@@ -326,7 +611,12 @@ public class FirmServiceImpl implements FirmService {
             throw new BadCommandException("Firm names cannot start with a number.");
         }
         if (!NameValidator.isValidFirmName(name)) {
-            throw new BadCommandException("Firm name must be 2–32 characters of letters, digits, space, underscore, hyphen, or period.");
+            throw new BadCommandException(
+                    "Firm name must be 2–32 characters of letters, digits, space, underscore, hyphen, or period.");
+        }
+        if (NameValidator.containsBlockedTerm(name, firmConfig.getBlockedNameTerms())) {
+            throw new BadCommandException(
+                    "This firm name contains a blocked word or phrase. Please choose another name.");
         }
     }
 
@@ -355,11 +645,31 @@ public class FirmServiceImpl implements FirmService {
     }
 
     @Override
+    public Firm getFirmById(int firmId) {
+        // Active-only, mirroring getFirmByNameOrId (ADT-99): disbanded firms stop
+        // resolving on command/action paths.
+        Firm firm = firms.getFirmById(firmId);
+        return (firm == null || Boolean.TRUE.equals(firm.getArchived())) ? null : firm;
+    }
+
+    @Override
+    @Nullable
+    public Firm getAnyFirmById(int firmId) {
+        // Archived-inclusive: the raw mapper returns disbanded firms too (ADT-96).
+        return firms.getFirmById(firmId);
+    }
+
+    @Override
     @Nullable
     public Firm getAnyFirmByNameOrId(String input) {
-        if (input != null && input.chars().allMatch(Character::isDigit)) {
-            int id = Integer.parseInt(input);
-            return firms.getFirmById(id);
+        if (input != null && !input.isEmpty() && input.chars().allMatch(Character::isDigit)) {
+            try {
+                return firms.getFirmById(Integer.parseInt(input));
+            } catch (NumberFormatException outOfRange) {
+                // An all-digits string too large for an int can't be a valid
+                // firm id — don't let it bubble up as an uncaught exception (ADT-56).
+                return null;
+            }
         }
         return firms.getFirmByName(input);
     }

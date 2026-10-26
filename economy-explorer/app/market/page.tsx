@@ -1,125 +1,84 @@
-import { buildMetadata } from '@/lib/metadata';
-import { memo } from '@/lib/cache';
-import { z } from 'zod';
-import { topItemsWithSeries, volumeByDay, countSales, sumVolume, countDistinctItems } from '@/lib/sql/market';
-import { fmtAmtFull, fmtN } from '@/lib/format';
-import { SectionTabs } from '@/components/SectionTabs';
-import { VolumeTimeline } from '@/components/charts/AreaTimeline';
-import { ItemCards } from '@/components/market/ItemCards';
+import '@/components/entity/entity.css';
+import Link from 'next/link';
+import { MetricCard, MetricRow, Money, Num, PageHeader, Pct, Section } from '@democracycraft/design-system';
+import { EntityLink } from '@democracycraft/design-system/next';
+import { DataTable, type Column } from '@democracycraft/design-system/table';
+import { CoverageNote } from '@/components/entity/bits';
+import { MarketSearch } from '@/components/market/MarketSearch';
+import { ShopTable } from '@/components/market/ShopTable';
+import { ShopOwner } from '@/components/market/ShopOwner';
+import { itemHref, previewHref } from '@/lib/entityLinks';
 import { itemIconUrl } from '@/lib/itemIcon';
-import { CsvButton } from '@/components/CsvButton';
-import { JsonButton } from '@/components/JsonButton';
-
-const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(1).max(30).default(30) });
+import { buildMetadata } from '@/lib/metadata';
+import { serverIdentity } from '@/lib/serverIdentity';
+import { priceToCents } from '@/lib/shopPrice';
+import { change } from '@/lib/services/account';
+import { getMarketOverview, itemLabel, type MarketOverview, type Mover } from '@/lib/services/market';
+import { resolveTheme } from '@/lib/theme';
 
 export const dynamic = 'force-dynamic';
 
-// Only short windows for now — there isn't yet 30 days of data, so 90/365 are
-// misleading.
-const WINDOWS = [7, 30];
-
 export async function generateMetadata() {
-  return buildMetadata({ title: "Market", description: "ChestShop market overview for {server} — prices, volume and top-traded items.", path: "/market" });
+  return buildMetadata({ title: 'Market', description: 'What is selling on {server}: price movers, most traded items and the newest shops.', path: '/market' });
 }
 
-// The market overview is tenant-global and slow-moving: the three all-time KPIs
-// (countSales/sumVolume/countDistinctItems) are full scans of chestshop_sale on
-// every load, and the windowed item/volume aggregates change only as new sales
-// trickle in. Cache the whole bundle per `days` window for 60s — same approach
-// as the dashboard (app/page.tsx). One tenant per pod, so the day arg is the only
-// cache discriminator needed.
-const getMarketData = (days: number) =>
-  memo(`market-overview:${days}`, 60_000, () =>
-    Promise.all([
-      // 12 keeps the card grid rectangular at 2/3/4 columns (no orphan row).
-      topItemsWithSeries(days, 12),
-      volumeByDay(days),
-      countSales(),
-      sumVolume(),
-      countDistinctItems(),
-    ]),
-  );
+/** Spec §7.4: the market's front page. Everything here comes from the item rollup, refreshed every few minutes. */
+export default async function MarketPage() {
+  const [overview, theme] = await Promise.all([getMarketOverview(), resolveTheme()]);
+  const { week, prevWeek } = overview;
+  return <>
+    <PageHeader title="Market" subtitle="Prices and trades at player, firm and admin shops over the last 7 days." />
+    <MarketSearch />
+    <MetricRow label="Market this week">
+      <MetricCard label="Trades, 7 days" value={<Num value={week.trades} />} delta={change(week.trades, prevWeek?.trades)} deltaLabel="vs previous 7 days" deltaTone="neutral"
+        spark={overview.days.length > 1 ? overview.days.map((d) => d.trades) : undefined} />
+      <MetricCard label="Volume, 7 days" value={<Money value={week.volume} compact />} delta={change(week.volume, prevWeek?.volume)} deltaLabel="vs previous 7 days" deltaTone="neutral" />
+      <MetricCard label="Items traded" value={<Num value={week.items} />} delta={change(week.items, prevWeek?.items)} deltaLabel="vs previous 7 days" deltaTone="neutral" />
+    </MetricRow>
+    <CoverageNote coverage={overview.coverage} />
 
-export default async function MarketPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
-  const [items, volume, totalSales, totalVolume, distinctItems] = await getMarketData(sp.days);
+    <div className="entity-pair">
+      <Section title="Rising" description="Average price, this week against last week">
+        <Movers id="gainers" rows={overview.gainers} empty="No item rose in price this week." />
+      </Section>
+      <Section title="Falling" description="Average price, this week against last week">
+        <Movers id="losers" rows={overview.losers} empty="No item fell in price this week." />
+      </Section>
+    </div>
 
-  const windowSales = volume.reduce((s, v) => s + v.sales, 0);
-  const windowVolume = volume.reduce((s, v) => s + parseFloat(v.total_volume), 0);
+    <Section title="Most traded" description="Last 7 days, by number of trades" divider actions={<Link href="/chestshop" className="btn btn-quiet">All items</Link>}>
+      <MostTraded rows={overview.mostTraded} />
+    </Section>
 
-  return (
-    <>
-      <div className="page-heading">
-        <h1>Market</h1>
-        <span className="sub">ChestShop activity · last {sp.days} days</span>
-        <span className="window-tabs">
-          {WINDOWS.map((w) => (
-            <a key={w} href={`/market?days=${w}`} className={w === sp.days ? 'active' : ''}>{w}d</a>
-          ))}
-        </span>
-        <SectionTabs />
-      </div>
-
-      <div className="kpi-grid">
-        <div className="kpi">
-          <div className="kpi-label">Sales / {sp.days}d</div>
-          <div className="kpi-value">{fmtN(windowSales)}</div>
-          <div className="kpi-meta">{fmtN(totalSales)} all-time</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Volume / {sp.days}d</div>
-          <div className="kpi-value">{fmtAmtFull(windowVolume)}</div>
-          <div className="kpi-meta">{fmtAmtFull(totalVolume)} all-time</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Items traded</div>
-          <div className="kpi-value">{fmtN(items.length)}</div>
-          <div className="kpi-meta">{fmtN(distinctItems)} all-time</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Avg sale</div>
-          <div className="kpi-value">{fmtAmtFull(windowSales > 0 ? windowVolume / windowSales : 0)}</div>
-          <div className="kpi-meta">mean value per sale</div>
-        </div>
-      </div>
-
-      <div className="chart-card">
-        <div className="chart-header">
-          <div>
-            <div className="chart-title">Trade activity</div>
-            <div className="chart-subtitle">sales volume + count · last {sp.days} days</div>
-          </div>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="chart-tag">$ + #</span>
-            <span className="toolbar-export">
-              <CsvButton
-                filename={`market-volume-${sp.days}d.csv`}
-                headers={['Date', 'Sales', 'Volume']}
-                rows={volume.map((v) => [v.date, v.sales, v.total_volume])}
-              />
-              <JsonButton filename={`market-volume-${sp.days}d.json`} data={volume} />
-            </span>
-          </span>
-        </div>
-        <VolumeTimeline data={volume.map((v) => ({ date: v.date, txn_count: v.sales, total_volume: v.total_volume }))} />
-      </div>
-
-      <ItemCards
-        items={items.map((i) => ({ ...i, icon: itemIconUrl(i.material, i.item_custom) }))}
-        days={sp.days}
-      />
-    </>
-  );
+    <Section title="Newest shops" description="Signs seen for the first time most recently" divider actions={<Link href="/chestshop/shops" className="btn btn-quiet">Find shops</Link>}>
+      <ShopTable id="newest-shops" label="Newest shops" shops={overview.newest} mapBase={serverIdentity(theme).map}
+        extra={[{ key: 'owner', header: 'Shop', secondary: true, cell: (s) => <ShopOwner shop={s} /> }]} />
+    </Section>
+  </>;
 }
 
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
+function ItemCell({ itemKey, identity }: { itemKey: string; identity: Mover['identity'] }) {
+  return <EntityLink kind="item" href={itemHref(itemKey)} name={itemLabel(itemKey, identity)} icon={itemIconUrl(identity?.material ?? itemKey, identity?.item_custom ?? 0)} preview={previewHref('item', itemKey)} />;
+}
+
+function Movers({ id, rows, empty }: { id: string; rows: Mover[]; empty: string }) {
+  const columns: Column<Mover>[] = [
+    { key: 'item', header: 'Item', cell: (m) => <ItemCell itemKey={m.itemKey} identity={m.identity} /> },
+    { key: 'price', header: 'Average now', numeric: true, cell: (m) => <Money value={priceToCents(m.after) ?? "0.00"} /> },
+    { key: 'change', header: 'Change', numeric: true, cell: (m) => <Pct value={m.change} sign="always" tone="auto" /> },
+  ];
+  return <DataTable id={id} label={id === 'gainers' ? 'Rising prices' : 'Falling prices'} columns={columns} rows={rows} rowKey={(m) => m.itemKey} density="compact"
+    empty={<p className="dt-empty-text">{empty}</p>} />;
+}
+
+function MostTraded({ rows }: { rows: MarketOverview['mostTraded'] }) {
+  const columns: Column<MarketOverview['mostTraded'][number]>[] = [
+    { key: 'item', header: 'Item', cell: (r) => <ItemCell itemKey={r.item_key} identity={r.identity} /> },
+    { key: 'trades', header: 'Trades', numeric: true, cell: (r) => r.trades.toLocaleString('en-US') },
+    { key: 'qty', header: 'Items', numeric: true, secondary: true, cell: (r) => r.qty.toLocaleString('en-US') },
+    { key: 'price', header: 'Average price', numeric: true, secondary: true, cell: (r) => r.avg_price === null ? "—" : <Money value={priceToCents(r.avg_price) ?? "0.00"} /> },
+    { key: 'volume', header: 'Volume', numeric: true, cell: (r) => <Money value={r.volume} compact /> },
+  ];
+  return <DataTable id="most-traded" label="Most traded items" columns={columns} rows={rows} rowKey={(r) => r.item_key} density="compact"
+    empty={<p className="dt-empty-text">No trades in the last 7 days.</p>} />;
 }

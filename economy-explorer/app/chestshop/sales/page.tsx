@@ -1,205 +1,147 @@
-import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
-import type { Route } from 'next';
-import { z } from 'zod';
-import { getViewer } from '@/lib/auth/viewer';
-import { auditView } from '@/lib/audit';
+import { Money, Num, PageHeader, When } from '@democracycraft/design-system';
+import { DataTable, TableEmpty, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
+import { ExportMenuForViewer } from '@/components/ExportMenuForViewer';
+import { FeedPager } from '@/components/FeedPager';
+import { FilterBar } from '@/components/FilterBar';
 import { PrivacyGate } from '@/components/PrivacyGate';
-import { listSalesFeed, countSalesFeed } from '@/lib/sql/market';
-import { memo } from '@/lib/cache';
-import { fmtAmtFull, fmtN, fmtTs } from '@/lib/format';
-import { Player } from '@/components/Player';
-import { Pagination } from '@/components/Pagination';
-import { Toolbar } from '@/components/Toolbar';
-import { SectionTabs } from '@/components/SectionTabs';
-import { CsvButton } from '@/components/CsvButton';
-import { JsonButton } from '@/components/JsonButton';
-
-const SP_SCHEMA = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  q: z.string().trim().min(1).optional(),
-  customer: z
-    .string()
-    .trim()
-    .regex(/^[0-9a-fA-F-]{32,36}$/)
-    .optional(),
-});
+import { searchSalesEntity } from '@/lib/actions/search';
+import { auditView } from '@/lib/audit';
+import { hasPermission } from '@/lib/auth';
+import { getViewer } from '@/lib/auth/viewer';
+import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { exportHrefs } from '@/lib/export/href';
+import { shortenUuid } from '@/lib/format';
+import { buildMetadata } from '@/lib/metadata';
+import { getSalesPage } from '@/lib/services/sales';
+import type { MarketSaleRow } from '@/lib/sql/market';
+import { cleared, filterText, parseTableState, serializeTableState, stateCursor, tableHref, withFilter, withQuery, withSort, withoutFilter, type TableState } from '@/lib/tables/core';
+import { JUMP_PARAM, feedLinks, parseFeedNav } from '@/lib/tables/feed';
+import { salesTable } from '@/lib/tables/sales';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  return buildMetadata({ title: "Sales", description: "Recent ChestShop sales on {server}.", path: "/chestshop/sales" });
+  return buildMetadata({ title: 'Sales', description: 'Trade-by-trade ChestShop sales on {server}.', path: '/chestshop/sales' });
 }
 
-export default async function SalesFeedPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+const TABLE_ID = 'sales-table';
+const RouterLink: LinkComponent = Link;
+
+function fmtDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+export default async function SalesFeedPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
   if (viewer.anon) {
-    return (
-      <PrivacyGate
-        kind="login"
-        title="ChestShop sales feed"
-        hint="Sign in with admin or government access to view trade-by-trade detail with customer attribution."
-      />
-    );
+    return <PrivacyGate kind="login" title="ChestShop sales feed" hint="Sign in with moderator or admin access to view trade-by-trade detail with customer attribution." />;
   }
-  if (viewer.role !== 'admin' && viewer.role !== 'government') {
-    return <PrivacyGate kind="private" title="Government / admin only" />;
+  if (!hasPermission(viewer, 'market.sales.read')) {
+    return <PrivacyGate kind="private" title="Moderators and admins only" hint="Trade-by-trade sales with customer attribution need the market.sales.read permission." />;
   }
 
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+  const raw = await searchParams;
+  const state = parseTableState(raw, salesTable);
+  const nav = parseFeedNav(raw);
+  const customer = state.filters.find((f) => f.field === 'customer');
 
-  // Privileged read: staff browsing trade-by-trade detail with customer
-  // attribution. When filtered to one customer, that player is the target.
+  // Privileged read: trade-by-trade detail with customer attribution. When
+  // filtered to one customer, that player is the target.
   await auditView(viewer, {
     path: '/chestshop/sales',
-    targetType: sp.customer ? 'player' : 'chestshop',
-    targetId: sp.customer ?? null,
+    targetType: customer?.values.length === 1 ? 'player' : 'chestshop',
+    targetId: customer?.values.length === 1 ? customer.values[0] ?? null : serializeTableState(state, salesTable).slice(0, 64) || null,
   });
 
-  // Cache only the default feed (no customer/search filter) — it's the same
-  // global data for every staff viewer. Filtered/per-customer reads stay
-  // uncached. The gate + audit above always run per request.
-  const fetchSales = () =>
-    Promise.all([
-      listSalesFeed({
-        customerUuid: sp.customer ?? null,
-        search: sp.q ?? null,
-        limit: sp.limit,
-        offset: (sp.page - 1) * sp.limit,
-      }),
-      countSalesFeed({ customerUuid: sp.customer ?? null, search: sp.q ?? null }),
-    ]);
-  const [rows, total] =
-    !sp.customer && !sp.q
-      ? await memo(`sales-default:${sp.limit}:${sp.page}`, 60_000, fetchSales)
-      : await fetchSales();
-  const totalPages = Math.max(1, Math.ceil(total / sp.limit));
+  const page = await getSalesPage(state, nav, stateCursor(state));
+  const href = (s: TableState<typeof salesTable>) => tableHref('/chestshop/sales', s, salesTable);
+  const describe = { currency: CURRENCY_SYMBOL, entityLabels: page.entityLabels };
+  const activeFilters = [
+    ...(state.q ? [{ text: `“${state.q}”`, removeHref: href(withQuery(state, '')) }] : []),
+    ...state.filters.map((f) => ({ text: filterText(f, salesTable, describe), removeHref: href(withoutFilter(state, f.field)) })),
+  ];
+  const onlyCustomer = (uuid: string) => href(withFilter(state, { field: 'customer', op: 'in', values: [uuid] }));
+
+  const columns: Column<MarketSaleRow>[] = [
+    {
+      key: 'item',
+      header: 'Item',
+      cell: (s) => <Link href={`/chestshop/items/${encodeURIComponent(s.item_key)}`} prefetch={false}>{s.item_name ?? s.item_key}</Link>,
+    },
+    { key: 'qty', header: 'Qty', numeric: true, cell: (s) => <Num value={s.quantity} /> },
+    {
+      key: 'direction',
+      header: 'Trade',
+      cell: (s) => (s.direction === 'BUY' ? 'Bought' : 'Sold'),
+    },
+    { key: 'total', header: 'Total', numeric: true, cell: (s) => <Money value={s.total_price} /> },
+    { key: 'unit', header: 'Each', numeric: true, secondary: true, optional: true, cell: (s) => <Money value={s.unit_price} /> },
+    {
+      key: 'customerName',
+      header: 'Customer',
+      cell: (s) => s.customer_uuid
+        ? <Link href={onlyCustomer(s.customer_uuid)} prefetch={false} title={s.customer_uuid}>{s.customer_name ?? shortenUuid(s.customer_uuid)}</Link>
+        : <span className="muted">—</span>,
+    },
+    { key: 'seller', header: 'Shop', cell: (s) => s.owner_name ?? (s.admin_shop ? 'Admin shop' : <span className="muted">—</span>) },
+    {
+      key: 'where',
+      header: 'Location',
+      secondary: true,
+      optional: true,
+      cell: (s) => (s.world ? <span className="dt-sub">{s.world}{s.sign_x !== null ? ` ${s.sign_x}, ${s.sign_y}, ${s.sign_z}` : ''}</span> : <span className="muted">—</span>),
+    },
+    { key: 'stock', header: 'Stock after', numeric: true, secondary: true, optional: true, cell: (s) => <Num value={s.shop_stock} /> },
+    { key: 'occurred', header: 'When', sort: 'occurred', sortFirst: 'desc', align: 'end', cell: (s) => <When value={s.occurred_at} time /> },
+  ];
+
+  const { newerHref, olderHref } = feedLinks('/chestshop/sales', state, salesTable, page.position);
+  const countText = `${page.count.count.toLocaleString('en-US')}${page.count.capped ? '+' : ''}`;
+  const hidden = new URLSearchParams(serializeTableState({ ...state, cursor: null }, salesTable));
 
   return (
     <>
-      <div className="page-heading">
-        <h1>Sales feed</h1>
-        <span className="sub">{fmtN(total)} trades · admin/government view</span>
-        <SectionTabs />
-      </div>
+      <PageHeader title="Sales" subtitle="Every ChestShop trade with the customer who made it. Staff only." />
 
-      <Toolbar
-        searchPlaceholder="Search item, material, shop, firm…"
-        right={
-          <span className="toolbar-export">
-            <CsvButton
-              filename={`sales-feed-page-${sp.page}.csv`}
-              headers={['When', 'Direction', 'Quantity', 'Unit price', 'Total', 'Item key', 'Item name', 'Seller', 'Customer', 'Customer UUID', 'World', 'X', 'Y', 'Z']}
-              rows={rows.map((s) => [
-                s.occurred_at?.toISOString() ?? '',
-                s.direction,
-                s.quantity,
-                s.unit_price,
-                s.total_price,
-                s.item_key,
-                s.item_name ?? '',
-                s.owner_name ?? (s.admin_shop ? 'Admin shop' : ''),
-                s.customer_name ?? '',
-                s.customer_uuid ?? '',
-                s.world ?? '',
-                s.sign_x,
-                s.sign_y,
-                s.sign_z,
-              ])}
-            />
-            <JsonButton filename={`sales-feed-page-${sp.page}.json`} data={rows} />
-          </span>
-        }
+      <FilterBar
+        table={salesTable}
+        total={page.count.count}
+        totalIsFloor={page.count.capped}
+        entityLabels={page.entityLabels}
+        searchEntity={searchSalesEntity}
+        columns={columnOptions(columns)}
+        tableId={TABLE_ID}
+        currency={CURRENCY_SYMBOL}
+        exportSlot={<ExportMenuForViewer hrefs={exportHrefs('sales', state, salesTable)} allDescription={`${countText} sales, up to 100,000`} />}
       />
 
-      {sp.customer && (
-        <div className="card" style={{ padding: '8px 12px', marginBottom: 12 }}>
-          Filtered to customer{' '}
-          <span className="mono">{sp.customer}</span>{' '}
-          <Link href="/chestshop/sales" className="rowlink" prefetch={false}>(clear)</Link>
-        </div>
+      {page.window.bounded && page.window.from && (
+        <p className="muted small">
+          Price and item-name searches cover {page.window.days} days at most: {fmtDay(page.window.from)} to {page.window.to ? fmtDay(new Date(page.window.to.getTime() - 1)) : 'now'}.
+          {' '}Add a Date filter to search another period.
+        </p>
       )}
 
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th className="ts">When</th>
-              <th>Direction</th>
-              <th className="amount">Qty</th>
-              <th className="amount">Unit</th>
-              <th className="amount">Total</th>
-              <th>Item</th>
-              <th>Seller</th>
-              <th>Customer</th>
-              <th>Location</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr><td colSpan={9} className="empty">No sales match.</td></tr>
-            )}
-            {rows.map((s) => (
-              <tr key={s.sale_id}>
-                <td className="ts">{fmtTs(s.occurred_at)}</td>
-                <td>
-                  <span className={`badge ${s.direction === 'BUY' ? 'badge-active' : 'badge-archived'}`}>
-                    {s.direction}
-                  </span>
-                </td>
-                <td className="amount mono">{fmtN(s.quantity)}</td>
-                <td className="amount neutral">{fmtAmtFull(s.unit_price)}</td>
-                <td className="amount neutral">{fmtAmtFull(s.total_price)}</td>
-                <td>
-                  <Link href={`/chestshop/items/${encodeURIComponent(s.item_key)}` as Route} className="rowlink" prefetch={false}>
-                    {s.item_name ?? s.item_key}
-                  </Link>
-                </td>
-                <td>{s.owner_name ?? (s.admin_shop ? 'Admin shop' : '—')}</td>
-                <td>
-                  {s.customer_uuid ? (
-                    <Link
-                      href={`/chestshop/sales?customer=${s.customer_uuid}` as Route}
-                      className="rowlink"
-                      prefetch={false}
-                    >
-                      <Player name={s.customer_name} uuid={s.customer_uuid} link={false} />
-                    </Link>
-                  ) : (
-                    <Player name={s.customer_name} uuid={s.customer_uuid} />
-                  )}
-                </td>
-                <td>
-                  <span className="mono small" style={{ color: 'var(--fg-muted)' }}>
-                    {s.world ?? '—'}{s.sign_x !== null ? ` ${s.sign_x},${s.sign_y},${s.sign_z}` : ''}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        id={TABLE_ID}
+        label="Sales"
+        columns={columns}
+        rows={page.rows}
+        rowKey={(s) => s.sale_id}
+        sort={state.sort}
+        sortHref={(field, dir) => href(withSort(state, field, dir, salesTable))}
+        density="compact"
+        link={RouterLink}
+        empty={<TableEmpty noun="sales" filters={activeFilters} clearHref={href(cleared(state))} link={RouterLink} />}
+      />
 
-      <Pagination
-        page={sp.page}
-        totalPages={totalPages}
-        totalItems={total}
-        basePath="/chestshop/sales"
-        searchParams={{ q: sp.q, customer: sp.customer, limit: String(sp.limit) }}
+      <FeedPager
+        newerHref={newerHref}
+        olderHref={olderHref}
+        summary={page.rows.length ? `Showing ${page.rows.length} of ${countText}` : undefined}
+        jump={{ action: '/chestshop/sales', param: JUMP_PARAM, value: nav.jump?.day, hidden: [...hidden.entries()], max: fmtDay(new Date()) }}
       />
     </>
   );
-}
-
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
 }

@@ -4,9 +4,11 @@ import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.BalanceEntry;
-
+import io.paradaux.treasury.model.economy.EconomySummary;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface AccountService {
@@ -16,6 +18,9 @@ public interface AccountService {
     /** Non-locking balance read for read-only calls. Locking is done internally by transfer(). */
     BigDecimal getBalanceReadOnly(int accountId);
 
+    /** Non-locking batch balance read; balances keyed by account id (missing rows absent). */
+    Map<Integer, BigDecimal> getBalancesByIds(Collection<Integer> accountIds);
+
     BigDecimal getBalanceByOwnerUuid(UUID ownerUuid);
 
     boolean hasFunds(int accountId, BigDecimal amount);
@@ -23,19 +28,30 @@ public interface AccountService {
     // ---- Account lookups ----
 
     Account getAccountByUUID(UUID ownerUuid);
+
     Account getAccountById(int accountId);
+
+    /** Batch account lookup; accounts keyed by id (missing ids absent). */
+    Map<Integer, Account> getAccountsByIds(Collection<Integer> accountIds);
+
     List<Account> getAccountsByOwner(UUID ownerUuid);
+
     List<Account> getAccountsByTypeAndOwner(AccountType accountType, UUID ownerUuid);
+
     List<Account> getAccountsByMember(UUID memberUuid);
 
     boolean hasAccountByAccountId(int accountId);
+
     boolean hasAccountByOwnerUuid(UUID ownerUuid);
 
     // ---- Access control checks ----
 
     boolean isAccountMember(UUID uuid, int accountId);
+
     boolean isOwnerForAccountId(UUID uuid, int accountId);
+
     boolean canAccessAccount(UUID uuid, int accountId);
+
     boolean accountHasBalance(UUID uuid, int accountId);
 
     // ---- Personal account convenience ----
@@ -102,6 +118,32 @@ public interface AccountService {
     /** Returns the non-archived BUSINESS account with the given display name, or null if not found. */
     Account getBusinessAccountByName(String name);
 
+    /**
+     * Resolves a BUSINESS account from a single {@code word()}-tokenised argument:
+     * the active firm default account first when Business supplies its lookup service,
+     * then a bare account display name and the canonical {@code "<token> Corporate Account"}
+     * display-name convention (FirmServiceImpl). Lets a user type just the firm name
+     * without knowing the suffix. Returns null if neither matches.
+     */
+    default Account resolveBusinessAccountByToken(String token) {
+        if (org.bukkit.Bukkit.getServer() != null) {
+            var lookup =
+                    org.bukkit.Bukkit.getServicesManager().load(io.paradaux.treasury.api.BusinessAccountLookup.class);
+            if (lookup != null) {
+                Integer accountId = lookup.findDefaultAccount(token);
+                if (accountId != null) {
+                    Account resolved = getAccountById(accountId);
+                    return resolved != null && !resolved.isArchived() ? resolved : null;
+                }
+            }
+        }
+        Account account = getBusinessAccountByName(token);
+        if (account == null) {
+            account = getBusinessAccountByName(token + " Corporate Account");
+        }
+        return account;
+    }
+
     /** Returns all non-archived GOVERNMENT accounts sorted by display name. */
     List<Account> listGovernmentAccounts();
 
@@ -120,9 +162,16 @@ public interface AccountService {
 
     Page<BalanceEntry> getTopBalances(int offset, int limit);
 
+    // ---- Economy summary ----
+
+    /** Top-level money supply by account type (active PERSONAL/BUSINESS/GOVERNMENT, SYSTEM excluded). */
+    EconomySummary getEconomySummary();
+
     // ---- Formatting ----
 
     String formatAmount(BigDecimal amount);
+
     String getCurrencyNameSingular();
+
     String getCurrencyNamePlural();
 }

@@ -1,12 +1,13 @@
+import { activeGroupMembership } from '@/lib/sql/group-membership';
 import 'server-only';
-import { Kysely, sql } from 'kysely';
+import { type Kysely, type RawBuilder, sql } from 'kysely';
 import { db, type DB, uuidToBin, binToUuid } from '@/lib/db';
 
 /**
  * Explorer group RBAC queries — a pure DAL: each export is a single Kysely query
  * (plus row→type mapping), no orchestration or validation. A player's effective
- * capabilities are the union of every group they belong to (see findCapabilities);
- * the rest is admin-tool CRUD for groups, their capabilities, their LuckPerms
+ * roles come from every group they belong to (lib/sql/role resolveAuthorization);
+ * this file is the admin-tool CRUD for groups, their capabilities, their LuckPerms
  * source node, and manual membership. Orchestration (multi-statement writes,
  * identifier resolution) lives in {@code lib/services/group.ts}. LuckPerms-sourced
  * membership is owned by the reconciliation cron (treasury-api-plugin) and is
@@ -25,7 +26,9 @@ interface GroupRow {
   description: string | null;
   luckperms_node: string | null;
   capabilities: string | null;
+  sync_sources: string | null;
   member_count: number | string;
+  active_count: number | string;
   luckperms_count: number | string;
 }
 
@@ -36,9 +39,22 @@ function mapGroupRow(row: GroupRow): GroupSummary {
     description: row.description,
     luckpermsNode: row.luckperms_node,
     capabilities: row.capabilities ? row.capabilities.split(',') : [],
+    // `source<TAB>selector` pairs, newline-separated: selectors may contain commas.
+    syncSources: row.sync_sources
+      ? row.sync_sources.split('\n').map((pair) => {
+        const [source = '', selector = ''] = pair.split('\t');
+        return { source: source as GroupSyncSource['source'], selector };
+      })
+      : [],
     memberCount: Number(row.member_count),
+    activeMemberCount: Number(row.active_count),
     luckpermsMemberCount: Number(row.luckperms_count),
   };
+}
+
+export interface GroupSyncSource {
+  source: 'business' | 'realty';
+  selector: string;
 }
 
 export interface GroupSummary {
@@ -47,54 +63,51 @@ export interface GroupSummary {
   description: string | null;
   luckpermsNode: string | null;
   capabilities: string[];
+  /** Firm and region sources (explorer_group_sync). */
+  syncSources: GroupSyncSource[];
+  /** Every membership row, including expired synced ones. */
   memberCount: number;
+  /** Memberships that grant roles right now (manual, or synced within the hour). */
+  activeMemberCount: number;
   luckpermsMemberCount: number;
 }
 
 export interface GroupMember {
   uuid: string;
   name: string | null;
-  source: 'manual' | 'luckperms';
+  source: 'manual' | 'luckperms' | 'business' | 'realty';
   addedAt: Date;
+  syncActive: boolean;
 }
 
-/** The capabilities a player has via group membership. */
-export async function findCapabilities(playerUuid: string): Promise<string[]> {
-  const r = await sql<{ capability: string }>`
-    SELECT DISTINCT gc.capability
-    FROM explorer_group_member gm
-    JOIN explorer_group_capability gc ON gc.group_id = gm.group_id
-    WHERE gm.player_uuid_bin = ${uuidToBin(playerUuid)}
-  `.execute(db);
-  return r.rows.map((row) => row.capability);
-}
+/** One summary row per group, as a derived table `g` the admin table filters and sorts. */
+const GROUP_SUMMARY = sql`(
+  SELECT g.group_id, g.name, g.description, g.luckperms_node,
+         (SELECT GROUP_CONCAT(gc.capability ORDER BY gc.capability)
+            FROM explorer_group_capability gc WHERE gc.group_id = g.group_id) AS capabilities,
+         (SELECT GROUP_CONCAT(CONCAT(s.source, CHAR(9), s.selector) ORDER BY s.source SEPARATOR '\n')
+            FROM explorer_group_sync s WHERE s.group_id = g.group_id) AS sync_sources,
+         (SELECT COUNT(*) FROM explorer_group_member gm WHERE gm.group_id = g.group_id) AS member_count,
+         (SELECT COUNT(*) FROM explorer_group_member gm WHERE gm.group_id = g.group_id AND ${activeGroupMembership}) AS active_count,
+         (SELECT COUNT(*) FROM explorer_group_member gm
+            WHERE gm.group_id = g.group_id AND gm.source = 'luckperms') AS luckperms_count
+  FROM explorer_group g
+) g`;
 
 export async function listGroups(): Promise<GroupSummary[]> {
-  const r = await sql<GroupRow>`
-    SELECT g.group_id, g.name, g.description, g.luckperms_node,
-           (SELECT GROUP_CONCAT(gc.capability ORDER BY gc.capability)
-              FROM explorer_group_capability gc WHERE gc.group_id = g.group_id) AS capabilities,
-           (SELECT COUNT(*) FROM explorer_group_member gm WHERE gm.group_id = g.group_id) AS member_count,
-           (SELECT COUNT(*) FROM explorer_group_member gm
-              WHERE gm.group_id = g.group_id AND gm.source = 'luckperms') AS luckperms_count
-    FROM explorer_group g
-    ORDER BY g.name
-  `.execute(db);
+  const r = await sql<GroupRow>`SELECT g.* FROM ${GROUP_SUMMARY} ORDER BY g.name`.execute(db);
+  return r.rows.map(mapGroupRow);
+}
+
+/** Groups for the admin table: `where` and `orderBy` compiled against the derived table `g`. */
+export async function listGroupsWhere(where: RawBuilder<unknown>, orderBy: RawBuilder<unknown>): Promise<GroupSummary[]> {
+  const r = await sql<GroupRow>`SELECT g.* FROM ${GROUP_SUMMARY} ${where} ${orderBy}`.execute(db);
   return r.rows.map(mapGroupRow);
 }
 
 /** Single group by id, or null. Queries by id rather than scanning listGroups(). */
-export async function selectGroupById(groupId: number): Promise<GroupSummary | null> {
-  const r = await sql<GroupRow>`
-    SELECT g.group_id, g.name, g.description, g.luckperms_node,
-           (SELECT GROUP_CONCAT(gc.capability ORDER BY gc.capability)
-              FROM explorer_group_capability gc WHERE gc.group_id = g.group_id) AS capabilities,
-           (SELECT COUNT(*) FROM explorer_group_member gm WHERE gm.group_id = g.group_id) AS member_count,
-           (SELECT COUNT(*) FROM explorer_group_member gm
-              WHERE gm.group_id = g.group_id AND gm.source = 'luckperms') AS luckperms_count
-    FROM explorer_group g
-    WHERE g.group_id = ${groupId}
-  `.execute(db);
+export async function selectGroupById(groupId: number, executor: Executor = db): Promise<GroupSummary | null> {
+  const r = await sql<GroupRow>`SELECT g.* FROM ${GROUP_SUMMARY} WHERE g.group_id = ${groupId}`.execute(executor);
   return r.rows[0] ? mapGroupRow(r.rows[0]) : null;
 }
 
@@ -104,7 +117,7 @@ export async function selectGroupById(groupId: number): Promise<GroupSummary | n
  */
 export async function findPlayerUuidByName(name: string): Promise<string | null> {
   const r = await sql<{ player_uuid_bin: Buffer }>`
-    SELECT player_uuid_bin FROM firm_players
+    SELECT player_uuid_bin FROM economy_players
     WHERE LOWER(current_name) = LOWER(${name})
     ORDER BY player_uuid_bin LIMIT 1
   `.execute(db);
@@ -115,16 +128,17 @@ export async function createGroup(args: {
   name: string;
   description: string | null;
   createdBy: string | null;
-}): Promise<void> {
-  await sql`
+}): Promise<number> {
+  const r = await sql`
     INSERT INTO explorer_group (name, description, created_by_uuid_bin)
     VALUES (${args.name}, ${args.description}, ${args.createdBy ? uuidToBin(args.createdBy) : null})
   `.execute(db);
+  return Number(r.insertId ?? 0);
 }
 
-export async function deleteGroup(groupId: number): Promise<void> {
+export async function deleteGroup(groupId: number, executor: Executor = db): Promise<void> {
   // capabilities + members cascade via FK ON DELETE CASCADE.
-  await sql`DELETE FROM explorer_group WHERE group_id = ${groupId}`.execute(db);
+  await sql`DELETE FROM explorer_group WHERE group_id = ${groupId}`.execute(executor);
 }
 
 /** Deletes every capability row for a group. */
@@ -143,20 +157,22 @@ export async function insertGroupCapability(
   `.execute(executor);
 }
 
-export async function setLuckpermsNode(groupId: number, node: string | null): Promise<void> {
-  await sql`UPDATE explorer_group SET luckperms_node = ${node} WHERE group_id = ${groupId}`.execute(db);
+export async function setLuckpermsNode(groupId: number, node: string | null, executor: Executor = db): Promise<void> {
+  await sql`UPDATE explorer_group SET luckperms_node = ${node} WHERE group_id = ${groupId}`.execute(executor);
 }
 
 export async function listGroupMembers(groupId: number): Promise<GroupMember[]> {
   const r = await sql<{
     player_uuid_bin: Buffer;
     name: string | null;
-    source: 'manual' | 'luckperms';
+    source: 'manual' | 'luckperms' | 'business' | 'realty';
     added_at: Date;
+    sync_active: number;
   }>`
-    SELECT gm.player_uuid_bin, fp.current_name AS name, gm.source, gm.added_at
+    SELECT gm.player_uuid_bin, fp.current_name AS name, gm.source, gm.added_at,
+           ${activeGroupMembership} AS sync_active
     FROM explorer_group_member gm
-    LEFT JOIN firm_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
     WHERE gm.group_id = ${groupId}
     ORDER BY gm.source, fp.current_name
   `.execute(db);
@@ -165,20 +181,58 @@ export async function listGroupMembers(groupId: number): Promise<GroupMember[]> 
     name: row.name,
     source: row.source,
     addedAt: row.added_at,
+    syncActive: Number(row.sync_active) === 1,
   }));
 }
 
-export async function addManualMember(groupId: number, playerUuid: string, addedBy: string | null): Promise<void> {
+export async function addManualMember(groupId: number, playerUuid: string, addedBy: string | null, executor: Executor = db): Promise<void> {
   await sql`
     INSERT IGNORE INTO explorer_group_member (group_id, player_uuid_bin, source, added_by_uuid_bin)
     VALUES (${groupId}, ${uuidToBin(playerUuid)}, 'manual', ${addedBy ? uuidToBin(addedBy) : null})
-  `.execute(db);
+  `.execute(executor);
 }
 
 /** Removes a manual grant only — LuckPerms-sourced rows are owned by the cron. */
-export async function removeManualMember(groupId: number, playerUuid: string): Promise<void> {
+export async function removeManualMember(groupId: number, playerUuid: string, executor: Executor = db): Promise<void> {
   await sql`
     DELETE FROM explorer_group_member
     WHERE group_id = ${groupId} AND player_uuid_bin = ${uuidToBin(playerUuid)} AND source = 'manual'
+  `.execute(executor);
+}
+
+/** Called in the same transaction as a source-node edit. */
+export async function clearSyncedMembers(groupId: number, executor: Executor = db): Promise<void> {
+  await sql`DELETE FROM explorer_group_member WHERE group_id = ${groupId} AND source = 'luckperms'`.execute(executor);
+}
+
+/** Live and total members per source, for the group page's sync summary. */
+export async function countGroupMembersBySource(groupId: number): Promise<{ source: GroupMember['source']; total: number; active: number }[]> {
+  const r = await sql<{ source: GroupMember['source']; total: number | string; active: number | string | null }>`
+    SELECT gm.source, COUNT(*) AS total, SUM(${activeGroupMembership}) AS active
+    FROM explorer_group_member gm
+    WHERE gm.group_id = ${groupId}
+    GROUP BY gm.source
   `.execute(db);
+  return r.rows.map((row) => ({ source: row.source, total: Number(row.total), active: Number(row.active ?? 0) }));
+}
+
+/** Set (insert or replace) a group's firm or region source. */
+export async function upsertGroupSync(groupId: number, source: GroupSyncSource['source'], selector: string, executor: Executor = db): Promise<void> {
+  await sql`
+    INSERT INTO explorer_group_sync (group_id, source, selector) VALUES (${groupId}, ${source}, ${selector})
+    ON DUPLICATE KEY UPDATE selector = VALUES(selector)
+  `.execute(executor);
+}
+
+export async function deleteGroupSync(groupId: number, source: GroupSyncSource['source'], executor: Executor = db): Promise<void> {
+  await sql`DELETE FROM explorer_group_sync WHERE group_id = ${groupId} AND source = ${source}`.execute(executor);
+}
+
+/**
+ * Drop one firm/region source's synced members, in the same transaction as the
+ * source edit. The plugin's compare-on-insert refresh (the selector must match)
+ * keeps a reconciliation that started under the old selector from restoring them.
+ */
+export async function clearSourceMembers(groupId: number, source: GroupSyncSource['source'], executor: Executor = db): Promise<void> {
+  await sql`DELETE FROM explorer_group_member WHERE group_id = ${groupId} AND source = ${source}`.execute(executor);
 }

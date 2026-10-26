@@ -36,11 +36,30 @@ public @interface RateLimit {
 
     /**
      * Sustained requests per minute for unauthenticated callers, bucketed by
-     * client IP (X-Forwarded-For first hop, falling back to remote address).
+     * client IP. The IP is taken from the trusted gateway's
+     * {@code X-Envoy-External-Address} header, falling back to the socket remote
+     * address; the client-controlled {@code X-Forwarded-For} is deliberately NOT
+     * trusted (its leftmost hop is spoofable, which would let a caller mint a
+     * fresh bucket per request — ADT-15). See {@code RateLimitInterceptor.clientIp}.
      * Default {@code 0} means anonymous traffic is not throttled and is allowed
      * straight through — keep the existing behaviour on endpoints that already
      * require auth. Set this on intentionally-public endpoints to cap scraper
      * abuse; pick a value that comfortably exceeds a human's interactive pace.
      */
     int anonymousPerMinute() default 0;
+
+    /**
+     * Behaviour when the rate-limit backend (Redis) itself errors and the limit
+     * cannot be checked.
+     *
+     * <p>Default {@code false} = <em>fail open</em>: a backend blip lets the
+     * request through rather than 503'ing the API — correct for public reads,
+     * where availability beats throttling.
+     *
+     * <p>Set {@code true} = <em>fail closed</em> on money-mutating endpoints
+     * (e.g. {@code POST /transfers}): if the limiter can't be consulted the
+     * request is rejected with {@code 503}, so an attacker who can stress Redis
+     * cannot also strip the throttle off the transfer path.
+     */
+    boolean failClosed() default false;
 }

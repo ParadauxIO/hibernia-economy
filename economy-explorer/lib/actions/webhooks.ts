@@ -3,21 +3,21 @@ import { revalidatePath } from 'next/cache';
 import { randomBytes } from 'node:crypto';
 import { getViewer, type Viewer } from '@/lib/auth/viewer';
 import { ForbiddenError } from '@/lib/errors';
-import { auditView } from '@/lib/audit';
+import { requirePermission } from '@/lib/auth/access';
+import { auditMutation, auditView } from '@/lib/audit';
+import { findAdminWebhook } from '@/lib/sql/admin';
+import type { AdminWebhookRow } from '@/lib/sql/webhook';
 import { assertPublicHttpsUrl } from '@/lib/util/ssrf';
 import { findAccountsForPlayer } from '@/lib/sql/me';
 import { hasFirmFinancialAccess } from '@/lib/sql/firm';
 import { findAccount } from '@/lib/sql/ledger';
 import {
-  createSubscription,
-  setActive,
-  setUrl,
-  rotateSecret,
-  deleteSubscription,
-  adminCreateForAccount,
-  adminSetActive,
-  adminDelete,
-} from '@/lib/sql/webhook';
+  createWebhook,
+  setWebhookActive,
+  setWebhookUrl,
+  setWebhookSecret,
+  deleteWebhook,
+} from '@/lib/treasury';
 
 export type WebhookActionResult = { ok: boolean; error?: string; secret?: string };
 
@@ -28,7 +28,8 @@ function newSecret(): string {
 
 /** Asserts a signed-in, account-linked viewer and returns their Minecraft UUID. */
 function requireLinkedUuid(viewer: Viewer): string {
-  if (viewer.anon || !viewer.linked || !viewer.minecraftUuid) {
+  requirePermission(viewer, 'webhooks.manage');
+  if (!viewer.linked || !viewer.minecraftUuid) {
     throw new ForbiddenError('Sign in and link your Minecraft account to manage webhooks.');
   }
   return viewer.minecraftUuid;
@@ -77,9 +78,10 @@ export async function createWebhookAction(args: {
     }
 
     const secret = newSecret();
-    await createSubscription({ ownerUuid: uuid, keyType, accountId, firmId, targetUrl: url, secret });
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/create', targetType, targetId });
-    revalidatePath('/me/webhooks');
+    // ADT-14: write via the REST admin API; kysely stays read-only.
+    await createWebhook({ ownerUuid: uuid, keyType, accountId, firmId, targetUrl: url, secret });
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/create', targetType, targetId, action: 'webhook.create' });
+    revalidatePath('/me/developer/webhooks');
     return { ok: true, secret };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -90,11 +92,11 @@ export async function setWebhookActiveAction(id: number, active: boolean): Promi
   const viewer = await getViewer();
   const uuid = requireLinkedUuid(viewer);
   try {
-    const n = await setActive(id, uuid, active);
+    const { affected: n } = await setWebhookActive(id, active, uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/active', targetType: 'player', targetId: `webhook:${id}` });
-    revalidatePath('/me/webhooks');
-    revalidatePath(`/me/webhooks/${id}`);
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/active', targetType: 'webhook', targetId: String(id), action: 'webhook.active' });
+    revalidatePath('/me/developer/webhooks');
+    revalidatePath(`/me/developer/webhooks/${id}`);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -106,11 +108,11 @@ export async function setWebhookUrlAction(id: number, url: string): Promise<Webh
   const uuid = requireLinkedUuid(viewer);
   try {
     await assertPublicHttpsUrl(url);
-    const n = await setUrl(id, uuid, url.trim());
+    const { affected: n } = await setWebhookUrl(id, url.trim(), uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/url', targetType: 'player', targetId: `webhook:${id}` });
-    revalidatePath('/me/webhooks');
-    revalidatePath(`/me/webhooks/${id}`);
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/url', targetType: 'webhook', targetId: String(id), action: 'webhook.url' });
+    revalidatePath('/me/developer/webhooks');
+    revalidatePath(`/me/developer/webhooks/${id}`);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -122,10 +124,10 @@ export async function rotateWebhookSecretAction(id: number): Promise<WebhookActi
   const uuid = requireLinkedUuid(viewer);
   try {
     const secret = newSecret();
-    const n = await rotateSecret(id, uuid, secret);
+    const { affected: n } = await setWebhookSecret(id, secret, uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/rotate', targetType: 'player', targetId: `webhook:${id}` });
-    revalidatePath(`/me/webhooks/${id}`);
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/rotate', targetType: 'webhook', targetId: String(id), action: 'webhook.secret.rotate' });
+    revalidatePath(`/me/developer/webhooks/${id}`);
     return { ok: true, secret };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -136,10 +138,10 @@ export async function deleteWebhookAction(id: number): Promise<WebhookActionResu
   const viewer = await getViewer();
   const uuid = requireLinkedUuid(viewer);
   try {
-    const n = await deleteSubscription(id, uuid);
+    const { affected: n } = await deleteWebhook(id, uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/delete', targetType: 'player', targetId: `webhook:${id}` });
-    revalidatePath('/me/webhooks');
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/delete', targetType: 'webhook', targetId: String(id), action: 'webhook.delete' });
+    revalidatePath('/me/developer/webhooks');
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -148,10 +150,9 @@ export async function deleteWebhookAction(id: number): Promise<WebhookActionResu
 
 // ── Admin (fleet-wide management, not owner-scoped) ──────────────────────────
 
-function requireAdmin(viewer: Viewer): asserts viewer is Extract<Viewer, { anon: false }> {
-  if (viewer.anon || viewer.role !== 'admin') {
-    throw new ForbiddenError('Admin only.');
-  }
+/** A webhook as recorded before and after an admin change. Never includes the signing secret. */
+function webhookSnapshot(h: AdminWebhookRow | null) {
+  return h && { url: h.url, active: h.active, disabled: h.disabledAt !== null, ownerUuid: h.ownerUuid, accountId: h.accountId, firmId: h.firmId };
 }
 
 /** webhook_subscription.key_type is enum(PERSONAL,BUSINESS,GOVERNMENT); SYSTEM/unknown
@@ -165,11 +166,11 @@ function keyTypeForAccount(accountType: string): 'PERSONAL' | 'BUSINESS' | 'GOVE
 /**
  * Admin: register an account-scoped webhook for an arbitrary account. Attributed
  * to the account's own owner (so it's model-consistent and the owner sees it in
- * /me/webhooks too); falls back to the admin if the account has no owner.
+ * /me/developer/webhooks too); falls back to the admin if the account has no owner.
  */
 export async function adminCreateWebhookAction(args: { accountId: number; url: string }): Promise<WebhookActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'webhooks.create.all');
   try {
     await assertPublicHttpsUrl(args.url);
     const account = await findAccount(args.accountId);
@@ -178,14 +179,18 @@ export async function adminCreateWebhookAction(args: { accountId: number; url: s
     if (!ownerUuid) return { ok: false, error: 'Account has no owner and you are not linked; cannot attribute the webhook.' };
 
     const secret = newSecret();
-    await adminCreateForAccount({
+    await createWebhook({
       ownerUuid,
       keyType: keyTypeForAccount(account.account_type),
       accountId: args.accountId,
+      firmId: null,
       targetUrl: args.url.trim(),
       secret,
     });
-    await auditView(viewer, { method: 'POST', path: '/admin/webhooks/create', targetType: 'account', targetId: String(args.accountId) });
+    await auditMutation(viewer, {
+      action: 'webhook.create', path: '/admin/webhooks/create', targetType: 'account', targetId: args.accountId,
+      before: null, after: { accountId: args.accountId, ownerUuid, url: args.url.trim(), active: true },
+    });
     revalidatePath('/admin/webhooks');
     return { ok: true, secret };
   } catch (e) {
@@ -195,11 +200,15 @@ export async function adminCreateWebhookAction(args: { accountId: number; url: s
 
 export async function adminSetWebhookActiveAction(id: number, active: boolean): Promise<WebhookActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'webhooks.update.all');
   try {
-    const n = await adminSetActive(id, active);
+    const before = webhookSnapshot(await findAdminWebhook(id));
+    const { affected: n } = await setWebhookActive(id, active);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/admin/webhooks/active', targetType: 'global', targetId: `webhook:${id}` });
+    await auditMutation(viewer, {
+      action: 'webhook.active', path: '/admin/webhooks/active', targetType: 'webhook', targetId: id,
+      before, after: webhookSnapshot(await findAdminWebhook(id)),
+    });
     revalidatePath('/admin/webhooks');
     return { ok: true };
   } catch (e) {
@@ -209,11 +218,12 @@ export async function adminSetWebhookActiveAction(id: number, active: boolean): 
 
 export async function adminDeleteWebhookAction(id: number): Promise<WebhookActionResult> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'webhooks.delete.all');
   try {
-    const n = await adminDelete(id);
+    const before = webhookSnapshot(await findAdminWebhook(id));
+    const { affected: n } = await deleteWebhook(id);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/admin/webhooks/delete', targetType: 'global', targetId: `webhook:${id}` });
+    await auditMutation(viewer, { action: 'webhook.delete', path: '/admin/webhooks/delete', targetType: 'webhook', targetId: id, before, after: null });
     revalidatePath('/admin/webhooks');
     return { ok: true };
   } catch (e) {

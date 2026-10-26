@@ -1,15 +1,18 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { setGroupCapabilitiesAction } from '@/lib/actions/admin';
+import styles from '../../admin.module.css';
 
 export function CapabilitiesForm({
   groupId,
   all,
   selected,
+  disabled = false,
 }: {
   groupId: number;
-  all: { value: string; label: string; description: string }[];
+  all: { value: string; label: string; description: string; permissions: number }[];
   selected: string[];
+  disabled?: boolean;
 }) {
   const [pending, start] = useTransition();
   const [chosen, setChosen] = useState<Set<string>>(new Set(selected));
@@ -39,51 +42,34 @@ export function CapabilitiesForm({
       } else {
         setSavedSet(new Set(chosen));
         setJustSaved(true);
+        window.location.reload();
       }
     });
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+    <div className={styles.stack}>
+      <ul className={styles.checklist}>
         {all.map((c) => (
-          <label
-            key={c.value}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'auto 1fr',
-              gap: 10,
-              alignItems: 'start',
-              padding: '10px 12px',
-              border: '1px solid var(--border, #2a2a2a)',
-              borderRadius: 8,
-              cursor: 'pointer',
-              background: chosen.has(c.value) ? 'var(--surface-2, rgba(255,255,255,0.03))' : 'transparent',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={chosen.has(c.value)}
-              onChange={() => toggle(c.value)}
-              style={{ marginTop: 3 }}
-            />
-            <div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                <strong>{c.label}</strong>
-                <span className="mono sub">{c.value}</span>
-              </div>
-              <div className="sub" style={{ marginTop: 2, lineHeight: 1.4 }}>{c.description}</div>
-            </div>
-          </label>
+          <li key={c.value}>
+            <label className={styles.check}>
+              <input type="checkbox" disabled={disabled || pending} checked={chosen.has(c.value)} onChange={() => toggle(c.value)} />
+              <span>
+                <strong>{c.label}</strong> <span className="mono muted">{c.value}</span>
+                <span className={`${styles.hint} small`}>{' '}· {c.permissions} permission{c.permissions === 1 ? '' : 's'}</span>
+                {c.description && <><br /><span className={styles.hint}>{c.description}</span></>}
+              </span>
+            </label>
+          </li>
         ))}
+      </ul>
+      <div className={styles.row}>
+        <button type="button" className="btn btn-primary" disabled={disabled || pending || !dirty} onClick={onSave}>
+          {pending ? 'Saving…' : 'Save roles'}
+        </button>
+        <span className="muted small" role="status">{dirty ? 'Unsaved changes.' : justSaved ? 'Saved.' : 'In sync.'}</span>
+        {err && <span role="alert" className="state-error small">{err}</span>}
       </div>
-      <button className="btn" disabled={pending || !dirty} onClick={onSave}>
-        {pending ? 'Saving…' : 'Save permissions'}
-      </button>
-      {dirty
-        ? <span className="sub" style={{ marginLeft: 8 }}>Unsaved changes.</span>
-        : <span className="sub" style={{ marginLeft: 8 }}>{justSaved ? 'Saved.' : 'In sync.'}</span>}
-      {err && <span className="state-error" style={{ fontSize: 11, marginLeft: 8 }}>{err}</span>}
     </div>
   );
 }

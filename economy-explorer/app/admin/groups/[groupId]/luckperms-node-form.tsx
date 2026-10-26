@@ -1,8 +1,9 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { setLuckpermsNodeAction } from '@/lib/actions/admin';
+import styles from '../../admin.module.css';
 
-export function LuckpermsNodeForm({ groupId, node }: { groupId: number; node: string | null }) {
+export function LuckpermsNodeForm({ groupId, node, disabled = false }: { groupId: number; node: string | null; disabled?: boolean }) {
   const [pending, start] = useTransition();
   const [value, setValue] = useState(node ?? '');
   const [err, setErr] = useState<string | null>(null);
@@ -13,22 +14,25 @@ export function LuckpermsNodeForm({ groupId, node }: { groupId: number; node: st
     setErr(null); setSaved(false);
     start(async () => {
       const r = await setLuckpermsNodeAction(groupId, value || null);
-      if (!r.ok) setErr(r.error ?? 'Failed'); else setSaved(true);
+      if (!r.ok) setErr(r.error ?? 'Failed'); else { setSaved(true); window.location.reload(); }
     });
   }
 
   return (
-    <form onSubmit={onSave} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <input
-        className="input"
-        placeholder="LuckPerms group name (e.g. doc) — blank for manual only"
-        value={value}
-        onChange={(e) => { setValue(e.target.value); setSaved(false); }}
-        style={{ minWidth: 320 }}
-      />
-      <button className="btn" disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>
-      {saved && <span className="sub">Saved.</span>}
-      {err && <span className="state-error" style={{ fontSize: 11 }}>{err}</span>}
+    <form onSubmit={onSave} className={styles.row}>
+      <label className={`field ${styles.grow}`}>
+        <span className="field-label">LuckPerms group or permission node</span>
+        <input
+          disabled={disabled || pending}
+          className="input mono"
+          placeholder="LuckPerms group name (e.g. doc) — blank for manual only"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setSaved(false); }}
+        />
+      </label>
+      <button className="btn" disabled={disabled || pending}>{pending ? 'Saving…' : 'Save'}</button>
+      {saved && <span role="status" className="muted small">Saved.</span>}
+      {err && <span role="alert" className="state-error small">{err}</span>}
     </form>
   );
 }

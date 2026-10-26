@@ -8,38 +8,48 @@ import lombok.Getter;
 @Getter
 public class DatabaseConfiguration {
 
+    // Framework reload writes these fields in place; publish each value to async readers.
+
     @ConfigurationValue(path = "database.host", defaultValue = "localhost")
-    private String host;
+    private volatile String host;
 
     @ConfigurationValue(path = "database.port", defaultValue = "3306")
-    private String port;
+    private volatile String port;
 
     @ConfigurationValue(path = "database.database", defaultValue = "treasury")
-    private String database;
+    private volatile String database;
 
-    @ConfigurationValue(path = "database.username", defaultValue = "root")
-    private String username;
+    @ConfigurationValue(path = "database.username", defaultValue = "treasury")
+    private volatile String username;
 
-    @ConfigurationValue(path = "database.password", defaultValue = "password")
-    private String password;
+    // Placeholder default; the plugin refuses to boot while it's unchanged
+    // (ADT default-db-creds-in-shipped-config).
+    @ConfigurationValue(path = "database.password", defaultValue = "CHANGE_ME")
+    private volatile String password;
+
+    // Empty pair uses the application credentials; a separate DDL user is recommended.
+    @ConfigurationValue(path = "database.migrations.username", defaultValue = "")
+    private volatile String migrationUsername;
+
+    @ConfigurationValue(path = "database.migrations.password", defaultValue = "")
+    private volatile String migrationPassword;
 
     // ---- Connection pool (HikariCP) ----
     // Sized for a busy server; raise maximum-size to match DB capacity (and never
     // above what the DB's max_connections can serve across all clients).
 
     @ConfigurationValue(path = "database.pool.maximum-size", defaultValue = "30")
-    private String poolMaximumSize;
+    private volatile String poolMaximumSize;
 
     @ConfigurationValue(path = "database.pool.minimum-idle", defaultValue = "10")
-    private String poolMinimumIdle;
+    private volatile String poolMinimumIdle;
 
     @ConfigurationValue(path = "database.pool.connection-timeout-ms", defaultValue = "10000")
-    private String poolConnectionTimeoutMs;
+    private volatile String poolConnectionTimeoutMs;
 
     @ConfigurationValue(path = "database.pool.max-lifetime-ms", defaultValue = "1800000")
-    private String poolMaxLifetimeMs;
+    private volatile String poolMaxLifetimeMs;
 
     @ConfigurationValue(path = "database.pool.keepalive-ms", defaultValue = "300000")
-    private String poolKeepaliveMs;
-
+    private volatile String poolKeepaliveMs;
 }

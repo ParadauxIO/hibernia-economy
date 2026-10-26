@@ -1,0 +1,252 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * Economy Explorer design tokens (v2)
+ *
+ * Two axes, both attributes on <html>, set by the host before first paint:
+ *   data-mode  = "dark" | "light"   surface mode (dark when absent)
+ *   data-theme = "blue" | "red"     brand: blue = DemocracyCraft, red = StateCraft
+ *
+ * Cascade, in four blocks (A is the default, blue · dark):
+ *   A  :root                                          scales + dark surfaces + blue·dark brand
+ *   B  :root[data-mode="light"]                       light surfaces + blue·light brand
+ *   C  :root[data-theme="red"]                        red·dark brand
+ *   D  :root[data-theme="red"][data-mode="light"]     red·light brand
+ * Red · light matches B and C at equal specificity, so C (later) wins and D must
+ * redefine every token C sets. test/unit/tokens.test.ts enforces that and checks
+ * contrast for all four combinations.
+ *
+ * Rules:
+ *   - One accent per brand. --accent is links, focus, active state and series 1.
+ *   - --pos / --neg are money direction only. --good / --warn / --bad are status.
+ *   - --cat-* are chart categories; --seq-0…5 a sequential scale (0 = empty).
+ *     The red brand has no green: green next to red reads as profit / loss.
+ *   - Cards use borders; --shadow-* is for popovers, dialogs and the palette.
+ *
+ * Legacy names (--radius, --c-1…7, --section-gap, --accent-2, --brand-*) remain
+ * as aliases so existing pages keep working.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/* ══ A · scales, dark surfaces, blue · dark brand ══════════════════════════ */
+:root {
+    /* Fonts. DM Sans is self-hosted by the layout (next/font). Mono is for IDs,
+       code and coordinates only, never for figures. */
+    --sans: var(--font-dm-sans, system-ui), ui-sans-serif, -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: var(--font-geist-mono, ui-monospace), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    /* Type scale: size / line height. Weights 400, 500 and 600 only. */
+    --text-xs: 12px;   --leading-xs: 16px;   /* captions, axis labels */
+    --text-sm: 14px;   --leading-sm: 20px;   /* table body, secondary text */
+    --text-md: 15px;   --leading-md: 24px;   /* body */
+    --text-lg: 16px;   --leading-lg: 24px;   /* card titles */
+    --text-xl: 20px;   --leading-xl: 28px;   /* section headings */
+    --text-2xl: 24px;  --leading-2xl: 32px;  /* metric values */
+    --text-3xl: 32px;  --leading-3xl: 40px;  /* page titles */
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --tracking-tight: -0.015em;
+
+    /* Spacing: 4 px base. The suffix is the multiple of 4 (space-6 = 24px). */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --section-gap: var(--space-6);
+
+    /* Radius: four values, nothing else. */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-pill: 999px;
+    --radius: var(--radius-sm); /* legacy alias */
+
+    --t-fast: 120ms ease;
+    --t-med: 200ms ease;
+
+    /* Dark surfaces (also the default when data-mode is absent). */
+    color-scheme: dark;
+    --bg:          #0c0e12;
+    --bg-soft:     #14171d;
+    --bg-card:     #111419;
+    --bg-elev:     #191d24;
+    --border:      #262a33;
+    --border-soft: #1c2027;
+    --fg:          #eceef2;
+    --fg-soft:     #b6bcc8;
+    --fg-muted:    #949dac;
+    --fg-faint:    #5b6270;
+    --good:        #34d399;
+    --warn:        #fbbf24;
+    --bad:         #f87171;
+    --info:        #22d3ee;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+    --shadow-2: 0 2px 6px rgb(0 0 0 / 0.35), 0 20px 56px rgb(0 0 0 / 0.5);
+    --scrim: rgb(0 0 0 / 0.55);
+
+    /* Blue · dark brand */
+    --accent:      #6b98f2;
+    --accent-2:    #6ed8ec;
+    --accent-soft: #1c2433;
+    --accent-line: #2c3c5a;
+    --accent-fill: #366bd6; /* filled surface behind white text: 4.97:1 */
+    --on-accent:   #ffffff;
+    --brand-bg:    #1a2745;
+    --brand-bg-2:  #1f2f55;
+    --brand-fg:    #e2eaff;
+    --brand-fg-muted: #92a4cf;
+    --brand-edge:  rgb(91 141 239 / 0.06);
+    --pos: #4cc38a;
+    --neg: #f07878;
+    --cat-1: #6b98f2;
+    --cat-2: #6ed8ec;
+    --cat-3: #6dd49f;
+    --cat-4: #f0c061;
+    --cat-5: #e98a8a;
+    --cat-6: #8b95ec;
+    --cat-7: #d08cc2;
+    --cat-8: #a3adbf;
+    --cat-9: #c9a66b;
+    --cat-10: #ec9a5e;
+    --seq-0: var(--bg-soft);
+    --seq-1: #1f293c;
+    --seq-2: #304163;
+    --seq-3: #425b8e;
+    --seq-4: #5578be;
+    --seq-5: #6b98f2;
+
+    /* Legacy chart aliases */
+    --c-1: var(--cat-1);
+    --c-2: var(--cat-2);
+    --c-3: var(--cat-3);
+    --c-4: var(--cat-4);
+    --c-5: var(--cat-5);
+    --c-6: var(--cat-6);
+    --c-7: var(--cat-7);
+}
+@media (max-width: 720px) {
+    :root { --section-gap: var(--space-4); }
+}
+
+/* ══ B · light surfaces, blue · light brand ════════════════════════════════ */
+:root[data-mode="light"] {
+    color-scheme: light;
+    --bg:          #fafafb;
+    --bg-soft:     #f2f3f5;
+    --bg-card:     #ffffff;
+    --bg-elev:     #ffffff;
+    --border:      #e2e4e9;
+    --border-soft: #eceef1;
+    --fg:          #14161b;
+    --fg-soft:     #454c59;
+    --fg-muted:    #5b6372;
+    --fg-faint:    #b5bac4;
+    --good:        #116b34;
+    --warn:        #945300;
+    --bad:         #c62828;
+    --info:        #0e7490;
+    --shadow-1: 0 1px 2px rgb(16 24 40 / 0.06), 0 8px 24px rgb(16 24 40 / 0.1);
+    --shadow-2: 0 2px 6px rgb(16 24 40 / 0.08), 0 20px 56px rgb(16 24 40 / 0.18);
+    --scrim: rgb(16 24 40 / 0.4);
+
+    --accent:      #2f5fbf;
+    --accent-2:    #1d6b80;
+    --accent-soft: #e6ecf7;
+    --accent-line: #c1cfec;
+    --accent-fill: #2f5fbf; /* 5.98:1 with white */
+    --on-accent:   #ffffff;
+    --brand-bg:    #e6eeff;
+    --brand-bg-2:  #d7e2fb;
+    --brand-fg:    #1f3a6b;
+    --brand-fg-muted: #5d6f96;
+    --brand-edge:  rgb(58 109 204 / 0.05);
+    --pos: #157341;
+    --neg: #c22b2b;
+    --cat-1: #2f5fbf;
+    --cat-2: #1d6b80;
+    --cat-3: #1f7547;
+    --cat-4: #8a5a0a;
+    --cat-5: #c03f3f;
+    --cat-6: #4a52b8;
+    --cat-7: #a63a86;
+    --cat-8: #5b6880;
+    --cat-9: #7a6420;
+    --cat-10: #b0521a;
+    --seq-0: var(--bg-soft);
+    --seq-1: #dee5f5;
+    --seq-2: #b8c9e9;
+    --seq-3: #8fa9dc;
+    --seq-4: #6185ce;
+    --seq-5: #2f5fbf;
+}
+
+/* ══ C · red · dark brand ══════════════════════════════════════════════════ */
+:root[data-theme="red"] {
+    --accent:      #e06c6c;
+    --accent-2:    #e1a06b;
+    --accent-soft: #2a1f23;
+    --accent-line: #4f2e32;
+    --accent-fill: #b84444; /* 5.3:1 with white */
+    --on-accent:   #ffffff;
+    --brand-bg:    #3b1d1e;
+    --brand-bg-2:  #4a2426;
+    --brand-fg:    #ffe6e2;
+    --brand-fg-muted: #d5a4a0;
+    --brand-edge:  rgb(217 102 102 / 0.06);
+    /* Teal for gains, amber for losses: red would read as the brand. */
+    --pos: #4fbfb5;
+    --neg: #f0a060;
+    --cat-1: #e06c6c;
+    --cat-2: #e1a06b;
+    --cat-3: #4fbfb5;
+    --cat-4: #f0c061;
+    --cat-5: #c46a8f;
+    --cat-6: #7397d0;
+    --cat-7: #c690d6;
+    --cat-8: #a3adbf;
+    --cat-9: #c9a66b;
+    --cat-10: #9a8fe0;
+    --seq-0: var(--bg-soft);
+    --seq-1: #322226;
+    --seq-2: #573235;
+    --seq-3: #814446;
+    --seq-4: #ae5758;
+    --seq-5: #e06c6c;
+}
+
+/* ══ D · red · light brand ═════════════════════════════════════════════════ */
+:root[data-theme="red"][data-mode="light"] {
+    --accent:      #b54444;
+    --accent-2:    #89512d;
+    --accent-soft: #f6e9e9;
+    --accent-line: #e9c7c7;
+    --accent-fill: #b54444; /* 5.42:1 with white */
+    --on-accent:   #ffffff;
+    --brand-bg:    #fde5e2;
+    --brand-bg-2:  #f8d4cf;
+    --brand-fg:    #5b2526;
+    --brand-fg-muted: #8a5a55;
+    --brand-edge:  rgb(179 77 77 / 0.05);
+    --pos: #11706a;
+    --neg: #a3480c;
+    --cat-1: #b54444;
+    --cat-2: #89512d;
+    --cat-3: #1f6f6a;
+    --cat-4: #8a5a0a;
+    --cat-5: #8f2f5a;
+    --cat-6: #3f66a8;
+    --cat-7: #8a4aa0;
+    --cat-8: #5b6880;
+    --cat-9: #7a6420;
+    --cat-10: #6a5bb8;
+    --seq-0: var(--bg-soft);
+    --seq-1: #f3e1e1;
+    --seq-2: #e6bfbf;
+    --seq-3: #d79a9a;
+    --seq-4: #c77171;
+    --seq-5: #b54444;
+}

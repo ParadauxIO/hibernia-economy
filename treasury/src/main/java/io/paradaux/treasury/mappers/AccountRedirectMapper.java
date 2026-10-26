@@ -39,7 +39,7 @@ public interface AccountRedirectMapper {
 
     /**
      * Loads every redirect in one shot. Used by
-     * {@link io.paradaux.treasury.utils.AccountRedirectCache} to warm an
+     * {@link io.paradaux.treasury.services.cache.AccountRedirectCache} to warm an
      * in-memory mirror — the table is tiny and effectively static at runtime, so
      * a single bulk read replaces a per-Vault-call point lookup.
      */

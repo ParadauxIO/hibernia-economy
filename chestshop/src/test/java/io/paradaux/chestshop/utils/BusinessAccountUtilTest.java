@@ -1,0 +1,33 @@
+package io.paradaux.chestshop.utils;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+
+class BusinessAccountUtilTest {
+
+    @Test
+    void toBusinessUuid_encodesAccountIdInTheLowWord_withTheFixedHighWord() {
+        UUID uuid = BusinessAccountUtil.toBusinessUuid(42);
+        assertThat(uuid.getMostSignificantBits()).isEqualTo(BusinessAccountUtil.BUSINESS_UUID_MSB);
+        assertThat(uuid.getLeastSignificantBits()).isEqualTo(42L);
+    }
+
+    @Test
+    void isBusinessUuid_trueForAnEncodedBusinessUuid() {
+        assertThat(BusinessAccountUtil.isBusinessUuid(BusinessAccountUtil.toBusinessUuid(7)))
+                .isTrue();
+    }
+
+    @Test
+    void isBusinessUuid_falseForARealPlayerUuid() {
+        assertThat(BusinessAccountUtil.isBusinessUuid(UUID.randomUUID())).isFalse();
+    }
+
+    @Test
+    void systemUuid_isTheReservedConstant() {
+        assertThat(BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID)
+                .isEqualTo(new UUID(0xC5B0FFFFFFFFFFFEL, 0xFFFFFFFFFFFFFFFEL));
+    }
+}

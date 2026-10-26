@@ -86,3 +86,36 @@ NETHERITE_INGOT
 
 - Manage the money those shops collect: **[Business accounts](/docs/guides/business-accounts)**.
 - Sign format and commands in full: the **[ChestShop reference](/docs/reference/chestshop)**.
+
+## Shop aliases
+
+The proprietor can give each firm account one memorable alias:
+
+```text
+/business account alias Acme 16 Acme
+/business account list Acme
+```
+
+Use the **decimal account ID** from the account list in the command. Put `A:Acme`
+on the first line of a shop sign. ChestShop checks your usual `CHESTSHOP` permission
+and **keeps `A:Acme` visible**, both when the shop is created and after trades.
+Payments still go to account 16. Numeric account-code signs continue to work.
+
+Aliases are globally unique, case-insensitive, and contain **1–12 letters (A–Z)
+only**. Digits, spaces, underscores and hyphens are not allowed. The `A:` prefix
+identifies an alias; it is not part of the alias itself. The older `B:@Acme` form
+no longer works: rewrite those signs as `A:Acme`. Each alias points to one
+specific account, independently of the firm's default account. Archived accounts
+and disbanded firms cannot be resolved by alias.
+
+Set another alias with the same command, or clear it with:
+
+```text
+/business account clearalias Acme 16
+```
+
+Changing or clearing an alias stops signs using the old alias from working. Update
+those signs to the new alias or the account code. Old aliases stay reserved to their
+original account permanently, so another account cannot take over existing signs.
+The proprietor can restore a previous alias to its original account. Business must
+be installed to resolve aliases.

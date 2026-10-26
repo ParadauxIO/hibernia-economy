@@ -38,7 +38,7 @@ public class FirmNotificationServiceImpl implements FirmNotificationService {
     @Override
     public void notifyFirmExcept(int firmId, UUID excluded, String messageKey, Object... placeholders) {
         try {
-            List<Player> recipients = staff.getOnlineEmployees(String.valueOf(firmId)).stream()
+            List<Player> recipients = staff.getOnlineEmployees(firmId).stream()
                     .filter(p -> excluded == null || !p.getUniqueId().equals(excluded))
                     .toList();
             if (recipients.isEmpty()) {

@@ -14,7 +14,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class FirmEmployee {
     private UUID playerUuid;
-    /** Current IGN from firm_players; null if the player is not in the registry. */
+    /** Current IGN from economy_players; null if the player is not in the registry. */
     private String playerName;
     private String roleName;
     private LocalDateTime joinedAt;

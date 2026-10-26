@@ -39,6 +39,25 @@ public record TaxCollection(
         byte @Nullable [] dedupKey
 ) {
 
+    public TaxCollection {
+        // Validate the money-bearing fields and defensively copy the mutable
+        // dedup-key array so the idempotency key can't be mutated post-construction (ADT-40).
+        java.util.Objects.requireNonNull(amount, "amount");
+        java.util.Objects.requireNonNull(taxType, "taxType");
+        java.util.Objects.requireNonNull(description, "description");
+        java.util.Objects.requireNonNull(initiator, "initiator");
+        if (amount.signum() <= 0) {
+            throw new IllegalArgumentException("amount must be > 0, was " + amount);
+        }
+        dedupKey = dedupKey == null ? null : dedupKey.clone();
+    }
+
+    /** Defensive copy so the returned idempotency key can't mutate the record's. */
+    @Override
+    public byte @Nullable [] dedupKey() {
+        return dedupKey == null ? null : dedupKey.clone();
+    }
+
     // ---- Factory methods ----
 
     /**

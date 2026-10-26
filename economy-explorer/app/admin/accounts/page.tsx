@@ -1,15 +1,25 @@
-import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { z } from 'zod';
+import { EntityBadge, PageHeader, Section, Tag, When } from '@democracycraft/design-system';
+import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
+import { FilterBar } from '@/components/FilterBar';
+import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { listAccounts } from '@/lib/sql/ledger';
+import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { accountLabel, fmtAmtFull } from '@/lib/format';
+import { buildMetadata } from '@/lib/metadata';
+import { getAdminAccounts } from '@/lib/services/admin';
+import type { ExplorerAccountRow } from '@/lib/sql/ledger';
+import { searchFirmsAction } from '@/lib/tables/actions';
+import { accountsTable } from '@/lib/tables/accounts';
+import { parseTableState, tableHref, withPage, withSort, type TableState } from '@/lib/tables/core';
 import { treasuryAdminConfigured } from '@/lib/treasury';
-import { fmtAmt } from '@/lib/format';
-import { Toolbar } from '@/components/Toolbar';
-import { MoveMoneyPanel } from './move-money-panel';
+import { AdminGate } from '../_components/AdminGate';
+import { ManageDialog } from '../_components/ManageDialog';
+import { AdminTableEmpty, RouterLink } from '../_components/table';
 import { AccountAdminPanel } from './account-admin-panel';
+import { MoveMoneyPanel } from './move-money-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,66 +27,96 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Admin · Accounts', description: 'Administer accounts: move money, rename, change owner, archive.', path: '/admin/accounts' });
 }
 
-const SP = z.object({ q: z.string().trim().min(1).optional() });
+const TABLE_ID = 'admin-accounts-table';
+const PATH = '/admin/accounts';
 
-/** Admin account tool (PAR-219/221): move money between accounts, and per-account
- *  rename / change-owner / archive-unarchive — all via the ledger-authoritative
- *  treasury admin API, audited. */
+/**
+ * Admin account tool (PAR-219/221): move money between accounts, and per-account
+ * rename / change-owner / archive-unarchive, all through the ledger-authoritative
+ * treasury admin API and audited with the values before and after.
+ */
 export default async function AdminAccountsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
-  if (viewer.anon || viewer.role !== 'admin') return null; // layout gates; defence in depth
-  const sp = SP.safeParse(flat(await searchParams)).data ?? {};
-  const q = sp.q ?? null;
-  await auditView(viewer, { path: '/admin/accounts', targetType: 'global', targetId: q });
+  if (!hasPermission(viewer, 'account.admin.read')) return <AdminGate viewer={viewer} title="Account administration access required" permission="account.admin.read" />;
+  const state = parseTableState(await searchParams, accountsTable);
+  await auditView(viewer, { path: PATH, targetType: 'global', targetId: state.q || null });
 
   const configured = treasuryAdminConfigured();
-  const accounts = q
-    ? await listAccounts({ limit: 25, offset: 0, type: null, archived: null, q, sort: 'account_id', dir: 'ASC' })
-    : [];
+  const canManage = (['account.rename', 'account.owner.change', 'account.archive'] as const).some((p) => hasPermission(viewer, p));
+  const { rows, total, entityLabels } = await getAdminAccounts(viewer, state);
+  const totalPages = Math.max(1, Math.ceil(total / state.limit));
+  const href = (s: TableState<typeof accountsTable>) => tableHref(PATH, s, accountsTable);
+
+  const columns: Column<ExplorerAccountRow>[] = [
+    {
+      key: 'name',
+      header: 'Account',
+      sort: 'name',
+      cell: (a) => (
+        <>
+          <Link href={`/accounts/${a.account_id}` as Route} prefetch={false}>{accountLabel(a)}</Link>
+          <span className="dt-sub">{` #${a.account_id}`}</span>
+          {a.archived ? <> <Tag tone="neg">Archived</Tag></> : null}
+        </>
+      ),
+    },
+    { key: 'type', header: 'Type', sort: 'type', secondary: true, cell: (a) => <EntityBadge type={a.account_type} /> },
+    { key: 'owner', header: 'Owner', secondary: true, optional: true, cell: (a) => a.owner_name ?? (a.owner_uuid ? <span className="mono">{a.owner_uuid}</span> : '—') },
+    { key: 'balance', header: 'Balance', sort: 'balance', numeric: true, cell: (a) => fmtAmtFull(a.balance) },
+    { key: 'created', header: 'Created', sort: 'created', sortFirst: 'desc', secondary: true, optional: true, cell: (a) => <When value={a.created_at} /> },
+    ...(canManage ? [{
+      key: 'manage',
+      header: <span className="sr-only">Manage</span>,
+      label: 'Manage',
+      align: 'end' as const,
+      cell: (a: ExplorerAccountRow) => (
+        <ManageDialog label={`Manage account ${a.account_id}`} title={`${accountLabel(a)} · #${a.account_id}`}
+          description="Each change goes through the Treasury admin API and is recorded in the audit log with its old and new values.">
+          <AccountAdminPanel accountId={a.account_id} displayName={a.display_name} archived={a.archived === 1} />
+        </ManageDialog>
+      ),
+    }] : []),
+  ];
 
   return (
     <>
-      <div className="page-heading">
-        <h1>Accounts</h1>
-        <span className="sub">move money, rename, change owner, archive — destructive, audited</span>
-      </div>
+      <PageHeader title="Accounts" subtitle="Move money, rename, change owner or archive. Each change needs its own permission and is audited." />
 
       {!configured && (
-        <p className="state-error" style={{ marginBottom: 12 }}>
-          Treasury admin API is not configured in this environment (TREASURY_API_BASE_URL / TREASURY_ADMIN_TOKEN).
+        <p className="state-error" role="alert">
+          The Treasury admin API is not configured in this environment (TREASURY_API_BASE_URL / TREASURY_ADMIN_TOKEN), so changes are unavailable.
         </p>
       )}
 
-      <MoveMoneyPanel disabled={!configured} />
+      {hasPermission(viewer, 'account.transfer') && (
+        <Section id="move-money" title="Move money between accounts" description="A ledger transfer between any two accounts, recorded with you as its initiator.">
+          <MoveMoneyPanel disabled={!configured} />
+        </Section>
+      )}
 
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-title">Find an account</div>
-        <Toolbar searchPlaceholder="Search by account id, name, or owner…" />
-      </div>
-
-      {q && accounts.length === 0 && <p className="muted" style={{ marginTop: 12 }}>No accounts match “{q}”.</p>}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-        {accounts.map((a) => (
-          <div key={a.account_id} className="card" style={{ padding: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-              <Link href={`/accounts/${a.account_id}` as Route} className="rowlink mono">#{a.account_id}</Link>
-              <strong>{a.display_name ?? '—'}</strong>
-              <span className={`badge badge-${a.account_type}`}>{a.account_type}</span>
-              <span className="muted small">owner {a.owner_name ?? a.owner_uuid ?? '—'}</span>
-              <span className="muted small">balance {fmtAmt(a.balance)}</span>
-              {a.archived ? <span className="badge" style={{ background: 'var(--bad)', color: '#fff' }}>archived</span> : null}
-            </div>
-            <AccountAdminPanel accountId={a.account_id} displayName={a.display_name} archived={a.archived === 1} />
-          </div>
-        ))}
-      </div>
+      <Section id="accounts" title="All accounts" divider={hasPermission(viewer, 'account.transfer')}>
+        <FilterBar
+          table={accountsTable}
+          total={total}
+          entityLabels={entityLabels}
+          searchEntity={searchFirmsAction}
+          columns={columnOptions(columns)}
+          tableId={TABLE_ID}
+          currency={CURRENCY_SYMBOL}
+        />
+        <DataTable
+          id={TABLE_ID}
+          label="Accounts"
+          columns={columns}
+          rows={rows}
+          rowKey={(a) => a.account_id}
+          sort={state.sort}
+          sortHref={(field, dir) => href(withSort(state, field, dir, accountsTable))}
+          link={RouterLink}
+          empty={<AdminTableEmpty pathname={PATH} state={state} table={accountsTable} describe={{ currency: CURRENCY_SYMBOL, entityLabels }} />}
+        />
+        <TablePager page={Math.min(state.page, totalPages)} totalPages={totalPages} hrefFor={(p) => href(withPage(state, p))} link={RouterLink} />
+      </Section>
     </>
   );
-}
-
-function flat(sp: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(sp)) if (typeof v === 'string') out[k] = v;
-  return out;
 }

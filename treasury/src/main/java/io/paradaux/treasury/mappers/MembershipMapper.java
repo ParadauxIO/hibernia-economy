@@ -27,10 +27,15 @@ public interface MembershipMapper {
 
     // ---- Checks ----
 
+    /**
+     * Reads the {@code account_read_access_api} view (ADT-13) — the single source
+     * of truth for the API/in-game read rule (MEMBER or AUTHORIZER, not removed),
+     * shared with {@code treasury-rest-api} so the two can't drift. See
+     * {@code V22__account_read_access_views.sql}.
+     */
     @Select("""
-      SELECT COUNT(*) FROM account_access
+      SELECT COUNT(*) FROM account_read_access_api
        WHERE account_id = #{accountId} AND subject_uuid_bin = #{member}
-         AND level IN ('MEMBER','AUTHORIZER') AND removed_at IS NULL
       """)
     int isMember(@Param("accountId") int accountId, @Param("member") UUID member);
 

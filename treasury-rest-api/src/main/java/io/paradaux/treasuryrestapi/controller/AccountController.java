@@ -2,6 +2,7 @@ package io.paradaux.treasuryrestapi.controller;
 
 import io.paradaux.treasuryrestapi.dto.AccountBalanceResponse;
 import io.paradaux.treasuryrestapi.dto.AccountByPlayerResponse;
+import io.paradaux.treasuryrestapi.dto.BaltopResponse;
 import io.paradaux.treasuryrestapi.dto.TransactionFeedResponse;
 import io.paradaux.treasuryrestapi.dto.TransactionsResponse;
 import io.paradaux.treasuryrestapi.ratelimit.RateLimit;
@@ -27,8 +28,7 @@ public class AccountController {
     private final TransactionService transactionService;
     private final AccountService accountService;
 
-    public AccountController(TransactionService transactionService,
-                             AccountService accountService) {
+    public AccountController(TransactionService transactionService, AccountService accountService) {
         this.transactionService = transactionService;
         this.accountService = accountService;
     }
@@ -41,8 +41,7 @@ public class AccountController {
     @GetMapping("/{accountId}/balance")
     @RateLimit(personalPerMinute = 120, businessPerMinute = 600)
     public ResponseEntity<AccountBalanceResponse> getBalance(
-            @AuthenticationPrincipal VerifiedToken verified,
-            @PathVariable long accountId) {
+            @AuthenticationPrincipal VerifiedToken verified, @PathVariable long accountId) {
 
         log.info("GET /accounts/{}/balance requested by keyId={}", accountId, verified.keyId());
 
@@ -53,7 +52,7 @@ public class AccountController {
      * GET /api/v1/accounts/by-player?uuid={uuid}|name={name}
      * Resolves a player to their non-archived PERSONAL account id. Exactly one
      * of {@code uuid} or {@code name} must be supplied. Names are matched
-     * case-insensitively via the {@code firm_players} IGN cache, so a player
+     * case-insensitively via the {@code economy_players} IGN cache, so a player
      * must have been seen on the server at least once for name lookup to work
      * (UUID lookup has no such constraint).
      */
@@ -66,10 +65,30 @@ public class AccountController {
 
         AccountByPlayerResponse response = accountService.resolvePlayerAccount(uuid, name);
 
-        log.info("GET /accounts/by-player resolved accountId={} (player={}) for keyId={}",
-                response.accountId(), response.playerUuid(), verified.keyId());
+        log.info(
+                "GET /accounts/by-player resolved accountId={} (player={}) for keyId={}",
+                response.accountId(),
+                response.playerUuid(),
+                verified.keyId());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * GET /api/v1/accounts/baltop?page={n}&limit={n}
+     * Returns personal accounts ranked by balance, like the in-game /baltop.
+     * Any authenticated caller may query it.
+     */
+    @GetMapping("/baltop")
+    @RateLimit(personalPerMinute = 10, businessPerMinute = 10)
+    public ResponseEntity<BaltopResponse> getBaltop(
+            @AuthenticationPrincipal VerifiedToken verified,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int limit) {
+
+        log.info("GET /accounts/baltop requested by keyId={} | page={} limit={}", verified.keyId(), page, limit);
+
+        return ResponseEntity.ok(accountService.getBaltop(page, limit));
     }
 
     /**
@@ -85,13 +104,23 @@ public class AccountController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
 
-        log.info("GET /accounts/{}/transactions requested by keyId={} ownerUuid={} | page={} limit={}",
-                accountId, verified.keyId(), verified.ownerUuid(), page, limit);
+        log.info(
+                "GET /accounts/{}/transactions requested by keyId={} ownerUuid={} | page={} limit={}",
+                accountId,
+                verified.keyId(),
+                verified.ownerUuid(),
+                page,
+                limit);
 
         TransactionsResponse response = transactionService.getTransactions(verified, accountId, page, limit);
 
-        log.info("Returning {} transactions for accountId={} (page {}/{}, totalItems={})",
-                response.items().size(), accountId, response.page(), response.totalPages(), response.totalItems());
+        log.info(
+                "Returning {} transactions for accountId={} (page {}/{}, totalItems={})",
+                response.items().size(),
+                accountId,
+                response.page(),
+                response.totalPages(),
+                response.totalItems());
 
         return ResponseEntity.ok(response);
     }
@@ -112,8 +141,12 @@ public class AccountController {
             @RequestParam(defaultValue = "0") long since,
             @RequestParam(defaultValue = "0") int limit) {
 
-        log.info("GET /accounts/{}/transactions/feed requested by keyId={} | since={} limit={}",
-                accountId, verified.keyId(), since, limit);
+        log.info(
+                "GET /accounts/{}/transactions/feed requested by keyId={} | since={} limit={}",
+                accountId,
+                verified.keyId(),
+                since,
+                limit);
 
         TransactionFeedResponse response = transactionService.getTransactionFeed(verified, accountId, since, limit);
         return ResponseEntity.ok(response);

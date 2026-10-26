@@ -22,3 +22,5 @@ a short note on **what the plugin is and why it exists**, then lists everything 
 > [!NOTE]
 > In the argument tables, `<angle brackets>` mean a required value and
 > `[square brackets]` mean an optional one. Don't type the brackets themselves.
+
+- **[TreasuryAPI](/docs/reference/treasury-api)** — API keys, linking, password recovery and access commands.

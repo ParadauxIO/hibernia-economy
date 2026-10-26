@@ -7,13 +7,12 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.paradaux.treasuryrestapi.mapper.ApiKeyMapper;
 import io.paradaux.treasuryrestapi.model.ApiKey;
+import java.util.UUID;
+import javax.crypto.SecretKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-
-import javax.crypto.SecretKey;
-import java.util.UUID;
 
 /**
  * Verification pipeline for JWT-based API keys.
@@ -47,13 +46,13 @@ public class JwtTokenVerifier {
         // Steps 2 & 3: parse, verify signature, check expiry
         Jws<Claims> jws;
         try {
-            jws = Jwts.parser()
-                    .verifyWith(signingKey)
-                    .build()
-                    .parseSignedClaims(token);
+            jws = Jwts.parser().verifyWith(signingKey).build().parseSignedClaims(token);
         } catch (ExpiredJwtException e) {
             throw new TokenException(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "Token has expired.");
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
+            // jjwt signals some malformed input (null/blank compact string) with
+            // IllegalArgumentException rather than a JwtException; both are a bad
+            // token (401), never an unhandled 500.
             log.warn("JWT verification failed: [{}] {}", e.getClass().getSimpleName(), e.getMessage());
             throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token signature or format is invalid.");
         }
@@ -86,7 +85,8 @@ public class JwtTokenVerifier {
         // Step 7: jti freshness — guards against old tokens after a reissue
         String jti = claims.getId();
         if (!apiKey.getJwtId().equals(jti)) {
-            throw new TokenException(HttpStatus.UNAUTHORIZED, "TOKEN_SUPERSEDED", "Token has been superseded by a newer issue.");
+            throw new TokenException(
+                    HttpStatus.UNAUTHORIZED, "TOKEN_SUPERSEDED", "Token has been superseded by a newer issue.");
         }
 
         // Step 8: type claim must be present and match the DB record (defence in depth)
@@ -101,15 +101,13 @@ public class JwtTokenVerifier {
         // bubble up as 500. Validate explicitly so malformed tokens are 401.
         String subjectStr = claims.getSubject();
         if (subjectStr == null || subjectStr.isBlank()) {
-            throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-                    "Token subject is missing.");
+            throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token subject is missing.");
         }
         UUID ownerUuid;
         try {
             ownerUuid = UUID.fromString(subjectStr);
         } catch (IllegalArgumentException e) {
-            throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-                    "Token subject is not a valid UUID.");
+            throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token subject is not a valid UUID.");
         }
         Long accountId = null;
         Long firmId = null;
@@ -118,12 +116,12 @@ public class JwtTokenVerifier {
             case "PERSONAL", "GOVERNMENT" -> {
                 Object accClaim = claims.get("acc");
                 if (accClaim == null) {
-                    throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-                            "Token is missing required 'acc' claim.");
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token is missing required 'acc' claim.");
                 }
                 if (!(accClaim instanceof Number n)) {
-                    throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-                            "Token claim 'acc' must be a number.");
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token claim 'acc' must be a number.");
                 }
                 accountId = n.longValue();
                 // Defence in depth: the signed acc claim must agree with the DB row.
@@ -131,28 +129,58 @@ public class JwtTokenVerifier {
                 // pinning it to api_keys.account_id means a key whose scope changed
                 // (or a misissued token) can never operate on a stale account.
                 if (apiKey.getAccountId() != null && apiKey.getAccountId().longValue() != accountId) {
-                    log.warn("Account claim mismatch: JWT acc={} DB account_id={} keyId={}",
-                            accountId, apiKey.getAccountId(), keyId);
-                    throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
+                    log.warn(
+                            "Account claim mismatch: JWT acc={} DB account_id={} keyId={}",
+                            accountId,
+                            apiKey.getAccountId(),
+                            keyId);
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED,
+                            "INVALID_TOKEN",
                             "Token account claim does not match the issued key.");
                 }
             }
             case "BUSINESS" -> {
                 Object firmClaim = claims.get("firm");
                 if (firmClaim == null) {
-                    throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-                            "Token is missing required 'firm' claim.");
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token is missing required 'firm' claim.");
                 }
                 if (!(firmClaim instanceof Number n)) {
-                    throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-                            "Token claim 'firm' must be a number.");
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token claim 'firm' must be a number.");
+                }
+                Object accClaim = claims.get("acc");
+                if (accClaim != null) {
+                    if (!(accClaim instanceof Integer || accClaim instanceof Long)
+                            || ((Number) accClaim).longValue() <= 0) {
+                        throw new TokenException(
+                                HttpStatus.UNAUTHORIZED,
+                                "INVALID_TOKEN",
+                                "Token claim 'acc' must be a positive integer.");
+                    }
+                    accountId = ((Number) accClaim).longValue();
+                }
+                Long storedAccountId = apiKey.getAccountId() == null
+                        ? null
+                        : apiKey.getAccountId().longValue();
+                if (!java.util.Objects.equals(accountId, storedAccountId)) {
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED,
+                            "INVALID_TOKEN",
+                            "Token account claim does not match the issued key.");
                 }
                 firmId = n.longValue();
                 // Defence in depth: pin the signed firm claim to api_keys.firm_id.
                 if (apiKey.getFirmId() != null && apiKey.getFirmId().longValue() != firmId) {
-                    log.warn("Firm claim mismatch: JWT firm={} DB firm_id={} keyId={}",
-                            firmId, apiKey.getFirmId(), keyId);
-                    throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
+                    log.warn(
+                            "Firm claim mismatch: JWT firm={} DB firm_id={} keyId={}",
+                            firmId,
+                            apiKey.getFirmId(),
+                            keyId);
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED,
+                            "INVALID_TOKEN",
                             "Token firm claim does not match the issued key.");
                 }
             }
@@ -161,9 +189,17 @@ public class JwtTokenVerifier {
                 // carry neither an 'acc' nor a 'firm' claim. Authorisation for the admin
                 // endpoints is enforced per-endpoint (requireServiceKey), not via a
                 // scoped claim here. accountId/firmId stay null.
+                //
+                // SERVICE is the most powerful credential in the system, so leave a trail
+                // of every use (ADT service-key-keytype-not-pinned) — an unexpected
+                // SERVICE verification (e.g. an api_keys row whose key_type was flipped)
+                // is then visible. INFO rather than WARN: the explorer uses a SERVICE key
+                // on every admin call, so WARN would be noise that buries the signal.
+                log.info("SERVICE token verified: keyId={} owner={}", keyId, ownerUuid);
             }
-            default -> throw new TokenException(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN",
-                    "Token has an unrecognised key type.");
+            default ->
+                throw new TokenException(
+                        HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token has an unrecognised key type.");
         }
 
         return new VerifiedToken(keyId, ownerUuid, claimedType, accountId, firmId);

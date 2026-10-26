@@ -2,17 +2,20 @@ package io.paradaux.treasuryapi;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import io.paradaux.hibernia.framework.commander.CommandManager;
-import io.paradaux.hibernia.framework.configurator.ConfigurationLoader;
 import io.paradaux.business.api.BusinessApi;
+import io.paradaux.common.JwtKeys;
+import io.paradaux.hibernia.framework.commander.CommandManager;
+import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.treasury.api.TreasuryApi;
-import io.paradaux.treasuryapi.guice.CommanderModule;
+import io.paradaux.treasuryapi.commands.TreasuryAPICommand;
 import io.paradaux.treasuryapi.guice.DatabaseModule;
 import io.paradaux.treasuryapi.guice.TreasuryAPIModule;
 import io.paradaux.treasuryapi.model.config.ApiConfiguration;
 import io.paradaux.treasuryapi.model.config.DatabaseConfiguration;
 import io.paradaux.treasuryapi.model.config.ReconciliationConfiguration;
+import io.paradaux.treasuryapi.tasks.DerivedGroupReconciliationTask;
 import io.paradaux.treasuryapi.tasks.GroupReconciliationTask;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,26 +28,47 @@ public final class TreasuryAPI extends JavaPlugin {
     public void onEnable() {
         getLogger().info("Loading configuration...");
 
-        // 1) Load typed config components
-        ConfigurationLoader configLoader = new ConfigurationLoader(this);
-        configLoader.scanPackage("io.paradaux.treasuryapi.model.config");
+        // 1) Build the framework module — scans @ConfigurationComponents, binds the plugin,
+        //    ConfigurationLoader, Message (eager), PlaceholderAPI support and the command
+        //    multibinder (TreasuryAPICommand, which also carries /treasuryapi help).
+        HiberniaModule hibernia = HiberniaModule.forPlugin(this)
+                .scanConfiguration("io.paradaux.treasuryapi.model.config")
+                .handlers(TreasuryAPICommand.class)
+                .build();
 
-        DatabaseConfiguration dbCfg = configLoader.getComponent(DatabaseConfiguration.class);
+        DatabaseConfiguration dbCfg = hibernia.configuration(DatabaseConfiguration.class);
         if (dbCfg == null) {
-            throw new IllegalStateException("DatabaseConfiguration not found. Check @ConfigurationComponent and package scan.");
+            throw new IllegalStateException(
+                    "DatabaseConfiguration not found. Check @ConfigurationComponent and package scan.");
         }
 
         // 1b) Refuse to mint tokens with a placeholder or too-short signing secret.
         //     The Treasury REST API that verifies these tokens hard-fails on the
         //     same placeholder and on <32 chars; signing with the public default
         //     would let anyone who reads it forge admin/government JWTs.
-        ApiConfiguration apiCfg = configLoader.getComponent(ApiConfiguration.class);
+        ApiConfiguration apiCfg = hibernia.configuration(ApiConfiguration.class);
         String jwtSecret = apiCfg != null ? apiCfg.getJwtSecret() : null;
-        if (jwtSecret == null || jwtSecret.isBlank()
+        if (jwtSecret == null
+                || jwtSecret.isBlank()
                 || jwtSecret.equals("change-me-please-use-a-long-random-secret-key")
                 || jwtSecret.length() < 32) {
-            getLogger().severe("api.jwt-secret is unset, the placeholder default, or shorter than 32 characters. "
-                    + "Set a long random secret matching the Treasury REST API before enabling. Disabling.");
+            getLogger()
+                    .severe("api.jwt-secret is unset, the placeholder default, or shorter than 32 characters. "
+                            + "Set a long random secret matching the Treasury REST API before enabling. Disabling.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        // A `base64:` secret can pass the length check above (its raw string is long)
+        // yet decode to fewer than 32 bytes, which JwtKeys rejects only at the first
+        // mint. Validate the actual derivation here so a mis-sized key disables the
+        // plugin at boot rather than failing a player command later
+        // (ADT base64-secret-passes-startup-guard-but-crashes-mint).
+        try {
+            JwtKeys.deriveHmacKey(jwtSecret);
+        } catch (RuntimeException e) {
+            getLogger()
+                    .severe("api.jwt-secret could not derive a valid signing key: " + e.getMessage()
+                            + " (a base64: secret must decode to at least 32 bytes). Disabling.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -69,28 +93,41 @@ public final class TreasuryAPI extends JavaPlugin {
         }
         BusinessApi businessApi = businessRsp.getProvider();
 
-        // 4) Create the injector
+        // 4) Create the injector. HiberniaModule owns the framework bindings;
+        //    TreasuryAPIModule adds the economy APIs and plugin services.
         getLogger().info("Setting up dependency injection...");
         this.injector = Guice.createInjector(
-                new TreasuryAPIModule(this, configLoader, treasuryApi, businessApi),
-                new DatabaseModule(dbCfg),
-                new CommanderModule(this)
-        );
+                hibernia, new TreasuryAPIModule(this, treasuryApi, businessApi), new DatabaseModule(dbCfg));
 
-        // 5) Register commands (none yet — ready to add)
+        // 5) Register commands (/treasuryapi … and /treasuryapi help).
         injector.getInstance(CommandManager.class).registerAll();
 
-        // 6) Schedule the LuckPerms → explorer-group reconciliation cron (opt-in,
-        //    requires LuckPerms). Check the plugin by name so the LuckPerms class
-        //    is never referenced when it is absent.
-        ReconciliationConfiguration reconCfg = configLoader.getComponent(ReconciliationConfiguration.class);
+        // 6) Schedule independent membership sources. Only the LP task requires LuckPerms;
+        // check by plugin name so absent optional API classes are never referenced.
+        ReconciliationConfiguration reconCfg = hibernia.configuration(ReconciliationConfiguration.class);
         if (reconCfg != null && reconCfg.isEnabled()) {
+            injector.getInstance(DerivedGroupReconciliationTask.class).schedule(reconCfg.getIntervalSeconds());
+            getLogger().info("Business/Realty group reconciliation scheduled.");
             if (getServer().getPluginManager().getPlugin("LuckPerms") != null) {
-                injector.getInstance(GroupReconciliationTask.class).schedule(reconCfg.getIntervalSeconds());
-                getLogger().info("Group reconciliation cron scheduled (every "
-                        + reconCfg.getIntervalSeconds() + "s).");
+                try {
+                    injector.getInstance(GroupReconciliationTask.class).schedule(reconCfg.getIntervalSeconds());
+                    getLogger()
+                            .info("Group reconciliation cron scheduled (every "
+                                    + Math.max(1L, Math.min(reconCfg.getIntervalSeconds(), 1800L)) + "s).");
+                } catch (RuntimeException | LinkageError e) {
+                    // LuckPerms is installed but never registered its service (it failed
+                    // to enable), so the task can't be built. Skip the cron rather than
+                    // failing the whole plugin over an optional feature.
+                    getLogger()
+                            .log(
+                                    Level.WARNING,
+                                    "LuckPerms is installed but unavailable — LP reconciliation skipped.",
+                                    e);
+                }
             } else {
-                getLogger().warning("reconciliation.enabled=true but LuckPerms is not installed — reconciliation skipped.");
+                getLogger()
+                        .warning(
+                                "reconciliation.enabled=true but LuckPerms is not installed — LP reconciliation skipped.");
             }
         }
 
@@ -102,9 +139,14 @@ public final class TreasuryAPI extends JavaPlugin {
         getServer().getServicesManager().unregisterAll(this);
 
         try {
-            javax.sql.DataSource ds = injector.getInstance(javax.sql.DataSource.class);
-            if (ds instanceof com.zaxxer.hikari.HikariDataSource hikari) hikari.close();
-        } catch (Exception ignored) { }
+            // injector is null if onEnable aborted before building it (ADT-39) —
+            // guard so disable during a failed startup doesn't NPE over the error.
+            if (injector != null) {
+                javax.sql.DataSource ds = injector.getInstance(javax.sql.DataSource.class);
+                if (ds instanceof com.zaxxer.hikari.HikariDataSource hikari) hikari.close();
+            }
+        } catch (Exception ignored) {
+        }
         injector = null;
     }
 }

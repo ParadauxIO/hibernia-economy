@@ -31,6 +31,7 @@ class BalanceTaxFallbackIT extends IntegrationTestBase {
     private LedgerService ledgerService;
     private AccountService accountService;
     private BalanceTaxService balanceTaxService;
+    private PlayerDirectoryService directory;
     private TaxApi taxApi;
 
     @BeforeEach
@@ -43,8 +44,15 @@ class BalanceTaxFallbackIT extends IntegrationTestBase {
         ledgerService     = injector.getInstance(LedgerService.class);
         accountService    = injector.getInstance(AccountService.class);
         balanceTaxService = injector.getInstance(BalanceTaxService.class);
+        directory         = injector.getInstance(PlayerDirectoryService.class);
         taxApi            = injector.getInstance(TaxApi.class);
         ledgerService.bootstrapGovernmentAccounts();
+    }
+
+    /** Mirrors {@code PlayerLoginListener}: directory records the login, tax collects. */
+    private void login(UUID player, long epochSeconds) {
+        Long previous = directory.recordLogin(player, "P" + player.toString().substring(0, 8), epochSeconds);
+        balanceTaxService.collect(player, previous, epochSeconds);
     }
 
     @Test
@@ -54,8 +62,8 @@ class BalanceTaxFallbackIT extends IntegrationTestBase {
         ledgerService.adminSet(player, new BigDecimal("100000.00"), "setup", UUID.randomUUID());
 
         long t0 = 1_700_000_000L;
-        balanceTaxService.processLogin(player, t0);
-        balanceTaxService.processLogin(player, t0 + ONE_WEEK_SECS / 2);
+        login(player, t0);
+        login(player, t0 + ONE_WEEK_SECS / 2);
 
         // Tax collection should still succeed — fallback to default tax account.
         assertThat(accountService.getBalanceByOwnerUuid(player)).isEqualByComparingTo("99500.00");

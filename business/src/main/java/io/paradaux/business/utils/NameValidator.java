@@ -1,5 +1,7 @@
 package io.paradaux.business.utils;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -17,10 +19,43 @@ public final class NameValidator {
     /** Same character set, slightly tighter range; account names are shown next to a firm name. */
     private static final Pattern ACCOUNT_NAME = Pattern.compile("[A-Za-z0-9 _.\\-]{2,40}");
 
+    /**
+     * A firm's advertised Discord invite (business/structure/0003). Strict
+     * {@code https + discord.gg} code charset — the old {@code \S+} let a
+     * MiniMessage payload ride into the public /firm info card (ADT
+     * discord-url-minimessage-injection). This is the single source of the rule
+     * shared by the command layer and {@code FirmServiceImpl}.
+     */
+    public static final String DISCORD_INVITE_REGEX = "https://discord\\.gg/[A-Za-z0-9]{2,32}";
+
+    private static final Pattern DISCORD_INVITE = Pattern.compile(DISCORD_INVITE_REGEX);
+
     private NameValidator() {}
+
+    /** Whether {@code s} is a valid Discord invite URL for a firm's advertised link. */
+    public static boolean isValidDiscordInvite(String s) {
+        return s != null && DISCORD_INVITE.matcher(s).matches();
+    }
 
     public static boolean isValidFirmName(String s) {
         return s != null && FIRM_NAME.matcher(s).matches();
+    }
+
+    /**
+     * Literal substring matching, ignoring case and firm-name separators. This
+     * also catches a blocked term embedded in a longer name or split by spaces.
+     * Empty/separator-only entries are ignored rather than rejecting every name.
+     */
+    public static boolean containsBlockedTerm(String name, List<String> blockedTerms) {
+        String normalizedName = normalizeFilterText(name);
+        return blockedTerms.stream()
+                .map(NameValidator::normalizeFilterText)
+                .filter(term -> !term.isEmpty())
+                .anyMatch(normalizedName::contains);
+    }
+
+    private static String normalizeFilterText(String text) {
+        return text.toLowerCase(Locale.ROOT).replaceAll("[ _.-]", "");
     }
 
     public static boolean isValidAccountName(String s) {

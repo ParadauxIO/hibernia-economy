@@ -1,7 +1,6 @@
 package io.paradaux.treasury.api.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
@@ -10,10 +9,13 @@ import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.DataExportService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
-
+import io.paradaux.treasury.services.PlayerDirectoryService;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TreasuryApiImpl implements TreasuryApi {
@@ -22,19 +24,23 @@ public class TreasuryApiImpl implements TreasuryApi {
     private final MembershipService membershipService;
     private final LedgerService ledgerService;
     private final DataExportService dataExportService;
-    private final TaxApiImpl taxApi;
+    private final TaxApi taxApi;
+    private final PlayerDirectoryService playerDirectory;
 
     @Inject
-    public TreasuryApiImpl(AccountService accountService,
-                           MembershipService membershipService,
-                           LedgerService ledgerService,
-                           DataExportService dataExportService,
-                           TaxApiImpl taxApi) {
+    public TreasuryApiImpl(
+            AccountService accountService,
+            MembershipService membershipService,
+            LedgerService ledgerService,
+            DataExportService dataExportService,
+            TaxApi taxApi,
+            PlayerDirectoryService playerDirectory) {
         this.accountService = accountService;
         this.membershipService = membershipService;
         this.ledgerService = ledgerService;
         this.dataExportService = dataExportService;
         this.taxApi = taxApi;
+        this.playerDirectory = playerDirectory;
     }
 
     // ---- Balance ----
@@ -42,6 +48,11 @@ public class TreasuryApiImpl implements TreasuryApi {
     @Override
     public BigDecimal getBalanceByAccountId(int accountId) {
         return accountService.getBalanceReadOnly(accountId);
+    }
+
+    @Override
+    public Map<Integer, BigDecimal> getBalancesByIds(Collection<Integer> accountIds) {
+        return accountService.getBalancesByIds(accountIds);
     }
 
     @Override
@@ -54,6 +65,11 @@ public class TreasuryApiImpl implements TreasuryApi {
         return accountService.hasFunds(accountId, amount);
     }
 
+    @Override
+    public UUID resolveKnownPlayerUuid(String name) {
+        return playerDirectory.resolveUuidByName(name).orElse(null);
+    }
+
     // ---- Account lookups ----
 
     @Override
@@ -64,6 +80,11 @@ public class TreasuryApiImpl implements TreasuryApi {
     @Override
     public Account getAccountById(int accountId) {
         return accountService.getAccountById(accountId);
+    }
+
+    @Override
+    public Map<Integer, Account> getAccountsByIds(Collection<Integer> accountIds) {
+        return accountService.getAccountsByIds(accountIds);
     }
 
     @Override
@@ -185,6 +206,11 @@ public class TreasuryApiImpl implements TreasuryApi {
     }
 
     @Override
+    public Page<TransactionEntry> getTransactionHistory(Collection<Integer> accountIds, int offset, int limit) {
+        return ledgerService.getTransactionHistory(accountIds, offset, limit);
+    }
+
+    @Override
     public String exportTransactionsFor(int accountId) {
         return dataExportService.exportTransactionsFor(accountId);
     }
@@ -211,6 +237,12 @@ public class TreasuryApiImpl implements TreasuryApi {
     @Override
     public long transfer(TransferRequest transferRequest) {
         return ledgerService.transfer(transferRequest);
+    }
+
+    @Override
+    public java.util.OptionalLong sweepAll(
+            int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin) {
+        return ledgerService.sweepAll(fromAccountId, toAccountId, memo, initiator, sourcePlugin);
     }
 
     // ---- Balance top ----

@@ -44,10 +44,10 @@ export async function upsertIdentity(args: {
       player_uuid_bin: uuidToBin(args.playerUuid),
       minecraft_name: args.minecraftName,
       linked_by: args.linkedBy,
-    } as never)
+    })
     .onDuplicateKeyUpdate({
       player_uuid_bin: uuidToBin(args.playerUuid),
       minecraft_name: args.minecraftName ?? undefined,
-    } as never)
+    })
     .execute();
 }

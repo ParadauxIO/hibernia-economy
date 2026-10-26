@@ -11,8 +11,60 @@ API, the explorer — points at the same MariaDB and agrees on that schema.
 - **All** schema changes are new migrations. Don't hand-edit a live schema, and
   don't treat the `schema.sql` snapshots that exist inside other projects as
   authoritative — those are derived test fixtures or stale copies.
+- A merged `V<n>` script is never edited, renamed or deleted, and a new one takes
+  the next free version. CI enforces both
+  ([`check-migrations.mjs`](../economy-flyway/scripts/check-migrations.mjs)) and
+  upgrade-tests every change from the previous schema (see
+  [ci-cd.md](ci-cd.md#migration-safety)).
 - Flyway runs with `mysql-connector-j` on its classpath (wire-compatible with
   MariaDB).
+
+## Firm names
+
+V33 adds `name_released` (default false) and a generated `reserved_display_name`
+with a unique index. Both active and archived firms reserve their names until an
+administrator runs `/business admin releasename <firmId>`. The atomic update only
+releases archived firms. The generated value becomes NULL only when a firm is both
+archived and explicitly released; active names are always protected by the index.
+Existing archived firms stay reserved when the migration runs.
+
+Archived rows retain their original `display_name`. Name lookups prefer the active
+firm, then an unreleased archived firm, then the most recently created released
+firm. Numeric IDs remain the unambiguous way to access older firms and resume a
+disband. Release changes no account links, balances or ownership.
+
+Deploy V33 together with the Business plugin, REST API and Explorer changes:
+older application versions assume names identify a single row even across archives.
+
+## Global name namespace deferred (PAR-501)
+
+V40 and V41 have been withdrawn; versions 40 and 41 are retired. Existing
+per-table uniqueness rules remain, but there is no global cross-kind reservation.
+Staging must be rebuilt from a pre-V40 backup; see [the withdrawal notes](name-namespace.md).
+This is a narrowly pinned exception to migration immutability, not a general
+permission to delete deployed migrations.
+
+## Cross-kind name collision inventory (PAR-501)
+
+[`ops/name-collision-inventory.sql`](../ops/name-collision-inventory.sql) is a
+read-only candidate inventory for a consistent restored database snapshot migrated
+through V35 or later. It compares accounts, firms, the unified player directory,
+and current/historical shop alias reservations. It includes archived accounts,
+released firms and same-owner pairs so a reviewer can make explicit lifecycle and
+projection decisions rather than hide them behind implicit exemptions.
+
+Each pair includes IDs, original spelling, owner UUIDs and lifecycle flags. The
+`comparison_basis` column distinguishes existing `utf8mb4_unicode_ci` equality
+from additional candidates that match only after trimming surrounding ASCII
+spaces. This is an informational comparison; global enforcement is deferred. Punctuation
+is significant; blocked-term filtering is not used as a uniqueness rule. Null
+account display names are omitted because they do not identify a name claim.
+
+The script neither enforces uniqueness nor selects remediation winners. It can
+produce a large result and compare many pairs: run it on a restored snapshot,
+not as a frequent live check. A clean result does not by itself approve remediation or remove the
+[projection and lifecycle rules](name-namespace.md). Review collisions by immutable IDs before
+any enforcement migration; do not merge, rename or reroute balances automatically.
 
 ## Why the database owns balances
 
@@ -23,30 +75,143 @@ balances would race. Having MariaDB fold postings into the materialized balance
 keeps it consistent under any mix of writers. Keep this in mind when writing
 migrations that touch ledger tables or their triggers.
 
+`ledger_txn_volume` (V36) is maintained the same way: one row per transaction
+with its settlement time and the sum of its positive postings, so the explorer's
+time-window aggregates scan one covering index instead of joining
+`ledger_txns` to `ledger_postings`. Its triggers only lock the row of the
+transaction being written. Don't replace it with shared rollup rows (per hour or
+per day): every transfer would contend for the same row, and taking it after the
+ascending `FOR UPDATE` balance locks in `LedgerServiceImpl` can deadlock.
+
+## Explorer rollups (V43, PAR-532)
+
+The explorer's daily aggregates live in `explorer_rollup_*` and
+`explorer_snapshot_wealth_day`. They are derived data: no trigger maintains
+them, and every row can be deleted and recomputed from the ledger. A worker
+inside the explorer's own Node process (`economy-explorer/lib/rollup/`) writes
+them; nothing else does.
+
+- **One leader.** Each pod tries a Redis lease, `ee:<tenant>:rollup:leader`
+  (`SET NX PX 30000`, renewed every 10 s, released on shutdown). Only the
+  holder runs the worker. Without `REDIS_HOST` the single process always leads.
+  `ROLLUP_WORKER=off` disables it; it is off under Vitest and the e2e server
+  unless set to `on`.
+- **Whole-day recompute.** Every step deletes one UTC day of one table and
+  re-inserts it with a single `INSERT … SELECT … GROUP BY`, in one transaction.
+  The worker's own two-connection pool runs `READ COMMITTED` with
+  `time_zone = '+00:00'` and a 300 s statement timeout
+  (`ROLLUP_DB_STMT_TIMEOUT_S`). `READ COMMITTED` matters: InnoDB then reads the
+  ledger as a consistent snapshot, without the shared next-key locks that would
+  make ledger writers wait.
+- **Privileges.** The worker needs `SELECT` on the ledger and economy tables
+  and `SELECT, INSERT, UPDATE, DELETE` on `explorer_*`, nothing else: no
+  temporary tables, DDL or locks. `pair_month` keeps its touched-account set in
+  Node and sends it back in `IN` lists of 1,000. `rollup.test.ts` runs the worker
+  as a user with exactly those grants.
+- **Schedule.** Tuned for the shared production database; every interval is an
+  environment variable (see `.env.example`).
+  - Every tick (`ROLLUP_TICK_MS`, default 5 minutes, so rollups lag by at most
+    about 5 minutes): today, plus any days missed
+    while no worker ran (oldest first).
+  - Yesterday is recomputed every tick only for the first hour after 00:00 UTC
+    (`ROLLUP_YESTERDAY_WINDOW_MS`, default 60 min), while late settlements and
+    the tail of the day land, then once more to finalise it.
+  - Wealth is snapshotted at most every 15 minutes (`ROLLUP_WEALTH_EVERY_MS`);
+    today's row is refreshed in place.
+  - Once a night (after 00:15 UTC): today-8..today-2, which absorbs late
+    `settlement_time` changes. A change to day D after its first-hour window is
+    picked up by the nightly pass on D+2.
+  - In the rest of each tick: backfill, newest-first, one day per transaction,
+    pausing `ROLLUP_BACKFILL_PAUSE_MS` (default 250 ms) between days.
+- **Coverage.** `explorer_rollup_coverage(job, from_day, to_day,
+  history_complete)` is the contiguous range each job has computed, so a
+  restart resumes where it stopped. Readers in `lib/services/rollup.ts` return
+  only covered days and report the coverage, so a page can say "covered back to
+  <date>" instead of running a slow live query.
+- **Run log.** `explorer_rollup_run` has one row per step (job, day, rows,
+  error), pruned after 7 days. `/healthz?rollup=1` reports staleness (no
+  successful step in 10 minutes) and coverage, and still returns 200.
+  `/metrics` adds `explorer_rollup_step_seconds{job,pass}`,
+  `explorer_rollup_steps_total{job,pass,outcome}`,
+  `explorer_rollup_last_success_timestamp_seconds{job}`,
+  `explorer_rollup_leader` and `explorer_rollup_backfill_days_remaining{job}`;
+  rollup queries appear in `explorer_db_query_seconds` as `fn="rollup:<job>"`.
+- **Counterparties** are monthly (`explorer_rollup_pair_month`). The worker
+  stages them per day in `explorer_rollup_pair_day`, so recomputing a day
+  re-sums only the touched accounts' month rows instead of rescanning a month of
+  ledger. Staged days are pruned once their month can no longer change.
+- **Categories** are not stored: rows keep `plugin_key` and `tax_kind` (plus
+  counterparty type and an internal-transfer flag), and `lib/categories.ts`
+  maps them at read time. Changing the taxonomy never needs a backfill.
+
+## Government workspace tables (V45, PAR-539)
+
+- `explorer_gov_unit` / `explorer_gov_unit_account` group GOVERNMENT accounts
+  into units for `/gov`. A presentation grouping only: scope stays RBAC
+  (`government.read[.all]`) plus ReBAC (`account_read_access_web`), decided in
+  one place, `lib/services/governmentScope.ts` (the relationship predicate is
+  `governmentRelationship` in `lib/sql/government.ts`, which the top bar's
+  Government entry also uses). An account is in at most one unit
+  (`uq_gov_unit_account`); deleting a parent unit sets its children's parent to
+  NULL.
+- `explorer_watchlist(viewer_uuid_bin, account_id)` is the compliance
+  watchlist, per player.
+- V45 also seeds `government.audit.read` (government, admin),
+  `gov_units.manage` (admin) and a `compliance` role attached to nobody.
+- `/gov` aggregates read the rollups. Its top-N lists (largest movements, tax
+  payers, officials, payroll runs and recipients, the audit feed) read the
+  ledger inside a txn_id window of at most 31 days: `txnIdAt()` finds the first
+  transaction settled at a time on `idx_ledger_settle_time`, and postings are
+  then walked on `idx_postings_account_txn_amount`. This relies on txn ids being
+  assigned in settlement order.
+
 ## Deploying a schema change
 
-Schema deploys are **manual and gated** — there is no automatic "migrate on push".
+Normal plugin releases are staged on `main` merges and **migrated by Treasury on
+next server startup**, before economy services are published. SQL remains in
+`economy-flyway`; Treasury bundles it unchanged and preserves the existing history.
+See [production staging](ci-cd.md#production-plugin-staging-on-merge) for target
+configuration, migration credentials, startup failures and shared-service ordering.
+
+The following manual workflows remain administrative tools for rehearsals and
+explicit recovery; they are not part of the normal release path.
 The workflows live at the repo root under `.github/workflows/` (see
 [ci-cd.md](ci-cd.md)):
 
 | Workflow | What it does |
 |---|---|
-| `economy-flyway-info` | Read-only `flywayInfo` + `flywayValidate` against a chosen target. Run any time to preview what's pending. |
+| `economy-flyway-info` | Read-only `flywayInfo` + `flywayValidate` against a chosen target. Run any time to preview what's pending; validation ignores pending migrations and fails on checksum drift or a missing applied script. |
 | `economy-flyway-migrate` | Applies migrations to a target. Requires typing the target name to confirm; supports a `baseline` flag for a pre-existing DB. |
 | `economy-flyway-staging-clean` | Wipes the **staging** schema for reproducible dry runs. Cannot target production. |
 
-The intended flow:
+For a deliberate administrative migration:
 
 1. Run **Info** against the target and read the plan.
 2. Run **Migrate** against the same target to apply it.
 
 Per-target secrets (`FLYWAY_URL` / `FLYWAY_USER` / `FLYWAY_PASSWORD` /
-`FLYWAY_SCHEMA`) are configured as **GitHub Environments** — typical targets are
-`dc-test-server`, `democracycraft`, and `statecraft`. The migrate workflow runs
+`FLYWAY_SCHEMA`) are configured as **GitHub Environments** — the targets the
+workflows offer are `democracycraft` and `statecraft`. The migrate workflow runs
 `flywayInfo` (the plan) immediately before applying, and again afterward as an
 audit trail.
 
+A manual run uses the migrations of the branch picked under *Use workflow from*
+(the repository default is `develop`) — pick the ref you are actually deploying.
+
+> [!IMPORTANT]
+> Applying the schema and deploying the code are **separate, unsynchronised**
+> steps: images roll out on merge to `main`, plugins on a server restart, and
+> migrations on the next server startup (or through an explicit administrative run). A migration that drops or
+> renames something the running code still uses therefore needs a planned
+> stop — see the **[release runbook](release-runbook.md)** for the full order
+> of operations (backup → stop → migrate → deploy → verify → rollback).
+
 ## Local development
+
+To refresh the local DemocracyCraft clone from production data, follow the
+[staging database refresh runbook](../ops/dev-server/staging-refresh.md).
+It covers the economy, ChestShop, Realty and LuckPerms databases, sanitization, writer
+quiescence, migration verification and rollback snapshots.
 
 For running services or full integration tests locally you need a MariaDB. Two
 options:
@@ -67,9 +232,80 @@ URL/schema and secrets per environment — not a code or schema fork. The
 deploy workflows are these tenant identities; treat them as infrastructure, not
 branding.
 
+## Account read access — single source of truth
+
+"Who may read an account's history/balance" is decided over the `account_access`
+table (the ordered scale `VIEWER < MEMBER < AUTHORIZER`, soft-deleted via
+`removed_at`). That rule used to be hand-restated in every client and had drifted,
+so it lives in two **named SQL views** (`V22`) that all consumers read instead of
+re-writing the level filter:
+
+| View | Rule | Consumed by |
+|---|---|---|
+| `account_read_access_api` | `MEMBER` / `AUTHORIZER` only | `treasury-rest-api`, `treasury` plugin |
+| `account_read_access_web` | `VIEWER` too | `economy-explorer` |
+
+The two surfaces are **deliberately different**: the public REST API and in-game
+plugin are strict (a read-only `VIEWER` is not a member), while the web explorer
+also lets a `VIEWER` read — that's the government department-secretary case
+(PAR-237). The OWNER path is checked separately by each caller (the owner isn't
+necessarily an `account_access` row), so it isn't folded into the views. Change
+the rule in `V<n>`, not in a mapper or a Kysely query — cross-side conformance
+tests guard it (`MembershipAccessIT`, `MembershipServiceIT`, the explorer
+integration suite).
+
+## Published config — `economy_config`
+
+Config files stay the source of truth for plugin tunables, but some of them (tax
+rates first) are shown to players, and hand-copied numbers in the docs drift. So
+the owning plugin **publishes** the values it is applying into `economy_config`
+(`V32`) on every start and reload, and readers display them from there (PAR-80):
+
+| Writer | Keys | Read by |
+|---|---|---|
+| Treasury (`ConfigPublishService`, owner `treasury`) | `tax.balance.{enabled,brackets}`, `tax.source-income-tax.{enabled,default-rate,plugin-rates}` | explorer docs live blocks (`/api/docs/tax-rates`), REST `GET /api/v1/config/tax` |
+
+- One row per setting: `value_type` is `BOOLEAN`, `DECIMAL` or `JSON`; decimals are
+  plain strings at their configured scale. The JSON shapes are documented on
+  `ConfigPublishService`.
+- `updated_at` only moves when a value changes, so it means "in effect since".
+- A writer deletes its own (`owner`) keys it no longer publishes; it never touches
+  another owner's rows.
+- **Nothing reads this table to decide behaviour.** It is a display copy; the plugin
+  keeps using its in-memory config. Publishing is fail-open: a failed write logs a
+  warning and the plugin starts anyway.
+
+To publish another setting, add the key in the owning plugin's publisher and teach
+the reader to display it. In the explorer docs, a page shows it with a fenced
+` ```live ` block naming the widget (see `lib/docsLive.ts`); the docs stay
+statically generated and the `LiveDocBlocks` client component fills the block from
+the running server.
+
 ## Rollback
 
 There is no automated rollback. The canonical recovery path is **restore from the
 pre-deploy backup**: pause economy-touching services, restore, fix the migration,
 re-run. This is deliberate — half-applied schema migrations have too many failure
-modes to automate safely.
+modes to automate safely. The step-by-step version is in the
+[release runbook](release-runbook.md#rollback).
+
+## ChestShop remaining space
+
+V25 added `chestshop_shop.estimated_capacity`: remaining free room for the shop
+item in units, not total container capacity. ChestShop captures empty-slot space
+and matching partial-stack headroom alongside stock on create, trade and inventory
+refresh, respecting item and container stack limits. NULL means unknown or an
+admin/infinite shop; zero means full. `/find` already uses this column.
+
+The public REST shop DTO exposes it as `currentSpace` (including item-detail
+shop offers), and the explorer as `current_space`. Both use `stock_at` as the
+observation timestamp. PAR-17 reuses V25 and the existing MarketApi capture path;
+no duplicate `current_space` database column or new migration is needed.
+
+### V38 collision reconciliation (2026-10-22)
+
+Three independently merged branches used V38. Taxation retains V38 and employment
+history is V39. The global namespace was initially renumbered to V40, then
+withdrawn together with V41 before production deployment. Staging must be rebuilt
+from a pre-V40 backup. The migration guard pins these historical exceptions to
+exact source trees and SQL blobs; normal migration history remains immutable.

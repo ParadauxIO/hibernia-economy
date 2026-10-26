@@ -15,7 +15,7 @@ import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.utils.DateUtils;
-import io.paradaux.business.utils.resolvers.FirmName;
+import io.paradaux.business.commands.resolvers.FirmName;
 import org.bukkit.entity.Player;
 
 import java.util.List;
@@ -131,7 +131,7 @@ public class StaffCommands implements CommandHandler {
         message.send(sender, "business.staff.list.header", "firm", firm);
         for (int i = 0; i < employees.size(); i++) {
             FirmEmployee e = employees.get(i);
-            // firm_players is populated lazily on join — staff imported via
+            // economy_players is populated on join (by Treasury) — staff imported via
             // TreasuryIngest whose UUIDs haven't logged in yet have no row.
             // Fall back to the raw UUID rather than crashing the listing.
             String employeeName = players.findByUuid(e.getPlayerUuid())

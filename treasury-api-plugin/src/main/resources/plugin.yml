@@ -1,9 +1,9 @@
 name: TreasuryAPI
 version: '${version}'
 main: io.paradaux.treasuryapi.TreasuryAPI
-api-version: '1.21'
+api-version: '26.3'
 depend: [ Treasury, Business ]
-softdepend: [ LuckPerms ]
+softdepend: [ LuckPerms, Realty ]
 
 commands:
     treasuryapi:
@@ -14,8 +14,8 @@ commands:
 
 permissions:
     treasuryapi.command:
-        description: Access to /treasuryapi
-        default: op
+        description: Access to /treasuryapi (subcommands enforce their own permissions)
+        default: true
 
     # Personal key permissions
     treasuryapi.personal.issue:
@@ -23,9 +23,6 @@ permissions:
         default: true
     treasuryapi.personal.list:
         description: List personal API keys
-        default: true
-    treasuryapi.personal.export:
-        description: Export a personal API key token to a URL
         default: true
     treasuryapi.personal.reissue:
         description: Reissue (rotate) a personal API key
@@ -41,9 +38,6 @@ permissions:
     treasuryapi.business.list:
         description: List business API keys
         default: true
-    treasuryapi.business.export:
-        description: Export a business API key token to a URL
-        default: true
     treasuryapi.business.reissue:
         description: Reissue (rotate) a business API key
         default: true
@@ -53,11 +47,15 @@ permissions:
 
     # Explorer UI access
     treasuryapi.ui.user:
-        description: Grant/revoke explorer roles (admin/government)
+        description: Grant/revoke any configured explorer role (privileged recovery access)
         default: op
     treasuryapi.ui.link:
         description: Link your own Minecraft account to your explorer login
         default: true
     treasuryapi.ui.sync:
         description: Sync your own explorer roles from your in-game ranks
+        default: true
+
+    treasuryapi.ui.resetpassword:
+        description: Reset your own linked web account password
         default: true

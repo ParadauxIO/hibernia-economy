@@ -1,12 +1,23 @@
 package io.paradaux.business.mappers;
 
 import io.paradaux.business.model.Firm;
-import org.apache.ibatis.annotations.*;
-
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 @Mapper
 public interface FirmMapper {
+
+    /**
+     * Serializes creation for one proprietor until the surrounding transaction
+     * commits or rolls back. The upsert also covers players with no firms yet;
+     * locking existing firm rows alone would leave that case unprotected.
+     */
+    @Insert("""
+            INSERT INTO firm_creation_lock (proprietor_uuid_bin)
+            VALUES (uuid_to_bin(#{playerUuid}))
+            ON DUPLICATE KEY UPDATE proprietor_uuid_bin = VALUES(proprietor_uuid_bin)
+            """)
+    void lockCreationForOwner(@Param("playerUuid") String playerUuid);
 
     @Insert("""
             INSERT INTO firm (display_name, proprietor_uuid_bin)
@@ -15,6 +26,7 @@ public interface FirmMapper {
     @Options(useGeneratedKeys = true, keyProperty = "firmId", keyColumn = "firm_id")
     void createFirm(Firm firm);
 
+    /** Archived ownership is the durable refund destination; unchanged-owner metadata remains writable. */
     @Lang(org.apache.ibatis.scripting.xmltags.XMLLanguageDriver.class)
     @Update("""
             <script>
@@ -26,27 +38,46 @@ public interface FirmMapper {
               <if test="hqRegion != null">hq_region = #{hqRegion},</if>
               <if test="defaultAccountId != null">default_account_id = #{defaultAccountId},</if>
               <if test="archived != null">is_archived = #{archived},</if>
-              updated_at = updated_at
+              updated_at = CURRENT_TIMESTAMP
             </set>
             WHERE firm_id = #{firmId}
+              <if test="proprietorUuid != null">
+                AND (is_archived = 0 OR proprietor_uuid_bin = uuid_to_bin(#{proprietorUuid}))
+              </if>
             </script>
             """)
-    void updateFirm(Firm firm);
+    int updateFirm(Firm firm);
 
     /**
-     * Archives a firm and explicitly clears its default_account_id. Used by
-     * {@code disbandFirm}, where the firm's accounts have just been archived
-     * in Treasury and removed from {@code firm_accounts}; leaving the
-     * default_account_id set would point at an archived account.
+     * Archives a firm only if its proprietor still matches the refund snapshot,
+     * and clears its default_account_id before the resumable account drain.
+     * Subsequent ownership changes are forbidden, pinning every resumed refund
+     * to this archived proprietor.
+     *
+     * <p>The {@code AND is_archived = 0} guard makes the transition atomic:
+     * only the first caller to flip the flag sees a non-zero affected-row count,
+     * so two concurrent disbands cannot both proceed to drain the same accounts.
+     * Returns the number of rows updated (1 for the winner, 0 for a loser or an
+     * already-archived firm).
      */
     @Update("""
             UPDATE firm
             SET is_archived = 1,
                 default_account_id = NULL,
-                updated_at = updated_at
+                updated_at = CURRENT_TIMESTAMP
             WHERE firm_id = #{firmId}
+              AND is_archived = 0
+              AND proprietor_uuid_bin = uuid_to_bin(#{expectedOwner})
             """)
-    void archiveFirm(@Param("firmId") int firmId);
+    int archiveFirm(@Param("firmId") int firmId, @Param("expectedOwner") String expectedOwner);
+
+    /** Releases only an archived firm's reservation; active firms cannot be released. */
+    @Update("""
+            UPDATE firm
+            SET name_released = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE firm_id = #{firmId} AND is_archived = 1 AND name_released = 0
+            """)
+    int releaseFirmName(@Param("firmId") int firmId);
 
     @Select("""
             SELECT f.firm_id                     AS firmId,
@@ -86,18 +117,17 @@ public interface FirmMapper {
             ORDER BY firm_id DESC
             LIMIT #{limit} OFFSET #{offset}
             """)
-    List<Firm> listAllFiltered(@Param("limit") int limit,
-                               @Param("offset") int offset,
-                               @Param("includeArchived") boolean includeArchived);
+    List<Firm> listAllFiltered(
+            @Param("limit") int limit, @Param("offset") int offset, @Param("includeArchived") boolean includeArchived);
 
     @Select("""
             SELECT COUNT(*) > 0
             FROM firm
             WHERE display_name = #{firmName}
+              AND is_archived = 0
               AND proprietor_uuid_bin = uuid_to_bin(#{playerUuid})
             """)
-    boolean isProprietorByFirmName(@Param("firmName") String firmName,
-                                   @Param("playerUuid") String playerUuid);
+    boolean isProprietorByFirmName(@Param("firmName") String firmName, @Param("playerUuid") String playerUuid);
 
     @Select("""
             SELECT COUNT(*) > 0
@@ -105,8 +135,7 @@ public interface FirmMapper {
             WHERE firm_id = #{firmId}
               AND proprietor_uuid_bin = uuid_to_bin(#{playerUuid})
             """)
-    boolean isProprietorByFirmId(@Param("firmId") int firmId,
-                                 @Param("playerUuid") String playerUuid);
+    boolean isProprietorByFirmId(@Param("firmId") int firmId, @Param("playerUuid") String playerUuid);
 
     @Select("""
             SELECT COUNT(*)
@@ -120,6 +149,7 @@ public interface FirmMapper {
             SELECT COUNT(1)
             FROM firm
             WHERE display_name = #{name}
+              AND (is_archived = 0 OR name_released = 0)
             """)
     int getFirmsByNameCount(@Param("name") String name);
 
@@ -163,6 +193,7 @@ public interface FirmMapper {
                      updated_at                      AS updatedAt
                 FROM firm
                WHERE display_name = #{name}
+               ORDER BY is_archived ASC, name_released ASC, firm_id DESC
                LIMIT 1
             """)
     Firm getFirmByName(@Param("name") String name);
@@ -182,5 +213,4 @@ public interface FirmMapper {
             ORDER BY firm_id
             """)
     List<Firm> listAllActive();
-
 }

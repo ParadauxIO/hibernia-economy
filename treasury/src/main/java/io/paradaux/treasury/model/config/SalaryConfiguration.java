@@ -1,7 +1,6 @@
 package io.paradaux.treasury.model.config;
 
 import com.google.inject.Inject;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.Treasury;
 import org.bukkit.configuration.ConfigurationSection;
@@ -36,32 +35,52 @@ import java.util.Optional;
  * </pre>
  */
 @Slf4j
-@Getter
 public class SalaryConfiguration {
 
     private static final String DEFAULT_GOV_ACCOUNT = "DCGovernment";
     private static final long DEFAULT_INTERVAL_SECONDS = 900L; // 15 minutes
 
-    // Mutable so {@link #reload()} can refresh them at runtime (Guice singleton —
-    // SalaryService reads enabled/amounts/account live each cycle). Note the
-    // payout INTERVAL is fixed when the timer is scheduled at startup; changing
-    // it needs a restart.
-    private boolean enabled;
-    private String governmentAccount;
-    /** Seconds between payout cycles. */
-    private long intervalSeconds;
-    /** LuckPerms group name (lower-cased) → salary amount. */
-    private Map<String, BigDecimal> amounts;
-    /** Set only via the {@code @Inject} ctor; null for test-factory instances. */
-    private Treasury plugin;
+    /** Immutable values retained by an operation even when a reload publishes newer values. */
+    public record Snapshot(boolean enabled, String governmentAccount, long intervalSeconds, Map<String, BigDecimal> amounts, boolean skipAfk, String afkContextKey, String afkContextValue) {
+        public Snapshot { amounts = Map.copyOf(amounts); }
+
+
+        public Optional<Map.Entry<String, BigDecimal>> highestSalary(Collection<String> groupNames) {
+            Map.Entry<String, BigDecimal> best = null;
+            if (groupNames != null) {
+                for (String g : groupNames) {
+                    if (g == null) continue;
+                    BigDecimal amt = amounts.get(g.toLowerCase(Locale.ROOT));
+                    if (amt != null && amt.signum() > 0
+                            && (best == null || amt.compareTo(best.getValue()) > 0)) {
+                        best = Map.entry(g.toLowerCase(Locale.ROOT), amt);
+                    }
+                }
+            }
+            return Optional.ofNullable(best);
+        }
+        public boolean isEnabled() { return enabled; }
+        public String getGovernmentAccount() { return governmentAccount; }
+        public long getIntervalSeconds() { return intervalSeconds; }
+        public Map<String, BigDecimal> getAmounts() { return amounts; }
+        public boolean isSkipAfk() { return skipAfk; }
+        public String getAfkContextKey() { return afkContextKey; }
+        public String getAfkContextValue() { return afkContextValue; }
+    }
+
+    private volatile Snapshot snapshot;
+    private final Treasury plugin;
+
+    public Snapshot snapshot() { return snapshot; }
 
     private SalaryConfiguration(boolean enabled, String governmentAccount, long intervalSeconds,
                                 Map<String, BigDecimal> amounts) {
-        this.enabled = enabled;
-        this.governmentAccount = (governmentAccount == null || governmentAccount.isBlank())
+        this.plugin = null;
+        governmentAccount = (governmentAccount == null || governmentAccount.isBlank())
                 ? DEFAULT_GOV_ACCOUNT : governmentAccount;
-        this.intervalSeconds = intervalSeconds > 0 ? intervalSeconds : DEFAULT_INTERVAL_SECONDS;
-        this.amounts = normalise(amounts);
+        intervalSeconds = intervalSeconds > 0 ? intervalSeconds : DEFAULT_INTERVAL_SECONDS;
+        amounts = normalise(amounts);
+        this.snapshot = new Snapshot(enabled, governmentAccount, intervalSeconds, amounts, true, "afk", "true");
     }
 
     /** Test-only factory: bypasses Bukkit config parsing. */
@@ -73,30 +92,59 @@ public class SalaryConfiguration {
     @Inject
     public SalaryConfiguration(Treasury plugin) {
         this.plugin = plugin;
-        load();
+        snapshot = read(plugin.getConfig(), true);
     }
 
     /** Re-reads from the (already-reloaded) config. No-op for test instances. */
     public void reload() {
-        if (plugin != null) load();
+        if (plugin != null) snapshot = prepareReload(plugin.getConfig());
     }
 
-    private void load() {
-        FileConfiguration cfg = plugin.getConfig();
+    /** Parse completely before publishing; exceptions leave the live snapshot untouched. */
+    public Snapshot prepareReload(FileConfiguration cfg) {
+        ReloadValidation.section(cfg, "salaries");
+        ReloadValidation.scalar(cfg, "salaries.enabled", Boolean.class);
+        ReloadValidation.scalar(cfg, "salaries.government-account", String.class);
+        ReloadValidation.scalar(cfg, "salaries.skip-afk", Boolean.class);
+        ReloadValidation.scalar(cfg, "salaries.afk-context-key", String.class);
+        ReloadValidation.scalar(cfg, "salaries.afk-context-value", String.class);
+        ReloadValidation.entries(cfg, "salaries.amount", false, false);
+        return read(cfg, false);
+    }
 
-        this.enabled = cfg.getBoolean("salaries.enabled", false);
+    public void publish(Snapshot replacement) {
+        snapshot = java.util.Objects.requireNonNull(replacement);
+    }
+
+    private Snapshot read(FileConfiguration cfg, boolean startup) {
+
+        boolean enabled = cfg.getBoolean("salaries.enabled", false);
 
         String gov = cfg.getString("salaries.government-account", DEFAULT_GOV_ACCOUNT);
-        this.governmentAccount = (gov == null || gov.isBlank()) ? DEFAULT_GOV_ACCOUNT : gov;
+        String governmentAccount = (gov == null || gov.isBlank()) ? DEFAULT_GOV_ACCOUNT : gov;
 
         long iv = cfg.getLong("salaries.interval", DEFAULT_INTERVAL_SECONDS);
-        this.intervalSeconds = iv > 0 ? iv : DEFAULT_INTERVAL_SECONDS;
+        long configuredInterval = iv > 0 ? iv : DEFAULT_INTERVAL_SECONDS;
+        long intervalSeconds = startup ? configuredInterval : snapshot.intervalSeconds();
+        if (!startup && configuredInterval != intervalSeconds) {
+            log.warn("salaries.interval changed from {}s to {}s — ignored until restart; payouts continue every {}s.",
+                    intervalSeconds, configuredInterval, intervalSeconds);
+        }
 
         Map<String, BigDecimal> parsed = new HashMap<>();
         ConfigurationSection sec = cfg.getConfigurationSection("salaries.amount");
         if (sec != null) {
             for (String key : sec.getKeys(false)) {
-                BigDecimal amt = BigDecimal.valueOf(sec.getDouble(key, 0));
+                // Parse from the string form (not getDouble) so salary amounts
+                // carry no IEEE-754 error into the ledger; skip malformed values.
+                String raw = sec.getString(key, "0");
+                BigDecimal amt;
+                try {
+                    amt = new BigDecimal(raw == null ? "0" : raw.trim());
+                } catch (NumberFormatException e) {
+                    log.warn("Invalid salary for group '{}': '{}' — skipping", key, raw);
+                    continue;
+                }
                 if (amt.signum() < 0) {
                     log.warn("Negative salary for group '{}' ({}) — skipping", key, amt);
                     continue;
@@ -104,12 +152,19 @@ public class SalaryConfiguration {
                 parsed.put(key.toLowerCase(Locale.ROOT), amt);
             }
         }
-        this.amounts = normalise(parsed);
+        Map<String, BigDecimal> amounts = normalise(parsed);
+
+        boolean skipAfk = cfg.getBoolean("salaries.skip-afk", true);
+        String afkKey = cfg.getString("salaries.afk-context-key", "afk");
+        String afkContextKey = (afkKey == null || afkKey.isBlank()) ? "afk" : afkKey;
+        String afkVal = cfg.getString("salaries.afk-context-value", "true");
+        String afkContextValue = (afkVal == null || afkVal.isBlank()) ? "true" : afkVal;
 
         if (enabled) {
-            log.info("Government salaries enabled: {} group(s), every {}s, from {}",
-                    amounts.size(), intervalSeconds, governmentAccount);
+            log.info("Government salaries enabled: {} group(s), every {}s, from {} (skip-afk={})",
+                    amounts.size(), intervalSeconds, governmentAccount, skipAfk);
         }
+        return new Snapshot(enabled, governmentAccount, intervalSeconds, amounts, skipAfk, afkContextKey, afkContextValue);
     }
 
     private static Map<String, BigDecimal> normalise(Map<String, BigDecimal> in) {
@@ -129,17 +184,13 @@ public class SalaryConfiguration {
      * @return an entry of (matched lower-cased group name, amount), or empty
      */
     public Optional<Map.Entry<String, BigDecimal>> highestSalary(Collection<String> groupNames) {
-        Map.Entry<String, BigDecimal> best = null;
-        if (groupNames != null) {
-            for (String g : groupNames) {
-                if (g == null) continue;
-                BigDecimal amt = amounts.get(g.toLowerCase(Locale.ROOT));
-                if (amt != null && amt.signum() > 0
-                        && (best == null || amt.compareTo(best.getValue()) > 0)) {
-                    best = Map.entry(g.toLowerCase(Locale.ROOT), amt);
-                }
-            }
-        }
-        return Optional.ofNullable(best);
+        return snapshot.highestSalary(groupNames);
     }
+    public boolean isEnabled() { return snapshot.enabled(); }
+    public String getGovernmentAccount() { return snapshot.governmentAccount(); }
+    public long getIntervalSeconds() { return snapshot.intervalSeconds(); }
+    public Map<String, BigDecimal> getAmounts() { return snapshot.amounts(); }
+    public boolean isSkipAfk() { return snapshot.skipAfk(); }
+    public String getAfkContextKey() { return snapshot.afkContextKey(); }
+    public String getAfkContextValue() { return snapshot.afkContextValue(); }
 }

@@ -43,6 +43,16 @@ class SsrfValidatorTest {
     }
 
     @Test
+    void rejectsNonStandardPort() {
+        assertThatThrownBy(() -> SsrfValidator.validate("https://93.184.216.34:22/x"))
+                .as("off-port reaches non-HTTP internal services")
+                .isInstanceOf(ApiException.class);
+        // The default port and an explicit :443 are both fine.
+        assertThat(SsrfValidator.validate("https://93.184.216.34/x").getPort()).isEqualTo(-1);
+        assertThat(SsrfValidator.validate("https://93.184.216.34:443/x").getPort()).isEqualTo(443);
+    }
+
+    @Test
     void rejectsInternalLiteralIps() {
         for (String url : new String[]{
                 "https://127.0.0.1/x",        // loopback

@@ -1,6 +1,9 @@
 package io.paradaux.treasuryapi.commands;
 
 import com.google.inject.Inject;
+import com.google.inject.Provider;
+import io.paradaux.hibernia.framework.commander.CommandManager;
+import io.paradaux.hibernia.framework.commander.HelpGenerator;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
@@ -12,18 +15,42 @@ import org.bukkit.entity.Player;
 @Permission("treasuryapi.command")
 public class TreasuryAPICommand implements CommandHandler {
 
-    @Inject private TreasuryAPI plugin;
-    @Inject private Message message;
-    @Inject private PersonalKeyHandler personalHandler;
-    @Inject private BusinessKeyHandler businessHandler;
-    @Inject private UiAccessHandler uiHandler;
+    @Inject
+    private TreasuryAPI plugin;
+
+    @Inject
+    private Message message;
+    // Provider breaks the construction cycle: CommandManager injects the
+    // Set<CommandHandler> (which includes this class), and HelpGenerator takes a
+    // CommandManager — so @Inject-ing HelpGenerator directly is circular and Guice
+    // can't proxy the concrete CommandManager. Mirrors the Treasury/Business pattern.
+    @Inject
+    private Provider<CommandManager> commandManager;
+
+    @Inject
+    private PersonalKeyHandler personalHandler;
+
+    @Inject
+    private BusinessKeyHandler businessHandler;
+
+    @Inject
+    private UiAccessHandler uiHandler;
 
     // /treasuryapi — plugin info
     @Route("")
     @Description("Show TreasuryAPI plugin information")
     public void info(@Sender CommandSender sender) {
-        message.send(sender, "treasuryapi.info",
-                "version", plugin.getDescription().getVersion());
+        message.send(
+                sender, "treasuryapi.info", "version", plugin.getDescription().getVersion());
+    }
+
+    // /treasuryapi help [page] — paginated, permission-filtered help built from the
+    // registered routes (each carries its @Description), so it stays in sync with the
+    // real commands instead of being hand-maintained.
+    @Route("help [page]")
+    @Description("Show command help")
+    public void help(@Sender CommandSender sender, @OptionalArg(value = "page", defaultValue = "1") int page) {
+        sender.sendMessage(new HelpGenerator(commandManager.get()).render(sender, "treasuryapi", page));
     }
 
     // ---- Personal ----
@@ -44,21 +71,11 @@ public class TreasuryAPICommand implements CommandHandler {
         personalHandler.doList(sender);
     }
 
-    @Route("personal export <keyId>")
-    @Permission("treasuryapi.personal.export")
-    @Async
-    @Description("Export a personal API key token to a shareable URL")
-    public void personalExport(@Sender Player sender,
-                               @Arg("keyId") int keyId) {
-        personalHandler.doExport(sender, keyId);
-    }
-
     @Route("personal reissue <keyId>")
     @Permission("treasuryapi.personal.reissue")
     @Async
     @Description("Reissue a personal API key (rotates the token, valid for another 180 days)")
-    public void personalReissue(@Sender Player sender,
-                                @Arg("keyId") int keyId) {
+    public void personalReissue(@Sender Player sender, @Arg("keyId") int keyId) {
         personalHandler.doReissue(sender, keyId);
     }
 
@@ -66,8 +83,7 @@ public class TreasuryAPICommand implements CommandHandler {
     @Permission("treasuryapi.personal.revoke")
     @Async
     @Description("Permanently revoke a personal API key")
-    public void personalRevoke(@Sender Player sender,
-                               @Arg("keyId") int keyId) {
+    public void personalRevoke(@Sender Player sender, @Arg("keyId") int keyId) {
         personalHandler.doRevoke(sender, keyId);
     }
 
@@ -77,9 +93,17 @@ public class TreasuryAPICommand implements CommandHandler {
     @Permission("treasuryapi.business.issue")
     @Async
     @Description("Issue a business-scoped API key for an entire firm (proprietors only)")
-    public void businessIssue(@Sender Player sender,
-                              @Arg("firmName") String firmName) {
+    public void businessIssue(@Sender Player sender, @Arg("firmName") String firmName) {
         businessHandler.doIssue(sender, firmName);
+    }
+
+    @Route("business issue <firmName> <accountId>")
+    @Permission("treasuryapi.business.issue")
+    @Async
+    @Description("Issue an API key restricted to one business account (proprietors only)")
+    public void businessIssueAccount(
+            @Sender Player sender, @Arg("firmName") String firmName, @Arg("accountId") int accountId) {
+        businessHandler.doIssue(sender, firmName, accountId);
     }
 
     @Route("business list")
@@ -98,21 +122,11 @@ public class TreasuryAPICommand implements CommandHandler {
         businessHandler.doListAccess(sender);
     }
 
-    @Route("business export <keyId>")
-    @Permission("treasuryapi.business.export")
-    @Async
-    @Description("Export a business API key token to a shareable URL")
-    public void businessExport(@Sender Player sender,
-                               @Arg("keyId") int keyId) {
-        businessHandler.doExport(sender, keyId);
-    }
-
     @Route("business reissue <keyId>")
     @Permission("treasuryapi.business.reissue")
     @Async
     @Description("Reissue a business API key (rotates the token, valid for another 180 days)")
-    public void businessReissue(@Sender Player sender,
-                                @Arg("keyId") int keyId) {
+    public void businessReissue(@Sender Player sender, @Arg("keyId") int keyId) {
         businessHandler.doReissue(sender, keyId);
     }
 
@@ -120,8 +134,7 @@ public class TreasuryAPICommand implements CommandHandler {
     @Permission("treasuryapi.business.revoke")
     @Async
     @Description("Permanently revoke a business API key")
-    public void businessRevoke(@Sender Player sender,
-                               @Arg("keyId") int keyId) {
+    public void businessRevoke(@Sender Player sender, @Arg("keyId") int keyId) {
         businessHandler.doRevoke(sender, keyId);
     }
 
@@ -130,10 +143,8 @@ public class TreasuryAPICommand implements CommandHandler {
     @Route("ui user add <role> <player>")
     @Permission("treasuryapi.ui.user")
     @Async
-    @Description("Grant an explorer role (admin|government) to a player")
-    public void uiUserAdd(@Sender CommandSender sender,
-                          @Arg("role") String role,
-                          @Arg("player") String player) {
+    @Description("Grant a configured explorer role to a player")
+    public void uiUserAdd(@Sender CommandSender sender, @Arg("role") String role, @Arg("player") String player) {
         uiHandler.doUserAdd(sender, role, player);
     }
 
@@ -141,9 +152,7 @@ public class TreasuryAPICommand implements CommandHandler {
     @Permission("treasuryapi.ui.user")
     @Async
     @Description("Revoke an explorer role from a player")
-    public void uiUserRemove(@Sender CommandSender sender,
-                             @Arg("role") String role,
-                             @Arg("player") String player) {
+    public void uiUserRemove(@Sender CommandSender sender, @Arg("role") String role, @Arg("player") String player) {
         uiHandler.doUserRemove(sender, role, player);
     }
 
@@ -151,8 +160,7 @@ public class TreasuryAPICommand implements CommandHandler {
     @Permission("treasuryapi.ui.user")
     @Async
     @Description("Show a player's explorer roles")
-    public void uiUserList(@Sender CommandSender sender,
-                           @Arg("player") String player) {
+    public void uiUserList(@Sender CommandSender sender, @Arg("player") String player) {
         uiHandler.doUserList(sender, player);
     }
 
@@ -160,9 +168,23 @@ public class TreasuryAPICommand implements CommandHandler {
     @Permission("treasuryapi.ui.link")
     @Async
     @Description("Link your Minecraft account to your explorer login using a code from the web UI")
-    public void uiLink(@Sender Player sender,
-                       @Arg("code") String code) {
+    public void uiLink(@Sender Player sender, @Arg("code") String code) {
         uiHandler.doLink(sender, code);
+    }
+
+    @Route("ui resetpassword")
+    @Permission("treasuryapi.ui.resetpassword")
+    @Description("Reset your linked web account password without email")
+    public void uiResetPassword(@Sender Player sender) {
+        uiHandler.doResetPassword(sender, false);
+    }
+
+    @Route("ui resetpassword confirm")
+    @Permission("treasuryapi.ui.resetpassword")
+    @Async
+    @Description("Confirm replacing your linked web account password")
+    public void uiResetPasswordConfirm(@Sender Player sender) {
+        uiHandler.doResetPassword(sender, true);
     }
 
     @Route("ui sync")

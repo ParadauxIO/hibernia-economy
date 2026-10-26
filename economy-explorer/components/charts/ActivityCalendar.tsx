@@ -29,14 +29,14 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
 
   // 365 days ending today.
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
   const days: { iso: string; count: number; col: number; row: number }[] = [];
   for (let i = 364; i >= 0; i--) {
     const d = new Date(today);
-    d.setDate(today.getDate() - i);
+    d.setUTCDate(today.getUTCDate() - i);
     const iso = d.toISOString().slice(0, 10);
     const col = Math.floor((364 - i) / 7);
-    const row = (d.getDay() + 6) % 7; // Mon=0, Sun=6
+    const row = (d.getUTCDay() + 6) % 7; // Mon=0, Sun=6
     days.push({ iso, count: map.get(iso) ?? 0, col, row });
   }
 
@@ -52,11 +52,11 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
     if (norm < 0.75) return 3;
     return 4;
   }
-  const colors = ['var(--bg-soft)', 'var(--c-1)', 'var(--c-1)', 'var(--c-1)', 'var(--c-1)'];
-  const opacities = [1, 0.25, 0.5, 0.75, 1];
+  // The shared sequential scale: --seq-0 is empty, --seq-2…5 are increasing activity.
+  const colors = ['var(--seq-0)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)'];
 
   const fmtDate = (iso: string) =>
-    new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    new Date(iso + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
 
   // The horizontal-scroll wrapper (overflowX: auto) also clips vertically —
   // CSS resolves the cross-axis `visible` to `auto` — so a tooltip rendered
@@ -65,7 +65,8 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
   // upward; offset its x by the wrapper's scrollLeft to track the visible cell.
   return (
     <div className="activity-calendar" style={{ position: 'relative', maxWidth: '100%' }}>
-      <div ref={scrollRef} style={{ overflowX: 'auto', maxWidth: '100%' }}>
+      {/* Scrolls horizontally on narrow screens: focusable so keyboards can too. */}
+      <div ref={scrollRef} role="region" aria-label={label} tabIndex={0} className="scroll-region" style={{ overflowX: 'auto', maxWidth: '100%' }}>
         <svg width={width} height={height} role="img" aria-label={label} style={{ minWidth: width, display: 'block' }}>
           {days.map((d) => {
             const lv = level(d.count);
@@ -78,7 +79,6 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
                 height={CELL}
                 rx={2}
                 fill={colors[lv]}
-                fillOpacity={opacities[lv]}
                 onMouseEnter={() =>
                   setHover({
                     iso: d.iso,
@@ -95,6 +95,7 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
           })}
         </svg>
       </div>
+      <p className="chart-subtitle">Daily activity in UTC.</p>
       {hover && (
         <div
           className="tooltip"

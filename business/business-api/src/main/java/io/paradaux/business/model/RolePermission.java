@@ -1,5 +1,7 @@
 package io.paradaux.business.model;
 
+import java.util.Locale;
+
 public enum RolePermission {
 
     ADMIN,
@@ -12,7 +14,9 @@ public enum RolePermission {
             throw new IllegalArgumentException("Permission value cannot be null or blank");
         }
 
-        String normalized = value.trim().toUpperCase();
+        // Locale.ROOT: a locale-sensitive toUpperCase() (e.g. Turkish "i" → "İ")
+        // would corrupt the comparison on some servers (ADT-35).
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
 
         // Alias handling for backward compatibility
         if ("CHEST_SHOP".equals(normalized)) {

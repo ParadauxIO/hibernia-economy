@@ -1,13 +1,21 @@
-import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
+import { EntityBadge, MetricCard, MetricRow, Money, PageHeader, Section, When } from '@democracycraft/design-system';
+import { BackLink } from '@democracycraft/design-system/next';
+import { DataTable, type Column } from '@democracycraft/design-system/table';
+import { CsvButton } from '@/components/CsvButton';
+import { Player } from '@/components/Player';
+import { canViewFirmInternals } from '@/lib/auth';
+import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { getFirmHeader, listFirmAccounts, listFirmEmployees } from '@/lib/sql/firm';
-import { fmtAmt, fmtTs } from '@/lib/format';
-import { Player } from '@/components/Player';
-import { CsvButton } from '@/components/CsvButton';
+import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { fmtAmtFull } from '@/lib/format';
+import { buildMetadata } from '@/lib/metadata';
+import { getFirmHeader, listFirmAccounts, listFirmEmployees, type FirmAccountRow, type FirmEmployeeRow } from '@/lib/sql/firm';
+import { AdminGate } from '../../_components/AdminGate';
+import { RouterLink } from '../../_components/table';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,14 +23,26 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Admin · Firm report', description: 'Per-firm financial report.', path: '/admin/firms' });
 }
 
-/** Admin per-firm report (PAR-224): header, accounts + balances + total, employee
- *  roster — read-only, audited, with CSV export. */
+const accountColumns: Column<FirmAccountRow>[] = [
+  { key: 'account', header: 'Account', cell: (a) => <><Link href={`/accounts/${a.account_id}` as Route} prefetch={false}>{a.display_name ?? `#${a.account_id}`}</Link><span className="dt-sub">{` #${a.account_id}`}{a.archived ? ' · archived' : ''}</span></> },
+  { key: 'type', header: 'Type', secondary: true, cell: (a) => <EntityBadge type={a.account_type} /> },
+  { key: 'balance', header: 'Balance', numeric: true, cell: (a) => fmtAmtFull(a.balance) },
+];
+
+const employeeColumns: Column<FirmEmployeeRow>[] = [
+  { key: 'player', header: 'Player', cell: (e) => <Player name={e.player_name} uuid={e.player_uuid} /> },
+  { key: 'role', header: 'Role', cell: (e) => e.role_name },
+  { key: 'joined', header: 'Joined', secondary: true, cell: (e) => <When value={e.joined_at} /> },
+];
+
+/** Admin per-firm report (PAR-224): header, accounts and balances, roster. Read-only, audited, CSV export. */
 export default async function FirmReportPage({ params }: { params: Promise<{ id: string }> }) {
   const viewer = await getViewer();
-  if (viewer.anon || viewer.role !== 'admin') return null; // layout gates
+  if (!hasPermission(viewer, 'firm.admin.read')) return <AdminGate viewer={viewer} title="Firm administration access required" permission="firm.admin.read" />;
   const firmId = Number((await params).id);
   if (!Number.isInteger(firmId) || firmId <= 0) notFound();
 
+  if (!await canViewFirmInternals(firmId, viewer)) return <AdminGate viewer={viewer} title="Firm roster permission required" permission="firm.read.all" />;
   const firm = await getFirmHeader(firmId);
   if (!firm) notFound();
   await auditView(viewer, { path: `/admin/firms/${firmId}`, targetType: 'firm', targetId: String(firmId) });
@@ -31,63 +51,40 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
 
   return (
     <>
-      <div className="page-heading">
-        <h1>{firm.display_name}</h1>
-        <span className="sub">firm report · #{firm.firm_id}{firm.archived ? ' · disbanded' : ''}</span>
-      </div>
-      <p style={{ marginTop: -4 }}>
-        <Link href={'/admin/firms' as Route} className="rowlink small">← back to firms</Link>
-      </p>
+      <BackLink href="/admin/firms" label="Firms" />
+      <PageHeader
+        eyebrow={<><EntityBadge type="BUSINESS" /> <span className="mono">#{firm.firm_id}</span></>}
+        title={firm.display_name}
+        subtitle={firm.archived ? 'Disbanded. Its accounts are archived.' : 'Firm report: its accounts, balances and staff.'}
+      />
 
-      <div className="admin-tool-grid" style={{ marginBottom: 16 }}>
-        <div className="card"><div className="card-title">Total balance</div><div className="mono" style={{ fontSize: 18 }}>{fmtAmt(firm.total_balance)}</div></div>
-        <div className="card"><div className="card-title">Proprietor</div><div><Player name={firm.proprietor_name} uuid={firm.proprietor_uuid} /></div></div>
-        <div className="card"><div className="card-title">HQ region</div><div>{firm.hq_region ?? '—'}</div></div>
-        <div className="card"><div className="card-title">Discord</div><div className="small">{firm.discord_url ?? '—'}</div></div>
-      </div>
+      <MetricRow label="Firm summary">
+        <MetricCard label="Balance across its accounts" value={<Money value={firm.total_balance} currency={CURRENCY_SYMBOL} />} />
+        <MetricCard label="Proprietor" value={<Player name={firm.proprietor_name} uuid={firm.proprietor_uuid} />} />
+        <MetricCard label="HQ region" value={firm.hq_region ?? '—'} />
+        <MetricCard label="Discord" value={firm.discord_url ?? '—'} />
+      </MetricRow>
 
-      <div className="card">
-        <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Accounts ({accounts.length})</span>
-          <CsvButton filename={`firm-${firmId}-accounts.csv`} headers={['Account', 'Name', 'Type', 'Balance', 'Archived']}
-            rows={accounts.map((a) => [a.account_id, a.display_name ?? '', a.account_type, a.balance, a.archived ? 'yes' : 'no'])} />
-        </div>
-        <div className="table-wrap"><table className="data-table">
-          <thead><tr><th>Account</th><th>Name</th><th>Type</th><th className="amount">Balance</th></tr></thead>
-          <tbody>
-            {accounts.length === 0 && <tr><td colSpan={4} className="empty">No live accounts.</td></tr>}
-            {accounts.map((a) => (
-              <tr key={a.account_id}>
-                <td><Link href={`/accounts/${a.account_id}` as Route} className="mono rowlink">#{a.account_id}</Link></td>
-                <td>{a.display_name ?? '—'}{a.archived ? ' (archived)' : ''}</td>
-                <td><span className={`badge badge-${a.account_type}`}>{a.account_type}</span></td>
-                <td className="amount mono">{fmtAmt(a.balance)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </div>
+      <Section
+        id="firm-accounts"
+        title={`Accounts (${accounts.length})`}
+        actions={<CsvButton filename={`firm-${firmId}-accounts.csv`} headers={['Account', 'Name', 'Type', 'Balance', 'Archived']}
+          rows={accounts.map((a) => [a.account_id, a.display_name ?? '', a.account_type, a.balance, a.archived ? 'yes' : 'no'])} />}
+      >
+        <DataTable id="firm-accounts-table" label="Firm accounts" columns={accountColumns} rows={accounts} rowKey={(a) => a.account_id} link={RouterLink}
+          empty={<p className="dt-empty-text">No live accounts.</p>} />
+      </Section>
 
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Employees ({employees.length})</span>
-          <CsvButton filename={`firm-${firmId}-employees.csv`} headers={['Player', 'Role', 'Joined']}
-            rows={employees.map((e) => [e.player_name ?? e.player_uuid ?? '', e.role_name, e.joined_at?.toISOString() ?? ''])} />
-        </div>
-        <div className="table-wrap"><table className="data-table">
-          <thead><tr><th>Player</th><th>Role</th><th className="ts">Joined</th></tr></thead>
-          <tbody>
-            {employees.length === 0 && <tr><td colSpan={3} className="empty">No current employees.</td></tr>}
-            {employees.map((e, i) => (
-              <tr key={i}>
-                <td><Player name={e.player_name} uuid={e.player_uuid} /></td>
-                <td>{e.role_name}</td>
-                <td className="ts">{fmtTs(e.joined_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </div>
+      <Section
+        id="firm-employees"
+        title={`Employees (${employees.length})`}
+        divider
+        actions={<CsvButton filename={`firm-${firmId}-employees.csv`} headers={['Player', 'Role', 'Joined']}
+          rows={employees.map((e) => [e.player_name ?? e.player_uuid ?? '', e.role_name, e.joined_at?.toISOString() ?? ''])} />}
+      >
+        <DataTable id="firm-employees-table" label="Firm employees" columns={employeeColumns} rows={employees}
+          rowKey={(e) => `${e.player_uuid ?? ''}:${e.role_name}`} link={RouterLink} empty={<p className="dt-empty-text">No current employees.</p>} />
+      </Section>
     </>
   );
 }

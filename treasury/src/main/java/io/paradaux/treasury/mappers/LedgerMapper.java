@@ -30,6 +30,25 @@ public interface LedgerMapper {
     })
     LedgerTxn findByDedupKey(@Param("key") byte[] clientKey);
 
+    /**
+     * Locking variant of {@link #findByDedupKey} (FOR UPDATE). Treasury runs at the
+     * MariaDB-default REPEATABLE READ, so after a concurrent identical-dedup-key insert
+     * trips {@code uq_ledger_dedup} a plain re-SELECT would still see the pre-race
+     * snapshot and miss the committed row. A locking read forces the latest committed
+     * version so the racing transaction id can be returned instead of propagating the
+     * duplicate-key error (ADT-73, mirrors AccountMapper's *Locking resolves).
+     */
+    @Select("""
+      SELECT txn_id, trade_time, settlement_time, message,
+             initiator_uuid_bin, authorizer_uuid_bin, plugin_system, client_dedup_key
+        FROM ledger_txns
+       WHERE client_dedup_key = #{key}
+       LIMIT 1
+       FOR UPDATE
+      """)
+    @ResultMap("txnMap")
+    LedgerTxn findByDedupKeyLocking(@Param("key") byte[] clientKey);
+
     @Select("""
       SELECT txn_id, trade_time, settlement_time, message,
              initiator_uuid_bin, authorizer_uuid_bin, plugin_system, client_dedup_key
@@ -116,6 +135,38 @@ public interface LedgerMapper {
        WHERE account_id = #{accountId}
       """)
     int countTransactionsByAccount(@Param("accountId") int accountId);
+
+    // ---- Merged paginated history across several accounts ----
+
+    @Select("""
+      <script>
+      SELECT p.posting_id, p.txn_id, p.account_id, p.amount, p.memo,
+             t.settlement_time, t.message, t.initiator_uuid_bin,
+             t.authorizer_uuid_bin, t.plugin_system
+        FROM ledger_postings p
+        JOIN ledger_txns t ON p.txn_id = t.txn_id
+       WHERE p.account_id IN
+       <foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach>
+       -- posting_id (PK, auto-increment) is globally monotonic, so DESC merges the
+       -- accounts in reverse-chronological order served by idx_postings_account.
+       ORDER BY p.posting_id DESC
+       LIMIT #{limit} OFFSET #{offset}
+      </script>
+      """)
+    @ResultMap("txnEntryMap")
+    List<TransactionEntry> findTransactionsByAccounts(@Param("ids") List<Integer> ids,
+                                                      @Param("limit") int limit,
+                                                      @Param("offset") int offset);
+
+    @Select("""
+      <script>
+      SELECT COUNT(*)
+        FROM ledger_postings
+       WHERE account_id IN
+       <foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach>
+      </script>
+      """)
+    int countTransactionsByAccounts(@Param("ids") List<Integer> ids);
 
     @Select("""
       SELECT p.posting_id, p.txn_id, p.account_id, p.amount, p.memo,

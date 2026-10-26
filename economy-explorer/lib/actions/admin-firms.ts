@@ -1,14 +1,22 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
-import { ForbiddenError } from '@/lib/errors';
-import { auditView } from '@/lib/audit';
+import { getViewer } from '@/lib/auth/viewer';
+import { requirePermission } from '@/lib/auth/access';
+import { auditMutation } from '@/lib/audit';
 import { disbandFirm, renameFirm, updateFirmDetails, type DisbandResult, type FirmResult } from '@/lib/treasury';
-import { findFirmById } from '@/lib/sql/firm';
+import { findFirmById, getFirmHeader, type FirmReportHeader } from '@/lib/sql/firm';
 
-function requireAdmin(viewer: Viewer): asserts viewer is Extract<Viewer, { anon: false }> {
-  if (viewer.anon || viewer.role !== 'admin') throw new ForbiddenError('Admin only.');
+/** The firm fields admin tools change, as recorded before and after. */
+function firmSnapshot(f: FirmReportHeader | null) {
+  return f && {
+    displayName: f.display_name,
+    discordUrl: f.discord_url,
+    hqRegion: f.hq_region,
+    archived: f.archived === 1,
+    proprietorUuid: f.proprietor_uuid,
+    totalBalance: f.total_balance,
+  };
 }
 
 /**
@@ -21,7 +29,7 @@ export async function disbandFirmAction(
   confirmName: string,
 ): Promise<{ ok: boolean; error?: string; result?: DisbandResult }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'firm.disband');
   try {
     const firm = await findFirmById(firmId);
     if (!firm) return { ok: false, error: 'Firm not found.' };
@@ -29,12 +37,11 @@ export async function disbandFirmAction(
     if (confirmName.trim() !== firm.display_name) {
       return { ok: false, error: 'Confirmation text must match the firm name exactly.' };
     }
+    const before = firmSnapshot(await getFirmHeader(firmId));
     const result = await disbandFirm(firmId);
-    await auditView(viewer, {
-      method: 'POST',
-      path: '/admin/firms/disband',
-      targetType: 'firm',
-      targetId: String(firmId),
+    await auditMutation(viewer, {
+      action: 'firm.disband', path: '/admin/firms/disband', targetType: 'firm', targetId: firmId,
+      before, after: { ...firmSnapshot(await getFirmHeader(firmId)), sweep: result.accounts },
     });
     revalidatePath('/admin/firms');
     return { ok: true, result };
@@ -50,16 +57,15 @@ export async function renameFirmAction(
   newName: string,
 ): Promise<{ ok: boolean; error?: string; result?: FirmResult }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'firm.rename');
   try {
     const name = newName.trim();
     if (!name) return { ok: false, error: 'A new name is required.' };
+    const before = firmSnapshot(await getFirmHeader(firmId));
     const result = await renameFirm(firmId, name);
-    await auditView(viewer, {
-      method: 'POST',
-      path: '/admin/firms/rename',
-      targetType: 'firm',
-      targetId: String(firmId),
+    await auditMutation(viewer, {
+      action: 'firm.rename', path: '/admin/firms/rename', targetType: 'firm', targetId: firmId,
+      before: before && { displayName: before.displayName }, after: { displayName: result.displayName },
     });
     revalidatePath('/admin/firms');
     return { ok: true, result };
@@ -74,14 +80,15 @@ export async function updateFirmDetailsAction(
   body: { discordUrl: string | null; hqRegion: string | null },
 ): Promise<{ ok: boolean; error?: string; result?: FirmResult }> {
   const viewer = await getViewer();
-  requireAdmin(viewer);
+  requirePermission(viewer, 'firm.details.update');
   try {
+    const before = firmSnapshot(await getFirmHeader(firmId));
     const result = await updateFirmDetails(firmId, body);
-    await auditView(viewer, {
-      method: 'POST',
-      path: '/admin/firms/details',
-      targetType: 'firm',
-      targetId: String(firmId),
+    const after = firmSnapshot(await getFirmHeader(firmId));
+    await auditMutation(viewer, {
+      action: 'firm.details.update', path: '/admin/firms/details', targetType: 'firm', targetId: firmId,
+      before: before && { discordUrl: before.discordUrl, hqRegion: before.hqRegion },
+      after: after && { discordUrl: after.discordUrl, hqRegion: after.hqRegion },
     });
     revalidatePath('/admin/firms');
     return { ok: true, result };

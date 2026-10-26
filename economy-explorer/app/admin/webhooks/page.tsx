@@ -1,162 +1,98 @@
-import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { z } from 'zod';
+import { PageHeader, Section, Tag, When } from '@democracycraft/design-system';
+import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
+import { FilterBar } from '@/components/FilterBar';
+import { Player } from '@/components/Player';
+import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { PrivacyGate } from '@/components/PrivacyGate';
-import { listAllWebhooks, countAllWebhooks } from '@/lib/sql/webhook';
-import { fmtN, fmtTs } from '@/lib/format';
-import { Player } from '@/components/Player';
-import { Toolbar, FilterSelect } from '@/components/Toolbar';
-import { Pagination } from '@/components/Pagination';
-import { CreateAdminWebhookForm } from './create-admin-webhook-form';
+import { fmtN } from '@/lib/format';
+import { buildMetadata } from '@/lib/metadata';
+import { getAdminWebhooks } from '@/lib/services/admin';
+import type { AdminWebhookRow } from '@/lib/sql/webhook';
+import { adminWebhooksTable } from '@/lib/tables/admin';
+import { parseTableState, tableHref, withPage, withSort, type TableState } from '@/lib/tables/core';
+import { AdminGate } from '../_components/AdminGate';
+import { AdminTableEmpty, RouterLink } from '../_components/table';
 import { AdminWebhookRowActions } from './admin-webhook-row-actions';
+import { CreateAdminWebhookForm } from './create-admin-webhook-form';
 
 export const dynamic = 'force-dynamic';
-
-const SP_SCHEMA = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  q: z.string().trim().min(1).optional(),
-  scope: z.enum(['account', 'firm']).optional(),
-  status: z.enum(['active', 'paused', 'disabled']).optional(),
-  source: z.enum(['explorer', 'apikey']).optional(),
-});
 
 export async function generateMetadata() {
   return buildMetadata({ title: 'Webhooks', description: 'Admin: every transaction-feed webhook on {server}.', path: '/admin/webhooks' });
 }
 
-export default async function AdminWebhooksPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const viewer = await getViewer();
-  if (viewer.anon) return <PrivacyGate kind="login" title="Admin webhooks" hint="Sign in as admin to manage webhooks." />;
-  if (viewer.role !== 'admin') return <PrivacyGate kind="private" title="Admin only" />;
-  await auditView(viewer, { path: '/admin/webhooks', targetType: 'global' });
+const TABLE_ID = 'admin-webhooks-table';
+const PATH = '/admin/webhooks';
 
-  const sp = SP_SCHEMA.safeParse(flatten(await searchParams)).data ?? SP_SCHEMA.parse({});
-  const filters = { q: sp.q ?? null, scope: sp.scope ?? null, status: sp.status ?? null, source: sp.source ?? null };
-  const [rows, total] = await Promise.all([
-    listAllWebhooks(filters, sp.limit, (sp.page - 1) * sp.limit),
-    countAllWebhooks(filters),
-  ]);
-  const totalPages = Math.max(1, Math.ceil(total / sp.limit));
+const columns: Column<AdminWebhookRow>[] = [
+  {
+    key: 'url',
+    header: 'Endpoint',
+    sort: 'id',
+    cell: (h) => <><span className="mono">#{h.id}</span>{' '}<span className="mono">{h.url}</span>{h.isDiscord && <span className="dt-sub"> · Discord embed</span>}</>,
+  },
+  { key: 'owner', header: 'Owner', secondary: true, cell: (h) => <Player name={h.ownerName} uuid={h.ownerUuid} /> },
+  {
+    key: 'scope',
+    header: 'Scope',
+    cell: (h) => (h.scope === 'firm'
+      ? (h.firmName ? <Link href={`/firms/${encodeURIComponent(h.firmName)}` as Route} prefetch={false}>Firm: {h.firmName}</Link> : `Firm #${h.firmId}`)
+      : h.accountId ? <Link href={`/accounts/${h.accountId}` as Route} prefetch={false}>Account: {h.accountName ?? `#${h.accountId}`}</Link> : '—'),
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (h) => (h.active ? <Tag tone="pos">Active</Tag> : <Tag tone={h.disabledAt ? 'neg' : 'neutral'}>{h.disabledAt ? 'Auto-disabled' : 'Paused'}</Tag>),
+  },
+  { key: 'failures', header: 'Failures', sort: 'failures', numeric: true, secondary: true, cell: (h) => fmtN(h.consecutiveFailures) },
+  { key: 'source', header: 'Created through', secondary: true, optional: true, cell: (h) => (h.viaApiKey ? 'API key' : 'Explorer') },
+  { key: 'created', header: 'Created', sort: 'created', sortFirst: 'desc', secondary: true, optional: true, cell: (h) => <When value={h.createdAt} /> },
+  { key: 'actions', header: <span className="sr-only">Actions</span>, label: 'Actions', align: 'end', cell: (h) => <AdminWebhookRowActions id={h.id} active={h.active} url={h.url} /> },
+];
+
+export default async function AdminWebhooksPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const viewer = await getViewer();
+  if (!hasPermission(viewer, 'webhooks.read.all')) return <AdminGate viewer={viewer} title="Webhook access required" permission="webhooks.read.all" />;
+  await auditView(viewer, { path: PATH, targetType: 'global' });
+
+  const state = parseTableState(await searchParams, adminWebhooksTable);
+  const { rows, total } = await getAdminWebhooks(viewer, state);
+  const totalPages = Math.max(1, Math.ceil(total / state.limit));
+  const href = (s: TableState<typeof adminWebhooksTable>) => tableHref(PATH, s, adminWebhooksTable);
 
   return (
     <>
-      <div className="page-heading">
-        <h1>Webhooks</h1>
-        <span className="sub">{fmtN(total)} subscription(s) across all accounts</span>
-      </div>
+      <PageHeader title="Webhooks" subtitle="Every transaction-feed webhook, across all accounts and firms." />
 
-      <div className="card">
-        <div className="card-title">Create webhook for an account</div>
-        <CreateAdminWebhookForm />
-        <p className="muted small" style={{ marginTop: 10, marginBottom: 0 }}>
-          Registers an account-scoped webhook attributed to the account&apos;s owner (they&apos;ll see it under their own
-          webhooks too). The endpoint must be a public <span className="mono">https://</span> URL; the signing secret is
-          shown once. A Discord webhook URL is auto-detected and delivered as a rich embed.
-        </p>
-      </div>
+      {hasPermission(viewer, 'webhooks.create.all') && (
+        <Section
+          id="create-webhook"
+          title="Create a webhook for an account"
+          description="Attributed to the account's owner, who also sees it under their own webhooks. The endpoint must be a public https:// URL; the signing secret is shown once. Discord webhook URLs are delivered as a rich embed."
+        >
+          <CreateAdminWebhookForm />
+        </Section>
+      )}
 
-      <div className="card">
-        <div className="card-title">All webhooks</div>
-        <Toolbar
-          searchPlaceholder="Search URL, owner, account/firm name, or id…"
-          filters={
-            <>
-              <FilterSelect
-                paramKey="scope"
-                ariaLabel="Filter by scope"
-                options={[{ value: '', label: 'All scopes' }, { value: 'account', label: 'Account' }, { value: 'firm', label: 'Firm' }]}
-              />
-              <FilterSelect
-                paramKey="status"
-                ariaLabel="Filter by status"
-                options={[
-                  { value: '', label: 'Any status' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'paused', label: 'Paused' },
-                  { value: 'disabled', label: 'Auto-disabled' },
-                ]}
-              />
-              <FilterSelect
-                paramKey="source"
-                ariaLabel="Filter by source"
-                options={[{ value: '', label: 'Any source' }, { value: 'explorer', label: 'Explorer' }, { value: 'apikey', label: 'API key' }]}
-              />
-            </>
-          }
+      <Section id="all-webhooks" title="All webhooks" divider={hasPermission(viewer, 'webhooks.create.all')}>
+        <FilterBar table={adminWebhooksTable} total={total} columns={columnOptions(columns)} tableId={TABLE_ID} />
+        <DataTable
+          id={TABLE_ID}
+          label="Webhooks"
+          columns={columns}
+          rows={rows}
+          rowKey={(h) => h.id}
+          sort={state.sort}
+          sortHref={(field, dir) => href(withSort(state, field, dir, adminWebhooksTable))}
+          link={RouterLink}
+          density="compact"
+          empty={<AdminTableEmpty pathname={PATH} state={state} table={adminWebhooksTable} />}
         />
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Endpoint</th>
-                <th>Owner</th>
-                <th>Scope</th>
-                <th>Status</th>
-                <th className="amount">Fails</th>
-                <th>Source</th>
-                <th className="ts">Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && <tr><td colSpan={9} className="empty">No webhooks match.</td></tr>}
-              {rows.map((h) => (
-                <tr key={h.id}>
-                  <td className="mono">{h.id}</td>
-                  <td>
-                    <span className="mono">{h.url}</span>
-                    {h.isDiscord && <span className="badge badge-active" style={{ marginLeft: 6 }} title="Deliveries sent as a rich Discord embed">Discord</span>}
-                  </td>
-                  <td><Player name={h.ownerName} uuid={h.ownerUuid} /></td>
-                  <td>
-                    {h.scope === 'firm' ? (
-                      h.firmId && h.firmName ? (
-                        <Link href={`/firms/${encodeURIComponent(h.firmName)}` as Route} className="rowlink" prefetch={false}>Firm: {h.firmName}</Link>
-                      ) : <span className="badge">firm #{h.firmId}</span>
-                    ) : h.accountId ? (
-                      <Link href={`/accounts/${h.accountId}` as Route} className="rowlink" prefetch={false}>Acct: {h.accountName ?? `#${h.accountId}`}</Link>
-                    ) : <span className="muted">—</span>}
-                  </td>
-                  <td>
-                    {h.active
-                      ? <span className="badge badge-active">active</span>
-                      : <span className="badge badge-archived">{h.disabledAt ? 'auto-disabled' : 'paused'}</span>}
-                  </td>
-                  <td className="amount mono">{fmtN(h.consecutiveFailures)}</td>
-                  <td><span className="badge">{h.viaApiKey ? 'API key' : 'explorer'}</span></td>
-                  <td className="ts">{fmtTs(h.createdAt)}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}><AdminWebhookRowActions id={h.id} active={h.active} url={h.url} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <Pagination
-          page={sp.page}
-          totalPages={totalPages}
-          totalItems={total}
-          basePath="/admin/webhooks"
-          searchParams={{ q: sp.q, scope: sp.scope, status: sp.status, source: sp.source, limit: String(sp.limit) }}
-        />
-      </div>
+        <TablePager page={Math.min(state.page, totalPages)} totalPages={totalPages} hrefFor={(p) => href(withPage(state, p))} link={RouterLink} />
+      </Section>
     </>
   );
-}
-
-function flatten(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const o: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === 'string') o[k] = v;
-    else if (Array.isArray(v) && v.length) o[k] = v[0];
-  }
-  return o;
 }

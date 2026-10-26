@@ -1,39 +1,30 @@
 package io.paradaux.treasuryapi.tasks;
 
 import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import io.paradaux.treasuryapi.TreasuryAPI;
 import io.paradaux.treasuryapi.mappers.ExplorerGroupMapper;
-import io.paradaux.treasuryapi.model.ReconciliationDiff;
 import io.paradaux.treasuryapi.model.SyncedGroup;
+import io.paradaux.treasuryapi.services.PlayerGroupSync;
 import net.luckperms.api.LuckPerms;
-import net.luckperms.api.node.Node;
-import net.luckperms.api.node.matcher.NodeMatcher;
-import net.luckperms.api.node.types.InheritanceNode;
-import net.luckperms.api.node.types.PermissionNode;
+import net.luckperms.api.model.user.User;
+import net.luckperms.api.query.QueryOptions;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
-/**
- * Periodically reconciles each explorer group's LuckPerms-sourced membership to
- * match the group's {@code luckperms_node}. Runs on the async scheduler (it does
- * DB + LuckPerms storage lookups). Manual memberships are never touched — only
- * {@code source = 'luckperms'} rows are added/removed.
+/** Synchronizes effective LP roles and account relationships, including offline users.
+ * Both entry points share a lock; failures never publish a partially resolved snapshot.
+ * Stored LP grants expire after one hour if reconciliation cannot refresh them.
  */
-public class GroupReconciliationTask extends BukkitRunnable {
-
+@Singleton
+public class GroupReconciliationTask extends BukkitRunnable implements PlayerGroupSync {
     private final TreasuryAPI plugin;
     private final ExplorerGroupMapper mapper;
     private final LuckPerms luckPerms;
     private final Logger log;
-    // Async timer ticks aren't guaranteed to be non-overlapping; skip a tick if the
-    // previous reconcile is still running rather than interleaving DB writes.
-    private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Inject
     public GroupReconciliationTask(TreasuryAPI plugin, ExplorerGroupMapper mapper, LuckPerms luckPerms) {
@@ -44,102 +35,123 @@ public class GroupReconciliationTask extends BukkitRunnable {
     }
 
     @Override
-    public void run() {
-        if (!running.compareAndSet(false, true)) {
-            log.fine("Skipping reconciliation tick: a previous run is still in progress.");
-            return;
-        }
+    public synchronized void run() {
         try {
-            for (SyncedGroup group : mapper.listSyncedGroups()) {
+            var groups = mapper.listSyncedGroups();
+            var accountGroups = mapper.listAccountGroups();
+            if (groups.isEmpty() && accountGroups.isEmpty()) return;
+            luckPerms.getGroupManager().loadAllGroups().get(15, TimeUnit.SECONDS);
+            luckPerms.getGroupManager().getLoadedGroups().forEach(g -> g.auditTemporaryNodes());
+            Set<UUID> players = new HashSet<>(luckPerms.getUserManager().getUniqueUsers().get(15, TimeUnit.SECONDS));
+            // Include former users so removing their final stored node revokes web access.
+            players.addAll(mapper.listSyncedPlayers());
+            luckPerms.getUserManager().getLoadedUsers().forEach(u -> players.add(u.getUniqueId()));
+            Map<Integer, Set<UUID>> desired = new HashMap<>();
+            Map<String, Set<UUID>> accountDesired = new HashMap<>();
+            groups.forEach(g -> desired.put(g.getGroupId(), new HashSet<>()));
+            accountGroups.forEach(g -> accountDesired.put(g, new HashSet<>()));
+            // Resolve first, publish only after every user loaded successfully.
+            // Unlike searchAll(node), this honours negations, wildcards and inheritance.
+            QueryOptions options = webOptions();
+            for (UUID id : players) {
+                User user = loadUser(id);
                 try {
-                    apply(group.getGroupId(), resolveMembers(group.getLuckpermsNode()));
-                } catch (Exception e) {
-                    log.warning("Reconciliation of group " + group.getGroupId()
-                            + " (node '" + group.getLuckpermsNode() + "') failed: " + e.getMessage());
+                    for (SyncedGroup group : groups) {
+                        if (matches(user, group.getLuckpermsNode(), options)) desired.get(group.getGroupId()).add(id);
+                    }
+                    for (String group : accountGroups) {
+                        if (matches(user, "group." + group, options)) accountDesired.get(group).add(id);
+                    }
+                } finally {
+                    luckPerms.getUserManager().cleanupUser(user);
                 }
             }
+            for (SyncedGroup group : groups) {
+                for (UUID id : desired.get(group.getGroupId())) {
+                    mapper.refreshLuckpermsMember(group.getGroupId(), id, group.getLuckpermsNode());
+                }
+                for (UUID id : mapper.listLuckpermsMemberUuids(group.getGroupId())) {
+                    if (!desired.get(group.getGroupId()).contains(id)) mapper.removeLuckpermsMember(group.getGroupId(), id);
+                }
+            }
+            for (String group : accountGroups) {
+                for (UUID id : accountDesired.get(group)) mapper.refreshAccountGroupMember(group, id);
+                for (UUID id : mapper.listAccountGroupMembers(group)) {
+                    if (!accountDesired.get(group).contains(id)) mapper.removeAccountGroupMember(group, id);
+                }
+            }
+            mapper.removeUnusedAccountGroups();
+        } catch (Exception e) {
+            log.warning("Explorer LP reconciliation failed (unrefreshed grants expire): " + e.getMessage());
+        }
+    }
+
+    @Override
+    public synchronized void reconcilePlayer(UUID playerId) {
+        User user = null;
+        try {
+            luckPerms.getGroupManager().loadAllGroups().get(15, TimeUnit.SECONDS);
+            luckPerms.getGroupManager().getLoadedGroups().forEach(g -> g.auditTemporaryNodes());
+            user = loadUser(playerId);
+            QueryOptions options = webOptions();
+            var groups = mapper.listSyncedGroups();
+            var accountGroups = mapper.listAccountGroups();
+            Set<Integer> desired = new HashSet<>();
+            Set<String> accountDesired = new HashSet<>();
+            // Self-sync must also finish resolution before publishing any changes.
+            for (SyncedGroup group : groups) {
+                if (matches(user, group.getLuckpermsNode(), options)) desired.add(group.getGroupId());
+            }
+            for (String group : accountGroups) {
+                if (matches(user, "group." + group, options)) accountDesired.add(group);
+            }
+            for (SyncedGroup group : groups) {
+                if (desired.contains(group.getGroupId())) {
+                    mapper.refreshLuckpermsMember(group.getGroupId(), playerId, group.getLuckpermsNode());
+                } else mapper.removeLuckpermsMember(group.getGroupId(), playerId);
+            }
+            for (String group : accountGroups) {
+                if (accountDesired.contains(group)) mapper.refreshAccountGroupMember(group, playerId);
+                else mapper.removeAccountGroupMember(group, playerId);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("Explorer LP self-sync failed for " + playerId, e);
         } finally {
-            running.set(false);
+            if (user != null) luckPerms.getUserManager().cleanupUser(user);
         }
     }
 
-    /** Bring the group's 'luckperms' membership in line with {@code desired}. */
-    private void apply(int groupId, Set<UUID> desired) {
-        Set<UUID> current = new HashSet<>(mapper.listLuckpermsMemberUuids(groupId));
-        // Guard against a degraded/misconfigured LuckPerms resolving to zero members,
-        // which would otherwise mass-revoke a whole group's synced access in one tick.
-        // A node legitimately emptying is rare; refusing to prune on an empty result is
-        // the safe failure mode (briefly over-grant, never mass-revoke).
-        if (desired.isEmpty() && !current.isEmpty()) {
-            log.warning("Reconciliation of explorer group " + groupId
-                    + " skipped removals: node resolved to zero members while "
-                    + current.size() + " are currently synced (treating as a transient/empty result).");
-            return;
-        }
-        ReconciliationDiff.Result d = ReconciliationDiff.of(desired, current);
-        for (UUID u : d.toAdd()) mapper.addLuckpermsMember(groupId, u);
-        for (UUID u : d.toRemove()) mapper.removeLuckpermsMember(groupId, u);
-        if (!d.toAdd().isEmpty() || !d.toRemove().isEmpty()) {
-            log.info("Reconciled explorer group " + groupId + ": +" + d.toAdd().size()
-                    + " -" + d.toRemove().size() + " members");
-        }
+    private User loadUser(UUID id) throws Exception {
+        User user = luckPerms.getUserManager().loadUser(id).get(15, TimeUnit.SECONDS);
+        if (user == null) throw new IllegalStateException("LP returned no user for " + id);
+        user.auditTemporaryNodes();
+        return user;
     }
 
-    /**
-     * Reconcile a single player's {@code source='luckperms'} memberships across every
-     * synced group — used by the on-demand self-sync command so a player's freshly
-     * granted in-game ranks reflect in the explorer immediately instead of waiting for
-     * the cron tick. Touches only this player's luckperms rows; manual grants and other
-     * players are untouched. Carries the same empty-result guard as the cron (an empty
-     * resolve for a group is treated as transient and never prunes the player).
-     */
-    public void reconcilePlayer(UUID playerId) {
-        for (SyncedGroup group : mapper.listSyncedGroups()) {
-            try {
-                Set<UUID> members = resolveMembers(group.getLuckpermsNode());
-                if (members.isEmpty()) {
-                    continue; // degraded/empty result — don't revoke on a transient miss
-                }
-                boolean shouldBeMember = members.contains(playerId);
-                boolean isMember = mapper.listLuckpermsMemberUuids(group.getGroupId()).contains(playerId);
-                if (shouldBeMember && !isMember) {
-                    mapper.addLuckpermsMember(group.getGroupId(), playerId);
-                } else if (!shouldBeMember && isMember) {
-                    mapper.removeLuckpermsMember(group.getGroupId(), playerId);
-                }
-            } catch (Exception e) {
-                log.warning("Self-sync of group " + group.getGroupId() + " for " + playerId
-                        + " failed: " + e.getMessage());
-            }
-        }
+    private QueryOptions webOptions() {
+        // Stable server context for online AND offline users. Never merge grants
+        // from other servers/worlds as nonContextual() would.
+        return luckPerms.getContextManager().getStaticQueryOptions();
     }
 
-    /** All players (offline included) carrying the configured node. */
-    private Set<UUID> resolveMembers(String node) throws Exception {
-        // Bound the LuckPerms storage lookup so a stalled backend can't pin this async
-        // worker indefinitely; a timeout surfaces to run()'s per-group catch (group skipped).
-        return luckPerms.getUserManager().searchAll(matcherFor(node))
-                .get(15, TimeUnit.SECONDS).keySet();
+    static boolean matches(User user, String node, QueryOptions options) {
+        String key = nodeKey(node);
+        if (key.startsWith("group.")) {
+            String name = key.substring(6);
+            return user.getInheritedGroups(options).stream().anyMatch(g -> g.getName().equalsIgnoreCase(name));
+        }
+        return user.getCachedData().getPermissionData(options).checkPermission(key).asBoolean();
     }
 
-    /**
-     * Interpret the configured node: a bare name or {@code group.<name>} is a
-     * LuckPerms group (inheritance node); anything else containing a dot is a
-     * raw permission node.
-     */
-    static NodeMatcher<? extends Node> matcherFor(String node) {
-        if (node.startsWith("group.")) {
-            return NodeMatcher.key(InheritanceNode.builder(node.substring("group.".length())).build());
-        }
-        if (node.indexOf('.') < 0) {
-            return NodeMatcher.key(InheritanceNode.builder(node).build());
-        }
-        return NodeMatcher.key(PermissionNode.builder(node).build());
+    static String nodeKey(String node) {
+        String key = node.trim().toLowerCase(Locale.ROOT);
+        if (key.isEmpty()) throw new IllegalArgumentException("Empty LP node");
+        return key.indexOf('.') < 0 ? "group." + key : key;
     }
 
-    /** Schedule the recurring async reconciliation. */
     public void schedule(long intervalSeconds) {
-        long periodTicks = Math.max(1L, intervalSeconds * 20L);
-        runTaskTimerAsynchronously(plugin, periodTicks, periodTicks);
+        // Keep refresh within the one-hour DB lease even with old configuration.
+        long periodTicks = Math.max(1L, Math.min(intervalSeconds, 1800L)) * 20L;
+        runTaskTimerAsynchronously(plugin, 1L, periodTicks);
     }
 }

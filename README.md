@@ -55,9 +55,14 @@ each other's database.
    HTTP clients ─▶ treasury-rest-api ────▶│  shared MariaDB                  │
                    (keys via              │  schema owned by economy-flyway  │
                     treasury-api-plugin)  └──────────────────────────────────┘
-                                                              │ (read-only)
+                                                              │ reads economy data*
    browsers ─────▶ economy-explorer (Next.js) ───────────────┘
 ```
+
+> \* The explorer never writes the ledger/balances/accounts, but it is not
+> strictly read-only over the whole DB — it writes a few control tables
+> (webhooks, key revocation, rate-limit overrides) directly today. See
+> [`wiki/architecture.md`](wiki/architecture.md#the-read-side).
 
 The public APIs live in dedicated `*-api` subprojects (`treasury-api`,
 `business-api`) so downstream code depends on a stable surface, not the plugin
@@ -73,8 +78,9 @@ internals.
 | **`business/business-api/`** | Library jar | The public Business API (`FirmApi`, `StaffApi`, `RolePermission`, …). Published as `io.paradaux:business-api`. |
 | **`treasury-api-plugin/`** | Paper plugin | Issues and manages **JWT API keys** that authenticate callers of the REST API. (Not the same as the `treasury-api` jar.) |
 | **`treasury-rest-api/`** | Spring Boot service | A REST/HTTP surface over the ledger for tooling and integrations, with API-key auth and rate limiting. Ships as a Docker image. |
-| **`economy-flyway/`** | Flyway migrations | The **authoritative shared database schema**. All schema changes are versioned migrations here; deploys run through gated workflows. |
-| **`chestshop/`** | Paper plugin (fork) | Sign-based automated shops, integrated with Treasury and Business. A vendored fork of ChestShop-3, built as a single Gradle module against the Paper 1.21.11 API (the old per-server-version adapter modules were folded into the core). |
+| **`economy-flyway/`** | Flyway migrations | The **authoritative shared database schema**. All schema changes are versioned migrations here; Treasury bundles and applies them before economy startup. |
+| **`common/`** | Library jar | Framework-free shared kernel used by the MariaDB-writing modules: `UuidBin` (UUID↔BINARY(16)), `JwtKeys` (the single source of the mint/verify HMAC key derivation), `DataSourceProvider`, `BalanceTaxBrackets`. |
+| **`chestshop/`** | Paper plugin (fork) | Sign-based automated shops, integrated with Treasury and Business. A vendored fork of ChestShop-3, built as a single Gradle module against the Paper 26.3 API (the old per-server-version adapter modules were folded into the core). |
 | **`economy-explorer/`** | Next.js app | The public, read-side web explorer (balances, prices, money flow) **and** the player/admin documentation site served at `/docs`. |
 | **`realty/`** | Paper plugin *(submodule)* | Property and land: buying, renting, offers, and auctions. Maintained upstream; consumed here. |
 | **`hibernia-framework/`** | Library *(submodule)* | The shared command (Brigadier-based `@Command`), type-safe configuration, and i18n framework the Paper plugins are built on. Published as `io.paradaux:hibernia-framework`. |
@@ -94,7 +100,8 @@ hibernia-economy/
 ├── treasury-api-plugin/       # JWT API-key issuer
 ├── treasury-rest-api/         # Spring Boot REST service (Dockerized)
 ├── economy-flyway/            # the shared database schema (Flyway migrations)
-├── chestshop/                 #   plugin/  (sign shops; shades to ChestShop.jar)
+├── common/                    # framework-free shared kernel (UuidBin, JwtKeys, DataSourceProvider)
+├── chestshop/                 # sign shops — single module, shades to chestshop-<version>.jar
 ├── economy-explorer/          # Next.js explorer + /docs user guide (npm, not Gradle)
 └── .github/workflows/         # CI for every component (build, test, publish, deploy)
 ```
@@ -116,7 +123,7 @@ There are two audiences, two doc sets:
 
 ### Prerequisites
 
-- **JDK 21** (Temurin recommended). The Gradle wrapper is included — you do **not**
+- **JDK 25** (Temurin recommended). The Gradle wrapper is included — you do **not**
   need a system Gradle.
 - **Node.js 22 + npm** — only for `economy-explorer`.
 - **MariaDB 10.11+ / MySQL** — to run the services, or for full integration tests.
@@ -146,8 +153,11 @@ npm ci
 npm run dev        # http://localhost:3000  (docs at /docs)
 ```
 
-Copy `economy-explorer/.env.example` to `.env` and fill in the database/Redis
-settings before running against real data.
+Copy `economy-explorer/.env.example` to `.env` and fill in the database settings
+before running against real data. Every variable the app reads is listed there,
+with the optional ones commented out next to their defaults. The REST API and the
+migrations have the same kind of file: `treasury-rest-api/.env.example` and
+`economy-flyway/.env.example`.
 
 ## Building the plugins
 
@@ -159,8 +169,8 @@ Everything is one Gradle build, so you can build any artifact from the repo root
 ./gradlew :business:shadowJar
 ./gradlew :treasury-api-plugin:shadowJar
 
-# ChestShop  ->  chestshop/plugin/build/libs/ChestShop.jar
-./gradlew :chestshop:plugin:shadowJar
+# ChestShop  ->  chestshop/build/libs/chestshop-<version>.jar
+./gradlew :chestshop:shadowJar
 
 # REST API (Spring Boot)  ->  treasury-rest-api/build/libs/
 ./gradlew :treasury-rest-api:bootJar

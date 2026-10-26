@@ -1,87 +1,62 @@
-import { buildMetadata } from '@/lib/metadata';
-import Link from 'next/link';
-import type { Route } from 'next';
-import { z } from 'zod';
+import { PageHeader, When } from '@democracycraft/design-system';
+import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
+import { FilterBar } from '@/components/FilterBar';
+import { Player } from '@/components/Player';
+import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { searchPlayers } from '@/lib/sql/me';
-import { fmtN } from '@/lib/format';
-import { Player } from '@/components/Player';
-import { Toolbar } from '@/components/Toolbar';
+import { buildMetadata } from '@/lib/metadata';
+import { getAdminPlayers } from '@/lib/services/admin';
+import type { AdminPlayerRow } from '@/lib/sql/admin';
+import { adminPlayersTable } from '@/lib/tables/admin';
+import { parseTableState, tableHref, withPage, withSort, type TableState } from '@/lib/tables/core';
+import { AdminGate } from '../_components/AdminGate';
+import { AdminTableEmpty, RouterLink } from '../_components/table';
 
 export const dynamic = 'force-dynamic';
 
-const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-const SP_SCHEMA = z.object({ q: z.string().trim().min(1).optional() });
-
 export async function generateMetadata() {
-  return buildMetadata({ title: 'Players', description: 'Admin: look up a player and view their personal {server} economy dashboard.', path: '/admin/players' });
+  return buildMetadata({ title: 'Admin · Players', description: 'Admin: look up a player and view their personal {server} economy dashboard.', path: '/admin/players' });
 }
 
-export default async function AdminPlayersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  // The /admin layout gates the whole section to admins; audit the access here.
-  const viewer = await getViewer();
-  await auditView(viewer, { path: '/admin/players', targetType: 'global' });
+const TABLE_ID = 'admin-players-table';
+const PATH = '/admin/players';
 
-  const sp = SP_SCHEMA.safeParse(flatten(await searchParams)).data ?? {};
-  const q = sp.q ?? null;
-  const results = q ? await searchPlayers(q, 50) : [];
-  const directUuid = q && UUID_RE.test(q) ? q.toLowerCase() : null;
+const columns: Column<AdminPlayerRow>[] = [
+  { key: 'name', header: 'Player', sort: 'name', cell: (p) => <Player name={p.name} uuid={p.uuid} link={false} /> },
+  { key: 'uuid', header: 'UUID', secondary: true, cell: (p) => <span className="mono">{p.uuid}</span> },
+  { key: 'firstSeen', header: 'First seen', sort: 'firstSeen', sortFirst: 'desc', secondary: true, optional: true, cell: (p) => <When value={p.firstSeen} /> },
+  { key: 'lastSeen', header: 'Last seen', sort: 'lastSeen', sortFirst: 'desc', cell: (p) => <When value={p.lastSeen} /> },
+];
+
+export default async function AdminPlayersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const viewer = await getViewer();
+  if (!hasPermission(viewer, 'player.read.all')) return <AdminGate viewer={viewer} title="Player lookup access required" permission="player.read.all" />;
+  await auditView(viewer, { path: PATH, targetType: 'global' });
+
+  const state = parseTableState(await searchParams, adminPlayersTable);
+  const { rows, total } = await getAdminPlayers(viewer, state);
+  const totalPages = Math.max(1, Math.ceil(total / state.limit));
+  const href = (s: TableState<typeof adminPlayersTable>) => tableHref(PATH, s, adminPlayersTable);
 
   return (
     <>
-      <div className="page-heading">
-        <h1>Players</h1>
-        <span className="sub">look up a player to view their personal data dashboard</span>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Find a player</div>
-        <Toolbar searchPlaceholder="Search by name, or paste a UUID…" />
-        {directUuid && (
-          <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>
-            Looks like a UUID — <Link href={`/admin/players/${directUuid}` as Route} className="rowlink">view this player&apos;s data →</Link>
-          </p>
-        )}
-        <div className="table-wrap" style={{ marginTop: 12 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Player</th>
-                <th>UUID</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {!q && <tr><td colSpan={3} className="empty">Search for a player above.</td></tr>}
-              {q && results.length === 0 && <tr><td colSpan={3} className="empty">No players match “{q}”.</td></tr>}
-              {results.map((p) => (
-                <tr key={p.uuid}>
-                  <td><Player name={p.name} uuid={p.uuid} link={false} /></td>
-                  <td className="mono muted small">{p.uuid}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <Link href={`/admin/players/${p.uuid}` as Route} className="btn" prefetch={false}>View data</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {results.length > 0 && <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>{fmtN(results.length)} match(es) (capped at 50).</p>}
-      </div>
+      <PageHeader title="Players" subtitle="Open a player's personal dashboard. Every view is recorded in the audit log." />
+      <FilterBar table={adminPlayersTable} total={total} columns={columnOptions(columns)} tableId={TABLE_ID} />
+      <DataTable
+        id={TABLE_ID}
+        label="Players"
+        columns={columns}
+        rows={rows}
+        rowKey={(p) => p.uuid}
+        rowHref={(p) => `/admin/players/${p.uuid}`}
+        rowLabel={(p) => `View ${p.name}'s data`}
+        sort={state.sort}
+        sortHref={(field, dir) => href(withSort(state, field, dir, adminPlayersTable))}
+        link={RouterLink}
+        empty={<AdminTableEmpty pathname={PATH} state={state} table={adminPlayersTable} />}
+      />
+      <TablePager page={Math.min(state.page, totalPages)} totalPages={totalPages} hrefFor={(p) => href(withPage(state, p))} link={RouterLink} />
     </>
   );
-}
-
-function flatten(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const o: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === 'string') o[k] = v;
-    else if (Array.isArray(v) && v.length) o[k] = v[0];
-  }
-  return o;
 }

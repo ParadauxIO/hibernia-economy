@@ -1,0 +1,10 @@
+# Formatting-only commits that `git blame` should look through. GitHub's blame
+# view reads this file automatically; locally run
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# The hashes only hold if the branch that introduced them is merged with a merge
+# commit (not squashed or rebased).
+
+# palantir-java-format over the files the static-analysis work touched (PAR-354)
+cbdcafe8f63dc237155f2ff52eb4c133b78cac92
+# palantir-java-format over everything else the CI/test-quality branch changed (PAR-354)
+e90da294cb1a1fd2cb27444d1f36c3fb2391b5f8

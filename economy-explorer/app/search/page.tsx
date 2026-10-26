@@ -1,130 +1,156 @@
-import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
-import type { Route } from 'next';
-import { z } from 'zod';
-import { searchGlobal } from '@/lib/sql/search';
-import { fmtAmtFull, shortenUuid } from '@/lib/format';
+import { Button, EmptyState, EntityBadge, Input, Money, PageHeader, Section, Segmented, ToolbarLayout, When } from '@democracycraft/design-system';
+import { DataTable, TablePager, type Column, type LinkComponent } from '@democracycraft/design-system/table';
+import { buildMetadata } from '@/lib/metadata';
+import { MIN_QUERY, SEARCH_TABS, normaliseQuery, searchEverything, type SearchGroup, type SearchGroupKind, type SearchTab } from '@/lib/services/search';
+import type { ItemSearchResult, SearchResult } from '@/lib/sql/search';
 
-const SP_SCHEMA = z.object({
-  q: z.string().trim().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(10),
-});
+// The full search (spec §9.1): contains matches on account, firm and item names,
+// prefix matches on player names, grouped with counts and per-type tabs. It runs
+// only when the form is submitted (Enter); the typeahead never comes here.
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  return buildMetadata({ title: "Search", description: "Search accounts, players, firms and items across the {server} economy.", path: "/search" });
+  return buildMetadata({ title: 'Search', description: 'Search accounts, players, firms and items across the {server} economy.', path: '/search' });
 }
 
-export default async function SearchPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const sp = SP_SCHEMA.parse(flat(await searchParams));
+const RouterLink: LinkComponent = Link;
+const PAGE_SIZE = 50;
+const PREVIEW = 5;
 
-  const results = sp.q ? await searchGlobal(sp.q, sp.limit) : [];
-  const grouped = {
-    account: results.filter((r) => r.kind === 'account'),
-    firm: results.filter((r) => r.kind === 'firm'),
-    player: results.filter((r) => r.kind === 'player'),
-  };
+const LABELS: Record<SearchGroupKind, { title: string; one: string; many: string }> = {
+  accounts: { title: 'Accounts', one: 'account', many: 'accounts' },
+  firms: { title: 'Firms', one: 'firm', many: 'firms' },
+  players: { title: 'Players', one: 'player', many: 'players' },
+  items: { title: 'Items', one: 'item', many: 'items' },
+};
+
+const NOTES: Record<SearchGroupKind, string> = {
+  accounts: 'Business, government and system account names, and account numbers. Personal accounts are listed under their player.',
+  firms: 'Active firms.',
+  players: 'Player names that start with your search.',
+  items: 'Items that have been traded in a shop.',
+};
+
+const accountColumns: Column<SearchResult>[] = [
+  { key: 'name', header: 'Account', cell: (r) => <><span>{r.label}</span><span className="dt-sub">{` #${r.account_id}`}</span></> },
+  { key: 'type', header: 'Type', secondary: true, cell: (r) => (r.account_type ? <EntityBadge type={r.account_type} /> : null) },
+  { key: 'balance', header: 'Balance', numeric: true, cell: (r) => <Money value={r.balance} /> },
+];
+
+const firmColumns: Column<SearchResult>[] = [
+  { key: 'name', header: 'Firm', cell: (r) => r.label },
+  { key: 'hq', header: 'Headquarters', secondary: true, cell: (r) => (r.secondary && r.secondary !== '—' ? r.secondary : <span className="muted">—</span>) },
+  { key: 'balance', header: 'Main account', numeric: true, cell: (r) => <Money value={r.balance} /> },
+];
+
+const playerColumns: Column<SearchResult>[] = [
+  { key: 'name', header: 'Player', cell: (r) => r.label },
+  { key: 'seen', header: 'First seen', align: 'end', cell: (r) => (r.secondary ? <When value={`${r.secondary}T00:00:00Z`} relative={false} /> : <span className="muted">—</span>) },
+];
+
+const itemColumns: Column<ItemSearchResult>[] = [
+  { key: 'name', header: 'Item', cell: (r) => <><span>{r.label}</span>{r.secondary && <span className="dt-sub">{` ${r.secondary}`}</span>}</> },
+  { key: 'traded', header: 'Last traded', align: 'end', cell: (r) => <When value={r.last_traded_at} /> },
+];
+
+function one(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+function count(n: number, kind: SearchGroupKind): string {
+  return `${n.toLocaleString('en-US')} ${n === 1 ? LABELS[kind].one : LABELS[kind].many}`;
+}
+
+function GroupTable({ group, q, preview }: { group: SearchGroup<SearchResult> | SearchGroup<ItemSearchResult>; q: string; preview: boolean }) {
+  const id = `search-${group.kind}`;
+  const label = `${LABELS[group.kind].title} matching “${q}”`;
+  switch (group.kind) {
+    case 'accounts':
+    case 'firms':
+    case 'players': {
+      const rows = group.rows as SearchResult[];
+      const cols = group.kind === 'accounts' ? accountColumns : group.kind === 'firms' ? firmColumns : playerColumns;
+      return <DataTable id={id} label={label} columns={cols} rows={preview ? rows.slice(0, PREVIEW) : rows} rowKey={(r) => r.account_id ?? r.firm_id ?? r.player_uuid ?? r.label} rowHref={(r) => r.href ?? `/search?q=${encodeURIComponent(r.label)}`} density="compact" link={RouterLink} />;
+    }
+    case 'items': {
+      const rows = group.rows as ItemSearchResult[];
+      return <DataTable id={id} label={label} columns={itemColumns} rows={preview ? rows.slice(0, PREVIEW) : rows} rowKey={(r) => r.item_key} rowHref={(r) => r.href} density="compact" link={RouterLink} />;
+    }
+  }
+}
+
+export default async function SearchPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  const q = normaliseQuery(one(sp.q) ?? '');
+  const rawTab = one(sp.type) ?? 'all';
+  const tab: SearchTab = (SEARCH_TABS as readonly string[]).includes(rawTab) ? (rawTab as SearchTab) : 'all';
+  const pageNo = Math.min(Math.max(1, Math.floor(Number(one(sp.page)) || 1)), 100);
+
+  const result = q ? await searchEverything(q, { tab, limit: PAGE_SIZE, offset: (pageNo - 1) * PAGE_SIZE, preview: PREVIEW }) : null;
+  const groups = result ? [result.accounts, result.firms, result.players, result.items] : [];
+  const total = groups.reduce((n, g) => n + g.total, 0);
+  const tabHref = (t: SearchTab, p = 1) => `/search?q=${encodeURIComponent(q)}${t === 'all' ? '' : `&type=${t}`}${p > 1 ? `&page=${p}` : ''}`;
 
   return (
     <>
-      <div className="page-heading">
-        <h1>Search</h1>
-        {sp.q && <span className="sub">results for &ldquo;{sp.q}&rdquo;</span>}
-      </div>
+      <PageHeader title="Search" subtitle={q ? <>Results for “{q}”</> : 'Accounts, firms, players and items across the economy.'} />
 
-      <form className="toolbar" style={{ marginBottom: 18 }}>
-        <input
-          name="q"
-          defaultValue={sp.q ?? ''}
-          placeholder="Search accounts, firms, players…"
-          className="toolbar-search"
+      <form action="/search" method="get" role="search" aria-label="Search the economy">
+        <ToolbarLayout
+          search={<Input type="search" name="q" className="toolbar-search" defaultValue={q} placeholder="Account, firm, player or item, or an account #" aria-label="Search" autoComplete="off" />}
+          actions={<Button type="submit" variant="primary">Search</Button>}
         />
-        <button type="submit" className="btn">Search</button>
       </form>
 
-      {!sp.q && (
-        <div className="card">
-          <div className="card-title">Search the economy</div>
-          <p style={{ padding: '4px 4px 8px', color: 'var(--fg-soft)' }}>
-            Type an account name, firm name, player name, or numeric account ID.
-          </p>
-        </div>
+      {!q && (
+        <EmptyState title="Search the economy">
+          Account and firm names match anywhere in the name; player names match from the start. Type a number to open that account.
+        </EmptyState>
       )}
 
-      {sp.q && results.length === 0 && (
-        <div className="card">
-          <div className="card-title">No results</div>
-        </div>
+      {q && q.length < MIN_QUERY && !/^#?\d+$/.test(q) && <EmptyState title="Type at least two characters" />}
+
+      {result && total === 0 && q.length >= MIN_QUERY && (
+        <EmptyState title={`Nothing matches “${q}”`}>Player names match from the first letter. Try fewer letters, or an account number.</EmptyState>
       )}
 
-      {grouped.account.length > 0 && (
-        <ResultGroup title={`Accounts (${grouped.account.length})`}>
-          {grouped.account.map((r, i) => (
-            <Link
-              key={`a-${r.account_id}-${i}`}
-              href={`/accounts/${r.account_id}` as Route}
-              className="result-row"
-              prefetch={false}
-            >
-              <span style={{ fontWeight: 500 }}>{r.label}</span>
-              {r.account_type && <span className={`badge badge-${r.account_type}`}>{r.account_type}</span>}
-              {r.balance && <span className="amount neutral" style={{ marginLeft: 'auto' }}>{fmtAmtFull(r.balance)}</span>}
-            </Link>
-          ))}
-        </ResultGroup>
-      )}
+      {result && total > 0 && (
+        <>
+          <Segmented
+            label="Result type"
+            value={tab}
+            items={SEARCH_TABS.map((t) => ({
+              value: t,
+              label: t === 'all' ? `All ${total.toLocaleString('en-US')}` : `${LABELS[t].title} ${(result[t].total).toLocaleString('en-US')}`,
+              href: tabHref(t),
+              disabled: t !== 'all' && result[t].total === 0,
+            }))}
+          />
 
-      {grouped.firm.length > 0 && (
-        <ResultGroup title={`Firms (${grouped.firm.length})`}>
-          {grouped.firm.map((r, i) => (
-            <Link
-              key={`f-${r.firm_id}-${i}`}
-              href={`/firms/${encodeURIComponent(r.firm_name ?? r.label)}` as Route}
-              className="result-row"
-              prefetch={false}
-            >
-              <span style={{ fontWeight: 500 }}>{r.label}</span>
-              {r.secondary && <span className="muted small">{r.secondary}</span>}
-            </Link>
-          ))}
-        </ResultGroup>
-      )}
-
-      {grouped.player.length > 0 && (
-        <ResultGroup title={`Players (${grouped.player.length})`}>
-          {grouped.player.map((r, i) => (
-            <div key={`p-${r.player_uuid ?? i}`} className="result-row">
-              <span style={{ fontWeight: 500 }}>{r.player_name ?? r.label}</span>
-              {r.player_uuid && (
-                <span className="mono muted small" title={r.player_uuid}>{shortenUuid(r.player_uuid)}</span>
+          {tab === 'all'
+            ? groups.filter((g) => g.total > 0).map((g) => (
+                <Section
+                  key={g.kind}
+                  id={`results-${g.kind}`}
+                  title={LABELS[g.kind].title}
+                  description={`${count(g.total, g.kind)}. ${NOTES[g.kind]}`}
+                  actions={g.total > PREVIEW ? <Link href={tabHref(g.kind)} prefetch={false}>See all {g.total.toLocaleString('en-US')}</Link> : undefined}
+                >
+                  <GroupTable group={g} q={q} preview />
+                </Section>
+              ))
+            : (
+                <Section id={`results-${tab}`} title={LABELS[tab].title} description={`${count(result[tab].total, tab)}. ${NOTES[tab]}`}>
+                  {result[tab].rows.length > 0
+                    ? <GroupTable group={result[tab]} q={q} preview={false} />
+                    : <EmptyState compact title={`No ${LABELS[tab].many} on this page`} />}
+                  <TablePager page={pageNo} totalPages={Math.max(1, Math.ceil(result[tab].total / PAGE_SIZE))} hrefFor={(p) => tabHref(tab, p)} link={RouterLink} />
+                </Section>
               )}
-              {r.secondary && <span className="muted small" style={{ marginLeft: 'auto' }}>seen {r.secondary}</span>}
-            </div>
-          ))}
-        </ResultGroup>
+        </>
       )}
     </>
   );
-}
-
-function ResultGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="card">
-      <div className="card-title">{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>{children}</div>
-    </div>
-  );
-}
-
-function flat(raw: Record<string, string | string[] | undefined>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) { if (v[0]) out[k] = v[0]; } else if (v !== undefined) out[k] = v;
-  }
-  return out;
 }

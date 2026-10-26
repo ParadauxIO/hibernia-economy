@@ -110,8 +110,8 @@ describe('bucketSamples (OHLC)', () => {
       '1h',
     );
     expect(candles).toHaveLength(2);
-    expect(candles[0].bucketStart.getTime()).toBeLessThan(candles[1].bucketStart.getTime());
-    expect(candles[0].open).toBe(7); // the 10:30 bucket, even though it was last in input
+    expect(candles[0]?.bucketStart.getTime()).toBeLessThan(candles[1]?.bucketStart.getTime() ?? 0);
+    expect(candles[0]?.open).toBe(7); // the 10:30 bucket, even though it was last in input
   });
 
   it('skips non-finite prices', () => {

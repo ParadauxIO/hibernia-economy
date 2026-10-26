@@ -1,81 +1,104 @@
-import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
 import type { Route } from 'next';
+import { PageHeader, Section, Tag } from '@democracycraft/design-system';
+import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
+import { FilterBar } from '@/components/FilterBar';
+import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { PrivacyGate } from '@/components/PrivacyGate';
-import { listGroups } from '@/lib/services/group';
-import { fmtN } from '@/lib/format';
+import { buildMetadata } from '@/lib/metadata';
+import { getAdminGroups } from '@/lib/services/admin';
+import type { GroupSummary } from '@/lib/sql/group';
+import { adminGroupsTable } from '@/lib/tables/admin';
+import { parseTableState, tableHref, withSort, type TableState } from '@/lib/tables/core';
+import { AdminGate } from '../_components/AdminGate';
+import { AdminTableEmpty, RouterLink } from '../_components/table';
 import { CreateGroupForm } from './create-group-form';
 import { DeleteGroupButton } from './delete-group-button';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  return buildMetadata({ title: 'Groups', description: 'Manage explorer access groups and capabilities.', path: '/admin/groups' });
+  return buildMetadata({ title: 'Groups', description: 'Manage explorer access groups and the roles they grant.', path: '/admin/groups' });
 }
 
-export default async function AdminGroupsPage() {
-  const viewer = await getViewer();
-  if (viewer.anon) return <PrivacyGate kind="login" title="Access groups" hint="Sign in as admin to manage groups." />;
-  if (viewer.role !== 'admin') return <PrivacyGate kind="private" title="Admin only" />;
-  await auditView(viewer, { path: '/admin/groups', targetType: 'global' });
+const TABLE_ID = 'admin-groups-table';
+const PATH = '/admin/groups';
 
-  const groups = await listGroups();
+function sources(g: GroupSummary) {
+  const out = [
+    ...(g.luckpermsNode ? [<span key="lp">LuckPerms <code>{g.luckpermsNode}</code></span>] : []),
+    ...g.syncSources.map((s) => <span key={s.source}>{s.source === 'business' ? 'Firm' : 'Region'} <code>{s.selector}</code></span>),
+  ];
+  return out.length ? out.reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ', ', el] : [el]), []) : <span className="muted">Manual only</span>;
+}
+
+export default async function AdminGroupsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const viewer = await getViewer();
+  if (!hasPermission(viewer, 'groups.read')) return <AdminGate viewer={viewer} title="Group access required" permission="groups.read" />;
+  await auditView(viewer, { path: PATH, targetType: 'global' });
+
+  const state = parseTableState(await searchParams, adminGroupsTable);
+  const groups = await getAdminGroups(viewer, state);
+  const href = (s: TableState<typeof adminGroupsTable>) => tableHref(PATH, s, adminGroupsTable);
+  const canDelete = hasPermission(viewer, 'groups.delete');
+
+  const columns: Column<GroupSummary>[] = [
+    {
+      key: 'name',
+      header: 'Group',
+      sort: 'name',
+      cell: (g) => <><Link href={`/admin/groups/${g.groupId}` as Route} prefetch={false}>{g.name}</Link>{g.description && <span className="dt-sub">{` · ${g.description}`}</span>}</>,
+    },
+    {
+      key: 'roles',
+      header: 'Grants roles',
+      cell: (g) => (g.capabilities.length ? g.capabilities.map((c) => <Tag key={c} tone="accent">{c}</Tag>) : <span className="muted">None</span>),
+    },
+    { key: 'sources', header: 'Members come from', secondary: true, cell: sources },
+    {
+      key: 'members',
+      header: 'Live members',
+      sort: 'members',
+      numeric: true,
+      cell: (g) => <>{g.activeMemberCount.toLocaleString('en-US')}{g.memberCount > g.activeMemberCount && <span className="dt-sub">{` of ${g.memberCount.toLocaleString('en-US')}`}</span>}</>,
+    },
+    ...(canDelete ? [{
+      key: 'actions',
+      header: <span className="sr-only">Actions</span>,
+      label: 'Actions',
+      align: 'end' as const,
+      cell: (g: GroupSummary) => <DeleteGroupButton groupId={g.groupId} name={g.name} />,
+    }] : []),
+  ];
 
   return (
     <>
-      <div className="page-heading">
-        <h1>Access groups</h1>
-        <span className="sub">{fmtN(groups.length)} groups · capabilities grant access; LuckPerms-fed groups are reconciled by the cron</span>
-      </div>
+      <PageHeader
+        title="Access groups"
+        subtitle="A group's members get every role it grants. Members come from LuckPerms, a firm, a region, or are added by hand."
+      />
 
-      <div className="card">
-        <div className="card-title">New group</div>
-        <CreateGroupForm />
-      </div>
+      {hasPermission(viewer, 'groups.create') && (
+        <Section id="new-group" title="New group">
+          <CreateGroupForm />
+        </Section>
+      )}
 
-      <div className="card">
-        <div className="card-title">All groups</div>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Capabilities</th>
-                <th>LuckPerms node</th>
-                <th className="amount">Members</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.length === 0 && <tr><td colSpan={5} className="empty">No groups yet.</td></tr>}
-              {groups.map((g) => (
-                <tr key={g.groupId}>
-                  <td>
-                    <Link href={`/admin/groups/${g.groupId}` as Route} className="rowlink" prefetch={false}>{g.name}</Link>
-                    {g.description && <div className="sub">{g.description}</div>}
-                  </td>
-                  <td>
-                    {g.capabilities.length === 0
-                      ? <span className="muted">—</span>
-                      : g.capabilities.map((c) => <span key={c} className="badge" style={{ marginRight: 4 }}>{c}</span>)}
-                  </td>
-                  <td>{g.luckpermsNode ? <span className="mono">{g.luckpermsNode}</span> : <span className="muted">manual only</span>}</td>
-                  <td className="amount mono">
-                    {fmtN(g.memberCount)}
-                    {g.luckpermsMemberCount > 0 && <span className="sub"> ({fmtN(g.luckpermsMemberCount)} synced)</span>}
-                  </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <Link href={`/admin/groups/${g.groupId}` as Route} className="btn" prefetch={false}>Manage</Link>{' '}
-                    <DeleteGroupButton groupId={g.groupId} name={g.name} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Section id="all-groups" title="All groups" divider={hasPermission(viewer, 'groups.create')}>
+        <FilterBar table={adminGroupsTable} total={groups.length} columns={columnOptions(columns)} tableId={TABLE_ID} />
+        <DataTable
+          id={TABLE_ID}
+          label="All groups"
+          columns={columns}
+          rows={groups}
+          rowKey={(g) => g.groupId}
+          sort={state.sort}
+          sortHref={(field, dir) => href(withSort(state, field, dir, adminGroupsTable))}
+          link={RouterLink}
+          empty={<AdminTableEmpty pathname={PATH} state={state} table={adminGroupsTable} />}
+        />
+      </Section>
     </>
   );
 }

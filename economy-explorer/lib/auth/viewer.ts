@@ -2,21 +2,17 @@ import 'server-only';
 import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { auth } from '@/lib/auth/authjs';
-import { findRoles, type ExplorerRole } from '@/lib/sql/role';
+import { resolveAuthorization, permissionsForRoles } from '@/lib/sql/role';
 import { findIdentityBySub, upsertIdentity } from '@/lib/sql/identity';
-import { findCapabilities } from '@/lib/sql/group';
-import {
-  legacyRoleCapabilities,
-  roleFromCapabilities,
-  isCapability,
-  type Capability,
-} from '@/lib/auth/capabilities';
+import { roleFromCapabilities, normalizeCapability } from '@/lib/auth/capabilities';
+import type { Permission } from './policy';
 
 export type Viewer =
   | {
       anon: true;
       role: null;
-      capabilities: readonly Capability[];
+      capabilities: readonly string[];
+      permissions: readonly Permission[];
       keycloakSub: null;
       minecraftUuid: null;
       minecraftName: null;
@@ -28,14 +24,41 @@ export type Viewer =
       minecraftUuid: string | null;
       minecraftName: string | null;
       linked: boolean;
-      role: ExplorerRole | 'player';
-      capabilities: readonly Capability[];
+      role: string;
+      capabilities: readonly string[];
+      permissions: readonly Permission[];
     };
+
+/**
+ * The `player` role as seeded by V31. Used only when the database cannot tell us
+ * the live baseline, so a signed-in player keeps their ordinary reads during a
+ * DB blip instead of dropping below the anonymous-plus-login baseline. Keep in
+ * step with the V31 seed; admins may narrow the live baseline, which is why the
+ * error path asks the database first.
+ */
+export const SEEDED_PLAYER_PERMISSIONS: readonly Permission[] = [
+  'player.read',
+  'account.read',
+  'firm.read',
+  'firm.financials.read',
+  'webhooks.read',
+  'webhooks.manage',
+];
+
+/** The live player baseline when the role tables answer, else the V31 seed. Never anything elevated. */
+async function playerBaseline(): Promise<readonly Permission[]> {
+  try {
+    return await permissionsForRoles(['player']);
+  } catch {
+    return SEEDED_PLAYER_PERMISSIONS;
+  }
+}
 
 const ANON: Viewer = {
   anon: true,
   role: null,
   capabilities: [],
+  permissions: [],
   keycloakSub: null,
   minecraftUuid: null,
   minecraftName: null,
@@ -48,7 +71,7 @@ const ANON: Viewer = {
  * Sources:
  * - Auth.js session → keycloak_sub + (optional) minecraft_uuid claim.
  * - explorer_identity → durable sub→player link (auto-upserted from the claim).
- * - explorer_role     → elevated grants (admin / government). Absent = 'player'.
+ * - explorer_role     → direct role grants. Absent = 'player'.
  *
  * Anonymous is the public baseline (no session, no role).
  */
@@ -61,7 +84,7 @@ const E2E_ALICE_UUID = '00000000-0000-0000-0000-00000000a1ce';
 async function e2eViewer(): Promise<Viewer | null> {
   const role = (await cookies()).get('e2e_viewer')?.value;
   if (!role || role === 'anon') return null;
-  if (role === 'player' || role === 'admin' || role === 'government') {
+  if (normalizeCapability(role)) {
     return {
       anon: false,
       keycloakSub: `e2e-${role}`,
@@ -69,7 +92,8 @@ async function e2eViewer(): Promise<Viewer | null> {
       minecraftName: 'Alice',
       linked: true,
       role,
-      capabilities: legacyRoleCapabilities(role),
+      capabilities: [...new Set(['player', role])],
+      permissions: await permissionsForRoles(['player', role]),
     };
   }
   return null;
@@ -121,20 +145,7 @@ export const getViewer = cache(async (): Promise<Viewer> => {
     const playerUuid = identity?.playerUuid ?? claimUuid ?? null;
     const linked = !!identity;
 
-    // Effective capabilities = group grants ∪ legacy explorer_role grants
-    // (mapped to capabilities). role is then derived from the capability set so
-    // existing viewer.role / requireRole checks keep working — a group granting
-    // the 'admin' capability now also yields role 'admin'.
-    const caps = new Set<Capability>();
-    if (playerUuid) {
-      const [elevated, groupCaps] = await Promise.all([
-        findRoles(playerUuid),
-        findCapabilities(playerUuid),
-      ]);
-      for (const r of elevated) for (const c of legacyRoleCapabilities(r)) caps.add(c);
-      for (const c of groupCaps) if (isCapability(c)) caps.add(c);
-    }
-    const capabilities = [...caps];
+    const { roles: capabilities, permissions } = await resolveAuthorization(playerUuid);
 
     return {
       anon: false,
@@ -144,6 +155,7 @@ export const getViewer = cache(async (): Promise<Viewer> => {
       linked,
       role: roleFromCapabilities(capabilities),
       capabilities,
+      permissions,
     };
   } catch (err) {
     console.warn('[viewer] identity/role resolution failed — degrading to player:', err);
@@ -154,7 +166,8 @@ export const getViewer = cache(async (): Promise<Viewer> => {
       minecraftName: claimName ?? null,
       linked: false,
       role: 'player',
-      capabilities: [],
+      capabilities: ['player'],
+      permissions: await playerBaseline(),
     };
   }
 });

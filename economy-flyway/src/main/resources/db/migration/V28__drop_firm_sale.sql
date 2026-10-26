@@ -1,0 +1,12 @@
+-- V28 — Drop the dead firm_sale table.
+--
+-- firm_sale was created in V1 as a stub ("business-rian's stubbed firm_sale") and
+-- was superseded in V6 by chestshop_sale (one structured row per trade, written by
+-- ChestShop-3 and read by treasury-rest-api). firm_sale has no read OR write path in
+-- any application code (verified: zero references across treasury, treasury-rest-api,
+-- business, chestshop, economy-explorer). The V8 uq_sale_source_msg_id constraint was
+-- legacy housekeeping on a table nothing populates.
+--
+-- Guarded with IF EXISTS so the migration is idempotent across environments that may
+-- have already lost the table.
+DROP TABLE IF EXISTS firm_sale;

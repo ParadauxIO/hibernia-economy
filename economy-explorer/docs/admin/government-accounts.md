@@ -11,17 +11,19 @@ page is the operator's view of how access to those accounts is granted and what 
 permission nodes mean. The player-facing basics are in
 [Government accounts](/docs/guides/government-accounts).
 
-## Two levels of access
+## Levels of access
 
-Every government account has two kinds of access:
+Every government account has three tiers of access (`VIEWER` < `MEMBER` < `AUTHORIZER`):
 
-- **Members** can **view** the account and its history **and spend** from it (`/government
-  pay`, `/government payout`).
-- **Authorizers** can do everything a member can, **plus manage who has access** — adding
-  and removing other members and authorizers.
+- **Viewers** can **view** the account and its history only — no spending, no managing
+  access.
+- **Members** can do everything a viewer can **and spend** from it (`/government pay`,
+  `/government payout`).
+- **Authorizers** can do everything a member can. With `treasury.gov.account.manage`
+  they can manage viewers/members; only `treasury.gov.admin` can manage authorizers.
 
-An authorizer is always a member too. Spending is gated by membership; managing access is
-gated by authorizer status.
+Each tier includes the ones below it. Viewing is gated by viewer access, spending by
+membership, and managing access by authorizer status.
 
 > [!NOTE]
 > The same gate covers **fines**: to issue or revoke a fine paid into an account
@@ -36,6 +38,8 @@ should use groups — see [why groups](#prefer-groups) below.
 ### Individual players
 
 ```text
+/government account viewer add <account> <player>
+/government account viewer remove <account> <player>
 /government account member add <account> <player>
 /government account member remove <account> <player>
 /government account auth add <account> <player>
@@ -45,6 +49,8 @@ should use groups — see [why groups](#prefer-groups) below.
 ### LuckPerms groups
 
 ```text
+/government account viewer addgroup <account> <group>
+/government account viewer removegroup <account> <group>
 /government account member addgroup <account> <group>
 /government account member removegroup <account> <group>
 /government account auth addgroup <account> <group>
@@ -55,9 +61,17 @@ should use groups — see [why groups](#prefer-groups) below.
 access with:
 
 ```text
+/government account viewer list <account>
 /government account member list <account>
 /government account auth list <account>
 ```
+
+> [!NOTE]
+> Managing **viewers** is gated like managing members — it needs
+> `treasury.gov.account.manage` (plus authorizer access on the account).
+
+Authorizer grants require an existing member grant for that same player/group.
+Add the member first, then the authorizer; verify each list afterward.
 
 ### Prefer groups
 
@@ -115,6 +129,59 @@ The full node list (including the everyday `/government` reads) is in the
 
 The primitive accounts Treasury creates on startup (starting balances, `Eco`,
 `DCGovernment`, `GovernmentFines`) are managed automatically — don't archive those.
+
+## The explorer's government workspace
+
+The explorer shows government money at `/gov`. Who sees what follows the access above,
+and nothing else:
+
+- A role with `government.read` opens the workspace. Its scope is the government
+  accounts the player owns or can read (VIEWER and up, directly or through a LuckPerms
+  group). Give a department its accounts in game and its officials see them on the
+  explorer.
+- `government.read.all` puts every government account in scope.
+- `government.audit.read` adds the Audit page: who moved money in and out of those
+  accounts, and who viewed them on the explorer.
+
+Reads made through an account relationship are recorded in the explorer audit log.
+
+### Government units
+
+Units group government accounts into departments, ministries, cities or states for
+the workspace. They are presentation only and never grant access: an official sees a
+unit's figures for the accounts they can already read, with **Partial view** when they
+can't read all of them.
+
+Manage them at **Admin → Government units** (`/admin/gov-units`, needs
+`gov_units.manage`):
+
+1. **New unit**: give it a name and a slug (used in links such as `/gov?unit=commerce`).
+   Pick a parent to build a hierarchy (nation → department, or state → city).
+2. In the accounts table, choose each account's unit. An account belongs to at most
+   one unit; a parent's figures include its sub-units.
+3. Deleting a unit leaves its accounts unassigned and moves its sub-units to the top
+   level. No money or access changes.
+
+Government accounts outside every unit appear under **Unassigned**.
+
+### Compliance tools
+
+`/gov/compliance` has a watchlist and a firm investigation view (accounts, money in and
+out by counterparty, transfers with the proprietor, large and round-number transfers,
+and sudden balance changes). They need `firm.financials.read.all` together with
+`transactions.read`.
+
+A **compliance** role with those permissions (plus `firm.financials.read` and
+`market.sales.read`) is created for you but given to nobody. To give a department the
+tools:
+
+1. Open **Admin → Groups** and find (or create) the explorer group synced from the
+   department's LuckPerms group.
+2. Add the **compliance** role to that group.
+
+Membership then follows LuckPerms: whoever is in the in-game group gets the tools, and
+loses them when they leave it. Nothing in the explorer is tied to a particular group,
+department or server.
 
 ## See also
 

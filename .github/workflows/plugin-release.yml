@@ -1,0 +1,131 @@
+name: Economy · Release plugins and APIs
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Every main push gets a release. No shared concurrency group: GitHub would
+# replace pending runs. Unique versions let builds finish independently; releases
+# never update a mutable latest pointer. Staging jobs serialize per target.
+jobs:
+  ci:
+    name: Require full CI for release commit
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout CI gate tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Wait for this commit's full main-push CI and ci-gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ops/plugin-deploy/ci_gate.py
+
+  publish:
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up JVM build
+        uses: ./.github/actions/setup-jvm
+
+      # Compute inside the publishing job so rerunning failed jobs gets a new
+      # attempt suffix, even when the test job is reused.
+      - name: Compute release version
+        id: release
+        run: node .github/scripts/release-metadata.mjs version
+
+      - name: Check release metadata tooling
+        run: node --test .github/scripts/release-metadata.test.mjs
+
+      - name: Build plugin bundle and API jars
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: >-
+          sh ./gradlew release :treasury:treasury-api:assemble :business:business-api:assemble
+          -Pci=true -Pversion="$RELEASE_VERSION"
+
+      - name: Write plugin manifest
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: node .github/scripts/release-metadata.mjs manifest
+
+      - name: Publish API libraries
+        env:
+          REPO_USER: ${{ secrets.REPO_USER }}
+          REPO_PASS: ${{ secrets.REPO_PASS }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: >-
+          sh ./gradlew :treasury:treasury-api:publish :business:business-api:publish
+          -Pci=true -Pversion="$RELEASE_VERSION"
+
+      # Upload everything before making the release visible. Never replace an
+      # existing release or retag it. Consumers must select an explicit tag.
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          TAG="economy-v$RELEASE_VERSION"
+          gh release create "$TAG" \
+            release/*.jar release/manifest.json \
+            treasury/treasury-api/build/libs/*.jar \
+            business/business-api/build/libs/*.jar \
+            --draft --latest=false --target "$GITHUB_SHA" \
+            --title "Economy $RELEASE_VERSION" --generate-notes
+          gh release edit "$TAG" --draft=false --latest=false
+
+  stage:
+    name: Stage plugins for ${{ matrix.target }}
+    needs: publish
+    if: vars.ECONOMY_DEPLOY_TARGETS != '' && vars.ECONOMY_DEPLOY_TARGETS != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(vars.ECONOMY_DEPLOY_TARGETS || '[]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ matrix.target }}
+    concurrency:
+      group: economy-stage-${{ matrix.target }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.publish.outputs.version }}
+    steps:
+      - name: Checkout deployment tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Download the exact published plugin bundle
+        run: >-
+          gh release download "economy-v$RELEASE_VERSION"
+          --dir release --pattern 'manifest.json' --pattern '*.jar'
+
+      - name: Stage verified plugins for the next restart
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ vars.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASS: ${{ secrets.SFTP_PASS }}
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+          SFTP_STRICT_HOST_KEY_CHECKING: ${{ vars.SFTP_STRICT_HOST_KEY_CHECKING }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.SFTP_KNOWN_HOSTS }}
+          SFTP_UPDATE_DIR: ${{ vars.SFTP_UPDATE_DIR }}
+        run: python3 ops/plugin-deploy/stage.py

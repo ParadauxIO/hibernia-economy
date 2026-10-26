@@ -3,24 +3,33 @@ package io.paradaux.treasury;
 import com.google.inject.*;
 import com.google.inject.Module;
 import com.zaxxer.hikari.HikariDataSource;
+import io.paradaux.common.DataSourceProvider;
 import io.paradaux.hibernia.framework.commander.CommandManager;
-import io.paradaux.hibernia.framework.configurator.ConfigurationLoader;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import io.paradaux.hibernia.framework.events.ListenerManager;
+import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.treasury.adapters.VaultEconomyRegistrar;
 import io.paradaux.treasury.api.MarketApi;
+import io.paradaux.treasury.api.SalesQueryApi;
+import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.api.impl.MarketApiImpl;
+import io.paradaux.treasury.api.impl.SalesQueryApiImpl;
+import io.paradaux.treasury.api.impl.ShopQueryApiImpl;
 import io.paradaux.treasury.api.impl.TaxApiImpl;
 import io.paradaux.treasury.api.impl.TreasuryApiImpl;
+import io.paradaux.treasury.commands.*;
+import io.paradaux.treasury.commands.resolvers.PayTargetResolver;
+import io.paradaux.treasury.events.FirstPlayerJoinEvent;
+import io.paradaux.treasury.events.OnlinePlayerRosterListener;
+import io.paradaux.treasury.events.PlayerLoginListener;
 import io.paradaux.treasury.guice.*;
-import io.paradaux.treasury.guice.providers.DataSourceProvider;
 import io.paradaux.treasury.model.config.DatabaseConfiguration;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.config.LoggingConfiguration;
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.config.TaxCycleConfiguration;
+import io.paradaux.treasury.services.ConfigPublishService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.SalaryService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
@@ -28,62 +37,127 @@ import io.paradaux.treasury.services.TaxWebhookService;
 import io.paradaux.treasury.tasks.SalaryTask;
 import io.paradaux.treasury.tasks.TaxCycleTask;
 import io.paradaux.treasury.utils.LoggingConfigurer;
+import java.util.ArrayList;
+import java.util.List;
+import javax.sql.DataSource;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Bukkit;
-import org.bukkit.event.Listener;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import javax.sql.DataSource;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
 @Slf4j
-public final class Treasury extends JavaPlugin {
+// Non-final so the startup test can load it under MockBukkit (which subclasses the
+// plugin main to intercept lifecycle) and drive the real injector (treasury/testing/0001).
+// The class is never extended in production; this only unblocks the wiring test.
+public class Treasury extends JavaPlugin {
 
     @Getter
     private Injector injector;
 
+    private DataSource dataSource;
+
     @Override
     public void onEnable() {
-        // 1) Load configuration first so we can apply the configured log level
-        //    before anything else gets a chance to spam the console.
-        ConfigurationLoader configLoader = new ConfigurationLoader(this);
-        configLoader.scanPackage("io.paradaux.treasury.model.config");
+        try {
+            enableEconomy();
+        } catch (RuntimeException | LinkageError failure) {
+            getLogger()
+                    .log(
+                            java.util.logging.Level.SEVERE,
+                            "Economy startup failed; stopping the server. Resolve the release/schema failure before restarting.",
+                            failure);
+            try {
+                getServer().getPluginManager().disablePlugin(this);
+            } finally {
+                getServer().shutdown();
+            }
+            throw failure;
+        }
+    }
 
-        LoggingConfiguration logCfg = configLoader.getComponent(LoggingConfiguration.class);
+    private void enableEconomy() {
+        io.paradaux.treasury.startup.ReleaseCohort.verify(getDescription().getVersion(), name -> {
+            var member = getServer().getPluginManager().getPlugin(name);
+            return member == null ? null : member.getDescription().getVersion();
+        });
+        // 1) Build the framework module. HiberniaModule scans the config package and
+        //    binds the plugin, ConfigurationLoader, every @ConfigurationComponent,
+        //    Message, the command/resolver/listener multibinders, PapiSupport and the
+        //    dialog renderer. We fetch the configs needed for early bootstrap (log
+        //    level, DataSource) off the module before the injector exists.
+        HiberniaModule hiberniaModule = HiberniaModule.forPlugin(this)
+                .scanConfiguration("io.paradaux.treasury.model.config")
+                .handlers(
+                        TreasuryCommand.class,
+                        PayCommand.class,
+                        PayAccountCommand.class,
+                        BalanceCommand.class,
+                        BaltopCommand.class,
+                        EconomyCommand.class,
+                        SalesCommand.class,
+                        TransactionsCommand.class,
+                        EcoCommand.class,
+                        GovCommand.class,
+                        FineCommand.class,
+                        TaxCommand.class)
+                .resolvers(PayTargetResolver.class)
+                .listeners(FirstPlayerJoinEvent.class, PlayerLoginListener.class, OnlinePlayerRosterListener.class)
+                .build();
+
+        // Apply the configured log level before anything else spams the console.
+        LoggingConfiguration logCfg = hiberniaModule.configuration(LoggingConfiguration.class);
         if (logCfg != null) {
             LoggingConfigurer.apply(logCfg.getLevel());
         }
 
         log.info("Loading Treasury…");
 
-        DatabaseConfiguration dbCfg = configLoader.getComponent(DatabaseConfiguration.class);
+        DatabaseConfiguration dbCfg = hiberniaModule.configuration(DatabaseConfiguration.class);
         if (dbCfg == null) {
             throw new IllegalStateException(
                     "DatabaseConfiguration not found. Check @ConfigurationComponent and package scan.");
         }
 
+        // Fail fast instead of silently booting against the shared money DB with the
+        // documented default password — the guard treasury-api-plugin already has,
+        // back-ported here so all writers to the shared DB behave the same (ADT-187).
+        String dbPass = dbCfg.getPassword();
+        if ("password".equals(dbPass) || "CHANGE_ME".equals(dbPass)) {
+            throw new IllegalStateException(
+                    "Refusing to start: the database password is still the placeholder default. "
+                            + "Set database.password in config.yml.");
+        }
+
+        // Migrate before creating the application pool, injector, accounts or public services.
+        var migration = io.paradaux.treasury.startup.SchemaMigrator.configure(dbCfg)
+                .load()
+                .migrate();
+        getLogger().info("Economy schema ready: " + migration.migrationsExecuted + " migration(s) applied.");
+
         // 2) Build the Guice injector. VaultModule is only installed when Vault
         //    is on the classpath, so VaultEconomyAdapter is bound conditionally.
-        DataSource dataSource = new DataSourceProvider(
-                dbCfg.getHost(),
-                Integer.parseInt(dbCfg.getPort()),
-                dbCfg.getDatabase(),
-                dbCfg.getUsername(),
-                dbCfg.getPassword(),
-                Integer.parseInt(dbCfg.getPoolMaximumSize()),
-                Integer.parseInt(dbCfg.getPoolMinimumIdle()),
-                Long.parseLong(dbCfg.getPoolConnectionTimeoutMs()),
-                Long.parseLong(dbCfg.getPoolMaxLifetimeMs()),
-                Long.parseLong(dbCfg.getPoolKeepaliveMs())
-        ).get();
+        dataSource = DataSourceProvider.builder(
+                        dbCfg.getHost(),
+                        Integer.parseInt(dbCfg.getPort()),
+                        dbCfg.getDatabase(),
+                        dbCfg.getUsername(),
+                        dbCfg.getPassword())
+                .poolName("Treasury-Hikari")
+                .maximumPoolSize(Integer.parseInt(dbCfg.getPoolMaximumSize()))
+                .minimumIdle(Integer.parseInt(dbCfg.getPoolMinimumIdle()))
+                .connectionTimeoutMs(Long.parseLong(dbCfg.getPoolConnectionTimeoutMs()))
+                .maxLifetimeMs(Long.parseLong(dbCfg.getPoolMaxLifetimeMs()))
+                .keepaliveMs(Long.parseLong(dbCfg.getPoolKeepaliveMs()))
+                .leakDetectionThresholdMs(30_000L)
+                .statementCaching(true)
+                .build()
+                .get();
 
         List<Module> modules = new ArrayList<>();
-        modules.add(new TreasuryModule(this, configLoader));
+        modules.add(hiberniaModule);
+        modules.add(new TreasuryModule(this));
         modules.add(new DatabaseModule(dataSource));
-        modules.add(new CommanderModule(this));
-        modules.add(new EventsModule());
         if (isVaultAvailable()) {
             modules.add(new VaultModule());
         }
@@ -91,17 +165,26 @@ public final class Treasury extends JavaPlugin {
 
         // 3) Bootstrap primitive GOVERNMENT accounts (starting-balances, tax-income, fines).
         GovernmentConfiguration govCfg = injector.getInstance(GovernmentConfiguration.class);
-        log.info("Government accounts: starting-balances='{}', tax-income='{}', fines='{}'",
+        log.info(
+                "Government accounts: starting-balances='{}', tax-income='{}', fines='{}'",
                 govCfg.getStartingBalancesAccount(),
                 govCfg.getTaxIncomeAccount(),
                 govCfg.getFinesAccount());
         injector.getInstance(LedgerService.class).bootstrapGovernmentAccounts();
 
+        // Publish the live tax rates for the explorer docs and REST API (PAR-80).
+        // Informational only, so a failure must not stop the economy loading.
+        try {
+            injector.getInstance(ConfigPublishService.class).publish();
+        } catch (RuntimeException e) {
+            log.warn("Could not publish config to economy_config (is economy-flyway V32 applied?): {}", e.toString());
+        }
+
         // 4) Register commands.
         injector.getInstance(CommandManager.class).registerAll();
 
-        // 5) Register listeners (set bound by EventsModule).
-        registerListeners();
+        // 5) Register listeners (Set<Listener> bound via HiberniaModule.listeners(...)).
+        injector.getInstance(ListenerManager.class).registerAll();
 
         // 6) Register Vault economy if available.
         if (isVaultAvailable()) {
@@ -114,6 +197,8 @@ public final class Treasury extends JavaPlugin {
         registerTreasuryApi();
         registerTaxApi();
         registerMarketApi();
+        registerSalesQueryApi();
+        registerShopQueryApi();
         scheduleSalaries();
 
         log.info("Treasury enabled.");
@@ -126,36 +211,32 @@ public final class Treasury extends JavaPlugin {
         }
         SalaryService salaryService = injector.getInstance(SalaryService.class);
         new SalaryTask(this, salaryService).schedule(salaryCfg.getIntervalSeconds());
-        log.info("Government salaries enabled (every {}s, {} group(s), from {})",
-                salaryCfg.getIntervalSeconds(), salaryCfg.getAmounts().size(), salaryCfg.getGovernmentAccount());
+        log.info(
+                "Government salaries enabled (every {}s, {} group(s), from {})",
+                salaryCfg.getIntervalSeconds(),
+                salaryCfg.getAmounts().size(),
+                salaryCfg.getGovernmentAccount());
     }
 
     @Override
     public void onDisable() {
-        if (injector != null) {
-            DataSource ds = injector.getInstance(DataSource.class);
-            if (ds instanceof HikariDataSource hds) {
-                hds.close();
-            }
+        if (dataSource instanceof HikariDataSource hds) {
+            hds.close();
         }
+        dataSource = null;
+        injector = null;
         log.info("Treasury disabled.");
     }
 
     // ---- Helpers ----
 
-    private void registerListeners() {
-        Set<Listener> listeners = injector.getInstance(Key.get(new TypeLiteral<Set<Listener>>() {}));
-        for (Listener listener : listeners) {
-            Bukkit.getPluginManager().registerEvents(listener, this);
-            log.debug("Registered listener: {}", listener.getClass().getSimpleName());
-        }
-    }
-
     private void registerTreasuryApi() {
         TreasuryApi api = injector.getInstance(TreasuryApiImpl.class);
         var existing = Bukkit.getServicesManager().getRegistration(TreasuryApi.class);
         if (existing != null) {
-            log.info("Replacing existing TreasuryApi provider: {}", existing.getPlugin().getName());
+            log.info(
+                    "Replacing existing TreasuryApi provider: {}",
+                    existing.getPlugin().getName());
             Bukkit.getServicesManager().unregister(existing.getProvider());
         }
         Bukkit.getServicesManager().register(TreasuryApi.class, api, this, ServicePriority.Highest);
@@ -170,26 +251,43 @@ public final class Treasury extends JavaPlugin {
         TaxWebhookService webhook = injector.getInstance(TaxWebhookService.class);
 
         if (cycleCfg.isDailyEnabled()) {
-            TaxCycleTask.daily(this, taxApi, registry, webhook, cycleCfg.getDailyHour()).scheduleNext();
+            TaxCycleTask.daily(this, taxApi, registry, webhook, cycleCfg.getDailyHour())
+                    .scheduleNext();
             log.info("Daily tax cycle enabled (hour={})", cycleCfg.getDailyHour());
         }
         if (cycleCfg.isWeeklyEnabled()) {
-            TaxCycleTask.weekly(this, taxApi, registry, webhook,
-                    cycleCfg.getWeeklyHour(), cycleCfg.getWeeklyDayOfWeek()).scheduleNext();
-            log.info("Weekly tax cycle enabled (day={}, hour={})",
-                    cycleCfg.getWeeklyDayOfWeek(), cycleCfg.getWeeklyHour());
+            TaxCycleTask.weekly(
+                            this, taxApi, registry, webhook, cycleCfg.getWeeklyHour(), cycleCfg.getWeeklyDayOfWeek())
+                    .scheduleNext();
+            log.info(
+                    "Weekly tax cycle enabled (day={}, hour={})",
+                    cycleCfg.getWeeklyDayOfWeek(),
+                    cycleCfg.getWeeklyHour());
         }
         if (cycleCfg.isMonthlyEnabled()) {
-            TaxCycleTask.monthly(this, taxApi, registry, webhook,
-                    cycleCfg.getMonthlyHour(), cycleCfg.getMonthlyDayOfMonth()).scheduleNext();
-            log.info("Monthly tax cycle enabled (day-of-month={}, hour={})",
-                    cycleCfg.getMonthlyDayOfMonth(), cycleCfg.getMonthlyHour());
+            TaxCycleTask.monthly(
+                            this, taxApi, registry, webhook, cycleCfg.getMonthlyHour(), cycleCfg.getMonthlyDayOfMonth())
+                    .scheduleNext();
+            log.info(
+                    "Monthly tax cycle enabled (day-of-month={}, hour={})",
+                    cycleCfg.getMonthlyDayOfMonth(),
+                    cycleCfg.getMonthlyHour());
         }
     }
 
     private void registerMarketApi() {
         MarketApi marketApi = injector.getInstance(MarketApiImpl.class);
         Bukkit.getServicesManager().register(MarketApi.class, marketApi, this, ServicePriority.Highest);
+    }
+
+    private void registerSalesQueryApi() {
+        SalesQueryApi salesQueryApi = injector.getInstance(SalesQueryApiImpl.class);
+        Bukkit.getServicesManager().register(SalesQueryApi.class, salesQueryApi, this, ServicePriority.Highest);
+    }
+
+    private void registerShopQueryApi() {
+        ShopQueryApi shopQueryApi = injector.getInstance(ShopQueryApiImpl.class);
+        Bukkit.getServicesManager().register(ShopQueryApi.class, shopQueryApi, this, ServicePriority.Highest);
     }
 
     private boolean isVaultAvailable() {
