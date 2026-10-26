@@ -12,8 +12,7 @@ import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { PrivacyGate } from '@/components/PrivacyGate';
 import { getViewer } from '@/lib/auth/viewer';
-import { canViewFirmFinancials, hasPermission } from '@/lib/auth/access';
-import { hasFirmFinancialAccess } from '@/lib/sql/firm';
+import { canViewFirmFinancials, hasFirmFinancialAccess, hasPermission } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import { TableWrap } from '@democracycraft/design-system';
 

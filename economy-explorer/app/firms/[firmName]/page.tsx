@@ -3,17 +3,16 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { getViewer } from '@/lib/auth/viewer';
-import { canViewFirmFinancials, canViewFirmInternals, hasElevatedRead } from '@/lib/auth/access';
+import { canViewFirmFinancials, canViewFirmInternals, findFirmByDisplayName, hasElevatedRead, isFirmMember } from '@/lib/auth/access';
 import { auditView } from '@/lib/audit';
 import {
-  findFirmByDisplayName,
   listFirmEmployees,
   listFirmRoles,
   listFirmRolePermissions,
   listFirmAccounts,
-  isFirmMember,
 } from '@/lib/sql/firm';
 import { fmtAmtFull, fmtN } from '@/lib/format';
+import { formatMoney, sumBy } from '@/lib/money';
 import { LocalTimestamp } from '@/components/LocalTimestamp';
 import { Player } from '@/components/Player';
 import { BackLink } from '@democracycraft/design-system/next';
@@ -42,13 +41,16 @@ export default async function FirmDetailPage({
   // Public identity (name, HQ, founded, default account, archived flag) is
   // always shown. Employees / roles / accounts are gated to: firm member ∨
   // proprietor ∨ moderator ∨ admin.
-  const viewer = await getViewer();
-  const canSeeInternals = await canViewFirmInternals(firm.firm_id, viewer);
-
+  //
   // ChestShop sales/volume is financial drilldown — narrower than internals:
   // only finance-role employees (FINANCIAL/ADMIN) + staff. A plain member can
-  // see the roster but not the books.
-  const canSeeFinancials = await canViewFirmFinancials(firm.firm_id, viewer);
+  // see the roster but not the books. The two checks are independent, so run
+  // them together; their shared lookups are deduped per request.
+  const viewer = await getViewer();
+  const [canSeeInternals, canSeeFinancials] = await Promise.all([
+    canViewFirmInternals(firm.firm_id, viewer),
+    canViewFirmFinancials(firm.firm_id, viewer),
+  ]);
 
   // Audit privileged inspection: a staff member using elevated access to view a
   // firm's internals/financials when they aren't actually part of that firm.
@@ -84,7 +86,7 @@ export default async function FirmDetailPage({
     permsByRole.set(p.role_id, arr);
   }
 
-  const totalBalance = accounts.reduce((s, a) => s + parseFloat(a.balance), 0);
+  const totalBalance = sumBy(accounts, (a) => a.balance);
 
   return (
     <>
@@ -193,7 +195,7 @@ export default async function FirmDetailPage({
           {/* Accounts */}
           <div className="card">
             <div className="card-title">
-              Accounts <span className="sub">{fmtN(accounts.length)} active · total {fmtAmtFull(totalBalance)}</span>
+              Accounts <span className="sub">{fmtN(accounts.length)} active · total {formatMoney(totalBalance)}</span>
             </div>
             <TableWrap label="Accounts">
               <table className="data-table">

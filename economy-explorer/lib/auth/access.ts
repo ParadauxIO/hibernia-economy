@@ -1,11 +1,28 @@
 import 'server-only';
+import { cache } from 'react';
 import type { Viewer } from './viewer';
 import type { Capability, Role } from './capabilities';
 import { hasPermission, hasAnyPermission, type Permission } from './policy';
 import { ForbiddenError, UnauthorizedError } from '@/lib/errors';
-import { hasFirmFinancialAccess, isFirmMember } from '@/lib/sql/firm';
-import { findAccount, canReadAccount, findTransactionAccountIds } from '@/lib/sql/ledger';
+import * as firmSql from '@/lib/sql/firm';
+import * as ledgerSql from '@/lib/sql/ledger';
 export { hasPermission } from './policy';
+
+// Request-scoped dedupe (React cache(), spec §4.3). One render often asks the
+// same question twice: the account page loads the account and then
+// canViewAccount loads it again; the firm page checks finance access for both
+// internals and financials. Within a Server Component render these return the
+// first answer; outside one (route handlers, server actions, tests) cache() is a
+// pass-through, so nothing is ever reused across requests and a revoked
+// relationship is seen on the next request. Pages should import these rather
+// than the raw lib/sql functions.
+export const findAccount = cache(ledgerSql.findAccount);
+export const canReadAccount = cache(ledgerSql.canReadAccount);
+export const findFirmByDisplayName = cache(firmSql.findFirmByDisplayName);
+export const findFirmById = cache(firmSql.findFirmById);
+export const isFirmMember = cache(firmSql.isFirmMember);
+export const hasFirmFinancialAccess = cache(firmSql.hasFirmFinancialAccess);
+const findTransactionAccountIds = cache(ledgerSql.findTransactionAccountIds);
 
 export function hasCapability(v: Viewer, cap: Capability): boolean {
   return !v.anon && v.capabilities.includes(cap);
@@ -20,6 +37,21 @@ export function hasElevatedRead(v: Viewer): boolean {
 /** Audit predicate only. Never use this as a resource authorization gate. */
 export const isStaff = hasElevatedRead;
 export function auditRole(v: Extract<Viewer, { anon: false }>): Role { return v.role; }
+
+/**
+ * Batched canViewAccount: the subset of `accountIds` the viewer may read, in one
+ * query rather than two per id. Same rule: RBAC (`account.read.all`, or
+ * `account.read` with a linked identity) AND ReBAC (ownership or an
+ * account_read_access_web relationship). Without `account.read.all`, ids that do
+ * not exist are never returned; with it every id is, without a lookup, exactly as
+ * canViewAccount answers true for any id.
+ */
+export async function readableAccountIds(v: Viewer, accountIds: readonly number[]): Promise<Set<number>> {
+  if (accountIds.length === 0) return new Set();
+  if (hasPermission(v, 'account.read.all')) return new Set(accountIds);
+  if (!hasPermission(v, 'account.read') || !v.minecraftUuid) return new Set();
+  return new Set(await ledgerSql.findReadableAccountIds(accountIds, v.minecraftUuid));
+}
 
 /** RBAC AND ReBAC. A scoped account grant never grants access to the whole firm. */
 export async function canViewAccount(accountId: number, v: Viewer): Promise<boolean> {
@@ -40,16 +72,19 @@ export async function canViewTransaction(txnId: number, v: Viewer): Promise<bool
   if (hasPermission(v, 'transactions.read')) return true;
   if (!hasAnyPermission(v, ['account.read', 'account.read.all'])) return false;
   if (!hasPermission(v, 'account.read.all') && !v.minecraftUuid) return false;
-  for (const accountId of await findTransactionAccountIds(txnId)) {
-    if (await canViewAccount(accountId, v)) return true;
-  }
-  return false;
+  return (await readableAccountIds(v, await findTransactionAccountIds(txnId))).size > 0;
 }
 export async function canViewFirmInternals(firmId: number, v: Viewer): Promise<boolean> {
   if (hasPermission(v, 'firm.read.all')) return true;
   if (!hasPermission(v, 'firm.read')) return false;
   if (!v.minecraftUuid) return false;
-  return await isFirmMember(firmId, v.minecraftUuid) || await hasFirmFinancialAccess(firmId, v.minecraftUuid);
+  // Both in parallel: the firm page asks for financials next, and the cached
+  // hasFirmFinancialAccess answer is reused there.
+  const [member, finance] = await Promise.all([
+    isFirmMember(firmId, v.minecraftUuid),
+    hasFirmFinancialAccess(firmId, v.minecraftUuid),
+  ]);
+  return member || finance;
 }
 export async function canViewFirmFinancials(firmId: number, v: Viewer): Promise<boolean> {
   if (hasPermission(v, 'firm.financials.read.all')) return true;

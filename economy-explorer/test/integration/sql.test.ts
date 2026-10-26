@@ -10,7 +10,7 @@ import { permissionsFor } from '../role-fixtures';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { HAS_DB, resetDb, testDbOptions, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
 import { accountLabel, looksLikeUuid } from '@/lib/format';
-import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount } from '@/lib/sql/ledger';
+import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount, findReadableAccountIds } from '@/lib/sql/ledger';
 import { getPersonalBalances, getBalanceDistribution } from '@/lib/sql/stats';
 import { isFirmMember, hasFirmFinancialAccess, getAccountFirmId, getFirmStats, findFirmByDisplayName } from '@/lib/sql/firm';
 import { listFinanceFirms } from '@/lib/sql/webhook';
@@ -352,6 +352,22 @@ d('government account viewer access (PAR-237)', () => {
   // ADT-13: the "my accounts" list must agree with canReadAccount. Previously it
   // filtered MEMBER/AUTHORIZER, so a viewer could open the account page but the
   // account never showed in their own list. Both now share account_read_access_web.
+  // PAR-535: the batched check that replaced the per-account N+1 must give the
+  // same answer as findAccount ownership + canReadAccount, id by id.
+  it('batched readable ids agree with ownership and canReadAccount', async () => {
+    const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 999999];
+    for (const who of [ALICE, BOB, CAROL, DAVE, SECRETARY, PENNY]) {
+      const batched = new Set(await findReadableAccountIds(ids, who));
+      for (const id of ids) {
+        const account = await findAccount(id);
+        const expected = !!account && (account.owner_uuid === who || await canReadAccount(id, who));
+        expect(batched.has(id), `account ${id} for ${who}`).toBe(expected);
+      }
+    }
+    expect(await findReadableAccountIds([], ALICE)).toEqual([]);
+    expect(await findReadableAccountIds([5, 5], SECRETARY)).toEqual([5]);
+  });
+
   it('lists the viewer-granted department account under "my accounts" (ADT-13)', async () => {
     const ids = (await findAccountsForPlayer(SECRETARY)).map((a) => a.account_id);
     expect(ids).toContain(5);
