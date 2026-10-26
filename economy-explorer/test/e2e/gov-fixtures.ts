@@ -1,8 +1,4 @@
-import Module from 'node:module';
-import { resolve } from 'node:path';
 import mysql from 'mysql2/promise';
-import { Kysely, MysqlDialect } from 'kysely';
-import { createPool } from 'mysql2';
 import { testDbOptions } from '../integration/db';
 
 // Government workspace fixtures for the e2e suite (PAR-539), loaded by
@@ -16,8 +12,9 @@ import { testDbOptions } from '../integration/db';
 //     here, so the shared pages they test are unchanged.
 //   * Interior's account, Commerce Annex and the mint are out of OFFICIAL's
 //     scope; the specs check that they never appear for OFFICIAL.
-//   * Rollups are built with the worker's own step functions, so the pages
-//     read exactly what production would.
+//   * Rollups are built afterwards by rollups.setup.ts with the worker's own
+//     step functions, from the oldest settlement (about six weeks back here),
+//     so the pages read exactly what production would.
 
 export const GOV_OFFICIAL = '00000000-0000-0000-0000-00000000f00d';
 export const GOV_OFFICIAL_NAME = 'Official';
@@ -37,16 +34,6 @@ const TRADER = bin('00000000-0000-0000-0000-0000000fa102');
 const MERCHANT_ACCOUNT = 211;
 const TRADER_ACCOUNT = 212;
 const ACME = 3;
-
-/** Lets this Node process load lib/rollup/steps.ts, which imports Next's `server-only` marker. */
-function allowServerOnly(): void {
-  const mod = Module as unknown as { _resolveFilename: (request: string, ...rest: unknown[]) => string };
-  const original = mod._resolveFilename;
-  const stub = resolve(process.cwd(), 'test/stubs/server-only.ts');
-  mod._resolveFilename = function (this: unknown, request: string, ...rest: unknown[]) {
-    return request === 'server-only' ? stub : original.call(this, request, ...rest);
-  };
-}
 
 const dayAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 const at = (n: number, time: string) => `${dayAgo(n)} ${time}`;
@@ -112,19 +99,5 @@ export async function seedGovFixtures(): Promise<void> {
     }
   } finally {
     await conn.end();
-  }
-
-  allowServerOnly();
-  const { ROLLUP_JOBS, recomputeDay, markHistoryComplete } = await import('../../lib/rollup/steps');
-  // Like the worker's pool: UTC sessions, DECIMAL as strings.
-  const pool = createPool({ ...testDbOptions(), timezone: 'Z', decimalNumbers: false });
-  pool.on('connection', (c) => { c.query("SET time_zone = '+00:00'", () => {}); });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rollup = new Kysely<any>({ dialect: new MysqlDialect({ pool: pool as any }) });
-  try {
-    for (let day = 0; day <= 45; day++) for (const job of ROLLUP_JOBS) await recomputeDay(rollup, job, dayAgo(day));
-    for (const job of ROLLUP_JOBS) await markHistoryComplete(rollup, job);
-  } finally {
-    await rollup.destroy();
   }
 }
