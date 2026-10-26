@@ -1,4 +1,5 @@
 import 'server-only';
+import { getViewer } from '@/lib/auth/viewer';
 
 /**
  * Server-only client for the treasury-rest-api **admin** surface (the ledger-
@@ -32,13 +33,46 @@ export function treasuryAdminConfigured(): boolean {
   return !!(BASE && TOKEN);
 }
 
-async function call<T>(path: string, method: string, body?: unknown): Promise<T> {
+/**
+ * Header naming the signed-in player behind an admin call. treasury-rest-api
+ * accepts it only alongside the SERVICE token, validates it, records it as the
+ * initiator of admin transfers and in its admin request log (PAR-542).
+ */
+export const ACTING_PLAYER_HEADER = 'X-Acting-Player';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The acting player's UUID for the current request, or null (signed out,
+ * unlinked, or outside a request). Every admin call goes through a server
+ * action, so the viewer is the person who clicked.
+ */
+async function actingPlayer(): Promise<string | null> {
+  try {
+    const viewer = await getViewer();
+    const uuid = viewer.anon ? null : viewer.minecraftUuid;
+    return uuid && UUID_RE.test(uuid) ? uuid.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Request headers for an admin call: the service token and, when known, the acting player. */
+export async function adminHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' };
+  const player = await actingPlayer();
+  if (player) headers[ACTING_PLAYER_HEADER] = player;
+  return headers;
+}
+
+/** One admin request. Throws with the API's `message` (or `error`) on a non-2xx. */
+async function request(path: string, method: string, body?: unknown): Promise<Response> {
   if (!BASE || !TOKEN) {
     throw new Error('Treasury admin API is not configured (TREASURY_API_BASE_URL / TREASURY_ADMIN_TOKEN).');
   }
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+    headers: await adminHeaders(),
     ...(body !== undefined && { body: JSON.stringify(body) }),
     cache: 'no-store',
   });
@@ -55,7 +89,16 @@ async function call<T>(path: string, method: string, body?: unknown): Promise<T>
     }
     throw new Error(message || `Treasury API request failed (${res.status}).`);
   }
-  return (await res.json()) as T;
+  return res;
+}
+
+async function call<T>(path: string, method: string, body?: unknown): Promise<T> {
+  return (await (await request(path, method, body)).json()) as T;
+}
+
+/** Like {@link call} but for 204 No Content responses (no body to parse). */
+async function callVoid(path: string, method: string, body?: unknown): Promise<void> {
+  await request(path, method, body);
 }
 
 export interface TransferResult {
@@ -102,31 +145,6 @@ export const archiveAccount = (accountId: number) =>
   call<AccountResult>(`/api/v1/admin/accounts/${accountId}/archive`, 'POST');
 export const unarchiveAccount = (accountId: number) =>
   call<AccountResult>(`/api/v1/admin/accounts/${accountId}/unarchive`, 'POST');
-
-/** Like {@link call} but for 204 No Content responses (no body to parse). */
-async function callVoid(path: string, method: string, body?: unknown): Promise<void> {
-  if (!BASE || !TOKEN) {
-    throw new Error('Treasury admin API is not configured (TREASURY_API_BASE_URL / TREASURY_ADMIN_TOKEN).');
-  }
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-    ...(body !== undefined && { body: JSON.stringify(body) }),
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    let message = text;
-    try {
-      const parsed = JSON.parse(text);
-      if (parsed && typeof parsed.message === 'string') message = parsed.message;
-      else if (parsed && typeof parsed.error === 'string') message = parsed.error;
-    } catch {
-      /* not JSON — keep raw text */
-    }
-    throw new Error(message || `Treasury API request failed (${res.status}).`);
-  }
-}
 
 /** Set a per-issuer rate-limit multiplier override (admin). */
 export const setRateLimitOverride = (ownerUuid: string, multiplier: string, note: string | null) =>

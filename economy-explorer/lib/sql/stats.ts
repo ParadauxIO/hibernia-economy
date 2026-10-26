@@ -2,9 +2,12 @@ import 'server-only';
 import { sql } from 'kysely';
 import { db } from '@/lib/db';
 
-export interface TxnVolumePoint { date: string; txn_count: number; total_volume: string }
+// Current-balance statistics over account_balances_mat (one row per account,
+// ~146k rows): cheap enough for the request path, and memoised by
+// lib/services/economy.ts. Activity over time (volume, heatmap, flows) is read
+// from the rollups (lib/services/rollup.ts), never from the ledger here.
+
 export interface BalanceBucket { bucket: string; bucket_label: string; account_count: number }
-export interface HourHeatmapCell { dow0: number; hr: number; txn_count: number }
 
 const BUCKET_LABEL: Record<string, string> = {
   neg: '< 0',
@@ -19,9 +22,6 @@ const BUCKET_LABEL: Record<string, string> = {
   '50k_100k': '50K – 100K',
   '100k_plus': '> 100K',
 };
-
-/** Same corrected economic-event volume used by the dashboard and velocity. */
-export { getDailyVolume as getTxnVolume } from './health';
 
 /**
  * Mirrors LedgerExplorerMapper.getBalanceDistribution (line 244-258), but
@@ -71,22 +71,4 @@ export async function getPersonalBalances(): Promise<number[]> {
     WHERE a.is_archived = 0 AND a.account_type = 'PERSONAL' AND abm.balance > 0
   `.execute(db);
   return r.rows.map((row) => parseFloat(row.b)).filter((n) => Number.isFinite(n));
-}
-
-/** Mirrors LedgerExplorerMapper.getHourHeatmap + the controller's dow re-keying. */
-export async function getHourHeatmap(days: number): Promise<HourHeatmapCell[]> {
-  const r = await sql<{ dow: number; hr: number; txn_count: string | number }>`
-    SELECT DAYOFWEEK(settlement_time) AS dow,
-           HOUR(settlement_time) AS hr,
-           COUNT(*) AS txn_count
-    FROM ledger_txns
-    WHERE settlement_time >= NOW() - INTERVAL ${days} DAY
-    GROUP BY DAYOFWEEK(settlement_time), HOUR(settlement_time)
-  `.execute(db);
-  // MariaDB DAYOFWEEK: 1=Sun..7=Sat. Re-key to 0=Mon..6=Sun (matches Spring controller).
-  return r.rows.map((row) => ({
-    dow0: row.dow === 1 ? 6 : row.dow - 2,
-    hr: row.hr,
-    txn_count: Number(row.txn_count),
-  }));
 }

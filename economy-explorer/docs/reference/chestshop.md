@@ -34,8 +34,9 @@ Who the shop belongs to.
 |---|---|
 | *your name* | A personal shop — money goes to you. |
 | *(blank)* | Filled in with your name automatically. |
-| `B:@alias` | A player-managed, letters-only business shop alias, set by the proprietor with `/business account alias <firm> <accountId> <alias>`. The alias stays visible on the sign, including after trades. |
+| `A:<alias>` | A player-managed, letters-only business shop alias, set by the proprietor with `/business account alias <firm> <accountId> <alias>`. The alias stays visible on the sign, including after trades. |
 | `B:<code>` | A **firm account** — money goes to the company. The code after `B:` is a short **base-36 code** for the account, **not** the account's decimal number, so copy it exactly as shown. Get it from `/business account list` (or the Explorer). See [ChestShops for your firm](/docs/guides/chestshop-business). |
+| `G:<name>` | A **government account** — money goes to that department, e.g. `G:GovJustice`. Use `G:#<code>` (the account's base-36 id) when `G:` plus the name is too wide for the sign; the sign then keeps whichever form fits. Needs `ChestShop.government.<name>`. See [Government shops](#government-shops). |
 | `b:<FirmName>` | An older **legacy** form — lowercase `b:` plus the firm's *name*, which resolves to that firm's default business account. Still works (the prefix is matched case-insensitively) and the sign quietly self-heals to the modern `B:<code>` form. |
 | `Admin Shop` | An **admin shop** with unlimited stock and no chest, backed by the server. Needs the `ChestShop.adminshop` permission. |
 
@@ -122,6 +123,27 @@ Building firm shops needs the
 **CHESTSHOP** permission in that firm. Full walkthrough:
 **[ChestShops for your firm](/docs/guides/chestshop-business)**.
 
+## Government shops
+
+Staff can run shops whose money goes to a Treasury **government account**. Put
+`G:` and the account's name on the owner line (`G:GovJustice`; upper/lower case
+doesn't matter). If `G:` plus the name doesn't fit on one sign line (for
+example `DCGovernmentJUD`), use the account's base-36 id instead: `G:#` followed by
+the id written in base 36. ChestShop writes the readable name back whenever it fits.
+
+You need `ChestShop.government.<account name>` in lowercase (for example
+`ChestShop.government.govjustice`) to build, open or break that account's shops.
+`ChestShop.government.*` covers every government account; setting a single account's
+node to `false` still excludes it. `ChestShop.othername.*` does **not** grant
+government shops. Archived accounts can't be used, and neither can the Treasury system
+accounts listed in `GOVERNMENT_SHOP_BLOCKED_ACCOUNTS` (by default `starting-balances`,
+`GovernmentFines` and `TreasuryIngest`), even by admins.
+
+> [!WARNING]
+> Most department accounts can go overdrawn without limit, so a government shop that
+> buys from players (an **S** price) keeps paying however low the balance gets.
+> Only grant these nodes to people trusted to spend that account's money.
+
 ## Permission nodes
 
 ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = operators).
@@ -149,6 +171,7 @@ ChestShop nodes use a `ChestShop.` prefix (defaults: `true` = everyone, `op` = o
 | `ChestShop.admin` | Modify/destroy others' shops; create admin shops (parent of `ChestShop.adminshop`) | `op` |
 | `ChestShop.adminshop` | Create/destroy **Admin Shops** | inherits from `ChestShop.admin` |
 | `ChestShop.mod` | View other players' shop chests (no destroy/admin powers) | `op` |
+| `ChestShop.government.<name>` · `ChestShop.government.*` | Build and run shops owned by that government account, or by any ([Government shops](#government-shops)) | `op` |
 | `ChestShop.nofee` | Skip the shop-creation fee | `op` |
 | `ChestShop.notax.buy` | Treasury adapter: exempt the initiating player from trade tax, for either direction | `op` |
 | `ChestShop.notax.sell` | Declared compatibility node; not independently checked by the current Treasury adapter | `op` |

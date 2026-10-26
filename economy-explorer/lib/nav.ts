@@ -150,7 +150,6 @@ export const ACCOUNT_LINKS: readonly AccountLink[] = [
   { label: 'Statements', href: '/me/statements' },
   { label: 'My market', href: '/me/market' },
   { label: 'My firms', href: '/me/firms' },
-  // ME moves this to /me/developer; until then the webhooks page is the developer page.
-  { label: 'Webhooks and API', href: '/me/webhooks' },
+  { label: 'Webhooks and API', href: '/me/developer' },
   { label: 'Link status', href: '/link' },
 ];

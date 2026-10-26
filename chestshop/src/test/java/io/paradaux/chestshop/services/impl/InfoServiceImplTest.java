@@ -466,7 +466,7 @@ class InfoServiceImplTest extends ServerTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"B:1A", "B:@acme", "B:Old Shop"})
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"B:1A", "A:acme", "B:Old Shop"})
     void showShopInfo_businessOwnerIsFirmNotNonDefaultWalletLabel(String ownerToken) {
         Player p = mock(Player.class);
         Sign sign = shopSign(ownerToken, "1", "B 10", "Stone");
@@ -481,6 +481,7 @@ class InfoServiceImplTest extends ServerTest {
         io.paradaux.treasury.model.economy.Account wallet = new io.paradaux.treasury.model.economy.Account();
         wallet.setAccountId(46);
         wallet.setDisplayName("ChestShops");
+        wallet.setAccountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS);
         when(treasury.getAccountById(46)).thenReturn(wallet);
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
         lenient().when(firms.resolveShopAlias("acme")).thenReturn(46);
@@ -489,6 +490,7 @@ class InfoServiceImplTest extends ServerTest {
         io.paradaux.treasury.model.economy.Account defaultWallet = new io.paradaux.treasury.model.economy.Account();
         defaultWallet.setAccountId(99);
         defaultWallet.setDisplayName("Default Wallet");
+        defaultWallet.setAccountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS);
         lenient().when(treasury.getAccountById(99)).thenReturn(defaultWallet);
         lenient().when(firms.getFirmByAccountId(99)).thenReturn(firm);
         BusinessAccountServiceImpl resolver = new BusinessAccountServiceImpl();

@@ -99,8 +99,8 @@ describe('CsvButton', () => {
       '﻿Account ID,Name,Balance,Note\n' +
         '10,Steve,1234.56,\n' +
         '11,"Acme, Inc.",0.00,\n' +
-        // A leading "-" is a formula trigger, so the negative balance is quoted as text.
-        '12,"He said ""hi""",\'-3.50,"line1\nline2"',
+        // A plain negative number is not a formula, so it stays numeric.
+        '12,"He said ""hi""",-3.50,"line1\nline2"',
     );
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(downloads[0]?.href);
   });

@@ -128,9 +128,13 @@ class SignServiceTest extends ServerTest {
     void businessAccount_detectsIdAndAliasTokensCaseInsensitively() {
         assertThat(SignService.isBusinessAccount("B:1A")).isTrue();
         assertThat(SignService.isBusinessAccount("b:z9")).isTrue();
-        assertThat(SignService.isBusinessAccount("B:@ACME")).isTrue();
+        assertThat(SignService.isBusinessAccount("A:ACME")).isTrue();
+        assertThat(SignService.isBusinessAccount("a:acme")).isTrue();
         // Malformed alias tokens are still reserved so creation rejects them.
-        assertThat(SignService.isBusinessAccount("B:@")).isTrue();
+        assertThat(SignService.isBusinessAccount("A:")).isTrue();
+        assertThat(SignService.isBusinessAccount("A:Acme1")).isTrue();
+        // So is the retired B:@alias form (PAR-528), rather than falling back to a player name.
+        assertThat(SignService.isBusinessAccount("B:@ACME")).isTrue();
         assertThat(SignService.isBusinessAccount("PlayerName")).isFalse();
         assertThat(SignService.isBusinessAccount("B:")).isFalse();
         assertThat(SignService.isBusinessAccount(new String[] {"B:Z9", "", "", ""}))
@@ -206,9 +210,34 @@ class SignServiceTest extends ServerTest {
     }
 
     @Test
+    void governmentAccount_reservesEveryGTokenAndPicksAFittingSignForm() {
+        assertThat(SignService.isGovernmentAccount("G:GovJustice")).isTrue();
+        assertThat(SignService.isGovernmentAccount("g:#2B1A")).isTrue();
+        assertThat(SignService.isGovernmentAccount("G:")).isTrue();
+        assertThat(SignService.isGovernmentAccount("GovJustice")).isFalse();
+        assertThat(SignService.isAccountToken("G:GovJustice")).isTrue();
+        assertThat(SignService.isAccountToken("A:Acme")).isTrue();
+        assertThat(SignService.isAccountToken("Notch")).isFalse();
+
+        assertThat(SignService.governmentAccountSignName(29862, "GovJustice")).isEqualTo("G:GovJustice");
+        // Too wide for one sign line, or not resolvable by name: fall back to the base-36 id.
+        assertThat(SignService.governmentAccountSignName(99393, "DCGovernmentJUD"))
+                .isEqualTo("G:#24OX");
+        assertThat(SignService.governmentAccountSignName(5, "#Odd")).isEqualTo("G:#5");
+    }
+
+    @Test
+    void validateSign_governmentOwnerSkipsNameValidation() {
+        assertThat(signs.validateSign(new String[] {"G:starting-bal", "64", "B 5", "Diamond"}))
+                .isTrue();
+        assertThat(signs.validateSign(new String[] {"G:#24OX", "64", "B 5", "Diamond"}))
+                .isTrue();
+    }
+
+    @Test
     void validateSign_businessOwnerSkipsNameValidation() {
         // An alias token neither matches the player-name regexp nor the "name:id" suffix form.
-        assertThat(signs.validateSign(new String[] {"B:@ACME", "64", "B 5", "Diamond"}))
+        assertThat(signs.validateSign(new String[] {"A:ACME", "64", "B 5", "Diamond"}))
                 .isTrue();
     }
 

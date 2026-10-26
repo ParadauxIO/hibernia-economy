@@ -228,6 +228,10 @@ public class ChestShopConfiguration {
     @ConfigurationValue(path = "EXCLUDED_ITEM_ATTRIBUTES", defaultValue = "")
     private List<String> excludedItemAttributesRaw;
 
+    /** Government accounts that may never own a G: shop; read via {@link #isGovernmentShopBlocked}. */
+    @ConfigurationValue(path = "GOVERNMENT_SHOP_BLOCKED_ACCOUNTS", defaultValue = "")
+    private List<String> governmentShopBlockedAccountsRaw;
+
     // ── Adapter getters for the types the Configurator can't bind natively ──────
 
     /** Allowed shop container materials, parsed from the configured names. */
@@ -254,6 +258,12 @@ public class ChestShopConfiguration {
     /** UUID of the server economy account (defaults to the zero UUID). */
     public UUID getServerEconomyAccountUuid() {
         return UUID.fromString(serverEconomyAccountUuidRaw);
+    }
+
+    /** Whether the named government account is barred from owning shops (case-insensitive). */
+    public boolean isGovernmentShopBlocked(String accountName) {
+        if (governmentShopBlockedAccountsRaw == null || accountName == null) return false;
+        return governmentShopBlockedAccountsRaw.stream().anyMatch(accountName::equalsIgnoreCase);
     }
 
     /** Item-meta attributes excluded from the item-similarity comparison. */

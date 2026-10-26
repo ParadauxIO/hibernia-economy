@@ -6,11 +6,21 @@ order: 9
 
 # Vault bridge analytics estimates (PAR-159)
 
-The dashboard volume/counts, period comparisons (and any velocity derived from
-that volume), stats volume, and money-flow aggregate estimate adjacent Vault
-bridge legs as a single economic event. The ledger, transaction history, raw REST
-feed, account history and sale identities are unchanged. SYSTEM hiding in
-counterparty/richest widgets was already shipped separately.
+The overview's volume, transaction counts and period comparisons estimate
+adjacent Vault bridge legs as a single economic event. The ledger, transaction
+history, raw REST feed, account history and sale identities are unchanged.
+
+**Where it runs (PAR-541).** The estimate is computed once per UTC day by the
+rollup worker (`lib/rollup/steps.ts`, `explorer_rollup_economy_day`:
+`txn_count`/`volume` adjusted, `raw_*` unadjusted, `bridge_pairs`), not
+per request. The live query that pages used to run hit the 15 s statement
+timeout on a cold cache (the first request to `/` failed). It survives only as
+the test oracle in `test/integration/reference/liveBridgeVolume.ts`, which the
+rollup equality tests and the edge cases below run against.
+
+**Money flow is no longer bridge-adjusted.** `/money-flow` now reads the
+`account_day` rollup by counterparty type and shows the ledger as it is: a
+bridged payment appears as two flows, into and out of SYSTEM.
 
 ## Classification evidence
 
@@ -29,15 +39,13 @@ a bridge only when:
 - Both transactions contain exactly two balanced postings, and their other
   accounts are non-SYSTEM.
 
-There is no plugin-wide exemption. Unmatched legs remain faucets/sinks in money
-flow and volume. Multi-posting transactions remain raw in volume and excluded
-from money-flow's two-posting contract. Atomic direct transfers remain unchanged.
+There is no plugin-wide exemption. Unmatched legs remain faucets/sinks in
+volume. Multi-posting transactions remain raw in volume. Atomic direct transfers remain unchanged.
 Intervening postings, differing amounts/messages/plugins, different clearing
 accounts, reversed settlement times and delays over one second prevent matching.
 
 The incoming transaction's volume/count is removed; the outgoing transaction
-retains the event and its settlement date. Money-flow replaces both legs with the
-inferred source/destination account types, then excludes same-type flows as usual.
+retains the event and its settlement date.
 A pair crossing a day/period boundary belongs to the outgoing leg. The window
 includes one second before the reporting boundary. A set-based ordering of recent SYSTEM postings finds candidate predecessors, and an inner
 primary-key range join rejects candidates with intervening postings, including
@@ -53,9 +61,9 @@ use these pairs to persist sale links, identify a payment in an audit, or rewrit
 the ledger. PAR-235's historical sale-link backfill independently requires unique
 leg pairs and unique sales, including adjacent batches and already linked sales.
 
-The query uses the existing settlement-time and posting indexes, bounded by the
-selected reporting window, without a migration, backfill, pairing table, worker,
-or transfer-hot-path trigger. SQL integration tests exercise classification,
+The rollup step uses the existing settlement-time and posting indexes, bounded
+to one day (plus one second for pairs straddling midnight), with no
+transfer-hot-path trigger. SQL integration tests exercise classification,
 raw-row preservation, calendar/window boundaries and actual query-plan row visits
 against 10,000 unrelated old SYSTEM postings and 1,000 current pairs. Correlated
 predecessor lookups were rejected after the latter fixture exposed quadratic

@@ -71,12 +71,12 @@ test('edge rejects forged and expired sessions; valid sessions still need live p
   expect((await context.request.get(`${baseURL}/admin/roles`, { maxRedirects: 0 })).status()).toBe(307);
   await signIn(context, policy.player);
   await visit(page, '/admin/roles');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator('.access-gate')).toBeVisible();
   await policy.conn.query('INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, ?)', [bin(policy.player), 'moderator']);
   await visit(page, '/accounts/2');
   await expect(page.locator('.privacy-gate')).toHaveCount(0);
   await visit(page, '/admin/groups');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator('.access-gate')).toBeVisible();
   await policy.conn.query('DELETE FROM explorer_role WHERE player_uuid_bin = ?', [bin(policy.player)]);
   await visit(page, '/accounts/2');
   await expect(page.locator('.privacy-gate')).toBeVisible();
@@ -99,14 +99,14 @@ test('role editor changes a real assignee’s access without replacing their ses
     const target = await recipient.newPage();
     await visit(target, `${baseURL}/admin/api-keys`);
     await expect(target.getByRole('heading', { name: 'API keys', exact: true })).toBeVisible();
-    await expect(target.getByRole('button', { name: /Revoke|Rotate|Limit/ })).toHaveCount(0);
+    await expect(target.getByRole('button', { name: /^(Revoke key|Rotate key|Limit$)/ })).toHaveCount(0);
     await page.getByRole('checkbox', { name: /^api_keys\.read\b/ }).uncheck();
     await page.getByRole('checkbox', { name: /^market\.sales\.read\b/ }).check();
     await submitReload(page, page.getByRole('button', { name: 'Save permissions', exact: true }));
     await expect.poll(() => permission(recipient, 'api_keys.read')).toBe(false);
     await expect.poll(() => permission(recipient, 'market.sales.read')).toBe(true);
     await visit(target, `${baseURL}/admin/api-keys`);
-    await expect(target.locator('.privacy-gate')).toBeVisible();
+    await expect(target.locator('.access-gate')).toBeVisible();
     await visit(page, `/admin/roles/${policy.key}`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     await submitReload(page, page.getByRole('button', { name: 'Remove direct assignment' }));
@@ -238,12 +238,13 @@ test('government account members can open related transactions from My data; rev
     await expect(page.getByText('Transaction access required', { exact: true })).toBeVisible();
     await policy.conn.query("INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES (?, ?, 'MEMBER', ?)", [accountId, bin(policy.player), bin(policy.admin)]);
     await visit(page, '/me');
-    await page.getByRole('link', { name: accountName, exact: true }).click();
+    // /me lists it as an EntityLink: the name, then the muted "#id".
+    await page.getByRole('link', { name: new RegExp(`^${policy.key} ?#${accountId}$`) }).first().click();
     await page.getByRole('link', { name: `#${txnId}`, exact: true }).click();
-    await expect(page.getByRole('heading', { name: `Txn #${txnId}` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await expect(page.getByRole('link', { name: accountName, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Bob #2', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: '← My data', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: '← My transactions', exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'Bob #2', exact: true }).click();
     await expect(page.locator('.privacy-gate')).toBeVisible();
     await visit(page, '/transactions/2');
@@ -256,7 +257,7 @@ test('government account members can open related transactions from My data; rev
     await policy.conn.query("INSERT INTO account_group_access (account_id, lp_group, level, added_by_uuid_bin) VALUES (?, ?, 'VIEWER', ?)", [accountId, policy.key, bin(policy.admin)]);
     await policy.conn.query('INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin, synced_at) VALUES (?, ?, NOW())', [policy.key, bin(policy.player)]);
     await visit(page, `/transactions/${txnId}`);
-    await expect(page.getByRole('heading', { name: `Txn #${txnId}` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await policy.conn.query('UPDATE explorer_lp_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE player_uuid_bin = ?', [bin(policy.player)]);
     await visit(page, `/transactions/${txnId}`);
     await expect(page.locator('.privacy-gate')).toBeVisible();

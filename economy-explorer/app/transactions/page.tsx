@@ -1,184 +1,181 @@
-import { hasPermission } from '@/lib/auth';
-import { buildMetadata } from '@/lib/metadata';
-import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
-import type { Route } from 'next';
-import { z } from 'zod';
-import { listTransactions, countTransactions, type SortDir } from '@/lib/sql/ledger';
-import { fmtN } from '@/lib/format';
-import { LocalTimestamp } from '@/components/LocalTimestamp';
-import { getViewer } from '@/lib/auth/viewer';
-import { auditView } from '@/lib/audit';
-import { Pagination } from '@democracycraft/design-system/next';
-import { Toolbar, FilterSelect, FilterInput } from '@/components/Toolbar';
-import { Player } from '@/components/Player';
-import { PrivacyGate } from '@/components/PrivacyGate';
+import { Money, PageHeader, When } from '@democracycraft/design-system';
+import { DataTable, TableEmpty, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
 import { AdminNav } from '@/components/AdminNav';
-import { CsvButton } from '@/components/CsvButton';
-import { JsonButton } from '@/components/JsonButton';
-import { TableWrap } from '@democracycraft/design-system';
-
-const SP_SCHEMA = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  q: z.string().trim().min(1).optional(),
-  pluginSystem: z.string().trim().min(1).optional(),
-  dateFrom: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  dateTo: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  minAmount: z.coerce.number().nonnegative().optional(),
-  maxAmount: z.coerce.number().nonnegative().optional(),
-  accountId: z.coerce.number().int().positive().optional(),
-  sort: z.enum(['default', 'txnId', 'settlement']).default('default'),
-  dir: z.enum(['ASC', 'DESC', 'asc', 'desc']).default('DESC'),
-});
+import { ExportMenuForViewer } from '@/components/ExportMenuForViewer';
+import { FeedPager } from '@/components/FeedPager';
+import { FilterBar } from '@/components/FilterBar';
+import { PrivacyGate } from '@/components/PrivacyGate';
+import { searchTransactionEntity } from '@/lib/actions/search';
+import { auditView } from '@/lib/audit';
+import { hasPermission } from '@/lib/auth';
+import { getViewer } from '@/lib/auth/viewer';
+import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { exportHrefs } from '@/lib/export/href';
+import { buildMetadata } from '@/lib/metadata';
+import {
+  DEFAULT_FOLLOW_HOURS,
+  FOLLOW_HOURS,
+  followTheMoney,
+  getPluginFacets,
+  getTransactionDetail,
+  getTransactionsPage,
+  getTransactionsTable,
+  type TxnListItem,
+  type TxnSide,
+} from '@/lib/services/transactions';
+import { cleared, filterText, foreignParams, parseTableState, serializeTableState, stateCursor, tableHref, withQuery, withSort, withoutFilter, type TableState } from '@/lib/tables/core';
+import { BACK_PARAM, JUMP_PARAM, feedLinks, parseFeedNav } from '@/lib/tables/feed';
+import type { TransactionsTable } from '@/lib/tables/transactions';
+import { TxnDetailBody } from './TxnDetailBody';
+import { TxnDrawer } from './TxnDrawer';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  return buildMetadata({ title: "Transactions", description: "Every transfer recorded on the {server} double-entry ledger.", path: "/transactions" });
+  return buildMetadata({ title: 'Transactions', description: 'Every transfer recorded on the {server} double-entry ledger.', path: '/transactions' });
 }
 
-export default async function TransactionsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+const TABLE_ID = 'transactions-table';
+const RouterLink: LinkComponent = Link;
+const TXN_PARAM = 'txn';
+const FOLLOW_PARAM = 'follow';
+
+function sides(list: readonly TxnSide[]) {
+  if (list.length === 0) return <span className="muted">—</span>;
+  const [first] = list as [TxnSide];
+  return <>{first.label}{list.length > 1 && <span className="dt-sub">{` +${list.length - 1}`}</span>}</>;
+}
+
+const columns: Column<TxnListItem>[] = [
+  {
+    key: 'txn',
+    header: 'Transaction',
+    cell: (t) => <><span>{t.message || 'No message'}</span><span className="dt-sub">{` #${t.txn_id}`}</span></>,
+  },
+  { key: 'amount', header: 'Amount', numeric: true, cell: (t) => <Money value={t.volume} /> },
+  { key: 'from', header: 'From', cell: (t) => sides(t.from) },
+  { key: 'to', header: 'To', cell: (t) => sides(t.to) },
+  { key: 'plugin', header: 'Plugin', secondary: true, optional: true, cell: (t) => t.plugin_system ?? <span className="muted">—</span> },
+  { key: 'initiator', header: 'Initiator', secondary: true, optional: true, cell: (t) => t.initiator_name ?? <span className="muted">—</span> },
+  { key: 'settled', header: 'Settled', sort: 'settled', sortFirst: 'desc', align: 'end', cell: (t) => <When value={t.settlement_time} time /> },
+];
+
+function fmtDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+export default async function TransactionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
   if (viewer.anon) {
-    return (
-      <PrivacyGate
-        kind="login"
-        title="Transactions firehose is private"
-        hint="Sign in with moderator or admin access to view the whole-economy transaction list."
-      />
-    );
+    return <PrivacyGate kind="login" title="The transaction explorer is private" hint="Sign in with moderator or admin access to search the whole ledger." />;
   }
   if (!hasPermission(viewer, 'transactions.read')) {
-    return <PrivacyGate kind="private" title="Moderator / admin only" hint="Only moderators and admins can view the whole-economy transactions list." />;
+    return <PrivacyGate kind="private" title="Moderators and admins only" hint="Searching every transaction needs the transactions.read permission." />;
   }
 
   const raw = await searchParams;
-  const sp = SP_SCHEMA.safeParse(flattenSearchParams(raw)).data ?? SP_SCHEMA.parse({});
-  const dir = sp.dir.toUpperCase() as SortDir;
+  const table = await getTransactionsTable();
+  const state = parseTableState(raw, table);
+  const nav = parseFeedNav(raw);
+  const one = (k: string) => { const v = raw[k]; return Array.isArray(v) ? v[0] : v; };
+  const openId = Number(one(TXN_PARAM));
+  const drawerId = Number.isSafeInteger(openId) && openId > 0 ? openId : null;
+  const hoursParam = Number(one(FOLLOW_PARAM));
+  const hours = (FOLLOW_HOURS as readonly number[]).includes(hoursParam) ? hoursParam : DEFAULT_FOLLOW_HOURS;
 
-  // Privileged read: admin browsing the whole-economy transaction firehose.
-  await auditView(viewer, { path: '/transactions', targetType: 'global', targetId: sp.q ?? null });
+  // Privileged read of the whole ledger: the filters are the target.
+  await auditView(viewer, { path: '/transactions', targetType: 'global', targetId: serializeTableState(state, table).slice(0, 64) || null });
 
-  const filters = {
-    q: sp.q ?? null,
-    pluginSystem: sp.pluginSystem ?? null,
-    dateFrom: sp.dateFrom ?? null,
-    dateTo: sp.dateTo ?? null,
-    minAmount: sp.minAmount ?? null,
-    maxAmount: sp.maxAmount ?? null,
-    accountId: sp.accountId ?? null,
-  };
-  const [rows, total] = await Promise.all([
-    listTransactions({ limit: sp.limit, offset: (sp.page - 1) * sp.limit, sort: sp.sort, dir, ...filters }),
-    countTransactions(filters),
+  const [page, facets, drawer] = await Promise.all([
+    getTransactionsPage(state, nav, stateCursor(state)),
+    getPluginFacets(table),
+    drawerId ? getTransactionDetail(drawerId) : Promise.resolve(null),
   ]);
-  const totalPages = Math.max(1, Math.ceil(total / sp.limit));
+  const followed = drawer
+    ? await followTheMoney(drawer, hours, async (ids) => new Set(ids)) // transactions.read sees every account's ledger
+    : [];
+  if (drawer) await auditView(viewer, { path: `/transactions?txn=${drawer.txn.txn_id}`, targetType: 'transaction', targetId: String(drawer.txn.txn_id) });
+
+  // Params that pin this exact page of the list; the drawer links keep them.
+  const position = foreignParams(raw, [BACK_PARAM, JUMP_PARAM]);
+  const href = (s: TableState<TransactionsTable>, extra: [string, string][] = []) => tableHref('/transactions', s, table, extra);
+  const listHref = href(state, position);
+  const drawerHref = (id: number, h?: number) => href(state, [...position, [TXN_PARAM, String(id)], ...(h && h !== DEFAULT_FOLLOW_HOURS ? [[FOLLOW_PARAM, String(h)] as [string, string]] : [])]);
+  const describe = { currency: CURRENCY_SYMBOL, entityLabels: page.entityLabels };
+  const activeFilters = [
+    ...(state.q ? [{ text: `“${state.q}”`, removeHref: href(withQuery(state, '')) }] : []),
+    ...state.filters.map((f) => ({ text: filterText(f, table, describe), removeHref: href(withoutFilter(state, f.field)) })),
+  ];
+  const { newerHref, olderHref } = feedLinks('/transactions', state, table, page.position);
+  const countText = `${page.count.count.toLocaleString('en-US')}${page.count.capped ? '+' : ''}`;
+  const jumpState = { ...state, cursor: null };
+  const hidden = new URLSearchParams(serializeTableState(jumpState, table));
 
   return (
     <>
       <AdminNav />
-      <div className="page-heading">
-        <h1>Transactions</h1>
-        <span className="sub">{fmtN(total)} total</span>
-      </div>
+      <PageHeader title="Transactions" subtitle="Every transfer on the ledger, newest first. Select one to see its postings and where the money went next." />
 
-      <Toolbar
-        searchPlaceholder="Search by message or initiator…"
-        filters={
-          <>
-            <FilterSelect
-              paramKey="pluginSystem"
-              ariaLabel="Filter by source"
-              options={[
-                { value: '', label: 'All sources' },
-                { value: 'treasury', label: 'treasury' },
-                { value: 'rest-api', label: 'rest-api' },
-                { value: 'business-rian', label: 'business-rian' },
-                { value: 'chestshop-3', label: 'chestshop-3' },
-                { value: 'realty', label: 'realty' },
-              ]}
-            />
-            <FilterInput paramKey="accountId" ariaLabel="Filter by account id" type="number" placeholder="Account #" width={110} />
-            <FilterInput paramKey="dateFrom" ariaLabel="From date" type="date" width={140} />
-            <FilterInput paramKey="dateTo" ariaLabel="To date" type="date" width={140} />
-            <FilterInput paramKey="minAmount" ariaLabel="Min amount" type="number" placeholder="Min $" width={90} />
-            <FilterInput paramKey="maxAmount" ariaLabel="Max amount" type="number" placeholder="Max $" width={90} />
-          </>
-        }
-        right={
-          <span className="toolbar-export">
-            <CsvButton
-              filename={`transactions-page-${sp.page}.csv`}
-              headers={['Txn ID', 'Message', 'Postings', 'Settled', 'Initiator', 'Source']}
-              rows={rows.map((r) => [
-                r.txn_id,
-                r.message ?? '',
-                r.posting_count,
-                r.settlement_time?.toISOString() ?? '',
-                r.initiator_name ?? r.initiator_uuid ?? '',
-                r.plugin_system ?? '',
-              ])}
-            />
-            <JsonButton filename={`transactions-page-${sp.page}.json`} data={rows} />
-          </span>
-        }
+      <FilterBar
+        table={table}
+        total={page.count.count}
+        totalIsFloor={page.count.capped}
+        counts={{ plugin: facets }}
+        entityLabels={page.entityLabels}
+        searchEntity={searchTransactionEntity}
+        columns={columnOptions(columns)}
+        tableId={TABLE_ID}
+        currency={CURRENCY_SYMBOL}
+        exportSlot={<ExportMenuForViewer hrefs={exportHrefs('transactions', state, table)} allDescription={`${countText} transactions, up to 100,000`} />}
       />
 
-      <TableWrap label="Transactions"><table className="data-table">
-        <thead>
-          <tr>
-            <th>Txn</th>
-            <th>Message</th>
-            <th className="amount">Postings</th>
-            <th className="ts">Settled</th>
-            <th>Initiator</th>
-            <th>Source</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={6} className="empty">No transactions match.</td>
-            </tr>
-          )}
-          {rows.map((r) => (
-            <tr key={r.txn_id}>
-              <td>
-                <Link href={`/transactions/${r.txn_id}` as Route} className="mono rowlink" prefetch={false}>
-                  #{r.txn_id}
-                </Link>
-              </td>
-              <td>{r.message}</td>
-              <td className="amount mono">{fmtN(r.posting_count)}</td>
-              <td className="ts"><LocalTimestamp value={r.settlement_time} /></td>
-              <td><Player name={r.initiator_name} uuid={r.initiator_uuid} /></td>
-              <td>
-                <span className="mono" style={{ color: 'var(--fg-muted)' }}>{r.plugin_system ?? '—'}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table></TableWrap>
+      {page.window.bounded && page.window.from && (
+        <p className="muted small">
+          Amount, account type and message filters search {page.window.days} days at most: {fmtDay(page.window.from)} to {page.window.to ? fmtDay(new Date(page.window.to.getTime() - 1)) : 'now'}.
+          {' '}Add a Settled filter to search another period.
+        </p>
+      )}
 
-      <Pagination
-        page={sp.page}
-        totalPages={totalPages}
-        totalItems={total}
-        basePath="/transactions"
-        searchParams={{
-          q: sp.q,
-          pluginSystem: sp.pluginSystem,
-          sort: sp.sort,
-          dir: sp.dir,
-          limit: String(sp.limit),
-        }}
+      <DataTable
+        id={TABLE_ID}
+        label="Transactions"
+        columns={columns}
+        rows={page.rows}
+        rowKey={(t) => t.txn_id}
+        rowHref={(t) => drawerHref(t.txn_id)}
+        sort={state.sort}
+        sortHref={(field, dir) => href(withSort(state, field, dir, table))}
+        density="compact"
+        link={RouterLink}
+        empty={<TableEmpty noun="transactions" filters={activeFilters} clearHref={href(cleared(state))} link={RouterLink} />}
       />
+
+      <FeedPager
+        newerHref={newerHref}
+        olderHref={olderHref}
+        summary={page.rows.length ? `Showing ${page.rows.length} of ${countText}` : undefined}
+        jump={{ action: '/transactions', param: JUMP_PARAM, value: nav.jump?.day, hidden: [...hidden.entries()], max: fmtDay(new Date()) }}
+      />
+
+      {drawer && (
+        <TxnDrawer
+          title={`Transaction #${drawer.txn.txn_id}`}
+          description={drawer.txn.message || undefined}
+          closeHref={listHref}
+          actions={<Link href={`/transactions/${drawer.txn.txn_id}`} className="btn btn-quiet" prefetch={false}>Open full page</Link>}
+        >
+          <TxnDetailBody
+            detail={drawer}
+            followed={followed}
+            hours={hours}
+            followHref={(h) => drawerHref(drawer.txn.txn_id, h)}
+            txnHref={(id) => drawerHref(id, hours)}
+            showFollow
+            inDrawer
+          />
+        </TxnDrawer>
+      )}
     </>
   );
 }
-

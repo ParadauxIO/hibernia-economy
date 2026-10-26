@@ -1,22 +1,21 @@
 package io.paradaux.chestshop.integration;
-import lombok.extern.slf4j.Slf4j;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.api.BusinessApi;
-import io.paradaux.chestshop.ChestShop;
 import io.paradaux.chestshop.services.BusinessAccountService;
 import io.paradaux.chestshop.services.EconomyService;
+import io.paradaux.chestshop.services.GovernmentAccountService;
 import io.paradaux.chestshop.utils.BusinessAccountUtil;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
+import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
-
-import java.util.List;
 
 /**
  * Treasury integration — ChestShop's economy boundary, and its one {@linkplain #required()
@@ -36,11 +35,16 @@ public class TreasuryIntegration implements Integration {
 
     private final EconomyService economy;
     private final BusinessAccountService businessAccounts;
+    private final GovernmentAccountService governmentAccounts;
 
     @Inject
-    public TreasuryIntegration(EconomyService economy, BusinessAccountService businessAccounts) {
+    public TreasuryIntegration(
+            EconomyService economy,
+            BusinessAccountService businessAccounts,
+            GovernmentAccountService governmentAccounts) {
         this.economy = economy;
         this.businessAccounts = businessAccounts;
+        this.governmentAccounts = governmentAccounts;
     }
 
     @Override
@@ -55,8 +59,7 @@ public class TreasuryIntegration implements Integration {
 
     @Override
     public boolean hook(Plugin plugin) {
-        RegisteredServiceProvider<TreasuryApi> rsp =
-                Bukkit.getServicesManager().getRegistration(TreasuryApi.class);
+        RegisteredServiceProvider<TreasuryApi> rsp = Bukkit.getServicesManager().getRegistration(TreasuryApi.class);
         if (rsp == null) {
             log.warn("Treasury plugin found but TreasuryApi service not registered!");
             return false;
@@ -71,8 +74,8 @@ public class TreasuryIntegration implements Integration {
             if (systemAccounts != null && !systemAccounts.isEmpty()) {
                 systemAccountId = systemAccounts.get(0).getAccountId();
             } else {
-                Account systemAccount =
-                        treasury.createAccount(AccountType.SYSTEM, BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID, "ChestShop System");
+                Account systemAccount = treasury.createAccount(
+                        AccountType.SYSTEM, BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID, "ChestShop System");
                 systemAccount.setAllowOverdraft(true);
                 treasury.updateAccount(systemAccount);
                 systemAccountId = systemAccount.getAccountId();
@@ -87,8 +90,7 @@ public class TreasuryIntegration implements Integration {
         // DCGovernment). Treasury exposes it as a separate service so we don't need a second lookup.
         TaxApi taxApi = treasury.getTaxApi();
         if (taxApi == null) {
-            log.warn(
-                    "Treasury loaded but TaxApi unavailable — ChestShop sales tax will not be collected.");
+            log.warn("Treasury loaded but TaxApi unavailable — ChestShop sales tax will not be collected.");
         }
         log.info("Sales tax now routed via Treasury TaxApi → "
                 + (taxApi != null ? taxApi.getDefaultTaxAccountName() : "(disabled)"));
@@ -102,12 +104,14 @@ public class TreasuryIntegration implements Integration {
                 businessApi = businessRsp.getProvider();
                 log.info("Business API integrated: firm CHESTSHOP permissions will gate shop access.");
             } else {
-                log.warn("Business plugin found but BusinessApi service not registered — falling back to Treasury membership checks.");
+                log.warn(
+                        "Business plugin found but BusinessApi service not registered — falling back to Treasury membership checks.");
             }
         }
 
         economy.bind(treasury, systemAccountId, taxApi);
         businessAccounts.bind(treasury, businessApi);
+        governmentAccounts.bind(treasury);
         return true;
     }
 }

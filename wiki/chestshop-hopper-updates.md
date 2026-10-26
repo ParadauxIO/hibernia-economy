@@ -1,8 +1,8 @@
 # ChestShop hopper stock updates
 
 PAR-523 adds a bounded, deferred refresh worker for shop-sign stock counters.
-`USE_STOCK_COUNTER` remains false by default. Enabling counters does not update
-the finder/market database on hopper transfers; that is outside this change.
+`USE_STOCK_COUNTER` remains false by default. PAR-544 makes the same refresh keep
+`/find` stock current, and the worker runs for that alone when counters are off.
 
 ## Behavior
 
@@ -21,6 +21,20 @@ all connected shop signs, including both halves of double chests, and writes onl
 changed counter text. Failed insertion and later cancellation therefore cannot
 add phantom stock. Unlimited admin shops are skipped, as are counters when
 `MAX_SHOP_AMOUNT` exceeds 99999.
+
+## Finder stock
+
+Each refreshed non-admin shop is also measured for the `/find` registry
+(`current_stock` and `estimated_capacity`) by `ShopStockPublisher`:
+
+- A reading equal to the last value written for that sign, by any path, writes nothing.
+- Changed readings are coalesced per sign and written by one async batch at a time,
+  so registry writes stay in order and never run on the server thread.
+- Trade, chest-close, creation and resync writes stay synchronous. They report their
+  value to the publisher, which drops queued hopper readings for that sign and makes
+  an in-flight one skip its write. An older hopper reading therefore cannot replace a newer one.
+- Wildcard shops have no registry row and are skipped. Plugin disable flushes
+  queued writes synchronously.
 
 This prototype uses a lazy index of pending container coordinates. It does **not**
 cache positive or negative shop membership: each batch discovers signs afresh.
@@ -41,9 +55,12 @@ option if profiling identifies that work as the bottleneck.
   coordinates. Chunk enumeration and an individual refresh cannot be preempted:
   **1 ms is a target, not a hard upper bound**. Dense chunks and expensive item
   matching must be included in load tests.
-- Memory consists of the capped normal queue, deduplicated chunk coordinates and
-  one chunk's recovery positions. Chunk/world unload discards associated work;
-  chunk load schedules reconciliation. Disabling the plugin clears everything.
+- Memory consists of the capped normal queue, deduplicated chunk coordinates,
+  one chunk's recovery positions and work set aside at unload. Chunk unload keeps the
+  positions it drops (up to 4,096 in total) and re-queues them when that chunk loads.
+  Unload during overflow reconciliation, or past that cap, recounts the whole chunk
+  on load instead. A chunk load on its own queues nothing, so exploration adds no
+  work. World unload and plugin disable discard everything.
 - No refresh intentionally loads an unloaded chunk. Counter freshness can exceed
   the configured interval under load and at low TPS. Existing loaded shops are refreshed on their
   next transfer or ordinary manual/trade update, not by a startup world scan.

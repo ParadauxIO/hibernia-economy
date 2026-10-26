@@ -45,7 +45,8 @@ export const PERMISSION_DESCRIPTIONS = {
   "roles.update": "Edit role permissions, limited to permissions you hold.",
   "roles.delete": "Delete roles and their assignments.",
   "roles.assign": "Manage direct role assignments, limited to permissions you hold.",
-  "docs.admin.read": "Read administrator documentation."
+  "docs.admin.read": "Read administrator documentation.",
+  "audit.read": "Read the full explorer audit log, including what each admin change altered."
 } as const;
 export type Permission = keyof typeof PERMISSION_DESCRIPTIONS;
 export const PERMISSIONS = Object.keys(PERMISSION_DESCRIPTIONS) as Permission[];

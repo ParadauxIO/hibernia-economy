@@ -21,7 +21,7 @@ annotations = "26.1.0"
 guice = "7.0.0"
 hikari = "7.1.0"
 mariadb = "3.5.10"
-mybatis = "3.5.19"
+mybatis = "3.6.0"
 mybatis-guice = "4.1.1"
 reflections = "0.10.2"
 jjwt = "0.13.0"
@@ -36,8 +36,8 @@ shadow = "9.6.1"
 # build-logic classpath deps (like shadow); the analysers themselves are resolved
 # into each project's errorprone / spotless configurations at build time.
 errorprone-plugin = "5.1.1"
-errorprone = "2.50.0"
-nullaway = "0.14.2"
+errorprone = "2.51.0"
+nullaway = "0.14.3"
 spotless = "8.10.4"
 palantir-java-format = "2.102.0"
 ktlint = "1.8.0"
@@ -51,7 +51,7 @@ mariadb4j = "3.3.1"
 # against Platform 1.14 but resolves to the BOM's 6.x without API breaks — see
 # MoneyProperties et al.).
 jqwik = "1.10.2"
-flyway = "13.10.0"
+flyway = "13.11.1"
 jacoco = "0.8.15"
 # Mutation testing (io.paradaux.mutation-testing-conventions). The Gradle plugin
 # is a build-logic classpath dep; PIT itself and its JUnit Platform test plugin

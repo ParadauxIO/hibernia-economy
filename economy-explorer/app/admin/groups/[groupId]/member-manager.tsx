@@ -1,7 +1,8 @@
 'use client';
 import { useState, useTransition } from 'react';
+import { Tag, TableWrap } from '@democracycraft/design-system';
 import { addGroupMemberAction, removeGroupMemberAction } from '@/lib/actions/admin';
-import { TableWrap } from '@democracycraft/design-system';
+import styles from '../../admin.module.css';
 
 interface Member {
   uuid: string;
@@ -36,23 +37,21 @@ export function MemberManager({ groupId, members, disabled = false }: { groupId:
   }
 
   return (
-    <div>
-      <form onSubmit={onAdd} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
-        <input
-          className="input"
-          placeholder="Player name or UUID"
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
+    <div className={styles.stack}>
+      <form onSubmit={onAdd} className={styles.row}>
+        <label className={`field ${styles.grow}`}>
+          <span className="field-label">Add a manual member</span>
+          <input className="input" placeholder="Player name or UUID" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+        </label>
         <button className="btn" disabled={disabled || pending || !identifier.trim()}>{pending ? 'Adding…' : 'Add member'}</button>
-        {err && <span className="state-error" style={{ fontSize: 11 }}>{err}</span>}
+        {err && <span role="alert" className="state-error small">{err}</span>}
       </form>
 
       <TableWrap label="Group members">
         <table className="data-table">
+          <caption className="sr-only">Group members</caption>
           <thead>
-            <tr><th>Player</th><th>Source</th><th>Actions</th></tr>
+            <tr><th scope="col">Player</th><th scope="col">Source</th><th scope="col"><span className="sr-only">Actions</span></th></tr>
           </thead>
           <tbody>
             {members.length === 0 && <tr><td colSpan={3} className="empty">No members.</td></tr>}
@@ -61,13 +60,13 @@ export function MemberManager({ groupId, members, disabled = false }: { groupId:
                 <td>{m.name ?? <span className="mono">{m.uuid}</span>}</td>
                 <td>
                   {m.source !== 'manual'
-                    ? <span className="badge">{m.source}: {m.syncActive ? 'synced' : 'sync expired'}</span>
-                    : <span className="badge badge-active">manual</span>}
+                    ? <Tag tone={m.syncActive ? 'neutral' : 'warn'}>{m.source}: {m.syncActive ? 'synced' : 'sync expired'}</Tag>
+                    : <Tag tone="accent">manual</Tag>}
                 </td>
                 <td>
                   {m.source === 'manual'
-                    ? <button className="btn" disabled={disabled || pending} onClick={() => onRemove(m.uuid, m.name)}>Remove</button>
-                    : <span className="sub">managed by cron</span>}
+                    ? <button type="button" className="btn btn-quiet" disabled={disabled || pending} onClick={() => onRemove(m.uuid, m.name)}>Remove</button>
+                    : <span className="muted small">Managed by sync</span>}
                 </td>
               </tr>
             ))}

@@ -136,7 +136,7 @@ rather than silently reporting an incomplete list. No migration is needed.
 
 `FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's
 shop alias, or null. Business owns alias persistence and proprietor-only management;
-ChestShop resolves `B:@alias` through this API, checks normal shop access, and keeps
+ChestShop resolves `A:alias` through this API, checks normal shop access, and keeps
 that alias as the account's sign name. Its synthetic UUID still encodes the Treasury
 account ID for payments. Aliases contain 1–12 ASCII letters only. Changing or clearing
 an alias stops old signs from resolving; `firm_shop_alias_reservations` permanently
@@ -412,6 +412,34 @@ Every table moves to one system (redesign spec §5.5). The accounts directory
 - **Every filter must be index-backed or cheap.** Check the plan with `EXPLAIN`
   before offering a filter on a large table; if it needs an index, add a Flyway
   migration in the same PR or drop the filter.
+
+### Explorer search, exports and big feeds (PAR-540)
+
+- **Search.** `lib/services/search.ts` owns the rules; `lib/sql/search.ts` the
+  queries. The typeahead (`searchPreview` and `searchSuggest` in
+  `lib/actions/search.ts`, and `GET /api/search/preview` for the ⌘K palette,
+  which can abort it) is prefix-only on name indexes, 2+ characters, and cached
+  60 s per `(type, prefix)` under the `search-typeahead` memo key. `/search` adds
+  contains matches on the small sets only: non-personal account names, firms and
+  traded item keys. Player names stay prefix-only.
+- **Keyset feeds.** `/transactions` and `/chestshop/sales` page on
+  `(timestamp, id)` with `lib/sql/keyset.ts` and `lib/tables/feed.ts` (Newer,
+  Older, jump to date), and count no further than 1,000. Each query is driven off
+  one index chosen from the filters, with one ordered, LIMITed branch per chip
+  value under a `UNION`; the comment above "Transaction explorer" in
+  `lib/sql/ledger.ts` lists the drivers. Filters with no index (amount, account
+  types, message or item text, price) only scan a bounded window
+  (`lib/tables/scanWindow.ts`), and per-row checks are written as
+  `(SELECT 1 … LIMIT 1) = 1`, because MariaDB may materialize an `EXISTS` as a
+  semi-join over the whole history.
+- **Full exports.** `GET /api/export/<dataset>?<page URL state>&format=csv|ndjson|json`
+  streams up to 100k rows. The route handles sign-in, the per-viewer rate limit
+  (10 a minute, Redis), the audit record (action `export`) and the row cap. To add a
+  dataset, create `lib/export/datasets/<id>.ts` calling `defineExport` (the
+  pattern is in the header of `lib/export/registry.ts`), add one import line to
+  `lib/export/datasets/index.ts`, and pass `exportHrefs(id, state, table)` from
+  `lib/export/href.ts` to the page's `ExportMenu`. `authorize` must repeat the
+  page's own permission check.
 
 ### Business and Realty Explorer membership sources
 

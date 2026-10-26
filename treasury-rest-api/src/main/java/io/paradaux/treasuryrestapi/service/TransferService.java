@@ -124,14 +124,22 @@ public class TransferService {
 
     /**
      * SERVICE-scoped admin transfer between two arbitrary accounts with a memo
-     * (PAR-217). Validates + bounds the amount like the token path, records the
-     * SERVICE key's owner as the ledger initiator, and goes through the same
-     * {@link #executeTransfer} core. Does NOT bypass the requires-authorization
-     * guard — an account needing an in-game authorizer is rejected (403).
+     * (PAR-217). Validates + bounds the amount like the token path and goes
+     * through the same {@link #executeTransfer} core. Does NOT bypass the
+     * requires-authorization guard — an account needing an in-game authorizer is
+     * rejected (403).
+     *
+     * <p>The ledger initiator is the acting player when the caller names one
+     * ({@code X-Acting-Player}, PAR-542): the person who moved the money, as an
+     * in-game {@code /treasury transfer} records its sender. Without one it is the
+     * SERVICE key's owner, as before.
+     *
+     * @param actingPlayer the validated acting player, or {@code null}
      */
     @Transactional
     public TransferResponse adminTransfer(
             VerifiedToken verified,
+            UUID actingPlayer,
             Long fromAccountId,
             Long toAccountId,
             String amount,
@@ -150,7 +158,7 @@ public class TransferService {
                 toAccountId,
                 amt,
                 memo == null ? "" : memo,
-                verified.ownerUuid(),
+                actingPlayer != null ? actingPlayer : verified.ownerUuid(),
                 idempotencyKey, /* bypassAuthRequired */
                 false);
     }

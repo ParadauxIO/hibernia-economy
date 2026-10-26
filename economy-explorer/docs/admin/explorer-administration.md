@@ -15,7 +15,25 @@ Financial mutations require the [configured Treasury admin API](/docs/admin/conf
 **Players** requires `player.read.all`; account histories still obey account-read
 permissions. Search for the Minecraft name/UUID and inspect the relevant account,
 firm and date window. **Transactions** requires `transactions.read` and shows the
-global ledger; open a transaction to inspect its postings and counterparties.
+global ledger, newest first. Narrow it with filter chips: settled date, category
+(Taxes, or the recording plugin's category), plugin, account, initiator or
+authorizer, amount, and the type of the paying or receiving account. Type `#123`
+to find one transaction, or text to match messages. Select a row to see its
+postings in a panel without leaving the list. **Follow the money** in that panel
+lists what each receiving account did in the 1, 6, 24 or 72 hours either side.
+
+Every filter reads an index. Amount searches at most 31 days, and the account-type
+and message filters at most 7; without a **Settled** filter they cover the most
+recent days, and a longer Settled range is cut to its last days. A note under the
+filters says when that happened. The count stops at "1,000+": use **Older**,
+**Newer** and **Jump to** a date to move through the list. The **Sales** feed
+(`market.sales.read`) works the same way for ChestShop trades, filtered by item,
+customer, shop owner, firm, direction, price and date (price and item-name text
+cover at most 7 days).
+
+**Export → All results** downloads up to 100,000 rows of what the filters select,
+as CSV or JSON, with the same permission as the page. Each export is written to the
+audit log with action **Export**, the dataset as the target, and the filters in the path.
 Record transaction IDs, exact amounts and UTC times, rather than screenshots alone.
 Public balances do not imply access to private transaction histories.
 
@@ -69,21 +87,42 @@ access and API keys afterward, not just the displayed proprietor.
 
 ## Audit evidence
 
-Privileged Explorer reads and mutations write to `explorer_audit`. There is no
-built-in audit-log browser. Authorized database operators can inspect a bounded
-read-only query, for example:
+[Admin → Audit log](/admin/audit) requires `audit.read` (seeded into the admin
+role). It lists `explorer_audit` newest first. Filter it with chips:
 
-```sql
-SELECT at, actor_sub, actor_role, method, path, target_type, target_id
-FROM explorer_audit
-ORDER BY at DESC
-LIMIT 100;
-```
+- **Actor**: a player name or UUID.
+- **Action**: what happened, for example `Account: rename` or `Group: change roles`.
+- **Target type** and **Target id**: an account number, firm id, group id, role key or player UUID.
+- **Time**: a preset or a custom range.
 
-Correlate this with REST/plugin logs and ledger transaction IDs. An audit record
-is not a substitute for checking the actual ledger result, and logged role names
-are not a historical snapshot of every permission. Preserve only the evidence
-needed for the incident; do not paste tokens or webhook URLs into tasks.
+Each row has **Details**. It shows the request facts (time, actor, request path,
+source IP, sign-in subject) and, for admin changes, a field-by-field comparison
+of the values before and after the change. Every account, firm, API key, rate
+limit, webhook, group and role change made through the Explorer records them.
+Rows written before this release have no before or after values.
+
+Two kinds of read are recorded too:
+
+- privileged views of other players' data, as before;
+- **relationship reads**: a government or business account opened through
+  ownership, account access, an LP group grant or firm finance access, rather
+  than a global `.all` permission. These are recorded at most once per person,
+  account and hour, so refreshing a page does not flood the log.
+
+The log is fail-open: if a row can't be written the page still works, and the
+failure is counted in the `explorer_audit_writes_total{outcome="error"}` metric.
+Watch that metric; a log that silently stops writing looks the same as a quiet one.
+
+Treasury admin calls also name the acting player. An admin transfer records the
+admin who made it as the ledger initiator (it used to record the owner of the
+Explorer's service key), and the REST API writes one `AdminRequests` log line per
+admin call with the acting player's UUID.
+
+Correlate the audit log with REST/plugin logs and ledger transaction IDs. An
+audit record is not a substitute for checking the actual ledger result, and
+logged role names are not a historical snapshot of every permission. Preserve
+only the evidence needed for the incident; do not paste tokens or webhook URLs
+into tasks.
 
 ## Other consoles
 

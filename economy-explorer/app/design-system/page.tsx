@@ -230,8 +230,9 @@ export default async function DesignSystemPage({ searchParams }: { searchParams:
         <Section level={3} id="chart-distribution" title="Distribution">
           <BalanceDistribution data={f.balanceBuckets} />
         </Section>
-        <Section level={3} id="chart-waterfall" title="Waterfall" description="Opening balance → categories → closing balance.">
-          <Waterfall label="October statement" opening="41210.30" steps={f.monthCategories} />
+        <Section level={3} id="chart-waterfall" title="Waterfall" description="Opening balance → categories → closing balance. When the changes are small next to the balance, the axis is fitted to the running total and the opening and closing bars are drawn cut.">
+          <Waterfall label="October statement" title="Fitted axis" description="A $41K balance moved by a few thousand." opening="41210.30" steps={f.monthCategories} />
+          <Waterfall label="First month statement" title="Axis from zero" description="Changes as large as the balance keep a zero baseline." opening="1200.00" steps={f.monthCategories} />
         </Section>
         <Section level={3} id="chart-empty" title="Empty">
           <TimeSeriesChart data={[]} label="Volume by day" series={[{ key: 'v', label: 'Volume' }]} empty="No activity in this period." />

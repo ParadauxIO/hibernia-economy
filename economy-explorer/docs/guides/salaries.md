@@ -38,7 +38,7 @@ Salary payments show up in your history like any other income:
 /transactions
 ```
 
-You can also see them on your **My data** dashboard on the
+You can also see them on your **My finances** dashboard on the
 [Explorer](/docs/guides/using-the-explorer) — they appear as income from the
 government.
 

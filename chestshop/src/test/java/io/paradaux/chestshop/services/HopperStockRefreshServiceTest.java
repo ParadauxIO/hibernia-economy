@@ -17,6 +17,7 @@ import io.paradaux.chestshop.utils.SignText;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.Server;
@@ -48,8 +49,10 @@ class HopperStockRefreshServiceTest extends ServerTest {
     private StockCounterService counters;
     private SignService signs;
     private HopperStockRefreshService refresh;
+    private ShopStockPublisher stock;
     private MockedStatic<InventoryUtil> inventoryApi;
     private final List<BlockState> containers = new ArrayList<>();
+    private final AtomicInteger enumerations = new AtomicInteger();
 
     @BeforeEach
     void setup() {
@@ -70,9 +73,11 @@ class HopperStockRefreshServiceTest extends ServerTest {
                     int z = call.getArgument(1);
                     Chunk chunk = mock(org.mockbukkit.mockbukkit.world.ChunkMock.class);
                     when(chunk.getTileEntities(false))
-                            .thenAnswer(ignored -> containers.stream()
-                                    .filter(state -> (state.getX() >> 4) == x && (state.getZ() >> 4) == z)
-                                    .toArray(BlockState[]::new));
+                            .thenAnswer(ignored -> enumerations.incrementAndGet() > 0
+                                    ? containers.stream()
+                                            .filter(state -> (state.getX() >> 4) == x && (state.getZ() >> 4) == z)
+                                            .toArray(BlockState[]::new)
+                                    : null);
                     return chunk;
                 })
                 .when(world)
@@ -87,7 +92,8 @@ class HopperStockRefreshServiceTest extends ServerTest {
         MaterialService materials = new MaterialServiceImpl(config);
         counters = spy(new StockCounterServiceImpl(
                 items, config, signs, blocks, new InventoryServiceImpl(config, materials), materials));
-        refresh = new HopperStockRefreshService(plugin, config, blocks, signs, counters, () -> 0L);
+        stock = mock(ShopStockPublisher.class);
+        refresh = new HopperStockRefreshService(plugin, config, blocks, signs, counters, stock, () -> 0L);
     }
 
     @AfterEach
@@ -193,6 +199,94 @@ class HopperStockRefreshServiceTest extends ServerTest {
         refresh.reconcileChunk(world.getUID(), 0, 0);
         ticks(110);
         assertThat(counter(sign)).isEqualTo("Q 1 : C 12");
+    }
+
+    @Test
+    void chunkLoadAloneQueuesNoWork() {
+        // PAR-544: exploring players must not build a recount backlog of unrelated chunks.
+        Inventory inventory = chestAt(4, 64, 4);
+        signAt(5, 64, 4, BlockFace.EAST);
+        inventory.addItem(item(Material.DIAMOND, 12));
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(200);
+        assertThat(enumerations).hasValue(0);
+        verifyNoInteractions(counters);
+    }
+
+    @Test
+    void unloadDefersDroppedWorkUntilThatChunkLoadsAgain() {
+        Inventory inventory = chestAt(4, 64, 4);
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        inventory.addItem(item(Material.DIAMOND, 12));
+        refresh.markDirty(inventory);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        ticks(200);
+        assertThat(counter(sign)).isEqualTo("1");
+        refresh.loadChunk(world.getUID(), 1, 0); // a different chunk restores nothing
+        ticks(200);
+        assertThat(counter(sign)).isEqualTo("1");
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 12");
+        // Only the dropped coordinate came back: no whole-chunk enumeration.
+        assertThat(enumerations).hasValue(0);
+        refresh.loadChunk(world.getUID(), 0, 0); // restored once, not on every later load
+        ticks(200);
+        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+    }
+
+    @Test
+    void unloadDuringOverflowRecountsTheWholeChunkOnLoad() {
+        Inventory inventory = chestAt(4, 64, 4);
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        inventory.addItem(item(Material.DIAMOND, 12));
+        refresh.reconcileChunk(world.getUID(), 0, 0);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        ticks(200);
+        assertThat(counter(sign)).isEqualTo("1");
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(110);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 12");
+    }
+
+    @Test
+    void worldUnloadDropsDeferredWork() {
+        Inventory inventory = chestAt(4, 64, 4);
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        inventory.addItem(item(Material.DIAMOND, 12));
+        refresh.markDirty(inventory);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        refresh.unloadWorld(world.getUID());
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(200);
+        assertThat(counter(sign)).isEqualTo("1");
+    }
+
+    @Test
+    void publishesRegistryStockEvenWithCountersOffButNeverForAdminShops() {
+        // PAR-544: /find stock follows hoppers whether or not sign counters are enabled.
+        when(stock.enabled()).thenReturn(true);
+        TestConfigs.with(config, "useStockCounter", false);
+        Inventory inventory = chestAt(4, 64, 4);
+        Block signBlock = signAt(5, 64, 4, BlockFace.EAST);
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class));
+        verifyNoInteractions(counters);
+        assertThat(counter(signBlock)).isEqualTo("1");
+
+        Sign sign = (Sign) signBlock.getState();
+        SignText.setLine(sign, 0, config.getAdminShopName());
+        sign.update();
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class));
+    }
+
+    @Test
+    void stopFlushesQueuedRegistryStock() {
+        refresh.stop();
+        verify(stock).flush();
     }
 
     @Test
@@ -316,8 +410,8 @@ class HopperStockRefreshServiceTest extends ServerTest {
     @Test
     void timeBudgetDefersWorkWithoutLosingIt() {
         var clock = new java.util.concurrent.atomic.AtomicLong();
-        refresh =
-                new HopperStockRefreshService(plugin, config, blocks, signs, counters, () -> clock.getAndAdd(500_000));
+        refresh = new HopperStockRefreshService(
+                plugin, config, blocks, signs, counters, stock, () -> clock.getAndAdd(500_000));
         Inventory first = chestAt(4, 64, 4);
         Block firstSign = signAt(5, 64, 4, BlockFace.EAST);
         Inventory second = chestAt(4, 68, 4);
@@ -458,5 +552,116 @@ class HopperStockRefreshServiceTest extends ServerTest {
         ticks(1);
         assertThat(counter(sign)).isEqualTo("Q 1 : C 0");
         verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+    }
+
+    @Test
+    void chunkLoadWhileDisabledDiscardsDeferredWork() {
+        Inventory inventory = chestAt(4, 64, 4);
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        inventory.addItem(item(Material.DIAMOND, 12));
+        refresh.markDirty(inventory);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        TestConfigs.with(config, "useStockCounter", false);
+        refresh.loadChunk(world.getUID(), 0, 0);
+        TestConfigs.with(config, "useStockCounter", true);
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(200);
+        assertThat(counter(sign)).isEqualTo("1");
+    }
+
+    @Test
+    void unloadOfAnUnknownWorldOrEmptyChunkDefersNothing() {
+        refresh.unloadChunk(java.util.UUID.randomUUID(), 0, 0);
+        refresh.unloadChunk(world.getUID(), 3, 3);
+        refresh.loadChunk(world.getUID(), 3, 3);
+        ticks(200);
+        assertThat(enumerations).hasValue(0);
+        verifyNoInteractions(counters);
+    }
+
+    @Test
+    void unloadMidRecoveryDefersOnlyThatChunksRemainingContainers() {
+        AtomicLong clock = new AtomicLong();
+        // Every timing read exhausts the budget: one container per phase per tick.
+        refresh = new HopperStockRefreshService(
+                plugin, config, blocks, signs, counters, stock, () -> clock.getAndAdd(500_000));
+        Inventory first = chestAt(4, 64, 4);
+        Block firstSign = signAt(5, 64, 4, BlockFace.EAST);
+        Inventory second = chestAt(8, 64, 4);
+        Block secondSign = signAt(9, 64, 4, BlockFace.EAST);
+        first.addItem(item(Material.DIAMOND, 3));
+        second.addItem(item(Material.DIAMOND, 4));
+        world.loadChunk(1, 0);
+        Inventory elsewhere = chestAt(20, 64, 4);
+        refresh.reconcileChunk(world.getUID(), 0, 0);
+        ticks(100); // recovery enumerates chunk 0 and refreshes one container
+        refresh.markDirty(elsewhere); // pending work in another chunk
+        refresh.unloadChunk(world.getUID(), 5, 5); // unrelated: recovery and pending untouched
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        ticks(200);
+        String before = counter(firstSign) + "|" + counter(secondSign);
+        assertThat(before).containsOnlyOnce("Q 1 : C");
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(100);
+        assertThat(counter(firstSign)).isEqualTo("Q 1 : C 3");
+        assertThat(counter(secondSign)).isEqualTo("Q 1 : C 4");
+    }
+
+    @Test
+    void deferredPositionsPastTheCapRecountTheWholeChunk() {
+        Container holder = mock(Container.class);
+        when(holder.getWorld()).thenReturn(world);
+        AtomicInteger coordinate = new AtomicInteger();
+        when(holder.getX()).thenAnswer(ignored -> coordinate.get() & 15);
+        when(holder.getZ()).thenAnswer(ignored -> (coordinate.get() >> 4) & 15);
+        when(holder.getY()).thenAnswer(ignored -> coordinate.get() >> 8);
+        Inventory busy = mock(Inventory.class);
+        when(busy.getHolder()).thenReturn(holder);
+        for (int i = 0; i < HopperStockRefreshService.MAX_PENDING; i++) {
+            coordinate.set(i);
+            refresh.markDirty(busy);
+        }
+        refresh.unloadChunk(world.getUID(), 0, 0); // fills the deferred-position allowance
+        world.loadChunk(1, 0);
+        Inventory inventory = chestAt(20, 64, 4);
+        Block sign = signAt(21, 64, 4, BlockFace.EAST);
+        inventory.addItem(item(Material.DIAMOND, 6));
+        refresh.markDirty(inventory);
+        refresh.unloadChunk(world.getUID(), 1, 0);
+        refresh.loadChunk(world.getUID(), 1, 0);
+        ticks(110);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 6");
+        assertThat(enumerations).hasValue(1); // recounted as a chunk, not as a remembered position
+    }
+
+    @Test
+    void worldUnloadKeepsOtherWorldsDeferredWork() {
+        Inventory inventory = chestAt(4, 64, 4);
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        inventory.addItem(item(Material.DIAMOND, 12));
+        refresh.markDirty(inventory);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        refresh.unloadWorld(java.util.UUID.randomUUID());
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 12");
+    }
+
+    @Test
+    void repeatedUnloadWithoutALoadKeepsEveryDroppedPosition() {
+        Inventory first = chestAt(4, 64, 4);
+        Block firstSign = signAt(5, 64, 4, BlockFace.EAST);
+        Inventory second = chestAt(8, 64, 4);
+        Block secondSign = signAt(9, 64, 4, BlockFace.EAST);
+        first.addItem(item(Material.DIAMOND, 3));
+        second.addItem(item(Material.DIAMOND, 4));
+        refresh.markDirty(first);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        refresh.markDirty(second); // a missed load event must not overwrite the earlier set
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        refresh.loadChunk(world.getUID(), 0, 0);
+        ticks(100);
+        assertThat(counter(firstSign)).isEqualTo("Q 1 : C 3");
+        assertThat(counter(secondSign)).isEqualTo("Q 1 : C 4");
     }
 }
