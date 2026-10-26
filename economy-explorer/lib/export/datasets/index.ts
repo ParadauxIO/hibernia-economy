@@ -5,5 +5,6 @@
 import 'server-only';
 import './accounts';
 import './audit';
+import './me';
 import './sales';
 import './transactions';

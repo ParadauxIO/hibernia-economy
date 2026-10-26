@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { buildMetadata } from '@/lib/metadata';
+import { parseRange } from '@/lib/range';
 import { findPlayerName } from '@/lib/sql/me';
 import { AdminGate } from '../../_components/AdminGate';
 
@@ -30,6 +31,7 @@ export default async function AdminPlayerDataPage({ params }: { params: Promise<
   await auditView(viewer, { path: '/admin/players/[uuid]', targetType: 'player', targetId: uuid });
 
   const name = await findPlayerName(uuid);
+  const NINETY_DAYS = parseRange({}, { defaultPreset: '90d' });
 
   return (
     <>
@@ -40,7 +42,7 @@ export default async function AdminPlayerDataPage({ params }: { params: Promise<
         subtitle="Personal economy data for the last 90 days. This view is recorded in the audit log."
         meta={<span className="mono">{uuid}</span>}
       />
-      <PlayerDashboard uuid={uuid} name={name} />
+      <PlayerDashboard uuid={uuid} name={name} range={NINETY_DAYS.range} rangeLabel={NINETY_DAYS.label} />
     </>
   );
 }

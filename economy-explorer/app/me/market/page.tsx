@@ -1,375 +1,112 @@
-import { hasPermission } from '@/lib/auth/policy';
-import { buildMetadata } from '@/lib/metadata';
-import { flattenSearchParams } from '@/lib/util/searchParams';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { z } from 'zod';
-import { getViewer } from '@/lib/auth/viewer';
-import { PrivacyGate } from '@/components/PrivacyGate';
-import { listPlayerSales } from '@/lib/sql/market';
-import { fmtN } from '@/lib/format';
-import { compare, formatMoney, parseMoney, toDbString, type Cents } from '@/lib/money';
-import { BackLink } from '@democracycraft/design-system/next';
+import { MetricCard, MetricRow, Money, Num, PageHeader, Section, TableWrap } from '@democracycraft/design-system';
+import { RangePicker } from '@democracycraft/design-system/next';
 import { CsvButton } from '@/components/CsvButton';
-import { JsonButton } from '@/components/JsonButton';
-import { TableWrap } from '@democracycraft/design-system';
+import { getViewer } from '@/lib/auth/viewer';
+import { buildMetadata } from '@/lib/metadata';
+import { parseRange, toDay } from '@/lib/range';
+import { meGate } from '@/lib/services/me';
+import { getMyMarket, ITEM_LIMIT, PARTNER_LIMIT } from '@/lib/services/meMarket';
+import type { MarketItemRow, MarketPartnerRow } from '@/lib/sql/me';
+import { MeGateView } from '../_components/MeGateView';
 
 export const dynamic = 'force-dynamic';
 
-const ITEM_LIMIT = 15;
-const PARTNER_LIMIT = 10;
-const WINDOWS = ['7', '30', '90', 'all'] as const;
-const SP_SCHEMA = z.object({ window: z.enum(WINDOWS).default('90') });
-
 export async function generateMetadata() {
-  return buildMetadata({ title: "My market activity", description: "Your ChestShop trades and market activity on {server}.", path: "/me/market" });
+  return buildMetadata({ title: 'My market activity', description: 'Your ChestShop trades and market activity on {server}.', path: '/me/market' });
 }
 
-export default async function MyMarketPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+/** Old links used ?window=7|30|90|all. */
+const LEGACY_WINDOW: Record<string, string> = { '7': '7d', '30': '30d', '90': '90d', all: 'all' };
+
+export default async function MyMarketPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
-  if (!viewer.anon && !hasPermission(viewer, 'player.read')) return <PrivacyGate kind="private" title="Permission required" />;
-  if (viewer.anon) {
-    return (
-      <PrivacyGate kind="login" title="My market activity" hint="Sign in to see your own ChestShop trades." />
-    );
-  }
-  if (!viewer.linked || !viewer.minecraftUuid) {
-    return (
-      <PrivacyGate kind="link" title="Link your Minecraft account" hint="My market is for linked players only." />
-    );
-  }
+  const gate = meGate(viewer);
+  if (!gate.ok) return <MeGateView kind={gate.kind} title="My market activity" />;
+  const sp = { ...(await searchParams) };
+  if (!sp.range && typeof sp.window === 'string' && LEGACY_WINDOW[sp.window]) sp.range = LEGACY_WINDOW[sp.window];
+  const range = parseRange(sp, { defaultPreset: '90d' });
+  const since = range.preset === 'all' ? null : new Date(`${range.range.from}T00:00:00Z`);
+  const m = await getMyMarket(gate.uuid, { since });
 
-  const sp = SP_SCHEMA.parse(flattenSearchParams(await searchParams));
-  const days = sp.window === 'all' ? null : Number(sp.window);
-  const windowLabel = sp.window === 'all' ? 'all time' : `last ${sp.window} days`;
-  const sales = await listPlayerSales(viewer.minecraftUuid, days);
+  return <>
+    <PageHeader title="Market" subtitle="Your ChestShop trades: what you buy at other shops and what sells at your own. Firm shops are on the firm’s pages." />
+    <RangePicker value={range.value} allowCompare={false} presets={['7d', '30d', '90d', '1y', 'all']} max={toDay(new Date())} />
+    <MetricRow label="Market summary">
+      <MetricCard label="Spent" value={<Money value={m.spent} />} meta={<><Num value={m.buys} /> buys</>} />
+      <MetricCard label="Earned" value={<Money value={m.earned} />} meta={<><Num value={m.sales} /> sales</>} />
+      <MetricCard label="Net" value={<Money value={m.net} sign="exceptZero" tone="auto" />} />
+      <MetricCard label="Trades" value={<Num value={m.buys + m.sales} />} meta={range.label} />
+    </MetricRow>
 
-  interface Item { item_key: string; item_name: string | null; material: string | null; trades: number; qty: number; amount: Cents }
-  interface Partner { owner_name: string; firm_id: number | null; trades: number; amount: Cents }
-
-  const bought = new Map<string, Item>();
-  const sold = new Map<string, Item>();
-  const boughtFrom = new Map<string, Partner>();
-  const soldTo = new Map<string, Partner>();
-  let boughtTrades = 0;
-  let soldTrades = 0;
-  let totalSpent = 0n;
-  let totalEarned = 0n;
-
-  for (const s of sales) {
-    const amount = parseMoney(s.total_price);
-    // Whether THIS player bought or sold depends on both their role and the
-    // ChestShop direction (which is the customer's perspective):
-    //   customer+BUY / owner+SELL → the player bought;
-    //   customer+SELL / owner+BUY → the player sold.
-    const iBought =
-      s.player_role === 'customer' ? s.direction === 'BUY' : s.direction === 'SELL';
-
-    // Counterparty: the shop when the player is the customer, otherwise the
-    // customer who traded at the player's shop.
-    let partnerKey: string;
-    let partnerName: string;
-    let partnerFirmId: number | null;
-    if (s.player_role === 'customer') {
-      partnerFirmId = s.shop_firm_id;
-      partnerKey = s.admin_shop
-        ? 'admin:shop'
-        : s.shop_firm_id != null
-        ? `firm:${s.shop_firm_id}`
-        : s.shop_owner_uuid
-        ? `player:${s.shop_owner_uuid}`
-        : 'unknown';
-      partnerName = s.owner_name ?? (s.admin_shop ? 'Admin shop' : 'Unknown');
-    } else {
-      partnerFirmId = null;
-      partnerKey = s.customer_uuid ? `cust:${s.customer_uuid}` : 'unknown';
-      partnerName = s.customer_name ?? 'Unknown';
-    }
-
-    function upsertItem(map: Map<string, Item>) {
-      const existing = map.get(s.item_key);
-      if (existing) {
-        existing.trades++;
-        existing.qty += s.quantity;
-        existing.amount += amount;
-      } else {
-        map.set(s.item_key, {
-          item_key: s.item_key,
-          item_name: s.item_name,
-          material: s.material,
-          trades: 1,
-          qty: s.quantity,
-          amount,
-        });
-      }
-    }
-    function upsertPartner(map: Map<string, Partner>) {
-      const existing = map.get(partnerKey);
-      if (existing) {
-        existing.trades++;
-        existing.amount += amount;
-      } else {
-        map.set(partnerKey, {
-          owner_name: partnerName,
-          firm_id: partnerFirmId,
-          trades: 1,
-          amount,
-        });
-      }
-    }
-
-    if (iBought) {
-      boughtTrades++;
-      totalSpent += amount;
-      upsertItem(bought);
-      upsertPartner(boughtFrom);
-    } else {
-      soldTrades++;
-      totalEarned += amount;
-      upsertItem(sold);
-      upsertPartner(soldTo);
-    }
-  }
-
-  const topBought = [...bought.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, ITEM_LIMIT);
-  const topSold = [...sold.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, ITEM_LIMIT);
-  const topBoughtFrom = [...boughtFrom.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, PARTNER_LIMIT);
-  const topSoldTo = [...soldTo.values()].sort((a, b) => compare(b.amount, a.amount)).slice(0, PARTNER_LIMIT);
-
-  return (
-    <>
-      <BackLink href="/me" label="My data" />
-
-      <div className="page-heading">
-        <h1>My market</h1>
-        <span className="sub">your ChestShop trades · {windowLabel}</span>
-        <span className="window-tabs">
-          {WINDOWS.map((w) => (
-            <a key={w} href={`/me/market?window=${w}`} className={w === sp.window ? 'active' : ''}>
-              {w === 'all' ? 'All' : `${w}d`}
-            </a>
-          ))}
-        </span>
+    <Section title="Items" description={`${range.label}. Top ${ITEM_LIMIT} each way by money.`}>
+      <div className="me-split">
+        <ItemTable title="Items you buy" rows={m.boughtItems} amountLabel="Spent" file="my-items-bought" />
+        <ItemTable title="Items you sell" rows={m.soldItems} amountLabel="Earned" file="my-items-sold" />
       </div>
+    </Section>
 
-      <div className="kpi-grid">
-        <div className="kpi">
-          <div className="kpi-label">Spent</div>
-          <div className="kpi-value">{formatMoney(totalSpent)}</div>
-          <div className="kpi-meta">{fmtN(boughtTrades)} buys</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Earned</div>
-          <div className="kpi-value">{formatMoney(totalEarned)}</div>
-          <div className="kpi-meta">{fmtN(soldTrades)} sales</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Net</div>
-          <div className={`kpi-value ${totalEarned - totalSpent >= 0n ? 'pos' : 'neg'}`}>
-            {formatMoney(totalEarned - totalSpent, { sign: 'always' })}
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Trades</div>
-          <div className="kpi-value">{fmtN(sales.length)}</div>
-        </div>
+    <Section title="Trading partners" divider description={`${range.label}. Top ${PARTNER_LIMIT} each way.`}>
+      <div className="me-split">
+        <PartnerTable title="Who you buy from" rows={m.boughtFrom} who="Seller" amountLabel="Spent" file="my-buy-from" />
+        <PartnerTable title="Who buys from you" rows={m.soldTo} who="Customer" amountLabel="Earned" file="my-sell-to" />
       </div>
-
-      {/* Helpers below render the per-table export controls. */}
-      {/* Items you bought */}
-      <div className="card">
-        <div className="card-title">
-          Items you buy <span className="sub">top {topBought.length} by spend</span>
-          <ItemExport items={topBought} basename="my-items-bought" spendLabel="Spent" />
-        </div>
-        <TableWrap label="Items you buy">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th className="amount">Trades</th>
-                <th className="amount">Quantity</th>
-                <th className="amount">Spent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topBought.length === 0 && (
-                <tr><td colSpan={4} className="empty">No buys in this window.</td></tr>
-              )}
-              {topBought.map((i) => (
-                <tr key={i.item_key}>
-                  <td>
-                    <Link href={`/chestshop/items/${encodeURIComponent(i.item_key)}` as Route} className="rowlink" prefetch={false}>
-                      <span style={{ fontWeight: 500 }}>{i.item_name ?? i.item_key}</span>
-                      <span className="mono muted small">{' ' + (i.material ?? '')}</span>
-                    </Link>
-                  </td>
-                  <td className="amount mono">{fmtN(i.trades)}</td>
-                  <td className="amount mono">{fmtN(i.qty)}</td>
-                  <td className="amount neutral">{formatMoney(i.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      </div>
-
-      {/* Items you sold */}
-      <div className="card">
-        <div className="card-title">
-          Items you sell <span className="sub">top {topSold.length} by earnings</span>
-          <ItemExport items={topSold} basename="my-items-sold" spendLabel="Earned" />
-        </div>
-        <TableWrap label="Items you sell">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th className="amount">Trades</th>
-                <th className="amount">Quantity</th>
-                <th className="amount">Earned</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topSold.length === 0 && (
-                <tr><td colSpan={4} className="empty">No sales in this window.</td></tr>
-              )}
-              {topSold.map((i) => (
-                <tr key={i.item_key}>
-                  <td>
-                    <Link href={`/chestshop/items/${encodeURIComponent(i.item_key)}` as Route} className="rowlink" prefetch={false}>
-                      <span style={{ fontWeight: 500 }}>{i.item_name ?? i.item_key}</span>
-                      <span className="mono muted small">{' ' + (i.material ?? '')}</span>
-                    </Link>
-                  </td>
-                  <td className="amount mono">{fmtN(i.trades)}</td>
-                  <td className="amount mono">{fmtN(i.qty)}</td>
-                  <td className="amount neutral">{formatMoney(i.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      </div>
-
-      {/* Who you buy from */}
-      <div className="card">
-        <div className="card-title">
-          Who you buy from <span className="sub">top {topBoughtFrom.length}</span>
-          <PartnerExport partners={topBoughtFrom} basename="my-buy-from" who="Seller" amountLabel="Spent" />
-        </div>
-        <TableWrap label="Who you buy from">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Seller</th>
-                <th className="amount">Trades</th>
-                <th className="amount">Spent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topBoughtFrom.length === 0 && (
-                <tr><td colSpan={3} className="empty">—</td></tr>
-              )}
-              {topBoughtFrom.map((p, i) => (
-                <tr key={`${p.firm_id}-${p.owner_name}-${i}`}>
-                  <td>
-                    {p.firm_id ? (
-                      <Link href={`/chestshop/firms/${p.firm_id}` as Route} className="rowlink" prefetch={false}>
-                        {p.owner_name}
-                      </Link>
-                    ) : p.owner_name}
-                  </td>
-                  <td className="amount mono">{fmtN(p.trades)}</td>
-                  <td className="amount neutral">{formatMoney(p.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      </div>
-
-      {/* Who buys from you */}
-      <div className="card">
-        <div className="card-title">
-          Who buys from you <span className="sub">top {topSoldTo.length}</span>
-          <PartnerExport partners={topSoldTo} basename="my-sell-to" who="Customer" amountLabel="Earned" />
-        </div>
-        <TableWrap label="Who buys from you">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th className="amount">Trades</th>
-                <th className="amount">Earned</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topSoldTo.length === 0 && (
-                <tr><td colSpan={3} className="empty">—</td></tr>
-              )}
-              {topSoldTo.map((p, i) => (
-                <tr key={`${p.firm_id}-${p.owner_name}-${i}`}>
-                  <td>{p.owner_name}</td>
-                  <td className="amount mono">{fmtN(p.trades)}</td>
-                  <td className="amount neutral">{formatMoney(p.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      </div>
-    </>
-  );
+    </Section>
+  </>;
 }
 
-// Per-table export controls. Local to this page — the bought/sold and
-// buy-from/sell-to tables share two shapes, so two small wrappers keep the
-// four card titles tidy while still emitting the same CsvButton/JsonButton.
-function ItemExport({
-  items,
-  basename,
-  spendLabel,
-}: {
-  items: { item_key: string; item_name: string | null; material: string | null; trades: number; qty: number; amount: Cents }[];
-  basename: string;
-  spendLabel: string;
-}) {
-  return (
-    <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
-      <CsvButton
-        filename={`${basename}.csv`}
-        headers={['Item key', 'Item name', 'Material', 'Trades', 'Quantity', spendLabel]}
-        rows={items.map((i) => [i.item_key, i.item_name ?? '', i.material ?? '', i.trades, i.qty, toDbString(i.amount)])}
-      />
-      <JsonButton filename={`${basename}.json`} data={items.map((i) => ({ ...i, amount: toDbString(i.amount) }))} />
-    </span>
-  );
+function ItemTable({ title, rows, amountLabel, file }: { title: string; rows: MarketItemRow[]; amountLabel: string; file: string }) {
+  return <div>
+    <div className="me-group-head">
+      <h3 className="me-subhead">{title}</h3>
+      <span className="toolbar-export"><CsvButton filename={`${file}.csv`} headers={['Item key', 'Item', 'Material', 'Trades', 'Quantity', amountLabel]}
+        rows={rows.map((i) => [i.item_key, i.item_name ?? '', i.material ?? '', i.trades, i.quantity, i.amount])} /></span>
+    </div>
+    <TableWrap label={title}>
+      <table className="data-table">
+        <thead><tr><th scope="col">Item</th><th scope="col" className="amount">Trades</th><th scope="col" className="amount">Quantity</th><th scope="col" className="amount">{amountLabel}</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={4} className="me-empty">None in this period.</td></tr>}
+          {rows.map((i) => <tr key={i.item_key}>
+            <td><Link href={`/chestshop/items/${encodeURIComponent(i.item_key)}` as Route} prefetch={false}>{i.item_name ?? i.item_key}</Link></td>
+            <td className="amount"><Num value={i.trades} /></td>
+            <td className="amount"><Num value={i.quantity} /></td>
+            <td className="amount"><Money value={i.amount} /></td>
+          </tr>)}
+        </tbody>
+      </table>
+    </TableWrap>
+  </div>;
 }
 
-function PartnerExport({
-  partners,
-  basename,
-  who,
-  amountLabel,
-}: {
-  partners: { owner_name: string; firm_id: number | null; trades: number; amount: Cents }[];
-  basename: string;
-  who: string;
-  amountLabel: string;
-}) {
-  return (
-    <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
-      <CsvButton
-        filename={`${basename}.csv`}
-        headers={[who, 'Firm ID', 'Trades', amountLabel]}
-        rows={partners.map((p) => [p.owner_name, p.firm_id ?? '', p.trades, toDbString(p.amount)])}
-      />
-      <JsonButton filename={`${basename}.json`} data={partners.map((p) => ({ ...p, amount: toDbString(p.amount) }))} />
-    </span>
-  );
+function partnerName(p: MarketPartnerRow): string {
+  if (p.partner_kind === 'admin') return 'Server shop';
+  if (p.partner_kind === 'firm') return p.firm_name ?? `Firm #${p.firm_id}`;
+  return p.player_name ?? 'Unknown player';
+}
+
+function PartnerTable({ title, rows, who, amountLabel, file }: { title: string; rows: MarketPartnerRow[]; who: string; amountLabel: string; file: string }) {
+  return <div>
+    <div className="me-group-head">
+      <h3 className="me-subhead">{title}</h3>
+      <span className="toolbar-export"><CsvButton filename={`${file}.csv`} headers={[who, 'Firm ID', 'Trades', amountLabel]}
+        rows={rows.map((p) => [partnerName(p), p.firm_id ?? '', p.trades, p.amount])} /></span>
+    </div>
+    <TableWrap label={title}>
+      <table className="data-table">
+        <thead><tr><th scope="col">{who}</th><th scope="col" className="amount">Trades</th><th scope="col" className="amount">{amountLabel}</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={3} className="me-empty">None in this period.</td></tr>}
+          {rows.map((p, i) => <tr key={`${p.partner_kind}-${p.firm_id ?? p.player_uuid ?? i}`}>
+            <td>{p.partner_kind === 'firm' && p.firm_id !== null
+              ? <Link href={`/chestshop/firms/${p.firm_id}` as Route} prefetch={false}>{partnerName(p)}</Link>
+              : partnerName(p)}</td>
+            <td className="amount"><Num value={p.trades} /></td>
+            <td className="amount"><Money value={p.amount} /></td>
+          </tr>)}
+        </tbody>
+      </table>
+    </TableWrap>
+  </div>;
 }

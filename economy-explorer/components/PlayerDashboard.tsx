@@ -1,234 +1,127 @@
+import '@/app/me/me.css';
 import 'server-only';
-import { getViewer, requirePlayerRead, readableAccountIds } from '@/lib/auth';
 import Link from 'next/link';
 import type { Route } from 'next';
-import {
-  findAccountsForPlayer,
-  getPlayerTotals,
-  countPlayerTransactions,
-  getPlayerCounterparties,
-  getPlayerTransactions,
-} from '@/lib/sql/me';
-import { accountLabel, fmtAmtFull, fmtN } from '@/lib/format';
-import { LocalTimestamp } from '@/components/LocalTimestamp';
-import { CsvButton } from '@/components/CsvButton';
-import { JsonButton } from '@/components/JsonButton';
-import { TableWrap } from '@democracycraft/design-system';
-
-const DAYS = 90;
+import { MetricCard, MetricRow, Money, Section, TableWrap } from '@democracycraft/design-system';
+import { BalanceLine } from '@/components/charts/AreaTimeline';
+import { AccountGroups } from '@/app/me/_components/AccountGroups';
+import { FeedTable } from '@/app/me/_components/FeedTable';
+import { PartyLink } from '@/app/me/_components/PartyLink';
+import { PartlyCovered, Preparing, Updated } from '@/app/me/_components/Freshness';
+import { getViewer, requirePlayerRead } from '@/lib/auth';
+import { toDbString, type Cents } from '@/lib/money';
+import type { DayRange } from '@/lib/rollup/days';
+import { getMeOverview, type CounterpartyTotal } from '@/lib/services/me';
+import { changeFraction, monthLabel, type CategoryFlow, type MonthFlows } from '@/lib/services/meFlows';
 
 /**
- * The personal economy dashboard for one player — balances, recent transactions,
- * and top counterparties. Keyed on a Minecraft UUID, so it backs both the
- * self-service `/me` page and the admin player lookup (`/admin/players/[uuid]`).
- * The caller renders the page heading + access gate; this is the body only.
+ * The /me overview body for one player (spec §8.1): their own money, the
+ * accounts they can access grouped by whose money they are, this month's
+ * income and spending, who pays them and whom they pay, and recent activity.
+ * Backs `/me` and the admin player view (`/admin/players/[uuid]`); the caller
+ * renders the page header and the gate.
  */
-export async function PlayerDashboard({ uuid, name, self = false }: { uuid: string; name: string | null; self?: boolean }) {
+export async function PlayerDashboard({ uuid, self = false, range, rangeLabel }: { uuid: string; name?: string | null; self?: boolean; range: DayRange; rangeLabel: string }) {
   const viewer = await getViewer();
   requirePlayerRead(uuid, viewer);
-  const candidates = await findAccountsForPlayer(uuid);
-  const readable = await readableAccountIds(viewer, candidates.map((a) => a.account_id));
-  const accounts = candidates.filter((a) => readable.has(a.account_id));
-  const accountIds = accounts.map((a) => a.account_id);
-  const [totals, txnCount, partners, recentTxns] = await Promise.all([
-    getPlayerTotals(accountIds, DAYS),
-    countPlayerTransactions(accountIds, DAYS),
-    getPlayerCounterparties(accountIds, 12, DAYS),
-    getPlayerTransactions(accountIds, 25),
-  ]);
+  const o = await getMeOverview(viewer, uuid, range);
+  const you = self ? 'you' : 'they';
+  const your = self ? 'your' : 'their';
+  const cur = o.month.current;
+  const prev = o.month.previous;
+  const thisMonth = monthLabel(o.month.month, false);
+  const lastMonth = monthLabel(prev.month, false);
+  const monthCovered = o.month.coverage.coveredTo !== null;
 
-  // Money rollups are summed in SQL and carried as exact DECIMAL strings — never
-  // folded through a JS double (behaviour/0001) — so the KPIs match the ledger to
-  // the cent. Only the sign class needs a numeric compare of the net string.
-  const { totalBalance, income, spend, net } = totals;
-  const netNonNegative = !net.trimStart().startsWith('-');
+  return <>
+    <MetricRow label="Personal summary">
+      <MetricCard label="My balance" value={<Money value={o.myBalance} />}
+        {...(o.balance.changeFraction !== null ? { delta: o.balance.changeFraction, deltaLabel: `over the ${rangeLabel.toLowerCase()}` } : {})}
+        info={`The sum of ${your} own personal accounts only (${o.personalCount}). Business and government money is never included, even where ${you} run the firm.`}
+        {...(o.balance.change !== null ? { meta: <><Money value={o.balance.change} sign="exceptZero" /> since {new Date(`${o.balance.range.from}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</> } : {})} />
+      <MetricCard label={`Income, ${thisMonth}`} value={monthCovered ? <Money value={cur.income} /> : '—'}
+        delta={monthCovered ? changeFraction(cur.income, prev.income) : null} deltaLabel={`vs ${lastMonth}`}
+        info="Money into your personal accounts. Transfers between your own accounts are left out; wages and draws from a firm count." />
+      <MetricCard label={`Spending, ${thisMonth}`} value={monthCovered ? <Money value={cur.spending} /> : '—'}
+        delta={monthCovered ? changeFraction(cur.spending, prev.spending) : null} deltaLabel={`vs ${lastMonth}`} deltaTone="inverse" />
+      <MetricCard label={`Tax paid, ${thisMonth}`} value={monthCovered ? <Money value={cur.taxPaid} /> : '—'}
+        meta={<Link href="/me/taxes" prefetch={false}>Taxes and fines</Link>} />
+    </MetricRow>
 
-  const prefix = (self ? 'my' : (name ?? uuid)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'player';
+    <Section title="My balance" description={<>{rangeLabel}, {your} personal accounts. <Updated coverage={o.balance.coverage} /></>}>
+      {o.balance.points.length
+        ? <BalanceLine data={o.balance.points.map((p) => ({ date: p.day, balance: p.balance }))} />
+        : o.personalCount === 0
+          ? <p className="me-empty">No personal account yet.</p>
+          : <Preparing coverage={o.balance.coverage} what="this range" />}
+    </Section>
 
-  return (
-    <>
-      <div className="kpi-grid">
-        <div className="kpi">
-          <div className="kpi-label">Total balance</div>
-          <div className="kpi-value">{fmtAmtFull(totalBalance)}</div>
-          <div className="kpi-meta">across {fmtN(accounts.length)} accounts</div>
+    <Section title={`${thisMonth} by category`} divider
+      description={<>Compared with {lastMonth}. Transfers between {your} own accounts are left out. <Updated coverage={o.month.coverage} /></>}
+      actions={<Link href={`/me/statements/${o.month.month}` as Route} className="btn btn-quiet" prefetch={false}>Statement</Link>}>
+      {monthCovered ? <>
+        <PartlyCovered coverage={o.month.coverage} />
+        <div className="me-split">
+          <CategoryTable title="Income" side="inflow" current={cur} previous={prev} thisMonth={thisMonth} lastMonth={lastMonth} />
+          <CategoryTable title="Spending" side="outflow" current={cur} previous={prev} thisMonth={thisMonth} lastMonth={lastMonth} />
         </div>
-        <div className="kpi">
-          <div className="kpi-label">Income / {DAYS}d</div>
-          <div className="kpi-value">{fmtAmtFull(income)}</div>
-          <div className="kpi-meta">credits</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Spend / {DAYS}d</div>
-          <div className="kpi-value">{fmtAmtFull(spend)}</div>
-          <div className="kpi-meta">debits</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Net / {DAYS}d</div>
-          <div className={`kpi-value ${netNonNegative ? 'pos' : 'neg'}`}>{netNonNegative ? '+' : ''}{fmtAmtFull(net)}</div>
-          <div className="kpi-meta">{fmtN(txnCount)} txns</div>
-        </div>
-      </div>
+      </> : <Preparing coverage={o.month.coverage} what="this month" />}
+    </Section>
 
-      <div className="card">
-        <div className="card-title">{self ? 'Your accounts' : 'Accounts'} <span className="sub">owned and shared</span>
-          <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
-            <CsvButton
-              filename={`${prefix}-accounts.csv`}
-              headers={['Account ID', 'Name', 'Type', 'Role', 'Balance', 'Created']}
-              rows={accounts.map((a) => [
-                a.account_id,
-                accountLabel(a),
-                a.account_type,
-                a.owner_uuid === uuid ? 'owner' : 'member',
-                a.balance,
-                a.created_at.toISOString(),
-              ])}
-            />
-            <JsonButton filename={`${prefix}-accounts.json`} data={accounts} />
-          </span>
-        </div>
-        <TableWrap label="Accounts">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Account</th>
-                <th>Type</th>
-                <th>Role</th>
-                <th className="amount">Balance</th>
-                <th className="ts">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.length === 0 && (
-                <tr><td colSpan={5} className="empty">No accounts found.</td></tr>
-              )}
-              {accounts.map((a) => (
-                <tr key={a.account_id}>
-                  <td>
-                    <Link href={`/accounts/${a.account_id}` as Route} className="rowlink" prefetch={false}>
-                      <span style={{ fontWeight: 500 }}>{accountLabel(a)}</span>
-                      <span className="mono muted small">{` #${a.account_id}`}</span>
-                    </Link>
-                  </td>
-                  <td><span className={`badge badge-${a.account_type}`}>{a.account_type}</span></td>
-                  <td><span className="badge">{a.owner_uuid === uuid ? 'owner' : 'member'}</span></td>
-                  <td className="amount neutral">{fmtAmtFull(a.balance)}</td>
-                  <td className="ts"><LocalTimestamp value={a.created_at} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      </div>
+    <Section title="Who pays you and whom you pay" divider description={<>{thisMonth}, by amount. {your === 'your' ? 'Your' : 'Their'} own accounts are left out. <Updated coverage={o.counterpartyCoverage} /></>}>
+      {o.counterpartyCoverage.coveredTo ? <div className="me-split">
+        <CounterpartyList title="Top income sources" rows={o.topSources} empty="No money in yet this month." />
+        <CounterpartyList title="Top spending destinations" rows={o.topDestinations} empty="No money out yet this month." />
+      </div> : <Preparing coverage={o.counterpartyCoverage} what="this month" />}
+    </Section>
 
-      <div className="card">
-        <div className="card-title">Recent transactions <span className="sub">latest {fmtN(recentTxns.length)} across {self ? 'your' : 'their'} accounts</span>
-          <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
-            <CsvButton
-              filename={`${prefix}-transactions.csv`}
-              headers={['When', 'Account', 'Account ID', 'Amount', 'Details', 'System', 'Txn']}
-              rows={recentTxns.map((t) => [
-                t.settlement_time?.toISOString() ?? '',
-                t.account_name ?? `#${t.account_id}`,
-                t.account_id,
-                t.amount,
-                t.message ?? t.memo ?? '',
-                t.plugin_system ?? '',
-                t.txn_id,
-              ])}
-            />
-            <JsonButton filename={`${prefix}-transactions.json`} data={recentTxns} />
-          </span>
-        </div>
-        <TableWrap label="Recent transactions">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="ts">When</th>
-                <th>Account</th>
-                <th className="amount">Amount</th>
-                <th>Details</th>
-                <th>Txn</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTxns.length === 0 && (
-                <tr><td colSpan={5} className="empty">No transactions yet.</td></tr>
-              )}
-              {recentTxns.map((t) => {
-                const v = parseFloat(t.amount);
-                return (
-                  <tr key={t.posting_id}>
-                    <td className="ts"><LocalTimestamp value={t.settlement_time} /></td>
-                    <td>
-                      <Link href={`/accounts/${t.account_id}` as Route} className="rowlink" prefetch={false}>
-                        {t.account_name ?? `#${t.account_id}`}
-                      </Link>
-                    </td>
-                    <td className={`amount ${v >= 0 ? 'pos' : 'neg'}`}>{v >= 0 ? '+' : ''}{fmtAmtFull(t.amount)}</td>
-                    <td>
-                      {t.message ?? <span className="muted">—</span>}
-                      {t.memo && <span className="muted small">{` · ${t.memo}`}</span>}
-                    </td>
-                    <td className="mono muted small">#{t.txn_id}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </TableWrap>
-      </div>
+    <Section title="Accounts" divider description={`Grouped by whose money it is. Only “Mine” is ${your} money; the other groups are never added to it.`}>
+      <AccountGroups groups={o.groups} />
+    </Section>
 
-      {partners.length > 0 && (
-        <div className="card">
-          <div className="card-title">Top counterparties <span className="sub">most-frequent partners</span>
-            <span className="toolbar-export" style={{ marginLeft: 'auto' }}>
-              <CsvButton
-                filename={`${prefix}-counterparties.csv`}
-                headers={['Account ID', 'Name', 'Type', 'Transactions', 'Total volume']}
-                rows={partners.map((p) => [
-                  p.counterparty_id,
-                  accountLabel({ display_name: p.display_name, owner_name: p.owner_name, owner_uuid: p.owner_uuid, account_id: p.counterparty_id }),
-                  p.account_type,
-                  p.txn_count,
-                  p.total_volume,
-                ])}
-              />
-              <JsonButton filename={`${prefix}-counterparties.json`} data={partners} />
-            </span>
-          </div>
-          <TableWrap label="Top counterparties">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Counterparty</th>
-                  <th>Type</th>
-                  <th className="amount">Transactions</th>
-                  <th className="amount">Total volume</th>
-                </tr>
-              </thead>
-              <tbody>
-                {partners.map((p) => (
-                  <tr key={p.counterparty_id}>
-                    <td>
-                      <Link href={`/accounts/${p.counterparty_id}` as Route} className="rowlink" prefetch={false}>
-                        <span style={{ fontWeight: 500 }}>
-                          {accountLabel({ display_name: p.display_name, owner_name: p.owner_name, owner_uuid: p.owner_uuid, account_id: p.counterparty_id })}
-                        </span>
-                        <span className="mono muted small">{` #${p.counterparty_id}`}</span>
-                      </Link>
-                    </td>
-                    <td><span className={`badge badge-${p.account_type}`}>{p.account_type}</span></td>
-                    <td className="amount mono">{fmtN(p.txn_count)}</td>
-                    <td className="amount neutral">{fmtAmtFull(p.total_volume)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
-        </div>
-      )}
-    </>
-  );
+    <Section title="Recent activity" divider description={`The latest movements on ${your} personal accounts.`}
+      actions={self ? <Link href="/me/transactions" className="btn btn-quiet" prefetch={false}>All transactions</Link> : undefined}>
+      <FeedTable id="me-recent" label="Recent activity" rows={o.recent} showAccount={false} empty={<p className="dt-empty-text">No transactions yet.</p>} />
+    </Section>
+  </>;
+}
+
+function CategoryTable({ title, side, current, previous, thisMonth, lastMonth }: {
+  title: string; side: 'inflow' | 'outflow'; current: MonthFlows; previous: MonthFlows; thisMonth: string; lastMonth: string;
+}) {
+  const pick = (f: CategoryFlow) => f[side];
+  const keys = new Map<string, string>();
+  for (const f of [...current.categories, ...previous.categories]) if (f.category !== 'internal' && pick(f) > 0n) keys.set(f.key, f.label);
+  const amount = (m: MonthFlows, key: string): Cents => { const f = m.categories.find((c) => c.key === key); return f ? pick(f) : 0n; };
+  const rows = [...keys.entries()].sort((a, b) => Number(amount(current, b[0]) - amount(current, a[0])));
+  const total = side === 'inflow' ? [current.income, previous.income] : [current.spending, previous.spending];
+  return <div>
+    <h3 className="me-subhead">{title}</h3>
+    <TableWrap label={`${title} by category`}>
+      <table className="data-table">
+        <thead><tr><th scope="col">Category</th><th scope="col" className="amount">{thisMonth}</th><th scope="col" className="amount">{lastMonth}</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={3} className="me-empty">Nothing yet.</td></tr>}
+          {rows.map(([key, label]) => <tr key={key}>
+            <th scope="row">{label}</th>
+            <td className="amount"><Money value={toDbString(amount(current, key))} /></td>
+            <td className="amount muted"><Money value={toDbString(amount(previous, key))} /></td>
+          </tr>)}
+        <tr className="me-total"><th scope="row">Total</th><td className="amount"><Money value={toDbString(total[0]!)} /></td><td className="amount muted"><Money value={toDbString(total[1]!)} /></td></tr>
+        </tbody>
+      </table>
+    </TableWrap>
+  </div>;
+}
+
+function CounterpartyList({ title, rows, empty }: { title: string; rows: readonly CounterpartyTotal[]; empty: string }) {
+  return <div>
+    <h3 className="me-subhead">{title}</h3>
+    {rows.length === 0 ? <p className="me-empty">{empty}</p> : <ol className="me-ranked">
+      {rows.map((r) => <li key={r.accountId}>
+        <PartyLink party={{ accountId: r.accountId, accountType: r.accountType, name: r.name, firmName: r.firmName }} />
+        <Money value={r.amount} />
+      </li>)}
+    </ol>}
+  </div>;
 }
