@@ -1,0 +1,21 @@
+/* Economy pages (overview, wealth, money flow, taxation). Tokens only. */
+
+.coverage-note { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--fg-muted); font-size: var(--text-xs); line-height: var(--leading-xs); }
+.coverage-note[data-state="preparing"]::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--warn); }
+.econ-note { margin: 0; max-width: 72ch; color: var(--fg-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.econ-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-4); }
+.econ-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--section-gap) var(--space-8); }
+@media (max-width: 960px) { .econ-grid { grid-template-columns: minmax(0, 1fr); } }
+/* Phones keep the figure that matters; secondary columns (collected, refunded, averages) drop out. */
+@media (max-width: 720px) {
+    .data-table.econ-table { min-width: 0; width: 100%; }
+    .econ-table [data-secondary] { display: none; }
+}
+/* The flow matrix and the source table have five numeric columns: they keep the scroll. */
+@media (max-width: 720px) { .data-table.econ-table.econ-wide { min-width: 560px; } }
+
+/* Money flow matrix: payer types down, payee types across; a bar under each amount shows its size. */
+.flow-matrix td { vertical-align: top; }
+.flow-cell { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); }
+.flow-bar { display: block; height: 4px; max-inline-size: 100%; border-radius: var(--radius-pill); background: var(--accent); }
+.flow-bar[data-self="true"] { background: var(--fg-faint); }
