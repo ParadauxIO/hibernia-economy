@@ -107,6 +107,13 @@ matching variations in the customer's inventory. Select one, inspect the exact
 items and price, then confirm. Different names, lore, and other metadata remain
 separate choices; a trade never automatically substitutes another variation.
 
+In the preview, choose **Change quantity** to trade **1×, 2×, 4×, or 8×** the
+sign quantity, or enter a custom item count. For example, a sign offering 2 items
+for $10 lets you choose 3 items for $15. Available shortcuts respect the server's
+maximum trade quantity. The refreshed preview shows the actual quantity and total
+price after stock, balance, and inventory limits; confirm it to complete the trade.
+This works for both buying and selling the selected variation.
+
 The stock counter totals all matching variations. Wildcard shops are currently
 excluded from `/find` and market shop listings, which represent one exact item per
 shop; completed sales still appear in transaction history.

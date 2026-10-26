@@ -106,6 +106,128 @@ class WildcardPurchaseTest extends ServerTest {
         variants = new ShopVariantsService(new WildcardItems(items), shops, config, previews);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"1,5", "3,15", "4,20"})
+    void customQuantityIsPricedAndConfirmedWithoutReusingOldOffer(int amount, String price) {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        var resized = previews.resize(original, buyer, amount);
+        assertThat(resized.stock()[0].getAmount()).isEqualTo(amount);
+        assertThat(resized.price()).isEqualByComparingTo(price);
+        assertThat(resized.bundleQuantity()).isEqualTo(2);
+        assertThat(previews.confirm(original, buyer)).isFalse();
+        verify(economy, never()).settle(any(), any(), any(), any());
+        assertThat(previews.confirm(resized, buyer)).isTrue();
+        assertThat(previews.confirm(resized, buyer)).isFalse();
+        assertThat(count(buyer.getInventory(), can)).isEqualTo(amount);
+        assertThat(count(stock, can)).isEqualTo(5 - amount);
+        assertThat(count(stock, bottle)).isEqualTo(4);
+    }
+
+    @Test
+    void quantityAboveStockPreviewsPartialFillAndRejectsLaterStockChanges() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        var resized = previews.resize(original, buyer, 8);
+        assertThat(resized.stock()[0].getAmount()).isEqualTo(5);
+        assertThat(resized.price()).isEqualByComparingTo("25");
+        var reduced = can.clone();
+        reduced.setAmount(4);
+        stock.setItem(1, reduced);
+        assertThat(previews.confirm(resized, buyer)).isFalse();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void quantityChangeCannotAcceptChangedSignOrAnotherPlayer() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        assertThat(previews.resize(original, server.addPlayer("Other"), 3)).isNull();
+        sign.setLine(2, "B 100");
+        sign.update();
+        assertThat(previews.resize(original, buyer, 3)).isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, -1, Integer.MAX_VALUE})
+    void invalidQuantitiesCannotPrepareOrReplaceOffer(int amount) {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        assertThat(previews.resize(original, buyer, amount)).isNull();
+        assertThat(transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, can, amount))
+                .isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+        assertThat(previews.confirm(original, buyer)).isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"0,OtherSeller", "1,3", "1,invalid", "3,other*"})
+    void quantityChangeRejectsReconfiguredShop(int line, String replacement) {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        sign.setLine(line, replacement);
+        sign.update();
+        assertThat(previews.resize(original, buyer, 3)).isNull();
+        assertThat(previews.confirm(original, buyer)).isFalse();
+        assertThat(count(stock, can)).isEqualTo(5);
+        assertThat(count(buyer.getInventory(), can)).isZero();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void quantityChangeRejectsRemovedShop() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        sign.getBlock().setType(Material.AIR);
+        assertThat(previews.resize(original, buyer, 3)).isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void onlyTheLatestQuantityOfferCanBeUsed() {
+        var original = previews.preview(sign, buyer, Action.RIGHT_CLICK_BLOCK, can);
+        var replacement = previews.resize(original, buyer, 3);
+        assertThat(previews.resize(original, buyer, 4)).isNull();
+        assertThat(previews.confirm(replacement, buyer)).isTrue();
+        assertThat(previews.resize(replacement, buyer, 4)).isNull();
+        assertThat(count(buyer.getInventory(), can)).isEqualTo(3);
+        verify(economy, times(1)).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void explicitQuantityCannotEnableADisabledTradeDirection() {
+        sign.setLine(2, "S 6");
+        sign.update();
+        var trade = transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, can, 3);
+        assertThat(trade.getExactPrice()).isEqualByComparingTo(io.paradaux.chestshop.utils.PriceUtil.NO_PRICE);
+        transactions.validate(trade);
+        assertThat(trade.isCancelled()).isTrue();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void explicitQuantityRequiresASelectedVariation() {
+        assertThat(transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, null, 3))
+                .isNull();
+        verify(economy, never()).settle(any(), any(), any(), any());
+    }
+
+    @Test
+    void customSellUsesSellUnitPrice() {
+        buyer.getInventory().addItem(can.clone());
+        var original = previews.preview(sign, buyer, Action.LEFT_CLICK_BLOCK, can);
+        var resized = previews.resize(original, buyer, 3);
+        assertThat(resized.price()).isEqualByComparingTo("9");
+        assertThat(previews.confirm(resized, buyer)).isTrue();
+        assertThat(count(buyer.getInventory(), can)).isEqualTo(2);
+        assertThat(count(stock, can)).isEqualTo(8);
+    }
+
+    @Test
+    void customPriceRoundsOnceFromSignRatio() {
+        sign.setLine(1, "3");
+        sign.setLine(2, "B 10");
+        sign.update();
+        var trade = transactions.prepare(sign, buyer, Action.RIGHT_CLICK_BLOCK, can, 2);
+        assertThat(trade.getExactPrice()).isEqualByComparingTo("6.67");
+        assertThat(trade.getStock()[0].getAmount()).isEqualTo(2);
+    }
+
     @Test
     void selectionPreviewAndConfirmationTransferOnlyChosenVariation() {
         var selection = variants.choices(sign, buyer, Action.RIGHT_CLICK_BLOCK);

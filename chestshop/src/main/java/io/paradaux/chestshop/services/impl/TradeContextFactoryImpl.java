@@ -76,6 +76,20 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
 
     @Override
     public PendingTransaction prepare(Sign sign, Player player, Action action, ItemStack selected) {
+        return prepareQuantity(sign, player, action, selected, null);
+    }
+
+    @Override
+    public PendingTransaction prepare(Sign sign, Player player, Action action, ItemStack selected, int amount) {
+        if (selected == null || amount < 1 || amount > config.getMaxShopAmount()) {
+            message.send(player, "shop.quantity.invalid", "max", config.getMaxShopAmount());
+            return null;
+        }
+        return prepareQuantity(sign, player, action, selected, amount);
+    }
+
+    private PendingTransaction prepareQuantity(
+            Sign sign, Player player, Action action, ItemStack selected, Integer requested) {
         String name = SignService.getOwner(sign);
         String prices = SignService.getPrice(sign);
         String material = SignService.getItem(sign);
@@ -124,7 +138,13 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
         }
 
         BigDecimal pricePerItem = price.divide(BigDecimal.valueOf(amount), MathContext.DECIMAL128);
-        if (config.isShiftSellsInStacks()
+        if (requested != null) {
+            if (price.compareTo(PriceUtil.NO_PRICE) != 0) {
+                price = price.multiply(BigDecimal.valueOf(requested))
+                        .divide(BigDecimal.valueOf(amount), config.getPricePrecision(), RoundingMode.HALF_UP);
+            }
+            amount = requested;
+        } else if (config.isShiftSellsInStacks()
                 && player.isSneaking()
                 && price.compareTo(PriceUtil.NO_PRICE) != 0
                 && isAllowedForShift(action == buy)) {

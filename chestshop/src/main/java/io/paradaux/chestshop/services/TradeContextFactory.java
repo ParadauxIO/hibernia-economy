@@ -18,4 +18,7 @@ public interface TradeContextFactory {
 
     /** Prepare an explicitly selected wildcard variation; reject items outside the sign pattern. */
     PendingTransaction prepare(Sign sign, Player player, Action action, org.bukkit.inventory.ItemStack selected);
+    /** Prepare a selected wildcard variation with an explicit item count, ignoring shift shortcuts. */
+    PendingTransaction prepare(
+            Sign sign, Player player, Action action, org.bukkit.inventory.ItemStack selected, int amount);
 }

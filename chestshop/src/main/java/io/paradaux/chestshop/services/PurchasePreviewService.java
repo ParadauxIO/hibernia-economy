@@ -56,8 +56,10 @@ public final class PurchasePreviewService {
         private final java.math.BigDecimal price;
         private final boolean buying;
         private boolean consumed;
+        private final Integer requested;
 
-        private Offer(PendingTransaction trade, Action action, ItemStack selected) {
+        private Offer(PendingTransaction trade, Action action, ItemStack selected, Integer requested) {
+            this.requested = requested;
             buying = trade.getTransactionType() == Transaction.TransactionType.BUY;
             player = trade.getClient().getUniqueId();
             block = trade.getSign().getBlock();
@@ -69,6 +71,14 @@ public final class PurchasePreviewService {
             this.selected = selected == null ? null : selected.clone();
             stock = Arrays.stream(trade.getStock()).map(ItemStack::clone).toArray(ItemStack[]::new);
             price = trade.getExactPrice();
+        }
+
+        public boolean adjustable() {
+            return selected != null;
+        }
+
+        public int bundleQuantity() {
+            return quantity;
         }
 
         public boolean buying() {
@@ -89,10 +99,16 @@ public final class PurchasePreviewService {
     }
 
     public Offer preview(Sign sign, Player player, Action action, ItemStack selected) {
+        return preview(sign, player, action, selected, null);
+    }
+
+    private Offer preview(Sign sign, Player player, Action action, ItemStack selected, Integer requested) {
         if (!canUse(sign, player)) return null;
-        PendingTransaction trade = selected == null
-                ? transactions.prepare(sign, player, action)
-                : transactions.prepare(sign, player, action, selected);
+        PendingTransaction trade = requested != null
+                ? transactions.prepare(sign, player, action, selected, requested)
+                : selected == null
+                        ? transactions.prepare(sign, player, action)
+                        : transactions.prepare(sign, player, action, selected);
         if (trade == null) return null;
         transactions.validate(trade);
         if (trade.isCancelled()) return null;
@@ -100,7 +116,29 @@ public final class PurchasePreviewService {
             message.send(player, "shop.purchase.metadata-conflict");
             return null;
         }
-        return new Offer(trade, action, selected);
+        return new Offer(trade, action, selected, requested);
+    }
+
+    public Offer resize(Offer offer, Player player, int amount) {
+        if (offer.consumed || !offer.player.equals(player.getUniqueId()) || !offer.adjustable()) return null;
+        if (amount < 1 || amount > config.getMaxShopAmount()) {
+            message.send(player, "shop.quantity.invalid", "max", config.getMaxShopAmount());
+            return null;
+        }
+        offer.consumed = true;
+        if (!(offer.block.getState() instanceof Sign sign) || !unchanged(offer, sign)) {
+            changed(player);
+            return null;
+        }
+        return preview(sign, player, offer.action, offer.selected, amount);
+    }
+
+    private boolean unchanged(Offer offer, Sign sign) {
+        return signs.isValid(sign)
+                && offer.owner.equals(SignService.getOwner(sign))
+                && offer.item.equals(SignService.getItem(sign))
+                && offer.priceLine.equals(SignService.getPrice(sign))
+                && offer.quantity == SignService.getQuantity(sign);
     }
 
     public boolean confirm(Offer offer, Player player) {
@@ -113,9 +151,11 @@ public final class PurchasePreviewService {
                 || offer.quantity != SignService.getQuantity(sign)) {
             return changed(player);
         }
-        PendingTransaction trade = offer.selected == null
-                ? transactions.prepare(sign, player, offer.action)
-                : transactions.prepare(sign, player, offer.action, offer.selected);
+        PendingTransaction trade = offer.requested != null
+                ? transactions.prepare(sign, player, offer.action, offer.selected, offer.requested)
+                : offer.selected == null
+                        ? transactions.prepare(sign, player, offer.action)
+                        : transactions.prepare(sign, player, offer.action, offer.selected);
         if (trade == null) return false;
         transactions.validate(trade);
         if (trade.isCancelled()) return false;

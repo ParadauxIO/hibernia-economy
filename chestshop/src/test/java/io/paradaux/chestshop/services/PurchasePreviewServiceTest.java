@@ -72,6 +72,15 @@ class PurchasePreviewServiceTest extends ServerTest {
     }
 
     @Test
+    void fixedItemOfferCannotBeResizedButCanStillBeConfirmed() {
+        var offer = offer();
+        assertThat(offer.adjustable()).isFalse();
+        assertThat(service.resize(offer, player, 3)).isNull();
+        verify(transactions, never()).process(any());
+        assertThat(service.confirm(offer, player)).isTrue();
+    }
+
+    @Test
     void anotherPlayerCannotConsumeTheOffer() {
         var offer = offer();
         assertThat(service.confirm(offer, server.addPlayer("Other"))).isFalse();

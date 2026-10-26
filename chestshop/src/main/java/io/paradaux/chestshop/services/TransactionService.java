@@ -79,4 +79,7 @@ public interface TransactionService {
      * trade is all-or-nothing.
      */
     void execute(Transaction event);
+    /** Prepare a selected wildcard variation with an explicit item count, ignoring shift shortcuts. */
+    PendingTransaction prepare(
+            Sign sign, Player player, Action action, org.bukkit.inventory.ItemStack selected, int amount);
 }
