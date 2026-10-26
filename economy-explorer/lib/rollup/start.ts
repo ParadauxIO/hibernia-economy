@@ -36,13 +36,13 @@ export function startRollupWorker(): void {
   if (state().started || !rollupWorkerEnabled(process.env)) return;
   state().started = true;
   void (async () => {
-    const [{ hostname }, { randomUUID }, { redis, tenantKey }, { rollupDb }, { LeaderLease }, { RollupWorker }] =
+    const [{ hostname }, { randomUUID }, { redis, tenantKey }, { rollupDb }, { LeaderLease }, { RollupWorker }, { rollupConfig }] =
       await Promise.all([
         import('node:os'), import('node:crypto'), import('@/lib/redis'), import('./db'), import('./lease'),
-        import('./worker'),
+        import('./worker'), import('./config'),
       ]);
     const lease = new LeaderLease(redis(), tenantKey('rollup:leader'), `${hostname()}:${process.pid}:${randomUUID()}`);
-    const worker = new RollupWorker({ db: rollupDb(), lease });
+    const worker = new RollupWorker({ db: rollupDb(), lease, config: rollupConfig(process.env) });
     state().leader = () => lease.held;
     // Release the lease on shutdown so a successor need not wait for the TTL.
     // If nothing else handles the signal, re-raise it for the default exit.

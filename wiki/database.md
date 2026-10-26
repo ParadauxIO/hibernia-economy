@@ -103,10 +103,20 @@ them; nothing else does.
   (`ROLLUP_DB_STMT_TIMEOUT_S`). `READ COMMITTED` matters: InnoDB then reads the
   ledger as a consistent snapshot, without the shared next-key locks that would
   make ledger writers wait.
-- **Schedule.** Every minute: today and yesterday, plus any days missed while no
-  worker ran. Once a night (after 00:15 UTC): the 7 days before that, which
-  absorbs late `settlement_time` changes. In the rest of each minute: backfill,
-  newest-first, one day per transaction.
+- **Schedule.** Tuned for the shared production database; every interval is an
+  environment variable (see `.env.example`).
+  - Every tick (`ROLLUP_TICK_MS`, default 60 s): today, plus any days missed
+    while no worker ran (oldest first).
+  - Yesterday is recomputed every tick only for the first hour after 00:00 UTC
+    (`ROLLUP_YESTERDAY_WINDOW_MS`, default 60 min), while late settlements and
+    the tail of the day land, then once more to finalise it.
+  - Wealth is snapshotted at most every 15 minutes (`ROLLUP_WEALTH_EVERY_MS`);
+    today's row is refreshed in place.
+  - Once a night (after 00:15 UTC): today-8..today-2, which absorbs late
+    `settlement_time` changes. A change to day D after its first-hour window is
+    picked up by the nightly pass on D+2.
+  - In the rest of each tick: backfill, newest-first, one day per transaction,
+    pausing `ROLLUP_BACKFILL_PAUSE_MS` (default 250 ms) between days.
 - **Coverage.** `explorer_rollup_coverage(job, from_day, to_day,
   history_complete)` is the contiguous range each job has computed, so a
   restart resumes where it stopped. Readers in `lib/services/rollup.ts` return

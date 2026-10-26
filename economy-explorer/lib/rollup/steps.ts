@@ -438,6 +438,16 @@ export async function logRun(db: Executor, entry: {
             ${entry.error === null ? null : entry.error.slice(0, 1000)})`.execute(db);
 }
 
+/**
+ * Jobs with a successful step for `day` that started at or after `since`
+ * (the run log's started_at index bounds the read).
+ */
+export async function jobsRecomputedSince(db: Executor, day: string, since: Date): Promise<Set<string>> {
+  const r = await sql<{ job: string }>`SELECT DISTINCT job FROM explorer_rollup_run
+    WHERE started_at >= ${since} AND day = ${day} AND error IS NULL`.execute(db);
+  return new Set(r.rows.map((row) => row.job));
+}
+
 export async function lastNightly(db: Executor): Promise<string | null> {
   const r = await sql<{ d: string | null }>`SELECT DATE_FORMAT(MAX(day), '%Y-%m-%d') AS d FROM explorer_rollup_run
     WHERE job = 'nightly' AND error IS NULL`.execute(db);

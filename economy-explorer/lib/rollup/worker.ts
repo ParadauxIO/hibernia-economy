@@ -5,20 +5,27 @@ import { addDays, daysBetween, eachDay, utcDay } from './days';
 import type { LeaderLease } from './lease';
 import { LEASE_RENEW_MS } from './lease';
 import { rollupMetrics } from './metrics';
+import { DEFAULT_ROLLUP_CONFIG, type RollupConfig } from './config';
 import {
-  ROLLUP_JOBS, type DayJob, earliestDay, lastNightly, logRun, markHistoryComplete, pairDayPruneRange,
+  ROLLUP_JOBS, type DayJob, earliestDay, jobsRecomputedSince, lastNightly, logRun, markHistoryComplete, pairDayPruneRange,
   prunePairDays, pruneRuns, readCoverage, recomputeDay, snapshotWealth,
 } from './steps';
 
-// The in-process scheduler (spec §4.2). Every minute the leader:
-//   1. recomputes today and yesterday (UTC), plus any days missed while no
-//      worker ran, oldest first so coverage stays contiguous;
-//   2. snapshots today's wealth;
-//   3. once a night (first tick after 00:15 UTC), recomputes the 7 days before
-//      yesterday, absorbing late settlement_time updates, and prunes staging
-//      and run-log rows;
-//   4. spends the rest of the minute backfilling history newest-first, one day
-//      per transaction, yielding between days.
+// The in-process scheduler (spec §4.2). Every tick (ROLLUP_TICK_MS, default a
+// minute) the leader:
+//   1. recomputes today (UTC), plus any days missed while no worker ran, oldest
+//      first so coverage stays contiguous. Yesterday is recomputed every tick
+//      only for the first hour after 00:00 UTC (ROLLUP_YESTERDAY_WINDOW_MS),
+//      while late settlements and the tail of the day land, then once more to
+//      finalise it; after that the nightly pass owns it;
+//   2. refreshes today's wealth snapshot at most every ROLLUP_WEALTH_EVERY_MS
+//      (default 15 minutes);
+//   3. once a night (first tick after 00:15 UTC), recomputes today-8..today-2,
+//      absorbing late settlement_time updates, and prunes staging and run-log
+//      rows. A late change to day D after its first-hour window is therefore
+//      picked up by the nightly pass on D+2 (D is then today-2);
+//   4. spends the rest of the tick backfilling history newest-first, one day
+//      per transaction, pausing ROLLUP_BACKFILL_PAUSE_MS between days.
 // Every step is idempotent (delete + insert of whole days), so a crash, a
 // restart or a brief overlap between two leaders only repeats work.
 
@@ -28,25 +35,26 @@ type Executor = Kysely<any>;
 /** Which part of a round a step belongs to, for metrics. */
 type Pass = 'fresh' | 'nightly' | 'backfill';
 
-export const TICK_MS = 60_000;
 const NIGHTLY_AFTER_MINUTES = 15;
 const NIGHTLY_DAYS = 7;
 const RUN_LOG_KEEP_DAYS = 7;
-/** Leave this much of each minute for the next tick's fresh-day pass. */
+/** Leave this much of each tick (at most) for the next tick's fresh-day pass. */
 const BACKFILL_MARGIN_MS = 10_000;
+const DAY_MS = 86_400_000;
 
 export interface WorkerDeps {
   db: Executor;
   lease: LeaderLease;
   now?: () => Date;
-  /** Pause between backfilled days so request traffic keeps the DB's attention. */
-  backfillPauseMs?: number;
+  /** Cadences; defaults in lib/rollup/config.ts. */
+  config?: Partial<RollupConfig>;
   log?: Pick<Console, 'info' | 'warn'>;
 }
 
 export interface TickResult {
   leader: boolean;
   freshDays: string[];
+  wealth: boolean;
   nightly: boolean;
   backfilled: string[];
   errors: number;
@@ -56,7 +64,8 @@ export class RollupWorker {
   private readonly db: Executor;
   private readonly lease: LeaderLease;
   private readonly now: () => Date;
-  private readonly pauseMs: number;
+  private readonly config: RollupConfig;
+  private lastWealthAt: number | null = null;
   private readonly log: Pick<Console, 'info' | 'warn'>;
   private tickTimer: NodeJS.Timeout | null = null;
   private renewTimer: NodeJS.Timeout | null = null;
@@ -67,14 +76,14 @@ export class RollupWorker {
     this.db = deps.db;
     this.lease = deps.lease;
     this.now = deps.now ?? (() => new Date());
-    this.pauseMs = deps.backfillPauseMs ?? 50;
+    this.config = { ...DEFAULT_ROLLUP_CONFIG, ...deps.config };
     this.log = deps.log ?? console;
   }
 
   start(): void {
     this.stopping = false;
     const tick = () => { void this.tick().catch((e: unknown) => this.log.warn('[rollup] tick failed', e)); };
-    this.tickTimer = setInterval(tick, TICK_MS);
+    this.tickTimer = setInterval(tick, this.config.tickMs);
     this.renewTimer = setInterval(() => { if (this.lease.held) void this.lease.renew(); }, LEASE_RENEW_MS);
     this.tickTimer.unref();
     this.renewTimer.unref();
@@ -100,14 +109,15 @@ export class RollupWorker {
   /** One scheduling round. Overlapping calls share the round in progress. */
   tick(deadline?: number): Promise<TickResult> {
     if (!this.running) {
-      this.running = this.round(deadline ?? this.now().getTime() + TICK_MS - BACKFILL_MARGIN_MS)
+      const margin = Math.min(BACKFILL_MARGIN_MS, this.config.tickMs / 6);
+      this.running = this.round(deadline ?? this.now().getTime() + this.config.tickMs - margin)
         .finally(() => { this.running = null; });
     }
     return this.running;
   }
 
   private async round(deadline: number): Promise<TickResult> {
-    const result: TickResult = { leader: false, freshDays: [], nightly: false, backfilled: [], errors: 0 };
+    const result: TickResult = { leader: false, freshDays: [], wealth: false, nightly: false, backfilled: [], errors: 0 };
     const leading = this.active() && await this.lease.acquire();
     rollupMetrics().leader.set(leading ? 1 : 0);
     if (!leading) return result;
@@ -116,7 +126,13 @@ export class RollupWorker {
 
     result.freshDays = await this.freshDays(today);
     for (const day of result.freshDays) result.errors += await this.runDay(day, ROLLUP_JOBS, 'fresh');
-    result.errors += await this.step('wealth', today, 'fresh', () => snapshotWealth(this.db, today));
+    const now = this.now().getTime();
+    if (this.lastWealthAt === null || now - this.lastWealthAt >= this.config.wealthEveryMs) {
+      const failed = await this.step('wealth', today, 'fresh', () => snapshotWealth(this.db, today));
+      if (!failed) this.lastWealthAt = now;
+      result.errors += failed;
+      result.wealth = true;
+    }
 
     if (await this.nightlyDue(today)) {
       result.nightly = true;
@@ -130,21 +146,34 @@ export class RollupWorker {
       result.errors += day.errors;
       // A failed day is retried next minute, not hammered in this one.
       if (day.errors > 0) break;
-      await new Promise((resolve) => setTimeout(resolve, this.pauseMs));
+      await new Promise((resolve) => setTimeout(resolve, this.config.backfillPauseMs));
     }
     return result;
   }
 
-  /** Yesterday and today, preceded by any days after the oldest job's coverage. */
-  private async freshDays(today: string): Promise<string[]> {
+  /**
+   * Today; any days after the oldest job's coverage (catch-up, oldest first);
+   * and yesterday while it is still settling: inside the window after 00:00
+   * UTC, or until every job has recomputed it once after the window closed.
+   */
+  async freshDays(today: string): Promise<string[]> {
     const yesterday = addDays(today, -1);
     const coverage = await readCoverage(this.db);
-    let from = yesterday;
+    let from = today;
     for (const job of ROLLUP_JOBS) {
       const to = coverage.get(job)?.to_day;
-      if (to && addDays(to, 1) < from) from = addDays(to, 1);
+      if (!to) from = yesterday; // first run: start coverage at yesterday
+      else if (addDays(to, 1) < from) from = addDays(to, 1);
     }
+    if (from === today && await this.yesterdayUnsettled(today)) from = yesterday;
     return eachDay({ from, to: today });
+  }
+
+  private async yesterdayUnsettled(today: string): Promise<boolean> {
+    const windowEnd = Date.parse(`${today}T00:00:00Z`) + this.config.yesterdayWindowMs;
+    if (this.now().getTime() < windowEnd) return true;
+    const done = await jobsRecomputedSince(this.db, addDays(today, -1), new Date(Math.min(windowEnd, Date.parse(`${today}T00:00:00Z`) + DAY_MS)));
+    return ROLLUP_JOBS.some((job) => !done.has(job));
   }
 
   private async nightlyDue(today: string): Promise<boolean> {

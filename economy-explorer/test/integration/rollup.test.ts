@@ -313,7 +313,7 @@ d('worker backfill and coverage', () => {
   // 00:05 UTC: before the nightly pass is due, so a tick is the fresh pass alone.
   let clock = new Date(`${TODAY}T00:05:00Z`);
   const worker = () => new RollupWorker({
-    db: rollupDb(), lease: new LeaderLease(null, 'test', 'test'), now: () => clock, backfillPauseMs: 0,
+    db: rollupDb(), lease: new LeaderLease(null, 'test', 'test'), now: () => clock, config: { backfillPauseMs: 0, wealthEveryMs: 0 },
     log: { info: () => {}, warn: () => {} },
   });
 

@@ -16,9 +16,11 @@ import {
 // Ranges are inclusive UTC days, `{ from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }`
 // (compatible with lib/range.ts). Every helper returns `{ data, coverage }`:
 //
-//   * Freshness: the worker recomputes today and yesterday every minute, so
-//     rows lag the ledger by about a minute. `coverage.updatedAt` is when the
-//     job last wrote ("updated hh:mm").
+//   * Freshness: the worker recomputes today every tick (default a minute),
+//     so today lags the ledger by about one tick. Yesterday is final after the
+//     first hour past 00:00 UTC; later settlement_time changes reach older days
+//     with the nightly pass. Wealth snapshots refresh every 15 minutes.
+//     `coverage.updatedAt` is when the job last wrote ("updated hh:mm").
 //   * Coverage: history is backfilled newest-first after a deploy. `data` only
 //     contains days inside the job's covered range; when `coverage.covered` is
 //     false the page shows "Preparing history: covered back to
@@ -140,7 +142,7 @@ export interface BalancePoint {
  * Source: account_balances_mat + explorer_rollup_account_day.
  * Coverage: needs account_day from range.from through today, because every
  * later day's net is subtracted; otherwise `covered` is false and `data` is
- * empty. Within the ~1 minute rollup lag, transactions not yet rolled up shift
+ * empty. Within the one-tick rollup lag, transactions not yet rolled up shift
  * every point by their net.
  */
 export async function balanceSeries(accountIds: readonly number[], range: DayRange): Promise<Covered<BalancePoint[]>> {

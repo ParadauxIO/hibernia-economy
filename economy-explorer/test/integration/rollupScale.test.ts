@@ -183,12 +183,28 @@ d('rollup worker at production scale', () => {
       await sql`DELETE FROM ${sql.table(table)}`.execute(db);
     }
     const worker = new RollupWorker({
-      db: rollupDb(), lease: new LeaderLease(null, 'scale', 'scale'), backfillPauseMs: 50,
+      db: rollupDb(), lease: new LeaderLease(null, 'scale', 'scale'),
       now: () => new Date(`${TODAY}T00:05:00Z`), log: { info: () => {}, warn: (...a: unknown[]) => console.warn(...a) },
     });
     let start = process.hrtime.bigint();
     const fresh = await worker.tick(0);
-    note(`minute pass (yesterday + today + wealth): ${(ms(start) / 1000).toFixed(2)} s, errors ${fresh.errors}`);
+    note(`first-hour tick (yesterday + today + wealth): ${(ms(start) / 1000).toFixed(2)} s, errors ${fresh.errors}`);
+    // After the yesterday window (and its finalising pass) a tick is today only.
+    // Synthetic "today" holds a full day, so this is the end-of-day worst case.
+    let clock = new Date(`${TODAY}T01:00:00Z`);
+    const steady = new RollupWorker({
+      db: rollupDb(), lease: new LeaderLease(null, 'scale', 'scale'), now: () => clock,
+      log: { info: () => {}, warn: (...a: unknown[]) => console.warn(...a) },
+    });
+    await steady.tick(0);
+    clock = new Date(`${TODAY}T12:00:00Z`);
+    start = process.hrtime.bigint();
+    const later = await steady.tick(0);
+    note(`steady tick after 01:00 (today only, full day of data): ${(ms(start) / 1000).toFixed(2)} s, days ${later.freshDays.join(',')}, wealth ${later.wealth}`);
+    clock = new Date(`${TODAY}T12:15:00Z`);
+    start = process.hrtime.bigint();
+    await steady.tick(0);
+    note(`steady tick with wealth snapshot: ${(ms(start) / 1000).toFixed(2)} s`);
     start = process.hrtime.bigint();
     let days = 0;
     while (await worker.backfillOne(TODAY)) days++;
