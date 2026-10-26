@@ -133,8 +133,8 @@ dependencies {
     // ChestShop compiles against the serializers it uses directly; Paper supplies them.
     // Keep the Adventure 4 API supplied by Paper: compiling against Adventure 5
     // produces incompatible builder calls (FindDialogTest catches NoSuchMethodError).
-    compileOnly("net.kyori:adventure-text-serializer-gson:4.21.0")
-    compileOnly("net.kyori:adventure-text-serializer-legacy:4.21.0")
+    compileOnly("net.kyori:adventure-text-serializer-gson:5.2.0")
+    compileOnly("net.kyori:adventure-text-serializer-legacy:5.2.0")
 
     // --- tests
     // Server API on the test runtime (tests mock/instantiate org.bukkit.* types).
