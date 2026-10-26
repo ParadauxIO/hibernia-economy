@@ -6,7 +6,7 @@ import { visit } from './helpers';
 // representative full screens because an isolated swatch misses real contrast.
 for (const theme of ['blue', 'red']) {
   for (const mode of ['dark', 'light']) {
-    for (const path of ['/', '/market', '/chestshop', '/chestshop/shops?item=DIAMOND', '/chestshop/items/DIAMOND']) {
+    for (const path of ['/', '/market', '/chestshop', '/chestshop/shops?item=DIAMOND', '/chestshop/items/DIAMOND', '/design-system', '/design-system/mock-account', '/design-system/mock-me']) {
       test(`${theme} ${mode}: ${path} remains readable and fits the viewport`, async ({ page, context, baseURL }) => {
         await context.addCookies([
           { name: 'theme', value: theme, url: baseURL! },

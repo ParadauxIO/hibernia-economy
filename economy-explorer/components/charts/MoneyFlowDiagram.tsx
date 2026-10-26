@@ -2,6 +2,7 @@
 // type nodes laid out in a circle with arc edges weighted by amount. Renders
 // in RSC without recharts.
 
+import './charts.css';
 import { CURRENCY_SYMBOL } from '@/lib/currency';
 
 interface Edge { from_type: string; to_type: string; amount: string; amount_ex_seed?: string; txn_count: number }
@@ -100,7 +101,7 @@ export function MoneyFlowDiagram({ edges }: { edges: Edge[] }) {
 export function MoneyFlowLegend({ edges }: { edges: Edge[] }) {
   if (edges.length === 0) return null;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12, color: 'var(--fg-soft)', fontSize: 12 }}>
+    <div className="chart-key-inline">
       {edges.slice(0, 8).map((e, i) => (
         <span key={i}>
           <span className={`badge badge-${e.from_type}`}>{e.from_type}</span>{' → '}

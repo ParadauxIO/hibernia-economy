@@ -50,6 +50,10 @@ const ROUTES: { path: string; viewers: Viewer[] }[] = [
   { path: '/admin/roles', viewers: ['admin'] },
   { path: '/admin/roles/player', viewers: ['admin'] },
   { path: '/admin/webhooks', viewers: ['admin'] },
+  { path: '/design-system', viewers: ['anon'] },
+  { path: '/design-system/mock-account', viewers: ['anon'] },
+  { path: '/design-system/mock-account?view=public', viewers: ['anon'] },
+  { path: '/design-system/mock-me', viewers: ['anon'] },
   { path: '/this-route-does-not-exist', viewers: ['anon'] },
 ];
 

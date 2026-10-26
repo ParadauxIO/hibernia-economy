@@ -1,104 +1,101 @@
-# Economy Explorer design system
+# Economy Explorer design system (v2)
 
-`@democracycraft/design-system` is a private, source-distributed npm workspace
-package for the DemocracyCraft and StateCraft explorers. Run `npm ci` from
-`economy-explorer/`; Next transpiles its TypeScript directly. No separate build,
-registry publication, or new runtime dependency is required.
+`@democracycraft/design-system` is the private, source-distributed npm workspace
+package the explorer is built from. Next transpiles it directly; there is no
+separate build. Open **`/design-system`** on any running explorer to see every
+primitive and chart in every state, plus two pages composed only from them:
+`/design-system/mock-account` (add `?view=public` for the logged-out view) and
+`/design-system/mock-me`.
 
-## Use
+The direction is restrained, typographic and data-first. Hierarchy comes from
+type size, weight and alignment; sections are separated by whitespace and
+hairlines, and only real units get a border. Numbers are the heroes. There is
+one accent per brand, and colour carries meaning only (money direction, status,
+chart categories). Minecraft flavour comes from player heads and item icons.
 
-Import the stylesheet once in the host's root layout, before application CSS:
+## Entry points
+
+| Import | Contents |
+| --- | --- |
+| `@democracycraft/design-system` | Structure, figures, entities, controls, states, popover base. Works in server and client components. |
+| `@democracycraft/design-system/next` | Components that need `next/link` or `next/navigation`: `Pager`, `CursorPager`, `Tabs`, `EntityLink`, `RangePicker`, `SidebarLayout`, `BackLink`. |
+| `@democracycraft/design-system/popover` | The floating-panel base: `Popover`, `MenuItem`, `MenuGroup`, `HoverCard`, `Dialog`, `computePosition`. FilterBar and the command palette build on this. |
+| `@democracycraft/design-system/format` | `formatNum`, `formatPct`, `formatWhen`, `formatUtc`, `compactMagnitude`. Money formatting is `lib/money.ts`. |
+| `@democracycraft/design-system/styles.css` | Tokens, reset, component and primitive styles. Imported once by the root layout. |
+
+Money is the one place the package reaches into the host: `Money` formats
+through `@/lib/money` (spec §3 rule 8, a single money module). Nothing else in
+the package imports `@/`.
+
+## Page skeleton
 
 ```tsx
-import '@democracycraft/design-system/styles.css';
-import { Button, Card, PageHeading, StatCard, TableWrap } from '@democracycraft/design-system';
-import { Pagination, BackLink } from '@democracycraft/design-system/next';
+<PageHeader eyebrow={<EntityBadge type="BUSINESS" />} title="…" subtitle="…" actions={<ExportMenu hrefs={…} />} tabs={<Tabs …/>} />
+<RangePicker value={parseRange(searchParams).value} />
+<MetricRow label="Summary">
+  <MetricCard label="Balance" value={<Money value={row.balance} />} delta={0.12} deltaLabel="vs previous 30 days" />
+</MetricRow>
+<Section title="Balance" description="Last 30 days"><BalanceLine data={…} /></Section>
+<Section title="Transactions" divider>…</Section>
 ```
 
-The root entry contains React presentation components and works in server or
-client components. `/next` isolates Next Link adapters. `/use-hydrated` is an
-explicit client entry; the root barrel does not turn the application into a
-client component. The package never imports `@/`, application services, sessions,
-permissions, database modules, or business formatters.
+Workspaces (`/me`, `/gov`, `/admin`) wrap this in `SidebarLayout`.
 
-| Layer | Contents |
-| --- | --- |
-| Foundations | CSS custom properties for surface, text, brand, status, chart series, fonts, radius, motion and section spacing; reset and type styles |
-| Layout | `PageHeading`, `Card`, `ChartCard`, `StatCard`, `SectionNav`, `ToolbarLayout` |
-| Controls | `Button`, `Input`, `Select`, `Badge` |
-| Data and states | `TableWrap`, `EmptyState`, `SkeletonLine`, `SkeletonTable`, `InfoTip`, `MiniSpark` |
-| Navigation | `WindowTabs`; Next adapters `BackLink`, `Pagination` |
-| Hydration | `useHydrated` for controls and DOM-measured charts |
+## Primitives
 
-Set `data-mode="dark|light"` and `data-theme="blue|red"` on the document root.
-The host owns preference persistence and setting these attributes before first
-paint. Geist variables are optional: fonts have system fallbacks. Consumers that
-only need variables can import `/tokens.css`; `/styles.css` also includes global
-reset and native-control styles, so it is intended for an explorer-style host.
+| Primitive | Key props | Notes |
+| --- | --- | --- |
+| `PageHeader` | `title`, `subtitle?`, `eyebrow?`, `avatar?`, `meta?`, `actions?`, `tabs?` | The page's only `h1`. Replaces `PageHeading` and `.page-heading`. |
+| `Section` | `title?`, `description?`, `actions?`, `level?: 2 \| 3`, `divider?`, `boxed?`, `id?` | `<section>` with a real heading; named by it when `id` is set. `boxed` only for real units. |
+| `MetricRow` / `MetricCard` | Row: `label?`. Card: `label`, `value`, `delta?: number \| null`, `deltaLabel?`, `deltaTone?: 'auto' \| 'inverse' \| 'neutral'`, `info?`, `spark?: number[]`, `meta?` | One hairline panel with dividers, not four boxes. `delta` is a fraction (0.12 = +12%). |
+| `Money` | `value: Cents \| string`, `currency?`, `compact?`, `sign?: 'auto' \| 'always' \| 'exceptZero' \| 'never'`, `tone?: 'none' \| 'auto' \| 'inverse'` | Formats through `lib/money`. Compact shows the exact value in a tooltip. Pass `currency` explicitly in client components. |
+| `Num`, `Pct`, `Delta` | `Num`: `value`, `compact?`, `unit?`. `Pct`: fraction. `Delta`: fraction, `label?`, `tone?` | Tabular figures. |
+| `When` | `value`, `time?`, `relative?` | Relative under 24 h, `Oct 25` this year, `Oct 25, 2025` otherwise. Local time after hydration, UTC on the server; exact UTC in the tooltip. Absorbs `LocalTimestamp`. |
+| `EntityBadge`, `Tag` | `type` / `tone` | A dot and a word. Legacy `.badge-PERSONAL` etc. render the same way. |
+| `EntityLink` (`/next`) | `kind`, `href`, `name`, `uuid?`, `accountType?`, `id?`, `icon?`, `preview?` | `preview` is a URL returning `EntityPreviewData` JSON; the hover card and its data load on first hover or focus. |
+| `PlayerHead` | `uuid`, `size?`, `name?`, `alt?` | Served by the host's `/api/avatar/[uuid]` proxy (24 h cache); visitors never contact the head service. |
+| `RangePicker` (`/next`) | `value: RangeValue`, `presets?`, `allowCompare?`, `min?`, `max?`, `resetParams?` | Writes `range`, `from`, `to`, `cmp`; drops `page`. Parse with `lib/range.ts`. |
+| `Segmented` | `items`, `value`, `label`, `onChange?` | Links with `aria-current`, or toggle buttons with `aria-pressed`. Replaces `WindowTabs`. |
+| `Tabs` (`/next`) | `items: { label, href, current?, count? }[]`, `label` | Route tabs under a `PageHeader`. |
+| `Pager` / `CursorPager` (`/next`) | `Pager`: as `Pagination` plus `noun?`. `CursorPager`: `newerHref`, `olderHref`, `jump?`, `summary?` | Server-rendered links. |
+| `ExportMenu` | `hrefs: { page?: { csv?, json? }, all?: { csv?, json? } }`, `allDescription?` | UI only; the host builds and authorizes the URLs. |
+| `EmptyState`, `ErrorState`, `AccessGate` | `AccessGate`: `kind: 'login' \| 'private' \| 'link' \| 'request'`, `title`, `description?`, `action?`, `grants?`, `inline?` | `request` lists the relationships that grant access. The host supplies the login form. |
+| `Skeleton*` | `SkeletonLine`, `SkeletonText`, `SkeletonTable`, `SkeletonMetricRow`, `SkeletonChart` | `SkeletonChart` is `aria-busy` until replaced; test helpers wait for it. |
+| `SidebarLayout` (`/next`) | `title`, `nav: { label?, items: { label, href, current?, count? }[] }[]` | Left navigation; a select on phones. |
+| `Popover` (`/popover`) | `trigger`, `children` (or `({ close }) => …`), `label?`, `role?: 'dialog' \| 'menu' \| 'listbox'`, `placement?`, `open?`/`onOpenChange?`, `sheet?`, `minWidth?` | Non-modal. Escape, outside click or tabbing away closes it; focus returns to the trigger. Portal + `position: fixed`, flipped and clamped to the viewport. `sheet` opens a bottom sheet at ≤ 720 px. |
+| `HoverCard`, `Dialog` (`/popover`) | `HoverCard`: `trigger`, `onFirstOpen?`. `Dialog`: `open`, `onClose`, `title`, `description?`, `actions?`, `size?` | `Dialog` is the native `<dialog>`: focus trap, inert page and Escape come from the browser. |
 
-Native control attributes, events and React 19 refs pass through. `Button`
-defaults to `type="button"`; use `type="submit"` for forms. `TableWrap` requires
-a region label and keeps overflowing tables keyboard-focusable. Provide visible
-labels or accessible names for inputs and meaningful text next to decorative
-sparklines. `SectionNav` accepts host-created links; routing and permission
-filtering remain the host's responsibility.
+Legacy components (`PageHeading`, `StatCard`, `Badge`, `ChartCard`, `WindowTabs`,
+`SectionNav`, `Pagination`) still work and are restyled to match, so pages look
+consistent until each is rebuilt. Don't use them in new code.
 
-## Ownership and migration
+## Tokens
 
-Existing class names are retained for incremental migration. Shared
-component CSS, including mobile rules, lives in `styles/components.css`; shell,
-market, documentation, charts and permission-gate styles remain in
-`app/explorer.css`. Older page markup may still use shared classes directly.
-Replace it with exported components as those screens are revised; do not copy
-their CSS back into the app.
+All in `styles/tokens.css`, in four blocks (blue/red × dark/light).
+`test/unit/tokens.test.ts` checks the cascade and contrast for every combination.
 
-All callers of the moved components use package imports. The overview consumes
-the card, heading and metric primitives; the market uses the controls and empty
-state; URL-aware toolbars compose the presentation controls. Search parameter
-handling, export authorization, CSV escaping, chart data, prices, and viewer
-permissions remain in the app.
+- **Type:** `--text-xs` … `--text-3xl` with matching `--leading-*` (12/16, 13/18, 14/20, 16/24, 20/28, 24/32, 32/40). Weights 400, 500, 600.
+- **Spacing:** `--space-N` = N × 4 px for N in 1, 2, 3, 4, 5, 6, 8, 10, 12, 16. `--section-gap` = `--space-6`.
+- **Radius:** `--radius-sm` 6, `--radius-md` 10, `--radius-lg` 14, `--radius-pill`. Nothing else.
+- **Elevation:** `--shadow-1`, `--shadow-2`, for floating panels only.
+- **Colour:** surfaces and text as before; `--accent`, `--accent-fill`, `--on-accent`; `--pos` / `--neg` for money direction (the red brand uses teal / amber, never green or brand red); `--good` / `--warn` / `--bad` for status; `--cat-1…10` chart categories; `--seq-0…5` sequential (0 = empty).
+- Legacy names (`--radius`, `--c-1…7`, `--accent-2`, `--brand-*`) are aliases.
 
-Keep application-specific concepts out of the generic API. For example,
-`StatCard` receives formatted React content rather than computing money or period
-comparisons, and `Badge` receives host-selected classes rather than deciding an
-account's type or status. Rich charts and shop offers remain domain components.
+Inline `fontSize`, `padding` and `margin` in JSX `style` props are a lint error in
+`packages/**` and `components/charts/**` (Wave 2 widens this to pages).
 
-## Review and verification
+## Charts
 
-Open `/design-system` after starting the explorer. The gallery uses fictional
-fixtures and does not need a database. It includes all four brand/appearance
-combinations, cards, controls, a working search/filter/pagination journey,
-horizontal table scrolling, a sparkline, tooltips, loading and empty states.
-Appearance previews do not overwrite saved preferences and restore the previous
-document appearance when the gallery unmounts.
+Charts are app components in `components/charts/` (they need app data types);
+they share `ChartFrame`, `kit.ts` and the tokens above. Import them from
+`@/components/charts/AreaTimeline` (the barrel) or their own files.
 
-From `economy-explorer/`:
+- Generic: `TimeSeriesChart` (area or line, stacked or not, second axis), `BarChart` (grouped, stacked, horizontal), `Donut`, `Waterfall`. Server-rendered: `Heatmap`, `Candlestick`; `MiniSpark` from the package.
+- Recharts loads through `next/dynamic` only; the server renders a skeleton at the chart's final height.
+- Every chart has an `aria-label` summary and a "View chart data" table, legends in the same place that toggle series, monotone curves, axis widths fitted to their labels, nice ticks with compact money, and outlier clamping with a log-scale toggle.
 
-```sh
-npm run typecheck
-npm run lint
-npm test
-npm run build
-```
+## Verification
 
-The existing component suite exercises the URL adapters, permissions and exports
-against the package-backed controls. Coverage includes package source. Docker's
-dependency stage copies the workspace manifest before `npm ci`; CI continues to
-use the explorer's existing lockfile and build context.
-
-See [the design audit](../../design/design-audit.md) for screen-level priorities
-and linked Mobbin references. The extraction is a foundation, not a claim that
-all legacy markup or accessibility issues have been redesigned.
-
-## Interaction refinements
-
-The shared tokens now include stronger light-mode text/link contrast and
-consistent mobile control sizes. Time selectors use visible day labels and
-current-state semantics. Help opens on hover, focus or tap, stays within the
-viewport, and dismisses on Escape without moving focus. Reduced-motion users
-receive immediate state changes.
-
-Application toolbars compose these foundations with URL-aware filter chips and
-reset behavior. Full Market and Economy screen composition lives in
-`app/experience.css`; offer availability, price normalization and return-route
-validation remain application responsibilities.
+From `economy-explorer/`: `npm run typecheck`, `npm run lint`, `npm test`,
+`npm run test:e2e` (includes `test/e2e/charts.spec.ts` and axe on the gallery in
+all four theme × mode combinations).

@@ -45,6 +45,9 @@ const ROUTES: { path: string; name: string; viewer?: 'admin' }[] = [
   { path: '/admin/groups/1', name: 'admin-group', viewer: 'admin' },
   { path: '/docs', name: 'docs' },
   { path: '/link', name: 'link', viewer: 'admin' },
+  { path: '/design-system', name: 'design-system' },
+  { path: '/design-system/mock-account', name: 'mock-account' },
+  { path: '/design-system/mock-me', name: 'mock-me' },
 ];
 
 const OUT = process.env.AUDIT_DIR || 'audit';

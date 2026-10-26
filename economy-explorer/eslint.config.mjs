@@ -29,6 +29,18 @@ export default tseslint.config(
     },
   },
   {
+    // Spacing and type come from design tokens (spec §5.4). Scoped to the design
+    // system and charts for now because existing pages still carry inline styles;
+    // Wave 2 (PAR-543) widens it to app/** once the pages are rebuilt.
+    files: ['packages/**/*.tsx', 'components/charts/**/*.tsx'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "JSXAttribute[name.name='style'] Property[key.name=/^(fontSize|padding|margin)/]",
+        message: 'Use design tokens (classes with var(--text-*) / var(--space-*)) instead of inline fontSize, padding or margin.',
+      }],
+    },
+  },
+  {
     // Playwright fixtures call their `use` callback; that isn't React's use().
     files: ['test/e2e/**'],
     rules: { 'react-hooks/rules-of-hooks': 'off' },

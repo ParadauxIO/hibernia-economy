@@ -6,6 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./next": "./src/next/index.ts",
+    "./popover": "./src/popover/index.ts",
+    "./format": "./src/format.ts",
     "./use-hydrated": "./src/useHydrated.ts",
     "./styles.css": "./styles/index.css",
     "./tokens.css": "./styles/tokens.css"
