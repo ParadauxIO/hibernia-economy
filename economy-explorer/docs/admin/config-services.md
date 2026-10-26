@@ -38,7 +38,7 @@ for every variable and default. Required connection/sign-in settings are:
 | Area | Variables and checks |
 |---|---|
 | Database | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`; `DB_POOL` defaults to 100, `DB_STMT_TIMEOUT_S` to 15 seconds. Budget connections across all replicas/services. |
-| OIDC | `AUTH_KEYCLOAK_ISSUER`, `AUTH_KEYCLOAK_ID`, `AUTH_KEYCLOAK_SECRET` (empty for the public client), `AUTH_SECRET`, `AUTH_URL`; configure the client's callback at `<AUTH_URL>/api/auth/callback/keycloak`. `AUTH_TRUST_HOST=true` is for a trusted proxy deployment. |
+| OIDC | `AUTH_KEYCLOAK_ISSUER`, `AUTH_KEYCLOAK_ID`, `AUTH_KEYCLOAK_SECRET` (empty for the public client), `AUTH_SECRET`, `AUTH_URL`; configure the client's callback at `<AUTH_URL>/api/auth/callback/keycloak`. Log out also ends the Keycloak session and returns to the site origin (`SITE_URL`, else `AUTH_URL`, without a trailing slash), so that origin must match the client's **Valid post logout redirect URIs** (for example `https://economy.example.net/*`); otherwise Keycloak shows an "invalid redirect URI" page after logging out. `AUTH_TRUST_HOST=true` is for a trusted proxy deployment. |
 | Tenant/URLs | `TENANT`, `THEME`, `SITE_URL` (defaults to `AUTH_URL`), `SERVER_NAME`, `SERVER_IP`, `SERVER_ICON`, `CURRENCY_SYMBOL`; verify the correct tenant branding and canonical URL. |
 | Admin API | `TREASURY_API_BASE_URL` and `TREASURY_ADMIN_TOKEN`; missing either disables admin writes and webhook management. |
 | Maps/assets/status | `MAP_URL`, `MAP_ZOOM`, `ITEM_ICON_BASE`, `MC_STATUS_API`; verify links against this server's worlds and assets. |

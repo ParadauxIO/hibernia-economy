@@ -315,6 +315,39 @@ into the browser's zone. Daily charts label this distinction.
 - **Keyset cursors.** `lib/pagination/cursor.ts` encodes `(timestamp, id)` as
   an opaque base64url token for Newer / Older pagination on unbounded feeds.
 
+### Explorer chrome: navigation, account menu, palette (PAR-536)
+
+- **One nav model.** `lib/nav.ts` declares the six top-bar sections (Economy,
+  Directory, Market, Government, Investigate, Docs), their pages and their
+  visibility rules. The top bar, the section nav under it, the phone menu, the
+  command palette and `Breadcrumbs` all read it. The chrome infers the active
+  section from the path, so pages never declare it and never render section
+  tabs (`SectionTabs` is a deprecated no-op). A new page under an existing
+  section prefix is highlighted automatically; a new page that should appear in
+  the section nav is one entry in `NAV_SECTIONS`.
+- **Viewer on the server.** The root layout awaits the React-cached
+  `getViewer()` and passes `lib/services/nav.ts` `chromeViewer()` (a
+  `lib/viewerSnapshot.ts` `ViewerCtx`) to `ViewerProvider`; `useViewer()`
+  reads it. `/api/viewer` returns the same snapshot and is used only by
+  `refreshViewer()` (back/forward-cache restores). The Government entry needs
+  `government.read.all`, or `government.read` plus a GOVERNMENT account in the
+  viewer's ReBAC scope (`lib/sql/nav.ts`, memoised per player for 60 s). The
+  account chip's balance is the sum of the PERSONAL accounts the player owns,
+  memoised for 30 s and streamed behind Suspense. Both are presentation only.
+- **Breadcrumbs.** `components/Breadcrumbs.tsx` is a server component. Put it
+  first in an entity page, above `PageHeader`:
+  `<Breadcrumbs section="/firms" items={[{ label: firm.name, href }, { label: account.name }]} />`.
+  `section` supplies the leading crumbs from `lib/nav` (Directory › Firms).
+- **Command palette.** `components/CommandPalette.tsx`, mounted once by the
+  layout, opened by ⌘K / Ctrl+K, `/`, or `openPalette()`. Entities come from the
+  `searchPreview` server action (200 ms debounce, two-character minimum, stale
+  results discarded through an `AbortSignal`); pages and actions from
+  `components/CommandPaletteEntries.ts`; recents from `localStorage`.
+- **Logout** ends the Keycloak session too: `logoutAction` clears the Auth.js
+  cookie, then redirects to the IdP's `end_session_endpoint` with `client_id`
+  and `post_logout_redirect_uri` (`lib/auth/endSession.ts`). No ID token is
+  stored, so Keycloak asks the user to confirm.
+
 ### Explorer metrics and Server-Timing (PAR-531)
 
 `instrumentation.ts` sets up Prometheus metrics (`lib/metrics.ts`) in the Node

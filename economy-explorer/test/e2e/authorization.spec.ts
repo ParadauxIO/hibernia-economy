@@ -197,6 +197,33 @@ test('direct and LP account relationships are scoped and revocable; government r
   await expect(page.locator('.privacy-gate')).toBeVisible();
 });
 
+test('the Government entry needs government.read and a government account in scope (PAR-536)', async ({ context, page, policy }) => {
+  await page.setViewportSize({ width: 1280, height: 800 }); // the primary nav is in the Menu on phones
+  const primary = page.getByRole('navigation', { name: 'Primary' });
+  // government.read with nothing in scope: no entry (the nav decision is cached per player for a minute,
+  // so the scoped case below uses a second player rather than changing this one).
+  await policy.conn.query("INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, 'government')", [bin(policy.player)]);
+  await signIn(context, policy.player);
+  await visit(page, '/');
+  await expect(primary.getByRole('link', { name: 'Economy' })).toBeVisible();
+  await expect(primary.getByRole('link', { name: 'Government' })).toHaveCount(0);
+
+  const scoped = randomUUID();
+  try {
+    await policy.conn.query("INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, 'government')", [bin(scoped)]);
+    await policy.conn.query("INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES (5, ?, 'VIEWER', ?)", [bin(scoped), bin(policy.admin)]);
+    await signIn(context, scoped);
+    await visit(page, '/');
+    await expect(primary.getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/government');
+    // The account chip counts personal money only; this player owns no account.
+    await expect(page.getByRole('button', { name: /TestPlayer/ })).not.toContainText('$');
+  } finally {
+    await policy.conn.query('DELETE FROM account_access WHERE subject_uuid_bin = ?', [bin(scoped)]);
+    await policy.conn.query('DELETE FROM explorer_role WHERE player_uuid_bin = ?', [bin(scoped)]);
+    await policy.conn.query('DELETE FROM explorer_identity WHERE player_uuid_bin = ?', [bin(scoped)]);
+  }
+});
+
 test('government account members can open related transactions from My data; revoked access is denied', async ({ context, page, policy }) => {
   // Each run owns its account so shared history caches cannot retain another run's postings.
   const [account] = await policy.conn.query<ResultSetHeader>("INSERT INTO accounts (account_type, owner_uuid_bin, display_name) VALUES ('GOVERNMENT', ?, ?)", [bin(policy.admin), policy.key]);
