@@ -16,6 +16,7 @@ import io.paradaux.business.model.RolePermission;
 import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.utils.BusinessAccountUtil;
 import io.paradaux.treasury.api.TreasuryApi;
+import io.paradaux.treasury.model.economy.AccountType;
 import java.util.Locale;
 import java.util.UUID;
 import org.bukkit.entity.Player;
@@ -46,9 +47,15 @@ class BusinessAccountServiceImplTest {
     }
 
     private static io.paradaux.treasury.model.economy.Account treasuryAccount(int id, String display) {
+        return treasuryAccount(id, display, AccountType.BUSINESS);
+    }
+
+    private static io.paradaux.treasury.model.economy.Account treasuryAccount(
+            int id, String display, AccountType type) {
         io.paradaux.treasury.model.economy.Account a = new io.paradaux.treasury.model.economy.Account();
         a.setAccountId(id);
         a.setDisplayName(display);
+        a.setAccountType(type);
         return a;
     }
 
@@ -73,6 +80,39 @@ class BusinessAccountServiceImplTest {
         assertThat(account.getName()).isEqualTo("Acme Corp");
         assertThat(account.getShortName()).isEqualTo("B:1A");
         assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(
+            value = AccountType.class,
+            names = {"PERSONAL", "GOVERNMENT", "SYSTEM"})
+    void resolve_nativeIdRefusesNonBusinessAccounts(AccountType type) {
+        // ADT-220: B:<id> must not let a shop pay out of a player's or government's account.
+        service.bind(treasury, business);
+        when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "Victim", type));
+
+        assertThat(service.resolveBusinessAccount("B:1A")).isNull();
+    }
+
+    @Test
+    void resolve_nativeIdKeepsArchivedBusinessWalletForStockRecovery() {
+        service.bind(treasury, business);
+        var archived = treasuryAccount(46, "Disbanded");
+        archived.setArchived(true);
+        when(treasury.getAccountById(46)).thenReturn(archived);
+
+        assertThat(service.resolveBusinessAccount("B:1A")).isNotNull();
+    }
+
+    @Test
+    void resolve_legacyFirmNameRefusesNonBusinessDefaultAccount() {
+        service.bind(treasury, business);
+        Firm firm = mock(Firm.class);
+        when(firm.getDefaultAccountId()).thenReturn(7);
+        when(firms.getFirm("My Shop")).thenReturn(firm);
+        when(treasury.getAccountById(7)).thenReturn(treasuryAccount(7, "Someone", AccountType.PERSONAL));
+
+        assertThat(service.resolveBusinessAccount("B:My Shop")).isNull();
     }
 
     @Test
@@ -273,9 +313,25 @@ class BusinessAccountServiceImplTest {
         UUID pid = UUID.randomUUID();
         when(staff.hasPermissionForAccount(anyInt(), any(), any())).thenReturn(false);
         when(firms.getFirmByAccountId(5)).thenReturn(null); // disbanded -> left accessible
+        when(treasury.getAccountById(5)).thenReturn(treasuryAccount(5, "Disbanded"));
 
         assertThat(service.canAccessBusinessAccount(player(pid), businessAccount(5)))
                 .isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(
+            value = AccountType.class,
+            names = {"PERSONAL", "GOVERNMENT", "SYSTEM"})
+    void access_unownedFallbackRefusesNonBusinessAccounts(AccountType type) {
+        // ADT-220: no firm owns a personal or government account; that must not read as "disbanded".
+        service.bind(treasury, business);
+        when(staff.hasPermissionForAccount(anyInt(), any(), any())).thenReturn(false);
+        when(firms.getFirmByAccountId(5)).thenReturn(null);
+        when(treasury.getAccountById(5)).thenReturn(treasuryAccount(5, "Victim", type));
+
+        assertThat(service.canAccessBusinessAccount(player(UUID.randomUUID()), businessAccount(5)))
+                .isFalse();
     }
 
     @Test

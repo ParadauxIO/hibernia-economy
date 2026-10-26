@@ -8,6 +8,7 @@ import io.paradaux.chestshop.services.BusinessAccountService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.BusinessAccountUtil;
 import io.paradaux.treasury.api.TreasuryApi;
+import io.paradaux.treasury.model.economy.AccountType;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -56,7 +57,7 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
                 Integer resolved = businessApi.firms().resolveShopAlias(token.substring(1));
                 if (resolved == null) return null;
                 treasuryAccount = treasury.getAccountById(resolved);
-                if (treasuryAccount == null || treasuryAccount.isArchived()) return null;
+                if (!isBusinessWallet(treasuryAccount) || treasuryAccount.isArchived()) return null;
                 return new Account(
                         businessDisplayName(resolved, treasuryAccount.getDisplayName()),
                         "B:" + token,
@@ -67,6 +68,9 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
             try {
                 accountId = Integer.parseInt(token, 36);
                 treasuryAccount = treasury.getAccountById(accountId);
+                // A B: id names a firm wallet only. Personal, government and system ids would
+                // otherwise let any player open a shop paid out of someone else's account (ADT-220).
+                if (!isBusinessWallet(treasuryAccount)) treasuryAccount = null;
             } catch (NumberFormatException notBase36) {
                 // e.g. a legacy firm name containing spaces — fall through to the name lookup.
             }
@@ -77,6 +81,7 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
                 if (firm != null && firm.getDefaultAccountId() != null) {
                     accountId = firm.getDefaultAccountId();
                     treasuryAccount = treasury.getAccountById(accountId);
+                    if (!isBusinessWallet(treasuryAccount)) treasuryAccount = null;
                 }
             }
 
@@ -89,6 +94,11 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
             log.warn("Treasury: Could not resolve business account for " + name, e);
         }
         return null;
+    }
+
+    // Archived wallets still resolve: a disbanded firm's shops stay reachable for stock recovery (PAR-29).
+    private static boolean isBusinessWallet(io.paradaux.treasury.model.economy.Account account) {
+        return account != null && account.getAccountType() == AccountType.BUSINESS;
     }
 
     /** The shop owner is the firm, not the label of its selected Treasury wallet. */
@@ -128,8 +138,10 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
                 if (businessApi.staff().hasPermissionForAccount(accountId, playerUuid, RolePermission.CHESTSHOP)) {
                     return true;
                 }
-                // PAR-29: no live firm owns this account (disbanded) — leave it accessible.
-                return businessApi.firms().getFirmByAccountId(accountId) == null;
+                // PAR-29: no live firm owns this account (disbanded) — leave it accessible. Only a
+                // business wallet qualifies: no firm ever owns a personal or government account (ADT-220).
+                return businessApi.firms().getFirmByAccountId(accountId) == null
+                        && isBusinessWallet(treasury.getAccountById(accountId));
             }
             // Business plugin absent: fall back to Treasury account membership.
             return treasury.isAccountMember(playerUuid, accountId)
