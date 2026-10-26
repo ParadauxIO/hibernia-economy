@@ -846,11 +846,19 @@ d('bridge analytics estimate (never persisted sale identity)', () => {
   }, 60_000);
   afterAll(async () => { await sql`DELETE FROM accounts WHERE account_id IN (9501, 9502)`.execute(db); });
 
+  // All legs use one database clock value, even if inserts cross a second boundary.
+  // Separate NOW() calls can turn reversed settlements into equal timestamps.
+  let settlementAnchor: string;
+  beforeEach(async () => {
+    const result = await sql<{ anchor: string }>`SELECT DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s') AS anchor`.execute(db);
+    settlementAnchor = result.rows[0]!.anchor;
+  });
+
   let nextId = 9500;
   async function transfer(src: number, dst: number, amount: string, message: string, plugin = 'ChestShop', ageSeconds = 3600) {
     const id = ++nextId;
     await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
-      VALUES (${id}, ${message}, ${plugin}, UNHEX(REPEAT('00',16)), NOW() - INTERVAL ${ageSeconds} SECOND)`.execute(db);
+      VALUES (${id}, ${message}, ${plugin}, UNHEX(REPEAT('00',16)), ${settlementAnchor} - INTERVAL ${ageSeconds} SECOND)`.execute(db);
     await sql`INSERT INTO ledger_postings (txn_id, account_id, amount) VALUES
       (${id}, ${src}, ${'-' + amount}), (${id}, ${dst}, ${amount})`.execute(db);
     return id;
