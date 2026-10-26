@@ -1,3 +1,4 @@
+import './docs.css';
 import { getDocsTree } from '@/lib/docs';
 import { DocsSidebar } from '@/components/docs/DocsSidebar';
 import { CodeCopyButton } from '@/components/docs/CodeCopyButton';
