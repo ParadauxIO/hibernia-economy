@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { getViewer, hasPermission } from '@/lib/auth';
 import type { Viewer } from '@/lib/auth/viewer';
-import { auditView } from '@/lib/audit';
+import { auditRelationshipRead, auditView } from '@/lib/audit';
 import { getGovernmentAccounts, type GovAccountRow } from '@/lib/sql/government';
 import { listGovUnitAccounts, listGovUnits, type GovUnitRow } from '@/lib/sql/govUnits';
 import { selectUnit, unassignedIds, unitOfAccount, visibleUnits, type Selection, type UnitView } from './governmentModel';
@@ -100,19 +100,17 @@ export function withinScope(scope: GovScope, accountIds: readonly number[]): num
 
 /**
  * Records a /gov read in explorer_audit (spec §10.1, closing the §1.6 gap).
- * A relationship-scoped viewer gets one `account` row per account the page
- * read, so the Audit tab (and /admin/audit) can show who looked at which
- * treasury. A government.read.all viewer gets one `global` row for the page.
- * Fail-open, like every audit write.
- *
- * TODO(PAR-542): switch the relationship rows to ADMIN's
- * auditRelationshipRead(viewer, target) once it lands in lib/audit.ts.
+ * A relationship-scoped viewer's reads go through auditRelationshipRead: one
+ * `account` row per account, throttled to one per viewer, account and hour,
+ * so the Audit tab (and /admin/audit) can show who looked at which treasury.
+ * A government.read.all viewer's read is not a relationship read; it gets one
+ * `global` row for the page instead. Fail-open, like every audit write.
  */
-export async function auditGovRead(scope: GovScope, path: string, accountIds: readonly number[], method = 'GET'): Promise<void> {
+export async function auditGovRead(scope: GovScope, path: string, accountIds: readonly number[]): Promise<void> {
   if (scope.all) {
-    await auditView(scope.viewer, { path, targetType: 'global', method });
+    await auditView(scope.viewer, { path, targetType: 'global' });
     return;
   }
-  // Bounded by the scope, which for a relationship viewer is a handful of accounts.
-  await Promise.all(withinScope(scope, accountIds).map((id) => auditView(scope.viewer, { path, targetType: 'account', targetId: String(id), method })));
+  const targets = withinScope(scope, accountIds).map((accountId) => ({ accountId, accountType: 'GOVERNMENT' }));
+  await auditRelationshipRead(scope.viewer, targets, path);
 }

@@ -4,7 +4,7 @@ import { getViewer, type Viewer } from '@/lib/auth/viewer';
 import { auditGovRead, govSelection, resolveGovScope, withinScope } from '@/lib/services/governmentScope';
 import { getGovernmentAccounts } from '@/lib/sql/government';
 import { listGovUnitAccounts, listGovUnits } from '@/lib/sql/govUnits';
-import { auditView } from '@/lib/audit';
+import { auditRelationshipRead, auditView } from '@/lib/audit';
 
 // The /gov scope rules (spec §10.1) with the SQL mocked: RBAC is checked before
 // any query, a relationship viewer's scope is exactly the accounts the SQL
@@ -12,7 +12,7 @@ import { auditView } from '@/lib/audit';
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 vi.mock('@/lib/sql/government', () => ({ getGovernmentAccounts: vi.fn() }));
 vi.mock('@/lib/sql/govUnits', () => ({ listGovUnits: vi.fn(), listGovUnitAccounts: vi.fn() }));
-vi.mock('@/lib/audit', () => ({ auditView: vi.fn() }));
+vi.mock('@/lib/audit', () => ({ auditView: vi.fn(), auditRelationshipRead: vi.fn() }));
 
 const base = { anon: false as const, keycloakSub: 'sub', minecraftUuid: 'uuid', minecraftName: null, linked: true };
 const government: Viewer = { ...base, role: 'government', capabilities: ['player', 'government'], permissions: permissionsFor('player', 'government') };
@@ -92,16 +92,17 @@ describe('selection and audit', () => {
     expect(withinScope(access.scope, [7, 9, 10, 8])).toEqual([7, 8]);
   });
 
-  it('records one account row per relationship read and one global row for .all viewers', async () => {
+  it('records relationship reads of in-scope accounts, and one global row for .all viewers', async () => {
     const access = await resolveGovScope();
     if (!access.ok) throw new Error('expected scope');
     await auditGovRead(access.scope, '/gov', [7, 8, 99]);
-    expect(vi.mocked(auditView).mock.calls.map((c) => c[1])).toEqual([
-      { path: '/gov', targetType: 'account', targetId: '7', method: 'GET' },
-      { path: '/gov', targetType: 'account', targetId: '8', method: 'GET' },
+    expect(vi.mocked(auditRelationshipRead).mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      [[{ accountId: 7, accountType: 'GOVERNMENT' }, { accountId: 8, accountType: 'GOVERNMENT' }], '/gov'],
     ]);
-    vi.mocked(auditView).mockClear();
+    expect(auditView).not.toHaveBeenCalled();
+    vi.mocked(auditRelationshipRead).mockClear();
     await auditGovRead({ ...access.scope, all: true }, '/gov/fines', [7]);
-    expect(vi.mocked(auditView).mock.calls.map((c) => c[1])).toEqual([{ path: '/gov/fines', targetType: 'global', method: 'GET' }]);
+    expect(vi.mocked(auditView).mock.calls.map((c) => c[1])).toEqual([{ path: '/gov/fines', targetType: 'global' }]);
+    expect(auditRelationshipRead).not.toHaveBeenCalled();
   });
 });
