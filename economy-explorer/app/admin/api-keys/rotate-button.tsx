@@ -1,8 +1,10 @@
 'use client';
 import { useTransition, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { rotateApiKeyAction } from '@/lib/actions/admin';
 
 export function RotateButton({ keyId }: { keyId: number }) {
+  const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
@@ -11,16 +13,16 @@ export function RotateButton({ keyId }: { keyId: number }) {
     start(async () => {
       const r = await rotateApiKeyAction(keyId);
       if (!r.ok) setErr(r.error ?? 'Failed');
-      else setErr(null);
+      else { setErr(null); router.refresh(); }
     });
   }
 
   return (
     <>
-      <button className="btn" disabled={pending} onClick={onClick} style={{ padding: '3px 8px', fontSize: 12 }}>
+      <button type="button" className="btn btn-quiet" disabled={pending} onClick={onClick} aria-label={`Rotate key ${keyId}`}>
         {pending ? 'Rotating…' : 'Rotate'}
       </button>
-      {err && <div className="state-error" style={{ fontSize: 11 }}>{err}</div>}
+      {err && <span role="alert" className="state-error small">{err}</span>}
     </>
   );
 }

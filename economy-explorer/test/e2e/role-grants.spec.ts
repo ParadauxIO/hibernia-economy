@@ -3,6 +3,7 @@ import { encode } from 'next-auth/jwt';
 import { randomUUID } from 'node:crypto';
 import mysql from 'mysql2/promise';
 import { testDbOptions } from '../integration/db';
+import { visit } from './helpers';
 
 test('provenance gates live read access and filters active and expired group grants', async ({ page, context }, testInfo) => {
   if (!/test/i.test(process.env.DB_NAME ?? '')) throw new Error('Disposable test database required');
@@ -28,23 +29,25 @@ test('provenance gates live read access and filters active and expired group gra
     await conn.query('INSERT INTO explorer_group_member (group_id,player_uuid_bin,source,synced_at) VALUES (?,?,?,CURRENT_TIMESTAMP)', [groupId,bin,'luckperms']);
     await page.goto('/admin/roles');
     await page.getByRole('link', { name: 'Browse user role grants and group provenance' }).click();
-    await page.getByLabel('Search user, UUID, group or source node').fill(user);
-    await page.getByLabel('Source', { exact: true }).selectOption('luckperms');
-    await page.getByRole('button', { name: 'Filter', exact: true }).click();
-    const table = page.getByRole('table');
+    await expect(page).toHaveURL(/\/admin\/role-grants$/);
+    // Search through the chip table's search box, then add the source chip through the URL.
+    const search = page.getByRole('searchbox', { name: 'Search user, UUID, group or source node' });
+    await search.fill(user);
+    await search.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`q=${user}`));
+    await visit(page, `/admin/role-grants?q=${user}&f=source:in:luckperms`);
+    const table = page.getByRole('table', { name: 'Role grant provenance' });
     await expect(table.getByRole('row')).toHaveCount(2);
     await expect(table.getByRole('cell', { name: 'parent', exact: true })).toBeVisible();
     await expect(table.getByRole('cell', { name: 'Active', exact: true })).toBeVisible();
     await page.screenshot({ path: `../.context/luckperms/provenance-${testInfo.project.name}.png`, fullPage: true });
-    await page.getByLabel('Status', { exact: true }).selectOption('inactive');
-    await page.getByRole('button', { name: 'Filter', exact: true }).click();
-    await expect(page.getByText('No role grants match these filters.')).toBeVisible();
+    await visit(page, `/admin/role-grants?q=${user}&f=source:in:luckperms&f=status:in:inactive`);
+    await expect(page.getByText(/^No grants match/)).toBeVisible();
     await conn.query('UPDATE explorer_group_member SET synced_at=CURRENT_TIMESTAMP-INTERVAL 2 HOUR WHERE group_id=?', [groupId]);
     await page.reload();
     await expect(table.getByRole('cell', { name: /Inactive/ })).toBeVisible();
-    await page.getByLabel('Search user, UUID, group or source node').fill('no-such-provenance-user');
-    await page.getByRole('button', { name: 'Filter', exact: true }).click();
-    await expect(page.getByText('No role grants match these filters.')).toBeVisible();
+    await visit(page, '/admin/role-grants?q=no-such-provenance-user');
+    await expect(page.getByText(/^No grants match/)).toBeVisible();
     await conn.query('DELETE FROM explorer_role_permission WHERE role_key=? AND permission=?', [key,'roles.read']);
     await page.reload();
     await expect(page.getByText('Role and group read access required')).toBeVisible();

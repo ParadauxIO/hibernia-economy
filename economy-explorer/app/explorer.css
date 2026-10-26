@@ -76,9 +76,6 @@ p a:not(.btn), .sub a { text-decoration: underline; text-decoration-thickness: 1
 .insight .body .label { color: var(--fg-muted); font-size: var(--text-xs); }
 .insight .body .value { color: var(--fg); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
 
-/* ───────────── modal (admin limit dialog; new code uses Dialog) ───────────── */
-.modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: var(--space-5); background: var(--scrim); }
-.modal { width: 100%; max-width: 420px; padding: var(--space-6); background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-2); }
 
 /* ───────────── privacy gate (components/PrivacyGate; new code uses AccessGate) ───────────── */
 .privacy-gate {
@@ -100,9 +97,6 @@ p a:not(.btn), .sub a { text-decoration: underline; text-decoration-thickness: 1
 .privacy-gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin-top: var(--space-3); }
 
 /* ───────────── admin overview ───────────── */
-.admin-tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-3); }
-.admin-tool-card { display: block; transition: border-color var(--t-fast); }
-.admin-tool-card:hover { border-color: var(--accent-line); }
 
 /* ───────────── directories (mobile rows), money flow, tax rates ───────────── */
 .mobile-only { display: none; }
