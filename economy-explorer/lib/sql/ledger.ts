@@ -1,6 +1,9 @@
 import 'server-only';
-import { sql } from 'kysely';
+import { sql, type RawBuilder, type SqlBool } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
+import { accountsTable, type AccountsTable, type AccountsTableState } from '@/lib/tables/accounts';
+import { normaliseFilter, type FilterKey, type FilterState } from '@/lib/tables/core';
+import { compileTableState, defineColumnMap, likeContains } from '@/lib/sql/tableState';
 
 // Row interfaces mirror the Java records in
 // io.paradaux.treasuryrestapi.model.*. Money columns stay as string
@@ -116,63 +119,191 @@ function rawDir(dir: SortDir) {
   return sql.raw(dir === 'ASC' ? 'ASC' : 'DESC');
 }
 
-const ORDER_BY: Record<SortColumn, (dir: SortDir) => ReturnType<typeof sql>> = {
-  balance: (dir) => sql`ORDER BY abm.balance ${rawDir(dir)}, a.account_id DESC`,
-  name: (dir) => sql`ORDER BY COALESCE(a.display_name, fp.current_name) ${rawDir(dir)}, a.account_id DESC`,
-  type: (dir) => sql`ORDER BY a.account_type ${rawDir(dir)}, a.account_id DESC`,
-  created: (dir) => sql`ORDER BY a.created_at ${rawDir(dir)}, a.account_id DESC`,
-  account_id: (dir) => sql`ORDER BY a.account_id ${rawDir(dir)}`,
-};
-
 // ── Accounts ──────────────────────────────────────────────────────────────
 
-/** Mirrors LedgerExplorerMapper.listAccounts (line 39-75). */
-export async function listAccounts(args: {
+/** What accountLabel() shows, in SQL: personal accounts store their owner's UUID as display_name. */
+const ACCOUNT_LABEL_SQL = sql`CASE WHEN a.display_name IS NULL OR a.display_name REGEXP '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-' THEN COALESCE(fp.current_name, a.display_name) ELSE a.display_name END`;
+const BALANCE_SQL = sql`COALESCE(abm.balance, 0.00)`;
+const UUID_SEARCH_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+
+/**
+ * Free-text search for the accounts directory. A full UUID is an exact,
+ * indexed owner match (idx_accounts_owner) and `#123` an exact account number;
+ * anything else is a substring match on the account and owner names. There is
+ * deliberately no partial-UUID match: it was a `LOWER(HEX(owner_uuid_bin)) LIKE`
+ * scan that no index can serve.
+ */
+export function accountSearchSql(q: string): RawBuilder<SqlBool> | null {
+  const t = q.trim();
+  if (!t) return null;
+  if (UUID_SEARCH_RE.test(t)) return sql<SqlBool>`a.owner_uuid_bin = ${uuidToBin(t)}`;
+  const hash = /^#(\d{1,10})$/.exec(t);
+  if (hash) return sql<SqlBool>`a.account_id = ${Number(hash[1])}`;
+  const like = likeContains(t);
+  const names = sql<SqlBool>`(a.display_name LIKE ${like} OR fp.current_name LIKE ${like})`;
+  if (/^\d{1,10}$/.test(t)) return sql<SqlBool>`(a.account_id = ${Number(t)} OR ${names})`;
+  return names;
+}
+
+/** True when the search text needs the economy_players join (a name search). */
+function searchUsesPlayers(q: string): boolean {
+  const t = q.trim();
+  return t !== '' && !UUID_SEARCH_RE.test(t) && !/^#\d{1,10}$/.test(t);
+}
+
+/**
+ * How the accounts table's fields reach SQL. Every filter here is index-backed
+ * or bounded by the accounts table (139k rows): type → idx_accounts_type,
+ * created → idx_accounts_created, firm → firm_accounts' idx_firm_account_active
+ * (the semi-join drives from the firm), archived → a column on the row already
+ * read. Balance is unindexed by design (V7/V9: the trigger rewrites it on every
+ * posting), so it costs one PK join per scanned account, the same as sorting by it.
+ */
+export const accountsColumnMap = defineColumnMap({
+  table: accountsTable,
+  filters: {
+    type: { column: sql`a.account_type`, values: { personal: 'PERSONAL', business: 'BUSINESS', government: 'GOVERNMENT', system: 'SYSTEM' } },
+    balance: { column: BALANCE_SQL },
+    created: { column: sql`a.created_at` },
+    firm: {
+      compile: (f) => {
+        const ids = f.values.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+        if (ids.length === 0) return null;
+        return sql<SqlBool>`a.account_id IN (SELECT fa.account_id FROM firm_accounts fa WHERE fa.firm_id IN (${sql.join(ids)}) AND fa.removed_at IS NULL)`;
+      },
+    },
+    archived: { column: sql`a.is_archived` },
+  },
+  sorts: { name: ACCOUNT_LABEL_SQL, type: sql`a.account_type`, balance: BALANCE_SQL, created: sql`a.created_at`, id: sql`a.account_id` },
+  tiebreak: { column: sql`a.account_id`, dir: 'desc' },
+  search: accountSearchSql,
+});
+
+/** A directory query: the parsed table state plus the page window. */
+export interface AccountsQuery {
+  state: AccountsTableState;
   limit: number;
   offset: number;
+  /** Show archived accounts too when the state has no archived filter (admin tools). Default: active only. */
+  includeArchived?: boolean;
+  /** Anchors relative dates ("last 30 days"). */
+  now?: Date;
+}
+
+/** The pre-PAR-534 argument shape, still used by the admin accounts tool. */
+export interface LegacyAccountsArgs {
   type: string | null;
   archived: number | null;
   q: string | null;
-  sort: SortColumn;
-  dir: SortDir;
-}): Promise<ExplorerAccountRow[]> {
-  const where = buildAccountsWhere(args.type, args.archived, args.q);
-  const order = ORDER_BY[args.sort](args.dir);
+}
+
+function fromLegacy(args: LegacyAccountsArgs & { limit?: number; offset?: number; sort?: SortColumn; dir?: SortDir }): AccountsQuery {
+  const filters: FilterState<FilterKey<AccountsTable>>[] = [];
+  const type = args.type ? normaliseFilter(accountsTable, 'type', 'in', [args.type]) : null;
+  if (type) filters.push(type as FilterState<FilterKey<AccountsTable>>);
+  if (args.archived !== null) filters.push({ field: 'archived', op: 'eq', values: [args.archived ? 'true' : 'false'] });
+  const sortField = args.sort === undefined || args.sort === 'account_id' ? 'id' : args.sort;
+  const limit = args.limit ?? accountsTable.pageSize;
+  return {
+    state: { q: args.q ?? '', filters, sort: { field: sortField, dir: args.dir === 'ASC' ? 'asc' : 'desc' }, page: 1, cursor: null, limit },
+    limit,
+    offset: args.offset ?? 0,
+    includeArchived: args.archived === null,
+  };
+}
+
+function isAccountsQuery<T extends object>(args: T): args is Extract<T, { state: AccountsTableState }> {
+  return 'state' in args;
+}
+
+/**
+ * WHERE / ORDER BY for the accounts directory, from the parsed table state,
+ * plus which optional joins the WHERE needs (the count skips the rest).
+ */
+export function buildAccountsWhere(query: Omit<AccountsQuery, 'limit' | 'offset'>) {
+  const compiled = compileTableState(query.state, accountsColumnMap, query.now);
+  const conditions = [...compiled.conditions];
+  const hasArchived = query.state.filters.some((f) => f.field === 'archived');
+  if (!hasArchived && !query.includeArchived) conditions.unshift(sql<SqlBool>`a.is_archived = 0`);
+  const sortField = query.state.sort.field;
+  return {
+    where: conditions.length ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``,
+    orderBy: compiled.orderBy,
+    /** The WHERE reads account_balances_mat / economy_players. */
+    needsBalance: query.state.filters.some((f) => f.field === 'balance'),
+    needsPlayers: searchUsesPlayers(query.state.q),
+    /** The ORDER BY reads them. */
+    sortsByBalance: sortField === 'balance',
+    sortsByName: sortField === 'name',
+  };
+}
+
+const BALANCE_JOIN = sql`LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id`;
+const PLAYER_JOIN = sql`LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin`;
+
+/**
+ * One page of the accounts directory. Mirrors LedgerExplorerMapper.listAccounts (line 39-75).
+ *
+ * A deferred join: the inner query picks the page's ids joining only what its
+ * WHERE and ORDER BY read, then the outer query fetches the display columns for
+ * those 50 rows. On 140k accounts this halves the default balance-sorted page
+ * (about 300 ms → 140 ms), because the player-name join no longer runs for
+ * every account before the sort.
+ */
+export async function listAccounts(
+  args: AccountsQuery | (LegacyAccountsArgs & { limit: number; offset: number; sort: SortColumn; dir: SortDir }),
+): Promise<ExplorerAccountRow[]> {
+  const query = isAccountsQuery(args) ? args : fromLegacy(args);
+  const b = buildAccountsWhere(query);
 
   const result = await sql<RawAccountRow>`
     SELECT a.account_id, a.account_type, a.display_name, a.owner_uuid_bin, fp.current_name AS owner_name,
            a.is_archived AS archived, a.requires_authorization, a.allow_overdraft,
            a.credit_limit, a.created_at, COALESCE(abm.balance, 0.00) AS balance
-    FROM accounts a
-    LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
-    LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin
-    ${where}
-    ${order}
-    LIMIT ${args.limit} OFFSET ${args.offset}
+    FROM (
+      SELECT a.account_id
+      FROM accounts a
+      ${b.needsBalance || b.sortsByBalance ? BALANCE_JOIN : sql``}
+      ${b.needsPlayers || b.sortsByName ? PLAYER_JOIN : sql``}
+      ${b.where}
+      ${b.orderBy}
+      LIMIT ${query.limit} OFFSET ${query.offset}
+    ) page
+    JOIN accounts a ON a.account_id = page.account_id
+    ${BALANCE_JOIN}
+    ${PLAYER_JOIN}
+    ${b.orderBy}
   `.execute(db);
 
   return result.rows.map(toExplorerAccountRow);
 }
 
-/** Mirrors LedgerExplorerMapper.countAccounts (line 77-92). */
-export async function countAccounts(args: {
-  type: string | null;
-  archived: number | null;
-  q: string | null;
-}): Promise<number> {
-  const where = buildAccountsWhere(args.type, args.archived, args.q);
-  // economy_players is only referenced by the `q` name filter; skip the join on the
-  // common no-search count so it doesn't join every account row for nothing.
-  const nameJoin = args.q
-    ? sql`LEFT JOIN economy_players fp ON fp.player_uuid_bin = a.owner_uuid_bin`
-    : sql``;
+/** Matching accounts for the directory summary. Mirrors LedgerExplorerMapper.countAccounts (line 77-92). */
+export async function countAccounts(args: Omit<AccountsQuery, 'limit' | 'offset'> | LegacyAccountsArgs): Promise<number> {
+  const query = isAccountsQuery(args) ? args : fromLegacy(args);
+  const { where, needsBalance, needsPlayers } = buildAccountsWhere(query);
+  // Join only what the WHERE reads, so the common count stays on `accounts` alone.
   const result = await sql<{ c: string | number }>`
     SELECT COUNT(*) AS c
     FROM accounts a
-    ${nameJoin}
+    ${needsBalance ? BALANCE_JOIN : sql``}
+    ${needsPlayers ? PLAYER_JOIN : sql``}
     ${where}
   `.execute(db);
   return Number(result.rows[0]?.c ?? 0);
+}
+
+/**
+ * Account counts by type and archived state, for the Type filter's facet
+ * counts. One pass over `accounts` with no joins; callers cache it (memo).
+ */
+export async function countAccountsByType(): Promise<{ account_type: string; archived: number; count: number }[]> {
+  const result = await sql<{ account_type: string; archived: number; c: string | number }>`
+    SELECT a.account_type, a.is_archived AS archived, COUNT(*) AS c
+    FROM accounts a
+    GROUP BY a.account_type, a.is_archived
+  `.execute(db);
+  return result.rows.map((r) => ({ account_type: r.account_type, archived: Number(r.archived), count: Number(r.c) }));
 }
 
 /** Mirrors LedgerExplorerMapper.findAccount (line 94-101). */
@@ -640,22 +771,6 @@ export async function countActiveFirms(): Promise<number> {
 }
 
 // ── Internal builders + row converters ────────────────────────────────────
-
-function buildAccountsWhere(type: string | null, archived: number | null, q: string | null) {
-  const conds: ReturnType<typeof sql>[] = [];
-  if (type) conds.push(sql`a.account_type = ${type}`);
-  if (archived !== null) conds.push(sql`a.is_archived = ${archived}`);
-  if (q && q.length > 0) {
-    const noDash = q.replace(/-/g, '').toLowerCase();
-    conds.push(sql`(
-      a.display_name LIKE CONCAT('%', ${q}, '%')
-      OR fp.current_name LIKE CONCAT('%', ${q}, '%')
-      OR LOWER(HEX(a.owner_uuid_bin)) LIKE CONCAT('%', ${noDash}, '%')
-    )`);
-  }
-  if (conds.length === 0) return sql``;
-  return sql`WHERE ${sql.join(conds, sql` AND `)}`;
-}
 
 /** Power filters for the admin ledger firehose (PAR-220). All optional. */
 export interface TxnFilters {

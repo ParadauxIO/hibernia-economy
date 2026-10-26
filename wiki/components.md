@@ -351,6 +351,35 @@ baseline is `economy-explorer/ops/perf-baseline.md`.
   - `db;dur` is the sum of query times, so it can be larger than `total` when
     queries run in parallel.
 
+### Explorer tables, search and filter chips (PAR-534)
+
+Every table moves to one system (redesign spec §5.5). The accounts directory
+(`app/accounts/page.tsx`) is the reference implementation.
+
+- **Schema.** `defineTable` in `lib/tables/core.ts` declares a table once:
+  filter fields (`enum`, `money`, `number`, `date`, `entity`, `text`,
+  `boolean`), sortable fields, the default sort, quick filters and paging.
+  `lib/tables/accounts.ts` is the example. It is plain data, so a server page
+  can pass it to the client `FilterBar`.
+- **URL state.** `?q=…&f=field:op:value&sort=-field&page=2`, one `f` per chip.
+  `parseTableState(searchParams, table)` never throws: unknown fields, bad
+  operators and malformed values are dropped. `tableHref` / `serializeTableState`
+  write the canonical form back. Money is parsed from typed shorthand (`10k`,
+  `$1,500`) into exact cents through `lib/money.ts`.
+- **SQL.** `lib/sql/tableState.ts` turns the state into Kysely fragments
+  (`compileTableState`) or applies it to a select builder (`applyTableState`).
+  A typed column map must cover every declared filter and sort; only declared
+  fields compile and every value is bound. Money compares as
+  `CAST(? AS DECIMAL(19,2))`.
+- **UI.** `DataTable`, `TableEmpty`, `TablePager` and `TablePopover` come from
+  `@democracycraft/design-system/table` (server-rendered table, real links for
+  sorting and rows, `aria-sort`, phone layout). `components/FilterBar.tsx` is
+  the client search box, chips, popovers, quick filters, Columns menu and
+  summary line.
+- **Every filter must be index-backed or cheap.** Check the plan with `EXPLAIN`
+  before offering a filter on a large table; if it needs an index, add a Flyway
+  migration in the same PR or drop the filter.
+
 ### Business and Realty Explorer membership sources
 
 TreasuryAPI reconciles optional per-group Business and Realty bindings independently

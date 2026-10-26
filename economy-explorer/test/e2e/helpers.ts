@@ -18,7 +18,7 @@ export async function visit(page: Page, path: string): Promise<void> {
  * one always comes later in document order.
  */
 export function dataTable(page: Page): Locator {
-  return page.locator('table.data-table').last();
+  return page.locator('table.data-table, table.dt').last();
 }
 
 /** Complete a successful mutation's document navigation before interacting again.
