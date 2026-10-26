@@ -2,7 +2,7 @@ import { test as base, expect, type BrowserContext } from '@playwright/test';
 import { encode } from 'next-auth/jwt';
 import { randomUUID } from 'node:crypto';
 import mysql, { type Connection, type RowDataPacket, type ResultSetHeader } from 'mysql2/promise';
-import { visit, submitReload } from './helpers';
+import { visit, submitReload, GATE } from './helpers';
 import { testDbOptions } from '../integration/db';
 
 // No e2e_viewer cookie: these tests use signed Auth.js sessions, the real request
@@ -71,15 +71,15 @@ test('edge rejects forged and expired sessions; valid sessions still need live p
   expect((await context.request.get(`${baseURL}/admin/roles`, { maxRedirects: 0 })).status()).toBe(307);
   await signIn(context, policy.player);
   await visit(page, '/admin/roles');
-  await expect(page.locator('.access-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
   await policy.conn.query('INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, ?)', [bin(policy.player), 'moderator']);
   await visit(page, '/accounts/2');
-  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator(GATE)).toHaveCount(0);
   await visit(page, '/admin/groups');
-  await expect(page.locator('.access-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
   await policy.conn.query('DELETE FROM explorer_role WHERE player_uuid_bin = ?', [bin(policy.player)]);
   await visit(page, '/accounts/2');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
 });
 
 test('role editor changes a real assignee’s access without replacing their session', async ({ context, page, browser, policy }) => {
@@ -106,7 +106,7 @@ test('role editor changes a real assignee’s access without replacing their ses
     await expect.poll(() => permission(recipient, 'api_keys.read')).toBe(false);
     await expect.poll(() => permission(recipient, 'market.sales.read')).toBe(true);
     await visit(target, `${baseURL}/admin/api-keys`);
-    await expect(target.locator('.access-gate')).toBeVisible();
+    await expect(target.locator(GATE)).toBeVisible();
     await visit(page, `/admin/roles/${policy.key}`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
     await submitReload(page, page.getByRole('button', { name: 'Remove direct assignment' }));
@@ -171,30 +171,30 @@ test('group editor grants custom roles, preserves independent sources, and clear
 test('direct and LP account relationships are scoped and revocable; government requires both grants', async ({ context, page, policy }) => {
   await signIn(context, policy.player);
   await visit(page, '/accounts/2');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
   await policy.conn.query("INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES (2, ?, 'VIEWER', ?)", [bin(policy.player), bin(policy.admin)]);
   await visit(page, '/accounts/2');
-  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator(GATE)).toHaveCount(0);
   await visit(page, '/accounts/1');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
   await policy.conn.query('UPDATE account_access SET removed_at = NOW() WHERE subject_uuid_bin = ?', [bin(policy.player)]);
   await visit(page, '/accounts/2');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
   await policy.conn.query("INSERT INTO account_group_access (account_id, lp_group, level, added_by_uuid_bin) VALUES (5, ?, 'VIEWER', ?)", [policy.key, bin(policy.admin)]);
   await policy.conn.query('INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin, synced_at) VALUES (?, ?, NOW())', [policy.key, bin(policy.player)]);
   await visit(page, '/accounts/5');
-  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator(GATE)).toHaveCount(0);
   await visit(page, '/gov/accounts');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
   await policy.conn.query("INSERT INTO explorer_role (player_uuid_bin, role) VALUES (?, 'government')", [bin(policy.player)]);
   await visit(page, '/gov/accounts');
-  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator(GATE)).toHaveCount(0);
   await expect(page.getByRole('link', { name: /^City Hall/ })).toBeVisible();
   await policy.conn.query('UPDATE explorer_lp_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE player_uuid_bin = ?', [bin(policy.player)]);
   await visit(page, '/gov/accounts');
   await expect(page.getByRole('link', { name: /^City Hall/ })).toHaveCount(0);
   await visit(page, '/accounts/5');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
 });
 
 test('the Government entry needs government.read and a government account in scope (PAR-536)', async ({ context, page, policy }) => {
@@ -240,27 +240,27 @@ test('government account members can open related transactions from My data; rev
     await visit(page, '/me');
     // /me lists it as an EntityLink: the name, then the muted "#id".
     await page.getByRole('link', { name: new RegExp(`^${policy.key} ?#${accountId}$`) }).first().click();
-    await page.getByRole('link', { name: `#${txnId}`, exact: true }).click();
+    await page.getByRole('link', { name: new RegExp(`#${txnId}$`) }).click();
     await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await expect(page.getByRole('link', { name: accountName, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Bob #2', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: '← My transactions', exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'Bob #2', exact: true }).click();
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await visit(page, '/transactions/2');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await visit(page, '/transactions');
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await policy.conn.query('UPDATE account_access SET removed_at = NOW() WHERE subject_uuid_bin = ?', [bin(policy.player)]);
     await visit(page, `/transactions/${txnId}`);
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
     await policy.conn.query("INSERT INTO account_group_access (account_id, lp_group, level, added_by_uuid_bin) VALUES (?, ?, 'VIEWER', ?)", [accountId, policy.key, bin(policy.admin)]);
     await policy.conn.query('INSERT INTO explorer_lp_group_member (lp_group, player_uuid_bin, synced_at) VALUES (?, ?, NOW())', [policy.key, bin(policy.player)]);
     await visit(page, `/transactions/${txnId}`);
     await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await policy.conn.query('UPDATE explorer_lp_group_member SET synced_at = NOW() - INTERVAL 2 HOUR WHERE player_uuid_bin = ?', [bin(policy.player)]);
     await visit(page, `/transactions/${txnId}`);
-    await expect(page.locator('.privacy-gate')).toBeVisible();
+    await expect(page.locator(GATE)).toBeVisible();
   } finally {
     await policy.conn.query('DELETE FROM ledger_postings WHERE txn_id = ?', [txnId]);
     await policy.conn.query('DELETE FROM ledger_txns WHERE txn_id = ?', [txnId]);
@@ -274,19 +274,23 @@ test('government account members can open related transactions from My data; rev
 test('firm roster membership does not grant finances until the member has a finance role', async ({ context, page, policy }) => {
   await signIn(context, policy.player);
   await policy.conn.query('INSERT INTO firm_employee (firm_id, player_uuid_bin, role_id, joined_at) VALUES (1, ?, 3, NOW())', [bin(policy.player)]);
-  await visit(page, '/firms/Acme%20Corp');
+  await visit(page, '/firms/Acme%20Corp/members');
   await expect(page.getByText('Worker', { exact: true }).first()).toBeVisible();
+  await visit(page, '/firms/Acme%20Corp/financials');
+  await expect(page.locator(GATE)).toBeVisible();
   await visit(page, '/chestshop/firms/1');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
   await policy.conn.query('UPDATE firm_employee SET role_id = 2 WHERE player_uuid_bin = ?', [bin(policy.player)]);
   await visit(page, '/chestshop/firms/1');
-  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator(GATE)).toHaveCount(0);
+  await visit(page, '/firms/Acme%20Corp/financials');
+  await expect(page.getByRole('heading', { name: 'Monthly statement' })).toBeVisible();
   await visit(page, '/accounts/3');
-  await expect(page.locator('.privacy-gate')).toHaveCount(0);
+  await expect(page.locator(GATE)).toHaveCount(0);
   // Business records who removed the member alongside left_at (V1 CHECK constraint).
   await policy.conn.query('UPDATE firm_employee SET left_at = NOW(), removed_by_uuid_bin = ? WHERE player_uuid_bin = ?', [bin(policy.admin), bin(policy.player)]);
   await visit(page, '/accounts/3');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page.locator(GATE)).toBeVisible();
 });
 
 test('an open role editor cannot save after the operator’s assignment is revoked', async ({ context, page, policy }) => {
