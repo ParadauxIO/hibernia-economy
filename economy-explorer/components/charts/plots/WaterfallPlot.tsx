@@ -50,7 +50,8 @@ export default function WaterfallPlot({ data, domain, ticks, height, currency, s
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barCategoryGap="22%" accessibilityLayer={false}>
           <CartesianGrid stroke={GRID_STROKE} vertical={false} />
-          <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: 'var(--border)' }} interval={0} />
+          {/* Category names wrap onto two lines (Text wraps at `width`), so neighbours never overlap. */}
+          <XAxis dataKey="label" tick={{ ...AXIS_TICK, width: 64 }} height={40} tickLine={false} axisLine={{ stroke: 'var(--border)' }} interval={0} />
           <YAxis width={width} ticks={ticks} domain={domain} allowDataOverflow interval={0} tick={AXIS_TICK} tickLine={false} axisLine={false}
             tickFormatter={(_v: number, i: number) => labels[i] ?? ''} />
           {domain[0] < 0 && domain[1] > 0 && <ReferenceLine y={0} stroke="var(--fg-faint)" />}
