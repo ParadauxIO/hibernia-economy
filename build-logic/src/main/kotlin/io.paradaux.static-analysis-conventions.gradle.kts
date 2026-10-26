@@ -14,7 +14,7 @@ import net.ltgt.gradle.errorprone.errorprone
 //                   project to the packages listed in `nullAwayScope`.
 //   * Spotless      palantir-java-format for Java, ktlint for *.gradle.kts,
 //                   whitespace hygiene for md/yml/sql. Ratcheted against
-//                   origin/develop so only files a branch touches are enforced.
+//                   origin/main so only files a branch touches are enforced.
 //   * ArchUnit      on every test classpath, for the per-module ArchitectureTest
 //                   layering rules.
 //
@@ -135,12 +135,12 @@ plugins.withId("java") {
 // branch. Override with -PspotlessRatchetFrom=<ref> (e.g. origin/main).
 //
 // The ref must exist locally: CI has to check out with full history
-// (actions/checkout `fetch-depth: 0`) or `git fetch origin develop`. When it's
+// (actions/checkout `fetch-depth: 0`) or `git fetch origin main`. When it's
 // missing, Spotless is not configured at all (spotlessApply on an unratcheted
 // tree would reformat the whole repo); spotlessCheck then fails on CI
 // (CI=true) so a shallow checkout can't silently skip formatting, and is a
 // warning-only no-op locally.
-val ratchetRef = providers.gradleProperty("spotlessRatchetFrom").orElse("origin/develop").get()
+val ratchetRef = providers.gradleProperty("spotlessRatchetFrom").orElse("origin/main").get()
 // runCatching: no git binary / not a checkout (e.g. a source tarball) counts as missing.
 val ratchetRefExists = runCatching {
     providers.exec {
@@ -209,7 +209,7 @@ if (ratchetRefExists) {
     if (project == rootProject) {
         logger.warn(
             "Spotless: ratchet ref '$ratchetRef' not found — formatting checks skipped. " +
-                "Run `git fetch origin develop` (CI: checkout with fetch-depth: 0).",
+                "Run `git fetch origin main` (CI: checkout with fetch-depth: 0).",
         )
     }
     if (onCi) {

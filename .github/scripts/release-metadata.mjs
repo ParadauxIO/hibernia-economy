@@ -4,15 +4,15 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export function releaseVersion(env, now = new Date()) {
-  if (!['refs/heads/main', 'refs/heads/develop'].includes(env.GITHUB_REF)) {
-    throw new Error('Releases must run from main or develop');
+  if (!env.GITHUB_REF?.startsWith('refs/heads/') || env.GITHUB_REF === 'refs/heads/') {
+    throw new Error('Releases must run from a branch');
   }
   for (const key of ['GITHUB_RUN_NUMBER', 'GITHUB_RUN_ATTEMPT']) {
     if (!/^[1-9][0-9]*$/.test(env[key] ?? '')) throw new Error(`Invalid ${key}`);
   }
   if (!/^[0-9a-f]{40}$/.test(env.GITHUB_SHA ?? '')) throw new Error('Invalid GITHUB_SHA');
   const month = `${now.getUTCFullYear()}.${now.getUTCMonth() + 1}`;
-  const channel = env.GITHUB_REF === 'refs/heads/develop' ? '-dev' : '';
+  const channel = env.GITHUB_REF !== 'refs/heads/main' ? '-dev' : '';
   return `${month}.${env.GITHUB_RUN_NUMBER}.${env.GITHUB_RUN_ATTEMPT}${channel}-g${env.GITHUB_SHA.slice(0, 12)}`;
 }
 

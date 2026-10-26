@@ -6,34 +6,27 @@ name: Economy Explorer · Build and Push Docker Image to Harbor
 
 on:
   push:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'economy-explorer/**'
-      - '.github/workflows/economy-explorer-docker.yml'
-      - '.github/workflows/explorer-check.yml'
-  # Manual trigger so a release on `main` (production) can be (re)built and
-  # deployed on demand — e.g. when `main` is created/advanced to an existing
-  # commit and the path-filtered push event doesn't fire.
+    branches: ['**']
   workflow_dispatch:
 
-# Least privilege (CodeQL actions/missing-workflow-permissions): every job only
-# checks out the repo; the Harbor push authenticates with registry secrets, not
-# the GITHUB_TOKEN.
 permissions:
   contents: read
 
-# Queue rather than cancel, so images are pushed in commit order.
-concurrency:
-  group: economy-explorer-docker-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
+  deployment-policy:
+    uses: ./.github/workflows/deployment-policy.yml
+    with:
+      allow-production: true
+
   test:
+    needs: deployment-policy
+    if: needs.deployment-policy.outputs.allowed == 'true'
     uses: ./.github/workflows/explorer-check.yml
 
   build-and-push:
+    concurrency:
+      group: economy-explorer-docker-${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      cancel-in-progress: false
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -52,12 +45,9 @@ jobs:
           if [ "$REF_NAME" == "main" ]; then
             ENV_NAME=production
             MUTABLE=prod
-          elif [ "$REF_NAME" == "develop" ]; then
+          else
             ENV_NAME=development
             MUTABLE=latest
-          else
-            echo "::error::Unsupported branch: $REF_NAME"
-            exit 1
           fi
           echo "SHA_TAG=${ENV_NAME}-sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "MUTABLE_TAG=${MUTABLE}" >> "$GITHUB_OUTPUT"
