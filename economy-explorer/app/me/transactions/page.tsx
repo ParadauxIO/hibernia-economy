@@ -3,14 +3,15 @@ import type { Route } from 'next';
 import { PageHeader } from '@democracycraft/design-system';
 import { CursorPager } from '@democracycraft/design-system/next';
 import { TableEmpty, type LinkComponent } from '@democracycraft/design-system/table';
-import { CsvButton } from '@/components/CsvButton';
+import { ExportMenuForViewer } from '@/components/ExportMenuForViewer';
 import { FilterBar } from '@/components/FilterBar';
 import { getViewer } from '@/lib/auth/viewer';
 import { CURRENCY_SYMBOL } from '@/lib/currency';
+import { exportHrefs } from '@/lib/export/href';
 import { buildMetadata } from '@/lib/metadata';
 import { meGate } from '@/lib/services/me';
 import { getMyTransactions, SEARCH_WINDOW_DAYS } from '@/lib/services/meTransactions';
-import { cleared, filterText, parseTableState, serializeTableState, tableHref, withoutFilter, withQuery, type TableState } from '@/lib/tables/core';
+import { cleared, filterText, parseTableState, tableHref, withoutFilter, withQuery, type TableState } from '@/lib/tables/core';
 import { meTransactionsTable } from '@/lib/tables/me';
 import { FeedTable } from '../_components/FeedTable';
 import { MeGateView } from '../_components/MeGateView';
@@ -39,7 +40,6 @@ export default async function MyTransactionsPage({ searchParams }: { searchParam
     ...state.filters.map((f) => ({ text: filterText(f, meTransactionsTable, describe), removeHref: href(withoutFilter(state, f.field)) })),
   ];
   const firstPage = { ...state, cursor: null };
-  const exportQs = serializeTableState({ ...state, cursor: null, limit: meTransactionsTable.pageSize }, meTransactionsTable);
 
   return <>
     <PageHeader title="Transactions"
@@ -53,12 +53,7 @@ export default async function MyTransactionsPage({ searchParams }: { searchParam
       searchEntity={searchMyAccountsAction}
       tableId={TABLE_ID}
       currency={CURRENCY_SYMBOL}
-      exportSlot={<span className="toolbar-export">
-        <CsvButton label="CSV (this page)" filename="my-transactions-page.csv"
-          headers={['Txn', 'When (UTC)', 'Account', 'Account ID', 'Description', 'Category', 'Counterparty', 'Counterparty ID', 'Amount']}
-          rows={page.rows.map((r) => [r.txnId, r.at.toISOString(), r.account.name, r.account.accountId, r.description, r.categoryLabel, r.counterparty?.name ?? '', r.counterparty?.accountId ?? '', r.amount])} />
-        <a className="btn" href={`/me/transactions/export${exportQs ? `?${exportQs}` : ''}`} download>Export all (CSV)</a>
-      </span>}
+      exportSlot={<ExportMenuForViewer hrefs={exportHrefs('me-transactions', state, meTransactionsTable)} allDescription="Every transaction the filters select, up to 100,000" />}
     />
 
     {page.ignoredAccounts.length > 0 && <p className="me-note" role="note">

@@ -21,7 +21,7 @@ import {
   selectMarketSummary, selectMarketTopItems, selectMarketTopPartners, selectMonthlyFlowGroups, selectPostings,
 } from '@/lib/sql/me';
 import { getMeOverview, meGate, myAccounts, subjectOf } from '@/lib/services/me';
-import { getMyTransactions } from '@/lib/services/meTransactions';
+import { exportMyTransactionsBatch, getMyTransactions } from '@/lib/services/meTransactions';
 import { getStatement, getStatementIndex } from '@/lib/services/meStatements';
 import { getMyTaxes } from '@/lib/services/meTaxes';
 import { getMyFirms } from '@/lib/services/meFirms';
@@ -298,6 +298,14 @@ d('/me/transactions', () => {
     const acme = await getMyTransactions(alice, ALICE, state('f=counterparty:in:3'));
     expect(acme.rows.every((r) => r.counterparty?.accountId === 3 || r.description === 'split')).toBe(true);
     expect(acme.rows.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('export batches step past empty search windows and end with the history', async () => {
+    const first = await exportMyTransactionsBatch(alice, ALICE, state('f=category:in:shop_sales'), null, 100);
+    expect(first.rows.map((r) => r.amount)).toEqual(['100.00']);
+    const all = await exportMyTransactionsBatch(alice, ALICE, state(''), null, 1000);
+    expect(all.next).toBeNull();
+    expect(all.rows.length).toBe((await getMyTransactions(alice, ALICE, state('limit=100'))).rows.length);
   });
 
   it('only reads accounts the player can read, and ignores others in the account chip', async () => {

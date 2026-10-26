@@ -128,6 +128,23 @@ export async function getMyTransactions(viewer: Viewer, uuid: string, state: MeT
   return { ...base, rows: rows.map(toFeedRow), nextCursor, window: rowByRow ? { from: windowFrom!, to: windowTo } : null };
 }
 
+/**
+ * One export batch (lib/export/datasets/me.ts): up to `limit` rows after the
+ * opaque `cursor`. A row-by-row search can find nothing in one 31-day window
+ * and still have older windows to search, so this steps back until it has
+ * rows or the history ends: the export route stops at the first empty batch.
+ */
+export async function exportMyTransactionsBatch(
+  viewer: Viewer, uuid: string, state: MeTransactionsState, cursor: string | null, limit: number,
+): Promise<{ rows: FeedRow[]; next: string | null }> {
+  let at = cursor;
+  for (;;) {
+    const page = await getMyTransactions(viewer, uuid, { ...state, cursor: at, limit });
+    if (page.rows.length > 0 || page.nextCursor === null) return { rows: page.rows, next: page.nextCursor };
+    at = page.nextCursor;
+  }
+}
+
 /** Account suggestions for the Account and Counterparty chips: the player's readable accounts. */
 export function suggestAccounts(accounts: readonly MyAccount[], text: string): EntityOption[] {
   const t = text.trim().toLowerCase().replace(/^#/, '');

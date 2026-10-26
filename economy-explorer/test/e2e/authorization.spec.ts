@@ -244,7 +244,7 @@ test('government account members can open related transactions from My data; rev
     await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await expect(page.getByRole('link', { name: accountName, exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Bob #2', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: '← My data', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: '← My transactions', exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'Bob #2', exact: true }).click();
     await expect(page.locator('.privacy-gate')).toBeVisible();
     await visit(page, '/transactions/2');

@@ -114,7 +114,7 @@ section list on the left (a menu at the top on a phone):
   direction, counterparty, amount, account, memo text and date. Add an
   **Account** filter to include accounts shared with you. Category,
   counterparty and memo filters search 31 days at a time, and **Older** keeps
-  searching further back. **Export all (CSV)** downloads every matching row.
+  searching further back. **Export** downloads every matching row as CSV or JSON.
 - **Statements**: one per month, with the opening balance, money in and out by
   category, the closing balance, tax paid and the largest transactions. Print
   it (or save it as a PDF) from your browser, or download it as CSV.

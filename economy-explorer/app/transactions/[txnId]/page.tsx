@@ -49,7 +49,7 @@ export default async function TransactionDetailPage({ params, searchParams }: {
 
   return (
     <>
-      {investigator ? <BackLink href="/transactions" label="Transactions" /> : <BackLink href="/me" label="My data" />}
+      {investigator ? <BackLink href="/transactions" label="Transactions" /> : <BackLink href="/me/transactions" label="My transactions" />}
       <PageHeader
         eyebrow={detail.txn.plugin_system ?? 'Ledger'}
         title={`Transaction #${detail.txn.txn_id}`}

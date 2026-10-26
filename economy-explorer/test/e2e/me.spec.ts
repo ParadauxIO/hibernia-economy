@@ -70,11 +70,11 @@ test.describe('/me as a linked player', () => {
   });
 
   test('exports every matching row as CSV', async ({ request }) => {
-    const res = await request.get(`${baseURL}/me/transactions/export`, { headers: { cookie: 'e2e_viewer=player' } });
+    const res = await request.get(`${baseURL}/api/export/me-transactions?format=csv`, { headers: { cookie: 'e2e_viewer=player' } });
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('text/csv');
     const lines = (await res.text()).trim().split('\n');
-    expect(lines[0]).toContain('Txn,When (UTC),Account');
+    expect(lines[0]).toContain('Transaction,When (UTC),Account');
     expect(lines.length).toBeGreaterThan(2);
   });
 
