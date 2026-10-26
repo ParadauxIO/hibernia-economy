@@ -52,8 +52,8 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
     if (norm < 0.75) return 3;
     return 4;
   }
-  const colors = ['var(--bg-soft)', 'var(--c-1)', 'var(--c-1)', 'var(--c-1)', 'var(--c-1)'];
-  const opacities = [1, 0.25, 0.5, 0.75, 1];
+  // The shared sequential scale: --seq-0 is empty, --seq-2…5 are increasing activity.
+  const colors = ['var(--seq-0)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)'];
 
   const fmtDate = (iso: string) =>
     new Date(iso + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
@@ -79,7 +79,6 @@ export function ActivityCalendar({ data, label = 'transactions' }: ActivityCalen
                 height={CELL}
                 rx={2}
                 fill={colors[lv]}
-                fillOpacity={opacities[lv]}
                 onMouseEnter={() =>
                   setHover({
                     iso: d.iso,

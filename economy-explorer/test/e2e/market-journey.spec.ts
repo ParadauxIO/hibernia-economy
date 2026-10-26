@@ -39,7 +39,8 @@ test('clearing shop filters preserves trade direction and comparison units', asy
 
 test('chart data is readable without interpreting the visual chart', async ({ page }) => {
   await visit(page, '/');
-  await page.getByText('View chart data', { exact: true }).click();
+  // The volume chart comes first; the weekday × hour heatmap has its own table.
+  await page.getByText('View chart data', { exact: true }).first().click();
   const table = page.getByRole('table', { name: 'Transactions and volume by day' });
   await expect(table).toBeVisible();
   await expect(table.getByRole('columnheader', { name: 'Transactions' })).toBeVisible();
