@@ -1,6 +1,6 @@
 name: Dev server · Publish plugins
 
-# Builds the Paper plugin bundle from `develop` and publishes it as the rolling
+# Builds the Paper plugin bundle from an authorized `[DEPLOY]` branch commit and publishes it as the rolling
 # `dev-latest` prerelease. Nothing here reaches the dev server directly: the
 # deploy agent on that machine (ops/dev-server/agent.mjs) polls this release,
 # and when its commit changes it migrates the sandbox database, swaps the jars
@@ -8,37 +8,21 @@ name: Dev server · Publish plugins
 
 on:
   push:
-    branches: [ develop ]
-    # Everything that ends up in a plugin jar or the schema it runs against.
-    paths:
-      - 'treasury/**'
-      - 'business/**'
-      - 'chestshop/**'
-      - 'treasury-api-plugin/**'
-      - 'common/**'
-      - 'economy-flyway/**'
-      - 'build-logic/**'
-      - 'gradle/**'
-      - 'gradle.properties'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - '.github/workflows/dev-server-publish.yml'
-      - '.github/actions/setup-jvm/**'
-      - '.github/scripts/release-metadata*'
-  workflow_dispatch:
+    branches: ['**']
 
 permissions:
   contents: write        # recreate the dev-latest release and its tag
 
-# Queue rather than cancel, so releases are replaced in push order; a pending
-# run is superseded by a newer one, which is what we want.
-concurrency:
-  group: dev-server-publish
-  cancel-in-progress: false
-
 jobs:
+  deployment-policy:
+    uses: ./.github/workflows/deployment-policy.yml
+
   publish:
-    if: github.ref == 'refs/heads/develop'
+    concurrency:
+      group: dev-server-publish
+      cancel-in-progress: false
+    needs: deployment-policy
+    if: needs.deployment-policy.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -74,4 +58,4 @@ jobs:
           gh release create dev-latest release/*.jar release/manifest.json \
             --prerelease --latest=false --target "$GITHUB_SHA" \
             --title "Dev server build (${GITHUB_SHA::7})" \
-            --notes "Rolling build of \`develop\` at ${GITHUB_SHA}, picked up by the dev server's deploy agent. Not a release."
+            --notes "Rolling development build at ${GITHUB_SHA}, picked up by the dev server's deploy agent. Not a release."

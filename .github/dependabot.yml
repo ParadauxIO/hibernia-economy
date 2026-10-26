@@ -3,7 +3,7 @@
 #
 # Volume control: per ecosystem, every minor + patch update lands as ONE grouped
 # PR per week; majors still come one PR each, since those are the ones that need
-# reading. PRs target develop (the default branch), per the release flow.
+# reading. PRs target main (the default branch), per the release flow.
 #
 # github-actions: Dependabot bumps the full-SHA pins in place and rewrites the
 # trailing `# vX.Y.Z` comment, so the pinning convention survives updates. The

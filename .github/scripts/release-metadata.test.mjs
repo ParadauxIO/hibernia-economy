@@ -21,7 +21,7 @@ test('release identities distinguish commits, runs, retries and development buil
     { ...env, GITHUB_RUN_NUMBER: '143' },
     { ...env, GITHUB_RUN_ATTEMPT: '2' },
     { ...env, GITHUB_SHA: 'def456abc123' + '0'.repeat(28) },
-    { ...env, GITHUB_REF: 'refs/heads/develop' },
+    { ...env, GITHUB_REF: 'refs/heads/feature/example' },
   ].map(input => releaseVersion(input, now));
   assert.equal(new Set(versions).size, versions.length);
   assert.equal(versions[4], '2026.10.142.1-dev-gabc123def456');
@@ -30,7 +30,7 @@ test('release identities distinguish commits, runs, retries and development buil
 
 test('rejects unsupported refs and missing identity rather than publishing ambiguous builds', () => {
   for (const input of [
-    { ...env, GITHUB_REF: 'refs/heads/feature' },
+    { ...env, GITHUB_REF: 'refs/heads/' },
     { ...env, GITHUB_REF: 'refs/tags/main' },
     { ...env, GITHUB_SHA: '' },
     { ...env, GITHUB_RUN_NUMBER: undefined },

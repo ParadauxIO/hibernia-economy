@@ -4,7 +4,7 @@
 //
 // It owns the server process, restarting it if it crashes, and polls the
 // rolling `dev-latest` release that .github/workflows/dev-server-publish.yml
-// publishes from `develop`. When that release's commit changes it:
+// publishes from authorized `[DEPLOY]` branch commits. When that release's commit changes it:
 //   1. downloads the jars into dev-deploy/history/<sha>/
 //   2. stops the server
 //   3. runs the economy-flyway migrations at that commit against the sandbox

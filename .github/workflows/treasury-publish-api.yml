@@ -2,27 +2,20 @@ name: Treasury · Build & Publish API
 
 on:
   push:
-    branches: [ develop ]
-    paths:
-      - 'treasury/**'
-      - '.github/workflows/treasury-publish-api.yml'
-      - '.github/workflows/jvm-check.yml'
-      - '.github/actions/setup-jvm/**'
-  workflow_dispatch:
+    branches: ['**']
 
 permissions:
   contents: read
 
-# Queue rather than cancel: a cancelled publish can leave a half-cut release.
-concurrency:
-  group: treasury-publish-api-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
+  deployment-policy:
+    uses: ./.github/workflows/deployment-policy.yml
+
   # Don't publish an API jar that doesn't pass its tests (ADT-52). Same job
   # definition ci.yml runs, narrowed to the Treasury projects.
   test:
-    if: github.ref == 'refs/heads/develop'
+    needs: deployment-policy
+    if: needs.deployment-policy.outputs.allowed == 'true'
     uses: ./.github/workflows/jvm-check.yml
     with:
       tasks: ':treasury:check :treasury:treasury-api:check'
@@ -32,6 +25,9 @@ jobs:
       checks: write
 
   publish:
+    concurrency:
+      group: treasury-publish-api-${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      cancel-in-progress: false
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20

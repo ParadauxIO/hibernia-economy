@@ -2,28 +2,21 @@ name: Business · Publish API
 
 on:
   push:
-    branches: [ develop ]
-    paths:
-      - 'business/**'
-      - '.github/workflows/business-publish-api.yml'
-      - '.github/workflows/jvm-check.yml'
-      - '.github/actions/setup-jvm/**'
-  workflow_dispatch:
+    branches: ['**']
 
 permissions:
   contents: read
 
-# Queue rather than cancel: a cancelled publish can leave a half-cut release.
-concurrency:
-  group: business-publish-api-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
+  deployment-policy:
+    uses: ./.github/workflows/deployment-policy.yml
+
   # Don't publish an API jar that doesn't pass its tests (ADT-52). Same job
   # definition ci.yml runs, narrowed to the Business projects (`:business:check`
   # includes testWithoutCarbon / testWithoutPlaceholderApi and the jacoco gate).
   test:
-    if: github.ref == 'refs/heads/develop'
+    needs: deployment-policy
+    if: needs.deployment-policy.outputs.allowed == 'true'
     uses: ./.github/workflows/jvm-check.yml
     with:
       tasks: ':business:check :business:business-api:check'
@@ -33,6 +26,9 @@ jobs:
       checks: write
 
   publish:
+    concurrency:
+      group: business-publish-api-${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      cancel-in-progress: false
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20

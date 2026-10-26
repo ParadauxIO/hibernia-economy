@@ -2,43 +2,24 @@ name: Treasury REST API · Build and Push Docker Image to Harbor
 
 on:
   push:
-    branches:
-      - main
-      - develop
-    # Everything that ends up in (or gates) the image: the service itself, its
-    # one project() dependency (:common, shaded into the bootJar), the shared
-    # build inputs that decide which library versions get bundled (version
-    # catalog, convention plugins, root build/settings), and the reused test
-    # workflow + setup action. Without these, a :common fix or a dependency bump
-    # merges without ever producing a new image.
-    paths:
-      - 'treasury-rest-api/**'
-      - 'common/**'                # implementation(project(":common"))
-      - 'gradle/**'                # libs.versions.toml + wrapper
-      - 'gradle.properties'
-      - 'build-logic/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - '.github/workflows/treasury-rest-api-docker.yml'
-      - '.github/workflows/jvm-check.yml'
-      - '.github/actions/setup-jvm/**'
+    branches: ['**']
+  workflow_dispatch:
 
-# Checkout needs contents: read; the Harbor push authenticates with registry
-# secrets, not GITHUB_TOKEN. The test job additionally gets checks: write for
-# its JUnit check run.
 permissions:
   contents: read
 
-# Queue rather than cancel, so images are pushed in commit order.
-concurrency:
-  group: treasury-rest-api-docker-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
+  deployment-policy:
+    uses: ./.github/workflows/deployment-policy.yml
+    with:
+      allow-production: true
+
   # Gate the image on the real test suite (ADT-19): the money service must not
   # build+push without its *IT suite and coverage ratchet passing. Same job
   # definition ci.yml runs, narrowed to this project.
   test:
+    needs: deployment-policy
+    if: needs.deployment-policy.outputs.allowed == 'true'
     uses: ./.github/workflows/jvm-check.yml
     with:
       tasks: ':treasury-rest-api:check'
@@ -48,6 +29,9 @@ jobs:
       checks: write
 
   build-and-push:
+    concurrency:
+      group: treasury-rest-api-docker-${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      cancel-in-progress: false
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -84,17 +68,14 @@ jobs:
           # (bootstrap/registrations/apps.yaml). Mutable tag (latest / prod)
           # kept for manual rollbacks.
           #   main    -> production-sha-<short>  (+ :prod)   -> production overlay
-          #   develop -> development-sha-<short> (+ :latest) -> development overlay
+          #   [DEPLOY] branch -> development-sha-<short> (+ :latest) -> development overlay
           SHORT_SHA=${GITHUB_SHA::7}
           if [ "$GITHUB_REF_NAME" == "main" ]; then
             ENV_NAME=production
             MUTABLE=prod
-          elif [ "$GITHUB_REF_NAME" == "develop" ]; then
+          else
             ENV_NAME=development
             MUTABLE=latest
-          else
-            echo "::error::Unsupported branch: $GITHUB_REF_NAME"
-            exit 1
           fi
           echo "SHA_TAG=${ENV_NAME}-sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "MUTABLE_TAG=${MUTABLE}" >> "$GITHUB_OUTPUT"

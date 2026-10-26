@@ -1,6 +1,6 @@
 name: CI
 
-# The one pipeline for pull requests, pushes to develop/main, a nightly run and
+# The one pipeline for pull requests, pushes to main, a nightly run and
 # manual runs. It replaced the per-module *-build/*-test workflows, whose
 # hand-picked Gradle tasks had drifted from what `./gradlew check` covers (the
 # treasury-api / business-api tests and :business:testWithoutCarbon gated
@@ -15,16 +15,16 @@ name: CI
 #   ci-gate ◄── all of the above
 #
 # Only the two expensive suites (explorer e2e, live integration) are skipped on
-# PRs that can't affect them; push to develop/main, the nightly schedule and
+# PRs that can't affect them; push to main, the nightly schedule and
 # manual runs always run everything. `ci-gate` is the single required status
 # check for branch protection: it fails if any job failed or was cancelled, and
 # treats skipped jobs as fine — so adding a job means adding it to its `needs`.
 
 on:
   pull_request:
-    branches: [ main, develop, 'stack/**' ]
+    branches: [ main, 'stack/**' ]
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   schedule:
     - cron: '23 3 * * *'   # nightly, catches drift in external deps/images
   workflow_dispatch:
@@ -40,7 +40,7 @@ permissions:
   contents: read
 
 # A new push to a PR supersedes its running checks. Every other run gets its
-# own group (run_id): a shared group would still cancel a *pending* develop run
+# own group (run_id): a shared group would still cancel a *pending* main run
 # when a third push queues, and every merged commit should get a full result.
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
@@ -55,7 +55,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check release metadata tooling
-        run: node --test .github/scripts/release-metadata.test.mjs
+        run: node --test .github/scripts/*.test.mjs
       - name: Check schema compatibility guard
         run: node --test ops/dev-server/schema-guard.test.mjs
       - name: Check acceptance evidence tooling
