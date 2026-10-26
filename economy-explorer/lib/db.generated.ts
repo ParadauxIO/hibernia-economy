@@ -199,6 +199,21 @@ export interface ExplorerAudit {
   targetType: Generated<string | null>;
 }
 
+export interface ExplorerGovUnit {
+  createdAt: Generated<Date>;
+  createdByUuidBin: Generated<Buffer | null>;
+  description: Generated<string | null>;
+  name: string;
+  parentUnitId: Generated<number | null>;
+  slug: string;
+  unitId: Generated<number>;
+}
+
+export interface ExplorerGovUnitAccount {
+  accountId: number;
+  unitId: number;
+}
+
 export interface ExplorerGroup {
   createdAt: Generated<Date>;
   createdByUuidBin: Generated<Buffer | null>;
@@ -369,6 +384,12 @@ export interface ExplorerSnapshotWealthDay {
   takenAt: Generated<Date>;
   top10Share: Generated<Decimal>;
   top1Share: Generated<Decimal>;
+}
+
+export interface ExplorerWatchlist {
+  accountId: number;
+  createdAt: Generated<Date>;
+  viewerUuidBin: Buffer;
 }
 
 export interface Firm {
@@ -592,6 +613,8 @@ export interface DB {
   economyConfig: EconomyConfig;
   economyPlayers: EconomyPlayers;
   explorerAudit: ExplorerAudit;
+  explorerGovUnit: ExplorerGovUnit;
+  explorerGovUnitAccount: ExplorerGovUnitAccount;
   explorerGroup: ExplorerGroup;
   explorerGroupCapability: ExplorerGroupCapability;
   explorerGroupMember: ExplorerGroupMember;
@@ -612,6 +635,7 @@ export interface DB {
   explorerRollupRun: ExplorerRollupRun;
   explorerRollupTypeDay: ExplorerRollupTypeDay;
   explorerSnapshotWealthDay: ExplorerSnapshotWealthDay;
+  explorerWatchlist: ExplorerWatchlist;
   firm: Firm;
   firmAccounts: FirmAccounts;
   firmCreationLock: FirmCreationLock;
