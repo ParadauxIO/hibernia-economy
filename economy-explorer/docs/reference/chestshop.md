@@ -135,7 +135,9 @@ You need `ChestShop.government.<account name>` in lowercase (for example
 `ChestShop.government.govjustice`) to build, open or break that account's shops.
 `ChestShop.government.*` covers every government account; setting a single account's
 node to `false` still excludes it. `ChestShop.othername.*` does **not** grant
-government shops. Archived accounts can't be used.
+government shops. Archived accounts can't be used, and neither can the Treasury system
+accounts listed in `GOVERNMENT_SHOP_BLOCKED_ACCOUNTS` (by default `starting-balances`,
+`GovernmentFines` and `TreasuryIngest`), even by admins.
 
 > [!WARNING]
 > Most department accounts can go overdrawn without limit, so a government shop that

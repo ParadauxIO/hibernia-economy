@@ -1,7 +1,9 @@
 package io.paradaux.chestshop.services.impl;
 
+import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.Account;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.GovernmentAccountService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.BusinessAccountUtil;
@@ -20,7 +22,13 @@ import org.bukkit.entity.Player;
 @Slf4j
 public class GovernmentAccountServiceImpl implements GovernmentAccountService {
 
+    private final ChestShopConfiguration config;
     private volatile TreasuryApi treasury;
+
+    @Inject
+    public GovernmentAccountServiceImpl(ChestShopConfiguration config) {
+        this.config = config;
+    }
 
     @Override
     public void bind(TreasuryApi treasury) {
@@ -42,6 +50,8 @@ public class GovernmentAccountServiceImpl implements GovernmentAccountService {
             if (account == null || account.getAccountType() != AccountType.GOVERNMENT || account.isArchived()) {
                 return null;
             }
+            // Treasury's system faucets and sinks (starting-balances, fines…) never back a shop.
+            if (config.isGovernmentShopBlocked(account.getDisplayName())) return null;
             return new Account(
                     account.getDisplayName(),
                     SignService.governmentAccountSignName(account.getAccountId(), account.getDisplayName()),

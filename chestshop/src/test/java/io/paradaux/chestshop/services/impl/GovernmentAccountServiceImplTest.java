@@ -24,11 +24,16 @@ class GovernmentAccountServiceImplTest {
 
     private TreasuryApi treasury;
     private GovernmentAccountServiceImpl service;
+    private io.paradaux.chestshop.model.config.ChestShopConfiguration config;
 
     @BeforeEach
     void setUp() {
         treasury = mock(TreasuryApi.class);
-        service = new GovernmentAccountServiceImpl();
+        config = io.paradaux.chestshop.support.TestConfigs.with(
+                io.paradaux.chestshop.support.TestConfigs.defaults(),
+                "governmentShopBlockedAccountsRaw",
+                java.util.List.of("starting-balances", "GovernmentFines"));
+        service = new GovernmentAccountServiceImpl(config);
         service.bind(treasury);
     }
 
@@ -88,6 +93,17 @@ class GovernmentAccountServiceImplTest {
     }
 
     @Test
+    void resolve_refusesBlockedSystemAccountsByNameOrId() {
+        // starting-balances mints money; no permission or admin bypass may put a shop on it.
+        var faucet = account(1, "starting-balances", AccountType.GOVERNMENT);
+        when(treasury.getGovernmentAccountByName("Starting-Balances")).thenReturn(faucet);
+        when(treasury.getAccountById(1)).thenReturn(faucet);
+
+        assertThat(service.resolveGovernmentAccount("G:Starting-Balances")).isNull();
+        assertThat(service.resolveGovernmentAccount("G:#1")).isNull();
+    }
+
+    @Test
     void resolve_refusesArchivedAccounts() {
         var archived = account(136699, "DCGovernmentWL", AccountType.GOVERNMENT);
         archived.setArchived(true);
@@ -110,7 +126,7 @@ class GovernmentAccountServiceImplTest {
     @Test
     void resolve_unknownNameOrUnboundTreasuryYieldsNull() {
         assertThat(service.resolveGovernmentAccount("G:Nowhere")).isNull();
-        GovernmentAccountServiceImpl unbound = new GovernmentAccountServiceImpl();
+        GovernmentAccountServiceImpl unbound = new GovernmentAccountServiceImpl(config);
         assertThat(unbound.resolveGovernmentAccount("G:GovJustice")).isNull();
     }
 
@@ -166,6 +182,26 @@ class GovernmentAccountServiceImplTest {
                 .isFalse();
         // A G: short name on a real player UUID is not a government account.
         assertThat(service.canAccessGovernmentAccount(p, new Account("GovJustice", "G:GovJustice", UUID.randomUUID())))
+                .isFalse();
+    }
+
+    @Test
+    void resolve_nullNameAndUnconfiguredDenyList() {
+        assertThat(service.resolveGovernmentAccount(null)).isNull();
+        io.paradaux.chestshop.support.TestConfigs.with(config, "governmentShopBlockedAccountsRaw", null);
+        assertThat(config.isGovernmentShopBlocked("starting-balances")).isFalse();
+        assertThat(config.isGovernmentShopBlocked(null)).isFalse();
+    }
+
+    @Test
+    void access_rejectsAccountsMissingAName() {
+        Player p = player();
+        when(p.hasPermission("ChestShop.government.*")).thenReturn(true);
+        var uuid = BusinessAccountUtil.toBusinessUuid(29862);
+
+        assertThat(service.canAccessGovernmentAccount(p, new Account("GovJustice", null, uuid)))
+                .isFalse();
+        assertThat(service.canAccessGovernmentAccount(p, new Account(null, "G:GovJustice", uuid)))
                 .isFalse();
     }
 }

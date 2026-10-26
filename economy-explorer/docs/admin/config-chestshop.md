@@ -70,6 +70,7 @@ buy and sell after changing these settings.
 | `FORCE_UNLIMITED_ADMIN_SHOP` | `false` | Makes admin shops unlimited even with a container attached. |
 | `TAX_AMOUNT` / `SERVER_TAX_AMOUNT` | `0` / `0` | Sales-tax percentages for ordinary / admin-server counterparties. |
 | `SERVER_ECONOMY_ACCOUNT` | *(empty)* | Optional server-shop account; blank uses the internal system account. |
+| `GOVERNMENT_SHOP_BLOCKED_ACCOUNTS` | `starting-balances`, `GovernmentFines`, `TreasuryIngest` | Government accounts that can never own a `G:` shop, whatever the creator's permissions. Use it for Treasury system accounts that create or absorb money. Names are case-insensitive. |
 
 ## Protection
 

@@ -61,7 +61,7 @@ class AccountServiceImplTest {
         lenient().when(config.getServerEconomyAccount()).thenReturn("");
         lenient().when(config.getServerEconomyAccountUuid()).thenReturn(new UUID(0, 0));
         treasury = mock(io.paradaux.treasury.api.TreasuryApi.class);
-        GovernmentAccountServiceImpl government = new GovernmentAccountServiceImpl();
+        GovernmentAccountServiceImpl government = new GovernmentAccountServiceImpl(config);
         government.bind(treasury);
         service = new AccountServiceImpl(mapper, business, government, config, signService, adminBypass);
     }

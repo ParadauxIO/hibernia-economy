@@ -182,6 +182,13 @@ HOPPER_STOCK_REFRESH_INTERVAL_TICKS: 100
 # Exclude these item meta attributes from the similarity check when comparing items
 EXCLUDED_ITEM_ATTRIBUTES: []
 
+# Government accounts that can never own a G: shop, even for ChestShop.government.* or admins.
+# These are Treasury system accounts that create or absorb money; names are case-insensitive.
+GOVERNMENT_SHOP_BLOCKED_ACCOUNTS:
+  - starting-balances
+  - GovernmentFines
+  - TreasuryIngest
+
 # Native result locations and optional preview names (plain text).
 FIND_LOCATION_FORMAT: '%x%, %y%, %z%'
 PREVIEW_NAME_FORMAT: ''
