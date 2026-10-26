@@ -1,10 +1,11 @@
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { HeaderNav } from '@/components/HeaderNav';
-import { SectionTabs } from '@/components/SectionTabs';
+import { HeaderNav, HeaderSectionNav } from '@/components/HeaderNav';
 import { AdminNav } from '@/components/AdminNav';
+import { SectionTabs } from '@/components/SectionTabs';
 import { navigation, resetNavigation } from './next-navigation';
-import { setViewer, viewerWithPermissions, type TestRole } from './viewer';
+import { setViewer, viewerFor, viewerWithPermissions, type TestRole } from './viewer';
+import type { ViewerCtx } from '@/lib/viewerSnapshot';
 
 vi.mock('next/navigation', () => import('./next-navigation'));
 
@@ -12,123 +13,162 @@ function linkNames(nav: HTMLElement): string[] {
   return within(nav).getAllByRole('link').map((a) => a.textContent);
 }
 
-function activeLinks(nav: HTMLElement): string[] {
+function currentLinks(nav: HTMLElement): string[] {
   return within(nav)
     .getAllByRole('link')
-    .filter((a) => a.classList.contains('active'))
+    .filter((a) => a.hasAttribute('aria-current'))
     .map((a) => a.textContent);
 }
 
+const primary = () => screen.getByRole('navigation', { name: 'Primary' });
+
 beforeEach(() => resetNavigation());
 
-describe('HeaderNav', () => {
-  const PUBLIC = ['Economy', 'Accounts', 'Firms', 'Market', 'Docs'];
+describe('HeaderNav visibility', () => {
+  const PUBLIC = ['Economy', 'Directory', 'Market', 'Docs'];
 
-  it.each<[TestRole, string[]]>([
-    ['anon', PUBLIC],
-    ['player', PUBLIC],
-    // player.read.all and transactions.read are admin tools, so a moderator gets the
-    // Admin entry (which also covers /transactions) rather than "Investigate".
-    ['moderator', [...PUBLIC, 'Admin']],
-    ['admin', [...PUBLIC, 'Admin']],
-  ])('shows the %s viewer exactly %j', (role, expected) => {
-    setViewer(role);
+  it.each<[string, ViewerCtx, string[]]>([
+    ['anon', viewerFor('anon'), PUBLIC],
+    ['player', viewerFor('player'), PUBLIC],
+    // government.read alone is not enough: the scope must hold a GOVERNMENT account (§10.1).
+    ['government reader with no account in scope', viewerFor('government', { governmentInScope: false }), PUBLIC],
+    ['government reader with an account in scope', viewerFor('government', { governmentInScope: true }), ['Economy', 'Directory', 'Market', 'Government', 'Docs']],
+    // government.read.all needs no scope; transactions.read opens Investigate.
+    ['moderator', viewerFor('moderator'), ['Economy', 'Directory', 'Market', 'Government', 'Investigate', 'Docs']],
+    ['admin', viewerFor('admin'), ['Economy', 'Directory', 'Market', 'Government', 'Investigate', 'Docs']],
+  ])('shows the %s exactly the right sections', (_label, viewer, expected) => {
+    setViewer(viewer);
     render(<HeaderNav />);
-    expect(linkNames(screen.getByRole('navigation', { name: 'Primary' }))).toEqual(expected);
+    expect(linkNames(primary())).toEqual(expected);
   });
 
-  it('shows Investigate (not Admin) for a viewer who can investigate but holds no admin tool', () => {
-    setViewer({ ...viewerWithPermissions([]), canInvestigate: true, isAdmin: false });
-    render(<HeaderNav />);
-    const nav = screen.getByRole('navigation', { name: 'Primary' });
-    expect(within(nav).getByRole('link', { name: 'Investigate' })).toHaveAttribute('href', '/transactions');
-    expect(within(nav).queryByRole('link', { name: 'Admin' })).toBeNull();
-  });
-
-  it('renders the anonymous baseline while the viewer is still loading', () => {
-    // setup.ts resets to ANON_VIEWER (loading: true) — no admin flash before the fetch.
-    render(<HeaderNav />);
-    expect(linkNames(screen.getByRole('navigation', { name: 'Primary' }))).toEqual(PUBLIC);
-  });
-
-  it.each([
-    ['/', 'Economy'],
-    ['/economy/wealth', 'Economy'],
-    ['/money-flow', 'Economy'],
-    ['/government/fines', 'Economy'],
-    ['/accounts/42', 'Accounts'],
-    ['/firms', 'Firms'],
-    ['/chestshop/shops', 'Market'],
-    ['/market/activity', 'Market'],
-    ['/docs/api', 'Docs'],
-    ['/transactions/9', 'Admin'],
-    ['/admin/roles', 'Admin'],
-  ])('highlights exactly one section for %s', (path, active) => {
+  it('never puts Admin in the primary nav (it is in the account menu)', () => {
     setViewer('admin');
-    navigation.pathname = path;
     render(<HeaderNav />);
-    expect(activeLinks(screen.getByRole('navigation', { name: 'Primary' }))).toEqual([active]);
+    expect(within(primary()).queryByRole('link', { name: 'Admin' })).toBeNull();
   });
 
-  it('highlights nothing on an unrelated page', () => {
-    navigation.pathname = '/me';
+  it('links Government to the government workspace and Investigate to the ledger', () => {
+    setViewer('admin');
     render(<HeaderNav />);
-    expect(activeLinks(screen.getByRole('navigation', { name: 'Primary' }))).toEqual([]);
+    expect(within(primary()).getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/government');
+    expect(within(primary()).getByRole('link', { name: 'Investigate' })).toHaveAttribute('href', '/transactions');
+    expect(within(primary()).getByRole('link', { name: 'Directory' })).toHaveAttribute('href', '/accounts');
+  });
+
+  it('renders the anonymous nav with no viewer at all', () => {
+    render(<HeaderNav />);
+    expect(linkNames(primary())).toEqual(PUBLIC);
   });
 });
 
-describe('SectionTabs', () => {
-  it('renders nothing outside a section group', () => {
-    navigation.pathname = '/accounts';
-    const { container } = render(<SectionTabs />);
+describe('HeaderNav active section', () => {
+  it.each([
+    ['/', 'Economy', 'page'],
+    ['/economy/wealth', 'Economy', 'true'],
+    ['/money-flow', 'Economy', 'true'],
+    ['/accounts', 'Directory', 'page'],
+    ['/accounts/42', 'Directory', 'true'],
+    ['/firms/Acme%20Corp', 'Directory', 'true'],
+    ['/players/Alice', 'Directory', 'true'],
+    ['/chestshop/shops', 'Market', 'true'],
+    ['/market/activity', 'Market', 'true'],
+    ['/government', 'Government', 'page'],
+    ['/gov/revenue', 'Government', 'true'],
+    ['/transactions/9', 'Investigate', 'true'],
+    ['/docs/api', 'Docs', 'true'],
+  ])('marks exactly one section on %s', (path, active, current) => {
+    setViewer('admin');
+    navigation.pathname = path;
+    render(<HeaderNav />);
+    expect(currentLinks(primary())).toEqual([active]);
+    expect(within(primary()).getByRole('link', { name: active })).toHaveAttribute('aria-current', current);
+  });
+
+  it.each(['/me', '/admin/roles', '/link', '/search'])('marks nothing on %s', (path) => {
+    setViewer('admin');
+    navigation.pathname = path;
+    render(<HeaderNav />);
+    expect(currentLinks(primary())).toEqual([]);
+  });
+
+  it('does not prefix-match a different section ("/accountsx" is not Directory)', () => {
+    navigation.pathname = '/accountsx';
+    render(<HeaderNav />);
+    expect(currentLinks(primary())).toEqual([]);
+  });
+});
+
+describe('HeaderSectionNav', () => {
+  it.each(['/me', '/docs', '/transactions', '/government', '/admin'])('renders nothing for %s', (path) => {
+    setViewer('admin');
+    navigation.pathname = path;
+    const { container } = render(<HeaderSectionNav />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows the economy tabs with the current one active', () => {
+  it('shows the economy pages with the current one marked', () => {
     navigation.pathname = '/economy/taxation';
-    render(<SectionTabs />);
-    const nav = screen.getByRole('navigation', { name: 'Section' });
-    expect(linkNames(nav)).toEqual(['Overview', 'Wealth', 'Money Flow', 'Taxation']);
-    expect(activeLinks(nav)).toEqual(['Taxation']);
+    render(<HeaderSectionNav />);
+    const nav = screen.getByRole('navigation', { name: 'Economy' });
+    expect(linkNames(nav)).toEqual(['Overview', 'Wealth', 'Money flow', 'Taxation']);
+    expect(currentLinks(nav)).toEqual(['Taxation']);
+    expect(within(nav).getByRole('link', { name: 'Taxation' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it.each<[string, TestRole | ReturnType<typeof viewerWithPermissions>, boolean]>([
-    ['anon', 'anon', false],
-    ['player', 'player', false],
-    ['moderator (government.read.all)', 'moderator', true],
-    ['admin', 'admin', true],
-    ['government.read holder', viewerWithPermissions(['player.read', 'government.read']), true],
-    ['government.read.all holder', viewerWithPermissions(['government.read.all']), true],
-  ])('economy tabs for %s include Government: %s', (_label, viewer, hasGovernment) => {
-    setViewer(viewer);
-    navigation.pathname = '/government';
-    render(<SectionTabs />);
-    const nav = screen.getByRole('navigation', { name: 'Section' });
-    expect(linkNames(nav)).toEqual(['Overview', 'Wealth', 'Money Flow', 'Taxation', ...(hasGovernment ? ['Government'] : [])]);
-    expect(activeLinks(nav)).toEqual(hasGovernment ? ['Government'] : []);
+  it('shows the directory with Players, Accounts and Firms', () => {
+    navigation.pathname = '/accounts/42';
+    render(<HeaderSectionNav />);
+    const nav = screen.getByRole('navigation', { name: 'Directory' });
+    expect(linkNames(nav)).toEqual(['Players', 'Accounts', 'Firms']);
+    expect(currentLinks(nav)).toEqual(['Accounts']);
+    expect(within(nav).getByRole('link', { name: 'Accounts' })).toHaveAttribute('aria-current', 'true');
   });
 
   it.each<[TestRole, boolean]>([
     ['anon', false],
     ['player', false],
+    ['government', false],
     ['moderator', true],
     ['admin', true],
-  ])('market tabs for %s include Sales: %s', (role, hasSales) => {
+  ])('market pages for %s include Sales: %s', (role, hasSales) => {
     setViewer(role);
     navigation.pathname = '/market';
-    render(<SectionTabs />);
-    const nav = screen.getByRole('navigation', { name: 'Section' });
-    expect(linkNames(nav)).toEqual(['Browse Items', 'Find Shops', 'Activity', ...(hasSales ? ['Sales'] : [])]);
-    expect(activeLinks(nav)).toEqual(['Browse Items']);
+    render(<HeaderSectionNav />);
+    const nav = screen.getByRole('navigation', { name: 'Market' });
+    expect(linkNames(nav)).toEqual(['Items', 'Find shops', 'Activity', 'Market firms', ...(hasSales ? ['Sales'] : [])]);
+    expect(currentLinks(nav)).toEqual(['Items']);
+  });
+
+  it('restores the orphaned market firms route', () => {
+    navigation.pathname = '/chestshop/firms/1';
+    render(<HeaderSectionNav />);
+    const nav = screen.getByRole('navigation', { name: 'Market' });
+    expect(within(nav).getByRole('link', { name: 'Market firms' })).toHaveAttribute('href', '/chestshop/firms');
+    expect(currentLinks(nav)).toEqual(['Market firms']);
   });
 
   it('gates Sales on market.sales.read, not on the admin flag', () => {
     setViewer(viewerWithPermissions(['market.sales.read']));
     navigation.pathname = '/chestshop/sales';
-    render(<SectionTabs />);
-    const nav = screen.getByRole('navigation', { name: 'Section' });
+    render(<HeaderSectionNav />);
+    const nav = screen.getByRole('navigation', { name: 'Market' });
     expect(within(nav).getByRole('link', { name: 'Sales' })).toHaveAttribute('href', '/chestshop/sales');
-    expect(activeLinks(nav)).toEqual(['Sales']);
+    expect(currentLinks(nav)).toEqual(['Sales']);
+  });
+
+  it('treats item pages as Items', () => {
+    navigation.pathname = '/chestshop/items/DIAMOND';
+    render(<HeaderSectionNav />);
+    expect(currentLinks(screen.getByRole('navigation', { name: 'Market' }))).toEqual(['Items']);
+  });
+});
+
+describe('SectionTabs', () => {
+  it('is a no-op now that the chrome owns section navigation', () => {
+    navigation.pathname = '/economy/wealth';
+    const { container } = render(<SectionTabs />);
+    expect(container).toBeEmptyDOMElement();
   });
 });
 
@@ -161,6 +201,6 @@ describe('AdminNav', () => {
     setViewer('admin');
     navigation.pathname = path;
     render(<AdminNav />);
-    expect(activeLinks(screen.getByRole('navigation', { name: 'Admin' }))).toEqual([active]);
+    expect(currentLinks(screen.getByRole('navigation', { name: 'Admin' }))).toEqual([active]);
   });
 });

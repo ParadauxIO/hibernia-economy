@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { listMarketFirms, countMarketFirms } from '@/lib/sql/market';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { Pagination } from '@democracycraft/design-system/next';
-import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { getViewer } from '@/lib/auth/viewer';
@@ -52,7 +51,6 @@ export default async function ChestShopFirmsPage({
       <div className="page-heading">
         <h1>Market firms</h1>
         <span className="sub">{fmtN(total)} firms with ChestShop activity</span>
-        <SectionTabs />
       </div>
 
       {!viewer.anon && (

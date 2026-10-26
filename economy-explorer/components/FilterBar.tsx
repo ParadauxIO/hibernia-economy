@@ -8,7 +8,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useOptimistic, useRef, useState, useSyncExternalStore, useTransition, type KeyboardEvent, type ReactNode } from 'react';
 import { Popover } from '@democracycraft/design-system/popover';
 import type { ColumnOption } from '@democracycraft/design-system/table';
-import { FilterEditor, useFocusOnMount } from '@/components/FilterBarEditors';
+import { FilterEditor } from '@/components/FilterBarEditors';
 import {
   cleared,
   describeFilter,
@@ -94,13 +94,6 @@ function useHiddenColumns(tableKey: string, columns: readonly ColumnOption[]): [
     window.dispatchEvent(new Event(COLUMNS_EVENT));
   };
   return [hidden, toggle];
-}
-
-/** A popover body that takes focus once the panel is visible. */
-function FocusPanel({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useFocusOnMount(ref);
-  return <div ref={ref} className="fb-pop">{children}</div>;
 }
 
 function SearchIcon() {
@@ -256,7 +249,7 @@ export function FilterBar({
             trigger={<button type="button" className="fb-btn"><PlusIcon />Filter</button>}
           >
             {({ close }) => (addField ? editor(addField, close) : (
-              <FocusPanel>
+              <div className="fb-pop">
                 <p className="fb-pop-title">Filter by</p>
                 <ul className="fb-menu">
                   {Object.entries(fields).map(([key, field]) => (
@@ -273,7 +266,7 @@ export function FilterBar({
                     </li>
                   ))}
                 </ul>
-              </FocusPanel>
+              </div>
             ))}
           </Popover>
           {showColumns && (
@@ -285,7 +278,7 @@ export function FilterBar({
               onOpenChange={(o) => setOpen(o ? { kind: 'columns' } : null)}
               trigger={<button type="button" className="fb-btn">Columns</button>}
             >
-              <FocusPanel>
+              <div className="fb-pop">
                 <p className="fb-pop-title">Columns</p>
                 <div className="fb-columns" role="group" aria-label="Visible columns">
                   {optionalColumns.map((c) => (
@@ -295,7 +288,7 @@ export function FilterBar({
                     </label>
                   ))}
                 </div>
-              </FocusPanel>
+              </div>
             </Popover>
           )}
           {exportSlot && <div className="fb-export">{exportSlot}</div>}

@@ -29,9 +29,9 @@ test.describe('admin', () => {
     await expect(page.getByRole('heading', { name: 'API keys' })).toBeVisible();
   });
 
-  test('sees the staff-only Sales tab in the market nav', async ({ page }) => {
+  test('sees the staff-only Sales page in the market section nav', async ({ page }) => {
     await visit(page, '/market');
-    await expect(page.locator('.section-tabs a', { hasText: 'Sales' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Market' }).getByRole('link', { name: 'Sales' })).toBeVisible();
   });
 
   test('privileged reads are written to the audit log', async ({ page }) => {

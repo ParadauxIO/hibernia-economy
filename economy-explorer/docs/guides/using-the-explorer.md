@@ -19,7 +19,20 @@ Plenty is public:
 - **Firms** — public company profiles and directory balances; internal accounts and activity require permission.
 - **Market** — ChestShop prices, top items, and sales volume.
 - **Money flow** and other economy-wide charts.
-- **Search** — the search box up top finds accounts, players, firms, and account IDs.
+- **Search** — press **Ctrl K** (**⌘K** on a Mac), **/**, or the **Search** button
+  in the top bar. Type two or more letters to find players, accounts (by name or
+  ID) and firms, or the name of a page ("statements", "taxation") to jump there.
+  Use the arrow keys and **Enter**, or click. Things you open from search are
+  listed under **Recent** next time; they are kept only in your browser. The
+  same box can copy the server address and switch between light and dark.
+
+## Finding your way around
+
+The top bar has the main sections: **Economy**, **Directory** (players,
+accounts and firms), **Market**, and **Docs**. **Government** and
+**Investigate** appear only for people whose role and accounts give them
+access. The pages of the section you are in are listed just below the top bar.
+On a phone, the **Menu** button at the top right lists every section and page.
 
 ## Dates and times
 
@@ -41,16 +54,24 @@ staff may also read records according to their permissions.
 ## Step 1 — Sign in
 
 Click **Log in** in the top-right corner. You'll sign in with your account, then land
-back on the Explorer. Once you're in, a link to your data appears in the top-right — it
-shows your Minecraft name once you've linked (and "My data" until then).
+back on the Explorer. Once you're in, your account menu appears in the top-right. After
+you link your Minecraft account it shows your head, your name and your **personal
+balance**: the money in your own personal account. Money in firms you own or work for,
+and in government accounts you can see, is never added to it, because that money is not
+yours personally.
+
+Open the menu for your own pages: **My finances**, **My transactions**,
+**Statements**, **My market**, **My firms**, **Webhooks and API**, and **Link
+status**. **Log out** signs you out of the Explorer and of your server account
+login; you may be asked to confirm.
 
 ## Step 2 — Link your Minecraft account
 
 Signing in proves who you are on the *website*; linking connects that to your
 *in-game* character so the Explorer knows which balances are yours.
 
-1. Open **[Link your account](/link)** (or click **My data** before you're linked —
-   it'll send you there).
+1. Open **[Link your account](/link)** (before you're linked, the account menu
+   starts with **Link your Minecraft account**).
 2. Generate a short **code** on that page.
 3. Join the Minecraft server and run this command within **5 minutes**:
 
@@ -70,7 +91,7 @@ link uses that player's UUID, including Floodgate identities.
 
 ## Step 3 — View your data
 
-Once linked, open your data (top-right) to see your personal dashboard:
+Once linked, choose **My finances** in the account menu to see your personal dashboard:
 
 - Your **total balance** across all your accounts.
 - Your **income and spending** over the last 90 days.
@@ -101,7 +122,7 @@ logged in.
 
 ## Changing the look
 
-Use the sun/moon/monitor button in the header to switch between **light**, **dark**,
+Use the sun/moon/monitor button in the top bar (in the **Menu** on a phone) to switch between **light**, **dark**,
 and **system** (follow your device) appearance. Your choice is remembered.
 
 ## Where to go next

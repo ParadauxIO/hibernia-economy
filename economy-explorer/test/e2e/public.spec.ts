@@ -51,9 +51,9 @@ test.describe('anonymous browsing', () => {
 
   test('market browsing links to activity and searches the full catalogue', async ({ page }) => {
     await visit(page, '/market');
-    const tabs = page.locator('.section-tabs a');
-    await expect(tabs.filter({ hasText: 'Items' })).toBeVisible();
-    await expect(tabs.filter({ hasText: 'Firms' })).toHaveCount(0);
+    const tabs = page.getByRole('navigation', { name: 'Market' }).getByRole('link');
+    await expect(tabs.filter({ hasText: 'Items' })).toHaveAttribute('aria-current', 'page');
+    await expect(tabs.filter({ hasText: 'Market firms' })).toHaveAttribute('href', '/chestshop/firms');
     await expect(tabs.filter({ hasText: 'Sales' })).toHaveCount(0);
     await page.getByLabel('Find an item', { exact: true }).fill('Diamond');
     await page.getByRole('button', { name: 'Search all items' }).click();
@@ -95,7 +95,7 @@ test.describe('anonymous browsing', () => {
 
   test('footer carries the attribution', async ({ page }) => {
     await visit(page, '/');
-    await expect(page.locator('.footer-meta')).toContainText('Minecraft Cities Network');
+    await expect(page.getByRole('contentinfo')).toContainText('Minecraft Cities Network');
   });
 
   test('the static tax guide shows the rates this server published', async ({ page }) => {
@@ -147,14 +147,14 @@ test('item pages put observed offers before optional advanced history', async ({
   await expect(page.getByRole('link', { name: 'Hide advanced candlesticks' })).toBeVisible();
 });
 
-test('mobile global search opens, focuses and closes with Escape', async ({ page }) => {
+test('mobile search opens the palette, focuses it and closes with Escape', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await visit(page, '/');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
-  const input = page.getByRole('searchbox', { name: 'Search', exact: true });
+  const input = page.getByRole('combobox', { name: /Search players/ });
   await expect(input).toBeFocused();
   await input.fill('Alice');
-  await expect(page.getByRole('group', { name: 'Search suggestions' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Results' }).getByRole('option').first()).toContainText('Alice');
   await input.press('Escape');
   await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeFocused();
   await expect(input).toBeHidden();
@@ -202,7 +202,7 @@ test('taxation aggregates are public, bounded and responsive', async ({ page }) 
   await expect(page.locator('a[href^="/transactions/"], a[href^="/players/"]')).toHaveCount(0);
   await page.getByRole('link', { name: '7 days', exact: true }).click();
   await expect(page.locator('.window-tabs a.active')).toHaveText('7 days');
-  await expect(page.locator('.section-tabs a.active')).toHaveText('Taxation');
+  await expect(page.getByRole('navigation', { name: 'Economy' }).getByRole('link', { name: 'Taxation' })).toHaveAttribute('aria-current', 'page');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   expect(errors.filter(e => /#\d+/.test(e))).toEqual([]);
 });

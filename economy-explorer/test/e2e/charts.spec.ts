@@ -149,6 +149,10 @@ test('charts hold their final size while recharts loads (no layout shift)', asyn
   });
   const ids = ['#chart-dual', '#chart-treasury', '#chart-donut', '#chart-inout'];
   await page.goto('/design-system', { waitUntil: 'domcontentloaded' });
+  // Streamed content first arrives in a hidden <div id="S:n"> and is swapped in
+  // by React's inline reveal script (no chunk needed). Measure only after that,
+  // or the locators below can hit the hidden copy and have no box.
+  await expect(page.locator('div[hidden][id^="S:"]')).toHaveCount(0);
   const before: { top: number; height: number }[] = [];
   for (const id of ids) {
     await expect(page.locator(`${id} .chart-plot .skeleton-chart[aria-busy="true"]`)).toHaveCount(1);

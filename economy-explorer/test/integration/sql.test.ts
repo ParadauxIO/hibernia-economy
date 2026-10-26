@@ -8,7 +8,7 @@ import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { permissionsFor } from '../role-fixtures';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import { HAS_DB, resetDb, testDbOptions, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
+import { HAS_DB, resetDb, testDbOptions, uuid, ALICE, BOB, CAROL, DAVE, BEDROCK, SECRETARY, PENNY } from './db';
 import { accountLabel, looksLikeUuid } from '@/lib/format';
 import { findAccount, findPostingsByTxnId, getTotalSupply, getPersonalSupply, canReadAccount, findReadableAccountIds } from '@/lib/sql/ledger';
 import { getPersonalBalances, getBalanceDistribution } from '@/lib/sql/stats';
@@ -1078,3 +1078,37 @@ d('role provenance', () => {
 });
 
 accountsTableSuite(d);
+
+// PAR-536: chrome lookups. Government scope uses the same ownership + relationship
+// view as /government; the balance chip counts owned PERSONAL accounts only.
+d('nav: government scope and personal balance (PAR-536)', () => {
+  it('finds a GOVERNMENT account through a relationship, ownership, or not at all', async () => {
+    const { hasGovernmentAccountInScope } = await import('@/lib/sql/nav');
+    expect(await hasGovernmentAccountInScope(SECRETARY)).toBe(true); // account_access VIEWER on #5
+    expect(await hasGovernmentAccountInScope(uuid('0000000000000000000000000000601C'))).toBe(true); // owns #5
+    expect(await hasGovernmentAccountInScope(ALICE)).toBe(false); // personal + business only
+    expect(await hasGovernmentAccountInScope(BOB)).toBe(false);
+  });
+
+  it('ignores archived government accounts', async () => {
+    const { hasGovernmentAccountInScope } = await import('@/lib/sql/nav');
+    await sql`UPDATE accounts SET is_archived = 1 WHERE account_id = 5`.execute(db);
+    try {
+      expect(await hasGovernmentAccountInScope(SECRETARY)).toBe(false);
+    } finally {
+      await sql`UPDATE accounts SET is_archived = 0 WHERE account_id = 5`.execute(db);
+    }
+  });
+
+  it('returns only the PERSONAL balances a player owns, never firm money', async () => {
+    const { findPersonalBalances } = await import('@/lib/sql/nav');
+    const rows = await sql<{ account_id: number; balance: string }>`SELECT account_id, balance FROM account_balances_mat WHERE account_id IN (1, 3, 6)`.execute(db);
+    const balance = (id: number) => String(rows.rows.find((r) => r.account_id === id)?.balance);
+    // Alice owns #1 (PERSONAL) and #3 (BUSINESS, the Acme corporate account).
+    expect(await findPersonalBalances(ALICE)).toEqual([balance(1)]);
+    // Carol's only personal account is archived; it is still her money.
+    expect(await findPersonalBalances(CAROL)).toEqual([balance(6)]);
+    // The secretary can read government #5 but owns nothing.
+    expect(await findPersonalBalances(SECRETARY)).toEqual([]);
+  });
+});

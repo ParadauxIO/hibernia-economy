@@ -6,7 +6,6 @@ import { getMoneyFlow } from '@/lib/sql/moneyFlow';
 import { memo } from '@/lib/cache';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { formatMoney, sumBy } from '@/lib/money';
-import { SectionTabs } from '@/components/SectionTabs';
 
 const SP_SCHEMA = z.object({ days: z.coerce.number().int().min(1).max(30).default(30) });
 
@@ -38,7 +37,6 @@ export default async function MoneyFlowPage({
         <h1>Money flow</h1>
         <span className="sub">between account types · last {sp.days} days</span>
         <WindowTabs basePath="/money-flow" days={sp.days} />
-        <SectionTabs />
       </div>
 
       <p className="page-intro">

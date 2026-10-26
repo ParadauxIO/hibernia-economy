@@ -3,7 +3,6 @@ import { getOverviewData } from '@/lib/services/economy';
 import { fmtAmt, fmtN } from '@/lib/format';
 import { VolumeTimeline } from '@/components/charts/AreaTimeline';
 import { Heatmap } from '@/components/charts/Heatmap';
-import { SectionTabs } from '@/components/SectionTabs';
 import { ChartCard, PageHeading, StatCard, WindowTabs } from '@democracycraft/design-system';
 import { AutoRefresh } from '@/components/AutoRefresh';
 export const dynamic = 'force-dynamic';
@@ -21,7 +20,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const busiest = heat.reduce<(typeof heat)[number] | undefined>((peak, cell) => !peak || cell.txn_count > peak.txn_count ? cell : peak, undefined);
   const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   return <>
-    <PageHeading title="Economy"><SectionTabs /></PageHeading>
+    <PageHeading title="Economy" />
     <div className="analytics-bar"><div><span>Activity: last {days} days · balances: current</span></div><div className="analytics-controls"><WindowTabs basePath="/" days={days} /><AutoRefresh windowMs={60_000} /></div></div>
     <div className="kpi-grid overview-metrics">
       <StatCard label="Personal supply" value={fmtAmt(stats.personalSupply)} meta="Current player-held balances" />

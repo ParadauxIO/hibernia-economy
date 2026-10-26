@@ -9,5 +9,5 @@ import { resetViewerStoreForTests } from '@/components/ViewerContext';
 afterEach(() => {
   cleanup();
   // The viewer is a module-level store; never let one test's viewer leak into the next.
-  resetViewerStoreForTests(undefined, true);
+  resetViewerStoreForTests();
 });

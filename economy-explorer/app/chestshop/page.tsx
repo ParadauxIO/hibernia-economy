@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { fmtAmtFull, fmtN } from '@/lib/format';
 import { Toolbar } from '@/components/Toolbar';
 import { Pagination } from '@democracycraft/design-system/next';
-import { SectionTabs } from '@/components/SectionTabs';
 import { CsvButton } from '@/components/CsvButton';
 import { JsonButton } from '@/components/JsonButton';
 import { ItemIcon } from '@/components/market/ItemIcon';
@@ -43,7 +42,6 @@ export default async function ChestShopPage({
       <div className="page-heading">
         <h1>Browse items</h1>
         <span className="sub">{fmtN(total)} items</span>
-        <SectionTabs />
       </div>
 
       <Toolbar

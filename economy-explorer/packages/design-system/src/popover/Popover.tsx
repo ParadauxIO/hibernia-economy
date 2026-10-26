@@ -35,7 +35,7 @@ export interface PopoverProps {
   onOpenChange?: ((open: boolean) => void) | undefined;
   /** Open as a bottom sheet at ≤ 720 px (filter editors on phones). */
   sheet?: boolean | undefined;
-  /** Where focus goes on open. first: first focusable element (default); panel: the panel itself. */
+  /** Where focus goes once the panel is visible. first (default): the first menu item, else a `[data-autofocus]` control, else the first focusable element; panel: the panel itself. */
   initialFocus?: 'first' | 'panel' | undefined;
   /** Minimum panel width; "trigger" matches the trigger's width. */
   minWidth?: number | 'trigger' | undefined;
@@ -59,6 +59,7 @@ export function Popover({ trigger, children, label, role = 'dialog', placement =
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' });
   const [asSheet, setAsSheet] = useState(false);
+  const [placed, setPlaced] = useState(false);
 
   const setOpen = useCallback((next: boolean) => {
     if (controlled === undefined) setUncontrolled(next);
@@ -84,15 +85,26 @@ export function Popover({ trigger, children, label, role = 'dialog', placement =
   }, [placement, sheet, minWidth, triggerEl]);
 
   useLayoutEffect(() => {
-    if (!open) return;
-    // Measuring and positioning before paint is what layout effects are for.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    /* eslint-disable react-hooks/set-state-in-effect -- measuring and positioning before paint is what layout effects are for */
+    if (!open) { setPlaced(false); return; }
     place();
+    setPlaced(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [open, place]);
+
+  // Move focus in only once the panel is positioned. Until then it is
+  // `visibility: hidden`, and browsers ignore focus() on hidden elements (jsdom
+  // doesn't, which is why only a real browser showed the bug: Escape then had
+  // nothing inside the panel to act on). Prefers a `[data-autofocus]` control.
+  useEffect(() => {
+    if (!open || !placed) return;
     const panel = panelRef.current;
-    if (!panel) return;
-    const target = initialFocus === 'first' ? (role === 'menu' ? panel.querySelector<HTMLElement>('[role="menuitem"]') : focusables(panel)[0]) : null;
+    if (!panel || panel.contains(document.activeElement)) return;
+    const target = initialFocus === 'first'
+      ? (role === 'menu' ? panel.querySelector<HTMLElement>('[role="menuitem"]') : panel.querySelector<HTMLElement>('[data-autofocus]') ?? focusables(panel)[0])
+      : null;
     (target ?? panel).focus({ preventScroll: true });
-  }, [open, place, initialFocus, role]);
+  }, [open, placed, initialFocus, role]);
 
   useEffect(() => {
     if (!open) return;
