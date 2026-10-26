@@ -12,58 +12,37 @@ export interface TaxRevenueRow {
   refunded: string;
 }
 
-/** Public aggregates only: never return payer identities, reasons or transaction IDs. */
-export async function getTaxRevenue(days: number): Promise<TaxRevenueRow[]> {
-  const result = await sql<TaxRevenueRow>`
-    SELECT DATE_FORMAT(revenue.settlement_time, '%Y-%m-%d') AS date,
-           revenue.kind, revenue.account_id, revenue.display_name,
-           CAST(SUM(CASE WHEN revenue.amount > 0 THEN revenue.amount ELSE 0 END) AS CHAR) AS collected,
-           CAST(SUM(CASE WHEN revenue.amount < 0 THEN -revenue.amount ELSE 0 END) AS CHAR) AS refunded
-    FROM (
-      SELECT lt.settlement_time, lp.amount, a.account_id, a.display_name,
-        CASE
-          -- V38 indexes the existing writer/message classification. Posting
-          -- sign still matters, and a tax-tagged debit may be a fine refund.
-          WHEN lp.amount > 0 AND lt.tax_kind IS NOT NULL THEN lt.tax_kind
-          -- Link actual fines and their reversals, not user-supplied reason text.
-          -- EXISTS avoids multiplying postings if historical fine rows duplicate.
-          WHEN lp.amount > 0 AND EXISTS (
-            SELECT 1 FROM government_fines gf
-            WHERE gf.txn_id = lt.txn_id AND gf.gov_account_id = lp.account_id
-          ) THEN 'fines'
-          WHEN lp.amount < 0 AND EXISTS (
-            SELECT 1 FROM government_fines gf
-            WHERE gf.revoke_txn_id = lt.txn_id AND gf.gov_account_id = lp.account_id
-          ) THEN 'fines'
-        END AS kind
-      FROM (
-        SELECT txn_id FROM ledger_txns FORCE INDEX (idx_ledger_tax_kind_time)
-        WHERE tax_kind IN ('personal', 'corporate', 'income', 'sales')
-          AND settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
-          AND settlement_time <= UTC_TIMESTAMP()
-        UNION
-        SELECT lt.txn_id FROM government_fines gf
-        JOIN ledger_txns lt ON lt.txn_id = gf.txn_id
-        WHERE lt.settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
-          AND lt.settlement_time <= UTC_TIMESTAMP()
-        UNION
-        SELECT lt.txn_id FROM government_fines gf
-        JOIN ledger_txns lt ON lt.txn_id = gf.revoke_txn_id
-        WHERE lt.settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
-          AND lt.settlement_time <= UTC_TIMESTAMP()
-      ) candidates
-      -- UNION deduplicates shared refunds and tax-tagged fines. Start with the
-      -- bounded candidates: starting at accounts walks all government history.
-      STRAIGHT_JOIN ledger_txns lt ON lt.txn_id = candidates.txn_id
-      STRAIGHT_JOIN ledger_postings lp ON lp.txn_id = lt.txn_id
-      STRAIGHT_JOIN accounts a ON a.account_id = lp.account_id
-      WHERE lt.settlement_time >= UTC_TIMESTAMP() - INTERVAL ${days} DAY
-        AND lt.settlement_time <= UTC_TIMESTAMP()
-        AND a.account_type = 'GOVERNMENT'
-    ) revenue
-    WHERE revenue.kind IS NOT NULL
-    GROUP BY date, revenue.kind, revenue.account_id, revenue.display_name
-    ORDER BY date, revenue.kind, revenue.account_id
+/**
+ * Tax and fine revenue per UTC day, kind and government account over
+ * [from, to] (inclusive 'YYYY-MM-DD'), from explorer_rollup_account_day (V43).
+ *
+ * The rollup tags each account-day row with V38's tax_kind (personal,
+ * corporate, income, sales), or 'fine' when the transaction is a recorded
+ * government fine or its revocation. Collected is what government accounts
+ * received under a tax kind; refunded is what they paid back on revoked fines.
+ * A tax-tagged debit from a government account is not revenue and is ignored.
+ *
+ * Starts from the GOVERNMENT accounts (idx_accounts_type, a few dozen rows) and
+ * reads each one's primary-key range of days, so the cost is independent of
+ * how busy the rest of the economy was. Archived accounts are included.
+ * Public aggregates only: never payer identities, reasons or transaction IDs.
+ */
+export async function getTaxRevenue(from: string, to: string): Promise<TaxRevenueRow[]> {
+  const result = await sql<Omit<TaxRevenueRow, 'kind'> & { tax_kind: string }>`
+    SELECT DATE_FORMAT(d.day, '%Y-%m-%d') AS date, d.tax_kind, a.account_id, a.display_name,
+           CAST(SUM(d.inflow) AS CHAR) AS collected,
+           CAST(SUM(CASE WHEN d.tax_kind = 'fine' THEN d.outflow ELSE 0 END) AS CHAR) AS refunded
+    FROM accounts a FORCE INDEX (idx_accounts_type)
+    STRAIGHT_JOIN explorer_rollup_account_day d ON d.account_id = a.account_id AND d.day BETWEEN ${from} AND ${to}
+    WHERE a.account_type = 'GOVERNMENT'
+      AND d.tax_kind IN ('personal', 'corporate', 'income', 'sales', 'fine')
+    GROUP BY d.day, d.tax_kind, a.account_id, a.display_name
+    HAVING SUM(d.inflow) <> 0 OR SUM(CASE WHEN d.tax_kind = 'fine' THEN d.outflow ELSE 0 END) <> 0
+    ORDER BY date, d.tax_kind, a.account_id
   `.execute(db);
-  return result.rows;
+  return result.rows.map(({ tax_kind, ...row }) => ({
+    ...row,
+    account_id: Number(row.account_id),
+    kind: (tax_kind === 'fine' ? 'fines' : tax_kind) as TaxKind,
+  }));
 }

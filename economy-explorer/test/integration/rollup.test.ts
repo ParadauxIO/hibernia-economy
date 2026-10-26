@@ -18,7 +18,7 @@ import { LeaderLease } from '@/lib/rollup/lease';
 import { ROLLUP_JOBS, recomputeDay, snapshotWealth, type DayJob } from '@/lib/rollup/steps';
 import { RollupWorker } from '@/lib/rollup/worker';
 import { metricsText } from '@/lib/metrics';
-import { getDailyVolume, getActivityComparison } from '@/lib/sql/health';
+import { getDailyVolume, getActivityComparison } from './reference/liveBridgeVolume';
 import { getPersonalBalances, getBalanceDistribution } from '@/lib/sql/stats';
 import { gini, topShare } from '@/lib/derived';
 import {

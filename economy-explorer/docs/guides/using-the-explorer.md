@@ -156,27 +156,48 @@ The item catalogue is ordered by item key for predictable browsing.
 
 ## Economy pages
 
-Overview combines activity and player participation for 7 or 30 days. Transaction
-and volume comparisons use the preceding period of equal length; there is no
-percentage when that period had no activity. The former Health bookmark redirects
-here. Wealth contains current distribution, inequality and account rankings.
-Money Flow shows received, sent and net received amounts for each account type.
-Only attributable transfers between different types are counted, including initial
-player funding. Daily chart buckets use UTC; the first and current day can be partial.
+Every economy page has a range picker (7, 30 or 90 days, a year, or your own
+dates); the range is kept in the address, so a link shares the same view. Charts
+use UTC days, and today is partial.
 
-Volume, transaction counts and Money Flow estimate matching adjacent Vault bridge
-legs as one economic event. These figures are labelled estimates: they do not
-establish who paid whom. Unmatched reward faucets and money sinks remain included.
-Your transaction history and raw API feed retain the original ledger records,
-so their counts can differ from these aggregates.
+The economy pages read daily summaries that the explorer builds in the
+background, so their figures are up to about five minutes behind the ledger.
+Each section says when it was last updated. After a new release the summaries
+are rebuilt newest day first, and a section whose range isn't ready yet says
+"Preparing history: covered back to …" and totals only the days it has.
 
-[Taxation](/economy/taxation) is public and shows 7- or 30-day collections,
-fine refunds, net revenue by type, and receiving government accounts. It counts
-recognised personal/corporate balance tax, source income tax, ChestShop sales tax,
-and recorded fines from the ledger. Other government transfers and property tax
-are excluded. Archived receiving accounts remain included. Refunds count on their
-settlement date, so a period can have negative net fine revenue. Individual payers,
-fine reasons and private account details are not exposed.
+**Overview** shows personal money supply (what players hold right now), daily
+active players, transactions and volume for the range, each compared with the
+period of the same length before it. It also shows activity by day, a weekday ×
+hour heatmap, and which plugins move the most money. Transactions and volume
+count a Vault bridge transfer once: some plugins move money through a system
+"bridge" account, which the ledger records as two transactions. These figures
+are estimates and don't establish who paid whom. Your transaction history and
+the raw API feed keep the original ledger records, so their counts can differ.
+The former Health bookmark redirects here.
+
+**Wealth** shows current concentration (Gini coefficient, top 1% and 10% shares),
+money by account type, the personal balance distribution and the largest
+accounts, plus their history from daily snapshots. Snapshots start on the day
+the explorer began recording them; earlier days are not reconstructed. The
+government total includes the accounts that create money, which hold negative
+balances by design, so it can be negative. Nothing is hidden or netted off.
+
+**Money flow** shows who pays whom by account type (personal, business,
+government, system), how much each type gained or lost over the range, and the
+plugins behind those changes. Transfers between someone's own accounts are left
+out. The ledger is shown as it is: a payment routed through a system bridge
+account appears as money into and out of System. Money flow covers up to 90 days
+at a time.
+
+[Taxation](/economy/taxation) is public and shows collections, fine refunds,
+net revenue by type, revenue by day and the receiving government accounts for
+the range. It counts recognised personal/corporate balance tax, source income
+tax, ChestShop sales tax, and recorded fines. Other government transfers and
+property tax are excluded. Archived receiving accounts remain included. Refunds
+count on their settlement day, so a day or period can have negative net fine
+revenue. Individual payers, fine reasons and private account details are not
+exposed.
 
 The rates panel shows the latest published Treasury configuration, regardless of
 the selected period. It shows enabled/disabled status, personal weekly balance-tax

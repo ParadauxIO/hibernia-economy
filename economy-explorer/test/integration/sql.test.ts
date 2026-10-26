@@ -18,9 +18,7 @@ import { findPlayerUuidByName } from '@/lib/sql/group';
 import { activeGroupMembership } from '@/lib/sql/group-membership';
 import { findAccountsForPlayer, getPlayerTotals } from '@/lib/sql/me';
 import { findIdentityBySub } from '@/lib/sql/identity';
-import { getDailyVolume, getActivityComparison } from '@/lib/sql/health';
-import { getTxnVolume } from '@/lib/sql/stats';
-import { getMoneyFlow } from '@/lib/sql/moneyFlow';
+import { getDailyVolume, getActivityComparison } from './reference/liveBridgeVolume';
 import { listItemSales, getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
 import mysql from 'mysql2/promise';
 import { gini } from '@/lib/derived';
@@ -192,30 +190,6 @@ d('firm financial-access tiers', () => {
     const taxFree = await findFirmByDisplayName('TaxFree Co');
     expect(taxFree?.proprietor_uuid).toBe('00000000-0000-0000-0000-00000000da7e');
     expect(taxFree?.proprietor_name).toBeNull();
-  });
-});
-
-d('money flow counts only clean cross-type transfers', () => {
-  it('includes the 2-leg cross-type txn and excludes same-type + multi-leg', async () => {
-    const edges = await getMoneyFlow(30);
-    expect(edges).toHaveLength(1); // txn2 is same-type, txn3 is 3-leg
-    expect(edges[0]).toMatchObject({ from_type: 'PERSONAL', to_type: 'BUSINESS', txn_count: 1 });
-    expect(edges[0]?.amount).toBe('500.00');
-  });
-
-  it('filters by settlement time even when transaction IDs are out of time order', async () => {
-    try {
-      await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 10 DAY WHERE txn_id = 1`.execute(db);
-      expect(await getMoneyFlow(7)).toEqual([]);
-      expect(await getMoneyFlow(30)).toEqual([
-        { from_type: 'PERSONAL', to_type: 'BUSINESS', amount: '500.00', amount_ex_seed: '500.00', txn_count: 1 },
-      ]);
-      // The oldest ID now settles after the other fixture transactions.
-      await sql`UPDATE ledger_txns SET settlement_time = NOW() + INTERVAL 1 HOUR WHERE txn_id = 1`.execute(db);
-      expect((await getMoneyFlow(7))[0]?.amount).toBe('500.00');
-    } finally {
-      await sql`UPDATE ledger_txns SET settlement_time = NOW() WHERE txn_id = 1`.execute(db);
-    }
   });
 });
 
@@ -725,98 +699,7 @@ d('reused firm names', () => {
   });
 });
 
-d('public taxation ledger aggregates', () => {
-  it('bounds ledger reads to tax candidates, excluding old taxes and unrelated recent transfers', async () => {
-    const { getTaxRevenue } = await import('@/lib/sql/taxation');
-    await sql`INSERT INTO accounts (account_id, account_type, display_name, owner_uuid_bin)
-      VALUES (9301, 'GOVERNMENT', 'Tax performance fixture', UNHEX(REPEAT('00',16)))`.execute(db);
-    try {
-      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
-        SELECT 930000 + seq, IF(seq <= 5000 OR seq = 10001, 'Personal balance tax (fixture)', 'Ordinary transfer'),
-          'treasury', UNHEX(REPEAT('00',16)),
-          IF(seq <= 5000, UTC_TIMESTAMP() - INTERVAL 60 DAY, UTC_TIMESTAMP() - INTERVAL 1 DAY)
-        FROM seq_1_to_10001`.execute(db);
-      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
-        SELECT 930000 + seq, 9301, 1.00 FROM seq_1_to_10001`.execute(db);
-      for (const days of [7, 30]) {
-        // Capture the actual production query, then measure rows visited rather
-        // than wall time (which varies with CI load and the buffer pool).
-        const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
-        let query;
-        try {
-          expect((await getTaxRevenue(days)).filter(row => row.account_id === 9301))
-            .toEqual([expect.objectContaining({ kind: 'personal', collected: '1.00', refunded: '0.00' })]);
-          query = executed.mock.calls[0]![0];
-        } finally {
-          executed.mockRestore();
-        }
-        const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
-        const plan: unknown = JSON.parse(analyzed.rows[0]!.ANALYZE);
-        const visited = (node: unknown): number => {
-          if (!node || typeof node !== 'object') return 0;
-          const entry = node as Record<string, unknown>;
-          const reads = 'table_name' in entry ? Number(entry.r_loops ?? 0) * Number(entry.r_rows ?? 0) : 0;
-          return reads + Object.values(entry).reduce<number>((sum, child) => sum + visited(child), 0);
-        };
-        expect(visited(plan)).toBeLessThan(500);
-      }
-    } finally {
-      await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 930001 AND 940001`.execute(db);
-      await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 930001 AND 940001`.execute(db);
-      await sql`DELETE FROM accounts WHERE account_id = 9301`.execute(db);
-    }
-  });
-
-  it('counts government credits once, identifies writer tags, and dates fine refunds by settlement', async () => {
-    const { getTaxRevenue } = await import('@/lib/sql/taxation');
-    const { summarizeTaxRevenue } = await import('@/lib/taxation');
-    // Dedicated IDs; no changes to the shared seed or its balance assertions.
-    await sql`INSERT INTO accounts (account_id, account_type, display_name, is_archived, owner_uuid_bin)
-      VALUES (9201, 'GOVERNMENT', 'Archived tax office', 1, UNHEX(REPEAT('00',16))), (9202, 'PERSONAL', 'Private payer', 0, UNHEX(REPEAT('00',16)))`.execute(db);
-    const transfer = async (id: number, plugin: string, message: string, amount: string, age: number, reverse = false) => {
-      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
-        VALUES (${id}, ${message}, ${plugin}, UNHEX(REPEAT('00', 16)), UTC_TIMESTAMP() - INTERVAL ${age} DAY)`.execute(db);
-      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount, memo) VALUES
-        (${id}, 9201, ${reverse ? '-' + amount : amount}, ${message}),
-        (${id}, 9202, ${reverse ? amount : '-' + amount}, ${message})`.execute(db);
-    };
-    try {
-      await transfer(9201, 'treasury', 'Personal balance tax (1d @ 1%/wk)', '0.10', 1);
-      await transfer(9202, 'business', 'Weekly Corporate Balance Tax', '0.20', 1);
-      await transfer(9203, 'treasury', 'Income tax on deposit from Jobs ($10)', '0.30', 1);
-      await transfer(9204, 'ChestShop', 'ChestShop sales tax (5% of 10) — private memo', '0.40', 1);
-      await transfer(9205, 'treasury', 'Fine: private reason', '5.00', 10);
-      await transfer(9206, 'treasury', 'Fine revoked: private reason', '5.00', 1, true);
-      await transfer(9207, 'other', 'Personal balance tax (spoof)', '99.00', 1);
-      await transfer(9208, 'treasury', 'Fine: no fine record', '99.00', 1);
-      await transfer(9209, 'ChestShop', 'ordinary sale', '99.00', 1);
-      await transfer(9210, 'treasury', 'Personal balance tax (old)', '99.00', 31);
-      await transfer(9211, 'treasury', 'Personal balance tax (not a government credit)', '99.00', 1, true);
-      // A second fine record sharing the one refund txn (revoke_txn_id isn't
-      // unique; V29 only made the debit unique). Its own debit txn has no postings
-      // to the office, so it contributes nothing — the refund must count once.
-      await sql`INSERT INTO ledger_txns (txn_id, message, plugin_system, initiator_uuid_bin, settlement_time)
-        VALUES (9212, 'Fine: duplicate historic record', 'treasury', UNHEX(REPEAT('00', 16)), UTC_TIMESTAMP() - INTERVAL 10 DAY)`.execute(db);
-      await sql`INSERT INTO government_fines
-        (fine_id, player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked, revoke_txn_id)
-        VALUES (9201, UNHEX(REPEAT('00',16)), 9201, 5, 'private reason', 9205, UNHEX(REPEAT('00',16)), 1, 9206),
-               (9202, UNHEX(REPEAT('00',16)), 9201, 5, 'duplicate historic record', 9212, UNHEX(REPEAT('00',16)), 1, 9206)`.execute(db);
-      const rows = (await getTaxRevenue(7)).filter(row => row.account_id === 9201);
-      const summary = summarizeTaxRevenue(rows, 7, new Date());
-      expect(summary.totals).toEqual({ collected: '1.00', refunded: '5.00', net: '-4.00' });
-      expect(summary.byType.map(row => row.net)).toEqual(['0.10', '0.20', '0.30', '0.40', '-5.00']);
-      expect(summary.accounts[0]?.name).toBe('Archived tax office');
-      expect(summarizeTaxRevenue((await getTaxRevenue(30)).filter(row => row.account_id === 9201), 30, new Date()).totals)
-        .toEqual({ collected: '6.00', refunded: '5.00', net: '1.00' });
-      expect(Object.keys(rows[0] ?? {}).sort()).toEqual(['account_id', 'collected', 'date', 'display_name', 'kind', 'refunded']);
-    } finally {
-      await sql`DELETE FROM government_fines WHERE fine_id BETWEEN 9201 AND 9202`.execute(db);
-      await sql`DELETE FROM ledger_postings WHERE txn_id BETWEEN 9201 AND 9212`.execute(db);
-      await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 9201 AND 9212`.execute(db);
-      await sql`DELETE FROM accounts WHERE account_id IN (9201, 9202)`.execute(db);
-    }
-  });
-});
+// Public taxation aggregates moved to economy.test.ts with the rollup-backed query (PAR-541).
 
 d('Business/Realty group leases (PAR-101)', () => {
   it('accepts each configured source independently, rejects changed/expired leases, and preserves manual access', async () => {
@@ -850,6 +733,8 @@ d('Business/Realty group leases (PAR-101)', () => {
   });
 });
 
+// The live bridge queries now exist only as the test oracle for the economy_day
+// rollup (test/integration/reference/liveBridgeVolume.ts); these cases pin it.
 d('bridge analytics estimate (never persisted sale identity)', () => {
   beforeAll(async () => {
     await sql`INSERT INTO accounts (account_id, account_type, display_name, owner_uuid_bin)
@@ -884,7 +769,7 @@ d('bridge analytics estimate (never persisted sale identity)', () => {
     await sql`DELETE FROM ledger_txns WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db);
   }
 
-  it('counts a bridge once, removes phantom arrows, retains cross-type and atomic flow, and leaves ledger raw', async () => {
+  it('counts a bridge once, retains cross-type and atomic flow, and leaves the ledger raw', async () => {
     const before = await totals();
     const raw = await sql<{ n: number }>`SELECT COUNT(*) n FROM ledger_txns`.execute(db);
     try {
@@ -894,10 +779,6 @@ d('bridge analytics estimate (never persisted sale identity)', () => {
       await transfer(9501, 3, '20.10', 'purchase'); // personal→business appears once
       await transfer(1, 3, '7.15', 'atomic');
       expect(await totals()).toEqual({ count: before.count + 3, volume: before.volume + 37.5 });
-      expect(await getMoneyFlow(7)).toEqual([
-        { from_type: 'PERSONAL', to_type: 'BUSINESS', amount: '527.25', amount_ex_seed: '527.25', txn_count: 3 },
-      ]);
-      expect(await getTxnVolume(7)).toEqual(await getDailyVolume(7));
       expect((await getActivityComparison(7)).current).toEqual({ transactions: before.count + 3, volume: before.volume + 37.5 });
       expect(Number((await sql<{ n: number }>`SELECT COUNT(*) n FROM ledger_txns`.execute(db)).rows[0]!.n)).toBe(Number(raw.rows[0]!.n) + 5);
       expect((await sql`SELECT * FROM ledger_postings WHERE txn_id BETWEEN 9501 AND 9599 OR txn_id BETWEEN 960001 AND 972000`.execute(db)).rows).toHaveLength(10);
@@ -925,8 +806,6 @@ d('bridge analytics estimate (never persisted sale identity)', () => {
       const count = kind === 'sink' || kind === 'faucet' ? 1 : kind === 'intervene' ? 3 : 2;
       const volume = count === 1 ? 12 : kind === 'amount' ? 23 : kind === 'intervene' ? 25 : 24;
       expect(await totals()).toEqual({ count: before.count + count, volume: before.volume + volume });
-      const edges = await getMoneyFlow(7);
-      expect(edges.some(e => e.from_type === 'SYSTEM' || e.to_type === 'SYSTEM')).toBe(true);
     } finally { await cleanup(); }
   });
 
@@ -954,7 +833,7 @@ d('bridge analytics estimate (never persisted sale identity)', () => {
         SELECT 960000 + seq, 9501, 1 FROM seq_1_to_10000`.execute(db);
       await transfer(1, 9501, '4.00', 'recent');
       await transfer(9501, 3, '4.00', 'recent');
-      for (const read of [() => getMoneyFlow(7), () => getDailyVolume(7), () => getActivityComparison(7)]) {
+      for (const read of [() => getDailyVolume(7), () => getActivityComparison(7)]) {
         const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
         let query;
         try { await read(); query = executed.mock.calls[0]![0]; }
@@ -987,7 +866,7 @@ d('bridge analytics estimate (never persisted sale identity)', () => {
       const executed = vi.spyOn(db.getExecutor(), 'executeQuery');
       let query;
       try {
-        expect((await getMoneyFlow(7)).find(e => e.to_type === 'BUSINESS')?.amount).toBe('1500.00');
+        await getDailyVolume(7);
         query = executed.mock.calls[0]![0];
       } finally { executed.mockRestore(); }
       const analyzed = await db.executeQuery<{ ANALYZE: string }>({ ...query!, sql: 'ANALYZE FORMAT=JSON ' + query!.sql });
@@ -1016,7 +895,6 @@ d('bridge analytics estimate (never persisted sale identity)', () => {
       await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 7 DAY - INTERVAL 1 SECOND WHERE txn_id = ${incoming}`.execute(db);
       await sql`UPDATE ledger_txns SET settlement_time = NOW() - INTERVAL 7 DAY WHERE txn_id = ${outgoing}`.execute(db);
       expect((await getActivityComparison(7)).current.volume).toBe(comparison.current.volume);
-      expect((await getMoneyFlow(7)).find(e => e.to_type === 'SYSTEM')).toBeUndefined();
     } finally { await cleanup(); await sql`SET timestamp = 0`.execute(db); }
   });
 });

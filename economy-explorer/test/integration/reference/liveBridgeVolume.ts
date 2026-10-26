@@ -1,19 +1,21 @@
-import 'server-only';
 import { sql } from 'kysely';
+import { db } from '@/lib/db';
+
+// Test-only reference implementation (PAR-541). These are the live-ledger
+// queries the overview used to run in the request path: the bridge-pair CTE
+// (PAR-159) and the daily volume / period comparison built on it. A cold run
+// over 30 days hit the 15 s statement timeout on production-sized data, so the
+// pages now read explorer_rollup_economy_day instead (lib/rollup computes the
+// same figures one day at a time). They stay here, unchanged, as the oracle the
+// rollup equality tests (rollup.test.ts) and the PAR-159 edge-case tests
+// (sql.test.ts) compare against. Nothing under app/ or lib/ may import this.
 
 /**
  * Aggregate estimate only (PAR-159), never a sale identity or an audit view.
- * The Oct 17 task evidence measured adjacent SYSTEM credit/debit postings with
- * equal amounts, plugin/message and <=1s separation. No global plugin whitelist:
- * unmatched rewards, fees and escrow must remain in the aggregates.
- *
- * Order only SYSTEM postings in the window (+1s for its boundary) with LAG.
- * The intervening-posting guard preserves exact posting-ID adjacency even if
- * settlement times are out of order. It MUST be an inner primary-key range join:
- * a correlated predecessor/outer range join scans whole accounts per candidate.
- * Both transactions must be balanced two-posting transfers to non-SYSTEM accounts.
- * Keep the outgoing leg's settlement date; discard the incoming leg's volume.
- * PAR-235 intentionally requires stricter uniqueness for persisted sale links.
+ * Adjacent SYSTEM credit/debit postings with equal amounts, plugin/message and
+ * <=1s separation count as one event; both transactions must be balanced
+ * two-posting transfers to non-SYSTEM accounts. Keep the outgoing leg's
+ * settlement date; discard the incoming leg's volume.
  */
 export function bridgePairs(days: number) {
   return sql`
@@ -26,7 +28,6 @@ export function bridgePairs(days: number) {
       WHERE t.settlement_time >= NOW() - INTERVAL ${days} DAY - INTERVAL 1 SECOND
     ),
     bridge_candidates AS (
-      -- Prevent derived-table merging from duplicating the candidate joins.
       SELECT DISTINCT credit.txn_id AS incoming_txn, debit.txn_id AS outgoing_txn,
              credit.posting_id AS credit_id, debit.posting_id AS debit_id, debit.account_id AS system_acct,
              payer.account_id AS src_acct, payee.account_id AS dst_acct,
@@ -51,9 +52,6 @@ export function bridgePairs(days: number) {
         AND (SELECT COUNT(*) FROM ledger_postings p WHERE p.txn_id = credit.txn_id) = 2
         AND (SELECT COUNT(*) FROM ledger_postings p WHERE p.txn_id = debit.txn_id) = 2
     ),
-    -- An old-settled posting can be absent from the window yet sit between two
-    -- recent postings. Inner join permits MariaDB's range-checked access; the
-    -- subsequent anti-join uses the materialized outgoing transaction IDs.
     bridge_blocked AS (
       SELECT DISTINCT c.outgoing_txn
       FROM bridge_candidates c
@@ -67,4 +65,40 @@ export function bridgePairs(days: number) {
       WHERE b.outgoing_txn IS NULL
     )
   `;
+}
+
+export interface DailyVolumePoint { date: string; txn_count: number; total_volume: string }
+
+/** Daily economic-event count and volume over a rolling window, bridge pairs counted once. */
+export async function getDailyVolume(days: number): Promise<DailyVolumePoint[]> {
+  const r = await sql<{ txn_date: string; txn_count: string | number; total_volume: string }>`
+    WITH ${bridgePairs(days)}
+    SELECT DATE_FORMAT(DATE(settlement_time), '%Y-%m-%d') AS txn_date,
+           COUNT(*) AS txn_count,
+           COALESCE(SUM(volume), 0.00) AS total_volume
+    FROM ledger_txn_volume v
+    WHERE settlement_time >= NOW() - INTERVAL ${days} DAY
+      AND NOT EXISTS (SELECT 1 FROM bridge_pairs b WHERE b.incoming_txn = v.txn_id)
+    GROUP BY DATE(settlement_time)
+    ORDER BY txn_date ASC
+  `.execute(db);
+  return r.rows.map((row) => ({ date: row.txn_date, txn_count: Number(row.txn_count), total_volume: row.total_volume }));
+}
+
+/** Equal rolling windows evaluated in one statement, so their boundary agrees. */
+export async function getActivityComparison(days: number) {
+  const r = await sql<{ period: string; transactions: string | number; volume: string }>`
+    WITH ${bridgePairs(days * 2)}
+    SELECT CASE WHEN settlement_time >= NOW() - INTERVAL ${days} DAY THEN 'current' ELSE 'previous' END AS period,
+      COUNT(*) AS transactions,
+      COALESCE(SUM(volume), 0) AS volume
+    FROM ledger_txn_volume v
+    WHERE settlement_time >= NOW() - INTERVAL ${days * 2} DAY
+      AND NOT EXISTS (SELECT 1 FROM bridge_pairs b WHERE b.incoming_txn = v.txn_id)
+    GROUP BY period
+  `.execute(db);
+  const current = r.rows.find((row) => row.period === 'current');
+  const previous = r.rows.find((row) => row.period === 'previous');
+  return { current: { transactions: Number(current?.transactions ?? 0), volume: Number(current?.volume ?? 0) },
+    previous: { transactions: Number(previous?.transactions ?? 0), volume: Number(previous?.volume ?? 0) } };
 }
