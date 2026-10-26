@@ -20,9 +20,10 @@ These are the initial role settings; administrators can change their permissions
 | Role | Initial access |
 |---|---|
 | **player** | Default for signed-in users. Own information, owned accounts, directly shared accounts and accounts shared with an LP group they belong to. Firm members see the roster; proprietors and active FINANCIAL/ADMIN staff see firm financials. |
-| **government** | Player access plus the government dashboard and fines for government accounts they own or have direct/group read access to. |
+| **government** | Player access plus the government workspace (`/gov`) for government accounts they own or have direct/group read access to, including its Audit page (`government.audit.read`). |
+| **compliance** | Not given to anyone by default. Every firm's financials, the global ledger and sales attribution, for the compliance tools. Link it to a group to use it ([Government account access](/docs/admin/government-accounts#compliance-tools)). |
 | **moderator** | Read-only investigation of all accounts, firms, transactions and sales, with privileged reads audited. No administrative controls or writes. |
-| **admin** | Every permission, including administration of access, accounts, firms, API keys and webhooks. |
+| **admin** | Every permission, including administration of access, accounts, firms, API keys, webhooks and government units (`gov_units.manage`). |
 
 Roles combine. Government is not a rank above player or below moderator: someone
 may hold both government and moderator. Public balances and aggregate market data

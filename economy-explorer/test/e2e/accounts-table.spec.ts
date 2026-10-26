@@ -4,7 +4,10 @@ import { visit } from './helpers';
 
 // The accounts directory on the table + filter-chip system (PAR-534). Seed:
 // #3 Acme Corporate Account (BUSINESS, 25,000, firm 1), #5 City Hall
-// (GOVERNMENT, 8,000), personal #1 Alice 5,000 / #2 Bob 100,000.
+// (GOVERNMENT, 8,000), personal #1 Alice 5,000 / #2 Bob 100,000. The e2e
+// run also loads the government workspace fixtures (gov-fixtures.ts), all
+// under $1M except the mint, which is far below zero.
+const GOV_FIXTURE_ACCOUNTS = ['Commerce Department', 'Commerce Reserve', 'Commerce Annex', 'Interior Ministry', 'Gov Mint'];
 
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: /Search accounts/ });
 const chips = (page: Page) => page.getByRole('list', { name: 'Active filters' }).getByRole('listitem');
@@ -42,7 +45,7 @@ test('a chip reopens its popover to edit, and Escape returns focus to it', async
   await dialog.getByRole('checkbox', { name: /Government/ }).check();
   await dialog.getByRole('button', { name: 'Apply' }).click();
   await expect(page).toHaveURL(/f=type:in:business,government/);
-  await expect.poll(async () => (await rowNames(page)).sort()).toEqual(['Acme Corporate Account', 'City Hall']);
+  await expect.poll(async () => (await rowNames(page)).sort()).toEqual(['Acme Corporate Account', 'City Hall', ...GOV_FIXTURE_ACCOUNTS].sort());
 });
 
 test('the + Filter menu adds a balance filter; the empty state names the filters and removes one', async ({ page }) => {
@@ -57,7 +60,7 @@ test('the + Filter menu adds a balance filter; the empty state names the filters
   await expect(empty).toContainText('No accounts match Type: Government and Balance > $1M.');
   await empty.getByRole('link', { name: 'Remove Balance > $1M' }).click();
   await expect(page).not.toHaveURL(/balance/);
-  await expect.poll(() => rowNames(page)).toEqual(['City Hall']);
+  await expect.poll(async () => (await rowNames(page)).sort()).toEqual(['City Hall', ...GOV_FIXTURE_ACCOUNTS].sort());
 });
 
 test('sort headers are links with aria-sort, and a second click reverses', async ({ page }) => {

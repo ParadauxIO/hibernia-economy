@@ -74,7 +74,7 @@ test.describe('anonymous browsing', () => {
   });
 
   test('government dashboard requires a role and relationship', async ({ page }) => {
-    await visit(page, '/government');
+    await visit(page, '/gov');
     await expect(page.locator('.privacy-gate')).toBeVisible();
     await expect(dataTable(page)).toHaveCount(0);
   });

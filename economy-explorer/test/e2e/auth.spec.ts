@@ -146,24 +146,13 @@ test('configures custom roles and enforces changes in the admin tools', async ({
   }
 });
 
-test('government accounts and fines have separate views with preserved filters', async ({ page, context }) => {
+test('the government workspace keeps the unit and range across its sections', async ({ page, context }) => {
+  await page.setViewportSize({ width: 1280, height: 800 }); // the sidebar is a select on phones
   await loginAs(context, 'admin');
-  await visit(page, '/government');
-  // Scope to the live page: streamed navigation can temporarily leave a
-  // second copy of the controls in React's hidden containers outside main.
-  const main = page.getByRole('main');
-  const status = main.getByRole('combobox', { name: 'Fine status' });
-  await expect(main.locator('.card-title', { hasText: 'Government accounts' })).toBeVisible();
-  await Promise.all([
-    page.waitForURL(/view=fines/),
-    main.getByRole('navigation', { name: 'Government views' }).getByRole('link', { name: 'Fines', exact: true }).click(),
-  ]);
-  await expect(status).toBeEnabled();
-  await status.selectOption('revoked');
-  const week = main.getByRole('link', { name: '7 days', exact: true });
-  await expect(week).toHaveAttribute('href', /status=revoked/);
-  await Promise.all([page.waitForURL(/days=7/), week.click()]);
-  await expect(page).toHaveURL(/view=fines/);
-  await expect(page).toHaveURL(/status=revoked/);
-  await expect(status).toHaveValue('revoked');
+  await visit(page, '/gov?unit=commerce&range=90d');
+  const nav = page.getByRole('navigation', { name: 'Government' });
+  await expect(nav.getByRole('link', { name: 'Fines', exact: true })).toHaveAttribute('href', /unit=commerce/);
+  await Promise.all([page.waitForURL(/\/gov\/fines/), nav.getByRole('link', { name: 'Fines', exact: true }).click()]);
+  await expect(page).toHaveURL(/unit=commerce/);
+  await expect(page).toHaveURL(/range=90d/);
 });

@@ -144,6 +144,27 @@ them; nothing else does.
   counterparty type and an internal-transfer flag), and `lib/categories.ts`
   maps them at read time. Changing the taxonomy never needs a backfill.
 
+## Government workspace tables (V45, PAR-539)
+
+- `explorer_gov_unit` / `explorer_gov_unit_account` group GOVERNMENT accounts
+  into units for `/gov`. A presentation grouping only: scope stays RBAC
+  (`government.read[.all]`) plus ReBAC (`account_read_access_web`), decided in
+  one place, `lib/services/governmentScope.ts` (the relationship predicate is
+  `governmentRelationship` in `lib/sql/government.ts`, which the top bar's
+  Government entry also uses). An account is in at most one unit
+  (`uq_gov_unit_account`); deleting a parent unit sets its children's parent to
+  NULL.
+- `explorer_watchlist(viewer_uuid_bin, account_id)` is the compliance
+  watchlist, per player.
+- V45 also seeds `government.audit.read` (government, admin),
+  `gov_units.manage` (admin) and a `compliance` role attached to nobody.
+- `/gov` aggregates read the rollups. Its top-N lists (largest movements, tax
+  payers, officials, payroll runs and recipients, the audit feed) read the
+  ledger inside a txn_id window of at most 31 days: `txnIdAt()` finds the first
+  transaction settled at a time on `idx_ledger_settle_time`, and postings are
+  then walked on `idx_postings_account_txn_amount`. This relies on txn ids being
+  assigned in settlement order.
+
 ## Deploying a schema change
 
 Schema deploys are **manual and gated** — there is no automatic "migrate on push".

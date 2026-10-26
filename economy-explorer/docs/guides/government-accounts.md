@@ -109,6 +109,40 @@ account. You can only
 it (revoking refunds out of that same account). Viewing fines uses the fines view
 permission.
 
+## The government workspace on the explorer
+
+Officials with government access on the explorer get a **Government** entry in the
+top bar. It opens the workspace at `/gov`, which covers the government accounts you
+can read in game (as owner, viewer, member or authorizer, directly or through a group).
+Accounts you can't read never appear there, and every figure covers only the
+accounts you can see.
+
+Every page has a **unit** selector (your department, its sub-units, or all of them)
+and a date range. The pages are:
+
+- **Overview**: the treasury total, net flow, revenue and spending by month, the
+  balance over time and the largest movements.
+- **Accounts**: each account with its balance, last 30 days and unit.
+- **Revenue**: taxes by kind, fines and other income, plus the players and firms
+  who paid the most.
+- **Spending**: where money went, by category and by kind of recipient. Transfers
+  between government accounts are shown separately. It also shows who initiated and
+  who approved payments.
+- **Payroll**: salary paid, each payroll run, and runs that look missed or doubled.
+- **Fines**: every fine paid into your accounts. Search the reasons, filter by
+  status, amount, date, official, player or account, and export the list.
+- **Reports**: a monthly report per unit to print or download as CSV. Reports stay
+  inside the workspace and are not published anywhere.
+- **Audit** (if your role includes it): who moved money in and out, and who viewed
+  your accounts on the explorer.
+
+Totals are the ledger as it is. Accounts that created money, such as the mint, hold
+negative balances, and those balances are counted. If a unit contains accounts you
+can't read, the page says **Partial view** and how many of its accounts you see.
+
+Figures from summaries can be up to five minutes behind the game. A section that
+says **Preparing history** is still being calculated after an update.
+
 ## Where to go next
 
 - Every government and fine command, with arguments: the
