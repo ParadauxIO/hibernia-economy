@@ -2,7 +2,7 @@ import 'server-only';
 import { sql } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
 
-// Government units (V44): a presentation grouping of GOVERNMENT accounts.
+// Government units (V45): a presentation grouping of GOVERNMENT accounts.
 // Pure queries; who may read or change them is decided in
 // lib/services/governmentScope.ts and lib/services/governmentUnits.ts.
 
@@ -124,4 +124,16 @@ export async function isActiveGovernmentAccount(accountId: number): Promise<bool
     SELECT EXISTS(SELECT 1 FROM accounts WHERE account_id = ${accountId} AND account_type = 'GOVERNMENT' AND is_archived = 0) AS ok
   `.execute(db);
   return Number(r.rows[0]?.ok ?? 0) === 1;
+}
+
+/** Unit labels for already-authorized accounts; this never expands the scope. */
+export async function govUnitsForAccounts(ids: readonly number[]): Promise<Map<number, { id: number; name: string }>> {
+  if (!ids.length) return new Map();
+  const result = await sql<{ account_id: number; unit_id: number; name: string }>`
+    SELECT ua.account_id, u.unit_id, u.name
+    FROM explorer_gov_unit_account ua
+    JOIN explorer_gov_unit u ON u.unit_id = ua.unit_id
+    WHERE ua.account_id IN (${sql.join(ids)})
+  `.execute(db);
+  return new Map(result.rows.map((r) => [Number(r.account_id), { id: Number(r.unit_id), name: r.name }]));
 }
