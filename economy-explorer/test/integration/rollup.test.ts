@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import mysql from 'mysql2/promise';
-import { sql } from 'kysely';
+import { createPool } from 'mysql2';
+import { Kysely, MysqlDialect, sql } from 'kysely';
 
 // Vitest runs test files in parallel and sql.test.ts resets the shared test
 // database, so this suite builds its own: DB_NAME + '_rollup'. Set before
@@ -11,7 +12,7 @@ vi.hoisted(() => {
 
 import { HAS_DB, resetDb, testDbOptions } from './db';
 import { db } from '@/lib/db';
-import { rollupDb, closeRollupDb } from '@/lib/rollup/db';
+import { rollupDb, closeRollupDb, ROLLUP_SESSION_SQL } from '@/lib/rollup/db';
 import { addDays, eachDay, monthEnd, monthStart, utcDay } from '@/lib/rollup/days';
 import { LeaderLease } from '@/lib/rollup/lease';
 import { ROLLUP_JOBS, recomputeDay, snapshotWealth, type DayJob } from '@/lib/rollup/steps';
@@ -525,4 +526,143 @@ d('read helpers', () => {
     expect(s.supply.personal).toBe(supply.rows[0]!.t);
     expect((await wealthSnapshots({ from: addDays(TODAY, -3), to: TODAY })).coverage.covered).toBe(false);
   });
+});
+
+// Production's explorer DB user may only SELECT from the ledger and economy
+// tables and write the explorer_* tables (PAR-532). pair_month once used a
+// temporary table and failed there with "Access denied ... to database"; this
+// suite runs the worker as a user with exactly those grants, so any statement
+// that needs more (temporary tables, DDL, locks, writes outside explorer_*)
+// fails here rather than on a deployment.
+d('the worker needs only SELECT plus DML on explorer_* tables', () => {
+  const ROLE = 'rollup_dml_only';
+  const PASSWORD = 'rollup-dml-only';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let restricted: Kysely<any>;
+
+  const dropRole = async () => {
+    const { database: _database, ...server } = testDbOptions();
+    void _database;
+    const admin = await mysql.createConnection(server);
+    try { await admin.query(`DROP USER IF EXISTS '${ROLE}'@'%'`); }
+    finally { await admin.end(); }
+  };
+
+  beforeAll(async () => {
+    if (!HAS_DB) return;
+    await dropRole();
+    const { database, ...server } = testDbOptions();
+    const admin = await mysql.createConnection(server);
+    try {
+      await admin.query(`CREATE USER '${ROLE}'@'%' IDENTIFIED BY '${PASSWORD}'`);
+      await admin.query(`GRANT SELECT ON \`${database}\`.* TO '${ROLE}'@'%'`);
+      const [tables] = await admin.query<mysql.RowDataPacket[]>(
+        "SELECT table_name AS n FROM information_schema.tables WHERE table_schema = ? AND table_name LIKE 'explorer\\_%'", [database]);
+      expect(tables.length).toBeGreaterThanOrEqual(ROLLUP_TABLES.length);
+      for (const t of tables) await admin.query(`GRANT INSERT, UPDATE, DELETE ON \`${database}\`.\`${String(t.n)}\` TO '${ROLE}'@'%'`);
+    } finally {
+      await admin.end();
+    }
+    const pool = createPool({ ...testDbOptions(), user: ROLE, password: PASSWORD, connectionLimit: 2, timezone: 'Z', dateStrings: true });
+    pool.on('connection', (conn) => { for (const statement of ROLLUP_SESSION_SQL) conn.query(statement, () => {}); });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    restricted = new Kysely({ dialect: new MysqlDialect({ pool: pool as any }) });
+  }, 30_000);
+
+  afterAll(async () => {
+    if (!HAS_DB) return;
+    await restricted.destroy();
+    await dropRole();
+  });
+
+  it('really lacks the privileges the old pair_month needed', async () => {
+    await expect(sql`CREATE TEMPORARY TABLE rollup_probe (id INT)`.execute(restricted)).rejects.toThrow(/denied/i);
+    await expect(sql`CREATE TABLE rollup_probe (id INT)`.execute(restricted)).rejects.toThrow(/denied/i);
+    await expect(sql`DELETE FROM ledger_postings WHERE txn_id = 0`.execute(restricted)).rejects.toThrow(/denied/i);
+  });
+
+  it('runs every step, the wealth snapshot, backfill and the nightly pass without errors', async () => {
+    await clearRollups();
+    const warnings: unknown[][] = [];
+    const clock = new Date(`${TODAY}T12:00:00Z`);
+    const worker = new RollupWorker({
+      db: restricted, lease: new LeaderLease(null, 'test', 'test'), now: () => clock,
+      config: { backfillPauseMs: 0, wealthEveryMs: 0 },
+      log: { info: () => {}, warn: (...args: unknown[]) => { warnings.push(args); } },
+    });
+    const tick = await worker.tick(clock.getTime() + 600_000);
+    expect(warnings).toEqual([]);
+    expect(tick).toEqual(expect.objectContaining({ leader: true, wealth: true, nightly: true, errors: 0 }));
+    // Backfill reached the oldest ledger day, so pair_month ran for every month.
+    expect(tick.backfilled).toContain(OLD);
+
+    const failed = await sql`SELECT job, day, error FROM explorer_rollup_run WHERE error IS NOT NULL`.execute(db);
+    expect(failed.rows).toEqual([]);
+    const jobs = await sql<{ job: string }>`SELECT DISTINCT job FROM explorer_rollup_run`.execute(db);
+    expect(jobs.rows.map((r) => r.job).sort()).toEqual([...ROLLUP_JOBS, 'nightly', 'wealth'].sort());
+
+    // The restricted run builds the same tables as the privileged one.
+    const asRestricted = await Promise.all(ROLLUP_TABLES.slice(0, 7).map(dump));
+    await clearRollups();
+    await recompute(ALL_DAYS);
+    expect(await Promise.all(ROLLUP_TABLES.slice(0, 7).map(dump))).toEqual(asRestricted);
+  }, 120_000);
+
+  it('pair_month re-sums touched accounts across several IN-list chunks, including accounts that left the day', async () => {
+    const day = OLD;
+    const FIRST = 100_000;
+    const PAIRS = 1_100; // 2,200 accounts: three chunks of 1,000
+    const month = monthStart(day);
+    const txnSeq = sql.raw(`seq_${FIRST}_to_${FIRST + PAIRS - 1}`);
+    const accountSeq = sql.raw(`seq_${FIRST}_to_${FIRST + 2 * PAIRS - 1}`);
+    const monthRows = async () => (await sql`
+      SELECT account_id, counterparty_id, DATE_FORMAT(month, '%Y-%m-%d') AS month, inflow, outflow, txn_count
+      FROM explorer_rollup_pair_month WHERE account_id >= ${FIRST} ORDER BY 1, 2, 3`.execute(db)).rows;
+    // Each transaction is one payer, one payee, so pairing is the plain amount.
+    const direct = async () => (await sql`
+      SELECT me.account_id, other.account_id AS counterparty_id, ${month} AS month,
+             SUM(CASE WHEN me.amount > 0 THEN me.amount ELSE 0 END) AS inflow,
+             SUM(CASE WHEN me.amount < 0 THEN -me.amount ELSE 0 END) AS outflow,
+             COUNT(DISTINCT me.txn_id) AS txn_count
+      FROM ledger_txns t JOIN ledger_postings me ON me.txn_id = t.txn_id
+      JOIN ledger_postings other ON other.txn_id = t.txn_id AND other.account_id <> me.account_id
+      WHERE me.account_id >= ${FIRST} AND t.settlement_time >= ${month} AND t.settlement_time < ${addDays(monthEnd(day), 1)}
+      GROUP BY me.account_id, other.account_id ORDER BY 1, 2, 3`.execute(db)).rows;
+    const normalise = (rows: unknown[]) => rows.map((r) => {
+      const row = r as Record<string, string | number>;
+      return [Number(row.account_id), Number(row.counterparty_id), row.month, Number(row.inflow), Number(row.outflow), Number(row.txn_count)];
+    });
+
+    try {
+      await sql`INSERT INTO accounts (account_id, account_type, owner_uuid_bin, display_name)
+        SELECT seq, 'BUSINESS', UNHEX(LPAD(HEX(seq), 32, '0')), CONCAT('chunk-', seq) FROM ${accountSeq}`.execute(db);
+      await sql`INSERT INTO ledger_txns (txn_id, settlement_time, message, initiator_uuid_bin, plugin_system)
+        SELECT seq, ${at(day, '03:00:00')}, 'chunk', UNHEX(REPEAT('00', 16)), 'ChunkTest' FROM ${txnSeq}`.execute(db);
+      // Transaction FIRST+i moves 1.00 + i/100 from account FIRST+2i to FIRST+2i+1.
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT seq, ${FIRST} + 2 * (seq - ${FIRST}), -(1 + (seq - ${FIRST}) / 100) FROM ${txnSeq}`.execute(db);
+      await sql`INSERT INTO ledger_postings (txn_id, account_id, amount)
+        SELECT seq, ${FIRST} + 2 * (seq - ${FIRST}) + 1, 1 + (seq - ${FIRST}) / 100 FROM ${txnSeq}`.execute(db);
+
+      await clearRollups();
+      await recomputeDay(restricted, 'pair_month', day);
+      const built = await monthRows();
+      expect(built).toHaveLength(2 * PAIRS);
+      expect(normalise(built)).toEqual(normalise(await direct()));
+
+      // Drop every other transaction: half the accounts are now touched only by
+      // the old pair_day rows, and their month rows must go.
+      await sql`DELETE FROM ledger_postings WHERE txn_id >= ${FIRST} AND MOD(txn_id, 2) = 0`.execute(db);
+      await sql`DELETE FROM ledger_txns WHERE txn_id >= ${FIRST} AND MOD(txn_id, 2) = 0`.execute(db);
+      await recomputeDay(restricted, 'pair_month', day);
+      const shrunk = await monthRows();
+      expect(shrunk).toHaveLength(PAIRS); // 550 transactions left, two month rows each
+      expect(normalise(shrunk)).toEqual(normalise(await direct()));
+    } finally {
+      await sql`DELETE FROM ledger_postings WHERE txn_id >= ${FIRST}`.execute(db);
+      await sql`DELETE FROM ledger_txns WHERE txn_id >= ${FIRST}`.execute(db);
+      await sql`DELETE FROM accounts WHERE account_id >= ${FIRST}`.execute(db);
+      await clearRollups();
+    }
+  }, 120_000);
 });
