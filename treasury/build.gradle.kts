@@ -237,6 +237,12 @@ jacoco {
 // public API impls (Treasury/Tax/Market), the Vault adapter's money paths and the
 // Money/dedup utilities — never the command/listener/Guice glue.
 pitest {
+    // PIT launches its own test JVMs and does not inherit the Test task's properties.
+    jvmArgs.add(
+        tasks.named<ShadowJar>("shadowJar")
+            .flatMap { it.archiveFile }
+            .map { "-Dtreasury.pluginJar=${it.asFile.absolutePath}" },
+    )
     targetClasses.set(
         listOf(
             "io.paradaux.treasury.services.impl.*",
@@ -261,6 +267,11 @@ pitest {
     // 95% line coverage of the mutated classes). Raise as survivors are killed.
     mutationThreshold.set(75)
     coverageThreshold.set(92)
+}
+
+tasks.named("pitest") {
+    dependsOn(tasks.named("shadowJar"))
+    inputs.file(tasks.named<ShadowJar>("shadowJar").flatMap { it.archiveFile })
 }
 
 // The publish repository target (snapshot/release URL + REPO_USER/REPO_PASS creds)
