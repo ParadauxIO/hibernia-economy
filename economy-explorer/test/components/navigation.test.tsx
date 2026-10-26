@@ -2,7 +2,6 @@ import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HeaderNav, HeaderSectionNav } from '@/components/HeaderNav';
 import { AdminNav } from '@/components/AdminNav';
-import { SectionTabs } from '@/components/SectionTabs';
 import { navigation, resetNavigation } from './next-navigation';
 import { setViewer, viewerFor, viewerWithPermissions, type TestRole } from './viewer';
 import type { ViewerCtx } from '@/lib/viewerSnapshot';
@@ -162,14 +161,6 @@ describe('HeaderSectionNav', () => {
     navigation.pathname = '/chestshop/items/DIAMOND';
     render(<HeaderSectionNav />);
     expect(currentLinks(screen.getByRole('navigation', { name: 'Market' }))).toEqual(['Items']);
-  });
-});
-
-describe('SectionTabs', () => {
-  it('is a no-op now that the chrome owns section navigation', () => {
-    navigation.pathname = '/economy/wealth';
-    const { container } = render(<SectionTabs />);
-    expect(container).toBeEmptyDOMElement();
   });
 });
 

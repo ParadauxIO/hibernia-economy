@@ -13,6 +13,7 @@ vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { HAS_DB, resetDb, testDbOptions, uuid, ALICE, BOB, CAROL, DAVE } from './db';
 import { permissionsFor } from '../role-fixtures';
 import { db } from '@/lib/db';
+import { newRequestTiming, runWithRequestTiming } from '@/lib/metrics';
 import { getViewer, type Viewer } from '@/lib/auth/viewer';
 import { closeRollupDb, rollupDb } from '@/lib/rollup/db';
 import { addDays, eachDay, utcDay } from '@/lib/rollup/days';
@@ -29,6 +30,7 @@ import {
 } from '@/lib/services/government';
 import { getFirmInvestigation, setWatched, getComplianceHome, type ComplianceViewer } from '@/lib/services/governmentCompliance';
 import { getGovUnitsAdmin, removeGovUnit, saveGovUnit, setAccountUnit } from '@/lib/services/governmentUnits';
+import { balanceSeries } from '@/lib/services/rollup';
 import { listWatchlist } from '@/lib/sql/compliance';
 
 const d = HAS_DB ? describe : describe.skip;
@@ -205,6 +207,17 @@ d('gov queries stay inside the scope', () => {
     ids = govSelection(scope, undefined).ids;
   });
 
+  it('cold overview including scope stays within the ten-query budget', async () => {
+    resetCacheForTests();
+    const timing = newRequestTiming();
+    await runWithRequestTiming(timing, async () => {
+      const resolved = await scopeAs(official);
+      await getOverview(resolved, govSelection(resolved, undefined), RANGE);
+    });
+    expect(timing.dbQueries).toBeGreaterThan(0);
+    expect(timing.dbQueries).toBeLessThanOrEqual(10);
+  });
+
   it('overview: totals, net flow, monthly bars, balance and largest movements', async () => {
     const o = await getOverview(scope, govSelection(scope, undefined), RANGE);
     // Opening balances plus the fixture postings (the balance trigger applies them).
@@ -219,6 +232,16 @@ d('gov queries stay inside the scope', () => {
     expect(accountsOf(o.movements.rows).filter((id) => OUT_OF_SCOPE.includes(id))).toEqual([]);
     expect(o.movements.rows.slice(0, 3).map((m) => [m.account_id, m.amount])).toEqual([[102, '1000.00'], [102, '-500.00'], [102, '-200.00']]);
     expect(o.units.map((u) => [u.key, u.partial, u.readable, u.total])).toEqual([['commerce', true, 2, 3]]);
+  });
+
+  it('historical and narrowed-unit balances include later postings without widening scope', async () => {
+    const range = { from: D3, to: D2 };
+    for (const selection of [govSelection(scope, undefined), { key: 'commerce', ids: [102] }]) {
+      const overview = await getOverview(scope, selection, range);
+      const reference = await balanceSeries(selection.ids, range);
+      expect(overview.balance.data).toEqual(reference.data);
+      expect(overview.balance.coverage.covered).toBe(true);
+    }
   });
 
   it('accounts: balance, 30-day net, sparkline and unit', async () => {

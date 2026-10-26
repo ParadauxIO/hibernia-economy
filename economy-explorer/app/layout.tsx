@@ -22,6 +22,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { ModeToggle } from '@/components/ModeToggle';
 import { Footer } from '@/components/Footer';
 import { ViewerProvider } from '@/components/ViewerContext';
+import { ExplorerAnalytics } from '@/components/ExplorerAnalytics';
 import { FaroAnalytics } from '@/components/FaroAnalytics';
 import { brand, siteUrl } from '@/lib/metadata';
 
@@ -128,7 +129,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </ViewerProvider>
         <Footer server={server} />
         {umamiSrc && umamiId && (
-          <Script src={umamiSrc} data-website-id={umamiId} strategy="afterInteractive" />
+          <>
+            <Script src={umamiSrc} data-website-id={umamiId} strategy="afterInteractive" />
+            <ExplorerAnalytics />
+          </>
         )}
         {faroUrl && <FaroAnalytics appName={`economy-explorer-${tenant}`} url={faroUrl} />}
       </body>
