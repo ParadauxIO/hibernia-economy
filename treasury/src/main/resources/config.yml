@@ -14,6 +14,11 @@ database:
   # The plugin refuses to boot while the password is still the placeholder.
   username: treasury
   password: CHANGE_ME
+  # Applied by Treasury before any economy services start. Both empty uses the
+  # database credentials above; otherwise configure both for a dedicated DDL user.
+  migrations:
+    username: ""
+    password: ""
   # Connection pool (HikariCP). Tune for your concurrent player count and DB capacity.
   # maximum-size is the hard cap on simultaneous DB connections — keep the sum across
   # all plugins/services (Treasury, rest-api, ingest, business, ...) below the DB's

@@ -111,23 +111,16 @@ dependencies {
     testImplementation(libs.mybatis.core)
 
     // Integration tests build their schema by running the authoritative
-    // economy-flyway migrations (staged onto the test classpath below), so the
+    // economy-flyway migrations (from its resource JAR on the test classpath), so the
     // tests and production share one source of schema truth — no bundled
     // schema.sql snapshot to drift (PAR-242, mirrors Treasury's PAR-239).
     // flyway-mysql handles the MySQL/MariaDB URL.
+    testRuntimeOnly(project(":economy-flyway"))
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.mysql)
 
     // SLF4J impl for tests so Lombok @Slf4j calls have a backing logger
     testRuntimeOnly(libs.slf4j.simple)
-}
-
-// Stage the economy-flyway migrations onto the test classpath (under db/migration)
-// so the IT harness can run them with Flyway (classpath:db/migration).
-tasks.named<Copy>("processTestResources") {
-    from(project(":economy-flyway").file("src/main/resources/db/migration")) {
-        into("db/migration")
-    }
 }
 
 // CarbonChat is only a softdepend (plugin.yml), so the plugin must enable on a server

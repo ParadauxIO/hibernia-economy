@@ -67,3 +67,10 @@ tasks.register<Sync>("release") {
         from(shadowJar.flatMap { it.archiveFile })
     }
 }
+
+val pluginDeploymentTests = tasks.register<Exec>("pluginDeploymentTests") {
+    group = "verification"
+    description = "Verify release staging rejects corrupt, partial and superseded bundles."
+    commandLine("python3", "-m", "unittest", "discover", "-s", "ops/plugin-deploy", "-p", "test_*.py")
+}
+tasks.named("check") { dependsOn(pluginDeploymentTests) }

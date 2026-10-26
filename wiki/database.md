@@ -146,7 +146,14 @@ them; nothing else does.
 
 ## Deploying a schema change
 
-Schema deploys are **manual and gated** — there is no automatic "migrate on push".
+Normal plugin releases are staged on `main` merges and **migrated by Treasury on
+next server startup**, before economy services are published. SQL remains in
+`economy-flyway`; Treasury bundles it unchanged and preserves the existing history.
+See [production staging](ci-cd.md#production-plugin-staging-on-merge) for target
+configuration, migration credentials, startup failures and shared-service ordering.
+
+The following manual workflows remain administrative tools for rehearsals and
+explicit recovery; they are not part of the normal release path.
 The workflows live at the repo root under `.github/workflows/` (see
 [ci-cd.md](ci-cd.md)):
 
@@ -156,7 +163,7 @@ The workflows live at the repo root under `.github/workflows/` (see
 | `economy-flyway-migrate` | Applies migrations to a target. Requires typing the target name to confirm; supports a `baseline` flag for a pre-existing DB. |
 | `economy-flyway-staging-clean` | Wipes the **staging** schema for reproducible dry runs. Cannot target production. |
 
-The intended flow:
+For a deliberate administrative migration:
 
 1. Run **Info** against the target and read the plan.
 2. Run **Migrate** against the same target to apply it.
@@ -173,7 +180,7 @@ A manual run uses the migrations of the branch picked under *Use workflow from*
 > [!IMPORTANT]
 > Applying the schema and deploying the code are **separate, unsynchronised**
 > steps: images roll out on merge to `main`, plugins on a server restart, and
-> migrations only when someone runs the workflow. A migration that drops or
+> migrations on the next server startup (or through an explicit administrative run). A migration that drops or
 > renames something the running code still uses therefore needs a planned
 > stop — see the **[release runbook](release-runbook.md)** for the full order
 > of operations (backup → stop → migrate → deploy → verify → rollback).
