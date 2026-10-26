@@ -43,7 +43,12 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
 
     @Override
     public Account resolveBusinessAccount(String name) {
-        if (name == null || name.length() < 3 || !name.regionMatches(true, 0, "B:", 0, 2)) {
+        if (name == null || name.length() < 3) {
+            return null;
+        }
+        // A: is its own namespace, so an alias cannot collide with base-36 ids or legacy names.
+        boolean alias = name.regionMatches(true, 0, "A:", 0, 2);
+        if (!alias && !name.regionMatches(true, 0, "B:", 0, 2)) {
             return null;
         }
         try {
@@ -51,16 +56,15 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
             int accountId = -1;
             io.paradaux.treasury.model.economy.Account treasuryAccount = null;
 
-            // Explicit alias namespace cannot collide with base-36 ids or legacy names.
-            if (token.startsWith("@")) {
-                if (businessApi == null || !token.substring(1).matches("[A-Za-z]{1,12}")) return null;
-                Integer resolved = businessApi.firms().resolveShopAlias(token.substring(1));
+            if (alias) {
+                if (businessApi == null || !token.matches("[A-Za-z]{1,12}")) return null;
+                Integer resolved = businessApi.firms().resolveShopAlias(token);
                 if (resolved == null) return null;
                 treasuryAccount = treasury.getAccountById(resolved);
                 if (!isBusinessWallet(treasuryAccount) || treasuryAccount.isArchived()) return null;
                 return new Account(
                         businessDisplayName(resolved, treasuryAccount.getDisplayName()),
-                        "B:" + token,
+                        "A:" + token,
                         BusinessAccountUtil.toBusinessUuid(resolved));
             }
 
@@ -124,7 +128,8 @@ public class BusinessAccountServiceImpl implements BusinessAccountService {
         if (account == null || account.getShortName() == null) {
             return false;
         }
-        if (!account.getShortName().toUpperCase(Locale.ROOT).startsWith("B:")) {
+        String shortName = account.getShortName().toUpperCase(Locale.ROOT);
+        if (!shortName.startsWith("B:") && !shortName.startsWith("A:")) {
             return false;
         }
         UUID uuid = account.getUuid();

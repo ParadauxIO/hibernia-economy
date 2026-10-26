@@ -34,7 +34,7 @@ Who the shop belongs to.
 |---|---|
 | *your name* | A personal shop — money goes to you. |
 | *(blank)* | Filled in with your name automatically. |
-| `B:@alias` | A player-managed, letters-only business shop alias, set by the proprietor with `/business account alias <firm> <accountId> <alias>`. The alias stays visible on the sign, including after trades. |
+| `A:<alias>` | A player-managed, letters-only business shop alias, set by the proprietor with `/business account alias <firm> <accountId> <alias>`. The alias stays visible on the sign, including after trades. |
 | `B:<code>` | A **firm account** — money goes to the company. The code after `B:` is a short **base-36 code** for the account, **not** the account's decimal number, so copy it exactly as shown. Get it from `/business account list` (or the Explorer). See [ChestShops for your firm](/docs/guides/chestshop-business). |
 | `b:<FirmName>` | An older **legacy** form — lowercase `b:` plus the firm's *name*, which resolves to that firm's default business account. Still works (the prefix is matched case-insensitively) and the sign quietly self-heals to the modern `B:<code>` form. |
 | `Admin Shop` | An **admin shop** with unlimited stock and no chest, backed by the server. Needs the `ChestShop.adminshop` permission. |

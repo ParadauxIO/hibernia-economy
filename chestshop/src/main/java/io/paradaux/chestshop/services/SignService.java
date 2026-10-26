@@ -62,11 +62,14 @@ public class SignService {
     };
     public static final String AUTOFILL_CODE = "?";
 
-    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^B:(?:[0-9A-Z]+|@[A-Z]{1,12})$");
+    // B:<base36 account id>, or A:<alias> for a firm's letters-only shop alias.
+    private static final Pattern BUSINESS_PATTERN = Pattern.compile("(?i)^(?:B:[0-9A-Z]+|A:[A-Z]{1,12})$");
 
     public static boolean isBusinessAccount(String owner) {
         // Reserve malformed alias tokens too, so creation rejects them instead of using a player name.
-        return owner.regionMatches(true, 0, "B:@", 0, 3)
+        // The retired B:@alias form stays reserved, so it fails loudly rather than becoming a personal shop.
+        return owner.regionMatches(true, 0, "A:", 0, 2)
+                || owner.regionMatches(true, 0, "B:@", 0, 3)
                 || BUSINESS_PATTERN.matcher(owner).matches();
     }
 
@@ -123,8 +126,11 @@ public class SignService {
         String ownerName = getOwner(lines);
 
         // Validate the owner as a player name unless it is blank (auto-filled), an admin
-        // shop, or a business token (B:<base36 id> / legacy b:<FirmName>) resolved elsewhere.
-        if (!isAdminShop(ownerName) && !ownerName.isEmpty() && !ownerName.regionMatches(true, 0, "B:", 0, 2)) {
+        // shop, or a business token (B:<base36 id> / A:<alias> / legacy b:<FirmName>) resolved elsewhere.
+        if (!isAdminShop(ownerName)
+                && !ownerName.isEmpty()
+                && !ownerName.regionMatches(true, 0, "B:", 0, 2)
+                && !isBusinessAccount(ownerName)) {
             Matcher withId = NAME_WITH_ID.matcher(ownerName);
             if (withId.matches()) {
                 // The name carries a disambiguation id — validate the part before the last ':'.

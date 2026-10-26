@@ -466,7 +466,7 @@ class InfoServiceImplTest extends ServerTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"B:1A", "B:@acme", "B:Old Shop"})
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"B:1A", "A:acme", "B:Old Shop"})
     void showShopInfo_businessOwnerIsFirmNotNonDefaultWalletLabel(String ownerToken) {
         Player p = mock(Player.class);
         Sign sign = shopSign(ownerToken, "1", "B 10", "Stone");

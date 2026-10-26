@@ -210,10 +210,10 @@ class BusinessAccountServiceImplTest {
         firm.setDefaultAccountId(99); // The shop wallet is not the firm's default account.
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
 
-        Account account = service.resolveBusinessAccount("B:@acme");
+        Account account = service.resolveBusinessAccount("A:acme");
 
         assertThat(account.getName()).isEqualTo("Acme Hardware");
-        assertThat(account.getShortName()).isEqualTo("B:@acme");
+        assertThat(account.getShortName()).isEqualTo("A:acme");
         assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
     }
 
@@ -381,33 +381,55 @@ class BusinessAccountServiceImplTest {
         service.bind(treasury, business);
         when(firms.resolveShopAlias("acme")).thenReturn(46);
         when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "Acme"));
-        Account result = service.resolveBusinessAccount("b:@acme");
-        assertThat(result.getShortName()).isEqualTo("B:@acme");
+        Account result = service.resolveBusinessAccount("a:acme");
+        assertThat(result.getShortName()).isEqualTo("A:acme");
         assertThat(result.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
         when(firms.resolveShopAlias("missing")).thenReturn(null);
-        assertThat(service.resolveBusinessAccount("B:@missing")).isNull();
+        assertThat(service.resolveBusinessAccount("A:missing")).isNull();
         org.mockito.Mockito.verify(firms, org.mockito.Mockito.never()).getFirm(any());
     }
 
     @Test
     void resolve_aliasRequiresBusinessAndLiveAccount() {
         service.bind(treasury, null);
-        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        assertThat(service.resolveBusinessAccount("A:acme")).isNull();
         service.bind(treasury, business);
         when(firms.resolveShopAlias("acme")).thenReturn(46);
-        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        assertThat(service.resolveBusinessAccount("A:acme")).isNull();
         var account = treasuryAccount(46, "Acme");
         account.setArchived(true);
         when(treasury.getAccountById(46)).thenReturn(account);
-        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        assertThat(service.resolveBusinessAccount("A:acme")).isNull();
     }
 
     @Test
     void resolve_aliasRejectsDigitsAndPunctuationBeforeLookup() {
         service.bind(treasury, business);
         for (String alias : java.util.List.of("123", "acme1", "ac1me", "1acme", "acme-shop", "acme_shop", "")) {
-            assertThat(service.resolveBusinessAccount("B:@" + alias)).isNull();
+            assertThat(service.resolveBusinessAccount("A:" + alias)).isNull();
         }
         org.mockito.Mockito.verifyNoInteractions(firms, treasury);
+    }
+
+    @Test
+    void resolve_retiredAtAliasFormNoLongerResolves() {
+        // PAR-528: B:@alias was replaced by A:alias outright.
+        service.bind(treasury, business);
+        lenient().when(firms.resolveShopAlias("acme")).thenReturn(46);
+        lenient().when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "Acme"));
+
+        assertThat(service.resolveBusinessAccount("B:@acme")).isNull();
+        org.mockito.Mockito.verify(firms, org.mockito.Mockito.never()).resolveShopAlias(any());
+    }
+
+    @Test
+    void access_grantedForAliasAccountByFirmStaffPermission() {
+        service.bind(treasury, business);
+        UUID pid = UUID.randomUUID();
+        when(staff.hasPermissionForAccount(eq(46), eq(pid), eq(RolePermission.CHESTSHOP)))
+                .thenReturn(true);
+
+        Account alias = new Account("Acme", "A:acme", BusinessAccountUtil.toBusinessUuid(46));
+        assertThat(service.canAccessBusinessAccount(player(pid), alias)).isTrue();
     }
 }

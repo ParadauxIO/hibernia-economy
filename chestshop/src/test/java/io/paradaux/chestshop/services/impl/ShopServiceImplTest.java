@@ -1429,21 +1429,28 @@ class ShopServiceImplTest extends ServerTest {
     @Test
     void create_aliasChecksAccessAndKeepsAliasOnSign() {
         loadTreasuryPlugin();
-        Account firm = new Account("Firm", "B:@Acme", UUID.randomUUID());
-        when(accounts.resolveAccount("B:@Acme")).thenReturn(firm);
+        Account firm = new Account("Firm", "A:Acme", UUID.randomUUID());
+        when(accounts.resolveAccount("A:Acme")).thenReturn(firm);
         when(accounts.canAccess(player, firm)).thenReturn(false);
-        create(new String[] {"B:@Acme", "64", "B 5", "Diamond"});
+        create(new String[] {"A:Acme", "64", "B 5", "Diamond"});
         verify(message).send(player, "chestshop.BUSINESS_NO_CHESTSHOP_PERMISSION");
         when(accounts.canAccess(player, firm)).thenReturn(true);
-        when(accounts.canUseName(any(Player.class), anyString(), eq("B:@Acme"))).thenReturn(true);
-        ShopCreation ctx = create(new String[] {"B:@Acme", "64", "B 5", "Diamond"});
-        assertThat(ctx.getSignLine(SignService.NAME_LINE)).isEqualTo("B:@Acme");
+        when(accounts.canUseName(any(Player.class), anyString(), eq("A:Acme"))).thenReturn(true);
+        ShopCreation ctx = create(new String[] {"A:Acme", "64", "B 5", "Diamond"});
+        assertThat(ctx.getSignLine(SignService.NAME_LINE)).isEqualTo("A:Acme");
+    }
+
+    @Test
+    void create_retiredAliasFormFailsInsteadOfBecomingPlayerShop() {
+        loadTreasuryPlugin();
+        create(new String[] {"B:@Acme", "64", "B 5", "Diamond"});
+        verify(message).send(player, "chestshop.BUSINESS_ACCOUNT_NOT_FOUND");
     }
 
     @Test
     void create_invalidAliasFailsInsteadOfBecomingPlayerShop() {
         loadTreasuryPlugin();
-        create(new String[] {"B:@Acme1", "64", "B 5", "Diamond"});
+        create(new String[] {"A:Acme1", "64", "B 5", "Diamond"});
         verify(message).send(player, "chestshop.BUSINESS_ACCOUNT_NOT_FOUND");
     }
 }

@@ -220,7 +220,7 @@ role has it by default, and the firm owner can always build firm shops.
 > [!TIP]
 > See [Selling with ChestShops](/docs/guides/chestshop-basics) for the complete
 > sign walkthrough and [firm shop aliases](/docs/guides/chestshop-business#shop-aliases)
-> for memorable `B:@alias` signs.
+> for memorable `A:alias` signs.
 
 ## Hand the firm to someone else
 

@@ -128,9 +128,13 @@ class SignServiceTest extends ServerTest {
     void businessAccount_detectsIdAndAliasTokensCaseInsensitively() {
         assertThat(SignService.isBusinessAccount("B:1A")).isTrue();
         assertThat(SignService.isBusinessAccount("b:z9")).isTrue();
-        assertThat(SignService.isBusinessAccount("B:@ACME")).isTrue();
+        assertThat(SignService.isBusinessAccount("A:ACME")).isTrue();
+        assertThat(SignService.isBusinessAccount("a:acme")).isTrue();
         // Malformed alias tokens are still reserved so creation rejects them.
-        assertThat(SignService.isBusinessAccount("B:@")).isTrue();
+        assertThat(SignService.isBusinessAccount("A:")).isTrue();
+        assertThat(SignService.isBusinessAccount("A:Acme1")).isTrue();
+        // So is the retired B:@alias form (PAR-528), rather than falling back to a player name.
+        assertThat(SignService.isBusinessAccount("B:@ACME")).isTrue();
         assertThat(SignService.isBusinessAccount("PlayerName")).isFalse();
         assertThat(SignService.isBusinessAccount("B:")).isFalse();
         assertThat(SignService.isBusinessAccount(new String[] {"B:Z9", "", "", ""}))
@@ -208,7 +212,7 @@ class SignServiceTest extends ServerTest {
     @Test
     void validateSign_businessOwnerSkipsNameValidation() {
         // An alias token neither matches the player-name regexp nor the "name:id" suffix form.
-        assertThat(signs.validateSign(new String[] {"B:@ACME", "64", "B 5", "Diamond"}))
+        assertThat(signs.validateSign(new String[] {"A:ACME", "64", "B 5", "Diamond"}))
                 .isTrue();
     }
 
