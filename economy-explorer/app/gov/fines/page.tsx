@@ -7,9 +7,10 @@ import { CURRENCY_SYMBOL } from '@/lib/currency';
 import { buildMetadata } from '@/lib/metadata';
 import { getFines } from '@/lib/services/government';
 import type { FineRow, IssuerRow } from '@/lib/sql/government';
-import { cleared, filterText, parseTableState, serializeTableState, tableHref, withPage, withQuery, withSort, withoutFilter, type TableState } from '@/lib/tables/core';
+import { cleared, filterText, parseTableState, tableHref, withPage, withQuery, withSort, withoutFilter, type TableState } from '@/lib/tables/core';
 import { finesTable } from '@/lib/tables/fines';
 import { searchGovEntitiesAction } from '../actions';
+import { govExportHrefs } from '../exports';
 import { AccountRef, GovControls, PlayerRef, ScopeNote, govPage, isGate, type SearchParams } from '../shared';
 
 export const dynamic = 'force-dynamic';
@@ -53,12 +54,12 @@ export default async function GovFinesPage({ searchParams }: { searchParams: Pro
     ...(state.q ? [{ text: `“${state.q}”`, removeHref: href(withQuery(state, '')) }] : []),
     ...state.filters.map((x) => ({ text: filterText(x, finesTable, describe), removeHref: href(withoutFilter(state, x.field)) })),
   ];
-  const exportQs = serializeTableState({ ...state, page: 1 }, finesTable, page.extra);
+  const exportLinks = govExportHrefs('fines', state, finesTable, page.selection.ids, page.range.range, 'issued');
   const revocation = f.summary.count ? f.summary.revoked / f.summary.count : null;
 
   return <>
     <PageHeader title="Fines" subtitle={`${page.selection.label} · ${page.range.label}`}
-      actions={<ExportMenu hrefs={{ all: { csv: `/gov/fines/export?${exportQs}` } }} allDescription={`${f.summary.count.toLocaleString('en-US')} fines`} />} />
+      actions={<ExportMenu hrefs={exportLinks} allDescription={`${f.summary.count.toLocaleString('en-US')} fines`} />} />
     <GovControls page={page} />
     <ScopeNote page={page} />
     <MetricRow label="Fines summary for the current filters">

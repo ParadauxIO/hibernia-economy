@@ -93,7 +93,7 @@ test.describe('government workspace scope and behaviour', () => {
     await shim(context, 'player');
     await visit(page, '/gov/fines');
     await expect(page.locator('.privacy-gate')).toBeVisible();
-    expect((await context.request.get(`${baseURL}/gov/fines/export`)).status()).toBe(403);
+    expect((await context.request.get(`${baseURL}/api/export/fines?format=csv`)).status()).toBe(403);
   });
 
   test('an official sees their accounts, a partial unit, and only in-scope fines', async ({ page, context }) => {
@@ -108,11 +108,17 @@ test.describe('government workspace scope and behaviour', () => {
     await expect(page.getByRole('link', { name: /Commerce Reserve/ })).toBeVisible();
     await visit(page, '/gov/fines');
     await expect(page.locator('#gov-fines-table tbody tr')).toHaveCount(3);
-    // Exports carry the same scope.
-    const csv = await (await context.request.get(`${baseURL}/gov/fines/export?range=90d`)).text();
+    // The page's export link carries its unit as an account chip and its range as a date chip.
+    await page.getByRole('button', { name: 'Export' }).click();
+    const exportLink = await page.getByRole('menuitem', { name: /CSV/ }).last().getAttribute('href');
+    expect(exportLink).toMatch(/^\/api\/export\/fines\?.*f=account:in:201,202.*f=issued:between:/);
+    // Exports carry the same scope, even when asked for everything or for another account.
+    const csv = await (await context.request.get(`${baseURL}/api/export/fines?format=csv`)).text();
     expect(csv).toContain('Price fixing');
     expect(csv).not.toContain('Trespass');
-    const ledger = await (await context.request.get(`${baseURL}/gov/audit/export?range=30d`)).text();
+    const elsewhere = await (await context.request.get(`${baseURL}/api/export/fines?format=csv&f=account:in:204`)).text();
+    expect(elsewhere.split('\r\n').filter(Boolean)).toHaveLength(1); // the header only
+    const ledger = await (await context.request.get(`${baseURL}/api/export/gov-transactions?format=csv`)).text();
     expect(ledger.split('\r\n').filter(Boolean).length).toBeGreaterThan(1);
     for (const name of GOV_OUT_OF_SCOPE_NAMES) expect(ledger).not.toContain(name);
     // Choosing a unit outside the scope falls back to the official's own accounts.

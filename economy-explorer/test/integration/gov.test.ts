@@ -20,10 +20,12 @@ import { markHistoryComplete, recomputeDay, ROLLUP_JOBS } from '@/lib/rollup/ste
 import { resetCacheForTests } from '@/lib/cache';
 import { parseTableState } from '@/lib/tables/core';
 import { finesTable } from '@/lib/tables/fines';
-import { govLedgerTable, govViewsTable } from '@/lib/tables/gov';
+import { govLedgerExportTable, govLedgerTable, govViewsTable } from '@/lib/tables/gov';
+import '@/lib/export/datasets';
+import { getExport } from '@/lib/export/registry';
 import { govSelection, resolveGovScope, type GovScope } from '@/lib/services/governmentScope';
 import {
-  getFines, getGovAccounts, getLedgerAudit, getMonthlyReport, getOverview, getPayroll, getRevenue, getSpending, getViewsAudit, exportFines, exportLedger,
+  getFines, getGovAccounts, getLedgerAudit, getMonthlyReport, getOverview, getPayroll, getRevenue, getSpending, getViewsAudit,
 } from '@/lib/services/government';
 import { getFirmInvestigation, setWatched, getComplianceHome, type ComplianceViewer } from '@/lib/services/governmentCompliance';
 import { getGovUnitsAdmin, removeGovUnit, saveGovUnit, setAccountUnit } from '@/lib/services/governmentUnits';
@@ -264,7 +266,16 @@ d('gov queries stay inside the scope', () => {
     expect((await getFines(scope, ids, RANGE, parseTableState(new URLSearchParams(`f=issuer:in:${CAROL}`), finesTable))).summary.count).toBe(0);
     // A chip naming an out-of-scope account can't reach it: scope is ANDed first.
     expect((await getFines(scope, ids, RANGE, parseTableState(new URLSearchParams('f=account:in:104'), finesTable))).rows).toEqual([]);
-    expect((await exportFines(ids, RANGE, parseTableState({}, finesTable))).map((f) => f.fine_id)).toEqual(all.rows.map((f) => f.fine_id));
+    // The `fines` export re-resolves the viewer's scope; an account chip only narrows it.
+    const fines = getExport('fines')!;
+    const signedIn = official as Extract<Viewer, { anon: false }>;
+    expect(await fines.authorize(signedIn, parseTableState({}, finesTable))).toBe(true);
+    const exported = await fines.rows(parseTableState({}, finesTable), null, { limit: 100, viewer: signedIn });
+    expect((exported.rows as { fine_id: number }[]).map((f) => f.fine_id)).toEqual(all.rows.map((f) => f.fine_id));
+    expect((await fines.rows(parseTableState(new URLSearchParams('f=account:in:104'), finesTable), null, { limit: 100, viewer: signedIn })).rows).toEqual([]);
+    vi.mocked(getViewer).mockResolvedValue(viewer(DAVE, 'government'));
+    expect(await fines.authorize(signedIn, parseTableState({}, finesTable))).toBe(false);
+    vi.mocked(getViewer).mockResolvedValue(official);
   });
 
   it('audit: ledger feed and movers within scope, keyset pages, export', async () => {
@@ -273,9 +284,22 @@ d('gov queries stay inside the scope', () => {
     expect(page1.next).not.toBeNull();
     const page2 = await getLedgerAudit(scope, ids, RANGE, parseTableState(new URLSearchParams(`limit=3&cursor=${encodeURIComponent((await import('@/lib/pagination/cursor')).encodeCursor(page1.next!))}`), govLedgerTable));
     expect(page2.rows[0]!.txn_id).toBeLessThan(page1.rows[2]!.txn_id);
-    const everything = await exportLedger(ids, RANGE, parseTableState({}, govLedgerTable));
+    // The `gov-transactions` export, in keyset batches, with the range as a `settled` chip.
+    const ledger = getExport('gov-transactions')!;
+    const signedIn = official as Extract<Viewer, { anon: false }>;
+    const exportState = parseTableState(new URLSearchParams(`f=settled:between:${RANGE.from},${RANGE.to}`), govLedgerExportTable);
+    const everything: { account_id: number; txn_id: number }[] = [];
+    let cursor: unknown = null;
+    do {
+      const batch = await ledger.rows(exportState, cursor, { limit: 5, viewer: signedIn });
+      everything.push(...(batch.rows as { account_id: number; txn_id: number }[]));
+      cursor = batch.next;
+    } while (cursor);
     expect(accountsOf(everything)).toEqual(IN_SCOPE);
     expect(everything).toHaveLength(12);
+    vi.mocked(getViewer).mockResolvedValue(moderator); // government.read.all, but no government.audit.read
+    expect(await ledger.authorize(signedIn, exportState)).toBe(false);
+    vi.mocked(getViewer).mockResolvedValue(official);
     const out = await getLedgerAudit(scope, ids, RANGE, parseTableState(new URLSearchParams(`f=direction:in:out&f=initiator:in:${OFFICIAL}`), govLedgerTable));
     expect(out.rows.map((m) => [m.account_id, m.amount, m.initiator_name])).toEqual([[102, '-200.00', 'Official']]);
     expect(out.labels).toEqual({ [`initiator:${OFFICIAL}`]: 'Official' });

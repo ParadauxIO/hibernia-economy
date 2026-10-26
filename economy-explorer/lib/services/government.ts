@@ -14,9 +14,10 @@ import {
   type CounterpartyRow, type FineRow, type FineSummaryRow, type IssuerRow, type MovementRow, type OfficialRow, type PayerRow,
   type SalaryRecipientRow, type TxnWindow, type ViewRow,
 } from '@/lib/sql/government';
-import { stateCursor, type TableState } from '@/lib/tables/core';
+import type { KeysetCursor } from '@/lib/pagination/cursor';
+import { dateBounds, stateCursor, type TableState } from '@/lib/tables/core';
 import type { FinesTableState } from '@/lib/tables/fines';
-import type { GovLedgerState, GovViewsState } from '@/lib/tables/gov';
+import type { GovLedgerExportState, GovLedgerState, GovViewsState } from '@/lib/tables/gov';
 import { analysePayroll, classifyFlows, type FlowBreakdown, type PayrollAnalysis } from './governmentModel';
 import { unitKeyOf, type GovScope } from './governmentScope';
 
@@ -397,9 +398,28 @@ export function entityLabels(scope: GovScope, state: TableState, names: Map<stri
   return out;
 }
 
-/** Every fine the filters select, for the CSV export. Capped so one export can't drain the pool. */
-export async function exportFines(accountIds: readonly number[], range: DayRange, state: FinesTableState, cap = 10_000): Promise<FineRow[]> {
-  return listFines({ accountIds, ...bounds(range), state }, cap, 0);
+// ── exports (lib/export/datasets/gov.ts) ──────────────────────────────────
+//
+// The export route only carries table state, so the page's unit and range
+// travel as chips: the selection as an `account` chip and the range as a date
+// chip (govExportState). Each batch re-resolves the viewer's scope, and an
+// account chip can only narrow it.
+
+/** Accounts an export may read: the `account` chip within scope, or the whole scope. */
+export function exportAccountIds(scope: GovScope, state: TableState): number[] {
+  const chip = state.filters.find((f) => f.field === 'account');
+  if (!chip) return [...scope.ids];
+  const wanted = new Set(chip.values.map(Number));
+  return scope.ids.filter((id) => wanted.has(id));
+}
+
+const ALL_TIME = { fromTs: '2000-01-01 00:00:00', toTs: '2100-01-01 00:00:00' };
+
+/** One batch of fines for the `fines` export. The `issued` chip carries the range; the offset is the cursor. */
+export async function exportFinesBatch(scope: GovScope, state: FinesTableState, offset: number | null, limit: number): Promise<{ rows: FineRow[]; next: number | null }> {
+  const start = offset ?? (state.page - 1) * state.limit;
+  const rows = await listFines({ accountIds: exportAccountIds(scope, state), ...ALL_TIME, state }, limit, start);
+  return { rows, next: rows.length === limit ? start + limit : null };
 }
 
 // ── reports ───────────────────────────────────────────────────────────────
@@ -513,9 +533,27 @@ export async function getViewsAudit(scope: GovScope, accountIds: readonly number
   return { rows: shown, next: rows.length > state.limit && last ? { at: last.at, id: last.audit_id } : null, labels: entityLabels(scope, state, names) };
 }
 
-/** Postings the ledger filters select, for the gov-transactions CSV export. */
-export async function exportLedger(accountIds: readonly number[], range: DayRange, state: GovLedgerState, cap = 5_000): Promise<MovementRow[]> {
-  const window = await txnWindow(rawRange(range));
-  return window ? selectGovLedger(accountIds, window, state, null, cap) : [];
+/** The day range a `settled` chip selects, or the last 30 days; capped like every raw read. */
+export function ledgerExportRange(state: TableState, now = new Date()): DayRange & { capped: boolean } {
+  const today = utcDay(now);
+  const chip = state.filters.find((f) => f.field === 'settled');
+  let range: DayRange = { from: addDays(today, -29), to: today };
+  if (chip) {
+    const b = dateBounds(chip, now);
+    const from = b.from ? b.from.toISOString().slice(0, 10) : '2000-01-01';
+    const to = b.to ? new Date(b.to.getTime() - 1).toISOString().slice(0, 10) : today;
+    range = { from: from > today ? today : from, to: to > today ? today : to };
+    if (range.from > range.to) range = { from: range.to, to: range.to };
+  }
+  return rawRange(range);
+}
+
+/** One batch of the `gov-transactions` export: postings on in-scope accounts, newest first, keyset on txn_id. */
+export async function exportLedgerBatch(scope: GovScope, state: GovLedgerExportState, cursor: KeysetCursor | null, limit: number): Promise<{ rows: MovementRow[]; next: KeysetCursor | null }> {
+  const window = await txnWindow(ledgerExportRange(state));
+  if (!window) return { rows: [], next: null };
+  const rows = await selectGovLedger(exportAccountIds(scope, state), window, state as unknown as GovLedgerState, cursor, limit);
+  const last = rows[rows.length - 1];
+  return { rows, next: rows.length === limit && last ? { at: last.settled_at, id: last.txn_id } : null };
 }
 

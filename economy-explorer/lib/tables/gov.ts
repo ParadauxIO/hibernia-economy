@@ -33,18 +33,20 @@ export const DIRECTIONS = [
   { value: 'out', label: 'Money out' },
 ] as const;
 
+const LEDGER_FILTERS = {
+  direction: { label: 'Direction', kind: 'enum', options: DIRECTIONS },
+  amount: { label: 'Amount', kind: 'money', hint: 'Size of the movement, either direction' },
+  account: { label: 'Account', kind: 'entity', entity: 'account', hint: 'A government account in your scope' },
+  initiator: { label: 'Initiated by', kind: 'entity', entity: 'player' },
+  authorized: { label: 'Has an authorizer', kind: 'boolean', hint: 'Approved by a second person' },
+} as const;
+
 /** Postings on in-scope accounts with who initiated and approved them (/gov/audit). */
 export const govLedgerTable = defineTable({
   id: 'gov-ledger',
   search: [],
   searchPlaceholder: 'Filter transactions',
-  filters: {
-    direction: { label: 'Direction', kind: 'enum', options: DIRECTIONS },
-    amount: { label: 'Amount', kind: 'money', hint: 'Size of the movement, either direction' },
-    account: { label: 'Account', kind: 'entity', entity: 'account', hint: 'A government account in your scope' },
-    initiator: { label: 'Initiated by', kind: 'entity', entity: 'player' },
-    authorized: { label: 'Has an authorizer', kind: 'boolean', hint: 'Approved by a second person' },
-  },
+  filters: LEDGER_FILTERS,
   sorts: { time: 'Time' },
   defaultSort: '-time',
   quick: [
@@ -58,6 +60,23 @@ export const govLedgerTable = defineTable({
   maxPageSize: 200,
 });
 export type GovLedgerState = TableState<typeof govLedgerTable>;
+
+/**
+ * The `gov-transactions` export (lib/export/datasets/gov.ts): the ledger
+ * table's filters plus `settled`, which carries the page's range into the
+ * export link (the page takes it from the RangePicker instead of a chip).
+ */
+export const govLedgerExportTable = defineTable({
+  id: 'gov-transactions',
+  filters: { ...LEDGER_FILTERS, settled: { label: 'Settled', kind: 'date' } },
+  sorts: { time: 'Time' },
+  defaultSort: '-time',
+  pagination: 'cursor',
+  noun: { one: 'transaction', many: 'transactions' },
+  pageSize: 50,
+  maxPageSize: 200,
+});
+export type GovLedgerExportState = TableState<typeof govLedgerExportTable>;
 
 /** Explorer views and exports of in-scope data (/gov/audit). */
 export const govViewsTable = defineTable({
