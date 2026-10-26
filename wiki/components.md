@@ -371,11 +371,11 @@ Every table moves to one system (redesign spec §5.5). The accounts directory
   A typed column map must cover every declared filter and sort; only declared
   fields compile and every value is bound. Money compares as
   `CAST(? AS DECIMAL(19,2))`.
-- **UI.** `DataTable`, `TableEmpty`, `TablePager` and `TablePopover` come from
+- **UI.** `DataTable`, `TableEmpty` and `TablePager` come from
   `@democracycraft/design-system/table` (server-rendered table, real links for
   sorting and rows, `aria-sort`, phone layout). `components/FilterBar.tsx` is
-  the client search box, chips, popovers, quick filters, Columns menu and
-  summary line.
+  the client search box, chips, quick filters, Columns menu and summary line;
+  its filter editors open in the shared `Popover` (`/popover`).
 - **Every filter must be index-backed or cheap.** Check the plan with `EXPLAIN`
   before offering a filter on a large table; if it needs an index, add a Flyway
   migration in the same PR or drop the filter.

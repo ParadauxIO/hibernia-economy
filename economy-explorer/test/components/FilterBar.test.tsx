@@ -32,6 +32,11 @@ function setup(search = '', props: Partial<Parameters<typeof FilterBar>[0]> = {}
 
 beforeEach(() => {
   window.localStorage.clear();
+  // jsdom has no matchMedia; the popover asks it whether to open as a bottom sheet.
+  window.matchMedia = vi.fn((query: string) => ({
+    matches: false, media: query, onchange: null,
+    addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+  }));
 });
 
 describe('FilterBar chips', () => {
@@ -108,7 +113,7 @@ describe('FilterBar popovers', () => {
     const { user } = setup('f=type:in:business');
     const chip = screen.getByRole('button', { name: 'Type: Business. Edit filter' });
     await user.click(chip);
-    expect(screen.getAllByRole('checkbox')[0]).toHaveFocus();
+    await waitFor(() => expect(screen.getAllByRole('checkbox')[0]).toHaveFocus());
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(chip).toHaveFocus();
@@ -123,7 +128,7 @@ describe('FilterBar popovers', () => {
     await user.click(within(screen.getByRole('dialog', { name: 'Add a filter' })).getByRole('button', { name: /^Balance/ }));
     const dialog = screen.getByRole('dialog', { name: 'Filter by Balance' });
     const value = within(dialog).getByRole('textbox', { name: 'Value' });
-    expect(value).toHaveFocus();
+    await waitFor(() => expect(value).toHaveFocus());
     await user.type(value, 'lots');
     await user.click(within(dialog).getByRole('button', { name: 'Apply' }));
     expect(within(dialog).getByRole('alert')).toHaveTextContent(/amount like 10k/);

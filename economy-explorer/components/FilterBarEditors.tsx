@@ -2,7 +2,7 @@
 // The per-kind popover bodies behind a filter chip. Each editor gets the
 // current filter (if any) and reports a new filter, or null to remove it.
 
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import {
   DATE_PRESETS,
   normaliseFilter,
@@ -27,6 +27,24 @@ export interface EditorProps {
   entityLabels?: Readonly<Record<string, string>> | undefined;
 }
 
+/**
+ * Move focus to the `[data-autofocus]` control (or the first control) once the
+ * popover panel is visible. The panel is placed in a layout effect and stays
+ * `visibility: hidden` until then, so a synchronous focus() would be dropped.
+ * It also covers an editor that replaces the + Filter menu inside a popover
+ * that is already open.
+ */
+export function useFocusOnMount(ref: RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const root = ref.current;
+      const target = root?.querySelector<HTMLElement>('[data-autofocus]') ?? root?.querySelector<HTMLElement>('input, select, button');
+      target?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [ref]);
+}
+
 const NUMBER_OPS: { op: Operator; label: string }[] = [
   { op: 'gt', label: 'More than' },
   { op: 'gte', label: 'At least' },
@@ -48,8 +66,10 @@ function Frame({ title, hint, error, onSubmit, onCancel, children, applyLabel = 
   onRemove?: () => void;
 }) {
   const titleId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  useFocusOnMount(formRef);
   return (
-    <form className="fb-pop" onSubmit={onSubmit} aria-labelledby={titleId} noValidate>
+    <form ref={formRef} className="fb-pop" onSubmit={onSubmit} aria-labelledby={titleId} noValidate>
       <p className="fb-pop-title" id={titleId}>{title}</p>
       {hint && <p className="fb-pop-hint">{hint}</p>}
       {children}

@@ -339,38 +339,9 @@
 
 /* ── Popovers ──────────────────────────────────────────────────────────── */
 
-.dt-popover {
-    position: fixed;
-    inset: auto;
-    margin: 0;
-    width: 296px;
-    max-width: calc(100vw - 16px);
-    max-height: min(70vh, 520px);
-    overflow: auto;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--bg-elev);
-    color: var(--fg);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12);
-    font-size: 13px;
-    line-height: 18px;
-}
-/* Without the popover API (old browsers, jsdom) the class drives visibility. */
-.dt-popover:not(.is-open) { display: none; }
-.dt-popover.is-sheet {
-    top: auto;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    max-width: none;
-    max-height: 82vh;
-    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-    border-width: 1px 0 0;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-.dt-popover.is-sheet::backdrop { background: rgba(0, 0, 0, 0.35); }
+/* Filter editors sit on the shared Popover panel (.popover-panel, primitives.css). */
+.popover-panel.fb-popover { width: 296px; padding: 12px; }
+.popover-panel.fb-popover.is-sheet { width: auto; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
 
 .fb-pop { display: grid; gap: 12px; }
 .fb-pop-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }

@@ -6,8 +6,9 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useOptimistic, useRef, useState, useSyncExternalStore, useTransition, type KeyboardEvent, type ReactNode } from 'react';
-import { TablePopover, type ColumnOption } from '@democracycraft/design-system/table';
-import { FilterEditor } from '@/components/FilterBarEditors';
+import { Popover } from '@democracycraft/design-system/popover';
+import type { ColumnOption } from '@democracycraft/design-system/table';
+import { FilterEditor, useFocusOnMount } from '@/components/FilterBarEditors';
 import {
   cleared,
   describeFilter,
@@ -52,8 +53,8 @@ export interface FilterBarProps {
 }
 
 type Open =
-  | { kind: 'fields' }
-  | { kind: 'edit'; field: string; from: 'add' | 'chip' }
+  | { kind: 'add'; field: string | null }
+  | { kind: 'chip'; field: string }
   | { kind: 'columns' }
   | null;
 
@@ -95,6 +96,13 @@ function useHiddenColumns(tableKey: string, columns: readonly ColumnOption[]): [
   return [hidden, toggle];
 }
 
+/** A popover body that takes focus once the panel is visible. */
+function FocusPanel({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useFocusOnMount(ref);
+  return <div ref={ref} className="fb-pop">{children}</div>;
+}
+
 function SearchIcon() {
   return (
     <svg className="fb-search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -133,9 +141,6 @@ export function FilterBar({
   const [open, setOpen] = useState<Open>(null);
   const [localLabels, setLocalLabels] = useState<Record<string, string>>({});
   const labels = useMemo(() => ({ ...entityLabels, ...localLabels }), [entityLabels, localLabels]);
-  const anchorRef = useRef<HTMLElement | null>(null);
-  const addRef = useRef<HTMLButtonElement>(null);
-  const columnsRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [hiddenColumns, toggleColumn] = useHiddenColumns(table.id, columns ?? []);
 
@@ -152,19 +157,12 @@ export function FilterBar({
     });
   }
 
-  function openAt(next: Exclude<Open, null>, anchor: HTMLElement | null) {
-    anchorRef.current = anchor;
-    setOpen(next);
-  }
-
-  function close() {
-    setOpen(null);
-  }
-
-  function apply(field: string, f: FilterState | null) {
-    setOpen(null);
+  /** Apply an editor's result. `close` returns focus to the popover's trigger. */
+  function apply(field: string, f: FilterState | null, close: () => void) {
+    close();
     go(f ? withFilter(state, f) : withoutFilter(state, field));
-    anchorRef.current?.focus({ preventScroll: true });
+    // A removed chip takes its trigger with it; keep focus somewhere useful.
+    if (!f) searchRef.current?.focus();
   }
 
   function onSearchChange(value: string) {
@@ -198,8 +196,26 @@ export function FilterBar({
     }
   }
 
-  const editing = open?.kind === 'edit' ? open.field : null;
-  const editingField = editing ? fields[editing] : undefined;
+  const editor = (key: string, close: () => void) => {
+    const field = fields[key];
+    if (!field) return null;
+    return (
+      <FilterEditor
+        table={table}
+        fieldKey={key}
+        field={field}
+        current={state.filters.find((f) => f.field === key)}
+        counts={counts?.[key]}
+        searchEntity={searchEntity}
+        entityLabels={labels}
+        onEntityLabel={(value, label) => setLocalLabels((l) => ({ ...l, [`${key}:${value}`]: label }))}
+        onApply={(f) => apply(key, f, close)}
+        onCancel={close}
+      />
+    );
+  };
+
+  const addField = open?.kind === 'add' ? open.field : null;
   const sort = describeSort(state, table);
   const optionalColumns = (columns ?? []).filter((c) => c.optional);
   const showColumns = optionalColumns.length > 0 && tableId !== undefined && SAFE_ID.test(tableId);
@@ -207,67 +223,6 @@ export function FilterBar({
   const countText = total === null || total === undefined
     ? null
     : `${total.toLocaleString('en-US')}${totalIsFloor ? '+' : ''} ${total === 1 && !totalIsFloor ? table.noun.one : table.noun.many}`;
-
-  let popoverLabel = 'Filter';
-  let popoverBody: ReactNode = null;
-  if (open?.kind === 'fields') {
-    popoverLabel = 'Add a filter';
-    popoverBody = (
-      <div className="fb-pop">
-        <p className="fb-pop-title">Filter by</p>
-        <ul className="fb-menu">
-          {Object.entries(fields).map(([key, field], i) => {
-            const active = state.filters.some((f) => f.field === key);
-            return (
-              <li key={key}>
-                <button
-                  type="button"
-                  className="fb-menu-item"
-                  aria-current={active ? 'true' : undefined}
-                  onClick={() => setOpen({ kind: 'edit', field: key, from: 'add' })}
-                  {...(i === 0 ? { 'data-autofocus': true } : {})}
-                >
-                  <span>{field.label}</span>
-                  {field.hint && <small>{field.hint}</small>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    );
-  } else if (editing && editingField) {
-    popoverLabel = `Filter by ${editingField.label}`;
-    popoverBody = (
-      <FilterEditor
-        table={table}
-        fieldKey={editing}
-        field={editingField}
-        current={state.filters.find((f) => f.field === editing)}
-        counts={counts?.[editing]}
-        searchEntity={searchEntity}
-        entityLabels={labels}
-        onEntityLabel={(value, label) => setLocalLabels((l) => ({ ...l, [`${editing}:${value}`]: label }))}
-        onApply={(f) => apply(editing, f)}
-        onCancel={() => { close(); anchorRef.current?.focus({ preventScroll: true }); }}
-      />
-    );
-  } else if (open?.kind === 'columns') {
-    popoverLabel = 'Columns';
-    popoverBody = (
-      <div className="fb-pop">
-        <p className="fb-pop-title">Columns</p>
-        <div className="fb-columns" role="group" aria-label="Visible columns">
-          {optionalColumns.map((c, i) => (
-            <label key={c.key} className="fb-option">
-              <input type="checkbox" checked={!hiddenColumns.includes(c.key)} onChange={() => toggleColumn(c.key)} {...(i === 0 ? { 'data-autofocus': true } : {})} />
-              <span>{c.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fb" aria-busy={pending || undefined}>
@@ -292,28 +247,56 @@ export function FilterBar({
           />
         </div>
         <div className="fb-actions">
-          <button
-            ref={addRef}
-            type="button"
-            className="fb-btn"
-            aria-haspopup="dialog"
-            aria-expanded={open?.kind === 'fields' || (open?.kind === 'edit' && open.from === 'add')}
-            onClick={() => (open?.kind === 'fields' ? close() : openAt({ kind: 'fields' }, addRef.current))}
+          <Popover
+            sheet
+            className="fb-popover"
+            label={addField ? `Filter by ${fields[addField]?.label ?? addField}` : 'Add a filter'}
+            open={open?.kind === 'add'}
+            onOpenChange={(o) => setOpen(o ? { kind: 'add', field: null } : null)}
+            trigger={<button type="button" className="fb-btn"><PlusIcon />Filter</button>}
           >
-            <PlusIcon />
-            Filter
-          </button>
+            {({ close }) => (addField ? editor(addField, close) : (
+              <FocusPanel>
+                <p className="fb-pop-title">Filter by</p>
+                <ul className="fb-menu">
+                  {Object.entries(fields).map(([key, field]) => (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        className="fb-menu-item"
+                        aria-current={state.filters.some((f) => f.field === key) ? 'true' : undefined}
+                        onClick={() => setOpen({ kind: 'add', field: key })}
+                      >
+                        <span>{field.label}</span>
+                        {field.hint && <small>{field.hint}</small>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </FocusPanel>
+            ))}
+          </Popover>
           {showColumns && (
-            <button
-              ref={columnsRef}
-              type="button"
-              className="fb-btn"
-              aria-haspopup="dialog"
-              aria-expanded={open?.kind === 'columns'}
-              onClick={() => (open?.kind === 'columns' ? close() : openAt({ kind: 'columns' }, columnsRef.current))}
+            <Popover
+              sheet
+              className="fb-popover"
+              label="Columns"
+              open={open?.kind === 'columns'}
+              onOpenChange={(o) => setOpen(o ? { kind: 'columns' } : null)}
+              trigger={<button type="button" className="fb-btn">Columns</button>}
             >
-              Columns
-            </button>
+              <FocusPanel>
+                <p className="fb-pop-title">Columns</p>
+                <div className="fb-columns" role="group" aria-label="Visible columns">
+                  {optionalColumns.map((c) => (
+                    <label key={c.key} className="fb-option">
+                      <input type="checkbox" checked={!hiddenColumns.includes(c.key)} onChange={() => toggleColumn(c.key)} />
+                      <span>{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </FocusPanel>
+            </Popover>
           )}
           {exportSlot && <div className="fb-export">{exportSlot}</div>}
         </div>
@@ -328,22 +311,27 @@ export function FilterBar({
               return (
                 <li key={f.field}>
                   <span className="fb-chip">
-                    <button
-                      type="button"
-                      className="fb-chip-edit"
-                      aria-haspopup="dialog"
-                      aria-label={`${label}. Edit filter`}
-                      onClick={(e) => openAt({ kind: 'edit', field: f.field, from: 'chip' }, e.currentTarget)}
+                    <Popover
+                      sheet
+                      className="fb-popover"
+                      label={`Filter by ${fields[f.field]?.label ?? f.field}`}
+                      open={open?.kind === 'chip' && open.field === f.field}
+                      onOpenChange={(o) => setOpen(o ? { kind: 'chip', field: f.field } : null)}
+                      trigger={
+                        <button type="button" className="fb-chip-edit" aria-label={`${label}. Edit filter`}>
+                          {d.value === null ? (
+                            <span className="fb-chip-value">{d.label}</span>
+                          ) : (
+                            <>
+                              <span className="fb-chip-label">{d.label}{d.sep.trim()}</span>
+                              <span className="fb-chip-value">{d.value}</span>
+                            </>
+                          )}
+                        </button>
+                      }
                     >
-                      {d.value === null ? (
-                        <span className="fb-chip-value">{d.label}</span>
-                      ) : (
-                        <>
-                          <span className="fb-chip-label">{d.label}{d.sep.trim()}</span>
-                          <span className="fb-chip-value">{d.value}</span>
-                        </>
-                      )}
-                    </button>
+                      {({ close }) => editor(f.field, close)}
+                    </Popover>
                     <button
                       type="button"
                       className="fb-chip-remove"
@@ -383,10 +371,6 @@ export function FilterBar({
           <button type="button" className="fb-text-btn" onClick={() => { setText(''); go(cleared(state)); }}>Clear search</button>
         )}
       </div>
-
-      <TablePopover open={open !== null} onOpenChange={(o) => { if (!o) close(); }} anchorRef={anchorRef} label={popoverLabel} contentKey={open?.kind === 'edit' ? `edit:${open.field}` : open?.kind ?? ''}>
-        {popoverBody}
-      </TablePopover>
     </div>
   );
 }
