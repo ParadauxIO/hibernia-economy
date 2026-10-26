@@ -42,7 +42,7 @@ const ROUTES: { path: string; viewers: Viewer[] }[] = [
   { path: '/search?q=acme&type=firms', viewers: ['anon'] },
   { path: '/me', viewers: ['anon', 'player'] },
   { path: '/me/market', viewers: ['player'] },
-  { path: '/me/webhooks', viewers: ['player'] },
+  { path: '/me/developer/webhooks', viewers: ['player'] },
   { path: '/link', viewers: ['player'] },
   { path: '/docs', viewers: ['anon'] },
   { path: '/docs/guides/tax', viewers: ['anon'] },

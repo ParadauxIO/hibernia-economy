@@ -80,8 +80,8 @@ export async function createWebhookAction(args: {
     const secret = newSecret();
     // ADT-14: write via the REST admin API; kysely stays read-only.
     await createWebhook({ ownerUuid: uuid, keyType, accountId, firmId, targetUrl: url, secret });
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/create', targetType, targetId, action: 'webhook.create' });
-    revalidatePath('/me/webhooks');
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/create', targetType, targetId, action: 'webhook.create' });
+    revalidatePath('/me/developer/webhooks');
     return { ok: true, secret };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -94,9 +94,9 @@ export async function setWebhookActiveAction(id: number, active: boolean): Promi
   try {
     const { affected: n } = await setWebhookActive(id, active, uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/active', targetType: 'webhook', targetId: String(id), action: 'webhook.active' });
-    revalidatePath('/me/webhooks');
-    revalidatePath(`/me/webhooks/${id}`);
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/active', targetType: 'webhook', targetId: String(id), action: 'webhook.active' });
+    revalidatePath('/me/developer/webhooks');
+    revalidatePath(`/me/developer/webhooks/${id}`);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -110,9 +110,9 @@ export async function setWebhookUrlAction(id: number, url: string): Promise<Webh
     await assertPublicHttpsUrl(url);
     const { affected: n } = await setWebhookUrl(id, url.trim(), uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/url', targetType: 'webhook', targetId: String(id), action: 'webhook.url' });
-    revalidatePath('/me/webhooks');
-    revalidatePath(`/me/webhooks/${id}`);
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/url', targetType: 'webhook', targetId: String(id), action: 'webhook.url' });
+    revalidatePath('/me/developer/webhooks');
+    revalidatePath(`/me/developer/webhooks/${id}`);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -126,8 +126,8 @@ export async function rotateWebhookSecretAction(id: number): Promise<WebhookActi
     const secret = newSecret();
     const { affected: n } = await setWebhookSecret(id, secret, uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/rotate', targetType: 'webhook', targetId: String(id), action: 'webhook.secret.rotate' });
-    revalidatePath(`/me/webhooks/${id}`);
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/rotate', targetType: 'webhook', targetId: String(id), action: 'webhook.secret.rotate' });
+    revalidatePath(`/me/developer/webhooks/${id}`);
     return { ok: true, secret };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -140,8 +140,8 @@ export async function deleteWebhookAction(id: number): Promise<WebhookActionResu
   try {
     const { affected: n } = await deleteWebhook(id, uuid);
     if (n === 0) return { ok: false, error: 'Webhook not found.' };
-    await auditView(viewer, { method: 'POST', path: '/me/webhooks/delete', targetType: 'webhook', targetId: String(id), action: 'webhook.delete' });
-    revalidatePath('/me/webhooks');
+    await auditView(viewer, { method: 'POST', path: '/me/developer/webhooks/delete', targetType: 'webhook', targetId: String(id), action: 'webhook.delete' });
+    revalidatePath('/me/developer/webhooks');
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -166,7 +166,7 @@ function keyTypeForAccount(accountType: string): 'PERSONAL' | 'BUSINESS' | 'GOVE
 /**
  * Admin: register an account-scoped webhook for an arbitrary account. Attributed
  * to the account's own owner (so it's model-consistent and the owner sees it in
- * /me/webhooks too); falls back to the admin if the account has no owner.
+ * /me/developer/webhooks too); falls back to the admin if the account has no owner.
  */
 export async function adminCreateWebhookAction(args: { accountId: number; url: string }): Promise<WebhookActionResult> {
   const viewer = await getViewer();

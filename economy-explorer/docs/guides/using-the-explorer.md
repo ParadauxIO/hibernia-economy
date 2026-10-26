@@ -96,14 +96,43 @@ link uses that player's UUID, including Floodgate identities.
 
 ## Step 3 — View your data
 
-Once linked, choose **My finances** in the account menu to see your personal dashboard:
+Once linked, choose **My finances** in the account menu. It is a workspace with a
+section list on the left (a menu at the top on a phone):
 
-- Your **total balance** across all your accounts.
-- Your **income and spending** over the last 90 days.
-- Your top **counterparties** — who you trade with most.
+- **Overview**: **My balance**, which is the money in your own personal
+  account only, with a chart over the last 90 days (or the range you pick);
+  this month's **income and spending by category** compared with last month;
+  who pays you most and whom you pay most; and your latest activity.
+- **Accounts you can access**, grouped by whose money it is: **Mine**, accounts
+  **shared with you** by other players, each **firm** you can see (with your
+  role there and the firm's own total), and **government** accounts. Each row
+  says why you can see it: owner, member, authorizer, viewer, firm finance
+  (with your role) or a group. Firm and government money is never added to
+  yours. A firm's money belongs to the firm, and the biggest firms are banks
+  holding other players' deposits.
+- **Transactions**: your full history, newest first. Filter by category,
+  direction, counterparty, amount, account, memo text and date. Add an
+  **Account** filter to include accounts shared with you. Category,
+  counterparty and memo filters search 31 days at a time, and **Older** keeps
+  searching further back. **Export all (CSV)** downloads every matching row.
+- **Statements**: one per month, with the opening balance, money in and out by
+  category, the closing balance, tax paid and the largest transactions. Print
+  it (or save it as a PDF) from your browser, or download it as CSV.
+- **Taxes and fines**: tax you paid by kind and month, every fine issued to you
+  with its transaction, and the tax rates in force.
+- **Market**: what you buy at other shops and what sells at your own.
+- **Firms**: firms you own or work for, your role, its permissions and when you
+  were hired. Where you have a finance role, the firm's balance and this month's
+  net, labelled as the firm's money.
+- **Developer**: your API keys (never their tokens) and your webhooks.
 
-From there, the **ChestShop activity** link opens a separate page breaking down what you
-buy and sell, who you trade with, and a 7/30/90-day or all-time window.
+Income and spending leave out money moved between your own accounts. Money
+between you and a firm, such as wages or an owner's draw, does count.
+
+Charts and statements are built from daily summaries that update every few
+minutes, shown as "Updated 14:05". Right after an Explorer release, older history
+is prepared in the background, newest first. Until it is ready, those sections
+say how far back they are covered.
 
 > [!TIP]
 > Linking identifies your own data. Authorized investigators and administrators
@@ -121,7 +150,7 @@ whole-economy transaction list still requires staff investigation permission.
 
 ## Exporting data
 
-When you're signed in, tables on the **Market** and **My data** pages show **CSV** and
+When you're signed in, tables on the **Market** and **My finances** pages show **CSV** and
 **JSON** buttons that download what you're looking at. The buttons only appear once you're
 logged in.
 

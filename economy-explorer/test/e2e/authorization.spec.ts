@@ -238,7 +238,8 @@ test('government account members can open related transactions from My data; rev
     await expect(page.getByText('Transaction access required', { exact: true })).toBeVisible();
     await policy.conn.query("INSERT INTO account_access (account_id, subject_uuid_bin, level, added_by_uuid_bin) VALUES (?, ?, 'MEMBER', ?)", [accountId, bin(policy.player), bin(policy.admin)]);
     await visit(page, '/me');
-    await page.getByRole('link', { name: accountName, exact: true }).click();
+    // /me lists it as an EntityLink: the name, then the muted "#id".
+    await page.getByRole('link', { name: new RegExp(`^${policy.key} ?#${accountId}$`) }).first().click();
     await page.getByRole('link', { name: `#${txnId}`, exact: true }).click();
     await expect(page.getByRole('heading', { name: `Transaction #${txnId}` })).toBeVisible();
     await expect(page.getByRole('link', { name: accountName, exact: true })).toBeVisible();

@@ -25,7 +25,7 @@ send it back with `/pay`. Double-check the name and amount before confirming.
 
 ### How do I see where my money went?
 
-`/transactions` shows your full history, and **My data** on the
+`/transactions` shows your full history, and **My finances** on the
 [Explorer](/docs/guides/using-the-explorer) shows it visually once you've linked your
 account.
 

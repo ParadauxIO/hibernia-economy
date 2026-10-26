@@ -60,7 +60,7 @@ income-tax
 
 ## Keeping an eye on it
 
-- Your own deductions: `/transactions` (or **My data** on the
+- Your own deductions: `/transactions` (or **My finances** on the
   [Explorer](/docs/guides/using-the-explorer)).
 - A firm's: `/business transactions Acme`.
 - The big picture of where tax flows: the [Money flow](/money-flow) view on the
