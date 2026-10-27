@@ -661,6 +661,12 @@ public class FirmServiceImpl implements FirmService {
 
     @Override
     @Nullable
+    public Firm getAnyFirmByName(String name) {
+        return firms.getFirmByName(name);
+    }
+
+    @Override
+    @Nullable
     public Firm getAnyFirmByNameOrId(String input) {
         if (input != null && !input.isEmpty() && input.chars().allMatch(Character::isDigit)) {
             try {

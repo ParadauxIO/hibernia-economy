@@ -121,12 +121,15 @@ test.describe('firms', () => {
   test('public overview, gated members and financials', async ({ page }) => {
     await visit(page, '/firms/Acme%20Corp');
     await expect(page.locator('.page-header')).toContainText('Run by Alice, its proprietor.');
+    await expect(page.locator('.page-header')).toContainText('Firm balance $25,000.00');
     await expect(page.getByRole('table', { name: 'Firm accounts' })).toContainText('Acme Corporate Account');
     await expect(page.getByRole('table', { name: 'Top items' })).toContainText('Diamond');
     await page.getByRole('link', { name: /^Members/ }).click();
     await expect(page.locator(GATE)).toContainText('Members are private to the firm');
+    await expect(page.locator('.page-header')).toContainText('Firm balance $25,000.00');
     await page.getByRole('link', { name: 'Financials' }).click();
     await expect(page.locator(GATE)).toContainText('Financials are private to the firm');
+    await expect(page.locator('.page-header')).toContainText('Firm balance $25,000.00');
   });
 
   test('the directory is a chip table', async ({ page }) => {

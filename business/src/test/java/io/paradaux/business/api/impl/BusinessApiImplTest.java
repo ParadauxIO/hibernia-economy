@@ -91,6 +91,16 @@ class BusinessApiImplTest {
     }
 
     @Test
+    void firms_getFirmByName_doesNotInterpretNumericNamesAsIds() {
+        Firm named = new Firm();
+        named.setFirmId(99);
+        when(firmService.getAnyFirmByName("42")).thenReturn(named);
+        assertThat(api.firms().getFirmByName("42")).isSameAs(named);
+        verify(firmService, never()).getAnyFirmByNameOrId(any());
+        verify(firmService, never()).getAnyFirmById(anyInt());
+    }
+
+    @Test
     void firms_getTotalBalance_delegates() {
         when(transactionService.getAggregateBalance(7)).thenReturn(new java.math.BigDecimal("1234.50"));
         assertThat(api.firms().getTotalBalance(7)).isEqualByComparingTo("1234.50");
