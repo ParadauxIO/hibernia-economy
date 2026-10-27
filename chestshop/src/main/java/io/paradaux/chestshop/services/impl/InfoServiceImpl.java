@@ -361,22 +361,30 @@ public class InfoServiceImpl implements InfoService {
         PotionMeta potionMeta = (PotionMeta) meta;
 
         StringBuilder message = new StringBuilder();
-        message.append(Colours.GRAY);
-        message.append(capitalizeFirstLetter(item.getType().name(), '_')).append(" of ");
-        message.append(capitalizeFirstLetter(
-                        potionMeta.getBasePotionData().getType().name(), '_'))
-                .append(' ');
-        if (potionMeta.getBasePotionData().isUpgraded()) {
-            message.append("II");
-        } else if (potionMeta.getBasePotionData().isExtended()) {
-            message.append("+");
+        var base = potionMeta.getBasePotionData();
+        if (base != null) {
+            message.append(Colours.GRAY);
+            message.append(capitalizeFirstLetter(item.getType().name(), '_')).append(" of ");
+            message.append(capitalizeFirstLetter(base.getType().name(), '_')).append(' ');
+            if (base.isUpgraded()) {
+                message.append("II");
+            } else if (base.isExtended()) {
+                message.append("+");
+            }
         }
 
         for (PotionEffect effect : potionMeta.getCustomEffects()) {
-            message.append("\n" + Colours.DARK_GRAY
-                    + capitalizeFirstLetter(effect.getType().getName(), '_') + ' ' + toTime(effect.getDuration() / 20));
+            if (!message.isEmpty()) {
+                message.append('\n');
+            }
+            message.append(Colours.DARK_GRAY)
+                    .append(capitalizeFirstLetter(effect.getType().getName(), '_'))
+                    .append(' ')
+                    .append(toTime(effect.getDuration() / 20));
         }
-        lines.addRawMessage("iteminfo_potion", message.toString());
+        if (!message.isEmpty()) {
+            lines.addRawMessage("iteminfo_potion", message.toString());
+        }
     }
 
     private void addBookInfo(ItemInfoLines lines) {
