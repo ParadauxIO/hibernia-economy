@@ -56,7 +56,6 @@ import org.bukkit.inventory.meta.trim.ArmorTrim;
 import org.bukkit.inventory.meta.trim.TrimMaterial;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.map.MapView;
-import org.bukkit.potion.PotionData;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
@@ -329,20 +328,17 @@ class InfoServiceImplTest extends ServerTest {
         return metaItem(Material.POTION, meta);
     }
 
-    private PotionData baseData(boolean upgraded, boolean extended) {
-        PotionData d = mock(PotionData.class);
-        lenient().when(d.getType()).thenReturn(PotionType.SWIFTNESS);
-        lenient().when(d.isUpgraded()).thenReturn(upgraded);
-        lenient().when(d.isExtended()).thenReturn(extended);
-        return d;
+    @Test
+    void potion_withoutBaseData_stillDisplaysCustomEffects() {
+        PotionMeta meta = mock(PotionMeta.class);
+        when(meta.getCustomEffects()).thenReturn(List.of(new PotionEffect(PotionEffectType.SPEED, 200, 0)));
+        assertThat(collect(potionItem(meta))).contains("iteminfo_potion");
     }
 
     @Test
     void potion_upgraded_withBaseTypeAndEffects() {
         PotionMeta meta = mock(PotionMeta.class);
-        PotionData data = baseData(true, false); // -> "II"
-        when(meta.getBasePotionData()).thenReturn(data);
-        when(meta.getBasePotionType()).thenReturn(PotionType.SWIFTNESS); // extended: non-null
+        when(meta.getBasePotionType()).thenReturn(PotionType.STRONG_SWIFTNESS); // extended: non-null
         List<PotionEffect> effects = List.of(
                 new PotionEffect(PotionEffectType.SPEED, 200, 1),
                 new PotionEffect(PotionEffectType.JUMP_BOOST, 100, 0));
@@ -354,8 +350,6 @@ class InfoServiceImplTest extends ServerTest {
     @Test
     void potion_extended_noBaseTypeNoEffects() {
         PotionMeta meta = mock(PotionMeta.class);
-        PotionData data = baseData(false, true); // -> "+"
-        when(meta.getBasePotionData()).thenReturn(data);
         when(meta.getBasePotionType()).thenReturn(null); // extended: skips base type
         when(meta.getCustomEffects()).thenReturn(List.of()); // extended: empty -> no line
 
@@ -366,8 +360,6 @@ class InfoServiceImplTest extends ServerTest {
     @Test
     void potion_plain_nullBaseTypeWithEffect() {
         PotionMeta meta = mock(PotionMeta.class);
-        PotionData data = baseData(false, false); // neither
-        when(meta.getBasePotionData()).thenReturn(data);
         when(meta.getBasePotionType()).thenReturn(null);
         when(meta.getCustomEffects()).thenReturn(List.of(new PotionEffect(PotionEffectType.SPEED, 60, 0)));
 

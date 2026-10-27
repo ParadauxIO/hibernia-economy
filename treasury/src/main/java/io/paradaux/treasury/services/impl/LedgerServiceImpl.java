@@ -274,7 +274,7 @@ public class LedgerServiceImpl implements LedgerService {
             // (locking read so REPEATABLE READ sees it) and return it instead of
             // propagating the duplicate-key error (ADT-73, mirrors the *Locking
             // re-resolves in AccountServiceImpl, ADT-74).
-            if (req.dedupKey() != null) {
+            if (req.dedupKey() != null && isDuplicateKey(e)) {
                 LedgerTxn raced = ledgerMapper.findByDedupKeyLocking(req.dedupKey());
                 if (raced != null) {
                     log.debug(
@@ -294,6 +294,15 @@ public class LedgerServiceImpl implements LedgerService {
                 req.amount(),
                 req.pluginSystem());
         return new TransferResult(txnId, true);
+    }
+
+    private static boolean isDuplicateKey(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.sql.SQLException sql && sql.getErrorCode() == 1062) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

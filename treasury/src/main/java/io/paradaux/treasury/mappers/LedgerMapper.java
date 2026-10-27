@@ -3,10 +3,9 @@ package io.paradaux.treasury.mappers;
 import io.paradaux.treasury.model.economy.LedgerPosting;
 import io.paradaux.treasury.model.economy.LedgerTxn;
 import io.paradaux.treasury.model.economy.TransactionEntry;
-import org.apache.ibatis.annotations.*;
-
 import java.time.Instant;
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 @Mapper
 public interface LedgerMapper {
@@ -18,25 +17,29 @@ public interface LedgerMapper {
        WHERE client_dedup_key = #{key}
        LIMIT 1
       """)
-    @Results(id="txnMap", value={
-            @Result(column="txn_id", property="txnId", id=true),
-            @Result(column="trade_time", property="tradeTime", javaType=Instant.class),
-            @Result(column="settlement_time", property="settlementTime", javaType=Instant.class),
-            @Result(column="message", property="message"),
-            @Result(column="initiator_uuid_bin", property="initiatorUuid"),
-            @Result(column="authorizer_uuid_bin", property="authorizerUuid"),
-            @Result(column="plugin_system", property="pluginSystem"),
-            @Result(column="client_dedup_key", property="clientDedupKey")
-    })
+    @Results(
+            id = "txnMap",
+            value = {
+                @Result(column = "txn_id", property = "txnId", id = true),
+                @Result(column = "trade_time", property = "tradeTime", javaType = Instant.class),
+                @Result(column = "settlement_time", property = "settlementTime", javaType = Instant.class),
+                @Result(column = "message", property = "message"),
+                @Result(column = "initiator_uuid_bin", property = "initiatorUuid"),
+                @Result(column = "authorizer_uuid_bin", property = "authorizerUuid"),
+                @Result(column = "plugin_system", property = "pluginSystem"),
+                @Result(column = "client_dedup_key", property = "clientDedupKey")
+            })
     LedgerTxn findByDedupKey(@Param("key") byte[] clientKey);
 
     /**
-     * Locking variant of {@link #findByDedupKey} (FOR UPDATE). Treasury runs at the
+     * Current-read variant of {@link #findByDedupKey} (LOCK IN SHARE MODE). Treasury runs at the
      * MariaDB-default REPEATABLE READ, so after a concurrent identical-dedup-key insert
      * trips {@code uq_ledger_dedup} a plain re-SELECT would still see the pre-race
      * snapshot and miss the committed row. A locking read forces the latest committed
      * version so the racing transaction id can be returned instead of propagating the
-     * duplicate-key error (ADT-73, mirrors AccountMapper's *Locking resolves).
+     * duplicate-key error. Use a shared lock: failed duplicate INSERTs already hold
+     * shared locks on the unique index. Concurrent recovery reads must not upgrade
+     * those locks to exclusive locks and deadlock with each other (DEMOCRACYCRAFT-3C).
      */
     @Select("""
       SELECT txn_id, trade_time, settlement_time, message,
@@ -44,7 +47,7 @@ public interface LedgerMapper {
         FROM ledger_txns
        WHERE client_dedup_key = #{key}
        LIMIT 1
-       FOR UPDATE
+       LOCK IN SHARE MODE
       """)
     @ResultMap("txnMap")
     LedgerTxn findByDedupKeyLocking(@Param("key") byte[] clientKey);
@@ -80,7 +83,8 @@ public interface LedgerMapper {
     @Options(useGeneratedKeys = true, keyProperty = "txnId", keyColumn = "txn_id")
     int insertTxnEntity(LedgerTxn txn);
 
-    @Insert("INSERT INTO ledger_postings(txn_id, account_id, amount, memo) VALUES(#{txnId}, #{accountId}, #{amount}, #{memo})")
+    @Insert(
+            "INSERT INTO ledger_postings(txn_id, account_id, amount, memo) VALUES(#{txnId}, #{accountId}, #{amount}, #{memo})")
     int insertPosting(LedgerPosting posting);
 
     /**
@@ -113,21 +117,22 @@ public interface LedgerMapper {
        ORDER BY p.posting_id DESC
        LIMIT #{limit} OFFSET #{offset}
       """)
-    @Results(id = "txnEntryMap", value = {
-            @Result(column = "posting_id", property = "postingId", id = true),
-            @Result(column = "txn_id", property = "txnId"),
-            @Result(column = "account_id", property = "accountId"),
-            @Result(column = "amount", property = "amount"),
-            @Result(column = "memo", property = "memo"),
-            @Result(column = "settlement_time", property = "settlementTime", javaType = Instant.class),
-            @Result(column = "message", property = "message"),
-            @Result(column = "initiator_uuid_bin", property = "initiatorUuid"),
-            @Result(column = "authorizer_uuid_bin", property = "authorizerUuid"),
-            @Result(column = "plugin_system", property = "pluginSystem")
-    })
-    List<TransactionEntry> findTransactionsByAccount(@Param("accountId") int accountId,
-                                                    @Param("limit") int limit,
-                                                    @Param("offset") int offset);
+    @Results(
+            id = "txnEntryMap",
+            value = {
+                @Result(column = "posting_id", property = "postingId", id = true),
+                @Result(column = "txn_id", property = "txnId"),
+                @Result(column = "account_id", property = "accountId"),
+                @Result(column = "amount", property = "amount"),
+                @Result(column = "memo", property = "memo"),
+                @Result(column = "settlement_time", property = "settlementTime", javaType = Instant.class),
+                @Result(column = "message", property = "message"),
+                @Result(column = "initiator_uuid_bin", property = "initiatorUuid"),
+                @Result(column = "authorizer_uuid_bin", property = "authorizerUuid"),
+                @Result(column = "plugin_system", property = "pluginSystem")
+            })
+    List<TransactionEntry> findTransactionsByAccount(
+            @Param("accountId") int accountId, @Param("limit") int limit, @Param("offset") int offset);
 
     @Select("""
       SELECT COUNT(*)
@@ -154,9 +159,8 @@ public interface LedgerMapper {
       </script>
       """)
     @ResultMap("txnEntryMap")
-    List<TransactionEntry> findTransactionsByAccounts(@Param("ids") List<Integer> ids,
-                                                      @Param("limit") int limit,
-                                                      @Param("offset") int offset);
+    List<TransactionEntry> findTransactionsByAccounts(
+            @Param("ids") List<Integer> ids, @Param("limit") int limit, @Param("offset") int offset);
 
     @Select("""
       <script>
@@ -182,8 +186,8 @@ public interface LedgerMapper {
        LIMIT #{maxRows}
       """)
     @ResultMap("txnEntryMap")
-    List<TransactionEntry> findAllTransactionsByAccount(@Param("accountId") int accountId,
-                                                       @Param("maxRows") int maxRows);
+    List<TransactionEntry> findAllTransactionsByAccount(
+            @Param("accountId") int accountId, @Param("maxRows") int maxRows);
 
     // ---- Postings for a single transaction ----
 
@@ -194,11 +198,11 @@ public interface LedgerMapper {
        ORDER BY posting_id
       """)
     @ConstructorArgs({
-            @Arg(column = "posting_id", javaType = Long.class, id = true),
-            @Arg(column = "txn_id",     javaType = long.class),
-            @Arg(column = "account_id", javaType = int.class),
-            @Arg(column = "amount",     javaType = java.math.BigDecimal.class),
-            @Arg(column = "memo",       javaType = String.class)
+        @Arg(column = "posting_id", javaType = Long.class, id = true),
+        @Arg(column = "txn_id", javaType = long.class),
+        @Arg(column = "account_id", javaType = int.class),
+        @Arg(column = "amount", javaType = java.math.BigDecimal.class),
+        @Arg(column = "memo", javaType = String.class)
     })
     List<LedgerPosting> findPostingsByTxnId(@Param("txnId") long txnId);
 }

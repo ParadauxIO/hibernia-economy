@@ -27,6 +27,7 @@ public interface ItemCodeService {
     /** The canonical sign string for {@code item} (material + durability + #code), within {@code maxWidth} (0 = unlimited). */
     String encode(ItemStack item, int maxWidth);
 
-    /** The {@link ItemStack} for a canonical sign string (material + durability + #code), or {@code null}. */
+    /** The {@link ItemStack} for a canonical sign string (material + durability + #code),
+     * or an exact stored-item reference (#code), or {@code null}. */
     ItemStack decode(String itemName);
 }

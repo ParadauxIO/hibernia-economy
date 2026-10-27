@@ -52,7 +52,17 @@ public final class FindDialog implements DialogHandler {
         DialogView.Builder b = DialogView.multiAction(Text.key("find.title", "item", state.itemDisplayName()))
                 .canCloseWithEscape(true);
         if (state.itemStack() != null) {
-            b.bodyItem(state.itemStack());
+            // The dialog codec rejects damageable items with a stack limit above one.
+            // Sanitize only the preview; search identity and the player's item stay intact.
+            var preview = state.itemStack().asOne();
+            var meta = preview.getItemMeta();
+            if (meta instanceof org.bukkit.inventory.meta.Damageable damageable
+                    && (damageable.hasMaxDamage() || preview.getType().getMaxDurability() > 0)
+                    && preview.getMaxStackSize() > 1) {
+                meta.setMaxStackSize(1);
+                preview.setItemMeta(meta);
+            }
+            b.bodyItem(preview);
         }
         return b.toggle("fuzzy", "find.toggle.fuzzy", "find.opt.on", "find.opt.off", state.fuzzy())
                 .button(Text.key("find.button.buy-cheap"), "buyCheap")

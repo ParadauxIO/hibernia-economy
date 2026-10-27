@@ -362,14 +362,10 @@ public class InfoServiceImpl implements InfoService {
 
         StringBuilder message = new StringBuilder();
         message.append(Colours.GRAY);
-        message.append(capitalizeFirstLetter(item.getType().name(), '_')).append(" of ");
-        message.append(capitalizeFirstLetter(
-                        potionMeta.getBasePotionData().getType().name(), '_'))
-                .append(' ');
-        if (potionMeta.getBasePotionData().isUpgraded()) {
-            message.append("II");
-        } else if (potionMeta.getBasePotionData().isExtended()) {
-            message.append("+");
+        message.append(capitalizeFirstLetter(item.getType().name(), '_'));
+        var baseType = potionMeta.getBasePotionType();
+        if (baseType != null) {
+            message.append(" of ").append(capitalizeFirstLetter(baseType.name(), '_'));
         }
 
         for (PotionEffect effect : potionMeta.getCustomEffects()) {
