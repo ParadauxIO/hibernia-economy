@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import 'server-only';
 import { sql, type RawBuilder, type SqlBool } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
@@ -48,7 +49,7 @@ export interface SearchResult {
   player_uuid: string | null;
   player_name: string | null;
   /** Where the result leads: the account, the firm, or a player's personal account. */
-  href?: string;
+  href?: AppHref;
   /** How the text matched, best first. */
   match?: SearchMatch;
 }
@@ -60,7 +61,7 @@ export interface ItemSearchResult {
   secondary: string | null;
   item_key: string;
   last_traded_at: Date | null;
-  href: string;
+  href: AppHref;
   match: SearchMatch;
 }
 

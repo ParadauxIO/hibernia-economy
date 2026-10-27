@@ -7,7 +7,6 @@
 //
 // The last crumb is the current page: it is not a link and carries aria-current.
 import Link from 'next/link';
-import type { Route } from 'next';
 import { sectionCrumbs, type Crumb } from '@/lib/nav';
 
 export function Breadcrumbs({ section, items = [] }: { section?: string; items?: Crumb[] }) {
@@ -23,7 +22,7 @@ export function Breadcrumbs({ section, items = [] }: { section?: string; items?:
               {last || !crumb.href ? (
                 <span aria-current={last ? 'page' : undefined}>{crumb.label}</span>
               ) : (
-                <Link href={crumb.href as Route} prefetch={false}>{crumb.label}</Link>
+                <Link href={crumb.href} prefetch={false}>{crumb.label}</Link>
               )}
             </li>
           );

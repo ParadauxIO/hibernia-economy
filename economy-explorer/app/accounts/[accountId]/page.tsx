@@ -106,7 +106,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pa
 
   const crumbs = firm
     ? [{ label: firm.display_name, href: firmHref(firm.display_name) }, { label }]
-    : [{ label: 'Accounts', href: '/accounts' }, { label }];
+    : [{ label: 'Accounts', href: '/accounts' as const }, { label }];
 
   return <>
     <Breadcrumbs section={firm ? '/firms' : '/accounts'} items={firm ? crumbs : crumbs.slice(1)} />

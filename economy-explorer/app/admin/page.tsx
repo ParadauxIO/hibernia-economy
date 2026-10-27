@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { DescriptionList, PageHeader, Section } from '@democracycraft/design-system';
 import { adminToolsFor, canAccessAdmin, type AdminTool } from '@/lib/auth/admin';
 import { auditView } from '@/lib/audit';
@@ -35,7 +34,7 @@ export default async function AdminHomePage() {
           <Section key={group} id={`admin-${group.toLowerCase()}`} title={group} description={description} divider>
             <DescriptionList
               items={items.map((t) => ({
-                label: <Link href={t.href as Route} prefetch={false}>{t.title}</Link>,
+                label: <Link href={t.href} prefetch={false}>{t.title}</Link>,
                 value: t.desc,
               }))}
             />

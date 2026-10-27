@@ -48,10 +48,7 @@ const config: NextConfig = {
   experimental: { serverMinification: false },
   poweredByHeader: false,
   reactStrictMode: true,
-  // Re-enable once all pages from the migration plan exist (Phase 2).
-  typedRoutes: false,
-  // ESLint is wired up (`npm run lint`) but kept out of the production build so
-  // a lint warning can't fail CI; run it separately in dev/PR.
+  typedRoutes: true,
 };
 
 export default config;

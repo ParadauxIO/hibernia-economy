@@ -1,5 +1,5 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Tag, When } from '@democracycraft/design-system';
 import { CursorPager } from '@democracycraft/design-system/next';
 import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
@@ -43,7 +43,7 @@ function targetOf(type: string | null, id: string | null): { kind: string | null
 }
 
 /** Where a target can be opened, if anywhere. */
-function targetHref(kind: string | null, value: string | null): string | null {
+function targetHref(kind: string | null, value: string | null): AppHref | null {
   if (!kind || !value) return null;
   switch (kind) {
     case 'account': return /^\d+$/.test(value) ? `/accounts/${value}` : null;
@@ -64,7 +64,7 @@ const columns: Column<AuditEntry>[] = [
     cell: (e) => (
       <>
         {e.actor_uuid
-          ? <Link href={`/admin/players/${e.actor_uuid}` as Route} prefetch={false}>{e.actor_name ?? e.actor_uuid.slice(0, 8)}</Link>
+          ? <Link href={`/admin/players/${e.actor_uuid}`} prefetch={false}>{e.actor_name ?? e.actor_uuid.slice(0, 8)}</Link>
           : <span>{e.actor_name ?? e.actor_sub}</span>}
         {e.actor_role && <span className="dt-sub">{` · ${e.actor_role}`}</span>}
       </>
@@ -82,7 +82,7 @@ const columns: Column<AuditEntry>[] = [
       const { kind, value } = targetOf(e.target_type, e.target_id);
       const href = targetHref(kind, value);
       const text = `${TARGET_LABEL.get(kind ?? '') ?? kind ?? '—'}${value ? ` ${value}` : ''}`;
-      return href ? <Link href={href as Route} prefetch={false}>{text}</Link> : <span>{text}</span>;
+      return href ? <Link href={href} prefetch={false}>{text}</Link> : <span>{text}</span>;
     },
   },
   { key: 'path', header: 'Path', secondary: true, optional: true, cell: (e) => <span className="mono">{e.path}</span> },

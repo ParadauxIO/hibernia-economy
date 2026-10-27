@@ -1,12 +1,13 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { TableEmpty, type LinkComponent } from '@democracycraft/design-system/table';
 import { cleared, filterText, tableHref, withQuery, withoutFilter, type AnyTable, type DescribeOptions, type TableState } from '@/lib/tables/core';
 
-export const RouterLink: LinkComponent = Link;
+export const RouterLink: LinkComponent<AppHref> = Link;
 
 /** The empty state for an admin chip table: which filters are active, and a way to drop each. */
 export function AdminTableEmpty<T extends AnyTable>({ pathname, state, table, describe }: {
-  pathname: string;
+  pathname: AppHref;
   state: TableState<T>;
   table: T;
   describe?: DescribeOptions;

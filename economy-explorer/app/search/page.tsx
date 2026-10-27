@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Button, EmptyState, EntityBadge, Input, Money, PageHeader, Section, Segmented, ToolbarLayout, When } from '@democracycraft/design-system';
 import { DataTable, TablePager, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -15,7 +16,7 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Search', description: 'Search accounts, players, firms and items across the {server} economy.', path: '/search' });
 }
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 const PAGE_SIZE = 50;
 const PREVIEW = 5;
 
@@ -91,7 +92,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const result = q ? await searchEverything(q, { tab, limit: PAGE_SIZE, offset: (pageNo - 1) * PAGE_SIZE, preview: PREVIEW }) : null;
   const groups = result ? [result.accounts, result.firms, result.players, result.items] : [];
   const total = groups.reduce((n, g) => n + g.total, 0);
-  const tabHref = (t: SearchTab, p = 1) => `/search?q=${encodeURIComponent(q)}${t === 'all' ? '' : `&type=${t}`}${p > 1 ? `&page=${p}` : ''}`;
+  const tabHref = (t: SearchTab, p = 1) => `/search?q=${encodeURIComponent(q)}${t === 'all' ? '' : `&type=${t}`}${p > 1 ? `&page=${p}` : ''}` as const;
 
   return (
     <>

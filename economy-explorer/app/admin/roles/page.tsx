@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Section } from '@democracycraft/design-system';
 import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -27,7 +26,7 @@ const columns: Column<AdminRoleRow>[] = [
     key: 'name',
     header: 'Role',
     sort: 'name',
-    cell: (r) => <><Link href={`/admin/roles/${encodeURIComponent(r.key)}` as Route} prefetch={false}>{r.name}</Link><span className="dt-sub mono">{` ${r.key}`}</span></>,
+    cell: (r) => <><Link href={`/admin/roles/${encodeURIComponent(r.key)}`} prefetch={false}>{r.name}</Link><span className="dt-sub mono">{` ${r.key}`}</span></>,
   },
   { key: 'description', header: 'Description', secondary: true, cell: (r) => r.description ?? '—' },
   { key: 'permissions', header: 'Permissions', sort: 'permissions', numeric: true, cell: (r) => r.permissionCount },
@@ -48,7 +47,7 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
         title="Roles"
         subtitle="A role is a named set of permissions. Players get roles directly or through a group; roles combine."
         actions={hasPermission(viewer, 'groups.read')
-          ? <Link href={'/admin/role-grants' as Route} prefetch={false} className="btn btn-quiet">Browse user role grants and group provenance</Link>
+          ? <Link href={'/admin/role-grants'} prefetch={false} className="btn btn-quiet">Browse user role grants and group provenance</Link>
           : undefined}
       />
       <FilterBar table={adminRolesTable} total={roles.length} columns={columnOptions(columns)} tableId={TABLE_ID} />

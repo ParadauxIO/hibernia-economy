@@ -4,7 +4,7 @@
 // HTML round-trip is the data fetch.
 
 import { Button, Input, Select, ToolbarLayout } from '@democracycraft/design-system';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition, type ReactNode } from 'react';
 import { useHydrated } from '@democracycraft/design-system/use-hydrated';
 
@@ -17,7 +17,6 @@ interface ToolbarProps {
 
 export function Toolbar({ searchPlaceholder, filters, right, filterLabels = {} }: ToolbarProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const urlQ = params.get('q') ?? '';
   const [input, setInput] = useState(urlQ);
@@ -39,7 +38,7 @@ export function Toolbar({ searchPlaceholder, filters, right, filterLabels = {} }
     else sp.delete('q');
     sp.delete('page'); // reset to page 1 on search change
     startTransition(() => {
-      router.replace(`${pathname}?${sp.toString()}`);
+      router.replace(`?${sp.toString()}`);
     });
   }
 
@@ -51,7 +50,7 @@ export function Toolbar({ searchPlaceholder, filters, right, filterLabels = {} }
     keys.forEach(key => sp.delete(key));
     sp.delete('page');
     if (keys.includes('q')) setInput('');
-    startTransition(() => router.replace(`${pathname}?${sp.toString()}`));
+    startTransition(() => router.replace(`?${sp.toString()}`));
   }
 
   return <div className="results-toolbar" aria-busy={pending}>
@@ -97,7 +96,6 @@ export function FilterSelect({
   options: { value: string; label: string }[];
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const value = params.get(paramKey) ?? options[0]?.value ?? '';
   const ready = useHydrated();
@@ -109,7 +107,7 @@ export function FilterSelect({
     else sp.delete(paramKey);
     sp.delete('page');
     startTransition(() => {
-      router.replace(`${pathname}?${sp.toString()}`);
+      router.replace(`?${sp.toString()}`);
     });
   }
 
@@ -140,7 +138,6 @@ export function FilterInput({
   width?: number;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const urlV = params.get(paramKey) ?? '';
   const [val, setVal] = useState(urlV);
@@ -158,7 +155,7 @@ export function FilterInput({
     if (next) sp.set(paramKey, next);
     else sp.delete(paramKey);
     sp.delete('page');
-    startTransition(() => router.replace(`${pathname}?${sp.toString()}`));
+    startTransition(() => router.replace(`?${sp.toString()}`));
   }
 
   return (

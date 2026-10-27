@@ -520,7 +520,7 @@ export function serializeTableState(state: TableState, table: AnyTable, extra: [
 }
 
 /** `pathname?query` for a state, or just the pathname when every param is default. */
-export function tableHref(pathname: string, state: TableState, table: AnyTable, extra: [string, string][] = []): string {
+export function tableHref<Path extends string>(pathname: Path, state: TableState, table: AnyTable, extra: [string, string][] = []): Path | `${Path}?${string}` {
   const qs = serializeTableState(state, table, extra);
   return qs ? `${pathname}?${qs}` : pathname;
 }

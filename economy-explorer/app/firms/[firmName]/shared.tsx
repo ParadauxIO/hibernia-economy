@@ -1,3 +1,5 @@
+import type { TabItem } from '@democracycraft/design-system/next';
+import type { AppHref } from '@/lib/routes';
 import '@/components/entity/entity.css';
 import { notFound } from 'next/navigation';
 import { EntityBadge, InfoTip, PageHeader, Tag } from '@democracycraft/design-system';
@@ -52,7 +54,7 @@ export function FirmHeader({ loaded, tab }: { loaded: LoadedFirm; tab: FirmTab }
   const { firm, pub } = loaded;
   const s = pub.summary;
   const base = firmHref(firm.display_name);
-  const tabs = [
+  const tabs: TabItem<AppHref>[] = [
     { label: 'Overview', href: base, current: tab === 'overview' },
     { label: 'Members', href: `${base}/members`, current: tab === 'members', count: s.staff_count },
     { label: 'Financials', href: `${base}/financials`, current: tab === 'financials' },

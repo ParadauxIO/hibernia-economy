@@ -1,7 +1,7 @@
 import type { LinkComponent } from './DataTable';
 import './table.css';
 
-const PlainLink: LinkComponent = ({ href, className, children, 'aria-label': ariaLabel }) => (
+const PlainLink = ({ href, className, children, 'aria-label': ariaLabel }: React.ComponentProps<LinkComponent>) => (
   <a href={href} className={className} aria-label={ariaLabel}>{children}</a>
 );
 
@@ -10,15 +10,15 @@ const PlainLink: LinkComponent = ({ href, className, children, 'aria-label': ari
  * table state, so repeated params (one `f` per chip) survive. Unbounded feeds
  * use cursor paging instead (spec §4.3).
  */
-export function TablePager({ page, totalPages, hrefFor, link, label = 'Pagination' }: {
+export function TablePager<H extends string = string>({ page, totalPages, hrefFor, link, label = 'Pagination' }: {
   page: number;
   totalPages: number;
-  hrefFor: (page: number) => string;
-  link?: LinkComponent;
+  hrefFor: (page: number) => H;
+  link?: LinkComponent<H>;
   label?: string;
 }) {
   if (totalPages <= 1) return null;
-  const Link = link ?? PlainLink;
+  const Link: LinkComponent<H> = link ?? PlainLink;
   const step = (target: number, text: string, aria: string) => (
     target >= 1 && target <= totalPages && target !== page
       ? <Link href={hrefFor(target)} className="dt-pager-link" aria-label={aria}>{text}</Link>

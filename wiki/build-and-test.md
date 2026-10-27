@@ -311,6 +311,15 @@ npm run typecheck && npm run lint
 npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
 
+Typed routes are enabled (ADT-151). Run `npm run typecheck` to generate Next's
+route declarations before checking navigation. Application navigation models use
+`AppHref` from `lib/routes.ts`; shared Next adapters preserve `Route<T>` and
+framework-neutral tables carry their caller's href type. Keep literal path types
+in URL builders rather than asserting `as Route`. Compile-only negative cases in
+`test/types/routes.tsx` ensure misspelled destinations fail the check. The docs
+index has an explicit page alongside its catch-all so `/docs` appears in Next's
+generated route union.
+
 `npm run typecheck` uses the native TypeScript 7 `tsc` executable, installed as
 the `@typescript/native` npm alias. The `typescript` package name aliases
 `@typescript/typescript6` so ESLint, Next.js, and code generation can still use

@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { EntityBadge, MetricCard, MetricRow, Money, PageHeader, Section, When } from '@democracycraft/design-system';
 import { BackLink } from '@democracycraft/design-system/next';
@@ -24,7 +23,7 @@ export async function generateMetadata() {
 }
 
 const accountColumns: Column<FirmAccountRow>[] = [
-  { key: 'account', header: 'Account', cell: (a) => <><Link href={`/accounts/${a.account_id}` as Route} prefetch={false}>{a.display_name ?? `#${a.account_id}`}</Link><span className="dt-sub">{` #${a.account_id}`}{a.archived ? ' · archived' : ''}</span></> },
+  { key: 'account', header: 'Account', cell: (a) => <><Link href={`/accounts/${a.account_id}`} prefetch={false}>{a.display_name ?? `#${a.account_id}`}</Link><span className="dt-sub">{` #${a.account_id}`}{a.archived ? ' · archived' : ''}</span></> },
   { key: 'type', header: 'Type', secondary: true, cell: (a) => <EntityBadge type={a.account_type} /> },
   { key: 'balance', header: 'Balance', numeric: true, cell: (a) => fmtAmtFull(a.balance) },
 ];

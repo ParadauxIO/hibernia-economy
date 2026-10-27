@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { DataTable, TableEmpty, TablePager, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
 import { ExportMenuForViewer } from '@/components/ExportMenuForViewer';
@@ -70,7 +71,7 @@ const columns: Column<ExplorerAccountRow>[] = [
   },
 ];
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 export default async function AccountsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const state = parseTableState(await searchParams, accountsTable);

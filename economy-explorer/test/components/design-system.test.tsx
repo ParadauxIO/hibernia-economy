@@ -187,9 +187,9 @@ describe('next adapters', () => {
     render(<RangePicker value={{ preset: '30d', from: '2026-09-27', to: '2026-10-26', compare: false }} />);
     expect(screen.getByRole('button', { name: '30d' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(screen.getByRole('button', { name: '7d' }));
-    expect(navigation.router.push).toHaveBeenLastCalledWith('/economy?range=7d', { scroll: false });
+    expect(navigation.router.push).toHaveBeenLastCalledWith('?range=7d', { scroll: false });
     await user.click(screen.getByRole('button', { name: /Compare to previous/ }));
-    expect(navigation.router.push).toHaveBeenLastCalledWith('/economy?range=30d&cmp=1', { scroll: false });
+    expect(navigation.router.push).toHaveBeenLastCalledWith('?range=30d&cmp=1', { scroll: false });
   });
 
   it('SidebarLayout marks the current route and offers a select on phones', () => {

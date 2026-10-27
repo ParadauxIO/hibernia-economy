@@ -1,4 +1,5 @@
 'use client';
+import type { AppHref } from '@/lib/routes';
 // The transaction detail drawer: the design system's modal Dialog, open while
 // the URL has ?txn=<id>. Its content is rendered on the server and passed in;
 // closing it (Escape, the backdrop, the Close button) drops ?txn from the URL so
@@ -6,18 +7,17 @@
 
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Route } from 'next';
 import { Dialog } from '@democracycraft/design-system/popover';
 
 export function TxnDrawer({ title, description, closeHref, actions, children }: {
   title: ReactNode;
   description?: ReactNode;
-  closeHref: string;
+  closeHref: AppHref;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   const router = useRouter();
-  const close = () => router.replace(closeHref as Route, { scroll: false });
+  const close = () => router.replace(closeHref, { scroll: false });
   return (
     <Dialog
       open

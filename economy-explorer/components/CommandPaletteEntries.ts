@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 // What the command palette can show, as plain data, and how a query ranks it.
 // Pure (no React, no DOM) so the rules are unit-tested directly.
 import type { SearchResult } from '@/lib/sql/search';
@@ -9,7 +10,7 @@ import type { RecentItem } from './CommandPaletteStore';
 export type ActionId = 'copy-ip' | 'toggle-theme' | 'log-in' | 'log-out';
 
 export type PaletteEntry =
-  | { id: string; type: 'link'; kind: RecentItem['kind']; label: string; detail?: string | undefined; href: string; keywords?: string | undefined; uuid?: string | null | undefined; recent?: boolean | undefined }
+  | { id: string; type: 'link'; kind: RecentItem['kind']; label: string; detail?: string | undefined; href: AppHref; keywords?: string | undefined; uuid?: string | null | undefined; recent?: boolean | undefined }
   | { id: string; type: 'action'; action: ActionId; label: string; detail?: string | undefined; keywords?: string | undefined };
 
 export interface PaletteGroup {

@@ -1,6 +1,5 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { EntityBadge, InfoTip, MetricCard, MetricRow, Money, Num, PageHeader, Pct, Section, SkeletonMetricRow, TableWrap } from '@democracycraft/design-system';
 import { RangePicker } from '@democracycraft/design-system/next';
 import { buildMetadata } from '@/lib/metadata';
@@ -113,7 +112,7 @@ async function TopAccounts() {
       <table className="data-table econ-table" aria-label="Largest accounts">
         <thead><tr><th scope="col">Account</th><th scope="col" data-secondary="true">Type</th><th scope="col" className="amount">Balance</th></tr></thead>
         <tbody>{result.value.topAccounts.map((a) => <tr key={a.account_id}>
-          <td><Link href={`/accounts/${a.account_id}` as Route} prefetch={false}>{accountLabel(a)}</Link> <span className="num muted small">#{a.account_id}</span></td>
+          <td><Link href={`/accounts/${a.account_id}`} prefetch={false}>{accountLabel(a)}</Link> <span className="num muted small">#{a.account_id}</span></td>
           <td data-secondary="true"><EntityBadge type={a.account_type} /></td>
           <td className="amount"><Money value={a.balance} /></td>
         </tr>)}</tbody>

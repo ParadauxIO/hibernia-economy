@@ -1,7 +1,6 @@
 import '@/app/me/me.css';
 import 'server-only';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { MetricCard, MetricRow, Money, Section, TableWrap } from '@democracycraft/design-system';
 import { BalanceLine } from '@/components/charts/AreaTimeline';
 import { AccountGroups } from '@/app/me/_components/AccountGroups';
@@ -58,7 +57,7 @@ export async function PlayerDashboard({ uuid, self = false, range, rangeLabel }:
 
     <Section title={`${thisMonth} by category`} divider
       description={<>Compared with {lastMonth}. Transfers between {your} own accounts are left out. <Updated coverage={o.month.coverage} /></>}
-      actions={<Link href={`/me/statements/${o.month.month}` as Route} className="btn btn-quiet" prefetch={false}>Statement</Link>}>
+      actions={<Link href={`/me/statements/${o.month.month}`} className="btn btn-quiet" prefetch={false}>Statement</Link>}>
       {monthCovered ? <>
         <PartlyCovered coverage={o.month.coverage} />
         <div className="me-split">

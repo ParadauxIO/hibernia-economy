@@ -1,7 +1,6 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { Route } from 'next';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Popover } from '../popover/Popover';
 import { RANGE_PARAMS, RANGE_PRESETS, type RangePreset, type RangeValue } from '../range';
@@ -28,7 +27,6 @@ export interface RangePickerProps {
  */
 export function RangePicker({ value, presets = RANGE_PRESETS.map((p) => p.key), allowCompare = true, min, max, resetParams = [] }: RangePickerProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [from, setFrom] = useState(value.from);
@@ -41,7 +39,7 @@ export function RangePicker({ value, presets = RANGE_PRESETS.map((p) => p.key), 
     for (const key of ['page', 'days', ...resetParams]) next.delete(key);
     for (const [k, v] of Object.entries(patch)) { if (v === null) next.delete(k); else next.set(k, v); }
     const qs = next.toString();
-    startTransition(() => router.push(`${pathname}${qs ? `?${qs}` : ''}` as Route, { scroll: false }));
+    startTransition(() => router.push(`?${qs}`, { scroll: false }));
   };
 
   const options = RANGE_PRESETS.filter((p) => presets.includes(p.key));

@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 // A transaction's facts, postings and "follow the money", shared by the drawer
 // on /transactions and the full page /transactions/[id]. Server component.
 
@@ -10,7 +11,7 @@ import { FOLLOW_HOURS, type FollowedAccount, type TransactionDetail } from '@/li
 import type { TxnPostingRow } from '@/lib/sql/ledger';
 import styles from './txn.module.css';
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 const postingColumns: Column<TxnPostingRow>[] = [
   {
@@ -52,7 +53,7 @@ export function TxnDetailBody({ detail, followed, hours, followHref, txnHref, sh
   /** The same view with another follow window. */
   followHref: (hours: number) => string;
   /** Where a transaction in the follow lists leads. */
-  txnHref: (txnId: number) => string;
+  txnHref: (txnId: number) => AppHref;
   /** False when the viewer may not see any receiving account's history. */
   showFollow: boolean;
   inDrawer?: boolean;

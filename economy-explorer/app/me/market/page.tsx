@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { MetricCard, MetricRow, Money, Num, PageHeader, Section, TableWrap } from '@democracycraft/design-system';
 import { RangePicker } from '@democracycraft/design-system/next';
 import { CsvButton } from '@/components/CsvButton';
@@ -69,7 +68,7 @@ function ItemTable({ title, rows, amountLabel, file }: { title: string; rows: Ma
         <tbody>
           {rows.length === 0 && <tr><td colSpan={4} className="me-empty">None in this period.</td></tr>}
           {rows.map((i) => <tr key={i.item_key}>
-            <td><Link href={`/chestshop/items/${encodeURIComponent(i.item_key)}` as Route} prefetch={false}>{i.item_name ?? i.item_key}</Link></td>
+            <td><Link href={`/chestshop/items/${encodeURIComponent(i.item_key)}`} prefetch={false}>{i.item_name ?? i.item_key}</Link></td>
             <td className="amount"><Num value={i.trades} /></td>
             <td className="amount"><Num value={i.quantity} /></td>
             <td className="amount"><Money value={i.amount} /></td>
@@ -100,7 +99,7 @@ function PartnerTable({ title, rows, who, amountLabel, file }: { title: string; 
           {rows.length === 0 && <tr><td colSpan={3} className="me-empty">None in this period.</td></tr>}
           {rows.map((p, i) => <tr key={`${p.partner_kind}-${p.firm_id ?? p.player_uuid ?? i}`}>
             <td>{p.partner_kind === 'firm' && p.firm_id !== null
-              ? <Link href={`/chestshop/firms/${p.firm_id}` as Route} prefetch={false}>{partnerName(p)}</Link>
+              ? <Link href={`/chestshop/firms/${p.firm_id}`} prefetch={false}>{partnerName(p)}</Link>
               : partnerName(p)}</td>
             <td className="amount"><Num value={p.trades} /></td>
             <td className="amount"><Money value={p.amount} /></td>

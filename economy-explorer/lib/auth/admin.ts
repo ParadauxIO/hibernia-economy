@@ -1,8 +1,9 @@
+import type { AppHref } from '@/lib/routes';
 import type { Viewer } from './viewer';
 import { hasPermission, type Permission } from './policy';
 
 export interface AdminTool {
-  href: string;
+  href: AppHref;
   title: string;
   /** The permission that opens the tool. */
   permission: Permission;

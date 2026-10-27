@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { MetricCard, MetricRow, Num, PageHeader, Section } from '@democracycraft/design-system';
 import { BackLink } from '@democracycraft/design-system/next';
@@ -72,8 +71,8 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
       >
         <ol className={styles.steps}>
           <li>Set where members come from under <a href="#sources">Membership sources</a>: a LuckPerms group (for example <code>group.doc</code>), a firm, a region, or manual members.</li>
-          <li>Tick the roles they should get{compliance ? <>, for example <Link href={`/admin/roles/${compliance.key}` as Route} prefetch={false}>{compliance.name}</Link> for a department that needs the compliance tools</> : null}.</li>
-          <li>Membership then follows the source automatically. What each role allows is edited on its <Link href={'/admin/roles' as Route} prefetch={false}>role page</Link>.</li>
+          <li>Tick the roles they should get{compliance ? <>, for example <Link href={`/admin/roles/${compliance.key}`} prefetch={false}>{compliance.name}</Link> for a department that needs the compliance tools</> : null}.</li>
+          <li>Membership then follows the source automatically. What each role allows is edited on its <Link href={'/admin/roles'} prefetch={false}>role page</Link>.</li>
         </ol>
         <CapabilitiesForm
           groupId={id}

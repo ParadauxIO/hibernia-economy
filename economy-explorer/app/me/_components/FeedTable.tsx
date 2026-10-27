@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, When } from '@democracycraft/design-system';
 import { DataTable, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -5,7 +6,7 @@ import type { ReactNode } from 'react';
 import type { FeedRow } from '@/lib/services/meFlows';
 import { PartyLink } from './PartyLink';
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 const CATEGORY_TONE: Record<string, string> = {
   wages: '1', shop_sales: '2', shop_purchases: '3', taxes: '4', fines: '5', property: '6', business: '7',

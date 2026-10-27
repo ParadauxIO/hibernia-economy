@@ -5,7 +5,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { Route } from 'next';
 import { useViewer } from '@/components/ViewerContext';
 import { itemMatches, sectionForPath, sectionItems, visibleSections } from '@/lib/nav';
 
@@ -20,7 +19,7 @@ export function HeaderNav() {
         return (
           <Link
             key={section.id}
-            href={section.href as Route}
+            href={section.href}
             className="shell-nav-link"
             aria-current={current ? (path === section.href ? 'page' : 'true') : undefined}
             // Default prefetch: Next prefetches only the static shell up to each
@@ -49,7 +48,7 @@ export function HeaderSectionNav() {
           return (
             <Link
               key={item.href}
-              href={item.href as Route}
+              href={item.href}
               prefetch={false}
               className="shell-subnav-link"
               aria-current={current ? (path === item.href ? 'page' : 'true') : undefined}

@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { PageHeader, When } from '@democracycraft/design-system';
 import { CursorPager } from '@democracycraft/design-system/next';
@@ -19,7 +20,7 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Government audit: views', description: 'Who viewed government data in your scope on {server}.', path: '/gov/audit/views' });
 }
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 const columns: Column<ViewRow>[] = [
   { key: 'actor', header: 'Viewer', cell: (v) => <PlayerRef uuid={v.actor_uuid} name={v.actor_name} /> },

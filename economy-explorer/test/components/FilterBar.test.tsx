@@ -12,7 +12,9 @@ function pushed(): { path: string; f: string[]; q: string | null; params: URLSea
   const calls = navigation.router.push.mock.calls;
   expect(calls.length).toBeGreaterThan(0);
   const href = calls[calls.length - 1]?.[0] ?? '';
-  const [path = '', query = ''] = href.split('?');
+  const url = new URL(href, `https://explorer.test${navigation.pathname}`);
+  const path = url.pathname;
+  const query = url.search;
   const params = new URLSearchParams(query);
   return { path, f: params.getAll('f'), q: params.get('q'), params };
 }
