@@ -54,6 +54,13 @@ public class PreviewServiceImpl implements PreviewService {
     // chunkKey -> (posKey -> display)
     private final Map<String, Map<String, TrackedPreview>> byChunk = new ConcurrentHashMap<>();
 
+    // Main-thread-only round robin. At 20 TPS each preview is checked once per 25 seconds.
+    // Above 50,000 previews the hard cap extends the cycle rather than stalling a tick.
+    private static final int CLEANUP_CYCLE_TICKS = 500;
+    private static final int MAX_CHECKS_PER_TICK = 100;
+    private final LinkedHashSet<TrackedPreview> validationQueue = new LinkedHashSet<>();
+    private long validationCredit;
+
     private record TrackedPreview(ItemDisplay display, World world, int x, int y, int z, List<String> lines) {
         boolean current() {
             if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
@@ -66,14 +73,21 @@ public class PreviewServiceImpl implements PreviewService {
 
     /** Sign editors can bypass Bukkit sign events, so reconcile tracked previews with live blocks. */
     void pruneInvalid() {
-        for (var chunk : byChunk.values()) {
-            chunk.entrySet().removeIf(entry -> {
-                if (entry.getValue().current()) return false;
-                entry.getValue().display().remove();
-                return true;
-            });
+        if (validationQueue.isEmpty()) {
+            validationCredit = 0;
+            return;
         }
-        byChunk.values().removeIf(Map::isEmpty);
+        validationCredit += validationQueue.size();
+        int checks = (int) Math.min(MAX_CHECKS_PER_TICK, validationCredit / CLEANUP_CYCLE_TICKS);
+        validationCredit %= CLEANUP_CYCLE_TICKS;
+        for (int i = 0; i < checks; i++) {
+            TrackedPreview preview = validationQueue.removeFirst();
+            if (preview.current()) {
+                validationQueue.add(preview);
+            } else {
+                destroy(preview.world().getName(), preview.x(), preview.y(), preview.z());
+            }
+        }
     }
 
     // players who have previews turned off (hidden for them only)
@@ -125,7 +139,7 @@ public class PreviewServiceImpl implements PreviewService {
                         io.paradaux.chestshop.services.SignService.getItem(sign))) return;
         List<String> lines = List.copyOf(java.util.Arrays.asList(sign.getLines()));
         if (cleanupTask == null) {
-            cleanupTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pruneInvalid, 20L, 20L);
+            cleanupTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pruneInvalid, 1L, 1L);
         }
 
         Location loc = new Location(world, x + 0.5, y + 1, z + 0.5);
@@ -153,8 +167,10 @@ public class PreviewServiceImpl implements PreviewService {
                 p.hideEntity(plugin, display);
             }
         }
+        TrackedPreview preview = new TrackedPreview(display, world, x, y, z, lines);
         byChunk.computeIfAbsent(chunkKey(worldName, x >> 4, z >> 4), k -> new ConcurrentHashMap<>())
-                .put(posKey(x, y, z), new TrackedPreview(display, world, x, y, z, lines));
+                .put(posKey(x, y, z), preview);
+        validationQueue.add(preview);
     }
 
     @Override
@@ -169,15 +185,20 @@ public class PreviewServiceImpl implements PreviewService {
         }
         TrackedPreview preview = chunk.remove(posKey);
         if (preview != null) {
+            validationQueue.remove(preview);
             preview.display().remove();
         }
+        if (chunk.isEmpty()) byChunk.remove(chunkKey);
     }
 
     @Override
     public void destroyChunk(String worldName, int chunkX, int chunkZ) {
         Map<String, TrackedPreview> chunk = byChunk.remove(chunkKey(worldName, chunkX, chunkZ));
         if (chunk != null) {
-            chunk.values().forEach(preview -> preview.display().remove());
+            chunk.values().forEach(preview -> {
+                validationQueue.remove(preview);
+                preview.display().remove();
+            });
         }
     }
 
@@ -185,6 +206,8 @@ public class PreviewServiceImpl implements PreviewService {
     public void destroyAll() {
         forEachDisplay(ItemDisplay::remove);
         byChunk.clear();
+        validationQueue.clear();
+        validationCredit = 0;
         if (cleanupTask != null) {
             cleanupTask.cancel();
             cleanupTask = null;

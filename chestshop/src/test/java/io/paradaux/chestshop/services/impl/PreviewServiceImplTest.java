@@ -137,7 +137,7 @@ class PreviewServiceImplTest {
     void cleanupDropsPreviewWhenItsChunkHasUnloaded() {
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
         when(world.isChunkLoaded(1, 2)).thenReturn(false);
-        preview.pruneInvalid();
+        advanceCleanup(500);
         verify(display).remove();
         // Only rendering read the block; cleanup never reloads it.
         verify(world, times(1)).getBlockAt(16, 64, 32);
@@ -147,11 +147,11 @@ class PreviewServiceImplTest {
     void cleanupIsScheduledOnceAndCancelledOnShutdown() {
         var scheduler = server.getScheduler();
         var task = mock(BukkitTask.class);
-        when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), eq(20L), eq(20L)))
+        when(scheduler.runTaskTimer(eq(plugin), any(Runnable.class), eq(1L), eq(1L)))
                 .thenReturn(task);
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
         preview.render("world", 17, 64, 33, new ItemStack(Material.DIAMOND));
-        verify(scheduler).runTaskTimer(eq(plugin), any(Runnable.class), eq(20L), eq(20L));
+        verify(scheduler).runTaskTimer(eq(plugin), any(Runnable.class), eq(1L), eq(1L));
         preview.destroyAll();
         verify(task).cancel();
     }
@@ -173,7 +173,7 @@ class PreviewServiceImplTest {
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
         var sign = (org.bukkit.block.Sign) world.getBlockAt(16, 64, 32).getState();
         when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "amethyst*"});
-        preview.pruneInvalid();
+        advanceCleanup(500);
         verify(display).remove();
         preview.render(shopAt(16, 64, 32, true));
         verifySpawns(1);
@@ -182,11 +182,88 @@ class PreviewServiceImplTest {
     @Test
     void deletedSignIsPrunedWithoutABreakEventButUnchangedSignIsKept() {
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
-        preview.pruneInvalid();
+        advanceCleanup(500);
         verify(display, never()).remove();
         when(world.getBlockAt(16, 64, 32).getState()).thenReturn(mock(org.bukkit.block.BlockState.class));
-        preview.pruneInvalid();
+        advanceCleanup(500);
         verify(display).remove();
+    }
+
+    private void advanceCleanup(int ticks) {
+        for (int tick = 0; tick < ticks; tick++) preview.pruneInvalid();
+    }
+
+    @Test
+    void validationIsSpreadAcrossTwentyFiveSecondsWithoutRepeatedReads() {
+        for (int x = 0; x < 1000; x++) {
+            preview.render("world", x, 64, 0, new ItemStack(Material.DIAMOND));
+        }
+        org.mockito.Mockito.clearInvocations(world);
+        advanceCleanup(1);
+        verify(world, times(2)).getBlockAt(anyInt(), anyInt(), anyInt());
+        advanceCleanup(499);
+        for (int x = 0; x < 1000; x++) verify(world).getBlockAt(x, 64, 0);
+        advanceCleanup(500);
+        for (int x = 0; x < 1000; x++) verify(world, times(2)).getBlockAt(x, 64, 0);
+        verify(display, never()).remove();
+    }
+
+    @Test
+    void aSinglePreviewIsNotRecheckedEverySecond() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        org.mockito.Mockito.clearInvocations(world);
+        advanceCleanup(499);
+        verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
+        advanceCleanup(1);
+        verify(world).getBlockAt(16, 64, 32);
+    }
+
+    @Test
+    void destroyedAndUnloadedPreviewsLeaveTheValidationQueueImmediately() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        preview.render("world", 32, 64, 32, new ItemStack(Material.DIAMOND));
+        preview.destroy("world", 16, 64, 32);
+        preview.destroyChunk("world", 2, 2);
+        verify(display, times(2)).remove();
+        org.mockito.Mockito.clearInvocations(world);
+        advanceCleanup(1000);
+        verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
+    }
+
+    @Test
+    void overloadedQueueCapsEachTickAndStillReachesTheTail() {
+        ItemStack item = new ItemStack(Material.DIAMOND);
+        for (int x = 0; x < 50_001; x++) {
+            preview.render("world", x, 64, 0, item);
+            if (x % 1000 == 0) org.mockito.Mockito.clearInvocations(world, display, server, plugin);
+        }
+        org.mockito.Mockito.clearInvocations(world);
+        advanceCleanup(1);
+        verify(world, times(100)).getBlockAt(anyInt(), anyInt(), anyInt());
+        advanceCleanup(499);
+        verify(world, times(50_000)).getBlockAt(anyInt(), anyInt(), anyInt());
+        verify(world, never()).getBlockAt(50_000, 64, 0);
+        advanceCleanup(1);
+        verify(world).getBlockAt(50_000, 64, 0);
+    }
+
+    @Test
+    void replacementAndShutdownDoNotLeaveStaleValidationEntries() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        org.mockito.Mockito.clearInvocations(world);
+        advanceCleanup(500);
+        verify(world).getBlockAt(16, 64, 32);
+        preview.destroyAll();
+        org.mockito.Mockito.clearInvocations(world);
+        advanceCleanup(500);
+        verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        org.mockito.Mockito.clearInvocations(world);
+        advanceCleanup(499);
+        verify(world, never()).getBlockAt(anyInt(), anyInt(), anyInt());
+        advanceCleanup(1);
+        verify(world).getBlockAt(16, 64, 32);
     }
 
     // ── render(worldName,...) ─────────────────────────────────────────────────

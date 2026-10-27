@@ -194,11 +194,11 @@ ratcheted **Spotless** check in `check`. Config lives in
 
 - Java: **palantir-java-format**. Build scripts: **ktlint** (`intellij_idea`
   style). `*.md`/`*.yml`/`*.sql`: no trailing whitespace, newline at EOF.
-- **Ratcheted from `origin/develop`**: only files that differ from it are checked
+- **Ratcheted from `origin/main`**: only files that differ from it are checked
   or formatted, so the tree is converted one touched file at a time instead of
   in one reformat that would conflict with every open branch. Touch a file, and
   the *whole* file must be formatted — run `spotlessApply` before committing.
-- The ref must exist locally (`git fetch origin develop`; in CI, check out with
+- The ref must exist locally (`git fetch origin main`; in CI, check out with
   `fetch-depth: 0`). If it's missing, Spotless is skipped with a warning — and
   `check` fails when `CI=true`, so a shallow CI checkout can't pass silently.
   Ratchet from something else with `-PspotlessRatchetFrom=<ref>`.
