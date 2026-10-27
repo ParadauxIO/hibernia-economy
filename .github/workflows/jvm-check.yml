@@ -69,7 +69,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Spotless ratchets against origin/develop (only files changed from it are
+          # Spotless ratchets against origin/main (only files changed from it are
           # format-checked); check fails loudly on CI if that ref is missing.
           fetch-depth: 0
 

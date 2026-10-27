@@ -13,7 +13,7 @@ migration base ref).
 
 | Job | What it runs | When |
 |---|---|---|
-| `JVM` | `./gradlew build --parallel --continue -Pci=true` — every project's `check` plus `assemble`, including Error Prone/NullAway, Spotless, ArchUnit and the coverage ratchets — against one **MariaDB 10.11** service with a database per suite. Full-history checkout so Spotless can ratchet against `origin/develop`. Publishes JUnit results as a check. | always |
+| `JVM` | `./gradlew build --parallel --continue -Pci=true` — every project's `check` plus `assemble`, including Error Prone/NullAway, Spotless, ArchUnit and the coverage ratchets — against one **MariaDB 10.11** service with a database per suite. Full-history checkout so Spotless can ratchet against `origin/main`. Publishes JUnit results as a check. | always |
 | `Coverage comment` | Comments Treasury's and Business's JaCoCo coverage on the PR. Advisory: the line + branch ratchets are `jacocoTestCoverageVerification` in their builds and already ran in `JVM`. | PRs |
 | `Mutation testing` | PIT (`:common`, `:treasury`, `:business`, `:treasury-api-plugin`, `:chestshop` `pitest`), each module failing under its `mutationThreshold`. History is cached per commit, so PR and push runs only re-analyse changed code; the nightly run starts cold. Reports are uploaded as `pitest-reports`. | as `Integration`; nightly always cold |
 | `REST API contract` | `oasdiff breaking` between the base branch's and this PR's `treasury-rest-api/openapi/openapi.json`; fails on breaking changes unless the PR has the `api-breaking-change` label. | PRs |
