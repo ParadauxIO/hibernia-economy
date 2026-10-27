@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ItemIcon } from '@/components/market/ItemIcon';
+import { ItemIcon, ItemIconProvider } from '@/components/market/ItemIcon';
 
 describe('ItemIcon', () => {
-  it.each([null, '', 'javascript:alert(1)', 'data:image/png;base64,AAAA'])('uses a letter tile for an unavailable or unsafe icon (%s)', (icon) => {
+  it.each([null, '', 'javascript:alert(1)', 'data:image/png;base64,AAAA', '//evil.example/a.png', '/\\evil.example/a.png', 'https://evil.example/a.png', 'http://static.minecraftitemids.com/64/a.png', 'https://user:pass@static.minecraftitemids.com/a.png'])('uses a letter tile for an unavailable or unsafe icon (%s)', (icon) => {
     const { container } = render(<ItemIcon icon={icon} name="diamond" size={48} />);
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByText('D')).toHaveAttribute('aria-hidden', 'true');
@@ -15,13 +15,20 @@ describe('ItemIcon', () => {
     expect(screen.getByText('?')).toBeInTheDocument();
   });
 
-  it.each(['/items/diamond.png', 'https://example.com/diamond.png', 'http://example.com/diamond.png'])('renders a valid texture (%s)', (icon) => {
+  it.each(['/items/diamond.png', 'https://static.minecraftitemids.com/64/diamond.png'])('renders a valid texture (%s)', (icon) => {
     render(<ItemIcon icon={icon} name="diamond" />);
     const image = screen.getByRole('presentation');
     expect(image).toHaveAttribute('src', icon);
     expect(image).toHaveAttribute('alt', '');
     expect(image).toHaveAttribute('loading', 'lazy');
     expect(image).toHaveStyle({ width: '36px', height: '36px' });
+  });
+
+  it('allows the configured HTTPS mirror without trusting other origins', () => {
+    const { container, rerender } = render(<ItemIconProvider origin="https://cdn.example"><ItemIcon icon="https://cdn.example/sprites/stone.png" name="stone" /></ItemIconProvider>);
+    expect(screen.getByRole('presentation')).toHaveAttribute('src', 'https://cdn.example/sprites/stone.png');
+    rerender(<ItemIconProvider origin="https://cdn.example"><ItemIcon icon="https://cdn.example.evil.test/stone.png" name="stone" /></ItemIconProvider>);
+    expect(container.querySelector('img')).toBeNull();
   });
 
   it('falls back on load failure and tries a different icon on the same instance', () => {

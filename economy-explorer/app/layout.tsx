@@ -21,6 +21,8 @@ import { HeaderAuth } from '@/components/HeaderAuth';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ModeToggle } from '@/components/ModeToggle';
 import { Footer } from '@/components/Footer';
+import { ItemIconProvider } from '@/components/market/ItemIcon';
+import { itemIconBase } from '@/lib/itemIcon';
 import { ViewerProvider } from '@/components/ViewerContext';
 import { ExplorerAnalytics } from '@/components/ExplorerAnalytics';
 import { FaroAnalytics } from '@/components/FaroAnalytics';
@@ -112,28 +114,30 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }}
         />
         <a href="#main-content" className="skip-link">Skip to content</a>
-        <ViewerProvider viewer={chrome}>
-          <header className="shell-header">
-            <div className="shell-bar">
-              <Link href="/" className="shell-brand" prefetch={false}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={server.icon} alt="" width={24} height={24} />
-                <span className="shell-brand-name">{server.name}</span>
-                <span className="shell-brand-product">Economy</span>
-              </Link>
-              <HeaderNav />
-              <div className="shell-tools">
-                <HeaderSearch />
-                <ModeToggle className="shell-desktop-only" />
-                <HeaderAuth balance={balance} />
-                <HeaderMenu />
+        <ItemIconProvider origin={itemIconBase().origin}>
+          <ViewerProvider viewer={chrome}>
+            <header className="shell-header">
+              <div className="shell-bar">
+                <Link href="/" className="shell-brand" prefetch={false}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={server.icon} alt="" width={24} height={24} />
+                  <span className="shell-brand-name">{server.name}</span>
+                  <span className="shell-brand-product">Economy</span>
+                </Link>
+                <HeaderNav />
+                <div className="shell-tools">
+                  <HeaderSearch />
+                  <ModeToggle className="shell-desktop-only" />
+                  <HeaderAuth balance={balance} />
+                  <HeaderMenu />
+                </div>
               </div>
-            </div>
-            <HeaderSectionNav />
-          </header>
-          <main id="main-content" className="explorer-main" tabIndex={-1}>{children}</main>
-          <CommandPalette serverIp={server.ip} currency={CURRENCY_SYMBOL} />
-        </ViewerProvider>
+              <HeaderSectionNav />
+            </header>
+            <main id="main-content" className="explorer-main" tabIndex={-1}>{children}</main>
+            <CommandPalette serverIp={server.ip} currency={CURRENCY_SYMBOL} />
+          </ViewerProvider>
+        </ItemIconProvider>
         <Footer server={server} />
         {umamiSrc && umamiId && (
           <>

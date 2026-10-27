@@ -1215,4 +1215,15 @@ class FirmServiceImplTest {
                 .isInstanceOf(BadCommandException.class)
                 .hasMessageContaining("already released");
     }
+
+    @Test
+    void nameOnlyLookup_preservesNumericNamesAndArchivedFirms() {
+        Firm named = new Firm();
+        named.setFirmId(99);
+        named.setArchived(true);
+        when(firms.getFirmByName("42")).thenReturn(named);
+        assertThat(svc.getAnyFirmByName("42")).isSameAs(named);
+        assertThat(svc.getAnyFirmByName("missing")).isNull();
+        verify(firms, never()).getFirmById(anyInt());
+    }
 }

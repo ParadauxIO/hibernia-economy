@@ -1,7 +1,6 @@
 package io.paradaux.business.services;
 
 import io.paradaux.business.model.Firm;
-
 import java.util.List;
 import java.util.UUID;
 
@@ -43,9 +42,11 @@ public interface FirmService {
     }
 
     List<Firm> listAllFirms(int page, int pageSize);
+
     List<Firm> listOwnedOrMemberFirms(UUID playerId);
 
     void updateFirmHq(String firmName, String plotName, UUID actorId);
+
     void updateFirmDiscord(String firmName, String url, UUID actorId);
 
     // ---- int-id overloads (structure/0004) ----------------------------------
@@ -55,7 +56,9 @@ public interface FirmService {
     // command entrypoints resolving user name-or-id input.
 
     DisbandResult disbandFirm(int firmId, UUID actorId);
+
     void updateFirmHq(int firmId, String plotName, UUID actorId);
+
     void updateFirmDiscord(int firmId, String url, UUID actorId);
 
     // ---- Staff/DOC administrative overrides (PAR-11) -------------------------
@@ -94,7 +97,9 @@ public interface FirmService {
     void updateDefaultAccount(Integer firmId, Integer accountId);
 
     void updateProprietor(Integer firmId, UUID playerId);
+
     boolean isProprietor(String firmName, UUID playerId);
+
     boolean isProprietor(Integer firmId, UUID playerId);
 
     /**
@@ -116,6 +121,9 @@ public interface FirmService {
     /** Resolves a firm by name or id <em>including archived</em> ones (readers / idempotency checks). */
     Firm getAnyFirmByNameOrId(String nameOrId);
 
+    /** Looks up a literal name, including numeric names and archived firms. */
+    Firm getAnyFirmByName(String name);
+
     /**
      * Archived-inclusive counterpart of {@link #getFirmById(int)} (ADT-96). Prefer
      * this over {@code getAnyFirmByNameOrId(String.valueOf(id))} on paths that
@@ -125,5 +133,4 @@ public interface FirmService {
     Firm getAnyFirmById(int firmId);
 
     List<Firm> listAllActiveFirms();
-
 }

@@ -336,6 +336,27 @@ class InfoServiceImplTest extends ServerTest {
     }
 
     @Test
+    void potion_withoutBaseOrEffects_omitsEmptyPotionLine() {
+        PotionMeta meta = mock(PotionMeta.class);
+        assertThat(collect(potionItem(meta))).doesNotContain("iteminfo_potion");
+    }
+
+    @Test
+    void potion_withoutBase_preservesCustomEffects() {
+        PotionMeta meta = mock(PotionMeta.class);
+        when(meta.getCustomEffects()).thenReturn(List.of(new PotionEffect(PotionEffectType.SPEED, 60, 0)));
+        ItemInfoLines lines = info.collectItemInfo(sender, potionItem(meta));
+        Component potion = lines.getMessages().stream()
+                .filter(entry -> entry.getKey().equals("iteminfo_potion"))
+                .findFirst()
+                .orElseThrow()
+                .getValue();
+        String text = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                .serialize(potion);
+        assertThat(text).contains("Speed", "0:03").doesNotStartWith("\n").doesNotContain("Potion of");
+    }
+
+    @Test
     void potion_upgraded_withBaseTypeAndEffects() {
         PotionMeta meta = mock(PotionMeta.class);
         when(meta.getBasePotionType()).thenReturn(PotionType.STRONG_SWIFTNESS); // extended: non-null
@@ -348,12 +369,12 @@ class InfoServiceImplTest extends ServerTest {
     }
 
     @Test
-    void potion_extended_noBaseTypeNoEffects() {
+    void potion_extended_withBaseTypeNoEffects() {
         PotionMeta meta = mock(PotionMeta.class);
-        when(meta.getBasePotionType()).thenReturn(null); // extended: skips base type
+        when(meta.getBasePotionType()).thenReturn(PotionType.LONG_SWIFTNESS);
         when(meta.getCustomEffects()).thenReturn(List.of()); // extended: empty -> no line
 
-        // basic emits the potion line; extended produces an empty message and adds nothing.
+        // The modern base type carries the extended variant without legacy PotionData.
         assertThat(collect(potionItem(meta))).contains("iteminfo_potion");
     }
 
