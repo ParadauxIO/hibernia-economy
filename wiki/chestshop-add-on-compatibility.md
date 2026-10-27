@@ -68,6 +68,12 @@ An empty left-click command disables transit. An empty right-click command opens
 the item inspector instead. Reload presentation settings with `/chestshop reload`;
 existing floating previews immediately receive the new scale.
 
+Fallback validation of floating previews is spread across 500 ticks (25 seconds
+at 20 TPS), with at most 100 sign checks per tick. Edits that bypass normal shop
+events can therefore leave an old preview visible until its next check. Cycles
+take longer at lower TPS or above 50,000 loaded previews. Normal shop removal and
+chunk unload still remove previews immediately.
+
 Native `/find toggle preview|visibility|hologram <true|false>` and
 `/csdb find ...` aliases remain available after the old database add-on is removed.
 Administrative `/csdb reload` and `/csdb resync <chunks>` require
