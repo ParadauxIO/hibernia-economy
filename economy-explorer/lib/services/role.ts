@@ -1,12 +1,13 @@
 import 'server-only';
+import type { AdminRoleMembersState } from '@/lib/tables/admin';
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { db, uuidToBin, binToUuid } from '@/lib/db';
+import { db, uuidToBin } from '@/lib/db';
 import { getViewer, type Viewer } from '@/lib/auth/viewer';
 import { requirePermission } from '@/lib/auth/access';
 import { isPermission, type Permission } from '@/lib/auth/policy';
 import { ForbiddenError } from '@/lib/errors';
-import { listRoleDefinitions, permissionsForRoles, resolveAuthorization, type Executor } from '@/lib/sql/role';
+import { countDirectRoleMembers, listDirectRoleMemberPage, listRoleDefinitions, permissionsForRoles, resolveAuthorization, type Executor } from '@/lib/sql/role';
 import { assertCanGrantRoles, withPolicyMutation } from '@/lib/auth/delegation';
 import { auditMutation, auditView } from '@/lib/audit';
 
@@ -103,16 +104,13 @@ export async function deleteRole(key: string, revision: number): Promise<void> {
   });
 }
 
-export async function listDirectRoleMembers(key: string) {
+export async function listDirectRoleMembers(key: string, state: AdminRoleMembersState) {
   const viewer = await getViewer();
   requirePermission(viewer, 'roles.read');
   await auditView(viewer, { path: `/admin/roles/${key}`, targetType: 'global', targetId: `role:${key}` });
-  const result = await sql<{ player_uuid_bin: Buffer; name: string | null }>`
-    SELECT r.player_uuid_bin, p.current_name AS name FROM explorer_role r
-    LEFT JOIN economy_players p ON p.player_uuid_bin = r.player_uuid_bin WHERE r.role = ${key}
-    ORDER BY p.current_name, r.player_uuid_bin
-  `.execute(db);
-  return result.rows.map(row => ({ uuid: binToUuid(row.player_uuid_bin), name: row.name }));
+  const total = await countDirectRoleMembers(key, state);
+  const page = Math.min(state.page, Math.max(1, Math.ceil(total / state.limit)));
+  return { rows: await listDirectRoleMemberPage(key, { ...state, page }), total, page };
 }
 export async function setDirectRoleMember(key: string, uuid: string, grant: boolean): Promise<void> {
   roleKey.parse(key);

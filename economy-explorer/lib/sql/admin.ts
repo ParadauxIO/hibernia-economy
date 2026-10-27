@@ -4,7 +4,7 @@ import { db, binToUuid, uuidToBin } from '@/lib/db';
 import { compileTableState, defineColumnMap, likeContains } from '@/lib/sql/tableState';
 import type { EntityOption } from '@/lib/tables/core';
 import { ADMIN_JOINS, toAdminRow, type AdminRawRow, type AdminWebhookRow } from '@/lib/sql/webhook';
-import { listGroupsWhere, type GroupSummary } from '@/lib/sql/group';
+import { countGroupsWhere, listGroupsWhere, type GroupSummary } from '@/lib/sql/group';
 import {
   adminApiKeysTable,
   adminGroupsTable,
@@ -303,7 +303,11 @@ export const adminGroupsColumnMap = defineColumnMap({
 
 export function listAdminGroups(state: AdminGroupsState): Promise<GroupSummary[]> {
   const c = compileTableState(state, adminGroupsColumnMap);
-  return listGroupsWhere(c.where, c.orderBy);
+  return listGroupsWhere(c.where, c.orderBy, state.limit, (state.page - 1) * state.limit);
+}
+
+export function countAdminGroups(state: AdminGroupsState): Promise<number> {
+  return countGroupsWhere(compileTableState(state, adminGroupsColumnMap).where);
 }
 
 // ── Roles ───────────────────────────────────────────────────────────────────
@@ -337,18 +341,27 @@ export const adminRolesColumnMap = defineColumnMap({
   },
 });
 
-export async function listAdminRoles(state: AdminRolesState): Promise<AdminRoleRow[]> {
-  const c = compileTableState(state, adminRolesColumnMap);
-  const r = await sql<{ role_key: string; name: string; description: string | null; permission_count: number | string; member_count: number | string; group_count: number | string }>`
-    SELECT r.* FROM (
+const ROLE_SUMMARY = sql`(
       SELECT d.role_key, d.name, d.description,
              (SELECT COUNT(*) FROM explorer_role_permission p WHERE p.role_key = d.role_key) AS permission_count,
              (SELECT COUNT(*) FROM explorer_role er WHERE er.role = d.role_key) AS member_count,
              (SELECT COUNT(*) FROM explorer_group_capability gc WHERE gc.capability = d.role_key) AS group_count
       FROM explorer_role_definition d
-    ) r
+) r`;
+
+export async function countAdminRoles(state: AdminRolesState): Promise<number> {
+  const c = compileTableState(state, adminRolesColumnMap);
+  const r = await sql<{ total: number | string }>`SELECT COUNT(*) AS total FROM ${ROLE_SUMMARY} ${c.where}`.execute(db);
+  return Number(r.rows[0]?.total ?? 0);
+}
+
+export async function listAdminRoles(state: AdminRolesState): Promise<AdminRoleRow[]> {
+  const c = compileTableState(state, adminRolesColumnMap);
+  const r = await sql<{ role_key: string; name: string; description: string | null; permission_count: number | string; member_count: number | string; group_count: number | string }>`
+    SELECT r.* FROM ${ROLE_SUMMARY}
     ${c.where}
     ${c.orderBy}
+    LIMIT ${state.limit} OFFSET ${(state.page - 1) * state.limit}
   `.execute(db);
   return r.rows.map((row) => ({
     key: row.role_key,

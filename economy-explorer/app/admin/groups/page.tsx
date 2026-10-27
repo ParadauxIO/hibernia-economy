@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { PageHeader, Section, Tag } from '@democracycraft/design-system';
-import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
+import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
 import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
@@ -9,7 +9,7 @@ import { buildMetadata } from '@/lib/metadata';
 import { getAdminGroups } from '@/lib/services/admin';
 import type { GroupSummary } from '@/lib/sql/group';
 import { adminGroupsTable } from '@/lib/tables/admin';
-import { parseTableState, tableHref, withSort, type TableState } from '@/lib/tables/core';
+import { parseTableState, tableHref, withPage, withSort, type TableState } from '@/lib/tables/core';
 import { AdminGate } from '../_components/AdminGate';
 import { AdminTableEmpty, RouterLink } from '../_components/table';
 import { CreateGroupForm } from './create-group-form';
@@ -85,18 +85,19 @@ export default async function AdminGroupsPage({ searchParams }: { searchParams: 
       )}
 
       <Section id="all-groups" title="All groups" divider={hasPermission(viewer, 'groups.create')}>
-        <FilterBar table={adminGroupsTable} total={groups.length} columns={columnOptions(columns)} tableId={TABLE_ID} />
+        <FilterBar table={adminGroupsTable} total={groups.total} columns={columnOptions(columns)} tableId={TABLE_ID} />
         <DataTable
           id={TABLE_ID}
           label="All groups"
           columns={columns}
-          rows={groups}
+          rows={groups.rows}
           rowKey={(g) => g.groupId}
           sort={state.sort}
           sortHref={(field, dir) => href(withSort(state, field, dir, adminGroupsTable))}
           link={RouterLink}
           empty={<AdminTableEmpty pathname={PATH} state={state} table={adminGroupsTable} />}
         />
+        <TablePager page={groups.page} totalPages={Math.max(1, Math.ceil(groups.total / state.limit))} hrefFor={(p) => href(withPage(state, p))} link={RouterLink} label="Groups pages" />
       </Section>
     </>
   );

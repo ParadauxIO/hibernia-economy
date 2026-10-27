@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { PageHeader, Section } from '@democracycraft/design-system';
-import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
+import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
 import { getViewer, hasPermission } from '@/lib/auth';
 import { buildMetadata } from '@/lib/metadata';
 import { getAdminRoles } from '@/lib/services/admin';
 import type { AdminRoleRow } from '@/lib/sql/admin';
 import { adminRolesTable } from '@/lib/tables/admin';
-import { parseTableState, tableHref, withSort, type TableState } from '@/lib/tables/core';
+import { parseTableState, tableHref, withPage, withSort, type TableState } from '@/lib/tables/core';
 import { AdminGate } from '../_components/AdminGate';
 import { AdminTableEmpty, RouterLink } from '../_components/table';
 import { RoleEditor } from './role-editor';
@@ -50,18 +50,19 @@ export default async function RolesPage({ searchParams }: { searchParams: Promis
           ? <Link href={'/admin/role-grants'} prefetch={false} className="btn btn-quiet">Browse user role grants and group provenance</Link>
           : undefined}
       />
-      <FilterBar table={adminRolesTable} total={roles.length} columns={columnOptions(columns)} tableId={TABLE_ID} />
+      <FilterBar table={adminRolesTable} total={roles.total} columns={columnOptions(columns)} tableId={TABLE_ID} />
       <DataTable
         id={TABLE_ID}
         label="Roles"
         columns={columns}
-        rows={roles}
+        rows={roles.rows}
         rowKey={(r) => r.key}
         sort={state.sort}
         sortHref={(field, dir) => href(withSort(state, field, dir, adminRolesTable))}
         link={RouterLink}
         empty={<AdminTableEmpty pathname={PATH} state={state} table={adminRolesTable} />}
       />
+      <TablePager page={roles.page} totalPages={Math.max(1, Math.ceil(roles.total / state.limit))} hrefFor={(p) => href(withPage(state, p))} link={RouterLink} label="Roles pages" />
       {hasPermission(viewer, 'roles.create') && (
         <Section id="create-role" title="Create a role" description="You can only include permissions you hold yourself." divider>
           <RoleEditor actorPermissions={viewer.permissions} />
