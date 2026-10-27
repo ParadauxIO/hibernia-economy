@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Tag, When } from '@democracycraft/design-system';
 import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -54,9 +53,9 @@ export default async function AdminApiKeysPage({ searchParams }: { searchParams:
       header: 'Scope',
       secondary: true,
       cell: (k) => (k.firm_id && k.firm_name
-        ? <Link href={`/firms/${encodeURIComponent(k.firm_name)}` as Route} prefetch={false}>Firm: {k.firm_name}</Link>
+        ? <Link href={`/firms/${encodeURIComponent(k.firm_name)}`} prefetch={false}>Firm: {k.firm_name}</Link>
         : k.account_id
-          ? <Link href={`/accounts/${k.account_id}` as Route} prefetch={false}>Account: {k.account_name ?? `#${k.account_id}`}</Link>
+          ? <Link href={`/accounts/${k.account_id}`} prefetch={false}>Account: {k.account_name ?? `#${k.account_id}`}</Link>
           : '—'),
     },
     ...(hasUsage ? [

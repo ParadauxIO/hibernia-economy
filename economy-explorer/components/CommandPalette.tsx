@@ -10,7 +10,6 @@
 // region announces searching, result counts and action feedback.
 
 import { useRouter } from 'next/navigation';
-import type { Route } from 'next';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { PlayerHead } from '@democracycraft/design-system';
 import { searchPreview } from '@/lib/actions/search';
@@ -180,7 +179,7 @@ export function CommandPalette({ serverIp, currency, search = defaultSearch }: {
         if (!entry.id.startsWith('search:')) rememberRecent(item);
       }
       closePalette();
-      router.push(entry.href as Route);
+      router.push(entry.href);
       return;
     }
     switch (entry.action) {

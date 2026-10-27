@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Section, Tag } from '@democracycraft/design-system';
 import { DataTable, type Column } from '@democracycraft/design-system/table';
 import { hasPermission } from '@/lib/auth/policy';
@@ -43,7 +42,7 @@ export default async function AdminFirmsPage({ searchParams }: { searchParams: P
       header: 'Firm',
       cell: (f) => (
         <>
-          <Link href={`/admin/firms/${f.firm_id}` as Route} prefetch={false}>{f.display_name}</Link>
+          <Link href={`/admin/firms/${f.firm_id}`} prefetch={false}>{f.display_name}</Link>
           <span className="dt-sub">{` #${f.firm_id}`}</span>
           {f.archived ? <> <Tag tone="neg">Disbanded</Tag></> : null}
         </>

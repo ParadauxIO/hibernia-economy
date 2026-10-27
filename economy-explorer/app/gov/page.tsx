@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { MetricCard, MetricRow, Money, PageHeader, Section } from '@democracycraft/design-system';
 import { DataTable } from '@democracycraft/design-system/table';
 import { BarChart, TimeSeriesChart } from '@/components/charts/AreaTimeline';
@@ -59,7 +58,7 @@ export default async function GovOverviewPage({ searchParams }: { searchParams: 
     {o.units.length > 0 && <Section title={selection.key === 'all' ? 'Units' : 'Sub-units'} description="Balance and net flow over the period, from the accounts you can read." divider>
       <ul className="gov-units">
         {o.units.map((u) => <li key={u.key}>
-          <Link className="gov-unit-card" href={u.href as Route} prefetch={false}>
+          <Link className="gov-unit-card" href={u.href} prefetch={false}>
             <span className="gov-unit-name">{u.name}</span>
             <span className="gov-unit-balance"><Money value={u.balance} /></span>
             <span className="gov-unit-meta">Net <Money value={u.net} sign="exceptZero" tone="auto" /> · {u.partial ? `partial view: ${u.readable} of ${u.total} accounts` : `${u.readable} account${u.readable === 1 ? '' : 's'}`}</span>

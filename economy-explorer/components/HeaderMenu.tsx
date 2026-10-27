@@ -4,7 +4,6 @@
 // inert page and Escape; focus returns to the Menu button on close.
 
 import Link from 'next/link';
-import type { Route } from 'next';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useViewer } from '@/components/ViewerContext';
@@ -61,7 +60,7 @@ export function HeaderMenu() {
                     <ul>
                       {items.map((item) => (
                         <li key={item.href}>
-                          <Link href={item.href as Route} prefetch={false} className="shell-menu-link" aria-current={itemMatches(item, path) ? 'page' : undefined} onClick={() => setOpen(false)}>
+                          <Link href={item.href} prefetch={false} className="shell-menu-link" aria-current={itemMatches(item, path) ? 'page' : undefined} onClick={() => setOpen(false)}>
                             {item.label}
                           </Link>
                         </li>
@@ -69,7 +68,7 @@ export function HeaderMenu() {
                     </ul>
                   </>
                 ) : (
-                  <Link href={section.href as Route} prefetch={false} className="shell-menu-link is-section" aria-current={active?.id === section.id ? 'page' : undefined} onClick={() => setOpen(false)}>
+                  <Link href={section.href} prefetch={false} className="shell-menu-link is-section" aria-current={active?.id === section.id ? 'page' : undefined} onClick={() => setOpen(false)}>
                     {section.label}
                   </Link>
                 )}

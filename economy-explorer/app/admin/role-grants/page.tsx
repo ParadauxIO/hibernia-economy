@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Tag, When } from '@democracycraft/design-system';
 import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -30,7 +29,7 @@ const columns: Column<Grant>[] = [
     sort: 'name',
     cell: (g) => (
       <>
-        <Link href={`/admin/players/${g.uuid}` as Route} prefetch={false}>{g.name ?? 'Unknown player'}</Link>
+        <Link href={`/admin/players/${g.uuid}`} prefetch={false}>{g.name ?? 'Unknown player'}</Link>
         <span className="dt-sub mono">{` ${g.uuid}`}</span>
       </>
     ),
@@ -39,10 +38,10 @@ const columns: Column<Grant>[] = [
     key: 'role',
     header: 'Role',
     sort: 'role',
-    cell: (g) => <><Link href={`/admin/roles/${encodeURIComponent(g.role)}` as Route} prefetch={false}>{g.roleName}</Link><span className="dt-sub">{` ${g.role}`}</span></>,
+    cell: (g) => <><Link href={`/admin/roles/${encodeURIComponent(g.role)}`} prefetch={false}>{g.roleName}</Link><span className="dt-sub">{` ${g.role}`}</span></>,
   },
   { key: 'source', header: 'Source', sort: 'source', cell: (g) => SOURCE_LABEL[g.source] ?? g.source },
-  { key: 'group', header: 'Originating group', cell: (g) => (g.groupId ? <Link href={`/admin/groups/${g.groupId}` as Route} prefetch={false}>{g.group}</Link> : '—') },
+  { key: 'group', header: 'Originating group', cell: (g) => (g.groupId ? <Link href={`/admin/groups/${g.groupId}`} prefetch={false}>{g.group}</Link> : '—') },
   { key: 'selector', header: 'Source node or selector', cell: (g) => (g.selector ? <span className="mono">{g.selector}</span> : '—') },
   {
     key: 'status',

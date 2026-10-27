@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Section, Tag } from '@democracycraft/design-system';
 import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -48,7 +47,7 @@ export default async function AdminGroupsPage({ searchParams }: { searchParams: 
       key: 'name',
       header: 'Group',
       sort: 'name',
-      cell: (g) => <><Link href={`/admin/groups/${g.groupId}` as Route} prefetch={false}>{g.name}</Link>{g.description && <span className="dt-sub">{` · ${g.description}`}</span>}</>,
+      cell: (g) => <><Link href={`/admin/groups/${g.groupId}`} prefetch={false}>{g.name}</Link>{g.description && <span className="dt-sub">{` · ${g.description}`}</span>}</>,
     },
     {
       key: 'roles',

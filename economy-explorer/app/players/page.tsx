@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { PageHeader, PlayerHead, When } from '@democracycraft/design-system';
 import { DataTable, TableEmpty, TablePager, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -18,7 +19,7 @@ export async function generateMetadata() {
 }
 
 const TABLE_ID = 'players-table';
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 const columns: Column<DirectoryPlayerRow>[] = [
   {

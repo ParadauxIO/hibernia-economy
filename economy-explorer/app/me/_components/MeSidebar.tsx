@@ -1,10 +1,11 @@
 'use client';
+import type { SidebarGroup } from '@democracycraft/design-system/next';
 
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { SidebarLayout } from '@democracycraft/design-system/next';
 
-const GROUPS = [
+const GROUPS: SidebarGroup[] = [
   { items: [
     { label: 'Overview', href: '/me' },
     { label: 'Transactions', href: '/me/transactions' },

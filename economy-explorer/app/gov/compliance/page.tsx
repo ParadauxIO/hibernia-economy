@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { Money, PageHeader, Section, When } from '@democracycraft/design-system';
 import { DataTable, type Column } from '@democracycraft/design-system/table';
 import { buildMetadata } from '@/lib/metadata';
@@ -22,7 +21,7 @@ const watchColumns: Column<WatchView>[] = [
   { key: 'in', header: 'In, 7 days', numeric: true, secondary: true, cell: (w) => <Money value={w.inflow7} /> },
   { key: 'out', header: 'Out, 7 days', numeric: true, secondary: true, cell: (w) => <Money value={w.outflow7} /> },
   { key: 'balance', header: 'Balance', numeric: true, cell: (w) => <Money value={w.balance} /> },
-  { key: 'firm', header: 'Investigate', secondary: true, cell: (w) => w.firm_id ? <Link href={`/gov/compliance/firms/${w.firm_id}` as Route} prefetch={false}>{w.firm_name}</Link> : <span className="muted">—</span> },
+  { key: 'firm', header: 'Investigate', secondary: true, cell: (w) => w.firm_id ? <Link href={`/gov/compliance/firms/${w.firm_id}`} prefetch={false}>{w.firm_name}</Link> : <span className="muted">—</span> },
   { key: 'watch', header: <span className="sr-only">Watchlist</span>, label: 'Watchlist', cell: (w) => <WatchButton accountId={w.account_id} watched label={w.display_name ?? `account #${w.account_id}`} /> },
 ];
 
@@ -42,7 +41,7 @@ export default async function CompliancePage({ searchParams }: { searchParams: P
         <button type="submit" className="btn">Find</button>
       </form>
       {q && (firms.length
-        ? <ul className="gov-list">{firms.map((f) => <li key={f.value}><Link href={`/gov/compliance/firms/${f.value}` as Route} prefetch={false}>{f.label}</Link>{f.detail && <span className="muted"> · {f.detail}</span>}</li>)}</ul>
+        ? <ul className="gov-list">{firms.map((f) => <li key={f.value}><Link href={`/gov/compliance/firms/${f.value}`} prefetch={false}>{f.label}</Link>{f.detail && <span className="muted"> · {f.detail}</span>}</li>)}</ul>
         : <p className="muted">No firm name starts with “{q}”.</p>)}
     </Section>
 

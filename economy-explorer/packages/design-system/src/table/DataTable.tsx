@@ -5,7 +5,7 @@ export type SortDirection = 'asc' | 'desc';
 export type Density = 'comfortable' | 'compact';
 
 /** Anything that renders an anchor: a plain `a`, or the host's router link (Next `Link`). */
-export type LinkComponent = ComponentType<{ href: string; className?: string; children?: ReactNode; prefetch?: boolean; 'aria-label'?: string }>;
+export type LinkComponent<H extends string = string> = ComponentType<{ href: H; className?: string; children?: ReactNode; prefetch?: boolean; 'aria-label'?: string }>;
 
 export interface Column<R> {
   /** CSS-safe key. Targets the Columns menu (`data-col`) and React keys. */
@@ -30,7 +30,7 @@ export interface Column<R> {
   className?: string;
 }
 
-export interface DataTableProps<R> {
+export interface DataTableProps<R, H extends string = string> {
   /** DOM id; the Columns menu scopes its rules to it. */
   id: string;
   /** Accessible name for the scroll region and the table caption. */
@@ -39,21 +39,21 @@ export interface DataTableProps<R> {
   rows: readonly R[];
   rowKey: (row: R) => string | number;
   /** Makes the first cell a real link and the whole row clickable. */
-  rowHref?: (row: R) => string;
+  rowHref?: (row: R) => H;
   /** Accessible name for a row link when the first cell's text isn't enough. */
   rowLabel?: (row: R) => string;
   sort?: { field: string; dir: SortDirection };
   /** URL for sorting by `field` in `dir`. Required for sortable headers to render as links. */
-  sortHref?: (field: string, dir: SortDirection) => string;
+  sortHref?: (field: string, dir: SortDirection) => H;
   density?: Density;
   /** Rendered in a full-width row when `rows` is empty. See `TableEmpty`. */
   empty?: ReactNode;
-  link?: LinkComponent;
+  link?: LinkComponent<H>;
   /** Label for the phone-only details toggle. */
   detailsLabel?: string;
 }
 
-const PlainLink: LinkComponent = ({ href, className, children, 'aria-label': ariaLabel }) => (
+const PlainLink = ({ href, className, children, 'aria-label': ariaLabel }: React.ComponentProps<LinkComponent>) => (
   <a href={href} className={className} aria-label={ariaLabel}>{children}</a>
 );
 
@@ -71,7 +71,7 @@ function cellClass<R>(c: Column<R>, extra?: string): string {
   ].filter(Boolean).join(' ');
 }
 
-function SortHeader<R>({ column, sort, sortHref, Link }: { column: Column<R>; sort: DataTableProps<R>['sort']; sortHref: NonNullable<DataTableProps<R>['sortHref']>; Link: LinkComponent }) {
+function SortHeader<R, H extends string>({ column, sort, sortHref, Link }: { column: Column<R>; sort: DataTableProps<R, H>['sort']; sortHref: NonNullable<DataTableProps<R, H>['sortHref']>; Link: LinkComponent<H> }) {
   const key = column.sort as string;
   const active = sort?.field === key;
   const first: SortDirection = column.sortFirst ?? (column.numeric ? 'desc' : 'asc');
@@ -91,11 +91,11 @@ function SortHeader<R>({ column, sort, sortHref, Link }: { column: Column<R>; so
  * row, optional totals footer, and a phone layout where secondary columns fold
  * into an expandable details block under the first cell.
  */
-export function DataTable<R>({
+export function DataTable<R, H extends string = string>({
   id, label, columns, rows, rowKey, rowHref, rowLabel, sort, sortHref,
   density = 'comfortable', empty, link, detailsLabel = 'Details',
-}: DataTableProps<R>) {
-  const Link = link ?? PlainLink;
+}: DataTableProps<R, H>) {
+  const Link: LinkComponent<H> = link ?? PlainLink;
   const secondary = columns.filter((c) => c.secondary);
   const hasFooter = columns.some((c) => c.footer !== undefined);
 
@@ -180,17 +180,17 @@ export function columnOptions<R>(columns: readonly Column<R>[]): ColumnOption[] 
  * Empty-results content: says what's filtering the table and offers links to
  * drop the most recent filter or all of them.
  */
-export function TableEmpty({ noun, filters, clearHref, link }: {
+export function TableEmpty<H extends string = string>({ noun, filters, clearHref, link }: {
   /** Plural noun: "accounts". */
   noun: string;
   /** Active filters, most recently added last, each with a link that removes it. */
-  filters: readonly { text: string; removeHref: string }[];
-  clearHref?: string;
-  link?: LinkComponent;
+  filters: readonly { text: string; removeHref: H }[];
+  clearHref?: H;
+  link?: LinkComponent<H>;
 }) {
-  const Link = link ?? PlainLink;
+  const Link: LinkComponent<H> = link ?? PlainLink;
   if (filters.length === 0) return <p className="dt-empty-text">No {noun} yet.</p>;
-  const last = filters[filters.length - 1] as { text: string; removeHref: string };
+  const last = filters[filters.length - 1] as { text: string; removeHref: H };
   return (
     <div className="dt-empty">
       <p className="dt-empty-text">

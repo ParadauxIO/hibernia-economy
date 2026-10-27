@@ -34,7 +34,7 @@ describe('palette entries', () => {
   });
 
   it('ranks exact, then prefix, then word-start, then substring matches', () => {
-    const e = (label: string) => ({ id: label, type: 'link' as const, kind: 'page' as const, label, href: '/' });
+    const e = (label: string) => ({ id: label, type: 'link' as const, kind: 'page' as const, label, href: '/' as const });
     expect(score(e('Wealth'), 'wealth')).toBe(0);
     expect(score(e('Wealth'), 'wea')).toBe(1);
     expect(score(e('Money flow'), 'flow')).toBe(2);

@@ -1,6 +1,7 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 export function DirectorySort({ basePath, params, sort, dir, options }: {
-  basePath: string; params: Record<string, string | string[] | undefined>; sort: string; dir: string;
+  basePath: AppHref; params: Record<string, string | string[] | undefined>; sort: string; dir: string;
   options: { label: string; sort: string; dir: string }[];
 }) {
   const label = options.find(o => o.sort === sort && o.dir === dir)?.label ?? `${sort === 'account_id' ? 'Account number' : sort} (${dir === 'ASC' ? 'ascending' : 'descending'})`;

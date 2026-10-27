@@ -1,10 +1,11 @@
 'use client';
+import type { AppHref } from '@/lib/routes';
 
 import type { ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { SidebarLayout } from '@democracycraft/design-system/next';
 
-export interface GovNavItem { label: string; href: string }
+export interface GovNavItem { label: string; href: AppHref }
 export interface GovNavGroup { label?: string; items: GovNavItem[] }
 
 /** Params every /gov page shares, carried between sections so the unit and range stick. */
@@ -28,7 +29,7 @@ export function GovShell({ nav, children }: { nav: GovNavGroup[]; children: Reac
     items: g.items.map((item) => {
       const keep = qs && !item.href.startsWith('/gov/compliance') && !item.href.startsWith('/admin');
       const current = item.href === '/gov' || item.href === '/gov/compliance' ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
-      return { label: item.label, href: keep ? `${item.href}?${qs}` : item.href, current };
+      return { label: item.label, href: keep ? `${item.href}?${qs}` as const : item.href, current };
     }),
   }));
   return <SidebarLayout title="Government" nav={groups}>{children}</SidebarLayout>;

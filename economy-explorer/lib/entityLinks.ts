@@ -4,21 +4,21 @@
 import { looksLikeUuid } from '@/lib/format';
 
 /** A player's profile. By name when known (canonical), else by UUID (the page redirects to the name). */
-export function playerHref(name: string | null | undefined, uuid?: string | null): string {
+export function playerHref(name: string | null | undefined, uuid?: string | null) {
   const n = name && !looksLikeUuid(name) && !/^[0-9A-F]{32}$/i.test(name) ? name : null;
-  return `/players/${encodeURIComponent(n ?? uuid ?? '')}`;
+  return `/players/${encodeURIComponent(n ?? uuid ?? '')}` as const;
 }
 
-export function accountHref(id: number | string): string {
-  return `/accounts/${id}`;
+export function accountHref(id: number | string) {
+  return `/accounts/${id}` as const;
 }
 
-export function firmHref(name: string): string {
-  return `/firms/${encodeURIComponent(name)}`;
+export function firmHref(name: string) {
+  return `/firms/${encodeURIComponent(name)}` as const;
 }
 
-export function itemHref(itemKey: string): string {
-  return `/chestshop/items/${encodeURIComponent(itemKey)}`;
+export function itemHref(itemKey: string) {
+  return `/chestshop/items/${encodeURIComponent(itemKey)}` as const;
 }
 
 export type PreviewKind = 'player' | 'account' | 'firm' | 'item';

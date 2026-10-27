@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, When } from '@democracycraft/design-system';
 import { CursorPager, EntityLink } from '@democracycraft/design-system/next';
@@ -11,7 +12,7 @@ import { SCAN_WINDOW, accountTxnsTable, type AccountTxnsState } from '@/lib/tabl
 import { cleared, filterText, tableHref, withCursor, withQuery, withoutFilter, type EntityOption } from '@/lib/tables/core';
 import { DateWithYear } from './bits';
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 const TABLE_ID = 'account-txns';
 
 function categoryTone(category: string): string {
@@ -70,7 +71,7 @@ function columns(running: boolean): Column<TxnView>[] {
  * say how far back they looked when it ran out before a page filled.
  */
 export function AccountTransactions({ pathname, state, page, extra, searchEntity, exportSlot }: {
-  pathname: string;
+  pathname: AppHref;
   state: AccountTxnsState;
   page: TxnPage;
   /** Params the table doesn't own (the range), kept on every link. */
@@ -78,7 +79,7 @@ export function AccountTransactions({ pathname, state, page, extra, searchEntity
   searchEntity: (field: string, text: string) => Promise<EntityOption[]>;
   exportSlot?: React.ReactNode;
 }) {
-  const href = (s: AccountTxnsState) => `${tableHref(pathname, s, accountTxnsTable, extra)}#transactions`;
+  const href = (s: AccountTxnsState) => `${tableHref(pathname, s, accountTxnsTable, extra)}#transactions` as const;
   const describe = { currency: CURRENCY_SYMBOL, entityLabels: page.entityLabels };
   const activeFilters = [
     ...(state.q ? [{ text: `“${state.q}”`, removeHref: href(withQuery(state, '')) }] : []),

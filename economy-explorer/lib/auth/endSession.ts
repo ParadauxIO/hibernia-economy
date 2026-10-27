@@ -10,11 +10,12 @@ import 'server-only';
 // redirect URI must be listed in the client's "Valid post logout redirect URIs".
 
 /** The end_session_endpoint URL with client_id and post_logout_redirect_uri. Pure. */
-export function buildEndSessionUrl(endpoint: string, clientId: string, postLogoutRedirectUri: string): string {
+export function buildEndSessionUrl(endpoint: string, clientId: string, postLogoutRedirectUri: string): `${string}:${string}` {
   const url = new URL(endpoint);
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
-  return url.toString();
+  // URL parsing guarantees an absolute, protocol-prefixed destination.
+  return `${url.protocol.slice(0, -1)}:${url.toString().slice(url.protocol.length)}`;
 }
 
 /** Keycloak's fixed path, for when discovery is unreachable. */
@@ -58,7 +59,7 @@ export function postLogoutRedirectUri(env: NodeJS.ProcessEnv = process.env): str
 }
 
 /** Where to send the browser after our session is cleared, or null for a local-only logout. */
-export async function federatedLogoutUrl(env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+export async function federatedLogoutUrl(env: NodeJS.ProcessEnv = process.env): Promise<`${string}:${string}` | null> {
   const issuer = env.AUTH_KEYCLOAK_ISSUER?.trim();
   const clientId = env.AUTH_KEYCLOAK_ID?.trim();
   const back = postLogoutRedirectUri(env);

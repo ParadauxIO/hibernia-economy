@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, PageHeader } from '@democracycraft/design-system';
 import { DataTable, TablePager, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -14,7 +15,7 @@ export async function generateMetadata() {
 }
 
 const PAGE_SIZE = 50;
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 /**
  * Firms with ChestShop activity, ranked by all-time volume. The ranking is

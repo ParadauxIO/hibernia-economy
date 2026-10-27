@@ -12,7 +12,7 @@ import { DocsToc } from '@/components/docs/DocsToc';
 export const dynamicParams = false;
 
 export async function generateStaticParams() {
-  return (await getAllDocSlugs()).map((slug) => ({ slug }));
+  return (await getAllDocSlugs()).filter((slug) => slug.length > 0).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({

@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Section, TableWrap, Tag, When } from '@democracycraft/design-system';
 import { EntityLink } from '@democracycraft/design-system/next';
 import { getViewer } from '@/lib/auth/viewer';
@@ -69,7 +68,7 @@ export default async function DeveloperPage() {
     </Section>
 
     <Section title="Webhooks" divider description="A signed POST to your server for each settled transaction on your account or firm."
-      actions={canWebhooks ? <Link href={'/me/developer/webhooks' as Route} className="btn btn-quiet" prefetch={false}>Manage webhooks</Link> : undefined}>
+      actions={canWebhooks ? <Link href={'/me/developer/webhooks'} className="btn btn-quiet" prefetch={false}>Manage webhooks</Link> : undefined}>
       {!canWebhooks ? <p className="me-empty">Your roles don’t include webhooks.</p>
         : <p className="me-note">{hooks.length === 0 ? 'You have no webhooks yet.' : `${hooks.length} registered, ${hooks.filter((h) => h.active).length} active.`} <Link href="/docs/guides/webhooks" prefetch={false}>Webhooks guide</Link></p>}
     </Section>

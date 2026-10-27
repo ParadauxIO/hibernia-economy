@@ -55,7 +55,7 @@ export default async function ItemPage({ params, searchParams }: { params: Param
   const query = (keys: string[]) => {
     const p = new URLSearchParams(rangeToParams(range));
     if (keys.length) p.set('compare', keys.join(','));
-    return `${self}?${p}`;
+    return `${self}?${p}` as const;
   };
   // "Add an item" form: fold ?add=KEY into ?compare= and redirect to the canonical URL.
   const add = typeof sp.add === 'string' ? sp.add.trim() : '';

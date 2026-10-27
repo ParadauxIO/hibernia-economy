@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { MetricCard, MetricRow, Money, PageHeader, Section, TableWrap, Tag, When } from '@democracycraft/design-system';
 import { EntityLink } from '@democracycraft/design-system/next';
 import { getViewer } from '@/lib/auth/viewer';
@@ -45,7 +44,7 @@ export default async function MyTaxesPage() {
               <th scope="col" className="amount">Total</th>
             </tr></thead>
             <tbody>{t.byMonth.map((m) => <tr key={m.month}>
-              <th scope="row"><Link href={`/me/statements/${m.month}` as Route} prefetch={false}>{monthLabel(m.month)}</Link></th>
+              <th scope="row"><Link href={`/me/statements/${m.month}`} prefetch={false}>{monthLabel(m.month)}</Link></th>
               {m.covered ? <>
                 {t.kinds.map((k) => <td key={k} className="amount"><Money value={m.byKind[k] ?? '0.00'} /></td>)}
                 <td className="amount"><Money value={m.total} /></td>
@@ -76,8 +75,8 @@ export default async function MyTaxesPage() {
             <td><When value={f.issued_at} /></td>
             <td>{f.revoked ? <Tag tone="neutral">Revoked{f.revoked_at ? <> <When value={f.revoked_at} /></> : null}</Tag> : <Tag tone="warn">Active</Tag>}</td>
             <td>
-              <Link href={`/transactions/${f.txn_id}` as Route} prefetch={false}>#{f.txn_id}</Link>
-              {f.revoke_txn_id && <> · refund <Link href={`/transactions/${f.revoke_txn_id}` as Route} prefetch={false}>#{f.revoke_txn_id}</Link></>}
+              <Link href={`/transactions/${f.txn_id}`} prefetch={false}>#{f.txn_id}</Link>
+              {f.revoke_txn_id && <> · refund <Link href={`/transactions/${f.revoke_txn_id}`} prefetch={false}>#{f.revoke_txn_id}</Link></>}
             </td>
             <td className="amount"><Money value={f.amount} /></td>
           </tr>)}</tbody>

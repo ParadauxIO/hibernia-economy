@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import 'server-only';
 import { deriveBalances } from '@/lib/balances';
 import { findTxnBounds } from '@/lib/sql/accountHistory';
@@ -135,7 +136,7 @@ export interface MonthBar { month: string; revenue: string; spending: string; go
 export interface UnitCard {
   key: string;
   name: string;
-  href: string;
+  href: AppHref;
   balance: string;
   net: string;
   readable: number;
@@ -188,7 +189,7 @@ function unitCards(scope: GovScope, selectionKey: string, nets: Map<number, Cent
     ? scope.units.filter((u) => u.depth === 0)
     : scope.units.filter((u) => u.parentUnitId === parent && parent !== null);
   const netOf = (ids: readonly number[]) => toDbString(ids.reduce((s, id) => s + (nets.get(id) ?? 0n), 0n));
-  const cards = shown.map((u) => ({
+  const cards: UnitCard[] = shown.map((u) => ({
     key: u.slug, name: u.name, href: `/gov?unit=${encodeURIComponent(u.slug)}${query}`, balance: balanceOf(scope, u.readableIds),
     net: netOf(u.readableIds), readable: u.readableIds.length, total: u.totalAccounts, partial: u.partial,
   }));

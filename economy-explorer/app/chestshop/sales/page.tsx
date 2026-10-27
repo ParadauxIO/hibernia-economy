@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, Num, PageHeader, When } from '@democracycraft/design-system';
 import { DataTable, TableEmpty, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -26,7 +27,7 @@ export async function generateMetadata() {
 }
 
 const TABLE_ID = 'sales-table';
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 function fmtDay(d: Date): string {
   return d.toISOString().slice(0, 10);

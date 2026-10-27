@@ -17,7 +17,9 @@ const OPTIONS = [
 function replacedWith(): { path: string; params: Record<string, string> } {
   expect(navigation.router.replace).toHaveBeenCalledTimes(1);
   const href = navigation.router.replace.mock.calls[0]?.[0] ?? '';
-  const [path = '', query = ''] = href.split('?');
+  const url = new URL(href, `https://explorer.test${navigation.pathname}`);
+  const path = url.pathname;
+  const query = url.search;
   return { path, params: Object.fromEntries(new URLSearchParams(query)) };
 }
 

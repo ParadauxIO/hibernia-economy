@@ -237,8 +237,8 @@ describe('entity search', () => {
     expect(navigation.router.push).toHaveBeenLastCalledWith('/search?q=alice');
   });
 
-  it('ignores tampered recent items that point off-site', () => {
-    window.localStorage.setItem(RECENT_KEY, JSON.stringify([{ kind: 'account', label: 'Evil', href: '//evil.example' }, { kind: 'firm', label: 'Acme', href: '/firms/Acme' }]));
+  it('ignores off-site and obsolete recent destinations', () => {
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify([{ kind: 'account', label: 'Evil', href: '//evil.example' }, { kind: 'page', label: 'Obsolete', href: '/admin/audti' }, { kind: 'firm', label: 'Acme', href: '/firms/Acme' }]));
     renderPalette();
     act(() => openPalette());
     const recent = within(screen.getByRole('group', { name: 'Recent' })).getAllByRole('option').map((o) => o.textContent);
