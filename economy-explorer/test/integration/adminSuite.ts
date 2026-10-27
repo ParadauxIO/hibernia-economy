@@ -11,6 +11,8 @@ import { parseAuditValue } from '@/lib/auditDiff';
 import { countAuditByAction, findAuditEntry, listAuditPage } from '@/lib/sql/audit';
 import {
   countAdminApiKeys,
+  countAdminGroups,
+  countAdminRoles,
   countAdminPlayers,
   countAdminWebhooks,
   findPlayersByPrefix,
@@ -20,10 +22,11 @@ import {
   listAdminRoles,
   listAdminWebhooks,
 } from '@/lib/sql/admin';
-import { clearSourceMembers, countGroupMembersBySource, selectGroupById, upsertGroupSync, deleteGroupSync } from '@/lib/sql/group';
+import { listGroupMembers, countGroupMembers, isManualGroupMember, clearSourceMembers, countGroupMembersBySource, selectGroupById, upsertGroupSync, deleteGroupSync } from '@/lib/sql/group';
+import { countDirectRoleMembers, listDirectRoleMemberPage } from '@/lib/sql/role';
 import { countRoleGrants, listRoleGrants } from '@/lib/sql/role-grants';
 import { auditTable } from '@/lib/tables/audit';
-import { adminApiKeysTable, adminGroupsTable, adminPlayersTable, adminRolesTable, adminWebhooksTable } from '@/lib/tables/admin';
+import { adminGroupMembersTable, adminRoleMembersTable, adminApiKeysTable, adminGroupsTable, adminPlayersTable, adminRolesTable, adminWebhooksTable } from '@/lib/tables/admin';
 import { parseTableState, stateCursor, withCursor } from '@/lib/tables/core';
 import { permissionsFor } from '../role-fixtures';
 import { ALICE, BOB, CAROL } from './db';
@@ -199,6 +202,68 @@ export function adminSuite(d: (name: string, fn: () => void) => void): void {
       expect((await roles('f=permission:eq:audit.read')).map((r) => r.key)).toEqual(['admin']);
       expect((await roles('q=moder')).map((r) => r.key)).toEqual(['moderator']);
       expect((await roles('sort=-permissions'))[0]?.key).toBe('admin');
+    });
+
+    it('pages group members with tied names and multiple sources, without dropping unknown players (PAR-545)', async () => {
+      const groupId = 99545;
+      const unknown = '00000000-0000-0000-0000-000000054545';
+      await sql`INSERT INTO explorer_group (group_id, name, luckperms_node) VALUES (${groupId}, 'Pagination fixture', 'default')`.execute(db);
+      try {
+        await sql`INSERT INTO explorer_group_member (group_id, player_uuid_bin, source, synced_at) VALUES
+          (${groupId}, ${uuidToBin(ALICE)}, 'manual', NULL),
+          (${groupId}, ${uuidToBin(ALICE)}, 'luckperms', NOW()),
+          (${groupId}, ${uuidToBin(BOB)}, 'manual', NULL),
+          (${groupId}, ${uuidToBin(unknown)}, 'luckperms', NOW() - INTERVAL 2 HOUR)`.execute(db);
+        const state = (qs: string) => parseTableState(new URLSearchParams(qs), adminGroupMembersTable);
+        expect(await countGroupMembers(groupId, state(''))).toBe(4);
+        const pages = await Promise.all([1, 2, 3, 4].map(page => listGroupMembers(groupId, state(`limit=1&page=${page}`))));
+        expect(pages.map(rows => rows.length)).toEqual([1, 1, 1, 1]);
+        expect(pages.flat().map(m => `${m.uuid}:${m.source}`)).toEqual([
+          `${unknown}:luckperms`, `${ALICE}:manual`, `${ALICE}:luckperms`, `${BOB}:manual`,
+        ]);
+        expect(pages[0]![0]).toMatchObject({ name: null, syncActive: false });
+        expect(await listGroupMembers(groupId, state('limit=1&page=5'))).toEqual([]);
+        expect(await countGroupMembers(groupId, state('q=Alice&f=source:in:manual'))).toBe(1);
+        expect((await listGroupMembers(groupId, state('q=Alice&f=source:in:manual'))).map(m => m.source)).toEqual(['manual']);
+        expect((await listGroupMembers(groupId, state(`q=${unknown}`))).map(m => m.uuid)).toEqual([unknown]);
+        expect(await countGroupMembers(groupId, state('q=%25'))).toBe(0);
+        expect(await isManualGroupMember(groupId, BOB)).toBe(true);
+        expect(await isManualGroupMember(groupId, unknown)).toBe(false);
+        expect(await isManualGroupMember(groupId + 1, BOB)).toBe(false);
+      } finally { await sql`DELETE FROM explorer_group WHERE group_id = ${groupId}`.execute(db); }
+    });
+
+    it('bounds group and role directories while counting all filtered results (PAR-545)', async () => {
+      await sql`INSERT INTO explorer_group (group_id, name) VALUES (99546, 'Paging A'), (99547, 'Paging B')`.execute(db);
+      try {
+        const groups = parseTableState(new URLSearchParams('limit=1&q=Paging'), adminGroupsTable);
+        const groupTotal = await countAdminGroups(groups);
+        expect(groupTotal).toBeGreaterThan(1);
+        const first = await listAdminGroups(groups);
+        const second = await listAdminGroups({ ...groups, page: 2 });
+        expect(first).toHaveLength(1); expect(second).toHaveLength(1);
+        expect(first[0]?.groupId).not.toBe(second[0]?.groupId);
+        const roles = parseTableState(new URLSearchParams('limit=1'), adminRolesTable);
+        expect(await countAdminRoles(roles)).toBeGreaterThan(1);
+        const r1 = await listAdminRoles(roles), r2 = await listAdminRoles({ ...roles, page: 2 });
+        expect(r1).toHaveLength(1); expect(r2).toHaveLength(1);
+        expect(r1[0]?.key).not.toBe(r2[0]?.key);
+        const filtered = parseTableState(new URLSearchParams('f=permission:eq:audit.read'), adminRolesTable);
+        expect(await countAdminRoles(filtered)).toBe(1);
+      } finally { await sql`DELETE FROM explorer_group WHERE group_id IN (99546, 99547)`.execute(db); }
+    });
+
+    it('pages direct role assignments and searches beyond the first page (PAR-545)', async () => {
+      await sql`INSERT INTO explorer_role_definition (role_key, name) VALUES ('pagination_test', 'Pagination test')`.execute(db);
+      try {
+        await sql`INSERT INTO explorer_role (player_uuid_bin, role) VALUES (${uuidToBin(ALICE)}, 'pagination_test'), (${uuidToBin(BOB)}, 'pagination_test')`.execute(db);
+        const state = parseTableState(new URLSearchParams('limit=1'), adminRoleMembersTable);
+        expect(await countDirectRoleMembers('pagination_test', state)).toBe(2);
+        expect(await listDirectRoleMemberPage('pagination_test', state)).toEqual([{ uuid: ALICE, name: 'Alice' }]);
+        expect(await listDirectRoleMemberPage('pagination_test', { ...state, page: 2 })).toEqual([{ uuid: BOB, name: 'Bob' }]);
+        expect(await listDirectRoleMemberPage('pagination_test', { ...state, q: BOB })).toEqual([{ uuid: BOB, name: 'Bob' }]);
+        expect(await countDirectRoleMembers('pagination_test', { ...state, q: 'Nobody' })).toBe(0);
+      } finally { await sql`DELETE FROM explorer_role_definition WHERE role_key = 'pagination_test'`.execute(db); }
     });
 
     it('sets, changes and clears a firm source, dropping that source’s synced members only', async () => {

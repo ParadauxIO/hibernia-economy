@@ -12,7 +12,7 @@ import {
   createGroup,
   deleteGroup,
   getGroup,
-  listGroupMembers,
+  isManualMember,
   setGroupCapabilities,
   setGroupSyncSource,
   setLuckpermsNode,
@@ -45,10 +45,6 @@ function groupSnapshot(g: GroupSummary | null) {
     syncSources: Object.fromEntries(g.syncSources.map((s) => [s.source, s.selector])),
     members: g.memberCount,
   };
-}
-
-async function isManualMember(groupId: number, uuid: string): Promise<boolean> {
-  return (await listGroupMembers(groupId)).some((m) => m.uuid === uuid && m.source === 'manual');
 }
 
 // ---- Group RBAC management -------------------------------------------------

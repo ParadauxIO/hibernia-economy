@@ -68,6 +68,31 @@ refreshed. Changes take effect on the next request without signing in again.
 An admin role name is not a bypass: its stored permissions are authoritative.
 Keep an independent administrator for recovery before changing your own access.
 
+## Government access for every signed-in user
+
+To make government records available to everyone who signs in, open
+**Admin → Roles → Player** and add `government.read.all`, keeping the existing
+permissions. The Player role is the authenticated baseline, including users who
+have not linked Minecraft. The Government tab appears on the next request and
+opens all active government accounts. Anonymous visitors remain excluded.
+`government.read` alone requires a linked player with a government account in
+scope. Audit pages still require `government.audit.read`; compliance uses its
+own permissions.
+
+A LuckPerms `default` group is unnecessary for this policy: it syncs offline
+players as well as current users, potentially creating hundreds of thousands of
+memberships. A group with no roles grants no access, regardless of its size.
+After configuring and verifying the Player baseline, clear the redundant Default
+group's LuckPerms source in **Admin → Groups**. This removes only its synced
+memberships; manual memberships remain. Check that the group serves no other
+purpose first. To reverse the government-access change, remove only the added
+permission from Player.
+
+Group and role directories have page controls. Group members and direct role
+assignments show 50 rows per page by default, with name/UUID search across all
+pages. Group members can also be filtered by source. The total counts matching
+memberships, including expired syncs and separate sources for the same player.
+
 ## Direct roles
 
 On a role’s detail page, add or remove direct assignments by player name or UUID.

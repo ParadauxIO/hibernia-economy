@@ -1,6 +1,8 @@
 import { activeGroupMembership } from '@/lib/sql/group-membership';
 import 'server-only';
-import { type Kysely, type RawBuilder, sql } from 'kysely';
+import { type Kysely, type RawBuilder, type SqlBool, sql } from 'kysely';
+import { adminGroupMembersTable, type AdminGroupMembersState } from '@/lib/tables/admin';
+import { compileTableState, defineColumnMap, likeContains } from '@/lib/sql/tableState';
 import { db, type DB, uuidToBin, binToUuid } from '@/lib/db';
 
 /**
@@ -100,9 +102,14 @@ export async function listGroups(): Promise<GroupSummary[]> {
 }
 
 /** Groups for the admin table: `where` and `orderBy` compiled against the derived table `g`. */
-export async function listGroupsWhere(where: RawBuilder<unknown>, orderBy: RawBuilder<unknown>): Promise<GroupSummary[]> {
-  const r = await sql<GroupRow>`SELECT g.* FROM ${GROUP_SUMMARY} ${where} ${orderBy}`.execute(db);
+export async function listGroupsWhere(where: RawBuilder<unknown>, orderBy: RawBuilder<unknown>, limit: number, offset: number): Promise<GroupSummary[]> {
+  const r = await sql<GroupRow>`SELECT g.* FROM ${GROUP_SUMMARY} ${where} ${orderBy} LIMIT ${limit} OFFSET ${offset}`.execute(db);
   return r.rows.map(mapGroupRow);
+}
+
+export async function countGroupsWhere(where: RawBuilder<unknown>): Promise<number> {
+  const r = await sql<{ total: number | string }>`SELECT COUNT(*) AS total FROM ${GROUP_SUMMARY} ${where}`.execute(db);
+  return Number(r.rows[0]?.total ?? 0);
 }
 
 /** Single group by id, or null. Queries by id rather than scanning listGroups(). */
@@ -161,7 +168,30 @@ export async function setLuckpermsNode(groupId: number, node: string | null, exe
   await sql`UPDATE explorer_group SET luckperms_node = ${node} WHERE group_id = ${groupId}`.execute(executor);
 }
 
-export async function listGroupMembers(groupId: number): Promise<GroupMember[]> {
+const memberColumns = defineColumnMap({
+  table: adminGroupMembersTable,
+  filters: { source: { column: sql`gm.source` } },
+  sorts: { name: sql`fp.current_name` },
+  // A player can have multiple sources, so UUID alone is not a unique order.
+  tiebreak: { column: sql`gm.player_uuid_bin, gm.source`, dir: 'asc' },
+  search: (q) => {
+    const like = likeContains(q);
+    return sql<SqlBool>`(fp.current_name LIKE ${like} OR HEX(gm.player_uuid_bin) LIKE ${likeContains(q.replaceAll('-', ''))})`;
+  },
+});
+
+export async function countGroupMembers(groupId: number, state: AdminGroupMembersState): Promise<number> {
+  const c = compileTableState(state, memberColumns);
+  const r = await sql<{ total: number | string }>`
+    SELECT COUNT(*) AS total FROM explorer_group_member gm
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
+    WHERE gm.group_id = ${groupId} ${c.conditions.length ? sql`AND ${sql.join(c.conditions, sql` AND `)}` : sql``}
+  `.execute(db);
+  return Number(r.rows[0]?.total ?? 0);
+}
+
+export async function listGroupMembers(groupId: number, state: AdminGroupMembersState): Promise<GroupMember[]> {
+  const c = compileTableState(state, memberColumns);
   const r = await sql<{
     player_uuid_bin: Buffer;
     name: string | null;
@@ -174,7 +204,9 @@ export async function listGroupMembers(groupId: number): Promise<GroupMember[]> 
     FROM explorer_group_member gm
     LEFT JOIN economy_players fp ON fp.player_uuid_bin = gm.player_uuid_bin
     WHERE gm.group_id = ${groupId}
-    ORDER BY gm.source, fp.current_name
+    ${c.conditions.length ? sql`AND ${sql.join(c.conditions, sql` AND `)}` : sql``}
+    ${c.orderBy}
+    LIMIT ${state.limit} OFFSET ${(state.page - 1) * state.limit}
   `.execute(db);
   return r.rows.map((row) => ({
     uuid: binToUuid(row.player_uuid_bin),
@@ -235,4 +267,11 @@ export async function deleteGroupSync(groupId: number, source: GroupSyncSource['
  */
 export async function clearSourceMembers(groupId: number, source: GroupSyncSource['source'], executor: Executor = db): Promise<void> {
   await sql`DELETE FROM explorer_group_member WHERE group_id = ${groupId} AND source = ${source}`.execute(executor);
+}
+
+/** Indexed point lookup for mutation audit snapshots; never load the whole group. */
+export async function isManualGroupMember(groupId: number, uuid: string): Promise<boolean> {
+  const r = await sql`SELECT 1 FROM explorer_group_member
+    WHERE group_id = ${groupId} AND player_uuid_bin = ${uuidToBin(uuid)} AND source = 'manual' LIMIT 1`.execute(db);
+  return r.rows.length > 0;
 }

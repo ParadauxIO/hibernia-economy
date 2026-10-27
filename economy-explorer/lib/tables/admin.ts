@@ -155,3 +155,30 @@ export type AdminApiKeysState = TableState<typeof adminApiKeysTable>;
 export type AdminGroupsState = TableState<typeof adminGroupsTable>;
 export type AdminRolesState = TableState<typeof adminRolesTable>;
 export type AdminRoleGrantsState = TableState<typeof adminRoleGrantsTable>;
+
+/** Members are paged in SQL, including groups synced from LuckPerms default. */
+export const adminGroupMembersTable = defineTable({
+  id: 'admin-group-members',
+  search: ['name', 'uuid'],
+  searchPlaceholder: 'Search members by name or UUID',
+  filters: {
+    source: { label: 'Source', kind: 'enum', options: [
+      { value: 'manual', label: 'Manual' }, { value: 'luckperms', label: 'LuckPerms' },
+      { value: 'business', label: 'Firm' }, { value: 'realty', label: 'Region' },
+    ] },
+  },
+  sorts: { name: 'Player' },
+  defaultSort: 'name',
+  noun: { one: 'membership', many: 'memberships' },
+  pageSize: 50,
+  maxPageSize: 200,
+});
+export type AdminGroupMembersState = TableState<typeof adminGroupMembersTable>;
+
+export const adminRoleMembersTable = defineTable({
+  id: 'admin-role-members', search: ['name', 'uuid'],
+  searchPlaceholder: 'Search direct members by name or UUID',
+  filters: {}, sorts: { name: 'Player' }, defaultSort: 'name',
+  noun: { one: 'direct member', many: 'direct members' }, pageSize: 50, maxPageSize: 200,
+});
+export type AdminRoleMembersState = TableState<typeof adminRoleMembersTable>;

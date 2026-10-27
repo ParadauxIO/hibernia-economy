@@ -1,4 +1,5 @@
 import 'server-only';
+import type { AdminGroupMembersState } from '@/lib/tables/admin';
 import { getViewer } from '@/lib/auth/viewer';
 import { requirePermission } from '@/lib/auth/access';
 import { assertCanGrantRoles, withPolicyMutation } from '@/lib/auth/delegation';
@@ -22,6 +23,8 @@ import {
   deleteGroupSync,
   clearSourceMembers,
   countGroupMembersBySource,
+  countGroupMembers,
+  isManualGroupMember,
   type GroupSummary,
   type GroupMember,
   type GroupSyncSource,
@@ -122,8 +125,12 @@ export function groupMemberCountsBySource(groupId: number) {
   return countGroupMembersBySource(groupId);
 }
 
-export function listGroupMembers(groupId: number): Promise<GroupMember[]> {
-  return listGroupMembersDal(groupId);
+export async function listGroupMembers(groupId: number, state: AdminGroupMembersState) {
+  requirePermission(await getViewer(), 'groups.read');
+  const total = await countGroupMembers(groupId, state);
+  const page = Math.min(state.page, Math.max(1, Math.ceil(total / state.limit)));
+  const rows = await listGroupMembersDal(groupId, { ...state, page });
+  return { rows, total, page };
 }
 
 export async function addManualMember(groupId: number, playerUuid: string, addedBy: string | null): Promise<void> {
@@ -154,4 +161,8 @@ export async function resolvePlayerUuid(input: string): Promise<string | null> {
     return trimmed.toLowerCase();
   }
   return findPlayerUuidByName(trimmed);
+}
+
+export function isManualMember(groupId: number, uuid: string): Promise<boolean> {
+  return isManualGroupMember(groupId, uuid);
 }

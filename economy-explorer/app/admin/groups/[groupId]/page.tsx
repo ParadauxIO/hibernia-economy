@@ -1,4 +1,9 @@
 import Link from 'next/link';
+import { TablePager } from '@democracycraft/design-system/table';
+import { FilterBar } from '@/components/FilterBar';
+import { adminGroupMembersTable } from '@/lib/tables/admin';
+import { parseTableState, tableHref, withPage } from '@/lib/tables/core';
+import { RouterLink } from '../../_components/table';
 import { notFound } from 'next/navigation';
 import { MetricCard, MetricRow, Num, PageHeader, Section } from '@democracycraft/design-system';
 import { BackLink } from '@democracycraft/design-system/next';
@@ -23,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ groupId: 
 }
 
 
-export default async function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
+export default async function GroupDetailPage({ params, searchParams }: { params: Promise<{ groupId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
   if (!hasPermission(viewer, 'groups.read')) return <AdminGate viewer={viewer} title="Group access required" permission="groups.read" />;
 
@@ -35,7 +40,8 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
   if (!group) notFound();
   await auditView(viewer, { path: `/admin/groups/${id}`, targetType: 'group', targetId: String(id) });
 
-  const [members, roles, counts] = await Promise.all([listGroupMembers(id), listRoleDefinitions(), groupMemberCountsBySource(id)]);
+  const state = parseTableState(await searchParams, adminGroupMembersTable);
+  const [members, roles, counts] = await Promise.all([listGroupMembers(id, state), listRoleDefinitions(), groupMemberCountsBySource(id)]);
   const delegable = group.capabilities.every(key => roles.find(r => r.key === key)?.permissions.every(p => viewer.permissions.includes(p)));
   const assignable = roles.filter(role => role.permissions.every(p => viewer.permissions.includes(p)) || group.capabilities.includes(role.key));
   const compliance = roles.find(role => role.key === 'compliance');
@@ -103,7 +109,10 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
       </Section>
 
       <Section id="members" title="Members" description="Manual members can be added and removed here; synced rows are owned by their source." divider>
-        <MemberManager groupId={id} members={members} disabled={!delegable || !hasPermission(viewer, 'groups.members.update')} />
+        <FilterBar table={adminGroupMembersTable} total={members.total} />
+        <MemberManager groupId={id} members={members.rows} disabled={!delegable || !hasPermission(viewer, 'groups.members.update')} />
+        <TablePager page={members.page} totalPages={Math.max(1, Math.ceil(members.total / state.limit))}
+          hrefFor={(p) => tableHref(`/admin/groups/${id}`, withPage(state, p), adminGroupMembersTable)} link={RouterLink} label="Group member pages" />
       </Section>
     </>
   );

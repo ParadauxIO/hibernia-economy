@@ -5,6 +5,8 @@ import { queryKeyUsage, type KeyUsage } from '@/lib/prometheus';
 import { unstable_cache } from 'next/cache';
 import {
   countAdminApiKeys,
+  countAdminGroups,
+  countAdminRoles,
   countAdminPlayers,
   countAdminWebhooks,
   findPlayerNamesByUuid,
@@ -84,15 +86,19 @@ export async function getAdminApiKeys(viewer: Viewer, state: AdminApiKeysState):
   return { rows, total: counts.total, active: counts.active, usage: new Map(usage), entityLabels };
 }
 
-/** Access groups for /admin/groups. Few rows, so no paging. */
-export async function getAdminGroups(viewer: Viewer, state: AdminGroupsState): Promise<GroupSummary[]> {
+/** Access groups for /admin/groups, bounded before rendering. */
+export async function getAdminGroups(viewer: Viewer, state: AdminGroupsState): Promise<Page<GroupSummary> & { page: number }> {
   requirePermission(viewer, 'groups.read');
-  return listAdminGroups(state);
+  const total = await countAdminGroups(state);
+  const page = Math.min(state.page, Math.max(1, Math.ceil(total / state.limit)));
+  return { rows: await listAdminGroups({ ...state, page }), total, page };
 }
 
 /** Role definitions for /admin/roles, with permission, member and group counts. */
-export async function getAdminRoles(viewer: Viewer, state: AdminRolesState): Promise<AdminRoleRow[]> {
+export async function getAdminRoles(viewer: Viewer, state: AdminRolesState): Promise<Page<AdminRoleRow> & { page: number }> {
   requirePermission(viewer, 'roles.read');
   await auditView(viewer, { path: '/admin/roles', targetType: 'global' });
-  return listAdminRoles(state);
+  const total = await countAdminRoles(state);
+  const page = Math.min(state.page, Math.max(1, Math.ceil(total / state.limit)));
+  return { rows: await listAdminRoles({ ...state, page }), total, page };
 }

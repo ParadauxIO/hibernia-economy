@@ -473,6 +473,21 @@ d('configurable authorization policy', () => {
     expect((await resolveAuthorization(BOB)).roles).not.toContain('auditor');
     expect((await resolveAuthorization(CAROL)).roles).not.toContain('auditor');
   });
+  it('opens government for linked and unlinked logins through the player baseline without synced memberships (PAR-546)', async () => {
+    const { canSeeGovernment } = await import('@/lib/viewerSnapshot');
+    const role = (await listRoleDefinitions()).find(r => r.key === 'player')!;
+    await updateRole({ ...role, permissions: [...role.permissions, 'government.read.all'] }, role.revision);
+    for (const uuid of [null, DAVE]) {
+      const authorization = await resolveAuthorization(uuid);
+      expect(authorization.roles).toEqual(['player']);
+      expect(authorization.permissions).toContain('government.read.all');
+      expect(canSeeGovernment({ anon: false, keycloakSub: 'baseline-test', minecraftUuid: uuid,
+        minecraftName: null, linked: uuid !== null, role: 'player', capabilities: authorization.roles,
+        permissions: authorization.permissions }, false)).toBe(true);
+    }
+    await updateRole(role, role.revision + 1);
+    expect((await resolveAuthorization(null)).permissions).not.toContain('government.read.all');
+  });
   it('edits the authenticated baseline without any implicit permission fallback', async () => {
     await updateRole({ key: 'player', name: 'Player', description: null, permissions: [] }, 1);
     expect((await resolveAuthorization(null)).permissions).toEqual([]);
