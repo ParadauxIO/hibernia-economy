@@ -12,7 +12,7 @@ export async function generateMetadata() {
 
 export default async function LinkPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { callbackUrl } = await searchParams;
-  const returnTo = typeof callbackUrl === 'string' && callbackUrl.startsWith('/') && !callbackUrl.startsWith('//') && !callbackUrl.includes('\\') ? callbackUrl : '/';
+  const returnTo = typeof callbackUrl === 'string' && callbackUrl.startsWith('/') && !callbackUrl.startsWith('//') && !/[\\\u0000-\u001f\u007f]/.test(callbackUrl) ? callbackUrl : '/';
   const viewer = await getViewer();
   if (viewer.anon) {
     return (
