@@ -28,6 +28,18 @@
         },
         "type" : "object"
       },
+      "AccountFirmResponse" : {
+        "properties" : {
+          "displayName" : {
+            "type" : "string"
+          },
+          "firmId" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "BalanceTax" : {
         "properties" : {
           "brackets" : {
@@ -597,6 +609,21 @@
         },
         "type" : "object"
       },
+      "PublicFirmAccountResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "defaultAccount" : {
+            "type" : "boolean"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PublicFirmResponse" : {
         "properties" : {
           "archived" : {
@@ -1007,6 +1034,35 @@
         "tags" : [ "account-controller" ]
       }
     },
+    "/api/v1/accounts/{accountId}/firm" : {
+      "get" : {
+        "description" : "Any authenticated caller may resolve a current firm-account link. Removed links are excluded. Returns 404 ACCOUNT_NOT_FOUND for a missing account, or 404 ACCOUNT_FIRM_NOT_FOUND when the account has no current firm link.\n\n**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "getFirm_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "accountId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AccountFirmResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Find the firm associated with an account",
+        "tags" : [ "account-controller" ]
+      }
+    },
     "/api/v1/accounts/{accountId}/transactions" : {
       "get" : {
         "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
@@ -1339,6 +1395,38 @@
         "tags" : [ "config-controller" ]
       }
     },
+    "/api/v1/firms/by-id/{firmId}/accounts" : {
+      "get" : {
+        "description" : "Same response and access as the name lookup. Uses an explicit ID route to distinguish numeric firm names. Unknown firms return 404 FIRM_NOT_FOUND.\n\n**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "listPublicAccountsById",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "firmId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PublicFirmAccountResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a firm's accounts by ID",
+        "tags" : [ "firm-controller" ]
+      }
+    },
     "/api/v1/firms/me" : {
       "get" : {
         "description" : "**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
@@ -1513,6 +1601,37 @@
             "description" : "OK"
           }
         },
+        "tags" : [ "firm-controller" ]
+      }
+    },
+    "/api/v1/firms/{firmName}/accounts" : {
+      "get" : {
+        "description" : "Any authenticated caller may list current account links, ordered by account ID. Returns accountId, displayName and defaultAccount. Removed links are excluded; archived accounts with a current link are included. Unknown firms return 404 FIRM_NOT_FOUND.\n\n**Rate limits:** 60 requests/minute for PERSONAL keys, 300 requests/minute for BUSINESS keys. Exceeding the limit returns HTTP 429 with a `Retry-After` header (in seconds). The response also includes `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers on every successful call.",
+        "operationId" : "listPublicAccounts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "firmName",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PublicFirmAccountResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "List a firm's accounts by name",
         "tags" : [ "firm-controller" ]
       }
     },

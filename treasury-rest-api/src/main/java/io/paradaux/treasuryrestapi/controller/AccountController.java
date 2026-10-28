@@ -2,6 +2,7 @@ package io.paradaux.treasuryrestapi.controller;
 
 import io.paradaux.treasuryrestapi.dto.AccountBalanceResponse;
 import io.paradaux.treasuryrestapi.dto.AccountByPlayerResponse;
+import io.paradaux.treasuryrestapi.dto.AccountFirmResponse;
 import io.paradaux.treasuryrestapi.dto.BaltopResponse;
 import io.paradaux.treasuryrestapi.dto.TransactionFeedResponse;
 import io.paradaux.treasuryrestapi.dto.TransactionsResponse;
@@ -9,6 +10,7 @@ import io.paradaux.treasuryrestapi.ratelimit.RateLimit;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.AccountService;
 import io.paradaux.treasuryrestapi.service.TransactionService;
+import io.swagger.v3.oas.annotations.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +33,17 @@ public class AccountController {
     public AccountController(TransactionService transactionService, AccountService accountService) {
         this.transactionService = transactionService;
         this.accountService = accountService;
+    }
+
+    @Operation(
+            summary = "Find the firm associated with an account",
+            description = "Any authenticated caller may resolve a current firm-account link. Removed links are "
+                    + "excluded. Returns 404 ACCOUNT_NOT_FOUND for a missing account, or "
+                    + "404 ACCOUNT_FIRM_NOT_FOUND when the account has no current firm link.")
+    @GetMapping("/{accountId}/firm")
+    @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
+    public ResponseEntity<AccountFirmResponse> getFirm(@PathVariable long accountId) {
+        return ResponseEntity.ok(accountService.getFirm(accountId));
     }
 
     /**
