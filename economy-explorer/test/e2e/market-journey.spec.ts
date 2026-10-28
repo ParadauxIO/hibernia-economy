@@ -1,7 +1,9 @@
+import { loginMarketPlayer } from './helpers';
 import { test, expect } from '@playwright/test';
 import { visit } from './helpers';
 
 test('search, open an item, compare it and see where to trade', async ({ page }) => {
+  await loginMarketPlayer(page);
   await visit(page, '/chestshop?q=Diamond');
   await page.getByRole('table', { name: 'Items' }).getByRole('link', { name: /Diamond/ }).click();
   await expect(page.getByRole('heading', { name: 'Diamond', level: 1 })).toBeVisible();
@@ -26,6 +28,7 @@ test('an empty search says what filtered it and offers a way back', async ({ pag
 });
 
 test('old shop links become filter chips, and selling compares buy-back prices', async ({ page }) => {
+  await loginMarketPlayer(page);
   await visit(page, '/chestshop/shops?item=DIAMOND&direction=sell');
   await expect(page.getByText('Shops that buy items from you', { exact: false })).toBeVisible();
   const table = page.getByRole('table', { name: 'Shops' });

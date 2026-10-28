@@ -13,7 +13,7 @@ import { ItemIcon } from '@/components/market/ItemIcon';
 import { ShopOwner } from '@/components/market/ShopOwner';
 import { ShopTable } from '@/components/market/ShopTable';
 import { hasPermission } from '@/lib/auth/access';
-import { getViewer } from '@/lib/auth/viewer';
+import { requireMarketViewer } from '@/lib/auth/market';
 import { itemHref } from '@/lib/entityLinks';
 import { itemIconUrl } from '@/lib/itemIcon';
 import { compareRows, dailyCandles, spreadRows, summarise, tradeRows } from '@/lib/market/itemSeries';
@@ -49,6 +49,7 @@ export async function generateMetadata({ params }: { params: Params }) {
 export default async function ItemPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const [{ itemKey: raw }, sp] = await Promise.all([params, searchParams]);
   const itemKey = decodeURIComponent(raw);
+  const viewer = await requireMarketViewer(itemHref(itemKey), sp);
   const range = parseRange(sp, { defaultPreset: '30d' });
   const compare = parseCompare(sp.compare, itemKey);
   const self = itemHref(itemKey);
@@ -61,7 +62,6 @@ export default async function ItemPage({ params, searchParams }: { params: Param
   const add = typeof sp.add === 'string' ? sp.add.trim() : '';
   if (add) redirect(`${query(KEY_RE.test(add) && add !== itemKey ? [...new Set([...compare, add])].slice(0, 3) : compare)}#compare`);
 
-  const viewer = await getViewer();
   const staff = hasPermission(viewer, 'market.figures.read');
   const [page, offers, overview, theme, sales] = await Promise.all([
     getItemPage(itemKey, compare, range.range),

@@ -8,6 +8,7 @@ import { sql } from 'kysely';
 vi.hoisted(() => {
   process.env.DB_NAME = `${process.env.DB_NAME ?? 'economy_test'}_entity`;
 });
+vi.mock('@/lib/auth/viewer', () => ({ getViewer: async () => ({ anon: false, keycloakSub: 'test-player' }) }));
 vi.mock('@/lib/redis', () => ({ redis: () => null, tenantKey: (key: string) => key }));
 
 import { HAS_DB, resetDb, testDbOptions, ALICE, BOB, CAROL, DAVE, uuid } from './db';

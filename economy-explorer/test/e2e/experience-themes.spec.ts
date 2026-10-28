@@ -1,3 +1,4 @@
+import { loginMarketPlayer } from './helpers';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { visit } from './helpers';
@@ -12,6 +13,7 @@ for (const theme of ['blue', 'red']) {
           { name: 'theme', value: theme, url: baseURL! },
           { name: 'mode', value: mode, url: baseURL! },
         ]);
+        if (path.startsWith('/chestshop/items/') || path.startsWith('/chestshop/shops')) await loginMarketPlayer(page);
         await visit(page, path);
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         await expect(page.locator('html')).toHaveAttribute('data-mode', mode);

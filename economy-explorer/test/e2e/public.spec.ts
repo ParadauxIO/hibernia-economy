@@ -1,3 +1,4 @@
+import { loginMarketPlayer } from './helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { dataTable, visit, GATE } from './helpers';
 
@@ -134,6 +135,7 @@ test('Health bookmarks preserve their window on the consolidated overview', asyn
 });
 
 test('shop discovery quotes per item, cheapest first, and switches to selling', async ({ page }) => {
+  await loginMarketPlayer(page);
   await visit(page, '/chestshop/shops?f=item:in:DIAMOND');
   const rows = page.getByRole('table', { name: 'Shops' }).locator('tbody tr');
   // 64.00 for a batch of 64 is 1.00 per item, cheaper than 2.00 for one.
@@ -144,6 +146,7 @@ test('shop discovery quotes per item, cheapest first, and switches to selling', 
 });
 
 test('item pages show candles, offers both ways and map links', async ({ page }) => {
+  await loginMarketPlayer(page);
   await visit(page, '/chestshop/items/DIAMOND');
   await expect(page.getByRole('heading', { name: 'Price', level: 2, exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Where to buy' })).toBeVisible();

@@ -24,6 +24,7 @@ test('a staff-warmed item page never exposes sales figures to anonymous visitors
   await expect(sales.getByRole('columnheader', { name: 'Total' })).toBeVisible();
   await context.clearCookies();
   await visit(page, '/chestshop/items/DIAMOND');
+  await expect(page).toHaveURL(/\/api\/auth\/signin/);
   await expect(page.locator('section#recent-sales')).toHaveCount(0);
   const html = await (await page.request.get('/chestshop/items/DIAMOND')).text();
   expect(html).not.toContain('sale_count');

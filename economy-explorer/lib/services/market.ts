@@ -1,4 +1,5 @@
 import 'server-only';
+import { requireMarketViewer } from '@/lib/auth/market';
 import { memo } from '@/lib/cache';
 import { sum, toDbString } from '@/lib/money';
 import { addDays, utcDay, type DayRange } from '@/lib/rollup/days';
@@ -133,6 +134,7 @@ export async function getCatalogue(state: ItemsTableState): Promise<{ rows: Cata
 
 /** The shop finder page. Live shop data: cached for a minute only for link-reachable views. */
 export async function getShopDirectory(state: ShopsTableState): Promise<{ rows: MarketShopRow[]; total: number }> {
+  await requireMarketViewer('/chestshop/shops');
   const offset = (state.page - 1) * state.limit;
   const fetch = async () => {
     const [rows, total] = await Promise.all([listShopDirectory(state, state.limit, offset), countShopDirectory(state)]);
@@ -149,7 +151,8 @@ export interface ItemPage {
 }
 
 /** One item's (and up to three comparison items') daily candles for a range. Cached for five minutes. */
-export function getItemPage(itemKey: string, compareKeys: readonly string[], range: DayRange): Promise<ItemPage> {
+export async function getItemPage(itemKey: string, compareKeys: readonly string[], range: DayRange): Promise<ItemPage> {
+  await requireMarketViewer(`/chestshop/items/${encodeURIComponent(itemKey)}`);
   const keys = [itemKey, ...compareKeys.filter((k) => k !== itemKey).slice(0, 3)];
   return memo(`item-page:v1:${keys.join('|')}:${range.from}:${range.to}`, FIVE_MINUTES, async () => {
     const [{ data, coverage }, ids] = await Promise.all([itemDays(keys, range), identities(keys)]);
@@ -163,7 +166,8 @@ export function getItemPage(itemKey: string, compareKeys: readonly string[], ran
 }
 
 /** Live offers for one item, both sides. Cached for a minute. */
-export function getItemOffers(itemKey: string): Promise<{ buy: MarketShopRow[]; sell: MarketShopRow[]; buyCount: number; sellCount: number }> {
+export async function getItemOffers(itemKey: string): Promise<{ buy: MarketShopRow[]; sell: MarketShopRow[]; buyCount: number; sellCount: number }> {
+  await requireMarketViewer(`/chestshop/items/${encodeURIComponent(itemKey)}`);
   return memo(`item-offers:v1:${itemKey}`, 60_000, async () => {
     const base = { itemKey, material: null, firmId: null, ownerUuid: null, buyable: false, inStock: false, search: null } as const;
     const [buy, sell, buyCount, sellCount] = await Promise.all([

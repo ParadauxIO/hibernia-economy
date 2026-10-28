@@ -330,3 +330,25 @@ test('Business and Realty group memberships show their sources and revoke access
     await expect(page.getByText('realty: sync expired', { exact: true })).toBeVisible();
   } finally { await recipient.close(); }
 });
+
+for (const path of ['/chestshop/items/DIAMOND?compare=IRON_INGOT', '/chestshop/shops?f=item:in:DIAMOND']) {
+  test(`market login boundary protects HTML and RSC: ${path}`, async ({ context, page, policy }) => {
+    for (const headers of [{}, { RSC: '1', 'Next-Router-Prefetch': '1' }]) {
+      const response = await context.request.get(path, { maxRedirects: 0, headers });
+      expect(response.status()).toBe(307);
+      const login = new URL(response.headers().location!, baseURL);
+      expect(login.pathname).toBe('/api/auth/signin');
+      const returned = new URL(login.searchParams.get('callbackUrl')!, baseURL);
+      const expected = new URL(path, baseURL);
+      expect(returned.pathname).toBe(expected.pathname);
+      expect([...returned.searchParams]).toEqual([...expected.searchParams]);
+    }
+    await context.addCookies([{ name: 'authjs.session-token', value: 'forged', url: baseURL }]);
+    expect((await context.request.get(path, { maxRedirects: 0 })).status()).toBe(307);
+    await signIn(context, policy.player);
+    await visit(page, path);
+    await expect(page.getByRole('heading', { name: path.includes('/items/') ? 'Diamond' : 'Find shops', exact: true })).toBeVisible();
+    await signIn(context, policy.player, -60);
+    expect((await context.request.get(path, { maxRedirects: 0 })).status()).toBe(307);
+  });
+}

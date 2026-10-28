@@ -1,5 +1,6 @@
 import 'server-only';
 import type { EntityPreviewData } from '@democracycraft/design-system';
+import { requireMarketViewer } from '@/lib/auth/market';
 import { memo } from '@/lib/cache';
 import { accountLabel } from '@/lib/format';
 import { formatMoney, sumBy } from '@/lib/money';
@@ -15,8 +16,8 @@ import { summarise } from '@/lib/market/itemSeries';
 import { playerName } from '@/lib/entityLinks';
 
 // Hover-card data for EntityLink (DS README: `{ title, subtitle?, rows? }`).
-// Public data only: the same facts the entity's public page shows to a
-// logged-out visitor. Never history, counterparties, members or financials.
+// Item cards require login, like their detail pages. Other cards show public
+// facts only. Never history, counterparties, members or financials.
 
 export type PreviewKind = 'player' | 'account' | 'firm' | 'item';
 
@@ -81,7 +82,8 @@ async function itemPreview(key: string): Promise<EntityPreviewData | null> {
 }
 
 /** One entity's hover card, cached for five minutes. Null when it doesn't exist. */
-export function getPreview(kind: PreviewKind, id: string): Promise<EntityPreviewData | null> {
+export async function getPreview(kind: PreviewKind, id: string): Promise<EntityPreviewData | null> {
+  if (kind === 'item') await requireMarketViewer(`/chestshop/items/${encodeURIComponent(id)}`);
   return memo(`preview:v1:${kind}:${id}`, 5 * 60_000, async () => {
     switch (kind) {
       case 'account': return /^[1-9]\d{0,9}$/.test(id) ? accountPreview(Number(id)) : null;

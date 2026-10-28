@@ -5,10 +5,10 @@ import { isQuietPath } from '@/lib/accessLog';
 
 const blockRequest = createRequestBlocker(process.env);
 
-/** Logging and theme handling stay public. The admin boundary verifies the
+/** Logging and theme handling stay public. Protected page boundaries verify the
  * signed session at the edge; live permissions are checked again by the page
  * and action/service using the database, never stale roles in a JWT. */
-const authenticatedAdmin = auth((req, event: NextFetchEvent) => {
+const authenticatedPage = auth((req, event: NextFetchEvent) => {
   void event;
   if (!req.auth?.keycloakSub) {
     const login = new URL('/api/auth/signin', req.url);
@@ -43,7 +43,10 @@ export default function proxy(req: NextRequest, event: NextFetchEvent) {
   // Only the explicit legacy role shim bypasses session verification in test builds.
   // Signed-session browser tests (no shim cookie) exercise the real edge boundary.
   const roleShim = process.env.E2E_TEST_AUTH === '1' && req.cookies.has('e2e_viewer');
-  if (admin && !roleShim) return authenticatedAdmin(req, event);
+  const market = req.nextUrl.pathname.startsWith('/chestshop/items/')
+    || req.nextUrl.pathname === '/chestshop/shops'
+    || req.nextUrl.pathname.startsWith('/chestshop/shops/');
+  if ((admin || market) && !roleShim) return authenticatedPage(req, event);
   return handleRequest(req);
 }
 
