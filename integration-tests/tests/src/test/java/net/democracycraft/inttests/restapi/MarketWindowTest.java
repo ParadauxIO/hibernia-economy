@@ -9,7 +9,7 @@ import java.sql.DriverManager;
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketWindowTest {
+class MarketWindowTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     @Test
     void detailWindowsExcludeOldSalesWhileDirectoryRetainsLifetimeTotals() throws Exception {
@@ -110,26 +110,26 @@ class MarketWindowTest {
             assertThat(Inv.playerCount(buyer.getUsername(), material)).isEqualTo(5);
         }
     }
-    private static String day(java.sql.Connection c, long sale) throws Exception {
+    private String day(java.sql.Connection c, long sale) throws Exception {
         try (var q = c.prepareStatement("SELECT DATE_FORMAT(occurred_at, '%Y-%m-%d') FROM chestshop_sale WHERE sale_id = ?")) {
             q.setLong(1, sale);
             try (var r = q.executeQuery()) { assertThat(r.next()).isTrue(); return r.getString(1); }
         }
     }
-    private static void priceDay(JsonNode day, String date, int quantity, String volume, String average) {
+    private void priceDay(JsonNode day, String date, int quantity, String volume, String average) {
         assertThat(day.path("day").asText()).isEqualTo(date);
         assertThat(day.path("sales").asInt()).isEqualTo(1);
         assertThat(day.path("totalQuantity").asInt()).isEqualTo(quantity);
         assertThat(new BigDecimal(day.path("totalVolume").asText())).isEqualByComparingTo(volume);
         assertThat(new BigDecimal(day.path("avgUnitPrice").asText())).isEqualByComparingTo(average);
     }
-    private static void totals(JsonNode node, int trades, int quantity, String volume) {
+    private void totals(JsonNode node, int trades, int quantity, String volume) {
         assertThat(node.path("tradeCount").asInt()).isEqualTo(trades);
         assertThat(node.path("totalQuantity").asInt()).isEqualTo(quantity);
         assertThat(new BigDecimal(node.path("totalVolume").asText())).isEqualByComparingTo(volume);
     }
-    private static JsonNode get(String path) {
-        var r = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var r = RestApi.call("GET", path, marketToken(), null);
         assertThat(r.status()).as("%s: %s", path, r.body()).isEqualTo(200);
         return r.json();
     }

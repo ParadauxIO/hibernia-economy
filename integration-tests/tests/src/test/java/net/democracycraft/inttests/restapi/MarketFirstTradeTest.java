@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketFirstTradeTest {
+class MarketFirstTradeTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Test
@@ -59,7 +59,7 @@ class MarketFirstTradeTest {
                 detail = get(detailUrl);
                 directory = get(directoryUrl);
                 if (detail.path("tradeCount").asInt() == 1 && directory.path("totalItems").asInt() == 1) break;
-                Thread.sleep(1500); // Bound HTTP polling below the anonymous route budget.
+                Thread.sleep(1500); // Bound HTTP polling below the authenticated route budget.
             } while (System.nanoTime() < deadline);
             totals(detail, 1, 2, "9");
             assertThat(detail.path("material").asText()).isEqualTo(material);
@@ -81,14 +81,14 @@ class MarketFirstTradeTest {
         }
     }
 
-    private static void totals(JsonNode node, int count, int quantity, String volume) {
+    private void totals(JsonNode node, int count, int quantity, String volume) {
         assertThat(node.path("tradeCount").asInt()).isEqualTo(count);
         assertThat(node.path("totalQuantity").asInt()).isEqualTo(quantity);
         assertThat(new BigDecimal(node.path("totalVolume").asText())).isEqualByComparingTo(volume);
     }
 
-    private static JsonNode get(String path) {
-        var response = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var response = RestApi.call("GET", path, marketToken(), null);
         assertThat(response.status()).as("%s: %s", path, response.body()).isEqualTo(200);
         return response.json();
     }

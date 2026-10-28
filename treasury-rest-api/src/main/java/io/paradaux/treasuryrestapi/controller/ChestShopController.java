@@ -5,10 +5,12 @@ import io.paradaux.treasuryrestapi.dto.ChestShopItemsResponse;
 import io.paradaux.treasuryrestapi.dto.ChestShopMarketStatsResponse;
 import io.paradaux.treasuryrestapi.dto.ChestShopShopsResponse;
 import io.paradaux.treasuryrestapi.ratelimit.RateLimit;
+import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.ChestShopService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,21 +18,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Public, read-only ChestShop market data — the same aggregate/directory views
- * economy-explorer renders, exposed as a hammer-friendly REST surface for
- * external consumers (price trackers, shop finders, dashboards).
+ * Read-only ChestShop market data for authenticated API consumers (price trackers,
+ * shop finders and dashboards). Every route requires an active API-key Bearer JWT.
+ * All key types may read these market views; the rate limiter accounts for usage
+ * per key owner, using the personal or business request budget.
  *
- * <p>These endpoints are intentionally <b>unauthenticated</b>: they carry no
- * per-entity financial detail, only public market aggregates and the live
- * "what's for sale where" registry. {@code JwtAuthFilter} skips this prefix so
- * no Bearer token is required; callers are therefore throttled by client IP via
- * {@link RateLimit#anonymousPerMinute()} (the personal/business limits never
- * apply here because there is never a verified principal).
- *
- * <p>Load posture: the aggregate endpoints are cached in the service; the shop
- * directory is a single index-served table with a hard page cap. Anonymous
- * limits are set generously above human interactive pace but low enough to blunt
- * a scraper hammering a single IP.
+ * <p>Aggregate endpoints are cached in the service; the shop directory is a single
+ * index-served table with a hard page cap.
  */
 @RestController
 @RequestMapping("/api/v1/chestshop")
@@ -51,8 +45,9 @@ public class ChestShopController {
      * (admin or stock &gt; 0), {@code search} (item name/material). Paged.
      */
     @GetMapping("/shops")
-    @RateLimit(personalPerMinute = 120, businessPerMinute = 600, anonymousPerMinute = 120)
+    @RateLimit(personalPerMinute = 120, businessPerMinute = 600)
     public ResponseEntity<ChestShopShopsResponse> listShops(
+            @AuthenticationPrincipal VerifiedToken token,
             @RequestParam(required = false) String itemKey,
             @RequestParam(required = false) String material,
             @RequestParam(required = false) Integer firmId,
@@ -62,11 +57,20 @@ public class ChestShopController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int limit) {
 
-        ChestShopShopsResponse response = chestShopService.listShops(
-                itemKey, material, firmId, buyable, inStock, search, page, limit);
-        log.info("GET /chestshop/shops itemKey={} material={} firmId={} buyable={} inStock={} → {} of {} (page {}/{})",
-                itemKey, material, firmId, buyable, inStock,
-                response.items().size(), response.totalItems(), response.page(), response.totalPages());
+        ChestShopShopsResponse response =
+                chestShopService.listShops(itemKey, material, firmId, buyable, inStock, search, page, limit);
+        log.info(
+                "GET /chestshop/shops keyId={} itemKey={} material={} firmId={} buyable={} inStock={} → {} of {} (page {}/{})",
+                token.keyId(),
+                itemKey,
+                material,
+                firmId,
+                buyable,
+                inStock,
+                response.items().size(),
+                response.totalItems(),
+                response.page(),
+                response.totalPages());
         return ResponseEntity.ok(response);
     }
 
@@ -76,15 +80,22 @@ public class ChestShopController {
      * over item name / material / key. Paged. Cached.
      */
     @GetMapping("/items")
-    @RateLimit(personalPerMinute = 120, businessPerMinute = 600, anonymousPerMinute = 120)
+    @RateLimit(personalPerMinute = 120, businessPerMinute = 600)
     public ResponseEntity<ChestShopItemsResponse> listItems(
+            @AuthenticationPrincipal VerifiedToken token,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int limit) {
 
         ChestShopItemsResponse response = chestShopService.listItems(search, page, limit);
-        log.info("GET /chestshop/items search={} → {} of {} (page {}/{})",
-                search, response.items().size(), response.totalItems(), response.page(), response.totalPages());
+        log.info(
+                "GET /chestshop/items keyId={} search={} → {} of {} (page {}/{})",
+                token.keyId(),
+                search,
+                response.items().size(),
+                response.totalItems(),
+                response.page(),
+                response.totalPages());
         return ResponseEntity.ok(response);
     }
 
@@ -94,14 +105,20 @@ public class ChestShopController {
      * daily price/volume series. Cached per (itemKey, days).
      */
     @GetMapping("/items/{itemKey}")
-    @RateLimit(personalPerMinute = 120, businessPerMinute = 600, anonymousPerMinute = 120)
+    @RateLimit(personalPerMinute = 120, businessPerMinute = 600)
     public ResponseEntity<ChestShopItemDetailResponse> getItem(
+            @AuthenticationPrincipal VerifiedToken token,
             @PathVariable String itemKey,
             @RequestParam(defaultValue = "30") int days) {
 
         ChestShopItemDetailResponse response = chestShopService.getItem(itemKey, days);
-        log.info("GET /chestshop/items/{} days={} → trades={} activeShops={}",
-                itemKey, days, response.tradeCount(), response.activeShopCount());
+        log.info(
+                "GET /chestshop/items/{} keyId={} days={} → trades={} activeShops={}",
+                itemKey,
+                token.keyId(),
+                days,
+                response.tradeCount(),
+                response.activeShopCount());
         return ResponseEntity.ok(response);
     }
 
@@ -110,11 +127,16 @@ public class ChestShopController {
      * Global market totals (sales, volume, distinct items, active shops). Cached.
      */
     @GetMapping("/stats")
-    @RateLimit(personalPerMinute = 120, businessPerMinute = 600, anonymousPerMinute = 120)
-    public ResponseEntity<ChestShopMarketStatsResponse> stats() {
+    @RateLimit(personalPerMinute = 120, businessPerMinute = 600)
+    public ResponseEntity<ChestShopMarketStatsResponse> stats(@AuthenticationPrincipal VerifiedToken token) {
         ChestShopMarketStatsResponse response = chestShopService.marketStats();
-        log.info("GET /chestshop/stats → sales={} volume={} items={} shops={}",
-                response.totalSales(), response.totalVolume(), response.distinctItems(), response.activeShops());
+        log.info(
+                "GET /chestshop/stats keyId={} → sales={} volume={} items={} shops={}",
+                token.keyId(),
+                response.totalSales(),
+                response.totalVolume(),
+                response.distinctItems(),
+                response.activeShops());
         return ResponseEntity.ok(response);
     }
 }

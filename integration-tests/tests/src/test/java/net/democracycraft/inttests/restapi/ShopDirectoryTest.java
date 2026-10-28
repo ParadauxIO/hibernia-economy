@@ -9,10 +9,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class ShopDirectoryTest {
+class ShopDirectoryTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     @Test
-    void publicDirectoryFiltersPagesAndReflectsRealBusinessShopTrade() {
+    void authenticatedDirectoryFiltersPagesAndReflectsRealBusinessShopTrade() {
         String firm = Usernames.fresh("DirF");
         try (var owner = MockPlayer.connectLocal(Usernames.fresh("DirO"));
              var buyer = MockPlayer.connectLocal(Usernames.fresh("DirB"));
@@ -114,16 +114,16 @@ class ShopDirectoryTest {
             assertThat(Market.saleCountForCustomer(buyer.getUuid())).isEqualTo(1);
         }
     }
-    private static Market.Shop registered(ChestShopFixture fixture) {
+    private Market.Shop registered(ChestShopFixture fixture) {
         var pos = fixture.signPos();
         return Market.waitForShopAt("world", pos.x(), pos.y(), pos.z(), TIMEOUT);
     }
-    private static JsonNode get(String path) {
-        var r = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var r = RestApi.call("GET", path, marketToken(), null);
         assertThat(r.status()).as("%s", r.body()).isEqualTo(200);
         return r.json();
     }
-    private static JsonNode page(String path, int page, int pages, int count, long... ids) {
+    private JsonNode page(String path, int page, int pages, int count, long... ids) {
         var json = get(path);
         assertThat(json.path("page").asInt()).isEqualTo(page);
         assertThat(json.path("totalPages").asInt()).isEqualTo(pages);
@@ -133,7 +133,7 @@ class ShopDirectoryTest {
         assertThat(found).containsExactly(java.util.Arrays.stream(ids).boxed().toArray(Long[]::new));
         return json;
     }
-    private static void row(JsonNode row, ChestShopFixture fixture, Market.Shop shop, int firmId, String firm,
+    private void row(JsonNode row, ChestShopFixture fixture, Market.Shop shop, int firmId, String firm,
                             String material, String price, int batch, int stock) {
         assertThat(row.path("world").asText()).isEqualTo("world");
         assertThat(row.path("x").asInt()).isEqualTo(fixture.signPos().x());
