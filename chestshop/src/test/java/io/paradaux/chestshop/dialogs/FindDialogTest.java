@@ -14,7 +14,24 @@ import java.util.function.BiConsumer;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
-class FindDialogTest {
+class FindDialogTest extends io.paradaux.chestshop.support.ServerTest {
+    @Test
+    void damageablePreviewIsNonStackable_withoutChangingSearchItem() {
+        var item = new org.bukkit.inventory.ItemStack(org.bukkit.Material.DIAMOND_SWORD);
+        var meta = item.getItemMeta();
+        meta.setMaxStackSize(64);
+        item.setItemMeta(meta);
+        var state = new FindState(item, "sword", "Sword", "world", 0, 0, 0, true);
+        var dialog = new FindDialog(mock(ShopFinderService.class), mock(Message.class), mock(MenuManager.class));
+        var view = dialog.main(state);
+        var body = (io.paradaux.hibernia.framework.usher.DialogView.Body.Item)
+                view.bodies().getFirst();
+        org.assertj.core.api.Assertions.assertThat(body.item().getMaxStackSize())
+                .isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(state.itemStack().getMaxStackSize())
+                .isEqualTo(64);
+    }
+
     @Test
     void successfulSearchOpensChestResultsForJavaToo() {
         var finder = mock(ShopFinderService.class);

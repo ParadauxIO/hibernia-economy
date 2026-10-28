@@ -361,16 +361,11 @@ public class InfoServiceImpl implements InfoService {
         PotionMeta potionMeta = (PotionMeta) meta;
 
         StringBuilder message = new StringBuilder();
-        var base = potionMeta.getBasePotionData();
-        if (base != null) {
+        var baseType = potionMeta.getBasePotionType();
+        if (baseType != null) {
             message.append(Colours.GRAY);
-            message.append(capitalizeFirstLetter(item.getType().name(), '_')).append(" of ");
-            message.append(capitalizeFirstLetter(base.getType().name(), '_')).append(' ');
-            if (base.isUpgraded()) {
-                message.append("II");
-            } else if (base.isExtended()) {
-                message.append("+");
-            }
+            message.append(capitalizeFirstLetter(item.getType().name(), '_'));
+            message.append(" of ").append(capitalizeFirstLetter(baseType.name(), '_'));
         }
 
         for (PotionEffect effect : potionMeta.getCustomEffects()) {

@@ -57,6 +57,7 @@ public class SignService {
         {
             Pattern.compile("^\\?$"),
             WildcardItems.PATTERN,
+            Pattern.compile("^#[0-9a-zA-Z]+$"),
             Pattern.compile("^[\\p{L}\\d_ \\-]+(" + DURABILITY.pattern() + ")?(" + METADATA.pattern() + ")?$"),
             Pattern.compile("^[\\p{L}\\d_ \\-]+" + METADATA.pattern() + "(" + DURABILITY.pattern() + ")?$")
         }

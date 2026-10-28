@@ -167,6 +167,14 @@ class ItemCodeServiceImplTest extends ServerTest {
         assertThat(service.getFromCode(Base62.encode(1))).isNull();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(
+            value = Material.class,
+            names = {"LAVA", "CARROTS", "COCOA"})
+    void decode_rejectsBlocksThatCannotBeItems(Material material) {
+        assertThat(service.decode(material.name())).isNull();
+    }
+
     // ---- encode / decode (canonical sign codes) --------------------------------
 
     @Test

@@ -298,6 +298,86 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     }
 
     @Test
+    void concurrentDuplicateRecovery_doesNotUpgradeSharedLocks() throws Exception {
+        Account source = accountService.getGovernmentAccountByName("starting-balances");
+        Account target = createPersonalAccount(0);
+        byte[] key = Idempotency.sha256("shared-dedup-recovery");
+        TransferRequest request = new TransferRequest(
+                source.getAccountId(),
+                target.getAccountId(),
+                new BigDecimal("100.00"),
+                "duplicate recovery",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                "test",
+                key);
+        var barrier = new DuplicateRecoveryBarrier();
+        injector.getInstance(org.apache.ibatis.session.SqlSessionFactory.class)
+                .getConfiguration()
+                .addInterceptor(barrier);
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> ledgerService.adminTransfer(request));
+            var second = pool.submit(() -> ledgerService.adminTransfer(request));
+            assertThat(barrier.snapshots.await(10, TimeUnit.SECONDS)).isTrue();
+            barrier.winnerThread = Thread.currentThread();
+            long winner = ledgerService.adminTransfer(request);
+            barrier.committed.countDown();
+            assertThat(first.get(20, TimeUnit.SECONDS)).isEqualTo(winner);
+            assertThat(second.get(20, TimeUnit.SECONDS)).isEqualTo(winner);
+            assertThat(balanceOf(target)).isEqualByComparingTo("100.00");
+            assertThat(countRows("SELECT COUNT(*) FROM ledger_postings WHERE txn_id = ?", winner))
+                    .isEqualTo(2);
+        } finally {
+            barrier.committed.countDown();
+            pool.shutdownNow();
+            assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @org.apache.ibatis.plugin.Intercepts({
+        @org.apache.ibatis.plugin.Signature(
+                type = org.apache.ibatis.executor.Executor.class,
+                method = "query",
+                args = {
+                    org.apache.ibatis.mapping.MappedStatement.class, Object.class,
+                    org.apache.ibatis.session.RowBounds.class, org.apache.ibatis.session.ResultHandler.class
+                }),
+        @org.apache.ibatis.plugin.Signature(
+                type = org.apache.ibatis.executor.Executor.class,
+                method = "update",
+                args = {org.apache.ibatis.mapping.MappedStatement.class, Object.class})
+    })
+    static final class DuplicateRecoveryBarrier implements org.apache.ibatis.plugin.Interceptor {
+        final CountDownLatch snapshots = new CountDownLatch(2);
+        final CountDownLatch committed = new CountDownLatch(1);
+        final CountDownLatch duplicates = new CountDownLatch(2);
+        volatile Thread winnerThread;
+
+        @Override
+        public Object intercept(org.apache.ibatis.plugin.Invocation invocation) throws Throwable {
+            String id = ((org.apache.ibatis.mapping.MappedStatement) invocation.getArgs()[0]).getId();
+            if (Thread.currentThread() == winnerThread) return invocation.proceed();
+            if (id.endsWith(".findByDedupKey")) {
+                Object result = invocation.proceed();
+                snapshots.countDown();
+                if (!committed.await(10, TimeUnit.SECONDS)) throw new AssertionError("Winner must commit");
+                return result;
+            }
+            try {
+                return invocation.proceed();
+            } catch (java.lang.reflect.InvocationTargetException failure) {
+                if (id.endsWith(".insertTxnEntity")) {
+                    // Both failed INSERTs now hold shared locks on the winner's unique key.
+                    duplicates.countDown();
+                    if (!duplicates.await(10, TimeUnit.SECONDS)) throw new AssertionError("Both inserts must conflict");
+                }
+                throw failure;
+            }
+        }
+    }
+
+    @Test
     void transfer_missingAccount_throws() {
         Account a = createPersonalAccount(100);
 
