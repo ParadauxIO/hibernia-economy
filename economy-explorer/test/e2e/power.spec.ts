@@ -135,6 +135,7 @@ test.describe('full exports', () => {
   test.skip(!process.env.E2E_AUTH_SHIM, 'needs the auth shim');
 
   test('stream the filtered rows as CSV or JSON with the page’s permissions', async ({ context, page }) => {
+    await context.clearCookies();
     expect((await context.request.get('/api/export/accounts?format=csv')).status()).toBe(401);
     await as(context, 'player');
     expect((await context.request.get('/api/export/transactions?format=csv')).status()).toBe(403);

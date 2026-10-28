@@ -84,9 +84,10 @@ test.describe('/me as a linked player', () => {
   });
 });
 
-test('/me asks an anonymous visitor to log in, without the workspace', async ({ page }) => {
+test('/me asks an anonymous visitor to log in, without the workspace', async ({ page, context }) => {
+  await context.clearCookies();
   await visit(page, '/me/statements');
-  await expect(page.locator('.privacy-gate')).toBeVisible();
+  await expect(page).toHaveURL(/\/api\/auth\/signin/);
   await expect(page.getByRole('navigation', { name: 'My finances' })).toHaveCount(0);
 });
 

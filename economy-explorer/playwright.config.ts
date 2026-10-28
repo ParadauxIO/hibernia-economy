@@ -59,6 +59,7 @@ export default defineConfig({
   }),
   use: {
     baseURL,
+    ...(managed && { storageState: '.context/linked-visitor.json' }),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

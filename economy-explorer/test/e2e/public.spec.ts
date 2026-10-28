@@ -12,7 +12,7 @@ function trackErrors(page: Page): string[] {
   return errors;
 }
 
-test.describe('anonymous browsing', () => {
+test.describe('linked visitor browsing', () => {
   test('home renders the economy dashboard with working KPIs', async ({ page }) => {
     const errors = trackErrors(page);
     await visit(page, '/');
@@ -67,7 +67,7 @@ test.describe('anonymous browsing', () => {
     await expect(page.getByText('Average trade', { exact: true })).toBeVisible();
   });
 
-  test('per-firm financials are private to anonymous viewers', async ({ page }) => {
+  test('per-firm financials are private to unrelated linked viewers', async ({ page }) => {
     await visit(page, '/chestshop/firms');
     // seed.sql gives Acme Corp (firm 1) ChestShop sales, so it is always listed.
     const firmLink = page.locator('a[href="/chestshop/firms/1"]').first();

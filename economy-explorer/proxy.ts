@@ -1,19 +1,42 @@
 import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server';
 import { createRequestBlocker } from '@/lib/requestBlocking';
 import { auth } from '@/lib/auth/authjs';
+import { normalizeCapability } from '@/lib/auth/capabilities';
+import { isPublicExplorerPath, validMinecraftUuid } from '@/lib/auth/routeAccess';
+import { findIdentityBySub, upsertIdentity } from '@/lib/sql/identity';
 import { isQuietPath } from '@/lib/accessLog';
 
 const blockRequest = createRequestBlocker(process.env);
 
-/** Logging and theme handling stay public. Protected page boundaries verify the
- * signed session at the edge; live permissions are checked again by the page
- * and action/service using the database, never stale roles in a JWT. */
-const authenticatedPage = auth((req, event: NextFetchEvent) => {
+/** Every data route, including RSC and APIs, requires a signed and linked identity. */
+const authenticatedPage = auth(async (req, event: NextFetchEvent) => {
   void event;
+  const api = req.nextUrl.pathname.startsWith('/api/');
+  const callbackUrl = req.nextUrl.pathname + req.nextUrl.search;
   if (!req.auth?.keycloakSub) {
+    if (api) return NextResponse.json({ error: 'Sign in required.' }, { status: 401, headers: { 'Cache-Control': 'private, no-store' } });
     const login = new URL('/api/auth/signin', req.url);
-    login.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
+    login.searchParams.set('callbackUrl', callbackUrl);
     return NextResponse.redirect(login);
+  }
+  // A link must be established durably. Verified provider claims can establish
+  // it just as getViewer does; identity-store errors fail closed.
+  let linked = false;
+  try {
+    let identity = await findIdentityBySub(req.auth.keycloakSub);
+    if (validMinecraftUuid(req.auth.minecraftUuid) && identity?.playerUuid !== req.auth.minecraftUuid) {
+      await upsertIdentity({ sub: req.auth.keycloakSub, playerUuid: req.auth.minecraftUuid, minecraftName: req.auth.minecraftName ?? null, linkedBy: 'token-claim' });
+      identity = await findIdentityBySub(req.auth.keycloakSub);
+    }
+    linked = validMinecraftUuid(identity?.playerUuid);
+  } catch {
+    return new NextResponse('Identity verification unavailable', { status: 503, headers: { 'Cache-Control': 'no-store' } });
+  }
+  if (!linked) {
+    if (api) return NextResponse.json({ error: 'Linked Minecraft account required.' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } });
+    const link = new URL('/link', req.url);
+    link.searchParams.set('callbackUrl', callbackUrl);
+    return NextResponse.redirect(link);
   }
   return handleRequest(req);
 });
@@ -39,14 +62,10 @@ export default function proxy(req: NextRequest, event: NextFetchEvent) {
     overview.searchParams.set('days', req.nextUrl.searchParams.get('days') === '7' ? '7' : '30');
     return NextResponse.redirect(overview);
   }
-  const admin = req.nextUrl.pathname === '/admin' || req.nextUrl.pathname.startsWith('/admin/');
-  // Only the explicit legacy role shim bypasses session verification in test builds.
-  // Signed-session browser tests (no shim cookie) exercise the real edge boundary.
-  const roleShim = process.env.E2E_TEST_AUTH === '1' && req.cookies.has('e2e_viewer');
-  const market = req.nextUrl.pathname.startsWith('/chestshop/items/')
-    || req.nextUrl.pathname === '/chestshop/shops'
-    || req.nextUrl.pathname.startsWith('/chestshop/shops/');
-  if ((admin || market) && !roleShim) return authenticatedPage(req, event);
+  // Only a recognized fixture role bypasses session verification in test builds.
+  const role = req.cookies.get('e2e_viewer')?.value;
+  const roleShim = process.env.E2E_TEST_AUTH === '1' && !!role && role !== 'anon' && normalizeCapability(role) !== null;
+  if (!isPublicExplorerPath(req.nextUrl.pathname) && !roleShim) return authenticatedPage(req, event);
   return handleRequest(req);
 }
 
@@ -104,6 +123,6 @@ export const config = {
     // Include auth endpoints so blocks precede session work. Keep liveness public.
     // /metrics is bearer-token protected in its route handler; skipping the proxy
     // keeps Prometheus scrapes out of the access log and the UA/IP denylist.
-    '/((?!_next/static|_next/image|favicon.ico|robots.txt|healthz|metrics).*)',
+    '/((?!_next/static|favicon.ico|robots.txt|healthz|metrics).*)',
   ],
 };

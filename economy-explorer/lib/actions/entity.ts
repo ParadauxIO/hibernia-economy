@@ -1,4 +1,5 @@
 'use server';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 // Server actions behind the entity pages (PAR-537).
 
 import { signIn } from '@/lib/auth/authjs';
@@ -24,6 +25,7 @@ export async function loginReturningTo(path: string): Promise<void> {
  * to read the account. Bound to the account id by the page.
  */
 export async function searchCounterpartiesAction(accountId: number, field: string, text: string): Promise<EntityOption[]> {
+  await requireLinkedViewer();
   if (field !== 'counterparty' || typeof text !== 'string' || !Number.isInteger(accountId) || accountId <= 0) return [];
   if (!(await canViewAccount(accountId, await getViewer()))) return [];
   return suggestCounterparties(accountId, text);
@@ -31,6 +33,7 @@ export async function searchCounterpartiesAction(accountId: number, field: strin
 
 /** Item keys are public (the catalogue). */
 export async function searchItemsAction(field: string, text: string): Promise<EntityOption[]> {
+  await requireLinkedViewer();
   if (field !== 'item' || typeof text !== 'string') return [];
   return suggestItems(text);
 }

@@ -13,7 +13,7 @@ import { ItemIcon } from '@/components/market/ItemIcon';
 import { ShopOwner } from '@/components/market/ShopOwner';
 import { ShopTable } from '@/components/market/ShopTable';
 import { hasPermission } from '@/lib/auth/access';
-import { requireMarketViewer } from '@/lib/auth/market';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { itemHref } from '@/lib/entityLinks';
 import { itemIconUrl } from '@/lib/itemIcon';
 import { compareRows, dailyCandles, spreadRows, summarise, tradeRows } from '@/lib/market/itemSeries';
@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: { params: Params }) {
 export default async function ItemPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const [{ itemKey: raw }, sp] = await Promise.all([params, searchParams]);
   const itemKey = decodeURIComponent(raw);
-  const viewer = await requireMarketViewer(itemHref(itemKey), sp);
+  const viewer = await requireLinkedViewer(itemHref(itemKey), sp);
   const range = parseRange(sp, { defaultPreset: '30d' });
   const compare = parseCompare(sp.compare, itemKey);
   const self = itemHref(itemKey);

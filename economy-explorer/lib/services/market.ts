@@ -1,5 +1,5 @@
 import 'server-only';
-import { requireMarketViewer } from '@/lib/auth/market';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { memo } from '@/lib/cache';
 import { sum, toDbString } from '@/lib/money';
 import { addDays, utcDay, type DayRange } from '@/lib/rollup/days';
@@ -60,7 +60,8 @@ function sumDays(days: MarketDayRow[], items: number): { trades: number; volume:
 }
 
 /** The /market landing: movers, most traded and newest listings. Cached for five minutes. */
-export function getMarketOverview(): Promise<MarketOverview> {
+export async function getMarketOverview(): Promise<MarketOverview> {
+  await requireLinkedViewer();
   return memo('market-overview:v1', FIVE_MINUTES, async () => {
     const today = utcDay();
     const from = addDays(today, -6);
@@ -99,7 +100,8 @@ export function getMarketOverview(): Promise<MarketOverview> {
 }
 
 /** Market-wide totals per day for a range (/market/activity). */
-export function getMarketActivity(range: DayRange): Promise<{ days: MarketDayRow[]; coverage: RangeCoverage; top: (ItemWindowRow & { identity: Identity | null })[] }> {
+export async function getMarketActivity(range: DayRange): Promise<{ days: MarketDayRow[]; coverage: RangeCoverage; top: (ItemWindowRow & { identity: Identity | null })[] }> {
+  await requireLinkedViewer();
   return memo(`market-activity:v1:${range.from}:${range.to}`, FIVE_MINUTES, async () => {
     const [coverage, days, top] = await Promise.all([
       itemCoverage(range), selectMarketDays(range.from, range.to), selectItemWindow(range.from, range.to, 10, 'volume'),
@@ -119,6 +121,7 @@ export interface CatalogueRow extends ItemWindowRow { identity: Identity | null 
 
 /** The item catalogue over the last 30 days of the item rollup. */
 export async function getCatalogue(state: ItemsTableState): Promise<{ rows: CatalogueRow[]; total: number; coverage: RangeCoverage }> {
+  await requireLinkedViewer();
   const today = utcDay();
   const range = { from: addDays(today, -29), to: today };
   const offset = (state.page - 1) * state.limit;
@@ -134,7 +137,7 @@ export async function getCatalogue(state: ItemsTableState): Promise<{ rows: Cata
 
 /** The shop finder page. Live shop data: cached for a minute only for link-reachable views. */
 export async function getShopDirectory(state: ShopsTableState): Promise<{ rows: MarketShopRow[]; total: number }> {
-  await requireMarketViewer('/chestshop/shops');
+  await requireLinkedViewer('/chestshop/shops');
   const offset = (state.page - 1) * state.limit;
   const fetch = async () => {
     const [rows, total] = await Promise.all([listShopDirectory(state, state.limit, offset), countShopDirectory(state)]);
@@ -152,7 +155,7 @@ export interface ItemPage {
 
 /** One item's (and up to three comparison items') daily candles for a range. Cached for five minutes. */
 export async function getItemPage(itemKey: string, compareKeys: readonly string[], range: DayRange): Promise<ItemPage> {
-  await requireMarketViewer(`/chestshop/items/${encodeURIComponent(itemKey)}`);
+  await requireLinkedViewer(`/chestshop/items/${encodeURIComponent(itemKey)}`);
   const keys = [itemKey, ...compareKeys.filter((k) => k !== itemKey).slice(0, 3)];
   return memo(`item-page:v1:${keys.join('|')}:${range.from}:${range.to}`, FIVE_MINUTES, async () => {
     const [{ data, coverage }, ids] = await Promise.all([itemDays(keys, range), identities(keys)]);
@@ -167,7 +170,7 @@ export async function getItemPage(itemKey: string, compareKeys: readonly string[
 
 /** Live offers for one item, both sides. Cached for a minute. */
 export async function getItemOffers(itemKey: string): Promise<{ buy: MarketShopRow[]; sell: MarketShopRow[]; buyCount: number; sellCount: number }> {
-  await requireMarketViewer(`/chestshop/items/${encodeURIComponent(itemKey)}`);
+  await requireLinkedViewer(`/chestshop/items/${encodeURIComponent(itemKey)}`);
   return memo(`item-offers:v1:${itemKey}`, 60_000, async () => {
     const base = { itemKey, material: null, firmId: null, ownerUuid: null, buyable: false, inStock: false, search: null } as const;
     const [buy, sell, buyCount, sellCount] = await Promise.all([
@@ -181,7 +184,8 @@ export async function getItemOffers(itemKey: string): Promise<{ buy: MarketShopR
 }
 
 /** The newest sales of one item. Staff only (market.figures.read): the caller checks. */
-export function getRecentItemSales(itemKey: string, limit: number): Promise<MarketSaleRow[]> {
+export async function getRecentItemSales(itemKey: string, limit: number): Promise<MarketSaleRow[]> {
+  await requireLinkedViewer();
   return listItemSales(itemKey, limit, 0);
 }
 
@@ -190,7 +194,8 @@ export function getRecentItemSales(itemKey: string, limit: number): Promise<Mark
  * chestshop_sale by shop_firm_id (idx_cs_firm); the rollups have no firm
  * dimension, so it is cached for ten minutes and served stale while it refreshes.
  */
-export function getMarketFirms(limit: number, offset: number): Promise<{ firms: MarketFirmRow[]; total: number }> {
+export async function getMarketFirms(limit: number, offset: number): Promise<{ firms: MarketFirmRow[]; total: number }> {
+  await requireLinkedViewer();
   return memo(`market-firms:v2:${limit}:${offset}`, 10 * 60_000, async () => {
     const [firms, total] = await Promise.all([listMarketFirms(limit, offset), countMarketFirms()]);
     return { firms, total };
@@ -199,6 +204,7 @@ export function getMarketFirms(limit: number, offset: number): Promise<{ firms: 
 
 /** Typeahead for item filters and the comparison picker: item keys among live shops. */
 export async function suggestItems(prefix: string): Promise<EntityOption[]> {
+  await requireLinkedViewer();
   const term = prefix.trim().slice(0, 64);
   if (!term) return [];
   const rows = await findShopItemsByPrefix(term, 8);

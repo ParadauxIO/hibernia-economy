@@ -39,7 +39,7 @@ export async function chromeViewer(viewer: Viewer): Promise<ViewerCtx> {
  * there is no linked player, they own no personal account, or the lookup fails.
  */
 export async function personalBalance(viewer: Viewer): Promise<string | null> {
-  if (viewer.anon || !viewer.minecraftUuid) return null;
+  if (viewer.anon || !viewer.linked || !viewer.minecraftUuid) return null;
   const uuid = viewer.minecraftUuid;
   try {
     return await memo(`nav:personal-balance:${uuid}`, BALANCE_MS, async () => {

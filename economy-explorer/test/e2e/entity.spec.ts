@@ -12,7 +12,7 @@ async function mainText(page: Page): Promise<string> {
   return (await page.getByRole('main').innerText()).replace(/\s+/g, ' ');
 }
 
-test.describe('account page, logged out', () => {
+test.describe('account page, unrelated linked visitor', () => {
   test('a business account names its firm first and keeps the history private', async ({ page }) => {
     await visit(page, '/accounts/3');
     await expect(page.getByRole('heading', { level: 1, name: 'Acme Corporate Account' })).toBeVisible();
@@ -26,7 +26,7 @@ test.describe('account page, logged out', () => {
     await expect(page.getByRole('button', { name: 'Copy /pay command' })).toHaveAttribute('title', '/firm account pay into 1 3 <amount>');
     const gate = page.locator(GATE);
     await expect(gate).toContainText('This account’s history is private');
-    await expect(gate.getByRole('button', { name: 'Log in to see your own account' })).toBeVisible();
+    await expect(gate.getByRole('button', { name: 'Log in to see your own account' })).toHaveCount(0);
     // The Related rail stays visible, so the visitor has somewhere to go.
     const related = page.getByRole('complementary', { name: 'Related' });
     await expect(related.getByRole('link', { name: 'Acme Corp' })).toHaveAttribute('href', '/firms/Acme%20Corp');
@@ -51,7 +51,7 @@ test.describe('account page, logged out', () => {
   });
 
   test('exports need access', async ({ request }) => {
-    expect((await request.get('/api/export/account-transactions?f=account:in:1&format=csv')).status()).toBe(401);
+    expect((await request.get('/api/export/account-transactions?f=account:in:1&format=csv')).status()).toBe(403);
   });
 });
 

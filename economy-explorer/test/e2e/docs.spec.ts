@@ -29,6 +29,7 @@ for (const role of ['anon', 'player', 'moderator', 'admin']) {
   test(`operator runbook access for ${role}`, async ({ page, context, baseURL }) => {
     test.skip(role !== 'anon' && !process.env.E2E_AUTH_SHIM, 'requires test auth shim');
     const errors = trackErrors(page);
+    await context.clearCookies();
     if (role !== 'anon') await context.addCookies([{ name: 'e2e_viewer', value: role, url: baseURL! }]);
     await visit(page, '/docs/admin/operator-runbook');
     if (role !== 'admin') {
