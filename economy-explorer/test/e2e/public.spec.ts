@@ -92,9 +92,12 @@ test.describe('linked visitor browsing', () => {
     await expect(page.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('/me requires login', async ({ page }) => {
+  test('/me redirects anonymous visitors to login before rendering the workspace', async ({ page, context }) => {
+    await context.clearCookies();
     await visit(page, '/me');
-    await expect(page.locator(GATE)).toBeVisible();
+    await expect(page).toHaveURL(/\/api\/auth\/signin\?callbackUrl=/);
+    await expect(page.getByRole('button', { name: 'Sign in with Keycloak' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'My finances' })).toHaveCount(0);
   });
 
   test('a missing route shows the styled 404', async ({ page }) => {
