@@ -534,6 +534,63 @@ public class AccountCommands implements CommandHandler {
                 formatted);
     }
 
+    @Route("account transfer <firm> <fromAccountId> <toAccountId> <amount>")
+    @Permission("business.account.finance")
+    @Async
+    @Description("Move money directly between two accounts belonging to the same firm")
+    public void accountTransfer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("fromAccountId") Integer fromAccountId,
+            @Arg("toAccountId") Integer toAccountId,
+            @Arg("amount") BigDecimal amount) {
+        doAccountTransfer(sender, firmRef, fromAccountId, toAccountId, amount, null);
+    }
+
+    @Route("account transfer <firm> <fromAccountId> <toAccountId> <amount> <memo>")
+    @Permission("business.account.finance")
+    @Async
+    @Description("Move money between the firm's accounts with a memo recorded in the ledger")
+    public void accountTransfer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("fromAccountId") Integer fromAccountId,
+            @Arg("toAccountId") Integer toAccountId,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
+        doAccountTransfer(sender, firmRef, fromAccountId, toAccountId, amount, memo);
+    }
+
+    private void doAccountTransfer(
+            Player sender,
+            FirmName firmRef,
+            Integer fromAccountId,
+            Integer toAccountId,
+            BigDecimal amount,
+            String memo) {
+        Firm firm = firms.getFirmByNameOrId(firmRef.value());
+        if (firm == null) {
+            message.send(sender, "business.general.firm-not-found");
+            return;
+        }
+        if (!canAccessFirmFinances(firm, sender)) {
+            message.send(sender, "business.general.no-permission");
+            return;
+        }
+        audit.transferBetweenAccounts(firm.getFirmId(), fromAccountId, toAccountId, sender.getUniqueId(), amount, memo);
+        message.send(
+                sender,
+                "business.account.transfer.success",
+                "firm",
+                firm.getDisplayName(),
+                "fromAccountId",
+                fromAccountId,
+                "toAccountId",
+                toAccountId,
+                "amount",
+                treasury.formatAmount(amount));
+    }
+
     // ---- ACCOUNT PAY: PLAYER -> BUSINESS ----------------------------------------
 
     @Route("account pay into <firm> <accountId> <amount>")

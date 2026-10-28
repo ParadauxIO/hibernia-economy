@@ -171,6 +171,54 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
     }
 
     @Test
+    void accountTransfer_movesOnlyFirmBalances_andRecordsMemo() {
+        UUID owner = UUID.randomUUID();
+        Firm firm = firms.createFirm("Acme", owner);
+        int source = firm.getDefaultAccountId();
+        int reserve =
+                treasury.createAccount(AccountType.BUSINESS, owner, "Reserve").getAccountId();
+        mapper(FirmAccountsMapper.class).insertFirmAccount(firm.getFirmId(), reserve);
+        transactions.deposit(firm.getFirmId(), owner, new BigDecimal("300.00"));
+        int personal = treasury.resolveOrCreatePersonal(owner).getAccountId();
+        BigDecimal personalBefore = treasury.getBalanceByAccountId(personal);
+
+        transactions.transferBetweenAccounts(
+                firm.getFirmId(), source, reserve, owner, new BigDecimal("120.50"), "  July   reserve  ");
+
+        assertThat(treasury.getBalanceByAccountId(source)).isEqualByComparingTo("179.50");
+        assertThat(treasury.getBalanceByAccountId(reserve)).isEqualByComparingTo("120.50");
+        assertThat(treasury.getBalanceByAccountId(personal)).isEqualByComparingTo(personalBefore);
+        assertThat(treasury.getTransactionHistory(reserve, 0, 10).items())
+                .singleElement()
+                .satisfies(entry -> {
+                    assertThat(entry.getAmount()).isEqualByComparingTo("120.50");
+                    assertThat(entry.getMessage()).isEqualTo("Business account transfer: July reserve");
+                });
+
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, reserve, owner, new BigDecimal("179.51"), null))
+                .isInstanceOf(ExceedsLimitException.class);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, reserve, UUID.randomUUID(), BigDecimal.ONE, null))
+                .isInstanceOf(io.paradaux.hibernia.framework.exceptions.NoPermissionException.class);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, source, owner, BigDecimal.ONE, null))
+                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, reserve, owner, BigDecimal.ZERO, null))
+                .isInstanceOf(BadCommandException.class);
+        Firm other = firms.createFirm("Other", owner);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, other.getDefaultAccountId(), owner, BigDecimal.ONE, null))
+                .isInstanceOf(BadCommandException.class);
+        assertThat(treasury.getBalanceByAccountId(source)).isEqualByComparingTo("179.50");
+        assertThat(treasury.getBalanceByAccountId(reserve)).isEqualByComparingTo("120.50");
+        assertThat(treasury.getBalanceByAccountId(other.getDefaultAccountId())).isEqualByComparingTo("0");
+        assertThat(treasury.getBalanceByAccountId(personal)).isEqualByComparingTo(personalBefore);
+        assertThat(treasury.getTransactionHistory(reserve, 0, 10).items()).hasSize(1);
+    }
+
+    @Test
     void weeklyBalanceTax_collectsExactlyTheFirmTotal_andIsIdempotentPerPeriod() {
         UUID owner = UUID.randomUUID();
         Firm firm = firms.createFirm("Taxed", owner);

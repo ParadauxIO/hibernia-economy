@@ -55,6 +55,21 @@ so old signs cannot be redirected to someone else's wallet.
 /business account withdraw Acme <accountId> 500
 ```
 
+## Move money between your firm’s accounts
+
+Use the account IDs from `/business account list <firm>`:
+
+```text
+/business account transfer Acme 42 51 1000
+/business account transfer Acme 42 51 1000 July reserve funding
+```
+
+This transfers directly from account #42 to #51 without passing through your personal
+balance. Both accounts must be live and linked to Acme, including any subaccounts.
+You need the same finance permission and source-account spending authority as for a
+withdrawal. The optional memo is saved in the transaction history. Transfers to the
+same account, to another firm's account, or for more than the source balance are rejected.
+
 ## Pay people and other firms
 
 Pay a wage from a firm account straight to a player:
