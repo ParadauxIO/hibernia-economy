@@ -25,7 +25,7 @@ test.describe('desktop chrome', () => {
     await visit(page, '/');
     await page.waitForLoadState('networkidle');
     expect(viewerCalls).toEqual([]);
-    await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Visitor/ })).toBeVisible();
   });
 
   test('marks the section and page, and the section nav follows the path', async ({ page }) => {

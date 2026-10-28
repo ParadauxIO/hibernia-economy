@@ -1,3 +1,4 @@
+import { loginMarketPlayer } from './helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { dataTable, visit, GATE } from './helpers';
 
@@ -11,7 +12,7 @@ function trackErrors(page: Page): string[] {
   return errors;
 }
 
-test.describe('anonymous browsing', () => {
+test.describe('linked visitor browsing', () => {
   test('home renders the economy dashboard with working KPIs', async ({ page }) => {
     const errors = trackErrors(page);
     await visit(page, '/');
@@ -66,7 +67,7 @@ test.describe('anonymous browsing', () => {
     await expect(page.getByText('Average trade', { exact: true })).toBeVisible();
   });
 
-  test('per-firm financials are private to anonymous viewers', async ({ page }) => {
+  test('per-firm financials are private to unrelated linked viewers', async ({ page }) => {
     await visit(page, '/chestshop/firms');
     // seed.sql gives Acme Corp (firm 1) ChestShop sales, so it is always listed.
     const firmLink = page.locator('a[href="/chestshop/firms/1"]').first();
@@ -91,9 +92,12 @@ test.describe('anonymous browsing', () => {
     await expect(page.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('/me requires login', async ({ page }) => {
+  test('/me redirects anonymous visitors to login before rendering the workspace', async ({ page, context }) => {
+    await context.clearCookies();
     await visit(page, '/me');
-    await expect(page.locator(GATE)).toBeVisible();
+    await expect(page).toHaveURL(/\/api\/auth\/signin\?callbackUrl=/);
+    await expect(page.getByRole('button', { name: 'Sign in with Keycloak' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'My finances' })).toHaveCount(0);
   });
 
   test('a missing route shows the styled 404', async ({ page }) => {
@@ -134,6 +138,7 @@ test('Health bookmarks preserve their window on the consolidated overview', asyn
 });
 
 test('shop discovery quotes per item, cheapest first, and switches to selling', async ({ page }) => {
+  await loginMarketPlayer(page);
   await visit(page, '/chestshop/shops?f=item:in:DIAMOND');
   const rows = page.getByRole('table', { name: 'Shops' }).locator('tbody tr');
   // 64.00 for a batch of 64 is 1.00 per item, cheaper than 2.00 for one.
@@ -144,6 +149,7 @@ test('shop discovery quotes per item, cheapest first, and switches to selling', 
 });
 
 test('item pages show candles, offers both ways and map links', async ({ page }) => {
+  await loginMarketPlayer(page);
   await visit(page, '/chestshop/items/DIAMOND');
   await expect(page.getByRole('heading', { name: 'Price', level: 2, exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Where to buy' })).toBeVisible();

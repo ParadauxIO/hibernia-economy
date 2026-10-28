@@ -58,7 +58,7 @@ describe('request denylist', () => {
   it('passes allowed public traffic onward', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const { default: proxy } = await import('@/proxy');
-    const response = await proxy(new NextRequest('http://localhost/accounts'), {} as never);
+    const response = await proxy(new NextRequest('http://localhost/docs'), {} as never);
     expect(response?.headers.get('x-middleware-next')).toBe('1');
   });
 });

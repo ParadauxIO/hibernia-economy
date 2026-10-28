@@ -23,19 +23,19 @@ const config: NextConfig = {
         ],
       },
       {
-        // Public documentation: cacheable + indexable. Excluding it from the
-        // rule above (rather than relying on later-rule precedence) ensures no
-        // X-Robots-Tag: noindex header reaches /docs to override page metadata.
+        // Documentation stays public and indexable, but its shared layout can
+        // contain a signed-in viewer's balance. Never share-cache that HTML.
+        // Exclusion above also preserves its indexable page metadata.
         source: '/docs/:path*',
         headers: [
-          { key: 'Cache-Control', value: 'public, max-age=3600, must-revalidate' },
+          { key: 'Cache-Control', value: 'private, no-store' },
           { key: 'X-Robots-Tag', value: 'index, follow' },
         ],
       },
       {
         source: '/docs',
         headers: [
-          { key: 'Cache-Control', value: 'public, max-age=3600, must-revalidate' },
+          { key: 'Cache-Control', value: 'private, no-store' },
           { key: 'X-Robots-Tag', value: 'index, follow' },
         ],
       },

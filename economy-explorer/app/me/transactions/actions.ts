@@ -1,4 +1,5 @@
 'use server';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 
 import { getViewer } from '@/lib/auth/viewer';
 import { accountLabel } from '@/lib/format';
@@ -13,6 +14,7 @@ import type { EntityOption } from '@/lib/tables/core';
  * account by its number ("#42"); a name is public, its history is not.
  */
 export async function searchMyAccountsAction(field: string, text: string): Promise<EntityOption[]> {
+  await requireLinkedViewer();
   if ((field !== 'account' && field !== 'counterparty') || typeof text !== 'string') return [];
   const viewer = await getViewer();
   const gate = meGate(viewer);

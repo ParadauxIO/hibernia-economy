@@ -28,6 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const viewer = await getViewer();
   if (viewer.anon) return NextResponse.json({ error: 'Sign in to export.' }, { status: 401, headers: NO_STORE });
 
+  if (!viewer.linked || !viewer.minecraftUuid) return NextResponse.json({ error: 'Link your Minecraft account to export.' }, { status: 403, headers: NO_STORE });
+
   const def = getExport(dataset);
   if (!def) return NextResponse.json({ error: 'Unknown dataset.' }, { status: 404, headers: NO_STORE });
 

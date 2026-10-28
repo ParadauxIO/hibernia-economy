@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { encode } from 'next-auth/jwt';
 import { resetDb } from '../integration/db';
 import { seedGovFixtures } from './gov-fixtures';
 
@@ -15,4 +17,13 @@ export default async function globalSetup(): Promise<void> {
   }
   await resetDb();
   await seedGovFixtures();
+  // Ordinary linked visitor with no account ownership or elevated role. Content
+  // suites exercise the authenticated product; boundary specs explicitly clear it.
+  const base = new URL(process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100');
+  const cookie = 'authjs.session-token';
+  const value = await encode({ secret: process.env.E2E_AUTH_SECRET!, salt: cookie, token: {
+    sub: 'e2e-linked-visitor', minecraftUuid: '00000000-0000-0000-0000-00000000f001', minecraftName: 'Visitor',
+  } });
+  await mkdir('.context', { recursive: true });
+  await writeFile('.context/linked-visitor.json', JSON.stringify({ cookies: [{ name: cookie, value, domain: base.hostname, path: '/', expires: -1, httpOnly: true, secure: false, sameSite: 'Lax' }], origins: [] }));
 }

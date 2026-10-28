@@ -47,6 +47,7 @@ const test = base.extend<{ policy: Fixture }>({
     }
   },
 });
+test.beforeEach(async ({ context }) => { await context.clearCookies(); });
 test.skip(!secret, 'Set E2E_AUTH_SECRET to the local test app AUTH_SECRET; managed Playwright runs configure it automatically.');
 
 async function createRole(conn: Connection, key: string, permissions: string[]) {
@@ -329,4 +330,44 @@ test('Business and Realty group memberships show their sources and revoke access
     await page.reload();
     await expect(page.getByText('realty: sync expired', { exact: true })).toBeVisible();
   } finally { await recipient.close(); }
+});
+
+for (const path of ['/chestshop/items/DIAMOND?compare=IRON_INGOT', '/chestshop/shops?f=item:in:DIAMOND']) {
+  test(`market login boundary protects HTML and RSC: ${path}`, async ({ context, page, policy }) => {
+    for (const headers of [{}, { RSC: '1', 'Next-Router-Prefetch': '1' }]) {
+      const response = await context.request.get(path, { maxRedirects: 0, headers });
+      expect(response.status()).toBe(307);
+      const login = new URL(response.headers().location!, baseURL);
+      expect(login.pathname).toBe('/api/auth/signin');
+      const returned = new URL(login.searchParams.get('callbackUrl')!, baseURL);
+      const expected = new URL(path, baseURL);
+      expect(returned.pathname).toBe(expected.pathname);
+      expect([...returned.searchParams]).toEqual([...expected.searchParams]);
+    }
+    await context.addCookies([{ name: 'authjs.session-token', value: 'forged', url: baseURL }]);
+    expect((await context.request.get(path, { maxRedirects: 0 })).status()).toBe(307);
+    await signIn(context, policy.player);
+    await visit(page, path);
+    await expect(page.getByRole('heading', { name: path.includes('/items/') ? 'Diamond' : 'Find shops', exact: true })).toBeVisible();
+    await signIn(context, policy.player, -60);
+    expect((await context.request.get(path, { maxRedirects: 0 })).status()).toBe(307);
+  });
+}
+
+
+test('signed-in unlinked accounts cannot read any explorer data', async ({ context, page }) => {
+  const name = baseURL.startsWith('https:') ? '__Secure-authjs.session-token' : 'authjs.session-token';
+  const token = await encode({ secret: secret!, salt: name, token: { sub: `unlinked-${randomUUID()}` } });
+  await context.addCookies([{ name, value: token, url: baseURL, httpOnly: true, sameSite: 'Lax' }]);
+  for (const path of ['/', '/market', '/accounts/1', '/chestshop/items/DIAMOND']) {
+    const response = await context.request.get(path, { maxRedirects: 0, headers: { RSC: '1', 'Next-Router-Prefetch': '1', 'x-middleware-subrequest': 'proxy:proxy:proxy:proxy:proxy' } });
+    expect(response.status()).toBe(307);
+    expect(response.headers().location).toContain('/link?');
+  }
+  for (const path of ['/api/preview/account/1', '/api/search/preview?q=al', '/api/export/accounts', '/api/docs/tax-rates']) {
+    expect((await context.request.get(path, { maxRedirects: 0 })).status()).toBe(403);
+  }
+  await visit(page, '/link');
+  await expect(page.getByRole('heading', { name: 'Link your account', exact: true })).toBeVisible();
+  await expect(page.getByText('Generate a short code below.')).toBeVisible();
 });

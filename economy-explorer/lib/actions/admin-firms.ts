@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer } from '@/lib/auth/viewer';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { requirePermission } from '@/lib/auth/access';
 import { auditMutation } from '@/lib/audit';
 import { disbandFirm, renameFirm, updateFirmDetails, type DisbandResult, type FirmResult } from '@/lib/treasury';
@@ -28,7 +28,7 @@ export async function disbandFirmAction(
   firmId: number,
   confirmName: string,
 ): Promise<{ ok: boolean; error?: string; result?: DisbandResult }> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'firm.disband');
   try {
     const firm = await findFirmById(firmId);
@@ -56,7 +56,7 @@ export async function renameFirmAction(
   firmId: number,
   newName: string,
 ): Promise<{ ok: boolean; error?: string; result?: FirmResult }> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'firm.rename');
   try {
     const name = newName.trim();
@@ -79,7 +79,7 @@ export async function updateFirmDetailsAction(
   firmId: number,
   body: { discordUrl: string | null; hqRegion: string | null },
 ): Promise<{ ok: boolean; error?: string; result?: FirmResult }> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'firm.details.update');
   try {
     const before = firmSnapshot(await getFirmHeader(firmId));
