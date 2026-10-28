@@ -2,6 +2,7 @@ package io.paradaux.treasuryrestapi.service;
 
 import io.paradaux.treasuryrestapi.dto.AccountBalanceResponse;
 import io.paradaux.treasuryrestapi.dto.AccountByPlayerResponse;
+import io.paradaux.treasuryrestapi.dto.AccountFirmResponse;
 import io.paradaux.treasuryrestapi.dto.BaltopEntry;
 import io.paradaux.treasuryrestapi.dto.BaltopResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
@@ -34,6 +35,17 @@ public class AccountService {
     public AccountService(AccountMapper accountMapper, FirmMapper firmMapper) {
         this.accountMapper = accountMapper;
         this.firmMapper = firmMapper;
+    }
+
+    public AccountFirmResponse getFirm(long accountId) {
+        if (accountMapper.findById(accountId) == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Account not found.");
+        }
+        var firm = firmMapper.findFirmByAccountId(accountId);
+        if (firm == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "ACCOUNT_FIRM_NOT_FOUND", "Account has no associated firm.");
+        }
+        return new AccountFirmResponse(firm.getFirmId(), firm.getDisplayName());
     }
 
     /**
