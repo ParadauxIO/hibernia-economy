@@ -51,3 +51,11 @@ for (const role of ['anon', 'player', 'moderator', 'admin']) {
     expect(errors).toEqual([]);
   });
 }
+
+test('documentation stays public without share-caching the personalized explorer shell', async ({ context }) => {
+  await context.clearCookies();
+  const response = await context.request.get('/docs');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['cache-control']).toContain('no-store');
+  expect(response.headers()['cache-control']).not.toContain('public');
+});
