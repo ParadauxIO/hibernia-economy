@@ -57,7 +57,7 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.mockito.core)
     testImplementation(libs.mockito.junit.jupiter)
-    // GroupReconciliationTask extends BukkitRunnable and references the LuckPerms
+    // GroupReconciliationTask uses Paper's async scheduler and references the LuckPerms
     // API, so the test classpath needs both to load the class (even for pure tests).
     testImplementation(libs.paper.api)
     testImplementation(libs.luckperms.api)

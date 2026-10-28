@@ -136,6 +136,7 @@ public final class TreasuryAPI extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        getServer().getAsyncScheduler().cancelTasks(this);
         getServer().getServicesManager().unregisterAll(this);
 
         try {
