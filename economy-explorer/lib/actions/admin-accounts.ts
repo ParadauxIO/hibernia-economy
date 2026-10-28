@@ -1,7 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
+import type { Viewer } from '@/lib/auth/viewer';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { requirePermission } from '@/lib/auth/access';
 import type { Permission } from '@/lib/auth/policy';
 import { auditMutation } from '@/lib/audit';
@@ -23,7 +24,7 @@ async function run<T>(
   audit: { action: string; path: string; targetId: string; before: () => Promise<unknown>; after: (result: T) => Promise<unknown> },
   op: (viewer: Extract<Viewer, { anon: false }>) => Promise<T>,
 ): Promise<Result<T>> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, permission);
   try {
     const before = await audit.before();

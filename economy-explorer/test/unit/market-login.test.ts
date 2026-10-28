@@ -5,6 +5,7 @@ vi.mock('@/lib/cache', () => ({ memo }));
 import { requireLinkedViewer } from '@/lib/auth/linked';
 import { getItemPage, getItemOffers, getShopDirectory } from '@/lib/services/market';
 import { getPreview } from '@/lib/services/preview';
+import { searchFirmsAction } from '@/lib/tables/actions';
 import { GET } from '@/app/api/preview/[kind]/[id]/route';
 import { parseTableState } from '@/lib/tables/core';
 import { shopsTable } from '@/lib/tables/shops';
@@ -22,6 +23,7 @@ it.each([
   ['offers', () => getItemOffers('DIAMOND')],
   ['shop directory', () => getShopDirectory(parseTableState({}, shopsTable))],
   ['item preview', () => getPreview('item', 'DIAMOND')],
+  ['firm typeahead action posted to a public route', () => searchFirmsAction('firm', 'ac')],
 ] as const)('rejects anonymous %s before shared caches or database work', async (_label, read) => {
   await expect(read()).rejects.toThrow('NEXT_REDIRECT');
   expect(memo).not.toHaveBeenCalled();
