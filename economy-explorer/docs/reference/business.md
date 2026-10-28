@@ -168,6 +168,7 @@ spend from it.
 |---|---|
 | `/business account deposit <firm> <accountId> <amount>` | Put your money into the account. |
 | `/business account withdraw <firm> <accountId> <amount>` | Take money out (authorizer only). |
+| `/business account transfer <firm> <fromAccountId> <toAccountId> <amount> [memo]` | Move money directly between two live accounts of the same firm; requires spending authority on the source. |
 | `/business account pay into <firm> <accountId> <amount>` | Pay your own money into the account. |
 | `/business account pay player <firm> <accountId> <player> <amount>` | Pay a player from the account. |
 | `/business account pay business <firm> <accountId> <target> <amount>` | Pay another firm from the account. |
@@ -287,7 +288,7 @@ in-firm role.
 | `/business account addmember` · `removemember` · `addauthorizer` · `removeauthorizer` | `business.account.addmember` · `.removemember` · `.addauthorizer` · `.removeauthorizer` | **owner only** |
 | `/business account list` · `members` · `authorizers` | `business.account.list` · `.members` · `.authorizers` | — |
 | `/business account pay into` | `business.pay` | — |
-| `/business account deposit` · `withdraw` · `pay player` · `pay business` · `balance` · `transactions` | `business.account.finance` | `ADMIN` or `FINANCIAL` |
+| `/business account deposit` · `withdraw` · `transfer` · `pay player` · `pay business` · `balance` · `transactions` | `business.account.finance` | `ADMIN` or `FINANCIAL` |
 | `/business transfer begin` · `confirm` · `cancel` | `business.transfer.begin` · `.confirm` · `.cancel` | owner only |
 | `/business transfer complete` · `reject` | `business.transfer.complete` · `.reject` | — (the recipient) |
 | `/business attribute set hq` · `discord` | `business.attribute.hq` · `business.attribute.discord` | `ADMIN` |

@@ -498,6 +498,32 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
                         + firmName(targetFirmId));
     }
 
+    @Override
+    public long transferBetweenAccounts(
+            Integer firmId,
+            Integer fromAccountId,
+            Integer toAccountId,
+            UUID actorUuid,
+            BigDecimal amount,
+            String memo) {
+        requireValidAmount(amount);
+        validateAccountBelongsToFirm(firmId, fromAccountId);
+        validateAccountBelongsToFirm(firmId, toAccountId);
+        if (fromAccountId.equals(toAccountId)) {
+            throw new BadCommandException("business.account.transfer.same-account");
+        }
+        for (int accountId : new int[] {fromAccountId, toAccountId}) {
+            Account account = treasury.getAccountById(accountId);
+            if (account == null) {
+                throw new NotFoundException(KEY_NO_ACCOUNT);
+            }
+            if (account.isArchived()) {
+                throw new ConflictException(KEY_ARCHIVED);
+            }
+        }
+        return payOut(fromAccountId, toAccountId, actorUuid, amount, reasonWithMemo("Business account transfer", memo));
+    }
+
     /**
      * Inbound payment into a firm account. No access check on the payer — paying
      * money in is harmless — but the payer must have funds and the destination

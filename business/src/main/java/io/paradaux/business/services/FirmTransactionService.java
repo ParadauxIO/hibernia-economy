@@ -3,7 +3,6 @@ package io.paradaux.business.services;
 import io.paradaux.business.model.FirmBalanceEntry;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.TransactionEntry;
-
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -55,6 +54,14 @@ public interface FirmTransactionService {
 
     long withdrawFromAccount(Integer firmId, Integer accountId, UUID playerUuid, BigDecimal amount);
 
+    /**
+     * Move money directly between two live accounts linked to the same firm.
+     * The caller enforces firm-finance permission; Treasury source access and
+     * authorization are enforced here. The optional memo is recorded in the ledger.
+     */
+    long transferBetweenAccounts(
+            Integer firmId, Integer fromAccountId, Integer toAccountId, UUID actorUuid, BigDecimal amount, String memo);
+
     // Payments ----------------------------------------------------------------
     //
     // Unlike deposit/withdraw (which only move money between a player and a firm
@@ -89,7 +96,8 @@ public interface FirmTransactionService {
      * Firm pays a player out of a specific firm account. As {@link #payPlayer}
      * but targets an explicit source account that must belong to the firm.
      */
-    long payPlayerFromAccount(Integer firmId, Integer accountId, UUID targetPlayerUuid, UUID actorUuid, BigDecimal amount);
+    long payPlayerFromAccount(
+            Integer firmId, Integer accountId, UUID targetPlayerUuid, UUID actorUuid, BigDecimal amount);
 
     /**
      * Firm pays another firm: source firm's default account → target firm's
@@ -113,5 +121,6 @@ public interface FirmTransactionService {
      * firm's default account. As {@link #payFirm} but the source account is
      * explicit and must belong to the source firm.
      */
-    long payFirmFromAccount(Integer sourceFirmId, Integer sourceAccountId, Integer targetFirmId, UUID actorUuid, BigDecimal amount);
+    long payFirmFromAccount(
+            Integer sourceFirmId, Integer sourceAccountId, Integer targetFirmId, UUID actorUuid, BigDecimal amount);
 }

@@ -701,6 +701,48 @@ class FirmTransactionServiceImplTest {
         assertThat(svc.withdrawFromAccount(1, 99, player, BigDecimal.ONE)).isEqualTo(100L);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {100, 101})
+    void accountTransfer_rejectsEitherForeignAccount(int foreignId) {
+        when(firmAccounts.isFirmAccount(1, foreignId)).thenReturn(false);
+        assertThatThrownBy(() -> svc.transferBetweenAccounts(1, 100, 101, player, BigDecimal.ONE, null))
+                .isInstanceOf(BadCommandException.class);
+        verify(treasury, never()).transfer(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {100, 101})
+    void accountTransfer_rejectsEitherArchivedAccount(int archivedId) {
+        when(treasury.getAccountById(100)).thenReturn(account(100, archivedId == 100, false));
+        if (archivedId == 101) {
+            when(treasury.getAccountById(101)).thenReturn(account(101, true, false));
+        }
+        assertThatThrownBy(() -> svc.transferBetweenAccounts(1, 100, 101, player, BigDecimal.ONE, null))
+                .isInstanceOf(ConflictException.class);
+        verify(treasury, never()).transfer(any());
+    }
+
+    @Test
+    void accountTransfer_memberWithoutSourceAuthorizationCannotSpend() {
+        when(treasury.getAccountById(100)).thenReturn(account(100, false, true));
+        when(treasury.getAccountById(101)).thenReturn(account(101, false, false));
+        when(treasury.canAccessAccount(player, 100)).thenReturn(true);
+        when(treasury.hasFunds(100, BigDecimal.ONE)).thenReturn(true);
+        when(treasury.getAuthorizers(100)).thenReturn(List.of());
+        assertThatThrownBy(() -> svc.transferBetweenAccounts(1, 100, 101, player, BigDecimal.ONE, null))
+                .isInstanceOf(NoPermissionException.class);
+        verify(treasury, never()).transfer(any());
+        verify(treasury, never()).resolveOrCreatePersonal(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "0.001", "1e999999999"})
+    void accountTransfer_rejectsInvalidAmounts(String amount) {
+        assertThatThrownBy(() -> svc.transferBetweenAccounts(1, 100, 101, player, new BigDecimal(amount), null))
+                .isInstanceOf(BadCommandException.class);
+        verify(treasury, never()).transfer(any());
+    }
+
     // ---------- payIntoFirm / payIntoAccount (player -> business) ----------
 
     private Account account(int id, boolean archived, boolean requiresAuth) {
