@@ -92,11 +92,10 @@ test.describe('linked visitor browsing', () => {
     await expect(page.getByRole('button', { name: '7d' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('/me redirects anonymous visitors to login before rendering the workspace', async ({ page, context }) => {
+  test('/me offers login before rendering the workspace', async ({ page, context }) => {
     await context.clearCookies();
     await visit(page, '/me');
-    await expect(page).toHaveURL(/\/api\/auth\/signin\?callbackUrl=/);
-    await expect(page.getByRole('button', { name: 'Sign in with Keycloak' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Log in or create an account' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'My finances' })).toHaveCount(0);
   });
 

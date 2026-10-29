@@ -13,7 +13,8 @@ test('provenance gates live read access and filters active and expired group gra
   let groupId: number | undefined;
   try {
     await context.clearCookies();
-    expect((await context.request.get('/admin/role-grants', { maxRedirects: 0 })).status()).toBe(307);
+    await visit(page, '/admin/role-grants');
+    await expect(page.getByRole('button', { name: 'Log in or create an account' })).toBeVisible();
     await conn.query('INSERT INTO explorer_role_definition (role_key,name) VALUES (?,?)', [key,key]);
     await conn.query('INSERT INTO explorer_role_permission VALUES (?,?)', [key,'roles.read']);
     await conn.query('INSERT INTO explorer_role (player_uuid_bin,role) VALUES (?,?)', [bin,key]);

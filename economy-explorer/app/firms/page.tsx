@@ -1,3 +1,5 @@
+import { getViewer } from '@/lib/auth/viewer';
+import { publicDirectoryTable } from '@/lib/tables/publicDirectory';
 import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, PageHeader } from '@democracycraft/design-system';
@@ -39,21 +41,26 @@ const columns: Column<FirmDirectoryRow>[] = [
 
 /** Spec §5.5: the firm directory. A firm's balance is the total of its own accounts. */
 export default async function FirmsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const state = parseTableState(await searchParams, firmsTable);
-  const { rows, total } = await getFirmsDirectory(state);
+  const viewer = await getViewer();
+  const showBalances = !viewer.anon && viewer.linked && !!viewer.minecraftUuid;
+  const table = showBalances ? firmsTable : publicDirectoryTable(firmsTable);
+  const visibleColumns = showBalances ? columns : columns.filter(column => column.key !== 'balance');
+  const state = parseTableState(await searchParams, table);
+  const { rows: directoryRows, total } = await getFirmsDirectory(state);
+  const rows = showBalances ? directoryRows : directoryRows.map(row => ({ ...row, total_balance: '0' }));
   const totalPages = Math.max(1, Math.ceil(total / state.limit));
-  const href = (s: TableState<typeof firmsTable>) => tableHref('/firms', s, firmsTable);
+  const href = (s: TableState<typeof table>) => tableHref('/firms', s, table);
   const describe = { currency: CURRENCY_SYMBOL };
   const activeFilters = [
     ...(state.q ? [{ text: `“${state.q}”`, removeHref: href(withQuery(state, '')) }] : []),
-    ...state.filters.map((f) => ({ text: filterText(f, firmsTable, describe), removeHref: href(withoutFilter(state, f.field)) })),
+    ...state.filters.map((f) => ({ text: filterText(f, table, describe), removeHref: href(withoutFilter(state, f.field)) })),
   ];
 
   return <>
-    <PageHeader title="Firms" subtitle="Businesses registered on the server. A firm’s balance is its own money, held across its accounts." />
-    <FilterBar table={firmsTable} total={total} columns={columnOptions(columns)} tableId={TABLE_ID} currency={CURRENCY_SYMBOL} />
-    <DataTable id={TABLE_ID} label="Firms" columns={columns} rows={rows} rowKey={(f) => f.firm_id} rowHref={(f) => firmHref(f.display_name)}
-      sort={state.sort} sortHref={(field, dir) => href(withSort(state, field, dir, firmsTable))} link={RouterLink}
+    <PageHeader title="Firms" subtitle="Businesses registered on the server. Browse firms and their staff." />
+    <FilterBar table={table} total={total} columns={columnOptions(visibleColumns)} tableId={TABLE_ID} currency={CURRENCY_SYMBOL} />
+    <DataTable id={TABLE_ID} label="Firms" columns={visibleColumns} rows={rows} rowKey={(f) => f.firm_id} rowHref={(f) => firmHref(f.display_name)}
+      sort={state.sort} sortHref={(field, dir) => href(withSort(state, field, dir, table))} link={RouterLink}
       empty={<TableEmpty noun="firms" filters={activeFilters} clearHref={href(cleared(state))} link={RouterLink} />} />
     <TablePager page={Math.min(state.page, totalPages)} totalPages={totalPages} hrefFor={(p) => href(withPage(state, p))} link={RouterLink} />
   </>;

@@ -9,16 +9,14 @@ import { checkAccountRateLimit } from '@/lib/requestRateLimit';
 
 const blockRequest = createRequestBlocker(process.env);
 
-/** Every data route, including RSC and APIs, requires a signed and linked identity. */
+/** Protected routes, including RSC and APIs, require a signed and linked identity. */
 const authenticatedPage = auth(async (req, event: NextFetchEvent) => {
   void event;
   const api = req.nextUrl.pathname.startsWith('/api/');
   const callbackUrl = req.nextUrl.pathname + req.nextUrl.search;
   if (!req.auth?.keycloakSub) {
     if (api) return NextResponse.json({ error: 'Sign in required.' }, { status: 401, headers: { 'Cache-Control': 'private, no-store' } });
-    const login = new URL('/api/auth/signin', req.url);
-    login.searchParams.set('callbackUrl', callbackUrl);
-    return NextResponse.redirect(login);
+    return accessPrompt(req, callbackUrl);
   }
   const limited = await checkAccountRateLimit(req.auth.keycloakSub);
   if (limited) {
@@ -42,12 +40,17 @@ const authenticatedPage = auth(async (req, event: NextFetchEvent) => {
   }
   if (!linked) {
     if (api) return NextResponse.json({ error: 'Linked Minecraft account required.' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } });
-    const link = new URL('/link', req.url);
-    link.searchParams.set('callbackUrl', callbackUrl);
-    return NextResponse.redirect(link);
+    return accessPrompt(req, callbackUrl);
   }
   return handleRequest(req);
 });
+
+function accessPrompt(req: NextRequest, callbackUrl: string) {
+  // Redirect before rendering: protected pages and their metadata never execute.
+  const url = new URL('/access', req.url);
+  url.searchParams.set('callbackUrl', callbackUrl);
+  return NextResponse.redirect(url, { headers: { 'Cache-Control': 'private, no-store' } });
+}
 
 export default function proxy(req: NextRequest, event: NextFetchEvent) {
   const decision = blockRequest(req.headers);

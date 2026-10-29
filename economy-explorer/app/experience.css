@@ -57,3 +57,10 @@
   .offer-action-buttons .btn { flex: 1; }
   .offer-details summary { min-height: 40px; padding: var(--space-2) 0; }
 }
+
+.explorer-access { max-width: 760px; margin: clamp(24px, 8vh, 96px) auto; padding: clamp(24px, 5vw, 64px); }
+.explorer-access h1 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -.035em; margin: 0 0 16px; }
+.explorer-access .privacy-gate-hint { max-width: 540px; line-height: 1.7; }
+.explorer-access-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; list-style: none; padding: 0; margin: 28px 0; color: var(--fg-soft); }
+.explorer-access-steps strong { display: block; color: var(--fg); margin-bottom: 8px; }
+.explorer-access .privacy-gate-actions { flex-wrap: wrap; justify-content: center; gap: 12px; }

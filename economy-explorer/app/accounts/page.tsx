@@ -1,3 +1,5 @@
+import { getViewer } from '@/lib/auth/viewer';
+import { publicDirectoryTable } from '@/lib/tables/publicDirectory';
 import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { DataTable, TableEmpty, TablePager, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -74,15 +76,20 @@ const columns: Column<ExplorerAccountRow>[] = [
 const RouterLink: LinkComponent<AppHref> = Link;
 
 export default async function AccountsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const state = parseTableState(await searchParams, accountsTable);
-  const { rows, total, typeCounts, entityLabels } = await getAccountsDirectory(state);
+  const viewer = await getViewer();
+  const showBalances = !viewer.anon && viewer.linked && !!viewer.minecraftUuid;
+  const table = showBalances ? accountsTable : publicDirectoryTable(accountsTable);
+  const visibleColumns = showBalances ? columns : columns.filter(column => column.key !== 'balance');
+  const state = parseTableState(await searchParams, table);
+  const { rows: directoryRows, total, typeCounts, entityLabels } = await getAccountsDirectory(state);
+  const rows = showBalances ? directoryRows : directoryRows.map(row => ({ ...row, balance: '0' }));
   const totalPages = Math.max(1, Math.ceil(total / state.limit));
-  const href = (s: TableState<typeof accountsTable>) => tableHref('/accounts', s, accountsTable);
+  const href = (s: TableState<typeof table>) => tableHref('/accounts', s, table);
   const describe = { currency: CURRENCY_SYMBOL, entityLabels };
 
   const activeFilters = [
     ...(state.q ? [{ text: `“${state.q}”`, removeHref: href(withQuery(state, '')) }] : []),
-    ...state.filters.map((f) => ({ text: filterText(f, accountsTable, describe), removeHref: href(withoutFilter(state, f.field)) })),
+    ...state.filters.map((f) => ({ text: filterText(f, table, describe), removeHref: href(withoutFilter(state, f.field)) })),
   ];
 
   return (
@@ -92,26 +99,26 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       </div>
 
       <FilterBar
-        table={accountsTable}
+        table={table}
         total={total}
         counts={{ type: typeCounts }}
         entityLabels={entityLabels}
-        searchEntity={searchFirmsAction}
-        columns={columnOptions(columns)}
+        {...(showBalances ? { searchEntity: searchFirmsAction } : {})}
+        columns={columnOptions(visibleColumns)}
         tableId={TABLE_ID}
         currency={CURRENCY_SYMBOL}
-        exportSlot={<ExportMenuForViewer hrefs={exportHrefs('accounts', state, accountsTable)} allDescription={`${total.toLocaleString('en-US')} accounts`} />}
+        exportSlot={showBalances && <ExportMenuForViewer hrefs={exportHrefs('accounts', state, table)} allDescription={`${total.toLocaleString('en-US')} accounts`} />}
       />
 
       <DataTable
         id={TABLE_ID}
         label="Accounts"
-        columns={columns}
+        columns={visibleColumns}
         rows={rows}
         rowKey={(a) => a.account_id}
         rowHref={(a) => `/accounts/${a.account_id}`}
         sort={state.sort}
-        sortHref={(field, dir) => href(withSort(state, field, dir, accountsTable))}
+        sortHref={(field, dir) => href(withSort(state, field, dir, table))}
         link={RouterLink}
         empty={<TableEmpty noun="accounts" filters={activeFilters} clearHref={href(cleared(state))} link={RouterLink} />}
       />

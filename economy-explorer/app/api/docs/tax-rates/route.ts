@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getTaxRates } from '@/lib/services/taxRates';
 
-// Live tax rates require a linked account at the request boundary, like all
-// dynamic economy data. Static documentation remains public.
+// Published tax rates support the public documentation.
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
