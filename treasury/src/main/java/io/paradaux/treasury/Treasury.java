@@ -202,6 +202,7 @@ public class Treasury extends JavaPlugin {
         scheduleSalaries();
 
         log.info("Treasury enabled.");
+        io.paradaux.treasury.deployment.TasklieDeploymentListener.register(this);
     }
 
     private void scheduleSalaries() {
