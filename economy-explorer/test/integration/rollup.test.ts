@@ -99,7 +99,7 @@ async function seedFixtures() {
 }
 
 const ROLLUP_TABLES = [
-  'explorer_rollup_account_day', 'explorer_rollup_pair_month', 'explorer_rollup_pair_day', 'explorer_rollup_economy_day',
+  'explorer_rollup_gov_recipient_day', 'explorer_rollup_account_day', 'explorer_rollup_pair_month', 'explorer_rollup_pair_day', 'explorer_rollup_economy_day',
   'explorer_rollup_type_day', 'explorer_rollup_hour_heatmap', 'explorer_rollup_item_day', 'explorer_snapshot_wealth_day',
   'explorer_rollup_run', 'explorer_rollup_coverage',
 ];

@@ -161,6 +161,20 @@ test.describe('government workspace scope and behaviour', () => {
     expect(csv.split('\r\n')[0]).toBe('Section,Item,Amount');
   });
 
+  test('payroll recipients follow the date picker beyond 31 days', async ({ page, context }) => {
+    await signInOfficial(context);
+    await visit(page, '/gov/payroll?unit=commerce&range=30d');
+    const recipients = page.locator('#gov-payroll-recipients');
+    await expect(recipients.getByRole('row').filter({ hasText: 'Merchant' })).toContainText('2,250');
+    await page.getByRole('button', { name: '90d', exact: true }).click();
+    await expect(page).toHaveURL(/range=90d/);
+    await expect(page).toHaveURL(/unit=commerce/);
+    await expect(recipients.getByRole('row').filter({ hasText: 'Merchant' })).toContainText('3,150');
+    await expect(recipients.getByRole('row').filter({ hasText: 'Trader' })).toContainText('2,700');
+    await page.reload();
+    await expect(recipients.getByRole('row').filter({ hasText: 'Merchant' })).toContainText('3,150');
+  });
+
   test('/government redirects to the workspace with its filters', async ({ context }) => {
     const r = await context.request.get(`${baseURL}/government?view=fines&days=7&status=active&q=stall`, { maxRedirects: 0 });
     expect(r.status()).toBe(308);

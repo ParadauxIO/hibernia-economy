@@ -63,50 +63,6 @@ public class MiscCommands implements CommandHandler {
         message.send(sender, "business.finance.balance", "firm", f.getDisplayName(), "balance", balance);
     }
 
-    // ---- DEPOSIT ----------------------------------------------------------------
-
-    @Route("deposit <firm> <amount>")
-    @Permission("business.finance")
-    @Async
-    @Description("Deposit from your personal account into a firm's treasury account")
-    public void deposit(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("amount") BigDecimal amount) {
-        doDeposit(sender, firmRef, amount, null);
-    }
-
-    @Route("deposit <firm> <amount> <memo>")
-    @Permission("business.finance")
-    @Async
-    @Description("Deposit into a firm's treasury with a memo recorded on the transaction")
-    public void deposit(
-            @Sender Player sender,
-            @Arg("firm") FirmName firmRef,
-            @Arg("amount") BigDecimal amount,
-            @GreedyArg("memo") String memo) {
-        doDeposit(sender, firmRef, amount, memo);
-    }
-
-    private void doDeposit(Player sender, FirmName firmRef, BigDecimal amount, String memo) {
-        String firm = firmRef.value();
-        Firm f = firms.getFirmByNameOrId(firm);
-        if (f == null) {
-            message.send(sender, "business.firm.not-found", "firm", firm);
-            return;
-        }
-
-        if (!canAccessFirmFinances(f, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
-
-        // Service throws framework semantic exceptions (invalid-amount, insufficient
-        // funds, no-permission, no-account) that the framework's ErrorRenderer resolves
-        // to the player's locale via the key each carries — no catch-and-hand-format
-        // here (plugin-architecture/0002).
-        audit.deposit(f.getFirmId(), sender.getUniqueId(), amount, memo);
-        String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.finance.deposit.success", "firm", f.getDisplayName(), "amount", formatted);
-    }
-
     // ---- WITHDRAW ---------------------------------------------------------------
 
     @Route("withdraw <firm> <amount>")
@@ -133,11 +89,25 @@ public class MiscCommands implements CommandHandler {
 
     // ---- PAY: PLAYER -> BUSINESS ------------------------------------------------
 
+    @Route("deposit <firm> <amount>")
     @Route("pay into <firm> <amount>")
     @Permission("business.pay")
     @Async
     @Description("Pay money from your personal account into a business")
     public void payInto(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("amount") BigDecimal amount) {
+        payInto(sender, firmRef, amount, null);
+    }
+
+    @Route("deposit <firm> <amount> <memo>")
+    @Route("pay into <firm> <amount> <memo>")
+    @Permission("business.pay")
+    @Async
+    @Description("Pay money into a business with a memo recorded on the transaction")
+    public void payInto(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
         String firm = firmRef.value();
         Firm f = firms.getFirmByNameOrId(firm);
         if (f == null) {
@@ -145,7 +115,7 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        audit.payIntoFirm(f.getFirmId(), sender.getUniqueId(), amount);
+        audit.payIntoFirm(f.getFirmId(), sender.getUniqueId(), amount, memo);
         String formatted = treasury.formatAmount(amount);
         message.send(sender, "business.finance.pay.into.success", "firm", f.getDisplayName(), "amount", formatted);
         notifications.notifyFirmExcept(

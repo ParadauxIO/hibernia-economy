@@ -11,7 +11,7 @@ import { compileTableState, defineColumnMap, likeContains } from './tableState';
 // account ids; an empty list always means "nothing", never "everything".
 //
 // Two kinds of read:
-//   * aggregates come from explorer_rollup_account_day / _pair_month, bounded by
+//   * aggregates (including payroll recipients) come from rollups, bounded by
 //     the rollup primary keys (account_id, day/month);
 //   * top-N and lists read the ledger, bounded to a txn_id window found on
 //     idx_ledger_settle_time (txnIdAt) and walked on
@@ -449,20 +449,18 @@ export interface SalaryRecipientRow {
   last_paid: Date;
 }
 
-/** Who received salary from a set of accounts over [fromTs, toTs), largest first. */
-export async function selectSalaryRecipients(accountIds: readonly number[], pluginKeys: readonly string[], fromTs: string, toTs: string, limit: number): Promise<SalaryRecipientRow[]> {
+/** Recipients over inclusive UTC days, largest first, from the worker rollup. */
+export async function selectSalaryRecipients(accountIds: readonly number[], pluginKeys: readonly string[], fromDay: string, toDay: string, limit: number): Promise<SalaryRecipientRow[]> {
   if (accountIds.length === 0 || pluginKeys.length === 0) return [];
   const r = await sql<Omit<SalaryRecipientRow, 'owner_uuid'> & { owner_uuid_bin: Buffer | null }>`
     SELECT x.account_id, a.display_name, a.account_type, a.owner_uuid_bin, fp.current_name AS owner_name, x.total, x.payments, x.last_paid
     FROM (
-      SELECT r.account_id, SUM(r.amount) AS total, COUNT(DISTINCT t.txn_id) AS payments, MAX(t.settlement_time) AS last_paid
-      FROM ledger_txns t FORCE INDEX (idx_ledger_plugin_time)
-      STRAIGHT_JOIN ledger_postings p ON p.txn_id = t.txn_id
-      STRAIGHT_JOIN ledger_postings r ON r.txn_id = t.txn_id
-      WHERE t.plugin_system IN (${sql.join([...pluginKeys])}) AND t.settlement_time >= ${fromTs} AND t.settlement_time < ${toTs}
-        AND p.account_id IN (${ids(accountIds)}) AND p.amount < 0 AND r.amount > 0
-      GROUP BY r.account_id
-      ORDER BY total DESC, r.account_id
+      SELECT recipient_id AS account_id, SUM(total) AS total, SUM(payments) AS payments, MAX(last_paid) AS last_paid
+      FROM explorer_rollup_gov_recipient_day
+      WHERE account_id IN (${ids(accountIds)}) AND plugin_key IN (${sql.join([...pluginKeys])})
+        AND day BETWEEN ${fromDay} AND ${toDay}
+      GROUP BY recipient_id
+      ORDER BY total DESC, recipient_id
       LIMIT ${limit}
     ) x
     JOIN accounts a ON a.account_id = x.account_id

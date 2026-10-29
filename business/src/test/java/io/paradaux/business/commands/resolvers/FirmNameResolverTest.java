@@ -1,18 +1,17 @@
 package io.paradaux.business.commands.resolvers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmSuggestionCache;
 import io.paradaux.business.services.impl.FirmSuggestionCacheImpl;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
 /**
  * Pure resolve/suggestions behaviour of {@link FirmNameResolver}
@@ -23,7 +22,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class FirmNameResolverTest {
 
-    @Mock FirmService firms;
+    @Mock
+    FirmService firms;
 
     private FirmNameResolver resolver() {
         return new FirmNameResolver(new FirmSuggestionCacheImpl(firms));
@@ -48,6 +48,21 @@ class FirmNameResolverTest {
         assertThat(resolver().resolve(null, null)).isEmpty();
     }
 
+    @Test
+    void playerSuggestionsStayWithOwnFirmsButOtherNamesResolve() {
+        FirmSuggestionCache cache = org.mockito.Mockito.mock(FirmSuggestionCache.class);
+        org.bukkit.entity.Player player = org.mockito.Mockito.mock(org.bukkit.entity.Player.class);
+        java.util.UUID id = java.util.UUID.randomUUID();
+        when(player.getUniqueId()).thenReturn(id);
+        when(cache.playerFirmNames(id)).thenReturn(List.of("Acme"));
+        FirmNameResolver resolver = new FirmNameResolver(cache);
+
+        assertThat(resolver.suggestions("", player)).containsExactly("Acme");
+        assertThat(resolver.suggestions("Glob", player)).isEmpty();
+        assertThat(resolver.resolve("Globex", player)).contains(new FirmName("Globex"));
+        org.mockito.Mockito.verify(cache, org.mockito.Mockito.never()).activeFirmNames();
+    }
+
     // ---- suggestions: console (non-Player sender) → all active firms ----------
 
     @Test
@@ -55,8 +70,7 @@ class FirmNameResolverTest {
         when(firms.listAllActiveFirms()).thenReturn(List.of(firm("Acme"), firm("Globex")));
 
         // A null sender is not an instanceof Player, so the console branch runs.
-        assertThat(resolver().suggestions("", null))
-                .containsExactlyInAnyOrder("Acme", "Globex");
+        assertThat(resolver().suggestions("", null)).containsExactlyInAnyOrder("Acme", "Globex");
     }
 
     @Test

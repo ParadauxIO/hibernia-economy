@@ -437,7 +437,7 @@ class AdminApiTest {
             if (deposit != null) {
                 p.drainMessages();
                 p.chatCommand("/business deposit " + firm + " " + deposit);
-                p.awaitMessageContaining("Deposited", TIMEOUT);
+                p.awaitMessageContaining("Paid", TIMEOUT);
                 BusinessLedger.waitForFirmDefaultBalance(id[0], new BigDecimal(deposit), TIMEOUT);
             }
         });

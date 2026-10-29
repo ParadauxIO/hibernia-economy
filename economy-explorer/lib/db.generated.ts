@@ -316,6 +316,16 @@ export interface ExplorerRollupEconomyDay {
   volume: Generated<Decimal>;
 }
 
+export interface ExplorerRollupGovRecipientDay {
+  accountId: number;
+  day: Date;
+  lastPaid: Date;
+  payments: number;
+  pluginKey: string;
+  recipientId: number;
+  total: Decimal;
+}
+
 export interface ExplorerRollupHourHeatmap {
   day: Date;
   hour: number;
@@ -628,6 +638,7 @@ export interface DB {
   explorerRollupAccountDay: ExplorerRollupAccountDay;
   explorerRollupCoverage: ExplorerRollupCoverage;
   explorerRollupEconomyDay: ExplorerRollupEconomyDay;
+  explorerRollupGovRecipientDay: ExplorerRollupGovRecipientDay;
   explorerRollupHourHeatmap: ExplorerRollupHourHeatmap;
   explorerRollupItemDay: ExplorerRollupItemDay;
   explorerRollupPairDay: ExplorerRollupPairDay;
