@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketItemPaginationTest {
+class MarketItemPaginationTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Test
@@ -70,7 +70,7 @@ class MarketItemPaginationTest {
         }
     }
 
-    private static JsonNode page(String path, int page, int pages, int total, String... materials) {
+    private JsonNode page(String path, int page, int pages, int total, String... materials) {
         var json = get(path);
         assertThat(json.path("page").asInt()).isEqualTo(page);
         assertThat(json.path("totalPages").asInt()).isEqualTo(pages);
@@ -81,14 +81,14 @@ class MarketItemPaginationTest {
         return json;
     }
 
-    private static void row(JsonNode item, int count, int quantity, String volume) {
+    private void row(JsonNode item, int count, int quantity, String volume) {
         assertThat(item.path("tradeCount").asInt()).isEqualTo(count);
         assertThat(item.path("totalQuantity").asInt()).isEqualTo(quantity);
         assertThat(new BigDecimal(item.path("totalVolume").asText())).isEqualByComparingTo(volume);
     }
 
-    private static JsonNode get(String path) {
-        var response = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var response = RestApi.call("GET", path, marketToken(), null);
         assertThat(response.status()).as("%s: %s", path, response.body()).isEqualTo(200);
         return response.json();
     }

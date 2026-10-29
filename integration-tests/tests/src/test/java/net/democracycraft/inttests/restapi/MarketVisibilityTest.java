@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketVisibilityTest {
+class MarketVisibilityTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Test
@@ -59,8 +59,8 @@ class MarketVisibilityTest {
         }
     }
 
-    private static void publicOffer(long id, int stock) {
-        var response = RestApi.call("GET", "/chestshop/shops?material=BASALT&buyable=true&inStock=true", null, null);
+    private void publicOffer(long id, int stock) {
+        var response = RestApi.call("GET", "/chestshop/shops?material=BASALT&buyable=true&inStock=true", marketToken(), null);
         assertThat(response.status()).as(response.body()).isEqualTo(200);
         var json = response.json();
         assertThat(json.path("totalItems").asInt()).isEqualTo(1);

@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketSellDirectionTest {
+class MarketSellDirectionTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Test
@@ -84,14 +84,14 @@ class MarketSellDirectionTest {
         }
     }
 
-    private static void totals(JsonNode node) {
+    private void totals(JsonNode node) {
         assertThat(node.path("tradeCount").asInt()).isEqualTo(1);
         assertThat(node.path("totalQuantity").asInt()).isEqualTo(4);
         assertThat(new BigDecimal(node.path("totalVolume").asText())).isEqualByComparingTo("13");
     }
 
-    private static JsonNode get(String path) {
-        var response = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var response = RestApi.call("GET", path, marketToken(), null);
         assertThat(response.status()).as("%s: %s", path, response.body()).isEqualTo(200);
         return response.json();
     }

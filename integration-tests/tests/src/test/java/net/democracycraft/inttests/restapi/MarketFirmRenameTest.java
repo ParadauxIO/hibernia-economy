@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketFirmRenameTest {
+class MarketFirmRenameTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Test
@@ -93,7 +93,7 @@ class MarketFirmRenameTest {
                 if (offers.size() == 1 && offers.get(0).path("ownerName").asText().equals(renamed)
                         && offers.get(0).path("currentStock").asInt() == 20
                         && refreshed.path("tradeCount").asInt() == 2) break;
-                Thread.sleep(1500); // Stay below the anonymous HTTP rate limit.
+                Thread.sleep(1500); // Stay below the authenticated HTTP rate limit.
             } while (System.nanoTime() < deadline);
             assertThat(refreshed.path("cheapestShops").size()).isEqualTo(1);
             identity(refreshed.path("cheapestShops").get(0), before, firmId, renamed);
@@ -105,7 +105,7 @@ class MarketFirmRenameTest {
         }
     }
 
-    private static void identity(JsonNode row, JsonNode original, int firmId, String name) {
+    private void identity(JsonNode row, JsonNode original, int firmId, String name) {
         assertThat(row.path("shopId")).isEqualTo(original.path("shopId"));
         assertThat(row.path("firmId").asInt()).isEqualTo(firmId);
         assertThat(row.path("ownerName").asText()).isEqualTo(name);
@@ -115,15 +115,15 @@ class MarketFirmRenameTest {
         assertThat(row.path("batchQty").asInt()).isEqualTo(2);
     }
 
-    private static JsonNode onlyShop(int firmId) {
+    private JsonNode onlyShop(int firmId) {
         var response = get("/chestshop/shops?firmId=" + firmId);
         assertThat(response.path("totalItems").asInt()).isEqualTo(1);
         assertThat(response.path("items").size()).isEqualTo(1);
         return response.path("items").get(0);
     }
 
-    private static JsonNode get(String path) {
-        var response = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var response = RestApi.call("GET", path, marketToken(), null);
         assertThat(response.status()).as("%s: %s", path, response.body()).isEqualTo(200);
         return response.json();
     }

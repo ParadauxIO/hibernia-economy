@@ -8,7 +8,7 @@ import java.time.Duration;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketPersonalOwnerTest {
+class MarketPersonalOwnerTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Test
@@ -56,7 +56,7 @@ class MarketPersonalOwnerTest {
         }
     }
 
-    private static void row(JsonNode row, MockPlayer owner, ChestShopFixture fixture, String price, int batch, int stock) {
+    private void row(JsonNode row, MockPlayer owner, ChestShopFixture fixture, String price, int batch, int stock) {
         var pos = fixture.signPos();
         var registered = Market.waitForShopAt("world", pos.x(), pos.y(), pos.z(), TIMEOUT);
         assertThat(row.path("shopId").asLong()).isEqualTo(registered.shopId());
@@ -71,8 +71,8 @@ class MarketPersonalOwnerTest {
         assertThat(row.path("currentSpace").asInt()).isEqualTo(27 * 64 - stock);
     }
 
-    private static JsonNode get(String path) {
-        var response = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var response = RestApi.call("GET", path, marketToken(), null);
         assertThat(response.status()).as("%s: %s", path, response.body()).isEqualTo(200);
         return response.json();
     }

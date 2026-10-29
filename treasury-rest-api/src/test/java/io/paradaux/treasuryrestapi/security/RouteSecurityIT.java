@@ -92,18 +92,6 @@ class RouteSecurityIT extends EmbeddedDbIT {
     private static final Map<String, Rule> ROUTES = Map.ofEntries(
             // ── public ──────────────────────────────────────────────────────────────
             Map.entry(
-                    "GET /api/v1/chestshop/shops",
-                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry(
-                    "GET /api/v1/chestshop/items",
-                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry(
-                    "GET /api/v1/chestshop/items/{itemKey}",
-                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry(
-                    "GET /api/v1/chestshop/stats",
-                    pub("Read-only public market data; IP-throttled (anonymousPerMinute)")),
-            Map.entry(
                     "GET /api/v1/config/tax", pub("Published tax rates every player can already see in-game (PAR-80)")),
             Map.entry("GET /v3/api-docs", pub("The public OpenAPI contract (admin controllers are @Hidden)")),
             Map.entry("GET /v3/api-docs/swagger-config", pub("Swagger UI bootstrap config for the public docs")),
@@ -114,6 +102,10 @@ class RouteSecurityIT extends EmbeddedDbIT {
             Map.entry("GET /actuator/health/**", pub("Kubernetes liveness/readiness probe groups")),
 
             // ── any valid key ───────────────────────────────────────────────────────
+            Map.entry("GET /api/v1/chestshop/shops", auth()),
+            Map.entry("GET /api/v1/chestshop/items", auth()),
+            Map.entry("GET /api/v1/chestshop/items/{itemKey}", auth()),
+            Map.entry("GET /api/v1/chestshop/stats", auth()),
             // Not in JwtAuthFilter's skip list, so it has always needed a token (unlike
             // the JSON form). Pinned here; making it public would be a reviewed change.
             Map.entry("GET /v3/api-docs.yaml", auth()),
@@ -288,6 +280,44 @@ class RouteSecurityIT extends EmbeddedDbIT {
             }
         }
         assertThat(failures).isEmpty();
+    }
+
+    @Test
+    void chestShopAcceptsEveryKeyTypeAndUsesItsRateBudget() throws Exception {
+        for (Route route : discoverRoutes()) {
+            if (!route.path().startsWith("/api/v1/chestshop/")) continue;
+            for (String keyType : KEY_TYPES) {
+                MockHttpServletResponse response = send(route, bearer(keyType), null);
+                // The unseeded item detail is a genuine 404; directories and totals are 200.
+                int expected = route.key().contains("{itemKey}") ? 404 : 200;
+                assertThat(response.getStatus())
+                        .as("%s with %s", route, keyType)
+                        .isEqualTo(expected);
+                assertThat(response.getHeader("X-RateLimit-Limit"))
+                        .as("%s with %s rate budget", route, keyType)
+                        .isEqualTo(keyType.equals("BUSINESS") ? "600" : "120");
+            }
+        }
+    }
+
+    @Test
+    void chestShopRejectsRevokedAndSupersededKeys() throws Exception {
+        String token = bearer("PERSONAL");
+        exec("UPDATE api_keys SET revoked = 1 WHERE key_id = ?", ps -> ps.setInt(1, TestTokens.PERSONAL_KEY));
+        assertChestShopTokenRejected(token, "TOKEN_REVOKED");
+        exec(
+                "UPDATE api_keys SET revoked = 0, jwt_id = 'superseded' WHERE key_id = ?",
+                ps -> ps.setInt(1, TestTokens.PERSONAL_KEY));
+        assertChestShopTokenRejected(token, "TOKEN_SUPERSEDED");
+    }
+
+    private void assertChestShopTokenRejected(String token, String error) throws Exception {
+        for (Route route : discoverRoutes()) {
+            if (!route.path().startsWith("/api/v1/chestshop/")) continue;
+            MockHttpServletResponse response = send(route, token, null);
+            assertThat(response.getStatus()).as("%s with %s", route, error).isEqualTo(401);
+            assertThat(response.getContentAsString()).contains("\"error\":\"" + error + "\"");
+        }
     }
 
     // ── route discovery ─────────────────────────────────────────────────────────
