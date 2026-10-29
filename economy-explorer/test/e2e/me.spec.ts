@@ -87,7 +87,7 @@ test.describe('/me as a linked player', () => {
 test('/me asks an anonymous visitor to log in, without the workspace', async ({ page, context }) => {
   await context.clearCookies();
   await visit(page, '/me/statements');
-  await expect(page).toHaveURL(/\/api\/auth\/signin/);
+  await expect(page.getByRole('button', { name: 'Log in or create an account' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'My finances' })).toHaveCount(0);
 });
 

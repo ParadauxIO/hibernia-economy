@@ -66,7 +66,7 @@ test('edge rejects forged and expired sessions; valid sessions still need live p
     if (forged) await context.addCookies([{ name: 'authjs.session-token', value: forged, url: baseURL }]);
     const response = await context.request.get(`${baseURL}/admin/roles`, { maxRedirects: 0 });
     expect(response.status()).toBe(307);
-    expect(response.headers().location).toContain('/api/auth/signin');
+    expect(response.headers().location).toContain('/access?callbackUrl=');
   }
   await signIn(context, policy.player, -60);
   expect((await context.request.get(`${baseURL}/admin/roles`, { maxRedirects: 0 })).status()).toBe(307);
@@ -337,9 +337,9 @@ for (const path of ['/chestshop/items/DIAMOND?compare=IRON_INGOT', '/chestshop/s
     for (const headers of [{}, { RSC: '1', 'Next-Router-Prefetch': '1' }]) {
       const response = await context.request.get(path, { maxRedirects: 0, headers });
       expect(response.status()).toBe(307);
-      const login = new URL(response.headers().location!, baseURL);
-      expect(login.pathname).toBe('/api/auth/signin');
-      const returned = new URL(login.searchParams.get('callbackUrl')!, baseURL);
+      const access = new URL(response.headers().location!, baseURL);
+      expect(access.pathname).toBe('/access');
+      const returned = new URL(access.searchParams.get('callbackUrl')!, baseURL);
       const expected = new URL(path, baseURL);
       expect(returned.pathname).toBe(expected.pathname);
       expect([...returned.searchParams]).toEqual([...expected.searchParams]);
@@ -355,16 +355,16 @@ for (const path of ['/chestshop/items/DIAMOND?compare=IRON_INGOT', '/chestshop/s
 }
 
 
-test('signed-in unlinked accounts cannot read any explorer data', async ({ context, page }) => {
+test('signed-in unlinked accounts cannot read protected explorer data', async ({ context, page }) => {
   const name = baseURL.startsWith('https:') ? '__Secure-authjs.session-token' : 'authjs.session-token';
   const token = await encode({ secret: secret!, salt: name, token: { sub: `unlinked-${randomUUID()}` } });
   await context.addCookies([{ name, value: token, url: baseURL, httpOnly: true, sameSite: 'Lax' }]);
-  for (const path of ['/', '/market', '/accounts/1', '/chestshop/items/DIAMOND']) {
+  for (const path of ['/market', '/accounts/1', '/chestshop/items/DIAMOND']) {
     const response = await context.request.get(path, { maxRedirects: 0, headers: { RSC: '1', 'Next-Router-Prefetch': '1', 'x-middleware-subrequest': 'proxy:proxy:proxy:proxy:proxy' } });
     expect(response.status()).toBe(307);
-    expect(response.headers().location).toContain('/link?');
+    expect(response.headers().location).toContain('/access?callbackUrl=');
   }
-  for (const path of ['/api/preview/account/1', '/api/search/preview?q=al', '/api/export/accounts', '/api/docs/tax-rates']) {
+  for (const path of ['/api/preview/account/1', '/api/search/preview?q=al', '/api/export/accounts']) {
     expect((await context.request.get(path, { maxRedirects: 0 })).status()).toBe(403);
   }
   await visit(page, '/link');
