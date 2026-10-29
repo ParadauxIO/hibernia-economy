@@ -151,6 +151,138 @@ class ShopServiceImplTest extends ServerTest {
         return service.create(player, sign, lines);
     }
 
+    private org.bukkit.event.block.SignChangeEvent edit(String... lines) {
+        return new org.bukkit.event.block.SignChangeEvent(
+                sign.getBlock(),
+                player,
+                java.util.Arrays.stream(lines)
+                        .map(net.kyori.adventure.text.Component::text)
+                        .map(c -> (net.kyori.adventure.text.Component) c)
+                        .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new)),
+                org.bukkit.block.sign.Side.FRONT);
+    }
+
+    private void handleEdit(org.bukkit.event.block.SignChangeEvent event) {
+        when(accounts.canAccess(eq(player), any(Sign.class))).thenReturn(true);
+        var listener = new io.paradaux.chestshop.listeners.SignCreateListener(
+                accounts,
+                service,
+                new SignBreakServiceImpl(accounts, service, config, signService, shopBlockService),
+                signService,
+                shopBlockService);
+        try (var ignored = org.mockito.Mockito.mockStatic(io.paradaux.chestshop.ChestShop.class)) {
+            listener.onSignChange(event);
+        }
+    }
+
+    private void enableEditFees() {
+        TestConfigs.with(config, "shopCreationPrice", new BigDecimal("10"));
+        TestConfigs.with(config, "shopRefundPrice", new BigDecimal("5"));
+        when(economy.hasFunds(eq(player.getUniqueId()), any())).thenReturn(true);
+        when(economy.withdraw(eq(player.getUniqueId()), any(), any())).thenReturn(true);
+        when(economy.deposit(eq(player.getUniqueId()), any(), any())).thenReturn(true);
+    }
+
+    @Test
+    void editChargesOnceAndRefundsOldShopBeforeReplacingIndex() {
+        sign = placeShopSign("Notch", "Diamond");
+        enableEditFees();
+        var event = edit("Notch", "32", "B 9", "Diamond");
+        handleEdit(event);
+        assertThat(event.isCancelled()).isFalse();
+        verify(economy).withdraw(eq(player.getUniqueId()), eq(new BigDecimal("10")), any());
+        verify(economy).deposit(eq(notchAccount.getUuid()), eq(new BigDecimal("5")), any());
+        var order = org.mockito.Mockito.inOrder(market);
+        order.verify(market)
+                .onShopDestroyed(org.mockito.ArgumentMatchers.argThat(
+                        removed -> SignService.getPrice(removed.getSign()).equals("B 5")));
+        order.verify(market)
+                .onShopCreated(org.mockito.ArgumentMatchers.argThat(
+                        created -> created.getSignLines()[1].equals("32") && created.getSignLines()[2].equals("B 9")));
+        order.verifyNoMoreInteractions();
+    }
+
+    @Test
+    void unchangedEditDoesNotChargeRefundOrPublishLifecycle() {
+        sign = placeShopSign("Notch", "Diamond");
+        enableEditFees();
+        handleEdit(edit(sign.getLines()));
+        org.mockito.Mockito.verifyNoInteractions(economy, market);
+    }
+
+    @Test
+    void rejectedEditPreservesOldShopWithoutFeesOrLifecycle() {
+        sign = placeShopSign("Notch", "Diamond");
+        enableEditFees();
+        when(protection.canBuild(any(), any(), any())).thenReturn(false);
+        var event = edit("Notch", "32", "B 9", "Diamond");
+        handleEdit(event);
+        assertThat(event.isCancelled()).isTrue();
+        assertThat(sign.getBlock().getType()).isEqualTo(Material.OAK_SIGN);
+        assertThat(((Sign) sign.getBlock().getState()).getLines()).containsExactly(sign.getLines());
+        verify(economy, never()).withdraw(any(), any(), any());
+        verify(economy, never()).deposit(any(), any(), any());
+        org.mockito.Mockito.verifyNoInteractions(market);
+    }
+
+    @Test
+    void replacementUpdatesOwnerItemAndPriceExactlyOnce() {
+        sign = placeShopSign("OldOwner", "Stone");
+        var oldOwner = new Account("OldOwner", UUID.randomUUID());
+        when(accounts.resolveAccount("OldOwner")).thenReturn(oldOwner);
+        when(economy.deposit(eq(oldOwner.getUuid()), any(), any())).thenReturn(true);
+        enableEditFees();
+
+        handleEdit(edit("Notch", "32", "B 9", "Diamond"));
+
+        verify(economy).withdraw(eq(player.getUniqueId()), eq(new BigDecimal("10")), any());
+        verify(economy).deposit(eq(oldOwner.getUuid()), eq(new BigDecimal("5")), any());
+        verify(economy, never()).deposit(eq(player.getUniqueId()), any(), any());
+        var removed = org.mockito.ArgumentCaptor.forClass(DestroyedShop.class);
+        var created = org.mockito.ArgumentCaptor.forClass(CreatedShop.class);
+        var order = org.mockito.Mockito.inOrder(market);
+        order.verify(market).onShopDestroyed(removed.capture());
+        order.verify(market).onShopCreated(created.capture());
+        order.verifyNoMoreInteractions();
+        assertThat(removed.getValue().getSign().getLines()).containsExactly("OldOwner", "64", "B 5", "Stone");
+        assertThat(created.getValue().getSignLines()).containsExactly("Notch", "32", "B 9", "Diamond");
+        assertThat(created.getValue().getSign().getLines()).containsExactly("Notch", "32", "B 9", "Diamond");
+        assertThat(created.getValue().getOwnerAccount().getUuid()).isEqualTo(player.getUniqueId());
+    }
+
+    @Test
+    void previouslyCancelledEditDoesNothing() {
+        sign = placeShopSign("Notch", "Diamond");
+        var event = edit("Notch", "32", "B 9", "Diamond");
+        event.setCancelled(true);
+        handleEdit(event);
+        org.mockito.Mockito.verifyNoInteractions(economy, market);
+    }
+
+    @Test
+    void erasingShopRetiresItOnceWithoutCreatingReplacement() {
+        sign = placeShopSign("Notch", "Diamond");
+        enableEditFees();
+        handleEdit(edit("plain", "text", "", ""));
+        verify(economy).deposit(eq(player.getUniqueId()), eq(new BigDecimal("5")), any());
+        verify(economy, never()).withdraw(any(), any(), any());
+        verify(market).onShopDestroyed(any());
+        verify(market, never()).onShopCreated(any());
+    }
+
+    @Test
+    void lateValidationFailureDoesNotChargeCreationFee() {
+        enableEditFees();
+        doAnswer(invocation -> {
+                    ((ShopCreation) invocation.getArgument(0)).setCancelled(true);
+                    return null;
+                })
+                .when(stockCounter)
+                .onPreShopCreation(any());
+        assertThat(create(VALID).isCancelled()).isTrue();
+        verify(economy, never()).withdraw(any(), any(), any());
+    }
+
     // ---- happy path -------------------------------------------------------------
 
     @Test

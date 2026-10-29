@@ -157,8 +157,11 @@ TURN_OFF_HOPPER_PROTECTION: false
 # Only allow users to buy/sell that have access to the sign's protection? (E.g. WorldGuard regions)
 CHECK_ACCESS_FOR_SHOP_USE: false
 
-# Do you want to only let people build inside WorldGuard regions?
+# Enable WorldGuard shop-creation rules (region membership and allow-shop flags).
 WORLDGUARD_INTEGRATION: false
+
+# Require a WorldGuard region when integration is enabled (preserves legacy behavior).
+WORLDGUARD_ONLY_IN_REGION: true
 
 # Do you want to only let people build inside region flagged by doing /region regionName flag allow-shop allow?
 WORLDGUARD_USE_FLAG: false
