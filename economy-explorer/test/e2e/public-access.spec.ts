@@ -21,10 +21,12 @@ test('visitors can browse the overview, directories and docs without balances', 
 });
 
 test('protected pages offer login while API and export data remain blocked', async ({ page, context }) => {
-  for (const path of ['/players/Alice', '/firms/Acme', '/transactions', '/me', '/market', '/gov', '/admin']) {
+  for (const path of ['/players/Alice', '/firms/Acme%20Corp', '/accounts/3', '/transactions', '/me', '/market', '/gov', '/admin']) {
     await visit(page, path);
     await expect(page.getByRole('heading', { name: 'There’s more to explore' })).toBeVisible();
     await expect(page.locator('table')).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Account summary' })).toHaveCount(0);
+    await expect(page.getByText('Firm balance', { exact: false })).toHaveCount(0);
   }
   // Share the browser's cleared cookies; the standalone request fixture retains
   // the linked visitor storage state configured by managed CI runs.

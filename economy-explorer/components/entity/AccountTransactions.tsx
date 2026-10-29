@@ -1,3 +1,4 @@
+import './transactions.css';
 import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, When } from '@democracycraft/design-system';
@@ -60,7 +61,7 @@ function columns(running: boolean): Column<TxnView>[] {
     },
   ];
   if (running) {
-    cols.push({ key: 'balance', header: 'Balance after', numeric: true, secondary: true, optional: true, cell: (t) => t.balanceAfter === null ? '—' : <Money value={t.balanceAfter} /> });
+    cols.push({ key: 'balance', header: 'Balance after', numeric: true, secondary: true, optional: true, cell: (t) => <><span className="transaction-balance-label">Balance </span>{t.balanceAfter === null ? '—' : <Money value={t.balanceAfter} />}</> });
   }
   return cols;
 }
@@ -96,7 +97,7 @@ export function AccountTransactions({ pathname, state, page, extra, searchEntity
     <FilterBar table={accountTxnsTable} entityLabels={page.entityLabels} searchEntity={searchEntity}
       columns={columnOptions(cols)} tableId={TABLE_ID} currency={CURRENCY_SYMBOL} exportSlot={exportSlot} />
     {page.implicitDays !== null && <p className="txn-note">Text search covers the past {page.implicitDays} days. Add a Date filter to search another period.</p>}
-    <DataTable id={TABLE_ID} label="Transactions" columns={cols} rows={page.rows} rowKey={(t) => t.txnId}
+    <DataTable className="transaction-table account-transaction-table" id={TABLE_ID} label="Transactions" columns={cols} rows={page.rows} rowKey={(t) => t.txnId}
       rowHref={(t) => `/transactions/${t.txnId}`} link={RouterLink} density="compact"
       empty={page.searchedBackTo
         ? <p className="dt-empty-text">No matches in the {SCAN_WINDOW.toLocaleString('en-US')} transactions before <DateWithYear value={page.searchedBackTo} />. Use Older to keep looking, or narrow the Date filter.</p>

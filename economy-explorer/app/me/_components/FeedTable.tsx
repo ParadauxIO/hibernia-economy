@@ -1,3 +1,4 @@
+import '@/components/entity/transactions.css';
 import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, When } from '@democracycraft/design-system';
@@ -23,7 +24,7 @@ export function FeedTable({ id, label, rows, showAccount = true, empty }: { id: 
     { key: 'counterparty', header: 'Counterparty', secondary: true, optional: true, cell: (r) => (r.counterparty ? <PartyLink party={r.counterparty} /> : <span className="muted">—</span>) },
     { key: 'amount', header: 'Amount', numeric: true, cell: (r) => <Money value={r.amount} sign="exceptZero" tone="auto" /> },
   ];
-  return <DataTable id={id} label={label} columns={columns} rows={rows} rowKey={(r) => r.postingId}
+  return <DataTable className="transaction-table feed-transaction-table" id={id} label={label} columns={columns} rows={rows} rowKey={(r) => r.postingId}
     rowHref={(r) => `/transactions/${r.txnId}`} link={RouterLink} empty={empty} />;
 }
 

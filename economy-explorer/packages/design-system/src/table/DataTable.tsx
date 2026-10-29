@@ -31,6 +31,8 @@ export interface Column<R> {
 }
 
 export interface DataTableProps<R, H extends string = string> {
+  /** Additional table styling for a domain-specific responsive layout. */
+  className?: string;
   /** DOM id; the Columns menu scopes its rules to it. */
   id: string;
   /** Accessible name for the scroll region and the table caption. */
@@ -92,7 +94,7 @@ function SortHeader<R, H extends string>({ column, sort, sortHref, Link }: { col
  * into an expandable details block under the first cell.
  */
 export function DataTable<R, H extends string = string>({
-  id, label, columns, rows, rowKey, rowHref, rowLabel, sort, sortHref,
+  id, label, columns, rows, rowKey, rowHref, rowLabel, sort, sortHref, className,
   density = 'comfortable', empty, link, detailsLabel = 'Details',
 }: DataTableProps<R, H>) {
   const Link: LinkComponent<H> = link ?? PlainLink;
@@ -101,7 +103,7 @@ export function DataTable<R, H extends string = string>({
 
   return (
     <div className="dt-wrap" role="region" aria-label={label} tabIndex={0}>
-      <table id={id} className={`dt dt-table dt--${density}`}>
+      <table id={id} className={`dt dt-table dt--${density}${className ? ` ${className}` : ''}`}>
         <caption className="sr-only">{label}</caption>
         <thead>
           <tr>
