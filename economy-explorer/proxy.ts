@@ -5,6 +5,7 @@ import { normalizeCapability } from '@/lib/auth/capabilities';
 import { isPublicExplorerPath, validMinecraftUuid } from '@/lib/auth/routeAccess';
 import { findIdentityBySub, upsertIdentity } from '@/lib/sql/identity';
 import { isQuietPath } from '@/lib/accessLog';
+import { checkAccountRateLimit } from '@/lib/requestRateLimit';
 
 const blockRequest = createRequestBlocker(process.env);
 
@@ -18,6 +19,13 @@ const authenticatedPage = auth(async (req, event: NextFetchEvent) => {
     const login = new URL('/api/auth/signin', req.url);
     login.searchParams.set('callbackUrl', callbackUrl);
     return NextResponse.redirect(login);
+  }
+  const limited = await checkAccountRateLimit(req.auth.keycloakSub);
+  if (limited) {
+    return new NextResponse(limited.status === 429 ? 'Too many requests' : 'Request protection unavailable', {
+      status: limited.status,
+      headers: { 'Cache-Control': 'private, no-store', 'Retry-After': String(limited.retryAfter) },
+    });
   }
   // A link must be established durably. Verified provider claims can establish
   // it just as getViewer does; identity-store errors fail closed.
