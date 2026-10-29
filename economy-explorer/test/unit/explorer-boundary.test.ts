@@ -60,3 +60,36 @@ it.each([429, 503])('rejects limited signed sessions before any identity query (
   expect(identity).not.toHaveBeenCalled();
   expect(upsert).not.toHaveBeenCalled();
 });
+
+for (const directory of ['/accounts', '/players', '/firms']) {
+  it.each(['page=2', 'page=2877', 'page=1&page=2', 'page=2&page=1', 'page=02', 'page=invalid'])('requires sign-in before rendering '+directory+'?%s', async query => {
+    const path = `${directory}?${query}&sort=-name`;
+    for (const headers of [{}, { RSC: '1', 'Next-Router-Prefetch': '1' }, { cookie: 'authjs.session-token=forged' }]) {
+      const response = await proxy(request(path, null, headers), event);
+      expect(response?.status).toBe(307);
+      expect(new URL(response!.headers.get('location')!).searchParams.get('callbackUrl')).toBe(path);
+      expect(response?.headers.get('cache-control')).toContain('no-store');
+      expect(response?.headers.get('x-middleware-next')).toBeNull();
+    }
+    expect(identity).not.toHaveBeenCalled();
+    expect(limit).not.toHaveBeenCalled();
+  });
+  it.each(['', '?page=1', '?page=1&sort=-name&q=alice'])('keeps the first page public: '+directory+'%s', async query => {
+    const response = await proxy(request(directory + query), event);
+    expect(response?.headers.get('x-middleware-next')).toBe('1');
+    expect(identity).not.toHaveBeenCalled();
+    expect(limit).not.toHaveBeenCalled();
+  });
+  it('allows signed-in directory pagination without requiring a Minecraft link: '+directory, async () => {
+    const response = await proxy(request(directory + '?page=2', { keycloakSub: 'unlinked' }), event);
+    expect(response?.headers.get('x-middleware-next')).toBe('1');
+    expect(limit).toHaveBeenCalledWith('unlinked');
+    expect(identity).not.toHaveBeenCalled();
+  });
+  it('enforces the account request budget for directory pagination: '+directory, async () => {
+    limit.mockResolvedValue({ status: 429, retryAfter: 5 });
+    const response = await proxy(request(directory + '?page=2', { keycloakSub: 'linked' }), event);
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get('x-middleware-next')).toBeNull();
+  });
+}
