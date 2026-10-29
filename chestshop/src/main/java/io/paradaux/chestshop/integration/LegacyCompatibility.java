@@ -79,6 +79,22 @@ public final class LegacyCompatibility implements Listener {
             protect(shop.getContainer().getBlock(), shop, config.getLwcChestProtectionType());
     }
 
+    public static void edited(CreatedShop shop, String[] oldLines) {
+        var owner = shop.getOwnerAccount();
+        var legacyOwner = owner == null
+                ? null
+                : new com.Acrobot.ChestShop.Database.Account(owner.getName(), owner.getShortName(), owner.getUuid());
+        if (legacyOwner != null) {
+            legacyOwner.setIgnoreMessages(owner.isIgnoreMessages());
+            legacyOwner.setLastSeen(
+                    owner.getLastSeen() == null
+                            ? null
+                            : new java.util.Date(owner.getLastSeen().getTime()));
+        }
+        fire(new com.Acrobot.ChestShop.Events.ShopEditedEvent(
+                shop.getPlayer(), shop.getSign(), shop.getContainer(), oldLines, shop.getSignLines(), legacyOwner));
+    }
+
     private static void protect(org.bukkit.block.Block block, CreatedShop shop, String type) {
         fire(new com.Acrobot.ChestShop.Events.Protection.ProtectBlockEvent(
                 block,

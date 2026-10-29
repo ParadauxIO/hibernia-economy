@@ -1,10 +1,8 @@
 package io.paradaux.chestshop.services;
 
-import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.model.ShopCreation;
 import io.paradaux.chestshop.model.CreatedShop;
 import io.paradaux.chestshop.model.DestroyedShop;
-import org.bukkit.Bukkit;
+import io.paradaux.chestshop.model.ShopCreation;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 
@@ -24,13 +22,14 @@ import org.bukkit.entity.Player;
 public interface ShopService {
 
     /**
-     * Run a shop-sign creation through the validation steps and return the result context
-     * for the caller ({@code SignCreateListener}) to act on. The steps run in the exact order the
+     * Run a shop-sign creation through validation, then charge its fee, and return the result
+     * for the caller ({@code SignCreateListener}) to act on. Validation follows the order the
      * former priority-ordered validators fired; like the originals (almost all
      * {@code ignoreCancelled=false}) each runs unconditionally and may overwrite the
      * outcome — so the reported failure is the last problem found. The two former
      * {@code ignoreCancelled=true} steps (the creation-fee charge and the second name
-     * pass) run only while the creation is still un-cancelled.
+     * pass) run only while the creation is still un-cancelled. The fee runs last so a
+     * late validation failure cannot charge for a rejected shop.
      */
     ShopCreation create(Player player, Sign sign, String[] signLines);
 
@@ -43,6 +42,9 @@ public interface ShopService {
      * the market registry.
      */
     void onCreated(CreatedShop event);
+
+    /** Retire the old sign snapshot, publish its edit, then register the validated replacement. */
+    void onEdited(CreatedShop replacement);
 
     /**
      * Run the post-removal reactions for a removed shop, in the former {@link DestroyedShop}
