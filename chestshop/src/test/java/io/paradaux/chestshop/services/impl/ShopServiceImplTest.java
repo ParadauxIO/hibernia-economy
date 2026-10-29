@@ -226,66 +226,28 @@ class ShopServiceImplTest extends ServerTest {
     }
 
     @Test
-    void replacementPublishesOldAndNewOwnerItemAndPriceExactlyOnce() {
+    void replacementUpdatesOwnerItemAndPriceExactlyOnce() {
         sign = placeShopSign("OldOwner", "Stone");
         var oldOwner = new Account("OldOwner", UUID.randomUUID());
-        notchAccount.setIgnoreMessages(true);
-        notchAccount.setLastSeen(new java.util.Date(1234));
         when(accounts.resolveAccount("OldOwner")).thenReturn(oldOwner);
         when(economy.deposit(eq(oldOwner.getUuid()), any(), any())).thenReturn(true);
         enableEditFees();
-        var lifecycle = new java.util.ArrayList<org.bukkit.event.Event>();
-        var plugin = org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin();
-        io.paradaux.chestshop.integration.LegacyCompatibility.install(com.google.inject.Guice.createInjector(
-                binder -> binder.bind(ChestShopConfiguration.class).toInstance(config)));
-        server.getPluginManager()
-                .registerEvents(
-                        new org.bukkit.event.Listener() {
-                            @org.bukkit.event.EventHandler
-                            public void removed(com.Acrobot.ChestShop.Events.ShopDestroyedEvent e) {
-                                lifecycle.add(e);
-                            }
 
-                            @org.bukkit.event.EventHandler
-                            public void edited(com.Acrobot.ChestShop.Events.ShopEditedEvent e) {
-                                lifecycle.add(e);
-                            }
+        handleEdit(edit("Notch", "32", "B 9", "Diamond"));
 
-                            @org.bukkit.event.EventHandler
-                            public void created(com.Acrobot.ChestShop.Events.ShopCreatedEvent e) {
-                                lifecycle.add(e);
-                            }
-                        },
-                        plugin);
-        server.getPluginManager()
-                .registerEvents(new io.paradaux.chestshop.integration.LegacyCompatibility(service), plugin);
-        try {
-            handleEdit(edit("Notch", "32", "B 9", "Diamond"));
-            assertThat(lifecycle).hasSize(3);
-            assertThat(lifecycle.get(0)).isInstanceOf(com.Acrobot.ChestShop.Events.ShopDestroyedEvent.class);
-            var edited = (com.Acrobot.ChestShop.Events.ShopEditedEvent) lifecycle.get(1);
-            assertThat(edited.getOldLines()).containsExactly("OldOwner", "64", "B 5", "Stone");
-            assertThat(edited.getNewLines()).containsExactly("Notch", "32", "B 9", "Diamond");
-            assertThat(edited.getSign().getLines()).containsExactly(edited.getNewLines());
-            assertThat(edited.getOwnerAccount().getUuid()).isEqualTo(player.getUniqueId());
-            assertThat(edited.modifiedByOwner()).isTrue();
-            assertThat(edited.getOwnerAccount().isIgnoringMessages()).isTrue();
-            assertThat(edited.getOwnerAccount().getLastSeen()).isEqualTo(new java.util.Date(1234));
-            edited.getOwnerAccount().getLastSeen().setTime(0);
-            assertThat(notchAccount.getLastSeen()).isEqualTo(new java.util.Date(1234));
-            edited.getOldLines()[0] = "tampered";
-            assertThat(edited.getOldLines()[0]).isEqualTo("OldOwner");
-            assertThat(lifecycle.get(2)).isInstanceOf(com.Acrobot.ChestShop.Events.ShopCreatedEvent.class);
-            verify(economy).deposit(eq(oldOwner.getUuid()), eq(new BigDecimal("5")), any());
-            verify(economy, never()).deposit(eq(player.getUniqueId()), any(), any());
-            verify(market).onShopDestroyed(any());
-            verify(market)
-                    .onShopCreated(org.mockito.ArgumentMatchers.argThat(
-                            created -> created.getOwnerAccount().getUuid().equals(player.getUniqueId())
-                                    && created.getSignLines()[3].equals("Diamond")));
-        } finally {
-            io.paradaux.chestshop.integration.LegacyCompatibility.clear();
-        }
+        verify(economy).withdraw(eq(player.getUniqueId()), eq(new BigDecimal("10")), any());
+        verify(economy).deposit(eq(oldOwner.getUuid()), eq(new BigDecimal("5")), any());
+        verify(economy, never()).deposit(eq(player.getUniqueId()), any(), any());
+        var removed = org.mockito.ArgumentCaptor.forClass(DestroyedShop.class);
+        var created = org.mockito.ArgumentCaptor.forClass(CreatedShop.class);
+        var order = org.mockito.Mockito.inOrder(market);
+        order.verify(market).onShopDestroyed(removed.capture());
+        order.verify(market).onShopCreated(created.capture());
+        order.verifyNoMoreInteractions();
+        assertThat(removed.getValue().getSign().getLines()).containsExactly("OldOwner", "64", "B 5", "Stone");
+        assertThat(created.getValue().getSignLines()).containsExactly("Notch", "32", "B 9", "Diamond");
+        assertThat(created.getValue().getSign().getLines()).containsExactly("Notch", "32", "B 9", "Diamond");
+        assertThat(created.getValue().getOwnerAccount().getUuid()).isEqualTo(player.getUniqueId());
     }
 
     @Test

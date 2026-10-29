@@ -43,7 +43,7 @@ public interface ShopService {
      */
     void onCreated(CreatedShop event);
 
-    /** Retire the old sign snapshot, publish its edit, then register the validated replacement. */
+    /** Retire the old sign snapshot, then register the validated replacement. */
     void onEdited(CreatedShop replacement);
 
     /**

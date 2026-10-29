@@ -543,18 +543,17 @@ public class ShopServiceImpl implements ShopService {
     @Override
     public void onEdited(CreatedShop replacement) {
         Sign oldSign = replacement.getSign();
-        String[] oldLines = oldSign.getLines();
         onDestroyed(new DestroyedShop(replacement.getPlayer(), oldSign, replacement.getContainer()));
         Sign newSign = (Sign) oldSign.getBlock().getState();
         for (int i = 0; i < 4; i++) SignText.setLine(newSign, i, replacement.getSignLines()[i]);
-        // The SignChangeEvent commits the world state; this snapshot supplies new text to add-ons.
+        // The SignChangeEvent commits the world state; this snapshot supplies the replacement text to creation
+        // reactions.
         CreatedShop edited = new CreatedShop(
                 replacement.getPlayer(),
                 newSign,
                 replacement.getContainer(),
                 replacement.getSignLines(),
                 replacement.getOwnerAccount());
-        io.paradaux.chestshop.integration.LegacyCompatibility.edited(edited, oldLines);
         onCreated(edited);
     }
 
