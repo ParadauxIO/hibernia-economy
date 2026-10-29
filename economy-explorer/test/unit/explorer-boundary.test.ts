@@ -43,7 +43,7 @@ it('fails closed if identity verification is unavailable, even with a signed cla
   expect(response?.status).toBe(503);
   expect(response?.headers.get('x-middleware-next')).toBeNull();
 });
-it.each(['/', '/accounts', '/firms', '/players', '/access', '/api/viewer', '/api/docs/tax-rates', '/link', '/docs', '/docs/guides/tax', '/api/auth/signin', '/api/auth/callback/keycloak', '/api/avatar/test', '/healthz', '/metrics', '/sitemap.xml', '/dm-sans.ttf'])('keeps safe public route available: %s', async path => {
+it.each(['/', '/accounts', '/firms', '/players', '/access', '/api/viewer', '/api/docs/tax-rates', '/api/docs/notes', '/link', '/docs', '/docs/guides/tax', '/api/auth/signin', '/api/auth/callback/keycloak', '/api/avatar/test', '/healthz', '/metrics', '/sitemap.xml', '/dm-sans.ttf'])('keeps safe public route available: %s', async path => {
   const response = await proxy(request(path), event);
   expect(response?.headers.get('x-middleware-next')).toBe('1');
   expect(identity).not.toHaveBeenCalled();

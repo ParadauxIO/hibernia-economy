@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { getAllDocSlugs, getDocBySlug, isAdminDoc } from '@/lib/docs';
 import { getViewer } from '@/lib/auth/viewer';
 import { PrivacyGate } from '@/components/PrivacyGate';
+import { DocTopNote } from '@/components/docs/DocTopNote';
 import { DocsToc } from '@/components/docs/DocsToc';
 
 // Statically generated from the docs/ tree at build time; unknown slugs 404
@@ -74,7 +75,10 @@ export default async function DocPage({
 
   return (
     <>
-      <article className="doc-prose" dangerouslySetInnerHTML={{ __html: doc.html }} />
+      <article className="doc-prose">
+        {!isAdminDoc(safeSlug) && <DocTopNote path={safeSlug.length ? `/docs/${safeSlug.join('/')}` : '/docs'} />}
+        <div dangerouslySetInnerHTML={{ __html: doc.html }} />
+      </article>
       <DocsToc headings={doc.headings} />
     </>
   );

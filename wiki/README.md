@@ -20,6 +20,7 @@ the code.
   deploys are gated.
 - **[CI/CD](ci-cd.md)** — the GitHub Actions workflows, container builds, and the
   release flow.
+- **[Tenant documentation notes](explorer-doc-notes.md)** — configure public page-top notes per deployment.
 - **[Explorer verification](explorer-verification.md)** — redesign budgets, browser checks, analytics and deployment evidence.
 - **[Release runbook](release-runbook.md)** — the order of operations for a
   release that changes the schema: backup, stop, migrate, deploy, verify, rollback.
