@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { NextRequest, type NextFetchEvent } from 'next/server';
-const { identity, upsert } = vi.hoisted(() => ({ identity: vi.fn(), upsert: vi.fn() }));
+const { identity, upsert, limit } = vi.hoisted(() => ({ identity: vi.fn(), upsert: vi.fn(), limit: vi.fn() }));
+vi.mock('@/lib/requestRateLimit', () => ({ checkAccountRateLimit: limit }));
 vi.mock('@/lib/auth/authjs', () => ({ auth: (handler: unknown) => handler }));
 vi.mock('@/lib/sql/identity', () => ({ findIdentityBySub: identity, upsertIdentity: upsert }));
 import proxy from '@/proxy';
@@ -10,7 +11,7 @@ function request(path: string, auth: Record<string, unknown> | null = null, head
   return Object.assign(new NextRequest(`http://localhost${path}`, { headers }), { auth });
 }
 const event = {} as NextFetchEvent;
-beforeEach(() => { vi.clearAllMocks(); identity.mockResolvedValue(null); delete process.env.E2E_TEST_AUTH; });
+beforeEach(() => { vi.clearAllMocks(); limit.mockResolvedValue(null); identity.mockResolvedValue(null); delete process.env.E2E_TEST_AUTH; });
 const dataPaths = ['/', '/market', '/market/activity', '/chestshop', '/chestshop/items/DIAMOND?compare=IRON_INGOT', '/chestshop/shops', '/accounts', '/accounts/1', '/firms/Acme', '/players/Alice', '/economy/wealth', '/transactions', '/search?q=a', '/api/search/preview?q=al', '/api/preview/player/Alice', '/api/preview/item/DIAMOND', '/api/export/accounts', '/api/viewer', '/api/docs/tax-rates', '/accounts/1/opengraph-image', '/_next/image?url=%2Faccounts%2F1'];
 it.each(dataPaths)('rejects anonymous HTML/RSC/data requests before identity or economy reads: %s', async path => {
   const response = await proxy(request(path, null, { RSC: '1', 'Next-Router-Prefetch': '1' }), event);
@@ -45,4 +46,16 @@ it.each(['/link', '/docs', '/docs/guides/tax', '/api/auth/signin', '/api/auth/ca
   const response = await proxy(request(path), event);
   expect(response?.headers.get('x-middleware-next')).toBe('1');
   expect(identity).not.toHaveBeenCalled();
+});
+
+it.each([429, 503])('rejects limited signed sessions before any identity query (%s)', async status => {
+  limit.mockResolvedValue({ status, retryAfter: 42 });
+  const response = await proxy(request('/market', { keycloakSub: 'linked', minecraftUuid: UUID }), event);
+  expect(limit).toHaveBeenCalledWith('linked');
+  expect(response?.status).toBe(status);
+  expect(response?.headers.get('retry-after')).toBe('42');
+  expect(response?.headers.get('cache-control')).toContain('no-store');
+  expect(response?.headers.get('x-middleware-next')).toBeNull();
+  expect(identity).not.toHaveBeenCalled();
+  expect(upsert).not.toHaveBeenCalled();
 });
