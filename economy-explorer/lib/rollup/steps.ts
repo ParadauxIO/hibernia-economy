@@ -14,7 +14,7 @@ import { addDays, dayStart, monthEnd, monthStart } from './days';
 type Executor = Kysely<any>;
 
 /** The tables the worker maintains, one coverage row and run-log job each. */
-export const ROLLUP_JOBS = ['account_day', 'pair_month', 'economy_day', 'type_day', 'hour_heatmap', 'item_day'] as const;
+export const ROLLUP_JOBS = ['account_day', 'pair_month', 'economy_day', 'type_day', 'hour_heatmap', 'item_day', 'gov_recipient_day'] as const;
 export type DayJob = (typeof ROLLUP_JOBS)[number];
 /** Wealth is a point-in-time snapshot, taken for the current day only. */
 export type RollupJob = DayJob | 'wealth';
@@ -79,6 +79,31 @@ async function accountDay(trx: Executor, b: Bounds): Promise<number> {
     LEFT JOIN accounts ca ON ca.account_id = cp.account_id
     LEFT JOIN firm_accounts cf ON cf.account_id = cp.account_id AND cf.removed_at IS NULL
     GROUP BY l.account_id, l.plugin_key, l.tax_kind, counterparty_type, is_internal
+  `);
+}
+
+// Government recipients retain the raw plugin key; category changes need no
+// backfill. Distinct debit accounts avoid multiplying credits when a transaction
+// has several debit postings for the same source account.
+async function govRecipientDay(trx: Executor, b: Bounds): Promise<number> {
+  await sql`DELETE FROM explorer_rollup_gov_recipient_day WHERE day = ${b.day}`.execute(trx);
+  return run(trx, sql`
+    INSERT INTO explorer_rollup_gov_recipient_day
+      (account_id, day, plugin_key, recipient_id, total, payments, last_paid)
+    SELECT source.account_id, ${b.day}, COALESCE(t.plugin_system, ''), r.account_id,
+           SUM(r.amount), COUNT(DISTINCT t.txn_id), MAX(t.settlement_time)
+    FROM ledger_txns t FORCE INDEX (idx_ledger_settle_time)
+    STRAIGHT_JOIN (
+      SELECT DISTINCT p.txn_id, p.account_id
+      FROM ledger_txns bounded FORCE INDEX (idx_ledger_settle_time)
+      STRAIGHT_JOIN ledger_postings p ON p.txn_id = bounded.txn_id
+      JOIN accounts a ON a.account_id = p.account_id
+      WHERE bounded.settlement_time >= ${b.start} AND bounded.settlement_time < ${b.end}
+        AND p.amount < 0 AND a.account_type = 'GOVERNMENT'
+    ) source ON source.txn_id = t.txn_id
+    STRAIGHT_JOIN ledger_postings r ON r.txn_id = t.txn_id AND r.amount > 0
+    WHERE t.settlement_time >= ${b.start} AND t.settlement_time < ${b.end}
+    GROUP BY source.account_id, COALESCE(t.plugin_system, ''), r.account_id
   `);
 }
 
@@ -272,6 +297,7 @@ async function itemDay(trx: Executor, b: Bounds): Promise<number> {
 
 const STEPS: Record<DayJob, (trx: Executor, b: Bounds) => Promise<number>> = {
   account_day: accountDay,
+  gov_recipient_day: govRecipientDay,
   pair_month: pairMonth,
   economy_day: economyDay,
   type_day: typeDay,

@@ -74,9 +74,9 @@ export default async function GovPayrollPage({ searchParams }: { searchParams: P
           <TablePager page={current} totalPages={totalPages} hrefFor={(n) => runsHref(view, n)} link={RouterLink} />
         </Section>
 
-        <Section title="Recipients" divider description={<>Who received wages, largest first. <RawNote range={p.rawRange} /></>}>
+        <Section title="Recipients" divider description={<>Top 50 recipients for {page.range.label}, largest first. <Freshness coverage={p.recipientCoverage} /></>}>
           <DataTable id="gov-payroll-recipients" label="Payroll recipients" columns={recipientColumns} rows={p.recipients} rowKey={(r) => r.account_id}
-            empty={<p className="dt-empty-text">No recipients in this window.</p>} />
+            empty={<p className="dt-empty-text">{p.recipientCoverage.covered ? 'No recipients in this window.' : 'Preparing history.'}</p>} />
         </Section>
       </>}
   </>;

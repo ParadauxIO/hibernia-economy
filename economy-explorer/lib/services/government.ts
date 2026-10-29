@@ -347,6 +347,7 @@ export interface Payroll {
   payments: number;
   analysis: PayrollAnalysis;
   recipients: SalaryRecipientRow[];
+  recipientCoverage: Coverage;
   rawRange: DayRange & { capped: boolean };
 }
 
@@ -355,10 +356,11 @@ export async function getPayroll(scope: GovScope, accountIds: readonly number[],
   const plugins = flows.wagePlugins;
   const raw = rawRange(range);
   const { fromTs, toTs } = bounds(raw);
-  const [days, buckets, recipients] = await Promise.all([
+  const [days, buckets, recipients, coverageMap] = await Promise.all([
     selectGovPluginOutflowDays(accountIds, plugins, range.from, range.to),
     plugins.length ? cachedRaw('gov-payroll-runs', accountIds, raw, plugins.join(','), () => selectSalaryBuckets(accountIds, plugins, fromTs, toTs)) : Promise.resolve([]),
-    plugins.length ? cachedRaw('gov-payroll-recipients', accountIds, raw, plugins.join(','), () => selectSalaryRecipients(accountIds, plugins, fromTs, toTs, 50)) : Promise.resolve([]),
+    plugins.length ? selectSalaryRecipients(accountIds, plugins, range.from, range.to, 50) : Promise.resolve([]),
+    rollupCoverage(),
   ]);
   const total = days.reduce((s, d) => s + parseMoney(d.outflow), 0n);
   return {
@@ -369,6 +371,7 @@ export async function getPayroll(scope: GovScope, accountIds: readonly number[],
     payments: days.reduce((s, d) => s + d.txn_count, 0),
     analysis: analysePayroll(buckets),
     recipients,
+    recipientCoverage: jobCoverage(coverageMap, 'gov_recipient_day', range),
     rawRange: raw,
   };
 }
