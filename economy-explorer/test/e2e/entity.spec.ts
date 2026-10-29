@@ -23,6 +23,7 @@ test.describe('account page, unrelated linked visitor', () => {
     await expect(header).toContainText(/Opened \w{3} \d{1,2}, \d{4}/);
     // Public activity totals for business and government accounts (§14 Q2).
     await expect(page.getByText('Money in, 30 days')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Account summary' }).locator('.metric').filter({ has: page.getByText('Balance', { exact: true }) })).toContainText('$25,000.00');
     await expect(page.getByRole('button', { name: 'Copy /pay command' })).toHaveAttribute('title', '/firm account pay into 1 3 <amount>');
     const gate = page.locator(GATE);
     await expect(gate).toContainText('This account’s history is private');
@@ -37,6 +38,7 @@ test.describe('account page, unrelated linked visitor', () => {
   test('a personal account shows its owner and no activity totals', async ({ page }) => {
     await visit(page, '/accounts/1');
     await expect(page.locator('.page-header')).toContainText('Personal account of Alice.');
+    await expect(page.getByRole('group', { name: 'Account summary' })).toContainText('$5,000.00');
     await expect(page.getByText('Money in, 30 days')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Copy /pay command' })).toHaveAttribute('title', '/pay Alice <amount>');
     await expect(page.getByRole('complementary', { name: 'Related' }).getByRole('link', { name: 'Acme Corp' })).toBeVisible();
@@ -64,6 +66,7 @@ test.describe('account page, with access', () => {
   test('the owner sees charts, counterparties and a filterable, cursor-paged history', async ({ page }) => {
     await visit(page, '/accounts/1');
     await expect(page.locator(GATE)).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Account summary' })).toContainText('$5,000.00');
     await expect(page.getByRole('heading', { name: 'Balance', level: 2 })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Top counterparties' })).toBeVisible();
     const table = page.getByRole('table', { name: 'Transactions' });
@@ -123,6 +126,7 @@ test.describe('firms', () => {
     await expect(page.locator('.page-header')).toContainText('Run by Alice, its proprietor.');
     await expect(page.locator('.page-header')).toContainText('Firm balance $25,000.00');
     await expect(page.getByRole('table', { name: 'Firm accounts' })).toContainText('Acme Corporate Account');
+    await expect(page.getByRole('table', { name: 'Firm accounts' })).toContainText('$25,000.00');
     await expect(page.getByRole('table', { name: 'Top items' })).toContainText('Diamond');
     await page.getByRole('link', { name: /^Members/ }).click();
     await expect(page.locator(GATE)).toContainText('Members are private to the firm');

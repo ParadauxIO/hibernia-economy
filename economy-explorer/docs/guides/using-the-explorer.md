@@ -340,6 +340,9 @@ travel, and admin shops are unlimited. The location opens the server map.
 Use **Search** in the header to find accounts, firms and players. Escape closes
 search and returns focus to its button. Account and firm directories keep names
 and balances together on narrow screens; expand **Details** for other columns.
+When space is limited, transaction history uses compact rows: names on the left,
+complete amounts on the right, and running balances underneath. Select a
+transaction to read its full name, message and other details.
 The players, firms, items and shops directories use the same search and filter chips
 as the accounts directory below, and keep them in the page address.
 
