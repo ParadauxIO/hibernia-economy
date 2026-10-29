@@ -10,26 +10,36 @@ import { visit } from './helpers';
 const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100';
 const as = (context: BrowserContext, viewer: string) => context.addCookies([{ name: 'e2e_viewer', value: viewer, url: baseURL }]);
 const rows = (page: Page, id: string) => page.locator(`#${id} tbody tr`);
+// Compare exact timestamps instead of labels that change as the clock advances.
+const transactionRows = (page: Page) => rows(page, 'transactions-table').evaluateAll(elements =>
+  elements.map(row => Array.from(row.querySelectorAll('td'), cell => {
+    const timestamp = cell.querySelector('time');
+    return timestamp ? timestamp.dateTime : cell.innerText;
+  })));
 
 test.describe('transaction explorer', () => {
   test.skip(!process.env.E2E_AUTH_SHIM, 'needs the auth shim');
 
   test('lists transactions newest first with chips, pages by cursor, and opens the drawer', async ({ page, context }) => {
+    const initialTime = new Date();
+    await page.clock.setFixedTime(initialTime);
     await as(context, 'admin');
     await visit(page, '/transactions?f=plugin:in:treasury&limit=4');
     await expect(page.getByRole('heading', { level: 1, name: 'Transactions' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Active filters' }).getByRole('listitem')).toHaveCount(1);
     await expect(rows(page, 'transactions-table')).toHaveCount(4);
     await expect(page.getByRole('status')).toContainText(/\d+ transactions/);
-    const firstPage = await rows(page, 'transactions-table').allInnerTexts();
+    const firstPage = await transactionRows(page);
+    // Force the minute boundary that caused CI to compare different relative labels.
+    await page.clock.setFixedTime(new Date(initialTime.getTime() + 60_000));
 
     await page.getByRole('link', { name: 'Older' }).click();
     await expect(page).toHaveURL(/cursor=/);
     await expect(rows(page, 'transactions-table')).toHaveCount(4);
-    expect(await rows(page, 'transactions-table').allInnerTexts()).not.toEqual(firstPage);
+    expect(await transactionRows(page)).not.toEqual(firstPage);
     await page.getByRole('link', { name: 'Newer' }).click();
     await expect(page).toHaveURL(/back=1/);
-    await expect.poll(() => rows(page, 'transactions-table').allInnerTexts()).toEqual(firstPage);
+    await expect.poll(() => transactionRows(page)).toEqual(firstPage);
 
     await visit(page, '/transactions?q=%231');
     await page.getByRole('link', { name: 'pay acme #1' }).click();

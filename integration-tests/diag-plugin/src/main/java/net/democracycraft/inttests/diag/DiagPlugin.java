@@ -864,11 +864,8 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
         org.bukkit.block.BlockState state = block.getState();
         if (!(state instanceof org.bukkit.block.Sign)) { sender.sendMessage("not a sign at that pos: " + block.getType()); return true; }
 
-        // Seed the sign text so getLines() reflects the shop lines, then fire the create event.
-        org.bukkit.block.Sign pre = (org.bukkit.block.Sign) state;
-        for (int i = 0; i < 4; i++) { pre.setLine(i, lines[i]); }
-        pre.update(true, false);
-
+        // Bukkit fires SignChangeEvent before committing the proposed text. Keep the
+        // existing block state intact so creation and edits take their real paths.
         SignChangeEvent event = new SignChangeEvent(block, p, lines.clone());
         Bukkit.getPluginManager().callEvent(event);
         boolean created = !event.isCancelled();
