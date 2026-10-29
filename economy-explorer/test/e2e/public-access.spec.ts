@@ -20,14 +20,16 @@ test('visitors can browse the overview, directories and docs without balances', 
   await expect(page).toHaveURL(/\/docs$/);
 });
 
-test('protected pages offer login while API and export data remain blocked', async ({ page, request }) => {
+test('protected pages offer login while API and export data remain blocked', async ({ page, context }) => {
   for (const path of ['/players/Alice', '/firms/Acme', '/transactions', '/me', '/market', '/gov', '/admin']) {
     await visit(page, path);
     await expect(page.getByRole('heading', { name: 'There’s more to explore' })).toBeVisible();
     await expect(page.locator('table')).toHaveCount(0);
   }
-  expect((await request.get('/api/export/accounts')).status()).toBe(401);
-  expect((await request.get('/api/preview/account/1')).status()).toBe(401);
+  // Share the browser's cleared cookies; the standalone request fixture retains
+  // the linked visitor storage state configured by managed CI runs.
+  expect((await context.request.get('/api/export/accounts')).status()).toBe(401);
+  expect((await context.request.get('/api/preview/account/1')).status()).toBe(401);
 });
 
 
