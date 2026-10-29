@@ -76,6 +76,9 @@ public interface FirmTransactionService {
      */
     long payIntoFirm(Integer firmId, UUID payerUuid, BigDecimal amount);
 
+    /** Public payment with an optional ledger memo. */
+    long payIntoFirm(Integer firmId, UUID payerUuid, BigDecimal amount, String memo);
+
     /**
      * Player pays into a specific firm account. As {@link #payIntoFirm} but
      * targets an explicit account that must belong to the firm.

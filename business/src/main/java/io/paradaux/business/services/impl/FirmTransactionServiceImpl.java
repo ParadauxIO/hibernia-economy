@@ -422,12 +422,17 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
 
     @Override
     public long payIntoFirm(Integer firmId, UUID payerUuid, BigDecimal amount) {
+        return payIntoFirm(firmId, payerUuid, amount, null);
+    }
+
+    @Override
+    public long payIntoFirm(Integer firmId, UUID payerUuid, BigDecimal amount, String memo) {
         int destAccountId = resolveAccountId(firmId);
         return payIn(
                 destAccountId,
                 payerUuid,
                 amount,
-                "Business payment: " + playerName(payerUuid) + " -> " + firmName(firmId));
+                reasonWithMemo("Business payment: " + playerName(payerUuid) + " -> " + firmName(firmId), memo));
     }
 
     @Override

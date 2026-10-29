@@ -21,6 +21,16 @@ account**. The simple money commands act on whichever account is the **default**
 /business withdraw Acme 1000    # take money back out
 ```
 
+### Paying into a firm
+
+`/firm deposit <firm> <amount> [memo]` is an alias for
+`/firm pay into <firm> <amount> [memo]`. Anyone with the normal payment
+permission can pay from their personal balance into a firm's default account;
+you do not need to work for that firm. Tab completion suggests only firms you
+own or work for. Type another firm's name manually to pay it. An optional memo
+is recorded in the ledger. Withdrawals and account-specific deposits retain
+their existing finance permissions.
+
 ## List and create accounts
 
 See all of the firm's accounts:

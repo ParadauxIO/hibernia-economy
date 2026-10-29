@@ -797,6 +797,26 @@ class FirmTransactionServiceImplTest {
     }
 
     @Test
+    void publicPaymentPreservesMemoWithoutRequiringDestinationAccess() {
+        when(firms.getFirmById(1)).thenReturn(firm(1, 100));
+        when(treasury.getAccountById(100)).thenReturn(account(100, false, false));
+        Account personal = new Account();
+        personal.setAccountId(7);
+        when(treasury.resolveOrCreatePersonal(player)).thenReturn(personal);
+        when(treasury.hasFunds(7, BigDecimal.TEN)).thenReturn(true);
+
+        svc.payIntoFirm(1, player, BigDecimal.TEN, "Invoice 42");
+
+        ArgumentCaptor<TransferRequest> req = ArgumentCaptor.forClass(TransferRequest.class);
+        verify(treasury).transfer(req.capture());
+        assertThat(req.getValue().fromAccountId()).isEqualTo(7);
+        assertThat(req.getValue().toAccountId()).isEqualTo(100);
+        assertThat(req.getValue().amount()).isEqualByComparingTo(BigDecimal.TEN);
+        assertThat(req.getValue().message()).endsWith(": Invoice 42");
+        verify(treasury, never()).canAccessAccount(any(), anyInt());
+    }
+
+    @Test
     void payIntoAccount_rejectsForeignAccount() {
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(false);
         assertThatThrownBy(() -> svc.payIntoAccount(1, 99, player, BigDecimal.ONE))
