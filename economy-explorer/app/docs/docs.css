@@ -254,3 +254,16 @@ a.docs-nav-section:hover, a.docs-nav-section.active { color: var(--fg); }
     .doc-prose h2 { font-size: 19px; }
 }
 
+
+/* Deployment-owned notes sit above the shared guide. */
+.doc-prose .doc-top-note {
+  border-left: 4px solid var(--accent);
+  background: var(--bg-soft);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  overflow-wrap: anywhere;
+}
+.doc-prose .doc-top-note p {
+  white-space: pre-line;
+  margin: 0.5rem 0;
+}

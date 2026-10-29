@@ -1,6 +1,6 @@
 /** Public browsing is limited to the overview, directories and documentation. */
 export function isPublicExplorerPath(path: string): boolean {
-  return ['/', '/players', '/firms', '/accounts', '/access', '/api/viewer', '/api/docs/tax-rates'].includes(path) || path === '/link' || path === '/docs' || path.startsWith('/docs/')
+  return ['/', '/players', '/firms', '/accounts', '/access', '/api/viewer', '/api/docs/tax-rates', '/api/docs/notes'].includes(path) || path === '/link' || path === '/docs' || path.startsWith('/docs/')
     || path.startsWith('/api/auth/') || path.startsWith('/api/avatar/')
     || path === '/robots.txt' || path === '/sitemap.xml' || path === '/favicon.ico'
     || path === '/dm-sans.ttf' || path === '/dm-sans-LICENSE.txt'
