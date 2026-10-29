@@ -48,7 +48,7 @@ class FirmMenuTest {
             NbtMap deposit = Dialogs.await(player, () -> click(player, funded, 11), d -> Dialogs.title(d).equals("Money"));
             var personal = Ledger.personalBalance(player.getUuid()).orElseThrow();
             Dialogs.click(player, deposit, "Submit", Map.of("operation", "DEPOSIT", "target", "", "amount", "1.25"));
-            player.awaitMessageContaining("Deposited", TIMEOUT);
+            player.awaitMessageContaining("Paid", TIMEOUT);
             BusinessLedger.waitForFirmDefaultBalance(id, new java.math.BigDecimal("1.25"), TIMEOUT);
             assertThat(Ledger.personalBalance(player.getUuid()).orElseThrow()).isEqualByComparingTo(personal.subtract(new java.math.BigDecimal("1.25")));
 

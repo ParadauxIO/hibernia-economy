@@ -26,7 +26,7 @@ class MarketSellDirectionTest extends MarketApiTestSupport {
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
                 Barrier.settle();
                 owner.chatCommand("/business deposit " + firm + " 100");
-                owner.awaitMessageContaining("Deposited", TIMEOUT);
+                owner.awaitMessageContaining("Paid", TIMEOUT);
             });
             int firmId = BusinessLedger.firmId(firm).orElseThrow();
             int account = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();

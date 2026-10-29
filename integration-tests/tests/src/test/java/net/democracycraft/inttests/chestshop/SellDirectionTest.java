@@ -96,7 +96,7 @@ class SellDirectionTest {
                 BusinessLedger.waitForFirm(firm, TIMEOUT);
                 Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " " + firmFund);
-                p.awaitMessageContaining("Deposited", TIMEOUT);
+                p.awaitMessageContaining("Paid", TIMEOUT);
             });
             firmId = BusinessLedger.firmId(firm).orElseThrow();
             firmAccountId = BusinessLedger.firmDefaultAccountId(firmId)

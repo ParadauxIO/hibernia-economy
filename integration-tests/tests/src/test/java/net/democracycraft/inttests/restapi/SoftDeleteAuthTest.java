@@ -183,7 +183,7 @@ class SoftDeleteAuthTest {
 
                 Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " 100");
-                p.awaitMessageContaining("Deposited", TIMEOUT);
+                p.awaitMessageContaining("Paid", TIMEOUT);
 
                 Barrier.settle();
                 p.chatCommand("/business account create " + firm + " Vault");

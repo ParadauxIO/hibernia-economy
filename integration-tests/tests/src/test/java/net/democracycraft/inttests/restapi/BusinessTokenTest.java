@@ -48,7 +48,7 @@ class BusinessTokenTest {
                 // Deposit 1000 into the firm's default account.
                 Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " 1000");
-                p.awaitMessageContaining("Deposited", TIMEOUT);
+                p.awaitMessageContaining("Paid", TIMEOUT);
             });
 
             IssuedKey key = ApiTokens.issueBusiness(owner, p, firm);
@@ -85,7 +85,7 @@ class BusinessTokenTest {
 
                 Barrier.settle();
                 o.chatCommand("/business deposit " + firm + " 500");
-                o.awaitMessageContaining("Deposited", TIMEOUT);
+                o.awaitMessageContaining("Paid", TIMEOUT);
             });
 
             IssuedKey key = ApiTokens.issueBusiness(owner, o, firm);
@@ -131,7 +131,7 @@ class BusinessTokenTest {
 
                 Barrier.settle();
                 o.chatCommand("/business deposit " + firm + " 250");
-                o.awaitMessageContaining("Deposited", TIMEOUT);
+                o.awaitMessageContaining("Paid", TIMEOUT);
             });
 
             IssuedKey key = ApiTokens.issueBusiness(owner, o, firm);
