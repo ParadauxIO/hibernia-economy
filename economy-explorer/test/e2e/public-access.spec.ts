@@ -64,7 +64,12 @@ for (const directory of ['/accounts', '/players', '/firms']) {
       if (cookie) await context.addCookies([{ name: 'authjs.session-token', value: cookie, url: baseURL! }]);
       const response = await context.request.get(target, { maxRedirects: 0, headers: { RSC: '1', 'Next-Router-Prefetch': '1' } });
       expect(response.status()).toBe(307);
-      expect(new URL(response.headers().location!).searchParams.get('callbackUrl')).toBe(target);
+      const location = response.headers().location;
+      expect(location).toBeTruthy();
+      // Next's production server can return a relative Location header.
+      const destination = new URL(location!, response.url());
+      expect(destination.pathname).toBe('/access');
+      expect(destination.searchParams.get('callbackUrl')).toBe(target);
     }
     await context.clearCookies();
     await visit(page, target);
