@@ -345,7 +345,8 @@ when Treasury, Business, ChestShop and TreasuryAPI are all enabled at the same
 release version. Uploading jars to `plugins/update` does not send a report.
 Reporting is opt-in and does not restart the server or affect economy availability.
 
-On Tasklie's Deployments page, create a deployment webhook token (`tdp_…`), then
+In Tasklie's API and MCP settings, create a Paradaux workspace API key with a role
+that can manage settings (`settings.manage`), then
 configure Treasury's `config.yml` on the intended production server:
 
 ```yaml
@@ -366,21 +367,23 @@ and environment, not by application. Custom environments show a live deployment;
 only the literal `production` environment drives Tasklie's production delivery
 status and automatic issue completion.
 
-The plugin calls `POST https://app.taskl.ie/api/public/hooks/argo` with a bearer
-token. This is Tasklie's existing deployment ingestion endpoint; it accepts
-`revision` without container images. Treasury supplies the 12-character commit
-embedded in its release version, repository `ParadauxIO/hibernia-economy`, the
-configured environment/app, startup timestamp and `Succeeded` status. Tasklie
-currently labels this source `argo` and displays the commit rather than the full
-plugin version; it resolves the commit through its GitHub integration. Link the
-repository to the correct Tasklie project and configure the GitHub App for PR
-and task association. No Tasklie server changes are required.
+The plugin calls `POST https://app.taskl.ie/api/public/w/paradaux/deployments/completions`
+with the workspace key as a bearer token. Treasury supplies `source: custom`,
+the 12-character commit embedded in its release version as `sha`, repository
+`ParadauxIO/hibernia-economy`, the configured environment, and a `completedAt`
+startup timestamp. The `eventId` combines `tasklie.app` (a stable server name,
+at most 100 characters) with that timestamp. Tasklie displays the commit rather
+than the full plugin version and resolves it through its GitHub integration.
+Link the repository to the correct Tasklie project and configure the GitHub App
+for PR and task association. This endpoint uses workspace API keys, not the
+separate `tdp_…` credential used by `/api/public/hooks/argo`; existing Argo
+credentials do not need to be replaced.
 
 HTTP runs asynchronously with a 10-second request timeout, without following
 redirects. Temporary connection failures, HTTP 429 and server errors retry every
 60 seconds, up to ten attempts per startup. Every retry keeps the same timestamp
 and payload for idempotency; a disabled/mismatched plugin stops subsequent
-attempts. Only Tasklie's `ok` or `duplicate` acknowledgement counts as success.
+attempts. Only a JSON response with `status: "ok"` or `status: "duplicate"` counts as success.
 Authentication/configuration failures stop retries and leave a warning; reporting
 never logs credentials or response bodies. After fixing configuration, restart to
 retry. Look for `Tasklie confirmed live economy release <version>` in the server

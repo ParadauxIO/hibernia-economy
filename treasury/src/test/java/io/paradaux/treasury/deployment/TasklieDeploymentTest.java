@@ -23,7 +23,7 @@ class TasklieDeploymentTest {
         server.createContext("/deploy", exchange -> {
             auth.add(exchange.getRequestHeaders().getFirst("Authorization"));
             bodies.add(new String(exchange.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
-            byte[] response = (bodies.size() == 1 ? "unavailable" : "duplicate")
+            byte[] response = (bodies.size() == 1 ? "unavailable" : "{\"status\":\"duplicate\"}")
                     .getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(bodies.size() == 1 ? 503 : 200, response.length);
             exchange.getResponseBody().write(response);
@@ -34,23 +34,23 @@ class TasklieDeploymentTest {
             var deployment = new TasklieDeployment(
                     client,
                     URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/deploy"),
-                    "tdp_test-secret",
+                    "workspace_test-secret",
                     "democracycraft-plugins",
                     "plugins \"primary\"",
                     VERSION,
                     Instant.parse("2026-10-29T08:09:00Z"));
             assertThat(deployment.send()).isEqualTo(TasklieDeployment.Result.RETRY);
             assertThat(deployment.send()).isEqualTo(TasklieDeployment.Result.ACCEPTED);
-            assertThat(auth).containsExactly("Bearer tdp_test-secret", "Bearer tdp_test-secret");
+            assertThat(auth).containsExactly("Bearer workspace_test-secret", "Bearer workspace_test-secret");
             assertThat(bodies).hasSize(2);
-            assertThat(bodies.get(1)).isEqualTo(bodies.getFirst()).doesNotContain("tdp_test-secret");
+            assertThat(bodies.get(1)).isEqualTo(bodies.getFirst()).doesNotContain("workspace_test-secret");
             var body = JsonParser.parseString(bodies.getFirst()).getAsJsonObject();
-            assertThat(body.get("revision").getAsString()).isEqualTo("41b9bbf9f528");
+            assertThat(body.get("sha").getAsString()).isEqualTo("41b9bbf9f528");
             assertThat(body.get("repo").getAsString()).isEqualTo("ParadauxIO/hibernia-economy");
             assertThat(body.get("environment").getAsString()).isEqualTo("democracycraft-plugins");
-            assertThat(body.get("app").getAsString()).isEqualTo("plugins \"primary\"");
-            assertThat(body.get("finishedAt").getAsString()).isEqualTo("2026-10-29T08:09:00Z");
-            assertThat(body.get("status").getAsString()).isEqualTo("Succeeded");
+            assertThat(body.get("eventId").getAsString()).isEqualTo("plugins \"primary\":2026-10-29T08:09:00Z");
+            assertThat(body.get("completedAt").getAsString()).isEqualTo("2026-10-29T08:09:00Z");
+            assertThat(body.get("source").getAsString()).isEqualTo("custom");
         } finally {
             server.stop(0);
         }
@@ -60,7 +60,7 @@ class TasklieDeploymentTest {
     void acceptsOnlyAcknowledgementsAndNeverFollowsRedirects() throws Exception {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         int[] status = {200};
-        String[] body = {"ok"};
+        String[] body = {"{\"status\":\"ok\"}"};
         server.createContext("/", exchange -> {
             byte[] bytes = body[0].getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Location", "/must-not-follow");
@@ -73,14 +73,18 @@ class TasklieDeploymentTest {
             var deployment = new TasklieDeployment(
                     client,
                     URI.create("http://127.0.0.1:" + server.getAddress().getPort()),
-                    "tdp_test",
+                    "workspace_test",
                     "democracycraft-plugins",
                     "plugins",
                     VERSION,
                     Instant.EPOCH);
             assertThat(deployment.send()).isEqualTo(TasklieDeployment.Result.ACCEPTED);
-            body[0] = "ignored";
+            body[0] = "{\"status\":\"ignored\"}";
             assertThat(deployment.send()).isEqualTo(TasklieDeployment.Result.REJECTED);
+            for (String malformed : List.of("ok", "{}", "null", "[]", "{", "{\"status\":true}")) {
+                body[0] = malformed;
+                assertThat(deployment.send()).isEqualTo(TasklieDeployment.Result.REJECTED);
+            }
             for (int rejected : new int[] {400, 404, 302}) {
                 status[0] = rejected;
                 assertThat(deployment.send()).isEqualTo(TasklieDeployment.Result.REJECTED);
@@ -100,7 +104,7 @@ class TasklieDeploymentTest {
                         .isThrownBy(() -> new TasklieDeployment(
                                 client,
                                 TasklieDeployment.ENDPOINT,
-                                "tdp_test",
+                                "workspace_test",
                                 "plugins",
                                 "plugins",
                                 version,
@@ -119,7 +123,13 @@ class TasklieDeploymentTest {
             }
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> new TasklieDeployment(
-                            client, TasklieDeployment.ENDPOINT, "tdp_test", "", "plugins", VERSION, Instant.EPOCH));
+                            client,
+                            TasklieDeployment.ENDPOINT,
+                            "workspace_test",
+                            "",
+                            "plugins",
+                            VERSION,
+                            Instant.EPOCH));
         }
     }
 }
