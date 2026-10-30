@@ -6,6 +6,16 @@ logging:
   # to see lifecycle events, or DEBUG when diagnosing a specific issue.
   level: WARN
 
+# Opt-in activation reporting to Tasklie after all four economy plugins enable.
+# Create a deployment token on Tasklie's Deployments page (not an account API key).
+# TASKLIE_DEPLOYMENT_TOKEN in the server environment takes precedence over token.
+# Use a distinct environment per server/component; do not share with Explorer.
+tasklie:
+  enabled: false
+  token: ""
+  environment: democracycraft-plugins
+  app: democracycraft-plugins
+
 database:
   host: localhost
   port: 3306

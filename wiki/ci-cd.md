@@ -337,3 +337,52 @@ already have committed. Inspect schema/history, recover from a compatible backup
 when needed, and deploy a corrected complete release. The administrative Flyway
 workflows remain available for deliberate recovery and rehearsal, not as a second
 automatic migration owner.
+
+### Report the live plugin release to Tasklie
+
+Treasury can report the **running** economy bundle after Paper's server-load event,
+when Treasury, Business, ChestShop and TreasuryAPI are all enabled at the same
+release version. Uploading jars to `plugins/update` does not send a report.
+Reporting is opt-in and does not restart the server or affect economy availability.
+
+On Tasklie's Deployments page, create a deployment webhook token (`tdp_…`), then
+configure Treasury's `config.yml` on the intended production server:
+
+```yaml
+tasklie:
+  enabled: true
+  token: "" # Prefer TASKLIE_DEPLOYMENT_TOKEN in the server environment.
+  environment: democracycraft-plugins
+  app: democracycraft-plugins
+```
+
+Supply the token through `TASKLIE_DEPLOYMENT_TOKEN` or `tasklie.token` and restart
+normally. Keep reporting disabled in sandbox clones; never copy the production
+reporting token into a clone. Development and snapshot version strings are
+rejected, but a clone running production jars still needs reporting disabled.
+Use a distinct environment for each server's plugin bundle. In particular, do not
+reuse Explorer's environment: Tasklie currently groups live releases by project
+and environment, not by application. Custom environments show a live deployment;
+only the literal `production` environment drives Tasklie's production delivery
+status and automatic issue completion.
+
+The plugin calls `POST https://app.taskl.ie/api/public/hooks/argo` with a bearer
+token. This is Tasklie's existing deployment ingestion endpoint; it accepts
+`revision` without container images. Treasury supplies the 12-character commit
+embedded in its release version, repository `ParadauxIO/hibernia-economy`, the
+configured environment/app, startup timestamp and `Succeeded` status. Tasklie
+currently labels this source `argo` and displays the commit rather than the full
+plugin version; it resolves the commit through its GitHub integration. Link the
+repository to the correct Tasklie project and configure the GitHub App for PR
+and task association. No Tasklie server changes are required.
+
+HTTP runs asynchronously with a 10-second request timeout, without following
+redirects. Temporary connection failures, HTTP 429 and server errors retry every
+60 seconds, up to ten attempts per startup. Every retry keeps the same timestamp
+and payload for idempotency; a disabled/mismatched plugin stops subsequent
+attempts. Only Tasklie's `ok` or `duplicate` acknowledgement counts as success.
+Authentication/configuration failures stop retries and leave a warning; reporting
+never logs credentials or response bodies. After fixing configuration, restart to
+retry. Look for `Tasklie confirmed live economy release <version>` in the server
+log and the matching commit on Tasklie's Deployments page. This records successful
+activation, not ongoing server uptime or health.
