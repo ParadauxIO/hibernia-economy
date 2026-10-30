@@ -9,7 +9,7 @@ import { checkAccountRateLimit } from '@/lib/requestRateLimit';
 
 const blockRequest = createRequestBlocker(process.env);
 
-/** Protected routes, including RSC and APIs, require a signed and linked identity. */
+/** Directory pagination requires sign-in; protected data also requires a link. */
 const authenticatedPage = auth(async (req, event: NextFetchEvent) => {
   void event;
   const api = req.nextUrl.pathname.startsWith('/api/');
@@ -25,6 +25,9 @@ const authenticatedPage = auth(async (req, event: NextFetchEvent) => {
       headers: { 'Cache-Control': 'private, no-store', 'Retry-After': String(limited.retryAfter) },
     });
   }
+  // Later pages of public directories need a verified session, but contain no
+  // additional private fields and do not require a linked Minecraft identity.
+  if (isPublicExplorerPath(req.nextUrl.pathname)) return handleRequest(req);
   // A link must be established durably. Verified provider claims can establish
   // it just as getViewer does; identity-store errors fail closed.
   let linked = false;
@@ -76,7 +79,7 @@ export default function proxy(req: NextRequest, event: NextFetchEvent) {
   // Only a recognized fixture role bypasses session verification in test builds.
   const role = req.cookies.get('e2e_viewer')?.value;
   const roleShim = process.env.E2E_TEST_AUTH === '1' && !!role && role !== 'anon' && normalizeCapability(role) !== null;
-  if (!isPublicExplorerPath(req.nextUrl.pathname) && !roleShim) return authenticatedPage(req, event);
+  if (!isPublicExplorerPath(req.nextUrl.pathname, req.nextUrl.searchParams) && !roleShim) return authenticatedPage(req, event);
   return handleRequest(req);
 }
 

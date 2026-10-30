@@ -55,3 +55,28 @@ test('logging out removes directory and personal balances', async ({ page, conte
   await expect(page.getByRole('columnheader', { name: /^Balance\b/ })).toHaveCount(0);
   await expect(page.locator('.shell-account-balance')).toHaveCount(0);
 });
+
+for (const directory of ['/accounts', '/players', '/firms']) {
+  test(`directory pagination requires a real session: ${directory}`, async ({ page, context, baseURL }) => {
+    const target = `${directory}?page=2&sort=name`;
+    for (const cookie of ['', 'forged-session']) {
+      await context.clearCookies();
+      if (cookie) await context.addCookies([{ name: 'authjs.session-token', value: cookie, url: baseURL! }]);
+      const response = await context.request.get(target, { maxRedirects: 0, headers: { RSC: '1', 'Next-Router-Prefetch': '1' } });
+      expect(response.status()).toBe(307);
+      const location = response.headers().location;
+      expect(location).toBeTruthy();
+      // Next's production server can return a relative Location header.
+      const destination = new URL(location!, response.url());
+      expect(destination.pathname).toBe('/access');
+      expect(destination.searchParams.get('callbackUrl')).toBe(target);
+    }
+    await context.clearCookies();
+    await visit(page, target);
+    await expect(page.getByText('The first page of each directory is public.', { exact: false })).toBeVisible();
+    await expect(page.locator('table')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Log in or create an account' })).toBeVisible();
+    await visit(page, `${directory}?page=1`);
+    await expect(page.locator(GATE)).toHaveCount(0);
+  });
+}

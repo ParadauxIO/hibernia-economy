@@ -132,3 +132,10 @@ manual-grant preservation, failed-sync behavior, and the separation of web read
 relationships from API spending authority. Explorer SQL tests additionally verify
 permission removal, delegation bounds, optimistic revisions, group cascades,
 source edits, and rechecks after assignment revocation.
+
+Anonymous directory browsing is limited to the first page of `/accounts`,
+`/players` and `/firms` (no `page` parameter or `page=1`). Other page values,
+including duplicate parameters containing a non-first page, require a verified
+session in the request proxy before rendering or directory queries. Signed-in
+pagination uses the account request budget but does not require a Minecraft link;
+private details and financial fields retain their existing link/permission checks.
