@@ -140,6 +140,7 @@ public class MarketResyncServiceImpl implements MarketResyncService {
         scheduler.runTaskAsynchronously(plugin, () -> {
             Map<String, Set<String>> known = null;
             try {
+                marketService.awaitWrites();
                 known = groupKnownByChunk(marketService.shopQuery().shopsInChunk(worldName, key.x(), key.z()).stream()
                         .map(s -> new ShopLocation(s.world(), s.worldUuid(), s.signX(), s.signY(), s.signZ()))
                         .toList());
@@ -166,6 +167,7 @@ public class MarketResyncServiceImpl implements MarketResyncService {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             Map<String, Set<String>> knownByChunk;
             try {
+                marketService.awaitWrites();
                 knownByChunk = groupKnownByChunk(marketService.shopQuery().activeShopLocations(null));
             } catch (RuntimeException e) {
                 running.set(false);

@@ -252,6 +252,7 @@ public class ChestShop extends JavaPlugin {
         if (injector != null) {
             injector.getInstance(io.paradaux.chestshop.services.HopperStockRefreshService.class)
                     .stop();
+            injector.getInstance(MarketService.class).close();
             injector.getInstance(MenuManager.class).shutdown();
             // The preview displays are live entities; untracked, they'd float on until chunk unload.
             injector.getInstance(io.paradaux.chestshop.services.PreviewService.class)

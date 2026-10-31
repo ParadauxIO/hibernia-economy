@@ -111,7 +111,7 @@ class PreviewServiceImplTest {
         var liveSign = mock(org.bukkit.block.Sign.class);
         lenient().when(world.isChunkLoaded(anyInt(), anyInt())).thenReturn(true);
         lenient().when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(signBlock);
-        lenient().when(signBlock.getState()).thenReturn(liveSign);
+        lenient().when(signBlock.getState(false)).thenReturn(liveSign);
         lenient().when(liveSign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "Diamond"});
         preview = new PreviewServiceImpl(
                 plugin,
@@ -163,7 +163,7 @@ class PreviewServiceImplTest {
         preview.refresh("world", 16, 64, 32);
         asyncTasks.poll().run();
         preview.destroy("world", 16, 64, 32);
-        when(world.getBlockAt(16, 64, 32).getState()).thenReturn(mock(org.bukkit.block.BlockState.class));
+        when(world.getBlockAt(16, 64, 32).getState(false)).thenReturn(mock(org.bukkit.block.BlockState.class));
         mainTasks.poll().run();
         verifySpawns(1);
     }
@@ -171,7 +171,7 @@ class PreviewServiceImplTest {
     @Test
     void externalSignEditRemovesOldPreviewAndWildcardDoesNotRenderFromStaleRegistry() {
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
-        var sign = (org.bukkit.block.Sign) world.getBlockAt(16, 64, 32).getState();
+        var sign = (org.bukkit.block.Sign) world.getBlockAt(16, 64, 32).getState(false);
         when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "amethyst*"});
         advanceCleanup(500);
         verify(display).remove();
@@ -184,7 +184,7 @@ class PreviewServiceImplTest {
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
         advanceCleanup(500);
         verify(display, never()).remove();
-        when(world.getBlockAt(16, 64, 32).getState()).thenReturn(mock(org.bukkit.block.BlockState.class));
+        when(world.getBlockAt(16, 64, 32).getState(false)).thenReturn(mock(org.bukkit.block.BlockState.class));
         advanceCleanup(500);
         verify(display).remove();
     }
@@ -463,7 +463,11 @@ class PreviewServiceImplTest {
         registry("world", 1, 2, shopAt(16, 64, 32, true), shopAt(17, 64, 33, true));
         preview.loadChunk("world", 1, 2);
         verifySpawns(0); // nothing until the registry answers
+        verify(marketService, never()).awaitWrites(); // never block the enqueueing server thread
         completeLookup();
+        var order = org.mockito.Mockito.inOrder(marketService, shopQuery);
+        order.verify(marketService).awaitWrites();
+        order.verify(shopQuery).shopsInChunk("world", 1, 2);
         verifySpawns(2);
     }
 

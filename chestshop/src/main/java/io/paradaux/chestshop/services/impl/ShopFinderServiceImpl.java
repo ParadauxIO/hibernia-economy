@@ -57,6 +57,7 @@ public class ShopFinderServiceImpl implements ShopFinderService {
         if (api == null) {
             return List.of();
         }
+        marketService.awaitWrites();
         List<ShopResult> rows = api.searchShops(ShopSearchQuery.builder()
                 .itemKey(state.itemKey())
                 .allMatches(true)

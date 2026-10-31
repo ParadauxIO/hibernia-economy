@@ -3,6 +3,7 @@ package io.paradaux.chestshop.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.ShopItem;
+import io.paradaux.chestshop.model.ShopItemCache;
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.PreviewService;
 import io.paradaux.chestshop.services.ShopDisplayService;
@@ -50,6 +51,7 @@ public class PreviewServiceImpl implements PreviewService {
     private final JavaPlugin plugin;
     private final MarketService marketService;
     private final ShopDisplayService displays;
+    private final ShopItemCache itemCache = new ShopItemCache();
 
     // chunkKey -> (posKey -> display)
     private final Map<String, Map<String, TrackedPreview>> byChunk = new ConcurrentHashMap<>();
@@ -64,7 +66,7 @@ public class PreviewServiceImpl implements PreviewService {
     private record TrackedPreview(ItemDisplay display, World world, int x, int y, int z, List<String> lines) {
         boolean current() {
             if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
-            return world.getBlockAt(x, y, z).getState() instanceof org.bukkit.block.Sign sign
+            return world.getBlockAt(x, y, z).getState(false) instanceof org.bukkit.block.Sign sign
                     && lines.equals(java.util.Arrays.asList(sign.getLines()));
         }
     }
@@ -120,7 +122,7 @@ public class PreviewServiceImpl implements PreviewService {
                 || (shop.worldUuid() != null && !shop.worldUuid().equals(world.getUID()))) {
             return;
         }
-        ItemStack item = toItemStack(shop);
+        ItemStack item = itemCache.decode(shop.material(), shop.itemData());
         if (item != null) {
             render(shop.world(), shop.signX(), shop.signY(), shop.signZ(), item);
         }
@@ -134,7 +136,7 @@ public class PreviewServiceImpl implements PreviewService {
         }
         destroy(worldName, x, y, z); // replace any existing
         if (!world.isChunkLoaded(x >> 4, z >> 4)
-                || !(world.getBlockAt(x, y, z).getState() instanceof org.bukkit.block.Sign sign)
+                || !(world.getBlockAt(x, y, z).getState(false) instanceof org.bukkit.block.Sign sign)
                 || io.paradaux.chestshop.services.WildcardItems.isPattern(
                         io.paradaux.chestshop.services.SignService.getItem(sign))) return;
         List<String> lines = List.copyOf(java.util.Arrays.asList(sign.getLines()));
@@ -206,6 +208,7 @@ public class PreviewServiceImpl implements PreviewService {
     public void destroyAll() {
         forEachDisplay(ItemDisplay::remove);
         byChunk.clear();
+        itemCache.clear();
         validationQueue.clear();
         validationCredit = 0;
         if (cleanupTask != null) {
@@ -252,6 +255,7 @@ public class PreviewServiceImpl implements PreviewService {
         BukkitScheduler scheduler = plugin.getServer().getScheduler();
         scheduler.runTaskAsynchronously(plugin, () -> {
             Map<Lookup, List<ShopResult>> found = new LinkedHashMap<>();
+            marketService.awaitWrites();
             for (Lookup lookup : batch) {
                 try {
                     found.put(
