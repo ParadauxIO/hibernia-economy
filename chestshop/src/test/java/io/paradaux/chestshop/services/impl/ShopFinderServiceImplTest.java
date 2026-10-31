@@ -4,12 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.chestshop.dialogs.FindState;
+import io.paradaux.chestshop.model.Account;
 import io.paradaux.chestshop.model.FoundShop;
+import io.paradaux.chestshop.model.ShopType;
+import io.paradaux.chestshop.services.AccountService;
+import io.paradaux.chestshop.services.EconomyService;
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.support.ServerTest;
+import io.paradaux.chestshop.utils.BusinessAccountUtil;
 import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.market.ShopResult;
 import io.paradaux.treasury.api.market.ShopSearchQuery;
@@ -34,12 +42,16 @@ class ShopFinderServiceImplTest extends ServerTest {
     private JavaPlugin plugin;
     private MarketService market;
     private ShopFinderServiceImpl finder;
+    private EconomyService economy;
+    private AccountService accounts;
 
     @BeforeEach
     void wire() {
         plugin = MockBukkit.createMockPlugin("FinderPlugin");
         market = mock(MarketService.class);
-        finder = new ShopFinderServiceImpl(plugin, market);
+        economy = mock(EconomyService.class);
+        accounts = mock(AccountService.class);
+        finder = new ShopFinderServiceImpl(plugin, market, economy, accounts);
     }
 
     private FindState state(String world) {
@@ -58,6 +70,7 @@ class ShopFinderServiceImplTest extends ServerTest {
                 64,
                 0,
                 false,
+                42,
                 "PERSONAL",
                 null,
                 UUID.randomUUID(),
@@ -74,6 +87,112 @@ class ShopFinderServiceImplTest extends ServerTest {
                 20,
                 true,
                 false);
+    }
+
+    private ShopResult offer(int x, Integer accountId, boolean admin, BigDecimal buy, BigDecimal sell) {
+        return new ShopResult(
+                "world",
+                null,
+                x,
+                64,
+                0,
+                admin,
+                accountId,
+                "BUSINESS",
+                999,
+                null,
+                "Firm",
+                "DIAMOND",
+                "Diamond",
+                "Diamond",
+                false,
+                null,
+                buy,
+                sell,
+                16,
+                64,
+                64,
+                true,
+                false);
+    }
+
+    private void shops(ShopResult... rows) {
+        ShopQueryApi api = mock(ShopQueryApi.class);
+        when(market.shopQuery()).thenReturn(api);
+        when(api.searchShops(any(ShopSearchQuery.class))).thenReturn(List.of(rows));
+    }
+
+    @Test
+    void hidesSellOffersBelowBatchPriceButKeepsExactAndHigherBalances() {
+        shops(
+                offer(1, 41, false, null, new BigDecimal("16.00")),
+                offer(2, 42, false, null, new BigDecimal("16.00")),
+                offer(3, 43, false, null, new BigDecimal("16.00")));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(41))).thenReturn(new BigDecimal("15.99"));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(42))).thenReturn(new BigDecimal("16.0"));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(43))).thenReturn(new BigDecimal("17"));
+        assertThat(finder.query(state("world"))).extracting(FoundShop::x).containsExactlyInAnyOrder(2, 3);
+    }
+
+    @Test
+    void unfundedBothShopRemainsBuyAndIsExcludedFromSellPreset() {
+        shops(offer(1, 42, false, BigDecimal.TEN, BigDecimal.ONE));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(42))).thenReturn(BigDecimal.ZERO);
+        assertThat(finder.query(state("world"))).singleElement().satisfies(shop -> {
+            assertThat(shop.shopType()).isEqualTo(ShopType.BUY);
+            assertThat(shop.buyPrice()).isEqualByComparingTo(BigDecimal.TEN);
+            assertThat(shop.sellPrice()).isNull();
+        });
+        FindState sell = state("world");
+        sell.presetSellBest();
+        assertThat(finder.query(sell)).isEmpty();
+        FindState buy = state("world");
+        buy.presetBuyCheap();
+        assertThat(finder.query(buy)).hasSize(1);
+    }
+
+    @Test
+    void buyAndFreeSellOffersDoNotRequireOwnerFunds() {
+        shops(offer(1, null, false, BigDecimal.TEN, null), offer(2, null, false, null, BigDecimal.ZERO));
+        assertThat(finder.query(state("world"))).extracting(FoundShop::x).containsExactlyInAnyOrder(1, 2);
+        verifyNoInteractions(economy);
+    }
+
+    @Test
+    void paidSellOfferWithUnresolvedAccountIsHidden() {
+        shops(offer(1, null, false, null, BigDecimal.TEN));
+        assertThat(finder.query(state("world"))).isEmpty();
+        verifyNoInteractions(economy);
+    }
+
+    @Test
+    void unlimitedAdminShopRemainsVisible() {
+        shops(offer(1, null, true, null, BigDecimal.TEN));
+        assertThat(finder.query(state("world"))).hasSize(1);
+        verifyNoInteractions(economy);
+    }
+
+    @Test
+    void adminShopUsesConfiguredServerAccountBalance() {
+        UUID serverOwner = UUID.randomUUID();
+        Account serverAccount = mock(Account.class);
+        when(serverAccount.getUuid()).thenReturn(serverOwner);
+        when(accounts.getServerEconomyAccount()).thenReturn(serverAccount);
+        when(economy.getBalance(serverOwner)).thenReturn(BigDecimal.ONE, BigDecimal.TEN);
+        shops(offer(1, null, true, null, BigDecimal.TEN));
+        assertThat(finder.query(state("world"))).isEmpty();
+        assertThat(finder.query(state("world"))).hasSize(1);
+    }
+
+    @Test
+    void balancesAreSharedWithinSearchAndRefreshedForTheNextSearch() {
+        UUID payer = BusinessAccountUtil.toBusinessUuid(42);
+        when(economy.getBalance(payer)).thenReturn(BigDecimal.ONE, BigDecimal.TEN);
+        shops(offer(1, 42, false, null, BigDecimal.ONE), offer(2, 42, false, null, BigDecimal.TEN));
+        assertThat(finder.query(state("world"))).extracting(FoundShop::x).containsExactly(1);
+        verify(economy).getBalance(payer);
+        assertThat(finder.query(state("world"))).hasSize(2);
+        verify(economy, times(2)).getBalance(payer);
     }
 
     // ---- available --------------------------------------------------------------
