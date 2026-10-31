@@ -47,6 +47,11 @@ class MarketCreationSnapshotTest extends ServerTest {
         world = server.addSimpleWorld("world");
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void closeMarket() {
+        market.close();
+    }
+
     private <T> void register(Class<T> type, T provider) {
         server.getServicesManager().register(type, provider, plugin, ServicePriority.Normal);
     }
@@ -91,6 +96,7 @@ class MarketCreationSnapshotTest extends ServerTest {
         sync.onShopCreated(new io.paradaux.chestshop.model.CreatedShop(
                 mock(org.bukkit.entity.Player.class), oldSnapshot, null, eventText, null));
         var captured = org.mockito.ArgumentCaptor.forClass(ChestShopShopRecord.class);
+        market.awaitWrites();
         org.mockito.Mockito.verify(api).upsertShop(captured.capture());
         assertThat(captured.getValue().batchQty()).isEqualTo(64);
         assertThat(captured.getValue().buyPrice()).isEqualByComparingTo("40");

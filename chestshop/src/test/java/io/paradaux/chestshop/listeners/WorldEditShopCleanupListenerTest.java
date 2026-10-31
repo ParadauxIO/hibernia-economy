@@ -49,10 +49,27 @@ class WorldEditShopCleanupListenerTest {
         when(chunk.getWorld()).thenReturn(world);
         when(chunk.getX()).thenReturn(-2);
         when(chunk.getZ()).thenReturn(2);
+        var unrelated = mock(org.bukkit.Chunk.class);
+        when(unrelated.getWorld()).thenReturn(world);
+        when(unrelated.getX()).thenReturn(-1);
+        when(unrelated.getZ()).thenReturn(2);
+        listener.onChunkLoad(new org.bukkit.event.world.ChunkLoadEvent(unrelated, false));
+        listener.drain();
+        verifyNoInteractions(sync);
+        var otherWorld = mock(org.bukkit.World.class);
+        when(otherWorld.getName()).thenReturn("other");
+        when(unrelated.getWorld()).thenReturn(otherWorld);
+        when(unrelated.getX()).thenReturn(-2);
+        listener.onChunkLoad(new org.bukkit.event.world.ChunkLoadEvent(unrelated, false));
+        listener.drain();
+        verifyNoInteractions(sync);
         when(world.isChunkLoaded(-2, 2)).thenReturn(true);
         listener.onChunkLoad(new org.bukkit.event.world.ChunkLoadEvent(chunk, false));
         listener.drain();
         verify(sync).onBlockReplaced("world", -17, 64, 33);
+        listener.onChunkLoad(new org.bukkit.event.world.ChunkLoadEvent(chunk, false));
+        listener.drain();
+        verifyNoMoreInteractions(sync);
         verify(world, never()).getChunkAt(anyInt(), anyInt());
     }
 

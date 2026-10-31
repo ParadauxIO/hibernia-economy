@@ -3,6 +3,8 @@ package io.paradaux.chestshop.services.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.business.api.BusinessApi;
@@ -59,6 +61,11 @@ class MarketServiceImplTest extends ServerTest {
         market = new MarketServiceImpl(items, itemCodes, inventoryService);
         plugin = org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin("Market");
         world = server.addSimpleWorld("world");
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void closeMarket() {
+        market.close();
     }
 
     private <T> void register(Class<T> type, T provider) {
@@ -122,6 +129,7 @@ class MarketServiceImplTest extends ServerTest {
     @Test
     void init_nothingRegistered_isDisabled() {
         market.init(); // server up, no providers -> every getRegistration returns null
+        market.awaitWrites(); // optional registry absent: reads must remain usable
         assertThat(market.enabled()).isFalse(); // market == null short-circuits
         assertThat(market.searchEnabled()).isFalse();
     }
@@ -488,6 +496,8 @@ class MarketServiceImplTest extends ServerTest {
         assertThat(rec.itemCustom()).isTrue();
         assertThat(rec.itemName()).isEqualTo("Ruby Sword"); // pretty(canonical), colon+hash stripped
         assertThat(rec.itemKey()).isEqualTo("nexo:ruby_sword#02");
+        verify(items, times(1)).getName(stone, 0);
+        verify(itemCodes, times(1)).encode(stone, 0);
     }
 
     @Test
