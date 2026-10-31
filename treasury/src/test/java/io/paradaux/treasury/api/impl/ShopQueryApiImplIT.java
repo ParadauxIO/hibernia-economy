@@ -134,6 +134,7 @@ class ShopQueryApiImplIT extends IntegrationTestBase {
                 .searchShops(ShopSearchQuery.builder().itemKey("DIAMOND").build())
                 .get(0);
         assertEquals("Town Hall", r.ownerName());
+        assertEquals(accountId, r.shopAccountId());
     }
 
     // ── shopsInChunk ──────────────────────────────────────────────────────────
