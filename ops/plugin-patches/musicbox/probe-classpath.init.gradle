@@ -1,0 +1,8 @@
+gradle.projectsEvaluated {
+    gradle.rootProject.project(':plugin').tasks.register('writeProbeClasspath') {
+        doLast {
+            new File(System.getProperty('probe.classpath.file')).text =
+                gradle.rootProject.project(':plugin').sourceSets.test.runtimeClasspath.asPath
+        }
+    }
+}
