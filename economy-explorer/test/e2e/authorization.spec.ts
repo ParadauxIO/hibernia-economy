@@ -349,8 +349,18 @@ for (const path of ['/chestshop/items/DIAMOND?compare=IRON_INGOT', '/chestshop/s
     await signIn(context, policy.player);
     await visit(page, path);
     await expect(page.getByRole('heading', { name: path.includes('/items/') ? 'Diamond' : 'Find shops', exact: true })).toBeVisible();
-    await signIn(context, policy.player, -60);
-    expect((await context.request.get(path, { maxRedirects: 0 })).status()).toBe(307);
+  });
+
+  // Keep expired credentials in their own context: a signed-in page's in-flight
+  // prefetch responses can renew the Auth.js cookie after we replace it.
+  test(`market login boundary rejects expired sessions for HTML and RSC: ${path}`, async ({ context, policy }) => {
+    for (const headers of [{}, { RSC: '1', 'Next-Router-Prefetch': '1' }]) {
+      // Reinstall for each request because rejecting a JWT clears its cookie.
+      await signIn(context, policy.player, -60);
+      const response = await context.request.get(path, { maxRedirects: 0, headers });
+      expect(response.status()).toBe(307);
+      expect(new URL(response.headers().location!, baseURL).pathname).toBe('/access');
+    }
   });
 }
 
