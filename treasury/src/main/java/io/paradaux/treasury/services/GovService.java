@@ -2,7 +2,6 @@ package io.paradaux.treasury.services;
 
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.GovernmentFine;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -47,7 +46,7 @@ public interface GovService {
     /**
      * Issues a fine against an arbitrary account (e.g. a firm's BUSINESS account):
      * transfers {@code amount} from {@code debtorAccountId} to {@code govAccountId}
-     * and records the fine with no player (firm fine). The fine remembers its
+     * and records the owner for PERSONAL accounts, or no player for other types. The fine remembers its
      * debtor account, so a later {@link #revokeFine(long, UUID)} refunds it.
      *
      * @throws IllegalArgumentException if {@code debtorAccountId} is not an existing account

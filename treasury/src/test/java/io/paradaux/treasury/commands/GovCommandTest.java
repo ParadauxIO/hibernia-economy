@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -263,6 +264,92 @@ class GovCommandTest {
 
     private void sourceAccount() {
         when(accounts.getGovernmentAccountByName("Police")).thenReturn(account(SOURCE_ID, "Police", false));
+    }
+
+    @ParameterizedTest
+    @EnumSource(AccountType.class)
+    void payoutAccount_targetsEveryAccountTypeWithoutNameLookup(AccountType type) {
+        sourceAccount();
+        Account target = account(TARGET_ID, "Recipient", false);
+        target.setAccountType(type);
+        when(accounts.getAccountById(TARGET_ID)).thenReturn(target);
+        when(player.hasPermission("treasury.gov.admin")).thenReturn(true);
+        when(player.getUniqueId()).thenReturn(PLAYER_ID);
+
+        command.payoutAccountReason(player, "Police", TARGET_ID, AMOUNT, "approved grant");
+
+        assertTransfer(player);
+        verifyNoInteractions(directory);
+        verify(accounts, never()).getOrCreatePersonalAccountId(any());
+    }
+
+    @Test
+    void payoutAccount_reportsLedgerAuthorizationDenialWithoutSuccess() {
+        sourceAccount();
+        when(accounts.getAccountById(TARGET_ID)).thenReturn(account(TARGET_ID, "Restricted", false));
+        when(player.hasPermission("treasury.gov.admin")).thenReturn(true);
+        when(player.getUniqueId()).thenReturn(PLAYER_ID);
+        when(ledger.transfer(any())).thenThrow(new SecurityException("Authorizer required"));
+
+        command.payoutAccount(player, "Police", TARGET_ID, AMOUNT);
+
+        verify(message).send(player, "treasury.gov.no-access");
+        verifyNoMoreInteractions(message);
+        verify(ledger, never()).adminTransfer(any());
+    }
+
+    @Test
+    void payoutAccount_consoleUsesAdminTransfer() {
+        sourceAccount();
+        when(accounts.getAccountById(TARGET_ID)).thenReturn(account(TARGET_ID, "Recipient", false));
+
+        command.payoutAccount(console, "Police", TARGET_ID, AMOUNT);
+
+        assertTransfer(console);
+    }
+
+    @Test
+    void payoutAccount_requiresSourceAccess() {
+        sourceAccount();
+        when(player.getUniqueId()).thenReturn(PLAYER_ID);
+
+        command.payoutAccount(player, "Police", TARGET_ID, AMOUNT);
+
+        verify(message).send(player, "treasury.gov.no-access");
+        verifyNoInteractions(ledger);
+        verify(accounts, never()).getAccountById(anyInt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void payoutAccount_rejectsMissingOrArchivedTargets(boolean archived) {
+        sourceAccount();
+        if (archived) when(accounts.getAccountById(TARGET_ID)).thenReturn(account(TARGET_ID, "Old", true));
+
+        command.payoutAccount(console, "Police", TARGET_ID, AMOUNT);
+
+        verify(message).send(console, "treasury.account.target.not-found", "id", String.valueOf(TARGET_ID));
+        verifyNoInteractions(ledger);
+    }
+
+    @Test
+    void payoutAccount_rejectsSameAccount() {
+        sourceAccount();
+        when(accounts.getAccountById(SOURCE_ID)).thenReturn(account(SOURCE_ID, "Police", false));
+
+        command.payoutAccount(console, "Police", SOURCE_ID, AMOUNT);
+
+        verify(message).send(console, "treasury.gov.account.transfer.same-account", "name", "Police");
+        verifyNoInteractions(ledger);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "0.001"})
+    void payoutAccount_rejectsInvalidAmounts(String amount) {
+        command.payoutAccount(console, "Police", TARGET_ID, new BigDecimal(amount));
+
+        verify(message).send(console, "treasury.general.invalid-amount");
+        verifyNoInteractions(ledger, accounts);
     }
 
     private void transferAccounts() {

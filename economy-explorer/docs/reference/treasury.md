@@ -259,6 +259,18 @@ salaries.
 > You must be a **member or authorizer** of the `from` account, or hold
 > `treasury.gov.admin` (which overrides the access check).
 
+### `/government payout-account <from> <id> <amount> [reason]`
+
+Pay an account by its numeric Treasury account ID. The recipient can be PERSONAL,
+BUSINESS, GOVERNMENT or SYSTEM. The source is a government account name, with the
+same spending permissions as `/government payout`. Missing, archived and same-source
+targets are rejected. Personal account owners receive the usual payout notification
+when online.
+
+```
+/government payout-account Police 123 250 approved reimbursement
+```
+
 ### Managing who has access
 
 Add or remove the people who can use an account. Viewers can only look; members can
@@ -337,6 +349,22 @@ amount is taken from the firm and paid into the named government account.
 | `firm` | yes | The business being fined |
 | `amount` | yes | How much (more than 0) |
 | `reason` | yes | Why the fine was issued |
+
+### `/fine account <account> <id> <amount> <reason>`
+
+Fine a debtor identified by its numeric Treasury account ID, paying into the named
+government account. Supports PERSONAL, BUSINESS, GOVERNMENT and SYSTEM accounts.
+Requires `treasury.gov.fine` plus membership/authorizer access to the receiving
+government account, or `treasury.gov.admin`. Fining a SYSTEM account additionally
+requires `treasury.gov.admin`, because SYSTEM sources have unlimited funds.
+
+Missing or archived debtors and fines into the debtor's own account are rejected.
+Personal account fines retain player history and online notifications.
+`/fine revoke <id>` refunds the original debtor account.
+
+```
+/fine account Police 123 50 zoning breach
+```
 
 ### `/fine revoke <id>` · `/fine info <id>` · `/fine list [player]`
 
