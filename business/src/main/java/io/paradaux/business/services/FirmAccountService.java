@@ -2,7 +2,6 @@ package io.paradaux.business.services;
 
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
-
 import java.util.List;
 import java.util.UUID;
 
@@ -18,7 +17,6 @@ public interface FirmAccountService {
 
     /** Resolves a live firm's alias to its Treasury account id, or null. */
     Integer resolveShopAlias(String alias);
-
 
     /**
      * Creates a new Treasury account for the firm and registers it.
@@ -64,7 +62,7 @@ public interface FirmAccountService {
     void syncAllFirmAccounts(Integer firmId);
 
     /**
-     * Repairs membership for all persisted live account links, including work
+     * Repairs ownership and membership for all persisted live account links, including work
      * interrupted by a process crash. Failures are logged per account and retried
      * on the next pass; one broken account does not block the rest.
      */
@@ -72,8 +70,10 @@ public interface FirmAccountService {
 
     /**
      * Hands every live Treasury account of the firm to a new proprietor:
-     * reassigns each account's Treasury owner to {@code newProprietorUuid} and
-     * re-syncs members/authorizers. Must be called <em>after</em> the firm's
+     * reassigns each account's Treasury owner to the current firm proprietor and
+     * re-syncs members/authorizers. The current firm row takes precedence over
+     * {@code newProprietorUuid} so delayed retries cannot restore an old owner.
+     * Must be called <em>after</em> the firm's
      * {@code proprietor_uuid} has been updated, so the sync derives the new
      * proprietor as owner (member + authorizer) and drops the previous owner
      * (unless they remain a qualifying employee). Without this the new owner is

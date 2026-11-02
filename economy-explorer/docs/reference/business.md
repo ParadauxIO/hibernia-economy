@@ -70,7 +70,7 @@ moderation — see [Permission nodes](#permission-nodes).
 | `/business admin rename <firm> <newname>` | Rename a firm. |
 | `/business admin set hq <firm> <plot>` | Set any firm's HQ plot. |
 | `/business admin set discord <firm> <url>` | Set any firm's Discord invite. |
-| `/business admin set proprietor <firm> <player>` | Reassign a firm's proprietor. |
+| `/business admin set proprietor <firm> <player>` | Transfer the firm and its linked account ownership and access to a new proprietor. |
 | `/business admin chatspy [firm]` | Toggle chat oversight for all firms or the named firm; requires CarbonChat and `business.admin.chatspy` (operator default). |
 
 ## Staff
@@ -205,6 +205,19 @@ Shorthand that acts on the firm's **default** account, so you don't pass an ID:
 | `/business transactions <firm> [page]` | History across all the firm's accounts. |
 
 ## Ownership transfer
+
+The admin proprietor command ends any employee role held by the incoming or
+outgoing owner, preserves employment history, cancels pending ownership transfers,
+and records who performed the handover. Other employees retain their roles.
+Linked accounts keep their IDs, balances and shop aliases; account ownership and
+access are reconciled to the new proprietor and the remaining staff roles. Shops
+linked to those accounts stay linked.
+
+If Treasury is unavailable, the command reports that ownership changed but account
+access still needs repair. The automatic reconciliation job retries ownership and
+permissions from the committed firm state; rerunning the command also retries.
+Until repair completes, some accounts may still grant the previous owner access.
+
 
 Handing the firm to someone else is a confirmed, two-sided handshake:
 

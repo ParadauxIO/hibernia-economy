@@ -79,6 +79,14 @@ public interface FirmMapper {
             """)
     int releaseFirmName(@Param("firmId") int firmId);
 
+    /** Lock the ownership snapshot until the handover transaction commits. */
+    @Select("""
+            SELECT firm_id AS firmId, bin_to_uuid(proprietor_uuid_bin) AS proprietorUuid,
+                   is_archived AS archived
+            FROM firm WHERE firm_id = #{firmId} FOR UPDATE
+            """)
+    Firm lockFirm(@Param("firmId") int firmId);
+
     @Select("""
             SELECT f.firm_id                     AS firmId,
                    f.display_name                AS displayName,
