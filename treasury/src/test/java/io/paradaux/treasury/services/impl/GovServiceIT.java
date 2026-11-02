@@ -11,6 +11,7 @@ import io.paradaux.treasury.api.exceptions.PrimitiveAccountException;
 import io.paradaux.treasury.mappers.GovernmentFineMapper;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.economy.Account;
+import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.GovernmentFine;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.GovService;
@@ -28,6 +29,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class GovServiceIT extends IntegrationTestBase {
 
@@ -192,16 +195,44 @@ class GovServiceIT extends IntegrationTestBase {
         assertThat(accountService.getBalanceReadOnly(police.getAccountId())).isEqualByComparingTo("0.00");
     }
 
+    @Test
+    void issueFine_byPersonalAccountId_preservesHistoryAndRefundsTheSameAccount() {
+        UUID owner = UUID.randomUUID();
+        UUID issuer = UUID.randomUUID();
+        int debtorId = ledgerService.resolveOrCreatePersonal(owner).getAccountId();
+        Account police = govService.createDepartmentAccount("Police", issuer);
+        BigDecimal before = accountService.getBalanceReadOnly(debtorId);
+
+        GovernmentFine fine =
+                govService.issueFine(debtorId, police.getAccountId(), new BigDecimal("10.00"), "account fine", issuer);
+
+        assertThat(fine.getPlayerUuid()).isEqualTo(owner);
+        assertThat(fine.getDebtorAccountId()).isEqualTo(debtorId);
+        assertThat(govService.getPlayerFines(owner))
+                .extracting(GovernmentFine::getFineId)
+                .contains(fine.getFineId());
+        assertThat(accountService.getBalanceReadOnly(debtorId)).isEqualByComparingTo(before.subtract(BigDecimal.TEN));
+        assertThat(accountService.getBalanceReadOnly(police.getAccountId())).isEqualByComparingTo("10.00");
+
+        govService.revokeFine(fine.getFineId(), issuer);
+
+        assertThat(accountService.getBalanceReadOnly(debtorId)).isEqualByComparingTo(before);
+        assertThat(accountService.getBalanceReadOnly(police.getAccountId())).isEqualByComparingTo("0.00");
+        assertThat(govService.getFine(fine.getFineId()).isRevoked()).isTrue();
+    }
+
     // ---- Firm (BUSINESS account) fines (PAR-48) ----
 
-    @Test
-    void issueFine_againstFirmAccount_debitsFirmAndRecordsNoPlayer() {
+    @ParameterizedTest
+    @EnumSource(
+            value = AccountType.class,
+            names = {"BUSINESS", "GOVERNMENT", "SYSTEM"})
+    void issueFine_againstNonPersonalAccount_debitsAndRefundsExactAccount(AccountType type) {
         UUID issuer = UUID.randomUUID();
         UUID funder = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(funder);
 
-        Account firm = accountService.createAccount(
-                io.paradaux.treasury.model.economy.AccountType.BUSINESS, UUID.randomUUID(), "Acme Ltd");
+        Account firm = accountService.createAccount(type, UUID.randomUUID(), "Acme Ltd");
         Account police = govService.createDepartmentAccount("Police", issuer);
         fund(funder, firm.getAccountId(), new BigDecimal("500.00"));
 
@@ -214,6 +245,11 @@ class GovServiceIT extends IntegrationTestBase {
         assertThat(fine.getGovAccountId()).isEqualTo(police.getAccountId());
         assertThat(accountService.getBalanceReadOnly(firm.getAccountId())).isEqualByComparingTo("300.00");
         assertThat(accountService.getBalanceReadOnly(police.getAccountId())).isEqualByComparingTo("200.00");
+
+        govService.revokeFine(fine.getFineId(), issuer);
+
+        assertThat(accountService.getBalanceReadOnly(firm.getAccountId())).isEqualByComparingTo("500.00");
+        assertThat(accountService.getBalanceReadOnly(police.getAccountId())).isEqualByComparingTo("0.00");
     }
 
     @Test
@@ -244,8 +280,7 @@ class GovServiceIT extends IntegrationTestBase {
         UUID issuer = UUID.randomUUID();
         UUID funder = UUID.randomUUID();
         ledgerService.resolveOrCreatePersonal(funder);
-        Account firm = accountService.createAccount(
-                io.paradaux.treasury.model.economy.AccountType.BUSINESS, UUID.randomUUID(), "Acme Ltd");
+        Account firm = accountService.createAccount(AccountType.BUSINESS, UUID.randomUUID(), "Acme Ltd");
         Account police = govService.createDepartmentAccount("Police", issuer);
         fund(funder, firm.getAccountId(), new BigDecimal("500.00"));
 

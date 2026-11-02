@@ -260,6 +260,29 @@ public class GovCommand implements CommandHandler {
         doExternalPayout(sender, fromName, toName, amount, reason);
     }
 
+    @Route("payout-account <from> <id> <amount>")
+    @Async
+    @Description("Pay an account by number from a government account")
+    public void payoutAccount(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("id") int accountId,
+            @Arg("amount") BigDecimal amount) {
+        doExternalPayout(sender, fromName, null, amount, null, accountId);
+    }
+
+    @Route("payout-account <from> <id> <amount> <reason>")
+    @Async
+    @Description("Pay an account by number from a government account with a reason")
+    public void payoutAccountReason(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("id") int accountId,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
+        doExternalPayout(sender, fromName, null, amount, reason, accountId);
+    }
+
     // =====================================================================
     // MEMBER MANAGEMENT
     // =====================================================================
@@ -779,6 +802,16 @@ public class GovCommand implements CommandHandler {
 
     private void doExternalPayout(
             CommandSender sender, String fromName, String toName, BigDecimal amount, String reason) {
+        doExternalPayout(sender, fromName, toName, amount, reason, null);
+    }
+
+    private void doExternalPayout(
+            CommandSender sender,
+            String fromName,
+            String toName,
+            BigDecimal amount,
+            String reason,
+            Integer explicitAccountId) {
         // Access is decided per-source-account by canTransferFrom (member /
         // authorizer / global node / admin) once the account is resolved below.
         // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
@@ -801,48 +834,61 @@ public class GovCommand implements CommandHandler {
         String toDisplayName;
         OfflinePlayer onlineTarget = null;
 
-        OfflinePlayer targetPlayer = Bukkit.getOfflinePlayerIfCached(toName);
-        boolean knownPlayer = targetPlayer != null && (targetPlayer.hasPlayedBefore() || targetPlayer.isOnline());
-
-        java.util.Optional<java.util.UUID> directoryUuid =
-                knownPlayer ? java.util.Optional.empty() : playerDirectory.resolveUuidByName(toName);
-
-        // PAR-144: a name that is both a known player and a non-archived GOVERNMENT
-        // account is ambiguous. Don't silently pay the personal account (which is
-        // what the player branches below would do) — refuse so the operator types
-        // the recipient explicitly rather than relying on cache/lookup order.
-        if ((knownPlayer || directoryUuid.isPresent()) && accountService.governmentAccountExists(toName)) {
-            message.send(sender, "treasury.gov.payout.ambiguous", "name", toName);
-            return;
-        }
-
-        if (knownPlayer) {
-            toAccountId = accountService.getOrCreatePersonalAccountId(targetPlayer.getUniqueId());
-            toDisplayName = targetPlayer.getName();
-            onlineTarget = targetPlayer;
-        } else if (directoryUuid.isPresent()) {
-            // Player not in the usercache but known to the directory — pay them by
-            // name regardless of cache state (PAR-150). The directory only holds
-            // real players who have logged in, so creating their account is safe.
-            java.util.UUID uuid = directoryUuid.get();
-            toAccountId = accountService.getOrCreatePersonalAccountId(uuid);
-            toDisplayName = playerDirectory.resolveNameByUuid(uuid).orElse(toName);
-            onlineTarget = Bukkit.getPlayer(uuid);
-        } else {
-            // BUSINESS account display names follow the convention
-            // "<FirmName> Corporate Account" (FirmServiceImpl line 109). The
-            // <to> arg type is word()-tokenised, so a user typing the full
-            // multi-word display name would split across two args. Try the
-            // bare token first, then fall back to the canonical suffix —
-            // letting `/gov payout DCGov Acme 100 …` resolve to Acme's
-            // corporate account without users having to know the convention.
-            Account businessAccount = accountService.resolveBusinessAccountByToken(toName);
-            if (businessAccount == null) {
-                message.send(sender, "treasury.gov.payout.unknown-recipient", "name", toName);
+        if (explicitAccountId != null) {
+            Account target = accountService.getAccountById(explicitAccountId);
+            if (target == null || target.isArchived()) {
+                message.send(sender, "treasury.account.target.not-found", "id", String.valueOf(explicitAccountId));
                 return;
             }
-            toAccountId = businessAccount.getAccountId();
-            toDisplayName = businessAccount.getDisplayName();
+            toAccountId = target.getAccountId();
+            toDisplayName = target.getDisplayName();
+            if (target.getAccountType() == AccountType.PERSONAL && target.getOwnerUuid() != null) {
+                onlineTarget = Bukkit.getPlayer(target.getOwnerUuid());
+            }
+        } else {
+            OfflinePlayer targetPlayer = Bukkit.getOfflinePlayerIfCached(toName);
+            boolean knownPlayer = targetPlayer != null && (targetPlayer.hasPlayedBefore() || targetPlayer.isOnline());
+
+            java.util.Optional<java.util.UUID> directoryUuid =
+                    knownPlayer ? java.util.Optional.empty() : playerDirectory.resolveUuidByName(toName);
+
+            // PAR-144: a name that is both a known player and a non-archived GOVERNMENT
+            // account is ambiguous. Don't silently pay the personal account (which is
+            // what the player branches below would do) — refuse so the operator types
+            // the recipient explicitly rather than relying on cache/lookup order.
+            if ((knownPlayer || directoryUuid.isPresent()) && accountService.governmentAccountExists(toName)) {
+                message.send(sender, "treasury.gov.payout.ambiguous", "name", toName);
+                return;
+            }
+
+            if (knownPlayer) {
+                toAccountId = accountService.getOrCreatePersonalAccountId(targetPlayer.getUniqueId());
+                toDisplayName = targetPlayer.getName();
+                onlineTarget = targetPlayer;
+            } else if (directoryUuid.isPresent()) {
+                // Player not in the usercache but known to the directory — pay them by
+                // name regardless of cache state (PAR-150). The directory only holds
+                // real players who have logged in, so creating their account is safe.
+                java.util.UUID uuid = directoryUuid.get();
+                toAccountId = accountService.getOrCreatePersonalAccountId(uuid);
+                toDisplayName = playerDirectory.resolveNameByUuid(uuid).orElse(toName);
+                onlineTarget = Bukkit.getPlayer(uuid);
+            } else {
+                // BUSINESS account display names follow the convention
+                // "<FirmName> Corporate Account" (FirmServiceImpl line 109). The
+                // <to> arg type is word()-tokenised, so a user typing the full
+                // multi-word display name would split across two args. Try the
+                // bare token first, then fall back to the canonical suffix —
+                // letting `/gov payout DCGov Acme 100 …` resolve to Acme's
+                // corporate account without users having to know the convention.
+                Account businessAccount = accountService.resolveBusinessAccountByToken(toName);
+                if (businessAccount == null) {
+                    message.send(sender, "treasury.gov.payout.unknown-recipient", "name", toName);
+                    return;
+                }
+                toAccountId = businessAccount.getAccountId();
+                toDisplayName = businessAccount.getDisplayName();
+            }
         }
 
         // Reject a payout that resolves to the source account itself up front, with a
@@ -876,6 +922,9 @@ public class GovCommand implements CommandHandler {
             } else {
                 ledgerService.adminTransfer(req);
             }
+        } catch (SecurityException e) {
+            message.send(sender, "treasury.gov.no-access");
+            return;
         } catch (IllegalStateException e) {
             BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
             message.send(
