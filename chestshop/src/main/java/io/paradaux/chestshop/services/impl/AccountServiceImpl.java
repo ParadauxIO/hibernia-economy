@@ -22,7 +22,8 @@ import io.paradaux.chestshop.utils.encoding.Base62;
 import io.paradaux.treasury.api.TreasuryApi;
 import java.util.Date;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.exceptions.PersistenceException;
 import org.bukkit.Bukkit;
@@ -50,7 +51,11 @@ public class AccountServiceImpl implements AccountService {
     private final BusinessAccountService businessAccounts;
     private final GovernmentAccountService governmentAccounts;
 
+    // Protects cache publication only; never held during mapper I/O.
     private final Object accountsLock = new Object();
+    // Allocation and save must be serialized: save upserts by short name.
+    private final Object usernameWriteLock = new Object();
+    private long cacheRevision;
 
     private final SimpleCache<String, Account> usernameToAccount;
     private final SimpleCache<UUID, Account> uuidToAccount;
@@ -135,78 +140,65 @@ public class AccountServiceImpl implements AccountService {
     /** Account info from a UUID, or {@code null} if none was found. */
     @Override
     public Account getAccount(UUID uuid) {
-        try {
-            synchronized (accountsLock) {
-                return uuidToAccount.get(uuid, () -> {
-                    try {
-                        Account account = accounts.findLatestByUuid(uuid);
-                        if (account != null) {
-                            account.setUuid(uuid);
-                            shortToAccount.put(account.getShortName(), account);
-                            usernameToAccount.put(account.getName(), account);
-                            return account;
-                        }
-                    } catch (PersistenceException e) {
-                        log.warn("Error while getting account for " + uuid + ":", e);
-                    }
-                    throw new Exception("Could not find account for " + uuid);
-                });
-            }
-        } catch (ExecutionException ignored) {
-            return null;
-        }
+        return lookup(uuidToAccount, uuid, () -> accounts.findLatestByUuid(uuid), account -> {
+            account.setUuid(uuid);
+            shortToAccount.put(account.getShortName(), account);
+            usernameToAccount.put(account.getName(), account);
+        });
     }
 
     @Override
     public Account getAccount(String fullName) {
         Preconditions.checkNotNull(fullName, "fullName cannot be null!");
         Preconditions.checkArgument(!fullName.isEmpty(), "fullName cannot be empty!");
-        try {
-            synchronized (accountsLock) {
-                return usernameToAccount.get(fullName, () -> {
-                    try {
-                        Account account = accounts.findLatestByName(fullName);
-                        if (account != null) {
-                            account.setName(fullName);
-                            shortToAccount.put(account.getShortName(), account);
-                            return account;
-                        }
-                    } catch (PersistenceException e) {
-                        log.warn("Error while getting account for " + fullName + ":", e);
-                    }
-                    throw new Exception("Could not find account for " + fullName);
-                });
-            }
-        } catch (ExecutionException ignored) {
-            return null;
-        }
+        return lookup(usernameToAccount, fullName, () -> accounts.findLatestByName(fullName), account -> {
+            account.setName(fullName);
+            shortToAccount.put(account.getShortName(), account);
+        });
     }
 
     @Override
     public Account getAccountFromShortName(String shortName) {
         Preconditions.checkNotNull(shortName, "shortName cannot be null!");
         Preconditions.checkArgument(!shortName.isEmpty(), "shortName cannot be empty!");
-        Account account = null;
+        return lookup(
+                shortToAccount,
+                shortName,
+                () -> accounts.findByShortName(shortName),
+                account -> account.setShortName(shortName));
+    }
 
-        try {
+    private <K> Account lookup(
+            SimpleCache<K, Account> cache, K key, Supplier<Account> loader, Consumer<Account> publish) {
+        while (true) {
+            long revision;
             synchronized (accountsLock) {
-                account = shortToAccount.get(shortName, () -> {
-                    try {
-                        Account a = accounts.findByShortName(shortName);
-                        if (a != null) {
-                            a.setShortName(shortName);
-                            return a;
-                        }
-                    } catch (PersistenceException e) {
-                        log.warn("Error while getting account for " + shortName + ":", e);
-                    }
-                    throw new Exception("Could not find account for " + shortName);
-                });
+                Account cached = cache.get(key);
+                if (cached != null) return cached;
+                revision = cacheRevision;
             }
-        } catch (ExecutionException e) {
-            // The cache loader logged the cause above before throwing; fall through with a null account.
+
+            Account loaded;
+            try {
+                loaded = loader.get();
+            } catch (PersistenceException e) {
+                log.warn("Error while getting account for " + key + ":", e);
+                return null;
+            }
+
+            synchronized (accountsLock) {
+                // A username write may have committed while this query was in flight.
+                // Retry even if its cache entry has since been evicted.
+                if (revision != cacheRevision) continue;
+                Account cached = cache.get(key);
+                if (cached != null) return cached;
+                if (loaded != null) {
+                    publish.accept(loaded);
+                    cache.put(key, loaded);
+                }
+                return loaded;
+            }
         }
-        return account;
     }
 
     @Override
@@ -242,7 +234,7 @@ public class AccountServiceImpl implements AccountService {
         final UUID uuid = player.getUniqueId();
 
         Account latestAccount;
-        synchronized (accountsLock) {
+        synchronized (usernameWriteLock) {
             try {
                 latestAccount = accounts.findByUuidAndName(uuid, player.getName());
             } catch (PersistenceException e) {
@@ -262,9 +254,12 @@ public class AccountServiceImpl implements AccountService {
                 return null;
             }
 
-            usernameToAccount.put(latestAccount.getName(), latestAccount);
-            uuidToAccount.put(uuid, latestAccount);
-            shortToAccount.put(latestAccount.getShortName(), latestAccount);
+            synchronized (accountsLock) {
+                cacheRevision++;
+                usernameToAccount.put(latestAccount.getName(), latestAccount);
+                uuidToAccount.put(uuid, latestAccount);
+                shortToAccount.put(latestAccount.getShortName(), latestAccount);
+            }
         }
 
         return latestAccount;

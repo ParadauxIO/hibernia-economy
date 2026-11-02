@@ -10,7 +10,7 @@ public class SimpleCache<K, V> {
     private final Map<K, V> map;
 
     public SimpleCache(int cacheSize) {
-        map = Collections.synchronizedMap(new LinkedHashMap<K, V>(cacheSize * 10/9, 0.7f, true) {
+        map = Collections.synchronizedMap(new LinkedHashMap<K, V>(cacheSize * 10 / 9, 0.7f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
                 return size() > cacheSize;
@@ -27,13 +27,20 @@ public class SimpleCache<K, V> {
     }
 
     public V get(K key, Callable<? extends V> loader) throws ExecutionException {
-        if (contains(key)) {
-            return map.get(key);
+        V cached = map.get(key);
+        if (cached != null) {
+            return cached;
         }
         try {
             V value = loader.call();
             if (value != null) {
-                put(key, value);
+                // Loading happens outside the map monitor. Prefer a value published
+                // while this load was in flight; concurrent misses may load twice.
+                synchronized (map) {
+                    V existing = map.get(key);
+                    if (existing != null) return existing;
+                    map.put(key, value);
+                }
             }
             return value;
         } catch (Exception e) {
