@@ -374,6 +374,14 @@ export interface ExplorerRollupRun {
   startedAt: Generated<Date>;
 }
 
+export interface ExplorerRollupTaxBracketDay {
+  accountId: number;
+  bracketKey: string;
+  collected: Decimal;
+  day: Date;
+  taxKind: string;
+}
+
 export interface ExplorerRollupTypeDay {
   accountType: "BUSINESS" | "GOVERNMENT" | "PERSONAL" | "SYSTEM";
   day: Date;
@@ -644,6 +652,7 @@ export interface DB {
   explorerRollupPairDay: ExplorerRollupPairDay;
   explorerRollupPairMonth: ExplorerRollupPairMonth;
   explorerRollupRun: ExplorerRollupRun;
+  explorerRollupTaxBracketDay: ExplorerRollupTaxBracketDay;
   explorerRollupTypeDay: ExplorerRollupTypeDay;
   explorerSnapshotWealthDay: ExplorerSnapshotWealthDay;
   explorerWatchlist: ExplorerWatchlist;
