@@ -275,3 +275,8 @@ export async function isManualGroupMember(groupId: number, uuid: string): Promis
     WHERE group_id = ${groupId} AND player_uuid_bin = ${uuidToBin(uuid)} AND source = 'manual' LIMIT 1`.execute(db);
   return r.rows.length > 0;
 }
+
+/** Update metadata in place, preserving the group's identity and every relationship. */
+export async function updateGroupMetadata(groupId: number, name: string, description: string | null, executor: Executor = db): Promise<void> {
+  await sql`UPDATE explorer_group SET name = ${name}, description = ${description} WHERE group_id = ${groupId}`.execute(executor);
+}

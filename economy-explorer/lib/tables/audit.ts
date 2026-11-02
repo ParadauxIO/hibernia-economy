@@ -28,6 +28,7 @@ export const AUDIT_ACTIONS = [
   { action: 'webhook.url', label: 'Webhook: change URL' },
   { action: 'webhook.secret.rotate', label: 'Webhook: rotate secret' },
   { action: 'webhook.delete', label: 'Webhook: delete' },
+  { action: 'group.update', label: 'Group: edit details' },
   { action: 'group.create', label: 'Group: create' },
   { action: 'group.delete', label: 'Group: delete' },
   { action: 'group.roles.update', label: 'Group: change roles' },
@@ -77,7 +78,7 @@ export const auditTable = defineTable({
   defaultSort: '-at',
   quick: [
     { label: 'Admin changes', f: ['action:in:account-transfer,account-rename,account-owner-change,account-archive,account-unarchive,firm-rename,firm-details-update,firm-disband,api_key-revoke,api_key-rotate,rate_limit-update'] },
-    { label: 'Access changes', f: ['action:in:group-create,group-delete,group-roles-update,group-sync-update,group-source-update,group-member-add,group-member-remove,role-create,role-update,role-delete,role-assign,role-unassign'] },
+    { label: 'Access changes', f: ['action:in:group-create,group-update,group-delete,group-roles-update,group-sync-update,group-source-update,group-member-add,group-member-remove,role-create,role-update,role-delete,role-assign,role-unassign'] },
     { label: 'Relationship reads', f: ['action:in:relationship-read'] },
     { label: 'Last 24 hours', f: ['at:gte:-1d'] },
   ],

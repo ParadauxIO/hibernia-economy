@@ -9,6 +9,7 @@ import {
 } from '@/lib/treasury';
 import { auditMutation } from '@/lib/audit';
 import {
+  updateGroupMetadata,
   createGroup,
   deleteGroup,
   getGroup,
@@ -261,4 +262,20 @@ export async function setRateLimitAction(args: {
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
+}
+
+export async function updateGroupMetadataAction(groupId: number, input: unknown): Promise<ActionResult> {
+  const viewer = await requireLinkedViewer();
+  requirePermission(viewer, 'groups.update');
+  try {
+    const before = groupSnapshot(await getGroup(groupId));
+    await updateGroupMetadata(groupId, input);
+    await auditMutation(viewer, {
+      action: 'group.update', path: `/admin/groups/${groupId}`, targetType: 'group', targetId: groupId,
+      before, after: groupSnapshot(await getGroup(groupId)),
+    });
+    revalidatePath('/admin/groups');
+    revalidatePath(`/admin/groups/${groupId}`);
+    return { ok: true };
+  } catch (e) { return failure(e); }
 }

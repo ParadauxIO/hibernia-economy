@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { GroupMetadataForm } from './metadata-form';
 import { TablePager } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
 import { adminGroupMembersTable } from '@/lib/tables/admin';
@@ -64,6 +65,9 @@ export default async function GroupDetailPage({ params, searchParams }: { params
         meta={group.luckpermsNode ? <>Synced from LuckPerms <code>{group.luckpermsNode}</code></> : undefined}
       />
 
+      {hasPermission(viewer, 'groups.update') && <Section title="Group details">
+        <GroupMetadataForm groupId={group.groupId} name={group.name} description={group.description} />
+      </Section>}
       <MetricRow label="Group summary">
         <MetricCard label="Live members" value={<Num value={group.activeMemberCount} />} meta={group.memberCount > group.activeMemberCount ? `${group.memberCount} including expired syncs` : 'Members whose grant is current'} />
         <MetricCard label="Roles granted" value={<Num value={group.capabilities.length} />} meta={linked.map(r => r.name).join(', ') || 'None yet'} />
