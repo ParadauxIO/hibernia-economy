@@ -23,7 +23,7 @@ import {
 import type { GroupSummary } from '@/lib/sql/group';
 import { auditView } from '@/lib/audit';
 import { countAccounts, listAccounts, type ExplorerAccountRow } from '@/lib/sql/ledger';
-import { listFirmAccountHistory } from '@/lib/sql/firm';
+import { getFirmOperationState, listFirmAccountHistory } from '@/lib/sql/firm';
 import { ForbiddenError } from '@/lib/errors';
 import { findFirmNames } from '@/lib/sql/tableLookups';
 import { listRecentDeliveries, type AdminWebhookRow } from '@/lib/sql/webhook';
@@ -120,4 +120,9 @@ export async function getAdminFirmAccountHistory(viewer: Viewer, firmId: number)
   requirePermission(viewer, 'firm.admin.read');
   if (!await canViewFirmInternals(firmId, viewer)) throw new ForbiddenError();
   return listFirmAccountHistory(firmId);
+}
+
+export async function getAdminFirmOperationsState(viewer: Viewer, firmId: number) {
+  requirePermission(viewer, 'firm.admin.read');
+  return getFirmOperationState(firmId);
 }
