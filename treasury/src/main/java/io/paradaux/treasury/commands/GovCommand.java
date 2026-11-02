@@ -719,25 +719,15 @@ public class GovCommand implements CommandHandler {
         // authorizer / global node / admin) once the account is resolved below.
         // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
         // (not rounded) — see AmountInput.
-        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
-        if (normalized == null) {
-            message.send(sender, "treasury.general.invalid-amount");
-            return;
-        }
+        BigDecimal normalized = normalizeTransferAmount(sender, amount);
+        if (normalized == null) return;
 
         Account from = resolveGovAccount(fromName, sender);
         if (from == null) return;
         Account to = resolveGovAccount(toName, sender);
         if (to == null) return;
 
-        // Reject self-transfer outright — net-zero balance change but still
-        // pollutes the ledger. Account.getAccountId() returns boxed Integer;
-        // comparing with `==` is reference equality and silently misfires for
-        // IDs outside the JVM's -128..127 cache.
-        if (from.getAccountId().intValue() == to.getAccountId().intValue()) {
-            message.send(sender, "treasury.gov.account.transfer.same-account", "name", from.getDisplayName());
-            return;
-        }
+        if (rejectSameAccount(sender, from.getAccountId(), to.getAccountId(), from.getDisplayName())) return;
 
         if (!canTransferFrom(sender, from)) {
             message.send(sender, "treasury.gov.no-access");
@@ -760,44 +750,15 @@ public class GovCommand implements CommandHandler {
         byte[] dedupKey = GovDedupKeys.transfer(
                 actorOf(sender), from.getAccountId(), to.getAccountId(), normalized, Instant.now());
 
-        try {
-            TransferRequest req = new TransferRequest(
-                    from.getAccountId(),
-                    to.getAccountId(),
-                    normalized,
-                    memo,
-                    actorOf(sender),
-                    null,
-                    TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey);
-            // Console bypasses the requires_authorization gate as well (it already
-            // skipped the membership check above); players go through the normal path.
-            if (sender instanceof Player) {
-                ledgerService.transfer(req);
-            } else {
-                ledgerService.adminTransfer(req);
-            }
-        } catch (IllegalStateException e) {
-            BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
-            message.send(
-                    sender,
-                    "treasury.gov.account.transfer.insufficient",
-                    "from",
-                    from.getDisplayName(),
-                    "balance",
-                    accountService.formatAmount(balance));
-            return;
-        }
-
-        message.send(
+        executeGovernmentTransfer(
                 sender,
-                "treasury.gov.account.transfer.success",
-                "from",
-                from.getDisplayName(),
-                "to",
+                from,
+                to.getAccountId(),
                 to.getDisplayName(),
-                "amount",
-                accountService.formatAmount(normalized));
+                normalized,
+                memo,
+                "treasury.gov.account.transfer.success",
+                dedupKey);
     }
 
     private void doExternalPayout(
@@ -816,11 +777,8 @@ public class GovCommand implements CommandHandler {
         // authorizer / global node / admin) once the account is resolved below.
         // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
         // (not rounded) — see AmountInput.
-        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
-        if (normalized == null) {
-            message.send(sender, "treasury.general.invalid-amount");
-            return;
-        }
+        BigDecimal normalized = normalizeTransferAmount(sender, amount);
+        if (normalized == null) return;
 
         Account from = resolveGovAccount(fromName, sender);
         if (from == null) return;
@@ -891,13 +849,7 @@ public class GovCommand implements CommandHandler {
             }
         }
 
-        // Reject a payout that resolves to the source account itself up front, with a
-        // clear message — the ledger now rejects a same-account transfer outright
-        // (ADT-33), so without this guard it would surface as an uncaught error (ADT-55).
-        if (from.getAccountId() == toAccountId) {
-            message.send(sender, "treasury.gov.account.transfer.same-account", "name", toDisplayName);
-            return;
-        }
+        if (rejectSameAccount(sender, from.getAccountId(), toAccountId, toDisplayName)) return;
 
         String memo = reason != null
                 ? "Gov payout: " + reason
@@ -907,45 +859,19 @@ public class GovCommand implements CommandHandler {
                 GovDedupKeys.payout(actorOf(sender), from.getAccountId(), toAccountId, normalized, Instant.now());
 
         try {
-            TransferRequest req = new TransferRequest(
-                    from.getAccountId(),
+            if (!executeGovernmentTransfer(
+                    sender,
+                    from,
                     toAccountId,
+                    toDisplayName,
                     normalized,
                     memo,
-                    actorOf(sender),
-                    null,
-                    TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey);
-            // Console bypasses requires_authorization too; players use the normal path.
-            if (sender instanceof Player) {
-                ledgerService.transfer(req);
-            } else {
-                ledgerService.adminTransfer(req);
-            }
+                    "treasury.gov.payout.success",
+                    dedupKey)) return;
         } catch (SecurityException e) {
             message.send(sender, "treasury.gov.no-access");
             return;
-        } catch (IllegalStateException e) {
-            BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
-            message.send(
-                    sender,
-                    "treasury.gov.account.transfer.insufficient",
-                    "from",
-                    from.getDisplayName(),
-                    "balance",
-                    accountService.formatAmount(balance));
-            return;
         }
-
-        message.send(
-                sender,
-                "treasury.gov.payout.success",
-                "from",
-                from.getDisplayName(),
-                "to",
-                toDisplayName,
-                "amount",
-                accountService.formatAmount(normalized));
 
         if (onlineTarget != null) {
             Player onlinePlayer = onlineTarget.getPlayer();
@@ -959,6 +885,68 @@ public class GovCommand implements CommandHandler {
                         from.getDisplayName());
             }
         }
+    }
+
+    private BigDecimal normalizeTransferAmount(CommandSender sender, BigDecimal amount) {
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) message.send(sender, "treasury.general.invalid-amount");
+        return normalized;
+    }
+
+    private boolean rejectSameAccount(CommandSender sender, int fromId, int toId, String name) {
+        // Primitive IDs avoid reference equality for boxed IDs outside the Integer cache.
+        if (fromId != toId) return false;
+        message.send(sender, "treasury.gov.account.transfer.same-account", "name", name);
+        return true;
+    }
+
+    /** Returns true only after settlement, so callers can safely notify the recipient. */
+    private boolean executeGovernmentTransfer(
+            CommandSender sender,
+            Account from,
+            int toAccountId,
+            String toDisplayName,
+            BigDecimal normalized,
+            String memo,
+            String successKey,
+            byte[] dedupKey) {
+        try {
+            TransferRequest request = new TransferRequest(
+                    from.getAccountId(),
+                    toAccountId,
+                    normalized,
+                    memo,
+                    actorOf(sender),
+                    null,
+                    TreasuryConstants.TREASURY_PLUGIN_NAME,
+                    dedupKey);
+            // Console/RCON bypasses requires_authorization; players retain the normal ledger gate.
+            if (sender instanceof Player) {
+                ledgerService.transfer(request);
+            } else {
+                ledgerService.adminTransfer(request);
+            }
+        } catch (IllegalStateException e) {
+            BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
+            message.send(
+                    sender,
+                    "treasury.gov.account.transfer.insufficient",
+                    "from",
+                    from.getDisplayName(),
+                    "balance",
+                    accountService.formatAmount(balance));
+            return false;
+        }
+        message.send(
+                sender,
+                successKey,
+                "from",
+                from.getDisplayName(),
+                "to",
+                toDisplayName,
+                "amount",
+                accountService.formatAmount(normalized));
+        return true;
     }
 
     private Account resolveGovAccount(String name, CommandSender sender) {
