@@ -49,7 +49,7 @@ const columns: Column<AdminWebhookRow>[] = [
   { key: 'failures', header: 'Failures', sort: 'failures', numeric: true, secondary: true, cell: (h) => fmtN(h.consecutiveFailures) },
   { key: 'source', header: 'Created through', secondary: true, optional: true, cell: (h) => (h.viaApiKey ? 'API key' : 'Explorer') },
   { key: 'created', header: 'Created', sort: 'created', sortFirst: 'desc', secondary: true, optional: true, cell: (h) => <When value={h.createdAt} /> },
-  { key: 'actions', header: <span className="sr-only">Actions</span>, label: 'Actions', align: 'end', cell: (h) => <AdminWebhookRowActions id={h.id} active={h.active} url={h.url} /> },
+  { key: 'actions', header: <span className="sr-only">Actions</span>, label: 'Actions', align: 'end', cell: (h) => <><Link href={`/admin/webhooks/${h.id}`} prefetch={false}>Details</Link><AdminWebhookRowActions id={h.id} active={h.active} url={h.url} /></> },
 ];
 
 export default async function AdminWebhooksPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
