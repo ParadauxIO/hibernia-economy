@@ -76,6 +76,8 @@ page and confirm its ID, proprietor and linked accounts before changing it.
 Before disbanding, capture all linked IDs and balances and confirm the proprietor's
 personal account exists. If positive funds have no destination, REST refuses with
 `PROPRIETOR_NO_PERSONAL_ACCOUNT`. Resolve the ownership/account problem first.
+The firm report retains former account links with their removal times after disband.
+Its balances and archive states show current values, not historical snapshots.
 After success, inspect the returned per-account sweep amounts, destination,
 transactions and archive states. Investigate negative balances separately; a
 positive-balance sweep does not settle debt. There is no Explorer undo-disband

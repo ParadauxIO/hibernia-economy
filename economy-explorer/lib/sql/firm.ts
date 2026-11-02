@@ -229,6 +229,21 @@ export async function listFirmAccounts(firmId: number): Promise<FirmAccountRow[]
   return r.rows;
 }
 
+/** Historical links for the admin report only; never use this to grant account access. */
+export interface FirmAccountHistoryRow extends FirmAccountRow { removed_at: Date | null }
+export async function listFirmAccountHistory(firmId: number): Promise<FirmAccountHistoryRow[]> {
+  const r = await sql<FirmAccountHistoryRow>`
+    SELECT a.account_id, a.display_name, a.account_type, a.is_archived AS archived,
+           COALESCE(abm.balance, 0.00) AS balance, fa.removed_at
+    FROM firm_accounts fa
+    JOIN accounts a ON a.account_id = fa.account_id
+    LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
+    WHERE fa.firm_id = ${firmId}
+    ORDER BY a.account_id
+  `.execute(db);
+  return r.rows;
+}
+
 export interface PlayerFirmMembership {
   firm_id: number;
   display_name: string;

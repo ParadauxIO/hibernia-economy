@@ -9,10 +9,11 @@ import { canViewFirmInternals } from '@/lib/auth';
 import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
+import { getAdminFirmAccountHistory } from '@/lib/services/admin';
 import { CURRENCY_SYMBOL } from '@/lib/currency';
 import { fmtAmtFull } from '@/lib/format';
 import { buildMetadata } from '@/lib/metadata';
-import { getFirmHeader, listFirmAccounts, listFirmEmployees, type FirmAccountRow, type FirmEmployeeRow } from '@/lib/sql/firm';
+import { getFirmHeader, listFirmEmployees, type FirmAccountHistoryRow, type FirmEmployeeRow } from '@/lib/sql/firm';
 import { AdminGate } from '../../_components/AdminGate';
 import { RouterLink } from '../../_components/table';
 
@@ -22,8 +23,9 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Admin · Firm report', description: 'Per-firm financial report.', path: '/admin/firms' });
 }
 
-const accountColumns: Column<FirmAccountRow>[] = [
+const accountColumns: Column<FirmAccountHistoryRow>[] = [
   { key: 'account', header: 'Account', cell: (a) => <><Link href={`/accounts/${a.account_id}`} prefetch={false}>{a.display_name ?? `#${a.account_id}`}</Link><span className="dt-sub">{` #${a.account_id}`}{a.archived ? ' · archived' : ''}</span></> },
+  { key: 'removed', header: 'Link removed', cell: (a) => a.removed_at ? <When value={a.removed_at} /> : 'Current' },
   { key: 'type', header: 'Type', secondary: true, cell: (a) => <EntityBadge type={a.account_type} /> },
   { key: 'balance', header: 'Balance', numeric: true, cell: (a) => fmtAmtFull(a.balance) },
 ];
@@ -46,7 +48,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
   if (!firm) notFound();
   await auditView(viewer, { path: `/admin/firms/${firmId}`, targetType: 'firm', targetId: String(firmId) });
 
-  const [accounts, employees] = await Promise.all([listFirmAccounts(firmId), listFirmEmployees(firmId)]);
+  const [accounts, employees] = await Promise.all([getAdminFirmAccountHistory(viewer, firmId), listFirmEmployees(firmId)]);
 
   return (
     <>
@@ -54,7 +56,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
       <PageHeader
         eyebrow={<><EntityBadge type="BUSINESS" /> <span className="mono">#{firm.firm_id}</span></>}
         title={firm.display_name}
-        subtitle={firm.archived ? 'Disbanded. Its accounts are archived.' : 'Firm report: its accounts, balances and staff.'}
+        subtitle={firm.archived ? 'Disbanded. Former account links are retained below for reconciliation.' : 'Firm report: its accounts, balances and staff.'}
       />
 
       <MetricRow label="Firm summary">
@@ -67,11 +69,12 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
       <Section
         id="firm-accounts"
         title={`Accounts (${accounts.length})`}
-        actions={<CsvButton filename={`firm-${firmId}-accounts.csv`} headers={['Account', 'Name', 'Type', 'Balance', 'Archived']}
-          rows={accounts.map((a) => [a.account_id, a.display_name ?? '', a.account_type, a.balance, a.archived ? 'yes' : 'no'])} />}
+        description="Current and former links. Balances and archive states are current, not snapshots at removal."
+        actions={<CsvButton filename={`firm-${firmId}-accounts.csv`} headers={['Account', 'Name', 'Type', 'Balance', 'Archived', 'Link removed']}
+          rows={accounts.map((a) => [a.account_id, a.display_name ?? '', a.account_type, a.balance, a.archived ? 'yes' : 'no', a.removed_at?.toISOString() ?? ''])} />}
       >
         <DataTable id="firm-accounts-table" label="Firm accounts" columns={accountColumns} rows={accounts} rowKey={(a) => a.account_id} link={RouterLink}
-          empty={<p className="dt-empty-text">No live accounts.</p>} />
+          empty={<p className="dt-empty-text">No account links.</p>} />
       </Section>
 
       <Section
