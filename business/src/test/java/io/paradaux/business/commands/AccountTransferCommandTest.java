@@ -25,8 +25,8 @@ class AccountTransferCommandTest {
     private final Player player = mock(Player.class);
     private final UUID actor = UUID.randomUUID();
     private final FirmName name = new FirmName("Acme");
-    private final AccountCommands commands =
-            new AccountCommands(null, firms, staff, transfers, treasury, message, null, null);
+    private final AccountCommands commands = new AccountCommands(
+            null, firms, new FirmGate(firms, staff, message), transfers, treasury, message, null, null);
 
     @BeforeEach
     void setup() {
