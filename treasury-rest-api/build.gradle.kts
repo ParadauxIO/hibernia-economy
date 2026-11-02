@@ -38,7 +38,7 @@ dependencies {
     implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0")
 
     // Swagger / OpenAPI
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 
     // Rate limiting — Bucket4j core + Caffeine (in-memory) and Lettuce
     // (Redis). Caffeine is the default; Redis kicks in when the

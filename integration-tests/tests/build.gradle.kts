@@ -20,7 +20,7 @@ dependencies {
     // JSON for Treasury REST API tests — parse response bodies into JsonNode.
     testImplementation("com.fasterxml.jackson.core:jackson-databind:2.22.4")
 
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.5")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.6")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
