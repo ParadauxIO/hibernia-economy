@@ -466,7 +466,7 @@ required; the existing nullable columns support both scopes.
 `PayoutCategory.AUCTION_PROCEEDS`. Pass a category as the final argument of
 `TransferRequest`; the existing eight-argument constructor remains supported
 and leaves it null. Treasury persists the enum name in the nullable,
-constraint-checked `ledger_txns.payout_category` column (V51). No category is
+constraint-checked `ledger_txns.payout_category` column (V52). No category is
 inferred from a memo, plugin name, or historical transaction.
 
 `LedgerTxn` and `TransactionEntry` expose the category. REST transaction history,
