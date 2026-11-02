@@ -4,13 +4,13 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
 import io.paradaux.common.BalanceTaxBrackets;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.logging.Logger;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Configuration for the corporate balance tax feature.
@@ -80,7 +80,8 @@ public class BalanceTaxConfiguration {
         this.brackets = BalanceTaxBrackets.fromRawEntries(raw, log::warning);
 
         if (enabled) {
-            log.info("Corporate balance tax enabled: " + brackets.size() + " bracket(s), government-account=" + governmentAccount);
+            log.info("Corporate balance tax enabled: " + brackets.size() + " bracket(s), government-account="
+                    + governmentAccount);
         }
     }
 
@@ -90,6 +91,11 @@ public class BalanceTaxConfiguration {
 
     public String getGovernmentAccount() {
         return governmentAccount;
+    }
+
+    /** The immutable bracket used for both the charge and its ledger tag, or null below all floors. */
+    public @Nullable BalanceTaxBrackets.Bracket getBracket(BigDecimal balance) {
+        return brackets.bracketAt(balance);
     }
 
     /**

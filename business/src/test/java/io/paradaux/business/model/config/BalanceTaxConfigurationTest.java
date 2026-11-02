@@ -1,6 +1,15 @@
 package io.paradaux.business.model.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.Business;
+import java.math.BigDecimal;
+import java.util.Set;
+import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,22 +18,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.Set;
-import java.util.logging.Logger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class BalanceTaxConfigurationTest {
 
-    @Mock Business plugin;
-    @Mock FileConfiguration cfg;
-    @Mock ConfigurationSection bracketsSec;
+    @Mock
+    Business plugin;
+
+    @Mock
+    FileConfiguration cfg;
+
+    @Mock
+    ConfigurationSection bracketsSec;
 
     @BeforeEach
     void setUp() {
@@ -50,6 +54,7 @@ class BalanceTaxConfigurationTest {
         assertThat(tax.getWeeklyRate(new BigDecimal("99999"))).isEqualByComparingTo("0");
         assertThat(tax.getWeeklyRate(new BigDecimal("100000"))).isEqualByComparingTo("0.01");
         assertThat(tax.getWeeklyRate(new BigDecimal("250000"))).isEqualByComparingTo("0.012");
+        assertThat(tax.getBracket(new BigDecimal("250000")).ledgerTag()).isEqualTo(" [bracket:200000:300000:0.012]");
         assertThat(tax.getWeeklyRate(new BigDecimal("500000"))).isEqualByComparingTo("0.018");
         assertThat(tax.getWeeklyRate(new BigDecimal("999999999"))).isEqualByComparingTo("0.018");
     }
