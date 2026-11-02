@@ -86,29 +86,42 @@ public class ShopFinderServiceImpl implements ShopFinderService {
                         || r.worldUuid() == null
                         || state.queryWorldUuid().equals(r.worldUuid()))
                 .map(r -> {
-                    BigDecimal sellPrice = canAffordSell(r, balances) ? r.sellPrice() : null;
+                    boolean roomForBatch =
+                            r.estimatedCapacity() == null || r.estimatedCapacity() >= Math.max(1, r.batchQty());
+                    BigDecimal sellPrice = roomForBatch ? r.sellPrice() : null;
+                    BigDecimal balance = null;
+                    boolean unlimitedFunds = false;
+                    if (sellPrice != null) {
+                        UUID payer = payingAccount(r);
+                        unlimitedFunds = r.adminShop() && payer == null;
+                        if (payer != null) balance = balances.computeIfAbsent(payer, economy::getBalance);
+                        if (sellPrice.signum() > 0
+                                && !unlimitedFunds
+                                && (balance == null || balance.compareTo(sellPrice) < 0)) sellPrice = null;
+                    }
                     if (r.buyPrice() == null && sellPrice == null) return null;
                     return FoundShop.from(
-                            r, state.queryWorld(), state.qx(), state.qy(), state.qz(), state.hasPosition(), sellPrice);
+                            r,
+                            state.queryWorld(),
+                            state.qx(),
+                            state.qy(),
+                            state.qz(),
+                            state.hasPosition(),
+                            sellPrice,
+                            balance,
+                            unlimitedFunds);
                 })
                 .filter(Objects::nonNull)
                 .toList();
         return state.pipeline(found);
     }
 
-    private boolean canAffordSell(ShopResult shop, Map<UUID, BigDecimal> balances) {
-        // Free trades do not move money. Prices are per advertised batch, not per item.
-        if (shop.sellPrice() == null || shop.sellPrice().signum() == 0) return true;
-        UUID payer;
+    private UUID payingAccount(ShopResult shop) {
         if (shop.adminShop()) {
             Account serverAccount = accounts.getServerEconomyAccount();
-            if (serverAccount == null) return true; // unlimited money source
-            payer = serverAccount.getUuid();
-        } else {
-            if (shop.shopAccountId() == null) return false;
-            // The economy adapter accepts an encoded ledger id for any account type.
-            payer = BusinessAccountUtil.toBusinessUuid(shop.shopAccountId());
+            return serverAccount == null ? null : serverAccount.getUuid();
         }
-        return balances.computeIfAbsent(payer, economy::getBalance).compareTo(shop.sellPrice()) >= 0;
+        // The economy adapter accepts an encoded ledger id for any account type.
+        return shop.shopAccountId() == null ? null : BusinessAccountUtil.toBusinessUuid(shop.shopAccountId());
     }
 }

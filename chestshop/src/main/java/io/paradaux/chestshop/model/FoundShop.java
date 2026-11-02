@@ -2,6 +2,7 @@ package io.paradaux.chestshop.model;
 
 import io.paradaux.treasury.api.market.ShopResult;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Objects;
 
 /**
@@ -29,16 +30,26 @@ public record FoundShop(
         int x,
         int y,
         int z,
-        long distanceSquared) {
+        long distanceSquared,
+        BigDecimal accountBalance,
+        boolean unlimitedFunds) {
 
     /** Build from a registry row, computing distance from the querying player's position. */
     public static FoundShop from(ShopResult r, String queryWorld, int qx, int qy, int qz, boolean hasPosition) {
-        return from(r, queryWorld, qx, qy, qz, hasPosition, r.sellPrice());
+        return from(r, queryWorld, qx, qy, qz, hasPosition, r.sellPrice(), null, false);
     }
 
     /** Build a search result with only the currently affordable SELL offer. */
     public static FoundShop from(
-            ShopResult r, String queryWorld, int qx, int qy, int qz, boolean hasPosition, BigDecimal sellPrice) {
+            ShopResult r,
+            String queryWorld,
+            int qx,
+            int qy,
+            int qz,
+            boolean hasPosition,
+            BigDecimal sellPrice,
+            BigDecimal accountBalance,
+            boolean unlimitedFunds) {
         long distSq;
         if (!hasPosition || queryWorld == null || !queryWorld.equals(r.world())) {
             distSq = Long.MAX_VALUE; // unknown / cross-world → "∞"
@@ -64,7 +75,22 @@ public record FoundShop(
                 r.signX(),
                 r.signY(),
                 r.signZ(),
-                distSq);
+                distSq,
+                accountBalance,
+                unlimitedFunds);
+    }
+
+    /** Full advertised batches covered by this search's balance snapshot; null if unknown/unlimited. */
+    public BigInteger affordableBatches() {
+        if (sellPrice == null || sellPrice.signum() == 0 || unlimitedFunds || accountBalance == null) return null;
+        return accountBalance
+                .max(BigDecimal.ZERO)
+                .divideToIntegralValue(sellPrice)
+                .toBigIntegerExact();
+    }
+
+    public boolean unlimitedAffordableBatches() {
+        return sellPrice != null && (sellPrice.signum() == 0 || unlimitedFunds);
     }
 
     public ShopType shopType() {

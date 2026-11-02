@@ -191,8 +191,91 @@ class ShopFinderServiceImplTest extends ServerTest {
         shops(offer(1, 42, false, null, BigDecimal.ONE), offer(2, 42, false, null, BigDecimal.TEN));
         assertThat(finder.query(state("world"))).extracting(FoundShop::x).containsExactly(1);
         verify(economy).getBalance(payer);
-        assertThat(finder.query(state("world"))).hasSize(2);
+        assertThat(finder.query(state("world")))
+                .hasSize(2)
+                .allSatisfy(shop -> assertThat(shop.accountBalance()).isEqualByComparingTo(BigDecimal.TEN));
         verify(economy, times(2)).getBalance(payer);
+    }
+
+    @Test
+    void excludesSellOffersWithoutRoomForAFullBatchEvenWithoutHideFull() {
+        shops(
+                withCapacity(offer(1, 42, false, null, BigDecimal.ONE), 15),
+                withCapacity(offer(2, 42, false, null, BigDecimal.ONE), 16),
+                withCapacity(offer(3, 42, false, null, BigDecimal.ZERO), 0));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(42))).thenReturn(BigDecimal.TEN);
+        assertThat(finder.query(state("world"))).extracting(FoundShop::x).containsExactly(2);
+    }
+
+    @Test
+    void fullBothShopKeepsItsCustomerBuyOffer() {
+        shops(withCapacity(offer(1, 42, false, BigDecimal.TEN, BigDecimal.ONE), 15));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(42))).thenReturn(BigDecimal.TEN);
+        assertThat(finder.query(state("world"))).singleElement().satisfies(shop -> {
+            assertThat(shop.shopType()).isEqualTo(ShopType.BUY);
+            assertThat(shop.buyPrice()).isEqualByComparingTo(BigDecimal.TEN);
+            assertThat(shop.sellPrice()).isNull();
+        });
+        FindState sell = state("world");
+        sell.presetSellBest();
+        assertThat(finder.query(sell)).isEmpty();
+    }
+
+    @Test
+    void resultShowsPayingAccountBalanceAndWholeBatches() {
+        shops(offer(1, 42, false, null, new BigDecimal("16.00")));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(42))).thenReturn(new BigDecimal("31.99"));
+        FoundShop shop = finder.query(state("world")).getFirst();
+        String text = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                .serialize(new io.paradaux.chestshop.services.FindPresentation()
+                        .details(shop, mock(io.paradaux.chestshop.services.ShopDisplayService.class)));
+        assertThat(text).contains("Account balance: $31.99", "Affordable batches: 1 | Items: 16");
+    }
+
+    @Test
+    void unknownCapacityAndUnlimitedAdminCapacityRemainVisible() {
+        shops(
+                withCapacity(offer(1, 42, false, null, BigDecimal.TEN), null),
+                withCapacity(offer(2, null, true, null, BigDecimal.TEN), null));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(42))).thenReturn(BigDecimal.TEN);
+        assertThat(finder.query(state("world"))).extracting(FoundShop::x).containsExactlyInAnyOrder(1, 2);
+    }
+
+    @Test
+    void fundedFreeOfferShowsActualAccountBalance() {
+        shops(offer(1, 42, false, null, BigDecimal.ZERO));
+        when(economy.getBalance(BusinessAccountUtil.toBusinessUuid(42))).thenReturn(new BigDecimal("123.45"));
+        assertThat(finder.query(state("world"))).singleElement().satisfies(shop -> {
+            assertThat(shop.accountBalance()).isEqualByComparingTo("123.45");
+            assertThat(shop.unlimitedAffordableBatches()).isTrue();
+        });
+    }
+
+    private ShopResult withCapacity(ShopResult r, Integer capacity) {
+        return new ShopResult(
+                r.world(),
+                r.worldUuid(),
+                r.signX(),
+                r.signY(),
+                r.signZ(),
+                r.adminShop(),
+                r.shopAccountId(),
+                r.shopAccountType(),
+                r.shopFirmId(),
+                r.shopOwnerUuid(),
+                r.ownerName(),
+                r.material(),
+                r.itemKey(),
+                r.itemName(),
+                r.itemCustom(),
+                r.itemData(),
+                r.buyPrice(),
+                r.sellPrice(),
+                r.batchQty(),
+                r.currentStock(),
+                capacity,
+                r.visible(),
+                r.hologram());
     }
 
     // ---- available --------------------------------------------------------------

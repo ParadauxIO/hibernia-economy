@@ -41,7 +41,8 @@ class FindDialogTest extends io.paradaux.chestshop.support.ServerTest {
         when(flow.player()).thenReturn(player);
         var state = new FindState(null, "STONE", "Stone", "world", 0, 0, 0, true);
         var results = List.of(new FoundShop(
-                "STONE", "Stone", "STONE", false, null, "Owner", null, null, 1, 1, 1, "world", 0, 0, 0, 0));
+                "STONE", "Stone", "STONE", false, null, "Owner", null, null, 1, 1, 1, "world", 0, 0, 0, 0, null,
+                false));
         when(finder.available()).thenReturn(true);
         when(finder.find(state)).thenReturn(CompletableFuture.completedFuture(results));
         doAnswer(call -> {
