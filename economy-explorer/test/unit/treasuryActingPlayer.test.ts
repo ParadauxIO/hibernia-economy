@@ -35,9 +35,9 @@ describe('X-Acting-Player on treasury admin calls', () => {
   it('names the signed-in player on every admin call, with the service token', async () => {
     const { getViewer, treasury } = await load();
     getViewer.mockResolvedValue(signedIn(ALEX.toUpperCase()));
-    await treasury.adminTransfer({ fromAccountId: 1, toAccountId: 2, amount: '5.00', memo: 'm' });
+    await treasury.adminTransfer({ fromAccountId: 1, toAccountId: 2, amount: '5.00', memo: 'm' }, '11111111-1111-4111-8111-111111111111');
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://treasury.test/api/v1/admin/transfers');
-    expect(sentHeaders()).toMatchObject({ authorization: 'Bearer service-token', 'X-Acting-Player': ALEX });
+    expect(sentHeaders()).toMatchObject({ authorization: 'Bearer service-token', 'X-Acting-Player': ALEX, 'Idempotency-Key': '11111111-1111-4111-8111-111111111111' });
 
     fetchMock.mockClear().mockResolvedValue(new Response(null, { status: 204 }));
     await treasury.revokeApiKey(3);

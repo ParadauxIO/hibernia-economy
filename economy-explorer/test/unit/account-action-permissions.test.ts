@@ -14,7 +14,7 @@ beforeEach(() => {
 it('permits only the configured action even when other server actions are called directly', async () => {
   expect(await renameAccountAction(12, 'New name')).toMatchObject({ ok: true });
   expect(renameAccount).toHaveBeenCalledWith(12, 'New name');
-  await expect(adminTransferAction({ fromAccountId: 12, toAccountId: 13, amount: '50', memo: 'forged' })).rejects.toThrow('Forbidden');
+  await expect(adminTransferAction({ idempotencyKey: '11111111-1111-4111-8111-111111111111', fromAccountId: 12, toAccountId: 13, amount: '50', memo: 'forged' })).rejects.toThrow('Forbidden');
   await expect(archiveAccountAction(12)).rejects.toThrow('Forbidden');
   await expect(changeAccountOwnerAction(12, 'someone')).rejects.toThrow('Forbidden');
   expect(adminTransfer).not.toHaveBeenCalled();
