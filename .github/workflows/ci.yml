@@ -58,6 +58,8 @@ jobs:
         run: node --test .github/scripts/release-metadata.test.mjs
       - name: Check schema compatibility guard
         run: node --test ops/dev-server/schema-guard.test.mjs
+      - name: Check SERVICE token signing
+        run: node --test economy-explorer/scripts/mint-service-token.test.mjs
       - name: Check acceptance evidence tooling
         run: python3 -m unittest discover -s ops/integration -p 'test_*.py'
 

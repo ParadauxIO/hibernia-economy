@@ -58,6 +58,9 @@ function deriveKey(secret) {
     }
     return key;
   }
+  if (secret.length < 32) {
+    fail('JWT legacy passphrase must be at least 32 characters; use base64: random key material.');
+  }
   // A SQL comment, so stderr stays runnable as-is.
   console.error('-- warning: passphrase secret; using the legacy SHA-256 derivation, as the services do.');
   return createHash('sha256').update(secret, 'utf8').digest();

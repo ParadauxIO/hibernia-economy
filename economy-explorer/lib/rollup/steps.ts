@@ -14,7 +14,7 @@ import { addDays, dayStart, monthEnd, monthStart } from './days';
 type Executor = Kysely<any>;
 
 /** The tables the worker maintains, one coverage row and run-log job each. */
-export const ROLLUP_JOBS = ['account_day', 'pair_month', 'economy_day', 'type_day', 'hour_heatmap', 'item_day', 'gov_recipient_day'] as const;
+export const ROLLUP_JOBS = ['account_day', 'pair_month', 'economy_day', 'type_day', 'hour_heatmap', 'item_day', 'gov_recipient_day', 'tax_bracket_day'] as const;
 export type DayJob = (typeof ROLLUP_JOBS)[number];
 /** Wealth is a point-in-time snapshot, taken for the current day only. */
 export type RollupJob = DayJob | 'wealth';
@@ -79,6 +79,34 @@ async function accountDay(trx: Executor, b: Bounds): Promise<number> {
     LEFT JOIN accounts ca ON ca.account_id = cp.account_id
     LEFT JOIN firm_accounts cf ON cf.account_id = cp.account_id AND cf.removed_at IS NULL
     GROUP BY l.account_id, l.plugin_key, l.tax_kind, counterparty_type, is_internal
+  `);
+}
+
+// Retain the exact bracket captured by the writer, never infer it from today's
+// configuration or the payer's current balance. The largest debit determines
+// the counterparty, matching account_day's revenue/transfer distinction.
+async function taxBracketDay(trx: Executor, b: Bounds): Promise<number> {
+  await sql`DELETE FROM explorer_rollup_tax_bracket_day WHERE day = ${b.day}`.execute(trx);
+  return run(trx, sql`
+    INSERT INTO explorer_rollup_tax_bracket_day (account_id, day, tax_kind, bracket_key, collected)
+    SELECT p.account_id, ${b.day}, t.tax_kind,
+           CASE WHEN t.message REGEXP ' [[]bracket:-?[0-9]+([.][0-9]+)?:([*]|-?[0-9]+([.][0-9]+)?):[0-9]+([.][0-9]+)?[]]$'
+                THEN SUBSTRING_INDEX(SUBSTRING_INDEX(t.message, ' [bracket:', -1), ']', 1)
+                ELSE '' END AS bracket_key,
+           SUM(p.amount)
+    FROM ledger_txns t FORCE INDEX (idx_ledger_settle_time)
+    STRAIGHT_JOIN ledger_postings p ON p.txn_id = t.txn_id AND p.amount > 0
+    JOIN accounts a ON a.account_id = p.account_id AND a.account_type = 'GOVERNMENT'
+    LEFT JOIN ledger_postings cp ON cp.posting_id = (
+      SELECT debit.posting_id FROM ledger_postings debit
+      WHERE debit.txn_id = t.txn_id AND debit.amount < 0
+      ORDER BY debit.amount, debit.posting_id LIMIT 1
+    )
+    LEFT JOIN accounts ca ON ca.account_id = cp.account_id
+    WHERE t.settlement_time >= ${b.start} AND t.settlement_time < ${b.end}
+      AND t.tax_kind IN ('personal', 'corporate')
+      AND (ca.account_type IS NULL OR ca.account_type <> 'GOVERNMENT')
+    GROUP BY p.account_id, t.tax_kind, bracket_key
   `);
 }
 
@@ -298,6 +326,7 @@ async function itemDay(trx: Executor, b: Bounds): Promise<number> {
 const STEPS: Record<DayJob, (trx: Executor, b: Bounds) => Promise<number>> = {
   account_day: accountDay,
   gov_recipient_day: govRecipientDay,
+  tax_bracket_day: taxBracketDay,
   pair_month: pairMonth,
   economy_day: economyDay,
   type_day: typeDay,

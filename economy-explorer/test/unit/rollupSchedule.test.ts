@@ -154,7 +154,7 @@ describe('backfill deadline', () => {
 
   it('never starts a backfill day it does not expect to finish before the next tick', async () => {
     state.earliest = '2026-01-01';
-    state.stepMs = 5_000; // 35 s per day across the seven jobs
+    state.stepMs = 5_000; // 40 s per day across the eight jobs
     try {
       for (const job of ROLLUP_JOBS) {
         state.coverage.set(job, { job, from_day: '2026-10-25', to_day: '2026-10-26', history_complete: 0 });
@@ -169,10 +169,10 @@ describe('backfill deadline', () => {
       });
       at('2026-10-26T12:00:00Z');
       const result = await w.tick(); // default deadline: 12:04:00 (5-minute tick, 60 s margin)
-      // Today takes 35 s; five backfill days fit, ending at 12:03:30.
+      // Today takes 40 s; four backfill days fit, ending at 12:03:20.
       expect(result.freshDays).toEqual(['2026-10-26']);
-      expect(result.backfilled).toEqual(['2026-10-24', '2026-10-23', '2026-10-22', '2026-10-21', '2026-10-20']);
-      expect(state.clock.toISOString()).toBe('2026-10-26T12:03:30.000Z');
+      expect(result.backfilled).toEqual(['2026-10-24', '2026-10-23', '2026-10-22', '2026-10-21']);
+      expect(state.clock.toISOString()).toBe('2026-10-26T12:03:20.000Z');
       expect(state.clock.getTime()).toBeLessThanOrEqual(Date.parse('2026-10-26T12:04:00Z'));
     } finally {
       state.earliest = null;

@@ -69,3 +69,24 @@ Those outcomes cannot be established by local tests or immediately after deploy.
 Previous-period chart comparison remains hidden until the charts support the
 comparison series. Money flow is limited to 92 days; expanding it needs a summary
 that pairs account types directly.
+
+## Exact tax-bracket revenue (PAR-553)
+
+Apply V51 before deploying Treasury/Business writers or Explorer. Writers append
+` [bracket:floor:ceiling:rate]` to balance-tax ledger messages, with `*` for an
+unbounded ceiling and a decimal weekly rate (not a percentage). Corporate
+messages retain their prefix; V51 recognises both legacy and tagged messages.
+The tag captures the same immutable bracket used to calculate the charge.
+
+The worker's `tax_bracket_day` job independently backfills
+`explorer_rollup_tax_bracket_day`, recomputes recent days, and publishes coverage.
+It sums government credit postings, excluding government transfers, by receiving
+account and exact collection-time bracket. Page requests use account/day primary
+key ranges, including periods longer than the raw-ledger 31-day limit. Existing
+rollup history does not need invalidating. Historical collections without tags
+remain in the unavailable bucket; do not infer brackets from today's config.
+
+`test/integration/taxBrackets.test.ts` applies all migrations and checks same-rate
+brackets, historical rate changes, corporate account splits, legacy/malformed
+tags, exact cents, account/date scope, excluded transfers and recompute idempotency.
+The government browser regression checks the resulting table with scoped fixtures.

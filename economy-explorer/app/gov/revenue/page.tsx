@@ -4,6 +4,8 @@ import { Donut } from '@/components/charts/AreaTimeline';
 import { buildMetadata } from '@/lib/metadata';
 import { parseMoney, toDbString } from '@/lib/money';
 import { getRevenue } from '@/lib/services/government';
+import type { TaxBracketRevenueRow } from '@/lib/sql/government';
+import { bracketDetails } from '@/lib/taxBrackets';
 import type { FlowLine } from '@/lib/services/governmentModel';
 import { linesByUnit, type UnitRow } from '../byUnit';
 import { payerColumns } from '../columns';
@@ -27,6 +29,16 @@ const unitColumns: Column<UnitRow>[] = [
   { key: 'unit', header: 'Unit', cell: (r) => r.name },
   ...GROUPS.map((g) => ({ key: g.key, header: g.label, numeric: true, secondary: true, cell: (r: UnitRow) => <Money value={r.values[g.key] ?? '0.00'} /> })),
   { key: 'total', header: 'Total', numeric: true, cell: (r) => <Money value={r.total} /> },
+];
+
+const bracketColumns: Column<TaxBracketRevenueRow>[] = [
+  { key: 'kind', header: 'Tax', cell: (r) => r.kind === 'personal' ? 'Personal balance tax' : 'Corporate balance tax' },
+  { key: 'bracket', header: 'Balance bracket', cell: (r) => {
+    const b = bracketDetails(r.bracket);
+    return b ? <>{b.floor} ≤ balance{b.ceiling === null ? '' : ` < ${b.ceiling}`}</> : 'Bracket unavailable';
+  } },
+  { key: 'rate', header: 'Weekly rate', numeric: true, cell: (r) => bracketDetails(r.bracket)?.percent ?? '—' },
+  { key: 'collected', header: 'Received', numeric: true, cell: (r) => <Money value={r.collected} /> },
 ];
 
 export default async function GovRevenuePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -62,6 +74,12 @@ export default async function GovRevenuePage({ searchParams }: { searchParams: P
     {byUnit.length > 1 && <Section title="By unit" description="Each account counts towards its own unit." divider>
       <DataTable id="gov-revenue-units" label="Revenue by unit" columns={unitColumns} rows={byUnit} rowKey={(u) => u.key} />
     </Section>}
+
+    <Section title="Balance tax by bracket" divider description={<>Actual receipts by the bracket and weekly rate in effect when collected. Personal tax is prorated; corporate brackets use the firm’s combined balance. Older receipts without an exact recorded bracket are shown as unavailable. <Freshness coverage={r.brackets.coverage} /></>}>
+      <DataTable id="gov-tax-brackets" label="Balance tax revenue by bracket" columns={bracketColumns}
+        rows={r.brackets.rows} rowKey={(r) => `${r.kind}:${r.bracket}`}
+        empty={<p className="dt-empty-text">{r.brackets.coverage.covered ? 'No balance tax was received in this period.' : 'Preparing history.'}</p>} />
+    </Section>
 
     <Section title="Top tax payers" divider description={<>Players and firms who paid the most tax into these accounts{r.topRange.capped ? <>, last 31 days of the range ({r.topRange.from} to {r.topRange.to})</> : null}. Read from the ledger.</>}>
       <DataTable id="gov-tax-payers" label="Top tax payers" columns={payerColumns} rows={r.taxPayers} rowKey={(p) => p.account_id}

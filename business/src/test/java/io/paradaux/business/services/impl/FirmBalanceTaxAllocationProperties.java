@@ -149,6 +149,8 @@ class FirmBalanceTaxAllocationProperties {
         when(m.accounts.listAccountIds(FIRM_ID)).thenReturn(new ArrayList<>(byAccount.keySet()));
         when(m.treasury.getBalancesByIds(any())).thenReturn(byAccount);
         when(m.config.getWeeklyRate(any())).thenReturn(rate);
+        when(m.config.getBracket(any()))
+                .thenReturn(new io.paradaux.common.BalanceTaxBrackets.Bracket(BigDecimal.ZERO, null, rate));
         when(m.config.getGovernmentAccount()).thenReturn("Gov");
         when(m.event.getTaxApi()).thenReturn(m.taxApi);
         when(m.event.getPeriodStart()).thenReturn(Instant.parse("2026-01-05T00:00:00Z"));

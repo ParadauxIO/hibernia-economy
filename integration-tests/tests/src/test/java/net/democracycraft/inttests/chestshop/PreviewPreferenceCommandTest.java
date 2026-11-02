@@ -5,6 +5,7 @@ import net.democracycraft.inttests.support.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,9 +71,13 @@ class PreviewPreferenceCommandTest {
         assertThat(player.awaitMessageContaining("holograms are now", TIMEOUT))
                 .contains(visible ? "shown" : "hidden");
         Barrier.settle();
+        // The command queues persistence on OrderedMarketWriter, which is not a
+        // Bukkit task and therefore is not covered by Barrier.settle().
+        Await.untilEquals("persisted preview preference for " + player.getUuid(),
+                () -> preference(player.getUuid()), visible, TIMEOUT);
     }
 
-    private static Boolean preference(UUID uuid) throws Exception {
+    private static Boolean preference(UUID uuid) {
         try (var connection = DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
              var query = connection.prepareStatement("SELECT visible FROM chestshop_preview_preference "
                      + "WHERE player_uuid_bin=UNHEX(REPLACE(?,'-',''))")) {
@@ -80,6 +85,8 @@ class PreviewPreferenceCommandTest {
             try (var result = query.executeQuery()) {
                 return result.next() ? result.getBoolean(1) : null;
             }
+        } catch (SQLException e) {
+            throw new AssertionError("Could not read preview preference for " + uuid, e);
         }
     }
 }

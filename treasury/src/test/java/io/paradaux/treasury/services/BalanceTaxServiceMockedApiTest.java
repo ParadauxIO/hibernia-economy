@@ -326,7 +326,7 @@ class BalanceTaxServiceMockedApiTest {
         assertThat(c.sourceAccountId()).isEqualTo(42);
         assertThat(c.destinationAccountId()).isEqualTo(99);
         assertThat(c.taxType()).isEqualTo("personal-balance-tax");
-        assertThat(c.description()).isEqualTo("Personal balance tax (3d 12h @ 1%/wk)");
+        assertThat(c.description()).isEqualTo("Personal balance tax (3d 12h @ 1%/wk) [bracket:100000:*:0.01]");
         // One collection per (player, login): a replayed login event can't tax twice.
         assertThat(c.dedupKey())
                 .isEqualTo(io.paradaux.treasury.utils.Idempotency.sha256("balance-tax:" + player + ":" + now));
@@ -342,7 +342,7 @@ class BalanceTaxServiceMockedApiTest {
         TaxCollection c = collectedFor(player, "100000.00", now - 6, now);
 
         assertThat(c.amount()).isEqualTo(new BigDecimal("0.01"));
-        assertThat(c.description()).isEqualTo("Personal balance tax (0h 0m @ 1%/wk)");
+        assertThat(c.description()).isEqualTo("Personal balance tax (0h 0m @ 1%/wk) [bracket:100000:*:0.01]");
     }
 
     @Test

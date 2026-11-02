@@ -183,6 +183,12 @@ If a migration fails: stop, do not retry blind. Go to [Rollback](#rollback).
 The REST API and the TreasuryAPI plugin derive the same HMAC key from one shared
 secret (`common/…/JwtKeys.java`); they must be byte-identical.
 
+Legacy passphrases shorter than 32 characters are rejected by the shared key
+helper and SERVICE token script (ADT-144). Longer legacy passphrases retain their
+existing SHA-256 derivation, but length alone does not guarantee entropy. Prefer
+`base64:` random key material containing at least 32 decoded bytes; generate it
+with `openssl rand -base64 48`.
+
 1. Set `base64:<value>` as `JWT_SECRET` on the REST API (`api.jwt-secret` in
    `application-prod.yaml`) **and** as `api.jwt-secret` in
    `plugins/TreasuryAPI/config.yml`. Restart both (covered by step 4).
