@@ -4,6 +4,7 @@ import type { Viewer } from '@/lib/auth/viewer';
 import { queryKeyUsage, type KeyUsage } from '@/lib/prometheus';
 import { unstable_cache } from 'next/cache';
 import {
+  findAdminWebhook,
   countAdminApiKeys,
   countAdminGroups,
   countAdminRoles,
@@ -23,7 +24,7 @@ import type { GroupSummary } from '@/lib/sql/group';
 import { auditView } from '@/lib/audit';
 import { countAccounts, listAccounts, type ExplorerAccountRow } from '@/lib/sql/ledger';
 import { findFirmNames } from '@/lib/sql/tableLookups';
-import type { AdminWebhookRow } from '@/lib/sql/webhook';
+import { listRecentDeliveries, type AdminWebhookRow } from '@/lib/sql/webhook';
 import type { AccountsTableState } from '@/lib/tables/accounts';
 import type { AdminApiKeysState, AdminGroupsState, AdminPlayersState, AdminRolesState, AdminWebhooksState } from '@/lib/tables/admin';
 
@@ -101,4 +102,14 @@ export async function getAdminRoles(viewer: Viewer, state: AdminRolesState): Pro
   const total = await countAdminRoles(state);
   const page = Math.min(state.page, Math.max(1, Math.ceil(total / state.limit)));
   return { rows: await listAdminRoles({ ...state, page }), total, page };
+}
+
+/** Resolve the owner on the server; the self-service query keeps its owner boundary. */
+export async function getAdminWebhookDetail(viewer: Viewer, id: number) {
+  requirePermission(viewer, 'webhooks.read.all');
+  const hook = await findAdminWebhook(id);
+  if (!hook) return null;
+  await auditView(viewer, { path: `/admin/webhooks/${id}`, targetType: 'webhook', targetId: String(id) });
+  const deliveries = hook.ownerUuid ? await listRecentDeliveries(id, hook.ownerUuid, 50) : [];
+  return { hook, deliveries };
 }

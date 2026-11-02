@@ -231,3 +231,37 @@ export async function adminDeleteWebhookAction(id: number): Promise<WebhookActio
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+export async function adminSetWebhookUrlAction(id: number, url: string): Promise<WebhookActionResult> {
+  const viewer = await requireLinkedViewer();
+  requirePermission(viewer, 'webhooks.update.all');
+  try {
+    await assertPublicHttpsUrl(url);
+    const before = webhookSnapshot(await findAdminWebhook(id));
+    const { affected } = await setWebhookUrl(id, url.trim());
+    if (!affected) return { ok: false, error: 'Webhook not found.' };
+    await auditMutation(viewer, {
+      action: 'webhook.url', path: `/admin/webhooks/${id}`, targetType: 'webhook', targetId: id,
+      before, after: webhookSnapshot(await findAdminWebhook(id)),
+    });
+    revalidatePath('/admin/webhooks');
+    revalidatePath(`/admin/webhooks/${id}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+export async function adminRotateWebhookSecretAction(id: number): Promise<WebhookActionResult> {
+  const viewer = await requireLinkedViewer();
+  requirePermission(viewer, 'webhooks.update.all');
+  try {
+    const secret = newSecret();
+    const { affected } = await setWebhookSecret(id, secret);
+    if (!affected) return { ok: false, error: 'Webhook not found.' };
+    await auditMutation(viewer, {
+      action: 'webhook.secret.rotate', path: `/admin/webhooks/${id}`, targetType: 'webhook', targetId: id,
+      before: { secret: '[redacted]' }, after: { secret: '[rotated]' },
+    });
+    revalidatePath(`/admin/webhooks/${id}`);
+    return { ok: true, secret };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
