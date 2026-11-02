@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import java.net.URI;
 import java.net.http.*;
 import java.sql.DriverManager;
@@ -48,10 +49,12 @@ class TransactionExportTest {
             String csv = export(sender, root + " export");
             String[] rows = csv.split("\n");
             assertThat(rows).hasSize(3);
-            assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system");
+            assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system,payout_category");
             assertThat(rows[1]).startsWith(postingId(transaction, account) + "," + transaction + "," + account + ",-23.45,");
             String quotedMemo = "\"ExportMemo, \"\"quoted\"\"\"";
             assertThat(rows[1]).contains(quotedMemo + ",", "," + quotedMemo + "," + sender.getUuid() + ",");
+            assertThat(rows[1]).endsWith(",rest-api,");
+            assertThat(rows[2]).endsWith(",");
             assertThat(rows[2].split(",", 5)[2]).isEqualTo(String.valueOf(account));
             assertThat(rows[2].split(",", 5)[3]).isEqualTo("10000.00");
             JsonNode upload = captures().get(0);
@@ -175,6 +178,40 @@ class TransactionExportTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "EMPLOYEE, false", "AUCTION_PROCEEDS, false",
+            "EMPLOYEE, true", "AUCTION_PROCEEDS, true"
+    })
+    void categorizedPayoutExportsStructuredPurposeSeparateFromMemo(String category, boolean byAccount) throws Exception {
+        post("__reset", "{}");
+        try (MockPlayer admin = MockPlayer.connectLocal(Usernames.fresh("CAdm"));
+             MockPlayer recipient = MockPlayer.connectLocal(Usernames.fresh("CRec"))) {
+            Ledger.waitForPersonalBalance(admin.getUuid(), TIMEOUT);
+            Ledger.waitForPersonalBalance(recipient.getUuid(), TIMEOUT);
+            Perms.grant(recipient.getUsername(), "treasury.transactions.export");
+            String government = Usernames.fresh("CGov");
+            adminCommand(admin, "/gov account create " + government);
+            Ledger.waitForGovernmentAccount(government, TIMEOUT);
+            adminCommand(admin, "/paya government " + government + " 25.00 Funding");
+            Ledger.waitForGovernmentBalance(government, new java.math.BigDecimal("25.00"), TIMEOUT);
+            int recipientAccount = Ledger.personalAccountId(recipient.getUuid()).orElseThrow();
+            String command = byAccount ? "payout-category-account" : "payout-category";
+            String target = byAccount ? String.valueOf(recipientAccount) : recipient.getUsername();
+            adminCommand(admin, "/gov " + command + " " + government + " " + target
+                    + " 7.50 " + category + " Unrelated memo");
+            Ledger.waitForPersonalBalance(recipient.getUuid(), new java.math.BigDecimal("10007.50"), TIMEOUT);
+            Ledger.waitForGovernmentBalance(government, new java.math.BigDecimal("17.50"), TIMEOUT);
+
+            String[] rows = export(recipient, "transactions export").split("\n");
+            assertThat(rows).hasSize(3);
+            assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system,payout_category");
+            assertThat(rows[1]).contains("," + recipientAccount + ",7.50,", "Gov payout: Unrelated memo")
+                    .endsWith("," + category);
+            assertThat(rows[2]).endsWith(",");
+        }
+    }
+
     private static void adminCommand(MockPlayer player, String command) {
         Ops.run(player.getUsername(), () -> {
             player.drainMessages();
@@ -195,9 +232,10 @@ class TransactionExportTest {
     private static void assertSharedCsv(String csv, int account, long transaction, MockPlayer initiator) throws Exception {
         String[] rows = csv.split("\n");
         assertThat(rows).hasSize(2);
-        assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system");
+        assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system,payout_category");
         assertThat(rows[1]).startsWith(postingId(transaction, account) + "," + transaction + "," + account + ",23.45,")
-                .contains("SharedExport", initiator.getUuid().toString());
+                .contains("SharedExport", initiator.getUuid().toString())
+                .endsWith(",");
     }
 
     private static String export(MockPlayer player, String command) throws Exception {
