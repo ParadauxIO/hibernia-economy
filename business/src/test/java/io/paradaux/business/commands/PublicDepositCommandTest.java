@@ -49,7 +49,7 @@ class PublicDepositCommandTest {
         when(player.getName()).thenReturn("Customer");
         when(treasury.formatAmount(BigDecimal.TEN)).thenReturn("$10.00");
 
-        new MiscCommands(firms, staff, transfers, treasury, messages, notifications)
+        new MiscCommands(firms, new FirmGate(firms, staff, messages), transfers, treasury, messages, notifications)
                 .payInto(player, new FirmName("Globex"), BigDecimal.TEN, "Invoice 42");
 
         verify(transfers).payIntoFirm(12, payer, BigDecimal.TEN, "Invoice 42");
