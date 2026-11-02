@@ -43,6 +43,14 @@ types go here, never in the plugin root.**
 
 ## `business/` — companies (Paper plugin)
 
+Finance command handlers share the injected `FirmGate` (ADT-103). It resolves
+active firms, checks proprietor/ADMIN/FINANCIAL access, and sends the existing
+missing-firm or permission-denied response before returning an empty `Optional`.
+Cross-firm transfers use its resolved-firm check after destination validation to
+preserve error precedence. Public deposits, public aggregate balances, and
+owner/admin-only sales settings keep their separate access rules. Service-layer
+authorization remains in place.
+
 Firms/companies: creation, staff with custom roles and permissions, firm accounts,
 sales, and per-firm tax — all money via `TreasuryApi`.
 

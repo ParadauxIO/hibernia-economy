@@ -352,6 +352,137 @@ class GovCommandTest {
         verifyNoInteractions(ledger, accounts);
     }
 
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void moneyMoves_preserveMemoSuccessMessageAndLedgerPath(boolean payout, boolean asPlayer) {
+        prepareMoneyMove(payout, asPlayer);
+        when(accounts.formatAmount(AMOUNT)).thenReturn("$5.00");
+        CommandSender sender = asPlayer ? player : console;
+
+        if (payout) command.payoutAccountReason(sender, "Police", TARGET_ID, AMOUNT, "approved grant");
+        else command.accountTransferReason(sender, "Police", "Health", AMOUNT, "approved grant");
+
+        ArgumentCaptor<TransferRequest> request = ArgumentCaptor.forClass(TransferRequest.class);
+        if (asPlayer) {
+            verify(ledger).transfer(request.capture());
+            verify(ledger, never()).adminTransfer(any());
+        } else {
+            verify(ledger).adminTransfer(request.capture());
+            verify(ledger, never()).transfer(any());
+        }
+        TransferRequest actual = request.getValue();
+        assertThat(actual.fromAccountId()).isEqualTo(SOURCE_ID);
+        assertThat(actual.toAccountId()).isEqualTo(TARGET_ID);
+        assertThat(actual.amount()).isEqualByComparingTo(AMOUNT);
+        assertThat(actual.message()).isEqualTo(payout ? "Gov payout: approved grant" : "Gov transfer: approved grant");
+        assertThat(actual.initiator()).isEqualTo(asPlayer ? PLAYER_ID : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
+        assertThat(actual.pluginSystem()).isEqualTo(TreasuryConstants.TREASURY_PLUGIN_NAME);
+        assertThat(actual.dedupKey()).isNotEmpty();
+        verify(message)
+                .send(
+                        sender,
+                        payout ? "treasury.gov.payout.success" : "treasury.gov.account.transfer.success",
+                        "from",
+                        "Police",
+                        "to",
+                        "Health",
+                        "amount",
+                        "$5.00");
+        verifyNoMoreInteractions(message);
+        verify(accounts, never()).getBalanceReadOnly(anyInt());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void moneyMoves_reportCurrentBalanceAndNeverSuccessOnFailure(boolean payout, boolean asPlayer) {
+        prepareMoneyMove(payout, asPlayer);
+        CommandSender sender = asPlayer ? player : console;
+        if (asPlayer) when(ledger.transfer(any())).thenThrow(new IllegalStateException("Insufficient funds"));
+        else when(ledger.adminTransfer(any())).thenThrow(new IllegalStateException("Insufficient funds"));
+        BigDecimal balance = new BigDecimal("2.50");
+        when(accounts.getBalanceReadOnly(SOURCE_ID)).thenReturn(balance);
+        when(accounts.formatAmount(balance)).thenReturn("$2.50");
+
+        if (payout) command.payoutAccount(sender, "Police", TARGET_ID, AMOUNT);
+        else command.accountTransfer(sender, "Police", "Health", AMOUNT);
+
+        verify(message)
+                .send(sender, "treasury.gov.account.transfer.insufficient", "from", "Police", "balance", "$2.50");
+        verifyNoMoreInteractions(message);
+        assertTransfer(sender);
+    }
+
+    @Test
+    void transfer_rejectsSameAccountOutsideIntegerCache() {
+        sourceAccount();
+        when(accounts.getGovernmentAccountByName("Alias")).thenReturn(account(SOURCE_ID, "Police", false));
+
+        command.accountTransfer(console, "Police", "Alias", AMOUNT);
+
+        verify(message).send(console, "treasury.gov.account.transfer.same-account", "name", "Police");
+        verifyNoInteractions(ledger);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void payout_notifiesOnlineRecipientOnlyAfterSettlement(boolean succeeds) {
+        sourceAccount();
+        UUID recipientId = UUID.randomUUID();
+        Account target = account(TARGET_ID, "Recipient", false)
+                .withAccountType(AccountType.PERSONAL)
+                .withOwnerUuid(recipientId);
+        when(accounts.getAccountById(TARGET_ID)).thenReturn(target);
+        Player recipient = org.mockito.Mockito.mock(Player.class);
+        try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(() -> org.bukkit.Bukkit.getPlayer(recipientId)).thenReturn(recipient);
+            if (succeeds) {
+                when(recipient.getPlayer()).thenReturn(recipient);
+                when(accounts.formatAmount(AMOUNT)).thenReturn("$5.00");
+            } else {
+                when(ledger.adminTransfer(any())).thenThrow(new IllegalStateException("Insufficient funds"));
+                when(accounts.getBalanceReadOnly(SOURCE_ID)).thenReturn(BigDecimal.ZERO);
+                when(accounts.formatAmount(BigDecimal.ZERO)).thenReturn("$0.00");
+            }
+
+            command.payoutAccount(console, "Police", TARGET_ID, AMOUNT);
+
+            if (succeeds) {
+                verify(message)
+                        .send(
+                                console,
+                                "treasury.gov.payout.success",
+                                "from",
+                                "Police",
+                                "to",
+                                "Recipient",
+                                "amount",
+                                "$5.00");
+                verify(message).send(recipient, "treasury.gov.payout.received", "amount", "$5.00", "from", "Police");
+            } else {
+                verify(message)
+                        .send(
+                                console,
+                                "treasury.gov.account.transfer.insufficient",
+                                "from",
+                                "Police",
+                                "balance",
+                                "$0.00");
+                verifyNoInteractions(recipient);
+            }
+            verifyNoMoreInteractions(message);
+        }
+    }
+
+    private void prepareMoneyMove(boolean payout, boolean asPlayer) {
+        sourceAccount();
+        if (payout) when(accounts.getAccountById(TARGET_ID)).thenReturn(account(TARGET_ID, "Health", false));
+        else when(accounts.getGovernmentAccountByName("Health")).thenReturn(account(TARGET_ID, "Health", false));
+        if (asPlayer) {
+            when(player.hasPermission("treasury.gov.admin")).thenReturn(true);
+            when(player.getUniqueId()).thenReturn(PLAYER_ID);
+        }
+    }
+
     private void transferAccounts() {
         sourceAccount();
         when(accounts.getGovernmentAccountByName("Health")).thenReturn(account(TARGET_ID, "Health", false));
