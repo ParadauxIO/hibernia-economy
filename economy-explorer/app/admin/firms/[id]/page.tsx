@@ -9,11 +9,13 @@ import { canViewFirmInternals } from '@/lib/auth';
 import { hasPermission } from '@/lib/auth/policy';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
-import { getAdminFirmAccountHistory } from '@/lib/services/admin';
+import { getAdminFirmOperationsState, getAdminFirmAccountHistory } from '@/lib/services/admin';
 import { CURRENCY_SYMBOL } from '@/lib/currency';
 import { fmtAmtFull } from '@/lib/format';
 import { buildMetadata } from '@/lib/metadata';
 import { getFirmHeader, listFirmEmployees, type FirmAccountHistoryRow, type FirmEmployeeRow } from '@/lib/sql/firm';
+import { treasuryAdminConfigured } from '@/lib/treasury';
+import { FirmOperationsPanel } from '../firm-operations-panel';
 import { AdminGate } from '../../_components/AdminGate';
 import { RouterLink } from '../../_components/table';
 
@@ -48,7 +50,7 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
   if (!firm) notFound();
   await auditView(viewer, { path: `/admin/firms/${firmId}`, targetType: 'firm', targetId: String(firmId) });
 
-  const [accounts, employees] = await Promise.all([getAdminFirmAccountHistory(viewer, firmId), listFirmEmployees(firmId)]);
+  const [accounts, employees, operations] = await Promise.all([getAdminFirmAccountHistory(viewer, firmId), listFirmEmployees(firmId), getAdminFirmOperationsState(viewer, firmId)]);
 
   return (
     <>
@@ -66,6 +68,9 @@ export default async function FirmReportPage({ params }: { params: Promise<{ id:
         <MetricCard label="Discord" value={firm.discord_url ?? '—'} />
       </MetricRow>
 
+      {operations && <Section title="Operator controls">
+        <FirmOperationsPanel firmId={firmId} name={firm.display_name} archived={!!firm.archived} nameReleased={operations.nameReleased} taxExempt={operations.taxExempt} disabled={!treasuryAdminConfigured()} />
+      </Section>}
       <Section
         id="firm-accounts"
         title={`Accounts (${accounts.length})`}

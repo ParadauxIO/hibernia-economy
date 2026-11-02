@@ -83,11 +83,28 @@ transactions and archive states. Investigate negative balances separately; a
 positive-balance sweep does not settle debt. There is no Explorer undo-disband
 button: restoring the business involves more than unarchiving its accounts.
 
-In-game staff overrides also support proprietor changes, account recovery and
-releasing a disbanded firm's reserved name. Follow the
-[Business reference](/docs/reference/business), using the old firm's numeric ID
-when its name has been reused. For an ownership transfer, verify staff/account
-access and API keys afterward, not just the displayed proprietor.
+The firm report's **Operator controls** provides:
+
+- **Change proprietor** (`firm.owner.change`): retype the firm name and enter the
+  incoming player name or UUID. Treasury updates the firm and every live linked
+  account, ends both proprietors' employee memberships, cancels pending
+  transfers, reconciles member/authorizer access, and revokes the outgoing
+  proprietor's business keys for this firm in one transaction. Independent
+  viewer and LuckPerms group grants remain; inspect those separately.
+- **Reconcile account access** (`firm.accounts.sync`): repair linked account
+  ownership and role-derived access. Proprietor/ADMIN gets AUTHORIZER; FINANCIAL
+  gets MEMBER. Stale member/authorizer grants are removed; independent viewer
+  and group grants remain.
+- **Balance-tax exemption** (`firm.tax.update`): set or clear the same exemption
+  used by `/business tax exempt`. The current state appears above the controls.
+- **Release reserved name** (`firm.name.release`): available for a disbanded firm.
+  Retype its name. Treasury refuses while any live account links remain. The
+  historical firm keeps its ID and name; a new firm can reserve that name.
+
+Reload the report and inspect account ownership/access and the audit log after
+an intervention. Use the firm's numeric ID once its name has been reused.
+These controls do not restore a disbanded business or change in-game chat state;
+see the [Business reference](/docs/reference/business) for in-game administration.
 
 ## Audit evidence
 

@@ -188,3 +188,15 @@ export const setWebhookSecret = (id: number, secret: string, ownerUuid?: string)
 
 export const deleteWebhook = (id: number, ownerUuid?: string) =>
   call<{ affected: number }>(`/api/v1/admin/webhooks/${id}${ownerQ(ownerUuid)}`, 'DELETE');
+
+export interface FirmOperationResult {
+  firmId: number; proprietorUuid: string; nameReleased: boolean; taxExempt: boolean; accountIds: number[];
+}
+export const changeFirmProprietor = (id: number, owner: string) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/proprietor`, 'PATCH', { owner });
+export const releaseFirmName = (id: number) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/release-name`, 'POST');
+export const setFirmTaxExempt = (id: number, exempt: boolean) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/tax-exemption`, 'PATCH', { exempt });
+export const syncFirmAccounts = (id: number) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/sync-accounts`, 'POST');

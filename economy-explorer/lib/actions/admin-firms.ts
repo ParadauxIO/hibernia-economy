@@ -1,11 +1,12 @@
 'use server';
 
+import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { requireLinkedViewer } from '@/lib/auth/linked';
 import { requirePermission } from '@/lib/auth/access';
 import { auditMutation } from '@/lib/audit';
-import { disbandFirm, renameFirm, updateFirmDetails, type DisbandResult, type FirmResult } from '@/lib/treasury';
-import { findFirmById, getFirmHeader, type FirmReportHeader } from '@/lib/sql/firm';
+import { changeFirmProprietor, releaseFirmName, setFirmTaxExempt, syncFirmAccounts, type FirmOperationResult, disbandFirm, renameFirm, updateFirmDetails, type DisbandResult, type FirmResult } from '@/lib/treasury';
+import { getFirmOperationState, findFirmById, getFirmHeader, type FirmReportHeader } from '@/lib/sql/firm';
 
 /** The firm fields admin tools change, as recorded before and after. */
 function firmSnapshot(f: FirmReportHeader | null) {
@@ -95,4 +96,45 @@ export async function updateFirmDetailsAction(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+const firmOperationSchema = z.discriminatedUnion('operation', [
+  z.object({ operation: z.literal('proprietor'), owner: z.string().trim().min(1), confirmName: z.string() }),
+  z.object({ operation: z.literal('release-name'), confirmName: z.string() }),
+  z.object({ operation: z.literal('tax-exemption'), exempt: z.boolean() }),
+  z.object({ operation: z.literal('sync-accounts') }),
+]);
+export async function operateFirmAction(firmId: number, raw: unknown): Promise<{ ok: boolean; error?: string; result?: FirmOperationResult }> {
+  const viewer = await requireLinkedViewer();
+  const permissions = {
+    proprietor: 'firm.owner.change', 'release-name': 'firm.name.release',
+    'tax-exemption': 'firm.tax.update', 'sync-accounts': 'firm.accounts.sync',
+  } as const;
+  const parsed = firmOperationSchema.safeParse(raw);
+  if (!parsed.success || !Number.isSafeInteger(firmId) || firmId <= 0) return { ok: false, error: 'Invalid operation.' };
+  const input = parsed.data;
+  requirePermission(viewer, permissions[input.operation]);
+  try {
+    const firm = await getFirmHeader(firmId);
+    if (!firm) return { ok: false, error: 'Firm not found.' };
+    if ((input.operation === 'proprietor' || input.operation === 'release-name') && input.confirmName.trim() !== firm.display_name) {
+      return { ok: false, error: 'Retype the firm name exactly.' };
+    }
+    const before = { ...firmSnapshot(firm), ...await getFirmOperationState(firmId) };
+    let result: FirmOperationResult;
+    switch (input.operation) {
+      case 'proprietor': result = await changeFirmProprietor(firmId, input.owner.trim()); break;
+      case 'release-name': result = await releaseFirmName(firmId); break;
+      case 'tax-exemption': result = await setFirmTaxExempt(firmId, input.exempt); break;
+      case 'sync-accounts': result = await syncFirmAccounts(firmId); break;
+    }
+    await auditMutation(viewer, {
+      action: permissions[input.operation], path: `/admin/firms/${firmId}`, targetType: 'firm', targetId: firmId,
+      before, after: { ...firmSnapshot(await getFirmHeader(firmId)), ...await getFirmOperationState(firmId), result },
+    });
+    revalidatePath('/admin/firms');
+    revalidatePath(`/admin/firms/${firmId}`);
+    revalidatePath('/admin/accounts');
+    return { ok: true, result };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
