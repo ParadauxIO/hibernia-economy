@@ -51,8 +51,12 @@ function accountAudit(action: string, path: string, accountId: number) {
 
 /** Move money between two accounts with a memo (admin). The acting player is recorded as the initiator. */
 export async function adminTransferAction(args: {
-  fromAccountId: number; toAccountId: number; amount: string; memo: string;
+  fromAccountId: number; toAccountId: number; amount: string; memo: string; idempotencyKey: string;
 }): Promise<Result<TransferResult>> {
+  if (typeof args.idempotencyKey !== 'string' || !/^[0-9a-f-]{36}$/i.test(args.idempotencyKey)) {
+    return { ok: false, error: 'A valid transfer retry key is required.' };
+  }
+  const { idempotencyKey, ...body } = args;
   const balances = async () => {
     const [from, to] = await Promise.all([findAccount(args.fromAccountId), findAccount(args.toAccountId)]);
     return { fromBalance: from?.balance ?? null, toBalance: to?.balance ?? null };
@@ -65,7 +69,7 @@ export async function adminTransferAction(args: {
       before: balances,
       after: async (r) => ({ txnId: r.txnId, amount: r.amount, memo: r.memo, ...(await balances()) }),
     },
-    () => adminTransfer(args),
+    () => adminTransfer(body, idempotencyKey),
   );
 }
 

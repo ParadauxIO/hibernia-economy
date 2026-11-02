@@ -56,8 +56,10 @@ firm links, aliases, payroll, tax destinations, API keys and shops first. Use fi
 disband for retiring a whole firm. Keep the primitive `Eco`, starting-balance,
 tax and fines accounts available.
 
-If a transfer times out, inspect the ledger before retrying: the form has no
-stable retry key. For an incorrect completed transfer, make one documented
+If a transfer times out, retry with identical details in the same browser tab.
+The form retains its retry key across reloads until success; Treasury returns
+the original result instead of moving money twice. Changing the details starts a
+new transfer. If you close the tab, inspect the ledger before submitting again. For an incorrect completed transfer, make one documented
 compensating transfer and verify both records. Do not delete the original.
 
 ## Firm changes
