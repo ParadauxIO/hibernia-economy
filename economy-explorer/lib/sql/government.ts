@@ -735,3 +735,22 @@ export async function selectGovViews(accountIds: readonly number[], fromTs: stri
   `.execute(db);
   return r.rows.map(({ actor_uuid_bin, ...row }) => ({ ...row, audit_id: Number(row.audit_id), outcome: Number(row.outcome), actor_uuid: bin(actor_uuid_bin) }));
 }
+
+export interface TaxBracketRevenueRow {
+  kind: 'personal' | 'corporate';
+  bracket: string;
+  collected: string;
+}
+
+/** Account-scoped, full-range aggregates; no request-time ledger scan. */
+export async function selectTaxBracketRevenue(accountIds: readonly number[], from: string, to: string): Promise<TaxBracketRevenueRow[]> {
+  if (accountIds.length === 0) return [];
+  const result = await sql<TaxBracketRevenueRow>`
+    SELECT tax_kind AS kind, bracket_key AS bracket, CAST(SUM(collected) AS CHAR) AS collected
+    FROM explorer_rollup_tax_bracket_day
+    WHERE account_id IN (${ids(accountIds)}) AND day BETWEEN ${from} AND ${to}
+    GROUP BY tax_kind, bracket_key
+    ORDER BY tax_kind, CAST(NULLIF(SUBSTRING_INDEX(bracket_key, ':', 1), '') AS DECIMAL(65,20)), bracket_key
+  `.execute(db);
+  return result.rows;
+}

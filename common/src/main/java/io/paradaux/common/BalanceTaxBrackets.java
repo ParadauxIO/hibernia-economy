@@ -7,6 +7,7 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.function.Consumer;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Framework-free model of the flat-bracket balance tax shared by the Treasury
@@ -29,11 +30,11 @@ public final class BalanceTaxBrackets {
 
     static {
         NavigableMap<BigDecimal, BigDecimal> m = new TreeMap<>();
-        m.put(new BigDecimal("0.00"),       BigDecimal.ZERO);
-        m.put(new BigDecimal("100000.00"),  new BigDecimal("0.01"));
-        m.put(new BigDecimal("200000.00"),  new BigDecimal("0.012"));
-        m.put(new BigDecimal("300000.00"),  new BigDecimal("0.014"));
-        m.put(new BigDecimal("500000.00"),  new BigDecimal("0.018"));
+        m.put(new BigDecimal("0.00"), BigDecimal.ZERO);
+        m.put(new BigDecimal("100000.00"), new BigDecimal("0.01"));
+        m.put(new BigDecimal("200000.00"), new BigDecimal("0.012"));
+        m.put(new BigDecimal("300000.00"), new BigDecimal("0.014"));
+        m.put(new BigDecimal("500000.00"), new BigDecimal("0.018"));
         DEFAULTS = Collections.unmodifiableNavigableMap(m);
     }
 
@@ -79,13 +80,13 @@ public final class BalanceTaxBrackets {
                 try {
                     rate = new BigDecimal(rawRate.trim());
                 } catch (NumberFormatException ex) {
-                    onWarn.accept("Invalid balance tax bracket rate for floor '" + key
-                            + "': '" + rawRate + "' — skipping");
+                    onWarn.accept(
+                            "Invalid balance tax bracket rate for floor '" + key + "': '" + rawRate + "' — skipping");
                     continue;
                 }
                 if (rate.compareTo(BigDecimal.ZERO) < 0 || rate.compareTo(BigDecimal.ONE) > 0) {
-                    onWarn.accept("Balance tax bracket rate for floor '" + key
-                            + "' is out of range [0,1]: " + rate + " — skipping");
+                    onWarn.accept("Balance tax bracket rate for floor '" + key + "' is out of range [0,1]: " + rate
+                            + " — skipping");
                     continue;
                 }
                 map.put(min, rate);
@@ -112,6 +113,23 @@ public final class BalanceTaxBrackets {
     public BigDecimal weeklyRate(BigDecimal balance) {
         Map.Entry<BigDecimal, BigDecimal> entry = brackets.floorEntry(balance);
         return entry != null ? entry.getValue() : BigDecimal.ZERO;
+    }
+
+    /** Exact collection-time bracket; the upper bound is exclusive. */
+    public record Bracket(BigDecimal floor, @Nullable BigDecimal ceiling, BigDecimal rate) {
+        public String ledgerTag() {
+            return " [bracket:" + decimal(floor) + ":" + (ceiling == null ? "*" : decimal(ceiling)) + ":"
+                    + decimal(rate) + "]";
+        }
+
+        private static String decimal(BigDecimal value) {
+            return value.stripTrailingZeros().toPlainString();
+        }
+    }
+
+    public @Nullable Bracket bracketAt(BigDecimal balance) {
+        Map.Entry<BigDecimal, BigDecimal> entry = brackets.floorEntry(balance);
+        return entry == null ? null : new Bracket(entry.getKey(), brackets.higherKey(entry.getKey()), entry.getValue());
     }
 
     /** The brackets as balance floor to weekly rate, ascending. Unmodifiable. */

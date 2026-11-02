@@ -18,6 +18,25 @@ import org.junit.jupiter.api.Test;
 class BalanceTaxBracketsTest {
 
     @Test
+    void exactBracketKeepsBoundsEvenWhenAdjacentRatesMatch() {
+        BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(
+                Map.of("100000.00", "0.0100", "200000", "0.01", "300000", "0.012"), w -> {});
+        assertEquals(null, b.bracketAt(new BigDecimal("99999.99")));
+        assertEquals(
+                " [bracket:100000:200000:0.01]",
+                b.bracketAt(new BigDecimal("100000")).ledgerTag());
+        assertEquals(
+                " [bracket:100000:200000:0.01]",
+                b.bracketAt(new BigDecimal("199999.99")).ledgerTag());
+        assertEquals(
+                " [bracket:200000:300000:0.01]",
+                b.bracketAt(new BigDecimal("200000")).ledgerTag());
+        assertEquals(
+                " [bracket:300000:*:0.012]",
+                b.bracketAt(new BigDecimal("300000")).ledgerTag());
+    }
+
+    @Test
     void emptyConfigFallsBackToDefaults() {
         List<String> warnings = new ArrayList<>();
         BalanceTaxBrackets b = BalanceTaxBrackets.fromRawEntries(Map.of(), warnings::add);

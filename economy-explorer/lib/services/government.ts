@@ -13,7 +13,7 @@ import {
   findPlayerNames, listFines, selectGovAccountDayNets, selectGovCounterparties, selectGovFlowGroups, selectGovLedger,
   selectGovMonthlyFlows, selectGovPluginOutflowDays, selectGovViews, selectLargestMovements, selectMoversByOfficial,
   selectSalaryBuckets, selectSalaryRecipients, selectTopFinePayers, selectTopTaxPayers, summariseFines,
-  summariseFinesForPeriod, topFineIssuers,
+  summariseFinesForPeriod, topFineIssuers, selectTaxBracketRevenue, type TaxBracketRevenueRow,
   type CounterpartyRow, type FineRow, type FineSummaryRow, type IssuerRow, type MovementRow, type OfficialRow, type PayerRow,
   type SalaryRecipientRow, type TxnWindow, type ViewRow,
 } from '@/lib/sql/government';
@@ -286,6 +286,7 @@ export async function getGovAccounts(scope: GovScope, accountIds: readonly numbe
 // ── revenue ───────────────────────────────────────────────────────────────
 
 export interface Revenue {
+  brackets: { rows: TaxBracketRevenueRow[]; coverage: Coverage };
   flows: Flows;
   taxPayers: PayerRow[];
   finePayers: (PayerRow & { player_uuid: string | null; player_name: string | null })[];
@@ -293,16 +294,18 @@ export interface Revenue {
 }
 
 export async function getRevenue(scope: GovScope, accountIds: readonly number[], range: DayRange): Promise<Revenue> {
-  const flows = await govFlows(scope, accountIds, range);
+  const map = await rollupCoverage();
+  const flows = await govFlows(scope, accountIds, range, map);
   const raw = rawRange(range);
   const { fromTs, toTs } = bounds(raw);
-  const [taxPayers, finePayers] = await Promise.all([
+  const [taxPayers, finePayers, bracketRows] = await Promise.all([
     flows.taxKinds.length
       ? cachedRaw('gov-tax-payers', accountIds, raw, flows.taxKinds.join(','), () => selectTopTaxPayers(accountIds, flows.taxKinds, fromTs, toTs, 15), TAX_PAYERS_CACHE_MS)
       : Promise.resolve([]),
     selectTopFinePayers(accountIds, ts(range.from), bounds(range).toTs, 15),
+    selectTaxBracketRevenue(accountIds, range.from, range.to),
   ]);
-  return { flows, taxPayers, finePayers, topRange: raw };
+  return { flows, taxPayers, finePayers, topRange: raw, brackets: { rows: bracketRows, coverage: jobCoverage(map, 'tax_bracket_day', range) } };
 }
 
 // ── spending ──────────────────────────────────────────────────────────────

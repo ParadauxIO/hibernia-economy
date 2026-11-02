@@ -74,7 +74,7 @@ export async function seedGovFixtures(): Promise<void> {
     for (let day = 40; day >= 1; day--) {
       const tax = (20 + day).toFixed(2);
       await txn(at(day, '09:00:00'), 'ChestShop', 'ChestShop sales tax (diamond)', [[MERCHANT_ACCOUNT, `-${tax}`], [a.commerce, tax]]);
-      await txn(at(day, '09:30:00'), 'business', 'Weekly Corporate Balance Tax', [[SUPPLIER_ACCOUNT, '-35.00'], [a.commerce, '35.00']]);
+      await txn(at(day, '09:30:00'), 'business', day <= 20 ? 'Weekly Corporate Balance Tax [bracket:100000:200000:0.01]' : 'Weekly Corporate Balance Tax', [[SUPPLIER_ACCOUNT, '-35.00'], [a.commerce, '35.00']]);
       await txn(at(day, '10:00:00'), 'treasury', 'Personal balance tax (24h 0m @ 1.0%/wk)', [[TRADER_ACCOUNT, '-12.50'], [a.interior, '12.50']]);
       if (day % 3 === 0) {
         for (const time of ['12:00:00', '12:15:00', '12:30:00']) {

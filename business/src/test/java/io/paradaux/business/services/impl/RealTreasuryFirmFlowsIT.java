@@ -339,7 +339,8 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
 
     private FirmBalanceTaxServiceImpl balanceTax(Firm firm, List<Integer> accountIds, BigDecimal rate) {
         BalanceTaxConfiguration config = mock(BalanceTaxConfiguration.class);
-        when(config.getWeeklyRate(any())).thenReturn(rate);
+        when(config.getBracket(any()))
+                .thenReturn(new io.paradaux.common.BalanceTaxBrackets.Bracket(BigDecimal.ZERO, null, rate));
         when(config.getGovernmentAccount()).thenReturn("DCGovernment");
         io.paradaux.business.services.FirmService firmService = mock(io.paradaux.business.services.FirmService.class);
         when(firmService.listAllActiveFirms()).thenReturn(List.of(firm));
