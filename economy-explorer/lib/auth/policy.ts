@@ -41,6 +41,7 @@ export const PERMISSION_DESCRIPTIONS = {
   "webhooks.update.all": "Enable, disable, update URLs and rotate secrets for any webhook.",
   "webhooks.delete.all": "Delete any webhook.",
   "groups.read": "List access groups, role assignments, sources and members.",
+  "groups.update": "Rename access groups and edit descriptions, limited to roles you can grant.",
   "groups.create": "Create an access group.",
   "groups.delete": "Delete an access group.",
   "groups.members.update": "Manage manual group members, limited to roles you can grant.",

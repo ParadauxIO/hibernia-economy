@@ -161,3 +161,12 @@ They also expire after one hour without a successful refresh. Changing or removi
 a mapping invalidates its old grants immediately. The `/treasuryapi ui sync`
 command refreshes LuckPerms only; allow the next scheduled pass for firm/property
 changes. Operators must apply database migration V37 before deploying this feature.
+
+## Correct a group's name or description
+
+Open the group under **Admin → Groups** and edit **Group details**. This requires
+`groups.update`, plus authority to grant every role the group currently grants.
+Names must be unique and 1–64 characters; descriptions may be cleared and are
+limited to 255 characters. Saving preserves the group ID, memberships, sync
+sources and role grants. Reload to verify the change; the audit log records
+**Group: edit details** with the previous and new values.

@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 import { db, uuidToBin } from '@/lib/db';
 import { getViewer } from '@/lib/auth/viewer';
 import { createRole, updateRole, deleteRole, setDirectRoleMember, type RoleInput } from '@/lib/services/role';
-import { setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, removeManualMember } from '@/lib/services/group';
+import { updateGroupMetadata, getGroup, setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, removeManualMember } from '@/lib/services/group';
 import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '@/lib/sql/role';
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { permissionsFor } from '../role-fixtures';
@@ -430,6 +430,21 @@ d('configurable authorization policy', () => {
     await resetDb();
     await sql`INSERT INTO explorer_role (player_uuid_bin, role) VALUES (${uuidToBin(ALICE)}, 'admin')`.execute(db);
     vi.mocked(getViewer).mockResolvedValue({ anon: false, keycloakSub: 'test-policy-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['player', 'admin'], permissions: permissionsFor('admin') });
+  });
+  it('renames a group in place without changing membership, grants or sources', async () => {
+    const before = await getGroup(1);
+    expect(before).not.toBeNull();
+    await updateGroupMetadata(1, { name: 'Renamed operators', description: 'Updated description' });
+    expect(await getGroup(1)).toEqual({ ...before, name: 'Renamed operators', description: 'Updated description' });
+    await updateGroupMetadata(1, { name: 'Renamed operators', description: '' });
+    expect((await getGroup(1))?.description).toBeNull();
+    await expect(updateGroupMetadata(1, { name: ' ', description: null })).rejects.toThrow();
+    await expect(updateGroupMetadata(1, { name: 'x'.repeat(65), description: null })).rejects.toThrow();
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (2, 'Other group')`.execute(db);
+    const other = await getGroup(2);
+    expect(other).not.toBeNull();
+    await expect(updateGroupMetadata(1, { name: other!.name, description: null })).rejects.toThrow('already exists');
+    expect((await getGroup(1))?.name).toBe('Renamed operators');
   });
   const custom: RoleInput = { key: 'auditor', name: 'Account auditor', description: 'Scoped custom role', permissions: ['account.read.all'] };
   it('seeds exactly the permission catalogue for admin and the documented defaults', async () => {
