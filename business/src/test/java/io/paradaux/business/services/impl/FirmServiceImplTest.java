@@ -54,6 +54,9 @@ class FirmServiceImplTest {
     FirmMapper firms;
 
     @Mock
+    io.paradaux.business.mappers.FirmStaffMapper staffMapper;
+
+    @Mock
     TreasuryApi treasury;
 
     @Mock
@@ -87,10 +90,10 @@ class FirmServiceImplTest {
     void setUp() {
         svc = new FirmServiceImpl(
                 firms,
+                new FirmOwnershipService(firms, staffMapper, requests),
                 treasury,
                 accounts,
                 roles,
-                requests,
                 () -> staffService,
                 () -> firmAccountService,
                 firmConfig,
@@ -827,6 +830,7 @@ class FirmServiceImplTest {
         firm.setFirmId(1);
         firm.setProprietorUuid(oldOwner.toString());
         when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(firms.lockFirm(1)).thenReturn(firm);
 
         svc.adminSetProprietor("Acme", newOwner, admin);
 
@@ -864,6 +868,7 @@ class FirmServiceImplTest {
         firm.setFirmId(1);
         firm.setProprietorUuid(oldOwner.toString());
         when(firms.getFirmByName("Acme")).thenReturn(firm);
+        when(firms.lockFirm(1)).thenReturn(firm);
         when(requests.recordAdminOverride(anyInt(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("audit insert failed"));
 
@@ -874,19 +879,21 @@ class FirmServiceImplTest {
     }
 
     @Test
-    void adminSetProprietor_whenNewProprietorIsEmployee_resignsThemFirst() {
+    void adminSetProprietor_endsBothProprietorsEmploymentWithoutEarlyAccountSync() {
         when(firms.updateFirm(any())).thenReturn(1);
         UUID newOwner = UUID.randomUUID();
         Firm firm = new Firm();
         firm.setFirmId(1);
         firm.setProprietorUuid(UUID.randomUUID().toString());
         when(firms.getFirmByName("Acme")).thenReturn(firm);
-        when(staffService.isEmployedBy(1, newOwner)).thenReturn(true);
+        when(firms.lockFirm(1)).thenReturn(firm);
 
         svc.adminSetProprietor("Acme", newOwner, UUID.randomUUID());
 
         // A proprietor cannot also hold an employee slot: resign, then hand over.
-        verify(staffService).resignFromFirm("Acme", newOwner);
+        verify(staffMapper).endCurrentEmployment(eq(1), eq(newOwner.toString()), any());
+        verify(staffMapper).endCurrentEmployment(eq(1), eq(firm.getProprietorUuid()), any());
+        org.mockito.Mockito.verifyNoInteractions(staffService);
         verify(firms).updateFirm(any());
         verify(firmAccountService).reassignAccountsToNewProprietor(1, newOwner);
     }

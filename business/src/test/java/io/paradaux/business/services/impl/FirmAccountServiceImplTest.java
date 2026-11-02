@@ -386,6 +386,7 @@ class FirmAccountServiceImplTest {
         when(treasury.getMembers(anyInt())).thenReturn(List.of());
         when(treasury.getAuthorizers(anyInt())).thenReturn(List.of());
 
+        when(treasury.getAccountById(anyInt())).thenReturn(new Account());
         svc.reassignAccountsToNewProprietor(1, newProprietor);
 
         // Owner reassigned on every live firm account...

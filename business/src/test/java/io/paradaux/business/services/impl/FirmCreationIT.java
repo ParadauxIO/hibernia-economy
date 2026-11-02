@@ -49,6 +49,7 @@ class FirmCreationIT extends IntegrationTestBase {
                                 environmentId("firm-creation-test");
                                 bindTransactionFactoryType(JdbcTransactionFactory.class);
                                 addMapperClass(FirmMapper.class);
+                                addMapperClass(io.paradaux.business.mappers.FirmStaffMapper.class);
                                 addMapperClass(FirmAccountsMapper.class);
                                 addMapperClass(FirmRoleMapper.class);
                                 addMapperClass(FirmRequestMapper.class);
