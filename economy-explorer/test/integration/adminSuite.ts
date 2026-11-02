@@ -29,6 +29,8 @@ import { auditTable } from '@/lib/tables/audit';
 import { adminGroupMembersTable, adminRoleMembersTable, adminApiKeysTable, adminGroupsTable, adminPlayersTable, adminRolesTable, adminWebhooksTable } from '@/lib/tables/admin';
 import { parseTableState, stateCursor, withCursor } from '@/lib/tables/core';
 import { permissionsFor } from '../role-fixtures';
+import { canReadAccount } from '@/lib/sql/ledger';
+import { listFirmAccountHistory, listFirmAccounts, findFirmForAccount } from '@/lib/sql/firm';
 import { ALICE, BOB, CAROL } from './db';
 
 type SignedIn = Extract<Viewer, { anon: false }>;
@@ -50,6 +52,20 @@ async function rowsFor(sub: string) {
 }
 
 export function adminSuite(d: (name: string, fn: () => void) => void): void {
+  d('historical firm account links', () => {
+    it('retains removed links for admin reconciliation without restoring live membership', async () => {
+      await sql`UPDATE firm_accounts SET removed_at = CURRENT_TIMESTAMP WHERE firm_id = 1 AND account_id = 3`.execute(db);
+      try {
+        expect(await listFirmAccounts(1)).toEqual([]);
+        expect(await findFirmForAccount(3)).toBeNull();
+        expect(await canReadAccount(3, BOB)).toBe(false);
+        const history = await listFirmAccountHistory(1);
+        expect(history).toEqual([expect.objectContaining({ account_id: 3, removed_at: expect.any(Date) })]);
+      } finally {
+        await sql`UPDATE firm_accounts SET removed_at = NULL WHERE firm_id = 1 AND account_id = 3`.execute(db);
+      }
+    });
+  });
   d('audit log (PAR-542)', () => {
     beforeAll(async () => {
       await sql`DELETE FROM explorer_audit WHERE actor_sub LIKE 'audit-suite-%'`.execute(db);

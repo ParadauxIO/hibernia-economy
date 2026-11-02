@@ -1,5 +1,5 @@
 import 'server-only';
-import { requirePermission } from '@/lib/auth/access';
+import { canViewFirmInternals, requirePermission } from '@/lib/auth/access';
 import type { Viewer } from '@/lib/auth/viewer';
 import { queryKeyUsage, type KeyUsage } from '@/lib/prometheus';
 import { unstable_cache } from 'next/cache';
@@ -23,6 +23,8 @@ import {
 import type { GroupSummary } from '@/lib/sql/group';
 import { auditView } from '@/lib/audit';
 import { countAccounts, listAccounts, type ExplorerAccountRow } from '@/lib/sql/ledger';
+import { listFirmAccountHistory } from '@/lib/sql/firm';
+import { ForbiddenError } from '@/lib/errors';
 import { findFirmNames } from '@/lib/sql/tableLookups';
 import { listRecentDeliveries, type AdminWebhookRow } from '@/lib/sql/webhook';
 import type { AccountsTableState } from '@/lib/tables/accounts';
@@ -112,4 +114,10 @@ export async function getAdminWebhookDetail(viewer: Viewer, id: number) {
   await auditView(viewer, { path: `/admin/webhooks/${id}`, targetType: 'webhook', targetId: String(id) });
   const deliveries = hook.ownerUuid ? await listRecentDeliveries(id, hook.ownerUuid, 50) : [];
   return { hook, deliveries };
+}
+
+export async function getAdminFirmAccountHistory(viewer: Viewer, firmId: number) {
+  requirePermission(viewer, 'firm.admin.read');
+  if (!await canViewFirmInternals(firmId, viewer)) throw new ForbiddenError();
+  return listFirmAccountHistory(firmId);
 }
