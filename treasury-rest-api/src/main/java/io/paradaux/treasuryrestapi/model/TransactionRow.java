@@ -29,7 +29,6 @@ public class TransactionRow {
     private String initiatorName;
 
     private String pluginSystem;
-    private String payoutCategory;
     /** The posting's account — populated by the dispatcher tail query; 0 on the per-account history query. */
     private long accountId;
     /** The other leg's account — populated by the history and feed queries; null if there is no other leg. */
@@ -38,4 +37,9 @@ public class TransactionRow {
     private String counterpartyAccountType;
     private String counterpartyDisplayName;
     private UUID counterpartyOwnerUuidBin;
+
+    public String getPayoutCategory() {
+        var category = io.paradaux.treasury.model.economy.PayoutCategory.fromSource(pluginSystem);
+        return category == null ? null : category.name();
+    }
 }

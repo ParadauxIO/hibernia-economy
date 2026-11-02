@@ -48,10 +48,10 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
     }
 
     @Test
-    void history_exposesStructuredPayoutCategoryAndLeavesLegacyRowsNull() {
+    void history_classifiesExistingPayrollFromItsSourceAndLeavesGenericTransfersNull() {
         insertSettledTransfer(1, 2, "25.00", "uncategorized", PLAYER);
         long txn = insertSettledTransfer(3, 1, "100.00", "same free-form memo", GOV);
-        exec("UPDATE ledger_txns SET payout_category = 'EMPLOYEE' WHERE txn_id = ?", ps -> ps.setLong(1, txn));
+        exec("UPDATE ledger_txns SET plugin_system = 'treasury-salary' WHERE txn_id = ?", ps -> ps.setLong(1, txn));
         assertThat(transactionService.getTransactions(token(), 1, 1, 20).items())
                 .extracting(TransactionItem::payoutCategory)
                 .containsExactly("EMPLOYEE", null);
@@ -144,7 +144,7 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
     void webhookPayload_carriesCounterparty() {
         long sub = insertSubscription(PLAYER, "PERSONAL", 1, null, "https://example.com/hook", "s".repeat(64), true, 0);
         long txn = insertSettledTransfer(3, 1, "100.00", "wage", GOV);
-        exec("UPDATE ledger_txns SET payout_category = 'AUCTION_PROCEEDS' WHERE txn_id = ?", ps -> ps.setLong(1, txn));
+        exec("UPDATE ledger_txns SET plugin_system = 'realty-auction' WHERE txn_id = ?", ps -> ps.setLong(1, txn));
         insertDueDelivery(sub, txn, 1, 0);
 
         List<DueDelivery> due = deliveryMapper.findDue(10);

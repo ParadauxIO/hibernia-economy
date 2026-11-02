@@ -1,6 +1,7 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.model.config.SalaryConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.TransferRequest;
@@ -11,13 +12,6 @@ import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.SalaryService;
 import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import java.time.Clock;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.context.ContextManager;
 import net.luckperms.api.context.ImmutableContextSet;
@@ -25,6 +19,13 @@ import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.user.User;
 import org.bukkit.Server;
 import org.bukkit.entity.Player;
+
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Pays online players a salary from a government account based on their highest
@@ -44,23 +45,15 @@ public class SalaryServiceImpl implements SalaryService {
     private LuckPerms luckPerms;
 
     @Inject
-    public SalaryServiceImpl(
-            SalaryConfiguration config,
-            AccountService accountService,
-            LedgerService ledgerService,
-            Server server,
-            EconomyNotifier notifier) {
+    public SalaryServiceImpl(SalaryConfiguration config, AccountService accountService,
+                             LedgerService ledgerService, Server server, EconomyNotifier notifier) {
         this(config, accountService, ledgerService, server, notifier, Clock.systemUTC());
     }
 
     /** Test seam: lets a test pin the clock so the per-run dedup key is deterministic. */
-    SalaryServiceImpl(
-            SalaryConfiguration config,
-            AccountService accountService,
-            LedgerService ledgerService,
-            Server server,
-            EconomyNotifier notifier,
-            Clock clock) {
+    SalaryServiceImpl(SalaryConfiguration config, AccountService accountService,
+                      LedgerService ledgerService, Server server, EconomyNotifier notifier,
+                      Clock clock) {
         this.config = config;
         this.accountService = accountService;
         this.ledgerService = ledgerService;
@@ -101,8 +94,8 @@ public class SalaryServiceImpl implements SalaryService {
                 continue; // don't pay UBI/salary to AFK-idling players (PAR-139)
             }
             UUID uuid = player.getUniqueId();
-            config.highestSalary(groupsOf(uuid))
-                    .ifPresent(best -> plan.add(new SalaryPayment(uuid, best.getKey(), best.getValue())));
+            config.highestSalary(groupsOf(uuid)).ifPresent(best ->
+                    plan.add(new SalaryPayment(uuid, best.getKey(), best.getValue())));
         }
         return plan;
     }
@@ -119,7 +112,8 @@ public class SalaryServiceImpl implements SalaryService {
             return false;
         }
         ImmutableContextSet contexts = contextManager.getContext(player);
-        return contexts != null && contexts.contains(config.getAfkContextKey(), config.getAfkContextValue());
+        return contexts != null
+                && contexts.contains(config.getAfkContextKey(), config.getAfkContextValue());
     }
 
     @Override
@@ -168,8 +162,7 @@ public class SalaryServiceImpl implements SalaryService {
                         TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
                         null,
                         "treasury-salary",
-                        dedupKey,
-                        io.paradaux.treasury.model.economy.PayoutCategory.EMPLOYEE));
+                        dedupKey));
 
                 if (result.created()) {
                     // A real payout happened — notify and count it.
@@ -182,13 +175,10 @@ public class SalaryServiceImpl implements SalaryService {
                     // SalaryTask keeps colliding (two fires bucketed into one period under
                     // tick lag) a whole payout period is silently skipped — surface it so
                     // that is diagnosable.
-                    log.warn(
-                            "Salary for {} (group {}, period start {}) collapsed onto an existing "
+                    log.warn("Salary for {} (group {}, period start {}) collapsed onto an existing "
                                     + "dedup key — no new payout for this period. Expected for a retry/overlapping "
                                     + "run; if it recurs on the scheduled timer, a payout period is being skipped.",
-                            payment.player(),
-                            payment.group(),
-                            runId);
+                            payment.player(), payment.group(), runId);
                 }
             } catch (Exception e) {
                 log.warn("Salary payment to {} failed: {}", payment.player(), e.getMessage());
@@ -220,7 +210,7 @@ public class SalaryServiceImpl implements SalaryService {
             return Set.of();
         }
         return user.getInheritedGroups(user.getQueryOptions()).stream()
-                .map(Group::getName)
-                .collect(Collectors.toSet());
+                   .map(Group::getName)
+                   .collect(Collectors.toSet());
     }
 }

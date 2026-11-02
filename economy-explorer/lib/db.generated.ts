@@ -547,7 +547,6 @@ export interface LedgerTxns {
   clientDedupKey: Generated<Buffer | null>;
   initiatorUuidBin: Buffer;
   message: string;
-  payoutCategory: Generated<string | null>;
   pluginSystem: Generated<string | null>;
   settlementTime: Generated<Date>;
   taxKind: Generated<string | null>;

@@ -26,10 +26,14 @@ public class DueDelivery {
     private LocalDateTime settlementTime;
     private UUID initiatorUuidBin;
     private String pluginSystem;
-    private String payoutCategory;
     // the other leg's account; null if the transaction has no other posting
     private Long counterpartyAccountId;
     private String counterpartyAccountType;
     private String counterpartyDisplayName;
     private UUID counterpartyOwnerUuidBin;
+
+    public String getPayoutCategory() {
+        var category = io.paradaux.treasury.model.economy.PayoutCategory.fromSource(pluginSystem);
+        return category == null ? null : category.name();
+    }
 }

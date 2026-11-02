@@ -20,7 +20,10 @@ public record TransactionItem(
         String pluginSystem,
         Counterparty counterparty,
 
-        @Schema(description = "EMPLOYEE or AUCTION_PROCEEDS; null for uncategorized transactions.", nullable = true)
+        @Schema(
+                description = "Purpose derived from the originating payment source; null for mixed or unknown sources.",
+                allowableValues = {"EMPLOYEE", "AUCTION_PROCEEDS"},
+                nullable = true)
         String payoutCategory) {
 
     /**

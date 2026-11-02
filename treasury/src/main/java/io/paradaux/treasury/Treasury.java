@@ -20,7 +20,6 @@ import io.paradaux.treasury.api.impl.TaxApiImpl;
 import io.paradaux.treasury.api.impl.TreasuryApiImpl;
 import io.paradaux.treasury.commands.*;
 import io.paradaux.treasury.commands.resolvers.PayTargetResolver;
-import io.paradaux.treasury.commands.resolvers.PayoutCategoryResolver;
 import io.paradaux.treasury.events.FirstPlayerJoinEvent;
 import io.paradaux.treasury.events.OnlinePlayerRosterListener;
 import io.paradaux.treasury.events.PlayerLoginListener;
@@ -102,7 +101,7 @@ public class Treasury extends JavaPlugin {
                         GovCommand.class,
                         FineCommand.class,
                         TaxCommand.class)
-                .resolvers(PayTargetResolver.class, PayoutCategoryResolver.class)
+                .resolvers(PayTargetResolver.class)
                 .listeners(FirstPlayerJoinEvent.class, PlayerLoginListener.class, OnlinePlayerRosterListener.class)
                 .build();
 

@@ -1,12 +1,13 @@
 package io.paradaux.treasuryrestapi.mapper;
 
 import io.paradaux.treasuryrestapi.model.DueDelivery;
-import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+
+import java.util.List;
 
 @Mapper
 public interface WebhookDeliveryMapper {
@@ -18,10 +19,9 @@ public interface WebhookDeliveryMapper {
      */
     @Insert("INSERT IGNORE INTO webhook_delivery (subscription_id, txn_id, account_id) "
             + "VALUES (#{subscriptionId}, #{txnId}, #{accountId})")
-    int enqueue(
-            @Param("subscriptionId") long subscriptionId,
-            @Param("txnId") long txnId,
-            @Param("accountId") long accountId);
+    int enqueue(@Param("subscriptionId") long subscriptionId,
+                @Param("txnId") long txnId,
+                @Param("accountId") long accountId);
 
     /**
      * Deliveries due now, joined to their (still-active) subscription and the
@@ -40,7 +40,7 @@ public interface WebhookDeliveryMapper {
             + "       s.target_url AS targetUrl, s.secret, "
             + "       lp.posting_id AS postingId, lp.amount, lp.memo, "
             + "       lt.message, lt.settlement_time AS settlementTime, "
-            + "       lt.initiator_uuid_bin AS initiatorUuidBin, lt.plugin_system AS pluginSystem, lt.payout_category AS payoutCategory "
+            + "       lt.initiator_uuid_bin AS initiatorUuidBin, lt.plugin_system AS pluginSystem "
             + "FROM webhook_delivery d "
             + "JOIN webhook_subscription s ON s.subscription_id = d.subscription_id AND s.active = 1 "
             + "JOIN ledger_postings lp ON lp.txn_id = d.txn_id AND lp.account_id = d.account_id "
@@ -66,11 +66,8 @@ public interface WebhookDeliveryMapper {
     @Update("UPDATE webhook_delivery SET attempts = attempts + 1, http_status = #{httpStatus}, "
             + "last_error = #{error}, next_attempt_at = NOW() + INTERVAL #{delaySeconds} SECOND "
             + "WHERE delivery_id = #{id}")
-    int markRetry(
-            @Param("id") long id,
-            @Param("httpStatus") Integer httpStatus,
-            @Param("error") String error,
-            @Param("delaySeconds") long delaySeconds);
+    int markRetry(@Param("id") long id, @Param("httpStatus") Integer httpStatus,
+                  @Param("error") String error, @Param("delaySeconds") long delaySeconds);
 
     @Update("UPDATE webhook_delivery SET status = 'FAILED', attempts = attempts + 1, "
             + "http_status = #{httpStatus}, last_error = #{error} WHERE delivery_id = #{id}")

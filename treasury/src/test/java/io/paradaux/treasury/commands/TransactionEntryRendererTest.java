@@ -67,7 +67,7 @@ class TransactionEntryRendererTest {
         entry.setTxnId(42);
         entry.setAmount(new BigDecimal("15.00"));
         entry.setMemo("Lot 17");
-        entry.setPayoutCategory(io.paradaux.treasury.model.economy.PayoutCategory.AUCTION_PROCEEDS);
+        entry.setPluginSystem("realty-auction");
         TransactionEntryRenderer.send(recipient, message, accounts, entry);
         verify(message)
                 .send(

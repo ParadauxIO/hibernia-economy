@@ -749,7 +749,8 @@
             "type" : "string"
           },
           "payoutCategory" : {
-            "description" : "EMPLOYEE or AUCTION_PROCEEDS; null for uncategorized transactions.",
+            "description" : "Purpose derived from the originating payment source; null for mixed or unknown sources.",
+            "enum" : [ "EMPLOYEE", "AUCTION_PROCEEDS" ],
             "type" : [ "string", "null" ]
           },
           "pluginSystem" : {

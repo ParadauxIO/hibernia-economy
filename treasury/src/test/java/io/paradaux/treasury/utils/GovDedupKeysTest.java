@@ -1,11 +1,12 @@
 package io.paradaux.treasury.utils;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
-import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Regression tests for the dedup-key collision bug in {@code /government pay} and
@@ -18,9 +19,9 @@ import org.junit.jupiter.api.Test;
  */
 class GovDedupKeysTest {
 
-    private static final UUID SENDER = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID OTHER = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final Instant NOW = Instant.parse("2026-01-15T12:34:56Z");
+    private static final UUID SENDER  = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID OTHER   = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final Instant NOW  = Instant.parse("2026-01-15T12:34:56Z");
     private static final BigDecimal AMOUNT = new BigDecimal("100.00");
 
     // ---- transfer ----
@@ -35,7 +36,7 @@ class GovDedupKeysTest {
     @Test
     void transfer_differentSender_produceDifferentKeys() {
         byte[] a = GovDedupKeys.transfer(SENDER, 1, 2, AMOUNT, NOW);
-        byte[] b = GovDedupKeys.transfer(OTHER, 1, 2, AMOUNT, NOW);
+        byte[] b = GovDedupKeys.transfer(OTHER,  1, 2, AMOUNT, NOW);
         assertThat(a).isNotEqualTo(b);
     }
 
@@ -76,18 +77,6 @@ class GovDedupKeysTest {
         assertThat(a).isEqualTo(b);
     }
 
-    @org.junit.jupiter.api.Test
-    void payoutCategories_areDistinctButRetriesAreStable() {
-        var employee = io.paradaux.treasury.model.economy.PayoutCategory.EMPLOYEE;
-        var auction = io.paradaux.treasury.model.economy.PayoutCategory.AUCTION_PROCEEDS;
-        byte[] key = GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW, employee);
-        assertThat(key).containsExactly(GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW, employee));
-        assertThat(key).isNotEqualTo(GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW, auction));
-        assertThat(key).isNotEqualTo(GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW));
-        assertThat(GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW, null))
-                .containsExactly(GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW));
-    }
-
     // ---- payout ----
 
     @Test
@@ -102,7 +91,7 @@ class GovDedupKeysTest {
         // Even with all other args identical, payout and transfer must occupy
         // separate dedup namespaces — the prefix differentiates them.
         byte[] t = GovDedupKeys.transfer(SENDER, 1, 2, AMOUNT, NOW);
-        byte[] p = GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW);
+        byte[] p = GovDedupKeys.payout(SENDER,   1, 2, AMOUNT, NOW);
         assertThat(t).isNotEqualTo(p);
     }
 
@@ -139,8 +128,8 @@ class GovDedupKeysTest {
     @Test
     void adminTransfer_namespaceDiffersFromTransferAndPayout() {
         byte[] admin = GovDedupKeys.adminTransfer(SENDER, 1, 2, AMOUNT, NOW);
-        byte[] t = GovDedupKeys.transfer(SENDER, 1, 2, AMOUNT, NOW);
-        byte[] p = GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW);
+        byte[] t     = GovDedupKeys.transfer(SENDER, 1, 2, AMOUNT, NOW);
+        byte[] p     = GovDedupKeys.payout(SENDER, 1, 2, AMOUNT, NOW);
         assertThat(admin).isNotEqualTo(t).isNotEqualTo(p);
     }
 }

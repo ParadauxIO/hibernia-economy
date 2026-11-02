@@ -261,7 +261,8 @@ class SalaryServiceImplTest {
         assertThat(req.initiator()).isEqualTo(TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
         assertThat(req.pluginSystem()).isEqualTo("treasury-salary");
         assertThat(req.message()).contains("senator");
-        assertThat(req.payoutCategory()).isEqualTo(io.paradaux.treasury.model.economy.PayoutCategory.EMPLOYEE);
+        assertThat(io.paradaux.treasury.model.economy.PayoutCategory.fromSource(req.pluginSystem()))
+                .isEqualTo(io.paradaux.treasury.model.economy.PayoutCategory.EMPLOYEE);
 
         // The recipient is notified of the salary they received.
         ArgumentCaptor<BigDecimal> amt = ArgumentCaptor.forClass(BigDecimal.class);

@@ -57,7 +57,7 @@ export function pluginOptions(plugins: readonly (string | null)[]): EnumOption[]
 // filter stays on idx_ledger_plugin_time and idx_ledger_tax_kind_time.
 
 export const TXN_CATEGORIES: readonly Category[] = [
-  'wages', 'shop_sales', 'taxes', 'fines', 'property', 'business', 'crime', 'jobs', 'transfers', 'api', 'other',
+  'wages', 'auction_proceeds', 'shop_sales', 'taxes', 'fines', 'property', 'business', 'crime', 'jobs', 'transfers', 'api', 'other',
 ];
 
 export const CATEGORY_OPTIONS: readonly EnumOption[] = TXN_CATEGORIES.map((c) => ({ value: c, label: c === 'shop_sales' ? 'Shop trades' : CATEGORY_LABELS[c] }));

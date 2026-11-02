@@ -92,8 +92,8 @@ For a normal (non-Discord) endpoint, the body is JSON:
 `null` only if the transaction has no other side. The same `counterparty` object appears on
 every item from the transaction history and feed endpoints.
 `payoutCategory` is `EMPLOYEE`, `AUCTION_PROCEEDS`, or `null` for an uncategorized
-transaction. It is stored separately from the memo and also appears on history
-and feed items.
+transaction. It is derived from the dedicated source (`treasury-salary` or
+`realty-auction`), never from memo text, and also appears on history and feed items.
 
 The request also carries these headers:
 

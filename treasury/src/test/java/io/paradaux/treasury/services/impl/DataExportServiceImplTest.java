@@ -85,12 +85,14 @@ class DataExportServiceImplTest {
     void csv_containsStructuredCategorySeparateFromMemo() {
         when(accountMapper.findById(1)).thenReturn(new Account());
         TransactionEntry entry = txn(1L, 1L, 1, "12.50", "memo", null, null, "test");
-        entry.setPayoutCategory(io.paradaux.treasury.model.economy.PayoutCategory.AUCTION_PROCEEDS);
+        entry.setPluginSystem("realty-auction");
         when(ledgerMapper.findAllTransactionsByAccount(eq(1), anyInt())).thenReturn(List.of(entry));
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         when(bytebinService.upload(body.capture(), eq("text/csv"))).thenReturn("url");
         svc.exportTransactionsFor(1);
-        assertThat(body.getValue()).contains(",test,AUCTION_PROCEEDS\n").contains(",12.50,memo,");
+        assertThat(body.getValue())
+                .contains(",realty-auction,AUCTION_PROCEEDS\n")
+                .contains(",12.50,memo,");
     }
 
     @Test

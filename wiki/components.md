@@ -462,15 +462,26 @@ required; the existing nullable columns support both scopes.
 
 ### Structured payout categories (PAR-554)
 
-`treasury-api` exposes `PayoutCategory.EMPLOYEE` and
-`PayoutCategory.AUCTION_PROCEEDS`. Pass a category as the final argument of
-`TransferRequest`; the existing eight-argument constructor remains supported
-and leaves it null. Treasury persists the enum name in the nullable,
-constraint-checked `ledger_txns.payout_category` column (V52). No category is
-inferred from a memo, plugin name, or historical transaction.
+Payout purpose comes from the originating operation's `plugin_system`, not a memo,
+recipient name, account label or manually chosen command argument. The public
+`PayoutCategory` enum maps `treasury-salary` to `EMPLOYEE` and `realty-auction` to
+`AUCTION_PROCEEDS`, case-insensitively. Unknown and mixed-purpose sources remain
+null. A generic `realty` payment is not necessarily an auction; a payment from
+`BusinessPlugin` is not necessarily employee pay.
 
-`LedgerTxn` and `TransactionEntry` expose the category. REST transaction history,
-cursor feeds and webhook transaction payloads expose `payoutCategory` as the
-stored enum name or null. CSV exports append a `payout_category` column.
-This payout purpose is separate from the Explorer's inferred analytics taxonomy.
-Deploy the migration before consumers that select the new column.
+Realty uses `realty-auction` for partial and final auction bid settlements. Rentals,
+purchases and refunds retain `realty`. This uses the existing eight-argument
+`TransferRequest` API and works with older Treasury versions; install the matching
+Realty change to identify new auctions. No historical Realty transactions are
+reclassified by parsing their descriptions.
+
+`LedgerTxn` and `TransactionEntry` derive the category on read. REST history,
+cursor feeds and webhooks expose its name as `payoutCategory`; CSV appends
+`payout_category`. Existing salary history is classified immediately without a
+migration or data rewrite. Explorer maps incoming `realty-auction` flows to Auction
+proceeds and outgoing flows to Property, retaining its internal-transfer and tax
+precedence. Its source-key rollups need no rebuild.
+
+SYSTEM wallets preserve plugin identity through `system_plugin_key`, but production
+wallets serve both receipts and payments. Their type or editable display name does
+not prove employee pay or auction proceeds; no new routing wallets are created.

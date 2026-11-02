@@ -22,6 +22,7 @@ repositories {
 
 dependencies {
     implementation(project(":common"))
+    implementation(project(":treasury:treasury-api"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")

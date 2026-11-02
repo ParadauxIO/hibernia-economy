@@ -1,9 +1,10 @@
 package io.paradaux.treasury.model.economy;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
-import org.jetbrains.annotations.Nullable;
 
 public record TransferRequest(
         int fromAccountId,
@@ -13,21 +14,7 @@ public record TransferRequest(
         UUID initiator,
         @Nullable UUID authorizer,
         @Nullable String pluginSystem,
-        byte @Nullable [] dedupKey,
-        @Nullable PayoutCategory payoutCategory) {
-
-    /** Existing callers remain uncategorized; no category is inferred from a memo. */
-    public TransferRequest(
-            int fromAccountId,
-            int toAccountId,
-            BigDecimal amount,
-            String message,
-            UUID initiator,
-            @Nullable UUID authorizer,
-            @Nullable String pluginSystem,
-            byte @Nullable [] dedupKey) {
-        this(fromAccountId, toAccountId, amount, message, initiator, authorizer, pluginSystem, dedupKey, null);
-    }
+        byte @Nullable [] dedupKey) {
 
     public TransferRequest {
         // Validate the money-bearing fields up front so a bad request can't reach

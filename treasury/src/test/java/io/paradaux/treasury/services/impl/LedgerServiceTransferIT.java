@@ -50,8 +50,8 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.EnumSource(PayoutCategory.class)
-    void payoutCategory_survivesLedgerAndAllHistoryQueries(PayoutCategory category) {
+    @org.junit.jupiter.params.provider.CsvSource({"treasury-salary,EMPLOYEE", "realty-auction,AUCTION_PROCEEDS"})
+    void payoutCategory_survivesLedgerAndAllHistoryQueries(String sourcePlugin, PayoutCategory category) {
         Account source = createPersonalAccount(100);
         Account target = createPersonalAccount(0);
         byte[] key = io.paradaux.treasury.utils.Idempotency.sha256("category:" + UUID.randomUUID());
@@ -62,9 +62,8 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
                 "same memo",
                 UUID.randomUUID(),
                 null,
-                "test",
-                key,
-                category);
+                sourcePlugin,
+                key);
         long id = ledgerService.transfer(request);
         assertThat(ledgerService.transfer(request)).isEqualTo(id);
         assertThat(balanceOf(source)).isEqualByComparingTo("87.50");
@@ -96,34 +95,8 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
                 null,
                 "test",
                 null);
-        assertThat(request.payoutCategory()).isNull();
         assertThat(ledgerMapper.findTxnById(ledgerService.transfer(request)).getPayoutCategory())
                 .isNull();
-    }
-
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"salary", "employee", "EMPLOYEE "})
-    void databaseRejectsUnknownPayoutCategories(String category) throws Exception {
-        Account source = createPersonalAccount(100);
-        Account target = createPersonalAccount(0);
-        long id = ledgerService.transfer(new TransferRequest(
-                source.getAccountId(),
-                target.getAccountId(),
-                new BigDecimal("1.00"),
-                "memo",
-                UUID.randomUUID(),
-                null,
-                "test",
-                null));
-        try (var connection = dataSource.getConnection();
-                var statement =
-                        connection.prepareStatement("UPDATE ledger_txns SET payout_category = ? WHERE txn_id = ?")) {
-            statement.setString(1, category);
-            statement.setLong(2, id);
-            org.assertj.core.api.Assertions.assertThatThrownBy(statement::executeUpdate)
-                    .isInstanceOf(java.sql.SQLException.class);
-        }
-        assertThat(ledgerMapper.findTxnById(id).getPayoutCategory()).isNull();
     }
 
     // ---------- transfer: amount validation ----------
