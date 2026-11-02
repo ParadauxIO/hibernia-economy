@@ -15,11 +15,16 @@ import static org.mockito.Mockito.when;
 import io.paradaux.chestshop.ChestShop;
 import io.paradaux.chestshop.mappers.AccountMapper;
 import io.paradaux.chestshop.model.Account;
+import io.paradaux.chestshop.model.PlayerSnapshot;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.Permissions;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.ibatis.exceptions.PersistenceException;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -27,6 +32,8 @@ import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 /**
@@ -64,6 +71,135 @@ class AccountServiceImplTest {
         GovernmentAccountServiceImpl government = new GovernmentAccountServiceImpl(config);
         government.bind(treasury);
         service = new AccountServiceImpl(mapper, business, government, config, signService, adminBypass);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"uuid", "name", "short", "write"})
+    void blockedDatabaseCallDoesNotBlockOtherLookups(String operation) throws Exception {
+        UUID slowId = UUID.randomUUID();
+        Account warm = new Account("Warm", "Warm", UUID.randomUUID());
+        Account cold = new Account("Cold", "Cold", UUID.randomUUID());
+        when(mapper.findLatestByUuid(warm.getUuid())).thenReturn(warm);
+        assertThat(service.getAccount(warm.getUuid())).isSameAs(warm);
+        when(mapper.findLatestByUuid(cold.getUuid())).thenReturn(cold);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        org.mockito.stubbing.Answer<Account> blocked = invocation -> {
+            entered.countDown();
+            assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+            return new Account("Slow", "Slow", slowId);
+        };
+        switch (operation) {
+            case "uuid" -> when(mapper.findLatestByUuid(slowId)).thenAnswer(blocked);
+            case "name" -> when(mapper.findLatestByName("Slow")).thenAnswer(blocked);
+            case "short" -> when(mapper.findByShortName("Slow")).thenAnswer(blocked);
+            case "write" -> when(mapper.findByUuidAndName(slowId, "Slow")).thenAnswer(blocked);
+        }
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var slow = executor.submit(() -> switch (operation) {
+                case "uuid" -> service.getAccount(slowId);
+                case "name" -> service.getAccount("Slow");
+                case "short" -> service.getAccountFromShortName("Slow");
+                default -> service.storeUsername(new PlayerSnapshot(slowId, "Slow"));
+            });
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+            var other = executor.submit(() -> {
+                assertThat(service.getAccount(warm.getUuid())).isSameAs(warm);
+                assertThat(service.getAccount("Warm")).isSameAs(warm);
+                assertThat(service.getAccountFromShortName("Warm")).isSameAs(warm);
+                return service.getAccount(cold.getUuid());
+            });
+            assertThat(other.get(2, TimeUnit.SECONDS)).isSameAs(cold);
+            release.countDown();
+            assertThat(slow.get(2, TimeUnit.SECONDS).getUuid()).isEqualTo(slowId);
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void inFlightLookupCannotOverwriteCompletedRename(boolean evictRenamedAccount) throws Exception {
+        UUID id = UUID.randomUUID();
+        Account old = new Account("Old", "Old", id);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicReference<Account> persisted = new AtomicReference<>(old);
+        when(mapper.findLatestByUuid(id)).thenAnswer(invocation -> {
+            Account snapshot = persisted.get();
+            if (snapshot == old) {
+                entered.countDown();
+                assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+            }
+            return snapshot;
+        });
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var lookup = executor.submit(() -> service.getAccount(id));
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+            Account renamed = executor.submit(() -> service.storeUsername(new PlayerSnapshot(id, "New")))
+                    .get(2, TimeUnit.SECONDS);
+            persisted.set(renamed);
+            if (evictRenamedAccount) {
+                // Exceed all three cache capacities before the stale read completes.
+                for (int i = 0; i < 128; i++) {
+                    service.storeUsername(new PlayerSnapshot(UUID.randomUUID(), "Other" + i));
+                }
+            }
+            release.countDown();
+            assertThat(lookup.get(2, TimeUnit.SECONDS)).isSameAs(renamed);
+            assertThat(service.getAccount(id)).isSameAs(renamed);
+            assertThat(service.getAccount("New")).isSameAs(renamed);
+            assertThat(service.getAccountFromShortName("New")).isSameAs(renamed);
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void concurrentWritersPreserveDistinctShortNames() throws Exception {
+        UUID firstId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        AtomicReference<Account> persisted = new AtomicReference<>();
+        CountDownLatch saving = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(mapper.findByShortName("Same")).thenAnswer(invocation -> persisted.get());
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    Account account = invocation.getArgument(0);
+                    if (account.getUuid().equals(firstId)) {
+                        saving.countDown();
+                        assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+                        persisted.set(account);
+                    }
+                    return null;
+                })
+                .when(mapper)
+                .save(any());
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> service.storeUsername(new PlayerSnapshot(firstId, "Same")));
+            assertThat(saving.await(2, TimeUnit.SECONDS)).isTrue();
+            CountDownLatch secondStarted = new CountDownLatch(1);
+            var second = executor.submit(() -> {
+                secondStarted.countDown();
+                return service.storeUsername(new PlayerSnapshot(secondId, "Same"));
+            });
+            assertThat(secondStarted.await(2, TimeUnit.SECONDS)).isTrue();
+            release.countDown();
+            assertThat(first.get(2, TimeUnit.SECONDS).getShortName()).isEqualTo("Same");
+            assertThat(second.get(2, TimeUnit.SECONDS).getShortName()).isEqualTo("Same:0");
+            assertThat(service.getAccountFromShortName("Same").getUuid()).isEqualTo(firstId);
+            assertThat(service.getAccountFromShortName("Same:0").getUuid()).isEqualTo(secondId);
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     private Player player(String name, UUID id) {

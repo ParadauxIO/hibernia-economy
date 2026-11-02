@@ -359,6 +359,21 @@ seeded or started in that mode. CI runs both suites in the `Explorer` job of `ci
    both `:jar` and `:shadowJar` target `build/libs/<name>.jar` and `:jar` would
    otherwise overwrite the fat jar.
 
+### ChestShop account lookup concurrency
+
+AccountServiceImpl performs SQLite lookups outside its cache-publication monitor
+(ADT-132). Cache updates across UUID, full-name and short-name indexes remain
+atomic with respect to service lookups. A revision counter makes in-flight reads
+retry after a username write, including when the new cache entry has been evicted.
+Concurrent cache misses may issue duplicate reads; misses are not cached.
+
+Username writers share a separate lock across short-name allocation and save,
+because the mapper upserts by short name. This prevents two writers from assigning
+the same sign name while allowing unrelated lookups to proceed. Database calls
+remain synchronous for the caller; this does not make main-thread misses async.
+The account-service and SimpleCache tests use latches to exercise blocked I/O,
+concurrent publication, rename freshness, and short-name collisions.
+
 ### ChestShop recovery audit
 
 `TradeRecoveryService` writes failed goods reversals through `TradeRecoveryMapper`
