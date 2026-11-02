@@ -50,7 +50,19 @@ present. Existing native files are preserved. It accepts the legacy keys:
 
 Templates accept `%owner%`, `%buy-price%`, `%sell-price%`,
 `%buy-price-unit%`, `%sell-price-unit%`, `%quantity%`, `%stock%`, `%capacity%`,
-`%distance%`, `%region-name%`, `%world%`, `%x%`, `%y%` and `%z%`.
+`%distance%`, `%region-name%`, `%world%`, `%x%`, `%y%`, `%z%`,
+`%account-balance%`, `%affordable-batches%` and `%affordable-items%`.
+For stores buying items from the customer (the finder's Sell offers), results show
+the paying account balance and how many full advertised batches/items those funds
+cover. These lines are appended to existing/custom lore unless it already contains
+the corresponding placeholders; no config rewrite is needed. Unlimited admin funds
+and free trades show unlimited affordability; unavailable balances show Unknown.
+Balances refresh on each search and do not reserve funds; shared accounts can change
+before arrival. The item-space estimate is separate from the funds limit. A Sell
+offer with known remaining space below one full advertised batch is excluded even
+when Hide full is off. A two-way shop retains its customer Buy offer. Unknown
+capacity retains the existing behavior rather than being treated as known-full.
+
 Player/world names are inserted as text rather than MiniMessage markup.
 The plain-text `FIND_LOCATION_FORMAT` and `PREVIEW_NAME_FORMAT` settings remain
 in the main `config.yml`.
