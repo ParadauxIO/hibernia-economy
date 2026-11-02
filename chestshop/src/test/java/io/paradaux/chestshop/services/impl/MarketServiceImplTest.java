@@ -150,10 +150,11 @@ class MarketServiceImplTest extends ServerTest {
     // ── ownerFromUuid / classify ──────────────────────────────────────────────
 
     private Account acc(int id, AccountType type, UUID owner) {
-        Account a = new Account();
-        a.setAccountId(id);
-        a.setAccountType(type);
-        a.setOwnerUuid(owner);
+        Account a = Account.builder()
+                .accountId(id)
+                .accountType(type)
+                .ownerUuid(owner)
+                .build();
         return a;
     }
 

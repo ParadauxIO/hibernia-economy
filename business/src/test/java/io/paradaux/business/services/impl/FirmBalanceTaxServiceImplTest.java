@@ -91,8 +91,7 @@ class FirmBalanceTaxServiceImplTest {
     }
 
     private Account govAccount(int id) {
-        Account a = new Account();
-        a.setAccountId(id);
+        Account a = Account.builder().accountId(id).build();
         return a;
     }
 

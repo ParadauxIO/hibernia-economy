@@ -130,8 +130,7 @@ class FirmServiceImplTest {
         when(firms.getFirmByName("Acme")).thenReturn(old);
         when(firms.isProprietorByFirmId(1, oldOwner.toString())).thenReturn(true);
         when(firms.getFirmById(1)).thenReturn(current);
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(oldOwner)).thenReturn(personal);
         when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
         assertThatThrownBy(() -> svc.disbandFirm("Acme", oldOwner))
@@ -192,8 +191,7 @@ class FirmServiceImplTest {
                 .when(firms)
                 .createFirm(any());
 
-        Account treasuryAccount = new Account();
-        treasuryAccount.setAccountId(7);
+        Account treasuryAccount = Account.builder().accountId(7).build();
         if (generatedNameReserved) {
             when(treasury.createAccount(AccountType.BUSINESS, actor, "Acme Corporate Account"))
                     .thenThrow(new RuntimeException(new java.sql.SQLException("GLOBAL_NAME_CONFLICT:", "45000", 1644)));
@@ -254,8 +252,7 @@ class FirmServiceImplTest {
                 .when(firms)
                 .createFirm(any());
 
-        Account treasuryAccount = new Account();
-        treasuryAccount.setAccountId(7);
+        Account treasuryAccount = Account.builder().accountId(7).build();
         when(treasury.createAccount(eq(AccountType.BUSINESS), eq(actor), any())).thenReturn(treasuryAccount);
 
         // A DB write after the Treasury account is created fails → the firm rows
@@ -278,8 +275,7 @@ class FirmServiceImplTest {
                 .when(firms)
                 .createFirm(any());
 
-        Account treasuryAccount = new Account();
-        treasuryAccount.setAccountId(7);
+        Account treasuryAccount = Account.builder().accountId(7).build();
         when(treasury.createAccount(eq(AccountType.BUSINESS), eq(actor), any())).thenReturn(treasuryAccount);
 
         RuntimeException dbError = new RuntimeException("db down");
@@ -321,8 +317,7 @@ class FirmServiceImplTest {
                 })
                 .when(firms)
                 .createFirm(any());
-        Account acc = new Account();
-        acc.setAccountId(7);
+        Account acc = Account.builder().accountId(7).build();
         when(treasury.createAccount(eq(AccountType.BUSINESS), eq(actor), eq("Acme Corporate Account")))
                 .thenReturn(acc);
 
@@ -385,8 +380,7 @@ class FirmServiceImplTest {
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         when(firms.isProprietorByFirmId(1, proprietor.toString())).thenReturn(true);
 
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
 
         FirmAccount fa1 = new FirmAccount(1, 10, null);
@@ -425,8 +419,7 @@ class FirmServiceImplTest {
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         when(firms.isProprietorByFirmId(1, proprietor.toString())).thenReturn(true);
 
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
 
         FirmAccount fa1 = new FirmAccount(1, 10, null);
@@ -471,8 +464,7 @@ class FirmServiceImplTest {
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         when(firms.isProprietorByFirmId(1, proprietor.toString())).thenReturn(true);
 
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
 
         // Three accounts. First run: 10 drains; 11's sweep fails (money never moved);
@@ -555,8 +547,7 @@ class FirmServiceImplTest {
         firm.setArchived(true);
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 11, null)));
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
 
         FirmService.DisbandResult result = svc.adminDisbandFirm("Acme");
@@ -596,8 +587,7 @@ class FirmServiceImplTest {
         when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(1);
 
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(proprietor)).thenAnswer(inv -> {
             assertThatThrownBy(() -> svc.adminDisbandFirm("Acme"))
                     .isInstanceOf(BadCommandException.class)
@@ -627,8 +617,7 @@ class FirmServiceImplTest {
         when(firms.getFirmByName("Acme")).thenReturn(firm);
         when(firms.isProprietorByFirmId(1, proprietor.toString())).thenReturn(true);
 
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
 
         FirmAccount fa1 = new FirmAccount(1, 10, null);
@@ -1135,8 +1124,7 @@ class FirmServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm);
         when(firms.isProprietorByFirmId(1, proprietor.toString())).thenReturn(true);
 
-        Account personal = new Account();
-        personal.setAccountId(99);
+        Account personal = Account.builder().accountId(99).build();
         when(treasury.resolveOrCreatePersonal(proprietor)).thenReturn(personal);
         when(accounts.listAccountsByFirm(1)).thenReturn(List.of(new FirmAccount(1, 10, null)));
         when(firms.archiveFirm(org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anyString()))

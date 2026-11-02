@@ -69,8 +69,7 @@ class TaxApiImplTest {
     }
 
     private static Account account(int id) {
-        Account a = new Account();
-        a.setAccountId(id);
+        Account a = Account.builder().accountId(id).build();
         return a;
     }
 
@@ -134,8 +133,7 @@ class TaxApiImplTest {
     void defaultTaxAccount_missing_isCreatedOnDemand() {
         when(accounts.findGovernmentAccountByName("DCGovernment")).thenReturn(null);
         org.mockito.Mockito.doAnswer(inv -> {
-                    ((Account) inv.getArgument(0)).setAccountId(91);
-                    return null;
+                    return 91;
                 })
                 .when(accounts)
                 .insertAccount(any());

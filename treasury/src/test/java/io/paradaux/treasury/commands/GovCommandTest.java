@@ -271,7 +271,7 @@ class GovCommandTest {
     void payoutAccount_targetsEveryAccountTypeWithoutNameLookup(AccountType type) {
         sourceAccount();
         Account target = account(TARGET_ID, "Recipient", false);
-        target.setAccountType(type);
+        target = target.withAccountType(type);
         when(accounts.getAccountById(TARGET_ID)).thenReturn(target);
         when(player.hasPermission("treasury.gov.admin")).thenReturn(true);
         when(player.getUniqueId()).thenReturn(PLAYER_ID);
@@ -358,11 +358,12 @@ class GovCommandTest {
     }
 
     private static Account account(int id, String name, boolean archived) {
-        Account account = new Account();
-        account.setAccountId(id);
-        account.setDisplayName(name);
-        account.setAccountType(AccountType.GOVERNMENT);
-        account.setArchived(archived);
+        Account account = Account.builder()
+                .accountId(id)
+                .displayName(name)
+                .accountType(AccountType.GOVERNMENT)
+                .isArchived(archived)
+                .build();
         return account;
     }
 

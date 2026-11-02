@@ -2,22 +2,22 @@ package io.paradaux.treasury.mappers;
 
 import io.paradaux.treasury.api.market.SaleRow;
 import io.paradaux.treasury.api.market.SalesQuery;
-import io.paradaux.treasury.api.market.SalesSummary;
 import io.paradaux.treasury.api.market.TopCustomer;
 import io.paradaux.treasury.api.market.TopItem;
+import java.time.LocalDateTime;
+import java.util.List;
+import org.apache.ibatis.annotations.Arg;
+import org.apache.ibatis.annotations.ConstructorArgs;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-
-import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Read side of the ChestShop sales tracker ({@code chestshop_sale}), backing the
  * in-game sales commands (PAR-176). {@link ChestShopMarketMapper} is write-only;
  * this is reads only. Optional scope/filters use dynamic {@code <where>}/{@code <if>}
  * so a null filter is simply omitted (and so a null UUID is never bound).
- * {@code mapUnderscoreToCamelCase} + the column aliases map rows onto the API DTOs;
+ * Constructor mappings and column aliases populate immutable API snapshots;
  * UUID columns bind via the registered UuidBinaryTypeHandler.
  */
 @Mapper
@@ -61,6 +61,24 @@ public interface ChestShopSalesReadMapper {
             LIMIT #{q.limit} OFFSET #{q.offset}
             </script>
             """)
+    @ConstructorArgs({
+        @Arg(column = "occurredAt", javaType = LocalDateTime.class),
+        @Arg(column = "direction", javaType = String.class),
+        @Arg(column = "customerUuid", javaType = java.util.UUID.class),
+        @Arg(column = "customerName", javaType = String.class),
+        @Arg(column = "quantity", javaType = int.class),
+        @Arg(column = "material", javaType = String.class),
+        @Arg(column = "itemName", javaType = String.class),
+        @Arg(column = "itemCustom", javaType = boolean.class),
+        @Arg(column = "unitPrice", javaType = java.math.BigDecimal.class),
+        @Arg(column = "totalPrice", javaType = java.math.BigDecimal.class),
+        @Arg(column = "taxAmount", javaType = java.math.BigDecimal.class),
+        @Arg(column = "world", javaType = String.class),
+        @Arg(column = "signX", javaType = Integer.class),
+        @Arg(column = "signY", javaType = Integer.class),
+        @Arg(column = "signZ", javaType = Integer.class),
+        @Arg(column = "txnId", javaType = Long.class)
+    })
     List<SaleRow> listSales(@Param("q") SalesQuery q, @Param("since") LocalDateTime since);
 
     @Select("""
@@ -85,7 +103,7 @@ public interface ChestShopSalesReadMapper {
             """ + WHERE + """
             </script>
             """)
-    SalesSummary summarizeTotals(@Param("q") SalesQuery q, @Param("since") LocalDateTime since);
+    SalesTotals summarizeTotals(@Param("q") SalesQuery q, @Param("since") LocalDateTime since);
 
     @Select("""
             <script>
@@ -101,8 +119,14 @@ public interface ChestShopSalesReadMapper {
             LIMIT #{topN}
             </script>
             """)
-    List<TopItem> topItems(@Param("q") SalesQuery q, @Param("since") LocalDateTime since,
-                           @Param("topN") int topN);
+    @ConstructorArgs({
+        @Arg(column = "itemKey", javaType = String.class),
+        @Arg(column = "itemName", javaType = String.class),
+        @Arg(column = "units", javaType = long.class),
+        @Arg(column = "volume", javaType = java.math.BigDecimal.class),
+        @Arg(column = "saleCount", javaType = long.class)
+    })
+    List<TopItem> topItems(@Param("q") SalesQuery q, @Param("since") LocalDateTime since, @Param("topN") int topN);
 
     @Select("""
             <script>
@@ -118,6 +142,12 @@ public interface ChestShopSalesReadMapper {
             LIMIT #{topN}
             </script>
             """)
-    List<TopCustomer> topCustomers(@Param("q") SalesQuery q, @Param("since") LocalDateTime since,
-                                   @Param("topN") int topN);
+    @ConstructorArgs({
+        @Arg(column = "customerUuid", javaType = java.util.UUID.class),
+        @Arg(column = "customerName", javaType = String.class),
+        @Arg(column = "saleCount", javaType = long.class),
+        @Arg(column = "volume", javaType = java.math.BigDecimal.class)
+    })
+    List<TopCustomer> topCustomers(
+            @Param("q") SalesQuery q, @Param("since") LocalDateTime since, @Param("topN") int topN);
 }

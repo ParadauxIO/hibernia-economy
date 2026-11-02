@@ -74,9 +74,7 @@ class FineCommandTest {
         command = new FineCommand(accountService, govService, membershipService, playerDirectory, fineWebhook, message);
         bukkit = mockStatic(Bukkit.class);
 
-        Account gov = new Account();
-        gov.setAccountId(GOV_ID);
-        gov.setDisplayName("Police");
+        Account gov = Account.builder().accountId(GOV_ID).displayName("Police").build();
         lenient().when(accountService.getGovernmentAccountByName("Police")).thenReturn(gov);
         lenient().when(accountService.getAccountById(GOV_ID)).thenReturn(gov);
         lenient().when(sender.hasPermission("treasury.gov.admin")).thenReturn(true);
@@ -90,9 +88,10 @@ class FineCommandTest {
     }
 
     private static Account firmAccount() {
-        Account firm = new Account();
-        firm.setAccountId(FIRM_ACCOUNT_ID);
-        firm.setDisplayName("Acme Corporate Account");
+        Account firm = Account.builder()
+                .accountId(FIRM_ACCOUNT_ID)
+                .displayName("Acme Corporate Account")
+                .build();
         return firm;
     }
 
@@ -100,7 +99,7 @@ class FineCommandTest {
     @EnumSource(AccountType.class)
     void fineAccount_supportsEveryAccountType(AccountType type) {
         Account debtor = firmAccount();
-        debtor.setAccountType(type);
+        debtor = debtor.withAccountType(type);
         when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(debtor);
         GovernmentFine fine = GovernmentFine.builder().fineId(7).amount(AMOUNT).build();
         when(govService.issueFine(FIRM_ACCOUNT_ID, GOV_ID, AMOUNT, "breach", senderUuid))
@@ -158,7 +157,7 @@ class FineCommandTest {
         when(sender.hasPermission("treasury.gov.admin")).thenReturn(false);
         when(membershipService.canSpend(GOV_ID, senderUuid)).thenReturn(true);
         Account debtor = firmAccount();
-        debtor.setAccountType(AccountType.SYSTEM);
+        debtor = debtor.withAccountType(AccountType.SYSTEM);
         when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(debtor);
 
         command.fineAccount(sender, "Police", FIRM_ACCOUNT_ID, AMOUNT, "breach");
@@ -172,7 +171,7 @@ class FineCommandTest {
     void fineAccount_rejectsMissingOrArchivedDebtors(boolean archived) {
         if (archived) {
             Account debtor = firmAccount();
-            debtor.setArchived(true);
+            debtor = debtor.withArchived(true);
             when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(debtor);
         }
 
