@@ -1,10 +1,9 @@
 package io.paradaux.treasuryrestapi.model;
 
-import lombok.Data;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.Data;
 
 /**
  * A webhook delivery that is due to be attempted, joined with its subscription
@@ -27,6 +26,7 @@ public class DueDelivery {
     private LocalDateTime settlementTime;
     private UUID initiatorUuidBin;
     private String pluginSystem;
+    private String payoutCategory;
     // the other leg's account; null if the transaction has no other posting
     private Long counterpartyAccountId;
     private String counterpartyAccountType;

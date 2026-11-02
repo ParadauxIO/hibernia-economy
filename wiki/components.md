@@ -459,3 +459,18 @@ and current firm linkage. Firm-wide management requires a key without an account
 restriction. Account-scoped webhooks store only the selected account as their
 subscription scope so they cannot match sibling accounts. No schema migration is
 required; the existing nullable columns support both scopes.
+
+### Structured payout categories (PAR-554)
+
+`treasury-api` exposes `PayoutCategory.EMPLOYEE` and
+`PayoutCategory.AUCTION_PROCEEDS`. Pass a category as the final argument of
+`TransferRequest`; the existing eight-argument constructor remains supported
+and leaves it null. Treasury persists the enum name in the nullable,
+constraint-checked `ledger_txns.payout_category` column (V51). No category is
+inferred from a memo, plugin name, or historical transaction.
+
+`LedgerTxn` and `TransactionEntry` expose the category. REST transaction history,
+cursor feeds and webhook transaction payloads expose `payoutCategory` as the
+stored enum name or null. CSV exports append a `payout_category` column.
+This payout purpose is separate from the Explorer's inferred analytics taxonomy.
+Deploy the migration before consumers that select the new column.

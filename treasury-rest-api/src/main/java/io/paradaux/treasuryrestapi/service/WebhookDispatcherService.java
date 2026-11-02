@@ -13,13 +13,6 @@ import io.paradaux.treasuryrestapi.util.DiscordWebhook;
 import io.paradaux.treasuryrestapi.util.HmacSha256;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import tools.jackson.databind.ObjectMapper;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -37,6 +30,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Tails the shared ledger and delivers new <b>settled</b> transactions to
@@ -65,22 +64,31 @@ public class WebhookDispatcherService {
 
     @Value("${treasury.webhook.enabled:true}")
     private boolean enabled;
+
     @Value("${treasury.webhook.settlement-lag-seconds:3}")
     private int lagSeconds;
+
     @Value("${treasury.webhook.ingest-batch:500}")
     private int ingestBatch;
+
     @Value("${treasury.webhook.delivery-batch:100}")
     private int deliveryBatch;
+
     @Value("${treasury.webhook.http-timeout-ms:10000}")
     private long httpTimeoutMs;
+
     @Value("${treasury.webhook.max-attempts:5}")
     private int maxAttempts;
+
     @Value("${treasury.webhook.failure-threshold:15}")
     private long failureThreshold;
+
     @Value("${treasury.webhook.retry-base-seconds:30}")
     private long retryBaseSeconds;
+
     @Value("${treasury.webhook.retry-max-seconds:3600}")
     private long retryMaxSeconds;
+
     @Value("${treasury.webhook.delivery-concurrency:8}")
     private int deliveryConcurrency;
 
@@ -88,14 +96,15 @@ public class WebhookDispatcherService {
      *  no longer stalls the rest of the batch (ADT-116). Built in {@link #init()}. */
     private ExecutorService deliveryExecutor;
 
-    public WebhookDispatcherService(LedgerMapper ledgerMapper,
-                                    WebhookSubscriptionMapper subscriptionMapper,
-                                    WebhookDeliveryMapper deliveryMapper,
-                                    WebhookCursorMapper cursorMapper,
-                                    WebhookRedisLock lock,
-                                    WebhookTargetPolicy targetPolicy,
-                                    ObjectMapper objectMapper,
-                                    @Value("${treasury.webhook.connect-timeout-ms:5000}") long connectTimeoutMs) {
+    public WebhookDispatcherService(
+            LedgerMapper ledgerMapper,
+            WebhookSubscriptionMapper subscriptionMapper,
+            WebhookDeliveryMapper deliveryMapper,
+            WebhookCursorMapper cursorMapper,
+            WebhookRedisLock lock,
+            WebhookTargetPolicy targetPolicy,
+            ObjectMapper objectMapper,
+            @Value("${treasury.webhook.connect-timeout-ms:5000}") long connectTimeoutMs) {
         this.ledgerMapper = ledgerMapper;
         this.subscriptionMapper = subscriptionMapper;
         this.deliveryMapper = deliveryMapper;
@@ -128,7 +137,8 @@ public class WebhookDispatcherService {
         }
     }
 
-    @Scheduled(fixedDelayString = "${treasury.webhook.poll-ms:2000}",
+    @Scheduled(
+            fixedDelayString = "${treasury.webhook.poll-ms:2000}",
             initialDelayString = "${treasury.webhook.initial-delay-ms:10000}")
     public void tick() {
         if (!enabled) return;
@@ -152,13 +162,16 @@ public class WebhookDispatcherService {
         List<TransactionRow> postings = ledgerMapper.findPostingsForTxns(txnIds);
 
         // Distinct accounts touched by this batch → match to active subscriptions.
-        List<Long> accountIds = postings.stream().map(TransactionRow::getAccountId).distinct().toList();
+        List<Long> accountIds =
+                postings.stream().map(TransactionRow::getAccountId).distinct().toList();
         Map<Long, Set<Long>> subsByAccount = new HashMap<>();
         if (!accountIds.isEmpty()) {
             List<SubscriptionMatch> matches = new ArrayList<>(subscriptionMapper.findAccountMatches(accountIds));
             matches.addAll(subscriptionMapper.findFirmMatches(accountIds));
             for (SubscriptionMatch m : matches) {
-                subsByAccount.computeIfAbsent(m.getAccountId(), k -> new HashSet<>()).add(m.getSubscriptionId());
+                subsByAccount
+                        .computeIfAbsent(m.getAccountId(), k -> new HashSet<>())
+                        .add(m.getSubscriptionId());
             }
         }
 
@@ -176,7 +189,11 @@ public class WebhookDispatcherService {
         long maxTxnId = txnIds.get(txnIds.size() - 1);
         cursorMapper.advanceTo(maxTxnId);
         if (enqueued > 0) {
-            log.info("Webhook ingest: {} txn(s) up to {} → {} deliver(y/ies) enqueued", txnIds.size(), maxTxnId, enqueued);
+            log.info(
+                    "Webhook ingest: {} txn(s) up to {} → {} deliver(y/ies) enqueued",
+                    txnIds.size(),
+                    maxTxnId,
+                    enqueued);
         }
     }
 
@@ -196,7 +213,10 @@ public class WebhookDispatcherService {
         }
         List<Callable<Void>> tasks = new ArrayList<>(due.size());
         for (DueDelivery d : due) {
-            tasks.add(() -> { deliver(d); return null; });
+            tasks.add(() -> {
+                deliver(d);
+                return null;
+            });
         }
         try {
             deliveryExecutor.invokeAll(tasks);
@@ -266,8 +286,10 @@ public class WebhookDispatcherService {
             subscriptionMapper.incrementFailures(d.getSubscriptionId());
             int disabled = subscriptionMapper.disableIfOverThreshold(d.getSubscriptionId(), failureThreshold);
             if (disabled > 0) {
-                log.warn("Webhook subscription {} auto-disabled after {} consecutive failed deliveries",
-                        d.getSubscriptionId(), failureThreshold);
+                log.warn(
+                        "Webhook subscription {} auto-disabled after {} consecutive failed deliveries",
+                        d.getSubscriptionId(),
+                        failureThreshold);
             }
         } else {
             long delay = Math.min(retryMaxSeconds, retryBaseSeconds * (1L << d.getAttempts()));
@@ -289,7 +311,8 @@ public class WebhookDispatcherService {
                         d.getCounterpartyAccountId(),
                         d.getCounterpartyAccountType(),
                         d.getCounterpartyDisplayName(),
-                        d.getCounterpartyOwnerUuidBin()));
+                        d.getCounterpartyOwnerUuidBin()),
+                d.getPayoutCategory());
         return new WebhookEvent("transaction", d.getDeliveryId(), d.getSubscriptionId(), d.getAccountId(), item);
     }
 

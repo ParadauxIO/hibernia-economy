@@ -12,7 +12,7 @@ public interface LedgerMapper {
 
     @Select("""
       SELECT txn_id, trade_time, settlement_time, message,
-             initiator_uuid_bin, authorizer_uuid_bin, plugin_system, client_dedup_key
+             initiator_uuid_bin, authorizer_uuid_bin, plugin_system, payout_category, client_dedup_key
         FROM ledger_txns
        WHERE client_dedup_key = #{key}
        LIMIT 1
@@ -27,6 +27,7 @@ public interface LedgerMapper {
                 @Result(column = "initiator_uuid_bin", property = "initiatorUuid"),
                 @Result(column = "authorizer_uuid_bin", property = "authorizerUuid"),
                 @Result(column = "plugin_system", property = "pluginSystem"),
+                @Result(column = "payout_category", property = "payoutCategory"),
                 @Result(column = "client_dedup_key", property = "clientDedupKey")
             })
     LedgerTxn findByDedupKey(@Param("key") byte[] clientKey);
@@ -43,7 +44,7 @@ public interface LedgerMapper {
      */
     @Select("""
       SELECT txn_id, trade_time, settlement_time, message,
-             initiator_uuid_bin, authorizer_uuid_bin, plugin_system, client_dedup_key
+             initiator_uuid_bin, authorizer_uuid_bin, plugin_system, payout_category, client_dedup_key
         FROM ledger_txns
        WHERE client_dedup_key = #{key}
        LIMIT 1
@@ -54,7 +55,7 @@ public interface LedgerMapper {
 
     @Select("""
       SELECT txn_id, trade_time, settlement_time, message,
-             initiator_uuid_bin, authorizer_uuid_bin, plugin_system, client_dedup_key
+             initiator_uuid_bin, authorizer_uuid_bin, plugin_system, payout_category, client_dedup_key
         FROM ledger_txns
        WHERE txn_id = #{txnId}
       """)
@@ -69,6 +70,7 @@ public interface LedgerMapper {
           initiator_uuid_bin,
           authorizer_uuid_bin,
           plugin_system,
+          payout_category,
           client_dedup_key
       ) VALUES (
           CURRENT_TIMESTAMP,
@@ -77,6 +79,7 @@ public interface LedgerMapper {
           #{initiatorUuid},
           #{authorizerUuid},
           #{pluginSystem},
+          #{payoutCategory},
           #{clientDedupKey}
       )
       """)
@@ -107,7 +110,7 @@ public interface LedgerMapper {
     @Select("""
       SELECT p.posting_id, p.txn_id, p.account_id, p.amount, p.memo,
              t.settlement_time, t.message, t.initiator_uuid_bin,
-             t.authorizer_uuid_bin, t.plugin_system
+             t.authorizer_uuid_bin, t.plugin_system, t.payout_category
         FROM ledger_postings p
         JOIN ledger_txns t ON p.txn_id = t.txn_id
        WHERE p.account_id = #{accountId}
@@ -129,7 +132,8 @@ public interface LedgerMapper {
                 @Result(column = "message", property = "message"),
                 @Result(column = "initiator_uuid_bin", property = "initiatorUuid"),
                 @Result(column = "authorizer_uuid_bin", property = "authorizerUuid"),
-                @Result(column = "plugin_system", property = "pluginSystem")
+                @Result(column = "plugin_system", property = "pluginSystem"),
+                @Result(column = "payout_category", property = "payoutCategory")
             })
     List<TransactionEntry> findTransactionsByAccount(
             @Param("accountId") int accountId, @Param("limit") int limit, @Param("offset") int offset);
@@ -147,7 +151,7 @@ public interface LedgerMapper {
       <script>
       SELECT p.posting_id, p.txn_id, p.account_id, p.amount, p.memo,
              t.settlement_time, t.message, t.initiator_uuid_bin,
-             t.authorizer_uuid_bin, t.plugin_system
+             t.authorizer_uuid_bin, t.plugin_system, t.payout_category
         FROM ledger_postings p
         JOIN ledger_txns t ON p.txn_id = t.txn_id
        WHERE p.account_id IN
@@ -175,7 +179,7 @@ public interface LedgerMapper {
     @Select("""
       SELECT p.posting_id, p.txn_id, p.account_id, p.amount, p.memo,
              t.settlement_time, t.message, t.initiator_uuid_bin,
-             t.authorizer_uuid_bin, t.plugin_system
+             t.authorizer_uuid_bin, t.plugin_system, t.payout_category
         FROM ledger_postings p
         JOIN ledger_txns t ON p.txn_id = t.txn_id
        WHERE p.account_id = #{accountId}

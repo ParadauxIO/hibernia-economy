@@ -265,7 +265,13 @@ public class LedgerServiceImpl implements LedgerService {
 
         final long txnId;
         try {
-            txnId = insertTxn(req.message(), req.initiator(), req.authorizer(), req.pluginSystem(), req.dedupKey());
+            txnId = insertTxn(
+                    req.message(),
+                    req.initiator(),
+                    req.authorizer(),
+                    req.pluginSystem(),
+                    req.dedupKey(),
+                    req.payoutCategory());
         } catch (PersistenceException e) {
             // Concurrent identical-dedup-key transfer: another thread/process inserted
             // a ledger_txn with this client_dedup_key between our findByDedupKey check
@@ -340,7 +346,7 @@ public class LedgerServiceImpl implements LedgerService {
             return java.util.OptionalLong.empty();
         }
 
-        long txnId = insertTxn(memo, initiator, null, sourcePlugin, null);
+        long txnId = insertTxn(memo, initiator, null, sourcePlugin, null, null);
         postDoubleEntry(txnId, fromAccountId, toAccountId, amount, memo);
         log.debug("Swept locked balance {} from account {} to {} (txn={})", amount, fromAccountId, toAccountId, txnId);
         return java.util.OptionalLong.of(txnId);
@@ -526,12 +532,14 @@ public class LedgerServiceImpl implements LedgerService {
             UUID initiator,
             @Nullable UUID authorizer,
             @Nullable String pluginSystem,
-            byte @Nullable [] dedup) {
+            byte @Nullable [] dedup,
+            @Nullable PayoutCategory payoutCategory) {
         LedgerTxn txn = new LedgerTxn();
         txn.setMessage(message);
         txn.setInitiatorUuid(initiator);
         txn.setAuthorizerUuid(authorizer);
         txn.setPluginSystem(pluginSystem);
+        txn.setPayoutCategory(payoutCategory);
         txn.setClientDedupKey(dedup);
         ledgerMapper.insertTxnEntity(txn);
         return txn.getTxnId();

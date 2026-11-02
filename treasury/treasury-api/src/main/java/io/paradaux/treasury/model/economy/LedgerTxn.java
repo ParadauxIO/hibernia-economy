@@ -11,6 +11,27 @@ import org.jetbrains.annotations.Nullable;
 @AllArgsConstructor
 @NoArgsConstructor
 public class LedgerTxn {
+    public LedgerTxn(
+            long txnId,
+            Instant tradeTime,
+            Instant settlementTime,
+            String message,
+            UUID initiatorUuid,
+            UUID authorizerUuid,
+            String pluginSystem,
+            byte @Nullable [] clientDedupKey) {
+        this(
+                txnId,
+                tradeTime,
+                settlementTime,
+                message,
+                initiatorUuid,
+                authorizerUuid,
+                pluginSystem,
+                null,
+                clientDedupKey);
+    }
+
     private long txnId;
     private Instant tradeTime;
     private Instant settlementTime;
@@ -18,6 +39,7 @@ public class LedgerTxn {
     private UUID initiatorUuid;
     private UUID authorizerUuid;
     private String pluginSystem;
+    private @Nullable PayoutCategory payoutCategory;
     private byte @Nullable [] clientDedupKey;
 
     // Defensive copies on the mutable dedup-key array (ADT-40): defining these

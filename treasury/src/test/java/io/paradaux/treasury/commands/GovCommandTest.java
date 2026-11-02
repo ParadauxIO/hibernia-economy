@@ -17,6 +17,7 @@ import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.economy.PayoutCategory;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.GovService;
@@ -260,6 +261,28 @@ class GovCommandTest {
 
         verify(message).send(console, "treasury.gov.not-found", "account", "Health");
         verifyNoInteractions(ledger, membership);
+    }
+
+    @ParameterizedTest
+    @EnumSource(PayoutCategory.class)
+    void categorizedPayout_preservesCategoryAndMemo(PayoutCategory category) {
+        sourceAccount();
+        when(accounts.getAccountById(TARGET_ID)).thenReturn(account(TARGET_ID, "Recipient", false));
+        command.payoutCategoryAccountReason(console, "Police", TARGET_ID, AMOUNT, category, "approved payment");
+        ArgumentCaptor<TransferRequest> request = ArgumentCaptor.forClass(TransferRequest.class);
+        verify(ledger).adminTransfer(request.capture());
+        assertThat(request.getValue().payoutCategory()).isEqualTo(category);
+        assertThat(request.getValue().message()).isEqualTo("Gov payout: approved payment");
+        assertThat(request.getValue().amount()).isEqualByComparingTo(AMOUNT);
+    }
+
+    @Test
+    void categorizedPayout_stillRequiresSourceAccess() {
+        sourceAccount();
+        when(player.getUniqueId()).thenReturn(PLAYER_ID);
+        command.payoutCategoryAccount(player, "Police", TARGET_ID, AMOUNT, PayoutCategory.EMPLOYEE);
+        verify(message).send(player, "treasury.gov.no-access");
+        verifyNoInteractions(ledger);
     }
 
     private void sourceAccount() {

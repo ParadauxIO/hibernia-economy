@@ -57,6 +57,33 @@ class TransactionEntryRendererTest {
         }
     }
 
+    @Test
+    void rendersCategoryWithoutChangingStoredMemo() {
+        Message message = mock(Message.class);
+        AccountService accounts = mock(AccountService.class);
+        CommandSender recipient = mock(CommandSender.class);
+        when(accounts.formatAmount(new BigDecimal("15.00"))).thenReturn("$15.00");
+        TransactionEntry entry = new TransactionEntry();
+        entry.setTxnId(42);
+        entry.setAmount(new BigDecimal("15.00"));
+        entry.setMemo("Lot 17");
+        entry.setPayoutCategory(io.paradaux.treasury.model.economy.PayoutCategory.AUCTION_PROCEEDS);
+        TransactionEntryRenderer.send(recipient, message, accounts, entry);
+        verify(message)
+                .send(
+                        recipient,
+                        "treasury.transactions.entry",
+                        "txn",
+                        "42",
+                        "amount",
+                        Component.text("+$15.00", NamedTextColor.GREEN),
+                        "memo",
+                        "[AUCTION_PROCEEDS] Lot 17",
+                        "time",
+                        "—");
+        assertThat(entry.getMemo()).isEqualTo("Lot 17");
+    }
+
     private static boolean hasColoredText(Component component, String text, NamedTextColor color) {
         return (PlainTextComponentSerializer.plainText().serialize(component).equals(text)
                         && color.equals(component.color()))

@@ -748,6 +748,10 @@
           "message" : {
             "type" : "string"
           },
+          "payoutCategory" : {
+            "description" : "EMPLOYEE or AUCTION_PROCEEDS; null for uncategorized transactions.",
+            "type" : [ "string", "null" ]
+          },
           "pluginSystem" : {
             "type" : "string"
           },

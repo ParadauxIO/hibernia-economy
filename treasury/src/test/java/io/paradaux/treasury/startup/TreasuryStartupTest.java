@@ -1,5 +1,7 @@
 package io.paradaux.treasury.startup;
 
+import static org.mockito.Mockito.mock;
+
 import com.google.inject.Module;
 import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.hibernia.testsupport.HiberniaStartupAssertion;
@@ -17,20 +19,18 @@ import io.paradaux.treasury.commands.TaxCommand;
 import io.paradaux.treasury.commands.TransactionsCommand;
 import io.paradaux.treasury.commands.TreasuryCommand;
 import io.paradaux.treasury.commands.resolvers.PayTargetResolver;
+import io.paradaux.treasury.commands.resolvers.PayoutCategoryResolver;
 import io.paradaux.treasury.events.FirstPlayerJoinEvent;
 import io.paradaux.treasury.events.PlayerLoginListener;
 import io.paradaux.treasury.guice.DatabaseModule;
 import io.paradaux.treasury.guice.TreasuryModule;
+import java.util.List;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
-
-import javax.sql.DataSource;
-import java.util.List;
-
-import static org.mockito.Mockito.mock;
 
 /**
  * Startup-shaped test: builds Treasury's <em>real</em> Guice module graph over a live
@@ -82,20 +82,15 @@ class TreasuryStartupTest {
                         GovCommand.class,
                         FineCommand.class,
                         TaxCommand.class)
-                .resolvers(PayTargetResolver.class)
-                .listeners(
-                        FirstPlayerJoinEvent.class,
-                        PlayerLoginListener.class)
+                .resolvers(PayTargetResolver.class, PayoutCategoryResolver.class)
+                .listeners(FirstPlayerJoinEvent.class, PlayerLoginListener.class)
                 .build();
 
         // A non-connecting DataSource: registerAll builds MyBatis mapper proxies without
         // touching the DB, so a mock stands in for the production MariaDB pool.
         DataSource dataSource = mock(DataSource.class);
 
-        List<Module> modules = List.of(
-                hibernia,
-                new TreasuryModule(plugin),
-                new DatabaseModule(dataSource));
+        List<Module> modules = List.of(hibernia, new TreasuryModule(plugin), new DatabaseModule(dataSource));
 
         // Resolves both managers (every command/resolver/listener binding), registers
         // them, and fires the COMMANDS lifecycle so route conflicts surface.

@@ -75,6 +75,7 @@ For a normal (non-Discord) endpoint, the body is JSON:
     "settledAt": "2026-06-14T12:30:57Z",
     "initiatorUuid": "f7e6…",
     "pluginSystem": "ChestShop",
+    "payoutCategory": null,
     "counterparty": {
       "accountId": 812,
       "accountType": "GOVERNMENT",
@@ -90,6 +91,10 @@ For a normal (non-Discord) endpoint, the body is JSON:
 (`PERSONAL`, `BUSINESS`, `GOVERNMENT` or `SYSTEM`), display name and owner UUID. It is
 `null` only if the transaction has no other side. The same `counterparty` object appears on
 every item from the transaction history and feed endpoints.
+`payoutCategory` is `EMPLOYEE`, `AUCTION_PROCEEDS`, or `null` for an uncategorized
+transaction. It is stored separately from the memo and also appears on history
+and feed items.
+
 The request also carries these headers:
 
 | Header | Meaning |

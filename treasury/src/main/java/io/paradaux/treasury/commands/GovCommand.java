@@ -283,6 +283,56 @@ public class GovCommand implements CommandHandler {
         doExternalPayout(sender, fromName, null, amount, reason, accountId);
     }
 
+    @Route("payout-category <from> <to> <amount> <category>")
+    @Async
+    @Description("Pay with a structured employee or auction-proceeds category")
+    public void payoutCategory(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String target,
+            @Arg("amount") BigDecimal amount,
+            @Arg("category") PayoutCategory category) {
+        doExternalPayout(sender, fromName, target, amount, null, null, category);
+    }
+
+    @Route("payout-category <from> <to> <amount> <category> <reason>")
+    @Async
+    @Description("Pay with a structured employee or auction-proceeds category")
+    public void payoutCategoryReason(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("to") String target,
+            @Arg("amount") BigDecimal amount,
+            @Arg("category") PayoutCategory category,
+            @GreedyArg("reason") String reason) {
+        doExternalPayout(sender, fromName, target, amount, reason, null, category);
+    }
+
+    @Route("payout-category-account <from> <id> <amount> <category>")
+    @Async
+    @Description("Pay with a structured employee or auction-proceeds category")
+    public void payoutCategoryAccount(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("id") int target,
+            @Arg("amount") BigDecimal amount,
+            @Arg("category") PayoutCategory category) {
+        doExternalPayout(sender, fromName, null, amount, null, target, category);
+    }
+
+    @Route("payout-category-account <from> <id> <amount> <category> <reason>")
+    @Async
+    @Description("Pay with a structured employee or auction-proceeds category")
+    public void payoutCategoryAccountReason(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("id") int target,
+            @Arg("amount") BigDecimal amount,
+            @Arg("category") PayoutCategory category,
+            @GreedyArg("reason") String reason) {
+        doExternalPayout(sender, fromName, null, amount, reason, target, category);
+    }
+
     // =====================================================================
     // MEMBER MANAGEMENT
     // =====================================================================
@@ -812,6 +862,17 @@ public class GovCommand implements CommandHandler {
             BigDecimal amount,
             String reason,
             Integer explicitAccountId) {
+        doExternalPayout(sender, fromName, toName, amount, reason, explicitAccountId, null);
+    }
+
+    private void doExternalPayout(
+            CommandSender sender,
+            String fromName,
+            String toName,
+            BigDecimal amount,
+            String reason,
+            Integer explicitAccountId,
+            PayoutCategory category) {
         // Access is decided per-source-account by canTransferFrom (member /
         // authorizer / global node / admin) once the account is resolved below.
         // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
@@ -903,8 +964,8 @@ public class GovCommand implements CommandHandler {
                 ? "Gov payout: " + reason
                 : "Gov payout from " + from.getDisplayName() + " to " + toDisplayName;
 
-        byte[] dedupKey =
-                GovDedupKeys.payout(actorOf(sender), from.getAccountId(), toAccountId, normalized, Instant.now());
+        byte[] dedupKey = GovDedupKeys.payout(
+                actorOf(sender), from.getAccountId(), toAccountId, normalized, Instant.now(), category);
 
         try {
             TransferRequest req = new TransferRequest(
@@ -915,7 +976,8 @@ public class GovCommand implements CommandHandler {
                     actorOf(sender),
                     null,
                     TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey);
+                    dedupKey,
+                    category);
             // Console bypasses requires_authorization too; players use the normal path.
             if (sender instanceof Player) {
                 ledgerService.transfer(req);

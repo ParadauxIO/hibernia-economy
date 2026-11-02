@@ -188,3 +188,26 @@ department or server.
 - [Government accounts](/docs/guides/government-accounts) — the player-facing guide.
 - [Operator commands](/docs/admin/operator-commands) — `/eco`, `/tax`, and salaries.
 - [Treasury reference → Permission nodes](/docs/reference/treasury#permission-nodes).
+
+## Categorized payouts
+
+Use a structured category when paying employees or distributing auction proceeds:
+
+```text
+/government payout-category <from> <to> <amount> <category> [reason]
+/government payout-category-account <from> <id> <amount> <category> [reason]
+```
+
+`EMPLOYEE` and `AUCTION_PROCEEDS` are the supported categories (case-insensitive,
+with tab completion). For example:
+
+```text
+/government payout-category Treasury Alex 100 EMPLOYEE Weekly pay
+/government payout-category-account Treasury 42 250 AUCTION_PROCEEDS Lot 17
+```
+
+These commands use the same access rules as ordinary payouts. The category is
+stored separately from the optional reason and appears in transaction history
+and CSV exports. Automated government salaries use `EMPLOYEE`. Existing
+`payout` and `payout-account` commands remain available without a category;
+old transactions are not reclassified based on their memos.

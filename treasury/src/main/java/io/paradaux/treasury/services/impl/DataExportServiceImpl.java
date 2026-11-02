@@ -1,17 +1,16 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.LedgerMapper;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.TransactionEntry;
 import io.paradaux.treasury.services.BytebinService;
 import io.paradaux.treasury.services.DataExportService;
-
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class DataExportServiceImpl implements DataExportService {
@@ -25,11 +24,10 @@ public class DataExportServiceImpl implements DataExportService {
     private final BytebinService bytebinService;
 
     @Inject
-    public DataExportServiceImpl(AccountMapper accountMapper,
-                                 LedgerMapper ledgerMapper,
-                                 BytebinService bytebinService) {
-        this.accountMapper  = accountMapper;
-        this.ledgerMapper   = ledgerMapper;
+    public DataExportServiceImpl(
+            AccountMapper accountMapper, LedgerMapper ledgerMapper, BytebinService bytebinService) {
+        this.accountMapper = accountMapper;
+        this.ledgerMapper = ledgerMapper;
         this.bytebinService = bytebinService;
     }
 
@@ -52,21 +50,33 @@ public class DataExportServiceImpl implements DataExportService {
 
     private String buildCsv(List<TransactionEntry> transactions) {
         StringBuilder sb = new StringBuilder();
-        sb.append("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system\n");
+        sb.append(
+                "posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system,payout_category\n");
         for (TransactionEntry entry : transactions) {
             sb.append(entry.getPostingId()).append(',');
             sb.append(entry.getTxnId()).append(',');
             sb.append(entry.getAccountId()).append(',');
             sb.append(entry.getAmount().toPlainString()).append(',');
             sb.append(escapeCsv(entry.getMemo())).append(',');
-            sb.append(entry.getSettlementTime() != null
-                    ? CSV_TIME_FMT.format(entry.getSettlementTime()) : "").append(',');
+            sb.append(entry.getSettlementTime() != null ? CSV_TIME_FMT.format(entry.getSettlementTime()) : "")
+                    .append(',');
             sb.append(escapeCsv(entry.getMessage())).append(',');
-            sb.append(entry.getInitiatorUuid() != null
-                    ? entry.getInitiatorUuid().toString() : "").append(',');
-            sb.append(entry.getAuthorizerUuid() != null
-                    ? entry.getAuthorizerUuid().toString() : "").append(',');
+            sb.append(
+                            entry.getInitiatorUuid() != null
+                                    ? entry.getInitiatorUuid().toString()
+                                    : "")
+                    .append(',');
+            sb.append(
+                            entry.getAuthorizerUuid() != null
+                                    ? entry.getAuthorizerUuid().toString()
+                                    : "")
+                    .append(',');
             sb.append(entry.getPluginSystem() != null ? entry.getPluginSystem() : "");
+            sb.append(',')
+                    .append(
+                            entry.getPayoutCategory() != null
+                                    ? entry.getPayoutCategory().name()
+                                    : "");
             sb.append('\n');
         }
         return sb.toString();

@@ -1,13 +1,12 @@
 package io.paradaux.treasuryrestapi.model;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Joined result of ledger_postings + ledger_txns used by the transaction history endpoint.
@@ -28,11 +27,14 @@ public class TransactionRow {
     private UUID initiatorUuidBin;
     /** Player name resolved via {@code LEFT JOIN economy_players ON player_uuid_bin = initiator_uuid_bin}. */
     private String initiatorName;
+
     private String pluginSystem;
+    private String payoutCategory;
     /** The posting's account — populated by the dispatcher tail query; 0 on the per-account history query. */
     private long accountId;
     /** The other leg's account — populated by the history and feed queries; null if there is no other leg. */
     private Long counterpartyAccountId;
+
     private String counterpartyAccountType;
     private String counterpartyDisplayName;
     private UUID counterpartyOwnerUuidBin;
