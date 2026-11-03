@@ -1,18 +1,19 @@
 package io.paradaux.treasury.model.economy;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Value;
+import lombok.With;
 
 /**
  * Represents a member or authorizer row on an account.
  */
-@Data
+@Builder(toBuilder = true)
+@Value
+@With
 @AllArgsConstructor
-@NoArgsConstructor
 public class AccountMember {
     private int accountId;
     private UUID memberUuid;

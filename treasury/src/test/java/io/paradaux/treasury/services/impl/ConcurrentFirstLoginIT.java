@@ -94,8 +94,9 @@ class ConcurrentFirstLoginIT extends IntegrationTestBase {
         @Override
         public Object intercept(Invocation invocation) throws Throwable {
             MappedStatement statement = (MappedStatement) invocation.getArgs()[0];
-            if (statement.getId().equals(AccountMapper.class.getName() + ".insertAccount")
-                    && invocation.getArgs()[1] instanceof Account account
+            if (statement.getId().equals(AccountMapper.class.getName() + ".insertAccountRow")
+                    && invocation.getArgs()[1] instanceof io.paradaux.treasury.mappers.GeneratedKey<?> row
+                    && row.getValue() instanceof Account account
                     && account.getAccountType() == AccountType.PERSONAL
                     && player.equals(account.getOwnerUuid())) {
                 inserting.countDown();

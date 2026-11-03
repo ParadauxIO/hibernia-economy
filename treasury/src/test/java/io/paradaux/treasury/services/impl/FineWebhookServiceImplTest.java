@@ -124,9 +124,9 @@ class FineWebhookServiceImplTest {
     @Test
     void sendFineRevoked_postsGreenEmbedWithReverseTxn() {
         GovernmentFine fine = playerFine();
-        fine.setRevoked(true);
-        fine.setRevokedBy(ISSUER);
-        fine.setRevokeTxnId(55555L);
+        fine = fine.withRevoked(true);
+        fine = fine.withRevokedBy(ISSUER);
+        fine = fine.withRevokeTxnId(55555L);
 
         svc(true, hookUrl()).sendFineRevoked(fine);
 
@@ -162,7 +162,7 @@ class FineWebhookServiceImplTest {
     @Test
     void escapesQuotesAndBackslashesInReason() {
         GovernmentFine fine = playerFine();
-        fine.setReason("evil\"reason\\with\nnewline");
+        fine = fine.withReason("evil\"reason\\with\nnewline");
 
         svc(true, hookUrl()).sendFineIssued(fine);
 

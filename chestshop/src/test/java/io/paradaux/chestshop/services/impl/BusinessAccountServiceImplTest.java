@@ -52,10 +52,11 @@ class BusinessAccountServiceImplTest {
 
     private static io.paradaux.treasury.model.economy.Account treasuryAccount(
             int id, String display, AccountType type) {
-        io.paradaux.treasury.model.economy.Account a = new io.paradaux.treasury.model.economy.Account();
-        a.setAccountId(id);
-        a.setDisplayName(display);
-        a.setAccountType(type);
+        io.paradaux.treasury.model.economy.Account a = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(id)
+                .displayName(display)
+                .accountType(type)
+                .build();
         return a;
     }
 
@@ -98,7 +99,7 @@ class BusinessAccountServiceImplTest {
     void resolve_nativeIdKeepsArchivedBusinessWalletForStockRecovery() {
         service.bind(treasury, business);
         var archived = treasuryAccount(46, "Disbanded");
-        archived.setArchived(true);
+        archived = archived.withArchived(true);
         when(treasury.getAccountById(46)).thenReturn(archived);
 
         assertThat(service.resolveBusinessAccount("B:1A")).isNotNull();
@@ -397,7 +398,7 @@ class BusinessAccountServiceImplTest {
         when(firms.resolveShopAlias("acme")).thenReturn(46);
         assertThat(service.resolveBusinessAccount("A:acme")).isNull();
         var account = treasuryAccount(46, "Acme");
-        account.setArchived(true);
+        account = account.withArchived(true);
         when(treasury.getAccountById(46)).thenReturn(account);
         assertThat(service.resolveBusinessAccount("A:acme")).isNull();
     }

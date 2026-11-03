@@ -674,10 +674,11 @@ class AccountServiceImplTest {
     // ── government accounts (PAR-529) ─────────────────────────────────────────
 
     private static io.paradaux.treasury.model.economy.Account governmentAccount(int id, String name) {
-        io.paradaux.treasury.model.economy.Account a = new io.paradaux.treasury.model.economy.Account();
-        a.setAccountId(id);
-        a.setDisplayName(name);
-        a.setAccountType(io.paradaux.treasury.model.economy.AccountType.GOVERNMENT);
+        io.paradaux.treasury.model.economy.Account a = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(id)
+                .displayName(name)
+                .accountType(io.paradaux.treasury.model.economy.AccountType.GOVERNMENT)
+                .build();
         return a;
     }
 

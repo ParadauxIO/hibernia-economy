@@ -1,18 +1,17 @@
 package io.paradaux.treasury.mappers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountRedirect;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.services.cache.AccountRedirectCache;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Integration tests for the {@code account_redirects} chain against real MariaDB
@@ -36,15 +35,16 @@ class AccountRedirectMapperIT extends IntegrationTestBase {
 
     /** Inserts a GOVERNMENT account and returns its generated id (satisfies fk_redirect_account). */
     private int newGovernmentAccount(String displayName) {
-        Account a = new Account();
-        a.setAccountType(AccountType.GOVERNMENT);
-        a.setOwnerUuid(UUID.randomUUID());
-        a.setDisplayName(displayName);
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
-        accountMapper.insertAccount(a);
+        Account a = Account.builder()
+                .accountType(AccountType.GOVERNMENT)
+                .ownerUuid(UUID.randomUUID())
+                .displayName(displayName)
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
+        a = a.withAccountId(accountMapper.insertAccount(a));
         assertThat(a.getAccountId()).isNotNull();
         return a.getAccountId();
     }

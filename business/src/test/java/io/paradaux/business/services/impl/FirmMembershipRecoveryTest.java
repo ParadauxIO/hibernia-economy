@@ -43,11 +43,11 @@ class FirmMembershipRecoveryTest {
 
     @BeforeEach
     void setup() {
-        account = new Account();
-        account.setOwnerUuid(owner);
-        when(treasury.getAccountById(99)).thenReturn(account);
+        account = Account.builder().build();
+        account = account.withOwnerUuid(owner);
+        when(treasury.getAccountById(99)).thenAnswer(call -> account);
         doAnswer(call -> {
-                    account.setOwnerUuid(call.getArgument(1));
+                    account = account.withOwnerUuid(call.getArgument(1));
                     afterWrite("reassignOwner");
                     return null;
                 })
@@ -176,7 +176,7 @@ class FirmMembershipRecoveryTest {
 
     @Test
     void restartRepairsOwnerLeftBehindByPartialTransfer() {
-        account.setOwnerUuid(fired);
+        account = account.withOwnerUuid(fired);
         service().reconcileLinkedAccounts();
         assertThat(account.getOwnerUuid()).isEqualTo(owner);
         assertThat(members).containsExactlyInAnyOrder(owner, hired, demoted);
@@ -188,7 +188,7 @@ class FirmMembershipRecoveryTest {
 
     @Test
     void ownerWriteWithLostReplyIsRecoveredOnNextPass() {
-        account.setOwnerUuid(fired);
+        account = account.withOwnerUuid(fired);
         failedOperation = "reassignOwner";
         failOnce.set(true);
         service().reconcileLinkedAccounts();
@@ -199,7 +199,7 @@ class FirmMembershipRecoveryTest {
 
     @Test
     void delayedTransferRetryUsesLatestProprietor() {
-        account.setOwnerUuid(fired);
+        account = account.withOwnerUuid(fired);
         when(links.listAccountsByFirm(1)).thenReturn(List.of(link(99)));
         service().reassignAccountsToNewProprietor(1, fired);
         assertThat(account.getOwnerUuid()).isEqualTo(owner);

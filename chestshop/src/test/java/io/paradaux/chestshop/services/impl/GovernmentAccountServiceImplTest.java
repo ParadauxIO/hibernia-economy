@@ -38,10 +38,11 @@ class GovernmentAccountServiceImplTest {
     }
 
     private static io.paradaux.treasury.model.economy.Account account(int id, String name, AccountType type) {
-        io.paradaux.treasury.model.economy.Account a = new io.paradaux.treasury.model.economy.Account();
-        a.setAccountId(id);
-        a.setDisplayName(name);
-        a.setAccountType(type);
+        io.paradaux.treasury.model.economy.Account a = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(id)
+                .displayName(name)
+                .accountType(type)
+                .build();
         return a;
     }
 
@@ -106,7 +107,7 @@ class GovernmentAccountServiceImplTest {
     @Test
     void resolve_refusesArchivedAccounts() {
         var archived = account(136699, "DCGovernmentWL", AccountType.GOVERNMENT);
-        archived.setArchived(true);
+        archived = archived.withArchived(true);
         when(treasury.getGovernmentAccountByName("DCGovernmentWL")).thenReturn(archived);
 
         assertThat(service.resolveGovernmentAccount("G:DCGovernmentWL")).isNull();

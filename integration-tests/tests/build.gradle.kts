@@ -25,6 +25,8 @@ dependencies {
 }
 
 tasks.test {
+    // Exercise mock-client synchronization regressions before the live suite.
+    dependsOn(":mock-client:test")
     useJUnitPlatform()
     // External server/database state is not a Gradle input. A fresh disposable stack
     // must never inherit an UP-TO-DATE result from a previous acceptance run.

@@ -367,7 +367,7 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
             try {
                 return invocation.proceed();
             } catch (java.lang.reflect.InvocationTargetException failure) {
-                if (id.endsWith(".insertTxnEntity")) {
+                if (id.endsWith(".insertTxnEntityRow")) {
                     // Both failed INSERTs now hold shared locks on the winner's unique key.
                     duplicates.countDown();
                     if (!duplicates.await(10, TimeUnit.SECONDS)) throw new AssertionError("Both inserts must conflict");
@@ -465,13 +465,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         // the real faucets: ops/money-invariants.sql (run after every IT) only accepts a
         // negative balance on GOVERNMENT/SYSTEM accounts, whereas OverdraftPolicy honours
         // the sentinel on any type — a PERSONAL "faucet" would be flagged as illegal.
-        Account faucet = new Account();
-        faucet.setAccountType(AccountType.GOVERNMENT);
-        faucet.setOwnerUuid(UUID.randomUUID());
-        faucet.setDisplayName("test-faucet");
-        faucet.setAllowOverdraft(true);
-        faucet.setCreditLimit(new BigDecimal("-1"));
-        accountMapper.insertAccount(faucet);
+        Account faucet = Account.builder()
+                .accountType(AccountType.GOVERNMENT)
+                .ownerUuid(UUID.randomUUID())
+                .displayName("test-faucet")
+                .allowOverdraft(true)
+                .creditLimit(new BigDecimal("-1"))
+                .build();
+        faucet = faucet.withAccountId(accountMapper.insertAccount(faucet));
         accountMapper.seedBalance(faucet.getAccountId());
         Account b = createPersonalAccount(0);
 
@@ -743,7 +744,7 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     void bootstrap_migratesLegacyCreditLimitToMinusOne() {
         // Roll a primitive back to a legacy credit_limit then re-bootstrap.
         Account starting = accountService.getGovernmentAccountByName("starting-balances");
-        starting.setCreditLimit(BigDecimal.ZERO);
+        starting = starting.withCreditLimit(BigDecimal.ZERO);
         accountService.updateAccount(starting);
 
         ledgerService.bootstrapGovernmentAccounts();
@@ -870,14 +871,15 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     void resolveOrCreatePersonal_existingAccountWithMissingBalanceRow_reSeedsAndFunds() throws Exception {
         UUID player = UUID.randomUUID();
         // Insert PERSONAL account without seeding balance (simulates a partial install).
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(player);
-        a.setDisplayName(player.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(player)
+                .displayName(player.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
         accountMapper.insertAccount(a);
         // Note: NOT calling seedBalance — the ledger should detect this and re-seed.
 
@@ -1089,15 +1091,16 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private Account createPersonalAccount(double startingBalance) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(owner);
-        a.setDisplayName(owner.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
-        accountMapper.insertAccount(a);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(owner)
+                .displayName(owner.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             seedBalance(a, BigDecimal.valueOf(startingBalance).setScale(2, java.math.RoundingMode.HALF_EVEN));
@@ -1107,15 +1110,16 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private Account createOverdraftAccount(double startingBalance, BigDecimal creditLimit) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(owner);
-        a.setDisplayName(owner.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(true);
-        a.setCreditLimit(creditLimit);
-        accountMapper.insertAccount(a);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(owner)
+                .displayName(owner.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(true)
+                .creditLimit(creditLimit)
+                .build();
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             seedBalance(a, BigDecimal.valueOf(startingBalance).setScale(2, java.math.RoundingMode.HALF_EVEN));
@@ -1125,22 +1129,23 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private Account createAuthorizationRequiredAccount(double startingBalance) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.BUSINESS);
-        a.setOwnerUuid(owner);
-        a.setDisplayName("biz-" + owner);
+        Account a = Account.builder()
+                .accountType(AccountType.BUSINESS)
+                .ownerUuid(owner)
+                .displayName("biz-" + owner)
+                .build();
         // Insert with requires_authorization=false so the seed transfer can complete,
         // then flip the flag once the account is funded.
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
-        accountMapper.insertAccount(a);
+        a = a.withRequiresAuthorization(false);
+        a = a.withArchived(false);
+        a = a.withAllowOverdraft(false);
+        a = a.withCreditLimit(BigDecimal.ZERO);
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             seedBalance(a, BigDecimal.valueOf(startingBalance).setScale(2, java.math.RoundingMode.HALF_EVEN));
         }
-        a.setRequiresAuthorization(true);
+        a = a.withRequiresAuthorization(true);
         accountMapper.updateAccount(a);
         return a;
     }

@@ -225,7 +225,7 @@ public class GovServiceImpl implements GovService {
                 .txnId(txnId)
                 .issuedBy(issuedBy)
                 .build();
-        fineMapper.insertFine(fine);
+        fine = fine.withFineId(fineMapper.insertFine(fine));
         log.info(
                 "Fine issued: id={} debtorAccount={} player={} govAccount={} amount={} txn={} issuedBy={}",
                 fine.getFineId(),
@@ -276,9 +276,9 @@ public class GovServiceImpl implements GovService {
                 dedupKey));
 
         fineMapper.revokeFine(fineId, revokedBy, revokeTxnId);
-        fine.setRevoked(true);
-        fine.setRevokedBy(revokedBy);
-        fine.setRevokeTxnId(revokeTxnId);
+        fine = fine.withRevoked(true);
+        fine = fine.withRevokedBy(revokedBy);
+        fine = fine.withRevokeTxnId(revokeTxnId);
         log.info(
                 "Fine revoked: id={} debtorAccount={} player={} amount={} reverseTxn={} revokedBy={}",
                 fineId,

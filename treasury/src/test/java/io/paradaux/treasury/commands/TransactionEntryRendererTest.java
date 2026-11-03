@@ -42,10 +42,11 @@ class TransactionEntryRendererTest {
         when(accounts.formatAmount(new BigDecimal("15.00"))).thenReturn("$15.00");
         for (int sign : new int[] {1, -1}) {
             CommandSender recipient = mock(CommandSender.class);
-            TransactionEntry entry = new TransactionEntry();
-            entry.setTxnId(42);
-            entry.setAmount(new BigDecimal("15.00").multiply(BigDecimal.valueOf(sign)));
-            entry.setMemo("<red>memo</red> {amount}");
+            TransactionEntry entry = TransactionEntry.builder()
+                    .txnId(42)
+                    .amount(new BigDecimal("15.00").multiply(BigDecimal.valueOf(sign)))
+                    .memo("<red>memo</red> {amount}")
+                    .build();
             TransactionEntryRenderer.send(recipient, message, accounts, entry);
             ArgumentCaptor<Component> output = ArgumentCaptor.forClass(Component.class);
             verify(recipient).sendMessage(output.capture());

@@ -82,14 +82,15 @@ class EconomyServiceImplTest extends ServerTest {
     // ---- helpers ---------------------------------------------------------------
 
     private io.paradaux.treasury.model.economy.Account tAccount(int id) {
-        io.paradaux.treasury.model.economy.Account a = new io.paradaux.treasury.model.economy.Account();
-        a.setAccountId(id);
+        io.paradaux.treasury.model.economy.Account a = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(id)
+                .build();
         return a;
     }
 
     private io.paradaux.treasury.model.economy.Account govAccount(int id) {
         io.paradaux.treasury.model.economy.Account a = tAccount(id);
-        a.setAccountType(AccountType.GOVERNMENT);
+        a = a.withAccountType(AccountType.GOVERNMENT);
         return a;
     }
 

@@ -292,15 +292,16 @@ class LedgerServiceBreadthIT extends IntegrationTestBase {
 
     private Account createPersonalAccount(double startingBalance) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(owner);
-        a.setDisplayName(owner.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
-        accountMapper.insertAccount(a);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(owner)
+                .displayName(owner.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             Account gov = accountService.getGovernmentAccountByName("starting-balances");

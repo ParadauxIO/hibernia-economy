@@ -69,8 +69,9 @@ class FirmCreationIT extends IntegrationTestBase {
                         })
                 .getInstance(FirmServiceImpl.class);
         when(treasury.createAccount(any(), any(), any())).thenAnswer(inv -> {
-            Account account = new Account();
-            account.setAccountId(insertStubAccount(inv.getArgument(2)));
+            Account account = Account.builder()
+                    .accountId(insertStubAccount(inv.getArgument(2)))
+                    .build();
             return account;
         });
     }
