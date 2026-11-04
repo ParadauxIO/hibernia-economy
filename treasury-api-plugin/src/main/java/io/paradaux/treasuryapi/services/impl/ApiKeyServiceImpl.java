@@ -8,6 +8,8 @@ import io.paradaux.common.JwtKeys;
 import io.paradaux.hibernia.framework.exceptions.ConflictException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import io.paradaux.hibernia.framework.exceptions.NotFoundException;
+import io.paradaux.treasury.api.TreasuryApi;
+import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasuryapi.mappers.ApiKeyMapper;
 import io.paradaux.treasuryapi.model.config.ApiConfiguration;
 import io.paradaux.treasuryapi.model.economy.ApiKey;
@@ -29,12 +31,15 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     private final ApiKeyMapper apiKeyMapper;
     private final ApiConfiguration apiConfig;
     private final BusinessApi businessApi;
+    private final TreasuryApi treasuryApi;
 
     @Inject
-    public ApiKeyServiceImpl(ApiKeyMapper apiKeyMapper, ApiConfiguration apiConfig, BusinessApi businessApi) {
+    public ApiKeyServiceImpl(
+            ApiKeyMapper apiKeyMapper, ApiConfiguration apiConfig, BusinessApi businessApi, TreasuryApi treasuryApi) {
         this.apiKeyMapper = apiKeyMapper;
         this.apiConfig = apiConfig;
         this.businessApi = businessApi;
+        this.treasuryApi = treasuryApi;
     }
 
     @Override
@@ -57,6 +62,20 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         }
         requireFirmAccount(firmId, accountId);
         return issue(KeyType.BUSINESS, accountId, firmId, ownerUuid);
+    }
+
+    @Override
+    @Transactional
+    public ApiKey issueGovernmentKey(int accountId, UUID ownerUuid) {
+        requireGovernmentAccount(accountId);
+        return issue(KeyType.GOVERNMENT, accountId, null, ownerUuid);
+    }
+
+    private void requireGovernmentAccount(Integer accountId) {
+        var account = accountId == null ? null : treasuryApi.getAccountById(accountId);
+        if (account == null || account.getAccountType() != AccountType.GOVERNMENT || account.isArchived()) {
+            throw new NoPermissionException("treasuryapi.government.issue.invalid-account");
+        }
     }
 
     private void requireFirmAccount(int firmId, int accountId) {
@@ -115,6 +134,10 @@ public class ApiKeyServiceImpl implements ApiKeyService {
             requireFirmAccount(existing.getFirmId(), existing.getAccountId());
         }
 
+        if (existing.getKeyType() == KeyType.GOVERNMENT) {
+            requireGovernmentAccount(existing.getAccountId());
+        }
+
         String newJwtId = UUID.randomUUID().toString();
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plus(KEY_LIFETIME_DAYS, ChronoUnit.DAYS);
@@ -163,7 +186,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     }
 
     /**
-     * Enforces the per-key management invariant: a PERSONAL key may be managed only by
+     * Enforces the per-key management invariant: a PERSONAL or GOVERNMENT key may be managed only by
      * its current owner; a BUSINESS key only by a CURRENT proprietor of its firm — never
      * the individual who happened to issue it (ADT-111), so the firm keeps control of its
      * own credential after a proprietor transfer. A SERVICE key is a backend credential

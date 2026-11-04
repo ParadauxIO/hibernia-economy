@@ -41,6 +41,34 @@ class JwtTokenVerifierTest {
     private static final long FIRM = 9L;
 
     @Test
+    void governmentTokenRequiresExactlyOnePersistedAccount() {
+        ApiKey key = personalKey();
+        key.setKeyType("GOVERNMENT");
+        JwtTokenVerifier verifier = verifierFor(key);
+        String valid = baseBuilder("GOVERNMENT", b -> b.claim("acc", ACC))
+                .signWith(KEY)
+                .compact();
+        assertThat(verifier.verify(valid).accountId()).isEqualTo(ACC);
+        for (Object invalid : new Object[] {43, 42.5, 0, -1, "42"}) {
+            assertInvalid(
+                    verifier,
+                    baseBuilder("GOVERNMENT", b -> b.claim("acc", invalid))
+                            .signWith(KEY)
+                            .compact(),
+                    "INVALID_TOKEN");
+        }
+        assertInvalid(verifier, baseBuilder("GOVERNMENT", b -> {}).signWith(KEY).compact(), "INVALID_TOKEN");
+        assertInvalid(
+                verifier,
+                baseBuilder("GOVERNMENT", b -> b.claim("acc", ACC).claim("firm", FIRM))
+                        .signWith(KEY)
+                        .compact(),
+                "INVALID_TOKEN");
+        key.setAccountId(null);
+        assertInvalid(verifier, valid, "INVALID_TOKEN");
+    }
+
+    @Test
     void scopedBusinessToken_requiresExactPersistedAccountClaim() {
         ApiKey key = businessKey();
         key.setAccountId(42);

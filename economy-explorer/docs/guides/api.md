@@ -84,6 +84,12 @@ Business keys have the same `list` / `reissue` / `revoke` subcommands under
 `/treasuryapi business`. Firm staff can also run `/treasuryapi business list access` to
 see the keys issued for firms they're employed at.
 
+Government integrations can use a key restricted to one government account via
+`/treasuryapi government issue <accountId>`. This requires a separate, explicitly
+granted permission that is withheld from production government roles. See
+[Government keys](/docs/reference/treasury-api#government-keys) for management
+commands and scope restrictions.
+
 ## Step 2 — Authenticate
 
 Send the token as a **Bearer** token in the `Authorization` header on every request:

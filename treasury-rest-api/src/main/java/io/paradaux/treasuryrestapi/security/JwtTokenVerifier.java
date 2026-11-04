@@ -123,6 +123,17 @@ public class JwtTokenVerifier {
                     throw new TokenException(
                             HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token claim 'acc' must be a number.");
                 }
+                if ("GOVERNMENT".equals(claimedType)
+                        && (!(accClaim instanceof Integer || accClaim instanceof Long)
+                                || n.longValue() <= 0
+                                || apiKey.getAccountId() == null
+                                || apiKey.getFirmId() != null
+                                || claims.get("firm") != null)) {
+                    throw new TokenException(
+                            HttpStatus.UNAUTHORIZED,
+                            "INVALID_TOKEN",
+                            "Government keys require exactly one persisted account scope.");
+                }
                 accountId = n.longValue();
                 // Defence in depth: the signed acc claim must agree with the DB row.
                 // A token can only carry a forged acc with the signing secret, but

@@ -54,10 +54,12 @@ class ApiKeyServiceImplTest {
         }
     };
 
+    private final io.paradaux.treasury.api.TreasuryApi treasuryApi = mock(io.paradaux.treasury.api.TreasuryApi.class);
+
     private final BusinessApi businessApi = mock(BusinessApi.class);
 
     private ApiKeyServiceImpl service(ApiKeyMapper mapper) {
-        return new ApiKeyServiceImpl(mapper, config, businessApi);
+        return new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi);
     }
 
     /** In-memory ApiKeyMapper: insert assigns a key id the way the DB would. */
@@ -93,6 +95,79 @@ class ApiKeyServiceImplTest {
                 return List.of();
             }
         };
+    }
+
+    @Test
+    void governmentKey_isPinnedToActiveAccountAndRotationPreservesScope() {
+        UUID owner = UUID.randomUUID();
+        when(treasuryApi.getAccountById(42))
+                .thenReturn(io.paradaux.treasury.model.economy.Account.builder()
+                        .accountId(42)
+                        .accountType(io.paradaux.treasury.model.economy.AccountType.GOVERNMENT)
+                        .build());
+        ApiKey issued = service(mapper(7)).issueGovernmentKey(42, owner);
+        assertEquals(KeyType.GOVERNMENT, issued.getKeyType());
+        assertEquals(42, issued.getAccountId());
+        assertNull(issued.getFirmId());
+        Claims claims = Jwts.parser()
+                .verifyWith(deriveKey(SECRET))
+                .build()
+                .parseSignedClaims(issued.getToken())
+                .getPayload();
+        assertEquals("GOVERNMENT", claims.get("type", String.class));
+        assertEquals(42, claims.get("acc", Integer.class));
+        assertNull(claims.get("firm"));
+        ApiKeyMapper mapper = trackingMapper(issued);
+        ApiKey rotated = service(mapper).reissueKey(7, owner);
+        assertEquals(42, rotated.getAccountId());
+        assertThrows(NoPermissionException.class, () -> service(mapper).reissueKey(7, UUID.randomUUID()));
+        assertThrows(NoPermissionException.class, () -> service(mapper).revokeKey(7, UUID.randomUUID()));
+        service(mapper).revokeKey(7, owner);
+        verify(mapper).revoke(7);
+    }
+
+    @Test
+    void governmentRotationRejectsArchivedAccountAndRevokedKey() {
+        UUID owner = UUID.randomUUID();
+        ApiKey key = personalKey(7, owner);
+        key.setKeyType(KeyType.GOVERNMENT);
+        key.setAccountId(42);
+        when(treasuryApi.getAccountById(42))
+                .thenReturn(io.paradaux.treasury.model.economy.Account.builder()
+                        .accountId(42)
+                        .accountType(io.paradaux.treasury.model.economy.AccountType.GOVERNMENT)
+                        .isArchived(true)
+                        .build());
+        ApiKeyMapper mapper = trackingMapper(key);
+        assertThrows(NoPermissionException.class, () -> service(mapper).reissueKey(7, owner));
+        key.setRevoked(true);
+        assertThrows(ConflictException.class, () -> service(mapper).reissueKey(7, owner));
+        verify(mapper, never())
+                .reissue(
+                        anyInt(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+        // Revocation remains available even after the account is archived.
+        service(mapper).revokeKey(7, owner);
+        verify(mapper).revoke(7);
+    }
+
+    @Test
+    void governmentKey_rejectsMissingWrongTypeAndArchivedAccountsBeforeInsert() {
+        ApiKeyMapper mapper = mock(ApiKeyMapper.class);
+        assertThrows(NoPermissionException.class, () -> service(mapper).issueGovernmentKey(42, UUID.randomUUID()));
+        for (var type : io.paradaux.treasury.model.economy.AccountType.values()) {
+            when(treasuryApi.getAccountById(42))
+                    .thenReturn(io.paradaux.treasury.model.economy.Account.builder()
+                            .accountId(42)
+                            .accountType(type)
+                            .isArchived(type == io.paradaux.treasury.model.economy.AccountType.GOVERNMENT)
+                            .build());
+            assertThrows(NoPermissionException.class, () -> service(mapper).issueGovernmentKey(42, UUID.randomUUID()));
+        }
+        org.mockito.Mockito.verifyNoInteractions(mapper);
     }
 
     @Test
@@ -208,7 +283,8 @@ class ApiKeyServiceImplTest {
         revoked.setRevoked(true);
         assertThrows(
                 ConflictException.class,
-                () -> new ApiKeyServiceImpl(mapperReturning(revoked, 1), config, businessApi).reissueKey(5, owner));
+                () -> new ApiKeyServiceImpl(mapperReturning(revoked, 1), config, businessApi, treasuryApi)
+                        .reissueKey(5, owner));
     }
 
     @Test
@@ -223,7 +299,8 @@ class ApiKeyServiceImplTest {
         active.setRevoked(false);
         assertThrows(
                 ConflictException.class,
-                () -> new ApiKeyServiceImpl(mapperReturning(active, 0), config, businessApi).reissueKey(6, owner));
+                () -> new ApiKeyServiceImpl(mapperReturning(active, 0), config, businessApi, treasuryApi)
+                        .reissueKey(6, owner));
     }
 
     // ---- Service-side authorization boundary (plugin-architecture/0005) ----
@@ -240,7 +317,7 @@ class ApiKeyServiceImplTest {
 
         assertThrows(
                 NoPermissionException.class,
-                () -> new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, intruder));
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).reissueKey(1, intruder));
         verify(mapper, never())
                 .reissue(
                         anyInt(),
@@ -258,7 +335,7 @@ class ApiKeyServiceImplTest {
 
         assertThrows(
                 NoPermissionException.class,
-                () -> new ApiKeyServiceImpl(mapper, config, businessApi).revokeKey(1, intruder));
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).revokeKey(1, intruder));
         verify(mapper, never()).revoke(anyInt());
     }
 
@@ -267,7 +344,7 @@ class ApiKeyServiceImplTest {
         UUID owner = UUID.randomUUID();
         ApiKeyMapper mapper = trackingMapper(personalKey(1, owner));
 
-        new ApiKeyServiceImpl(mapper, config, businessApi).revokeKey(1, owner);
+        new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).revokeKey(1, owner);
         verify(mapper).revoke(1);
     }
 
@@ -282,7 +359,7 @@ class ApiKeyServiceImplTest {
 
         assertThrows(
                 NoPermissionException.class,
-                () -> new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, actor));
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).reissueKey(1, actor));
         verify(mapper, never())
                 .reissue(
                         anyInt(),
@@ -300,7 +377,7 @@ class ApiKeyServiceImplTest {
         when(firms.isProprietor(7, actor)).thenReturn(true);
         ApiKeyMapper mapper = trackingMapper(businessKey(1, 7));
 
-        new ApiKeyServiceImpl(mapper, config, businessApi).revokeKey(1, actor);
+        new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).revokeKey(1, actor);
         verify(mapper).revoke(1);
     }
 
@@ -318,7 +395,8 @@ class ApiKeyServiceImplTest {
         when(firms.isProprietor(7, currentProprietor)).thenReturn(true);
         ApiKeyMapper mapper = trackingMapper(biz);
 
-        ApiKey reissued = new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, currentProprietor);
+        ApiKey reissued =
+                new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).reissueKey(1, currentProprietor);
 
         Claims claims = Jwts.parser()
                 .verifyWith(deriveKey(SECRET))
@@ -348,7 +426,7 @@ class ApiKeyServiceImplTest {
         personal.setAccountId(4);
         ApiKeyMapper mapper = trackingMapper(personal);
 
-        ApiKey reissued = new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, owner);
+        ApiKey reissued = new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).reissueKey(1, owner);
 
         Claims claims = Jwts.parser()
                 .verifyWith(deriveKey(SECRET))
@@ -375,7 +453,7 @@ class ApiKeyServiceImplTest {
 
         assertThrows(
                 NoPermissionException.class,
-                () -> new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(1, owner));
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).reissueKey(1, owner));
         verify(mapper, never())
                 .reissue(
                         anyInt(),
@@ -392,7 +470,7 @@ class ApiKeyServiceImplTest {
 
         assertThrows(
                 NoPermissionException.class,
-                () -> new ApiKeyServiceImpl(mapper, config, businessApi).revokeKey(1, owner));
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).revokeKey(1, owner));
         verify(mapper, never()).revoke(anyInt());
     }
 
@@ -402,7 +480,7 @@ class ApiKeyServiceImplTest {
         when(mapper.findById(9)).thenReturn(null);
         assertThrows(
                 NotFoundException.class,
-                () -> new ApiKeyServiceImpl(mapper, config, businessApi).reissueKey(9, UUID.randomUUID()));
+                () -> new ApiKeyServiceImpl(mapper, config, businessApi, treasuryApi).reissueKey(9, UUID.randomUUID()));
     }
 
     private static ApiKey personalKey(int keyId, UUID owner) {
@@ -494,8 +572,8 @@ class ApiKeyServiceImplTest {
                 return base64Secret;
             }
         };
-        ApiKey key =
-                new ApiKeyServiceImpl(mapper(11), base64Config, businessApi).issuePersonalKey(4, UUID.randomUUID());
+        ApiKey key = new ApiKeyServiceImpl(mapper(11), base64Config, businessApi, treasuryApi)
+                .issuePersonalKey(4, UUID.randomUUID());
         Claims claims = Jwts.parser()
                 .verifyWith(deriveKey(base64Secret))
                 .build()

@@ -40,6 +40,15 @@ class WebhookServiceTest {
     }
 
     @Test
+    void governmentWebhookIsPersistedForOnlyItsAccount() {
+        var result = service.create(new VerifiedToken(7, OWNER, "GOVERNMENT", 42L, null), URL);
+        var stored = mapper.findById(result.id());
+        assertThat(stored.getKeyType()).isEqualTo("GOVERNMENT");
+        assertThat(stored.getAccountId()).isEqualTo(42);
+        assertThat(stored.getFirmId()).isNull();
+    }
+
+    @Test
     void createScopesPersonalToAccountAndReturnsSecretOnce() {
         CreateWebhookResponse r = service.create(personal(7, 42), URL);
         assertThat(r.scope()).isEqualTo("account");

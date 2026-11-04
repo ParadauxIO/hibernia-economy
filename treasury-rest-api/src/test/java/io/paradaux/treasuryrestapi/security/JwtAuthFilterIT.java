@@ -33,7 +33,7 @@ class JwtAuthFilterIT extends EmbeddedDbIT {
 
     @BeforeEach
     void seedKeys() {
-        tokens = new TestTokens(signingKey, this::insertApiKey);
+        tokens = new TestTokens(signingKey, this::insertTestTokenKey);
         tokens.seedAll();
     }
 

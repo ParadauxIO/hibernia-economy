@@ -153,8 +153,8 @@ public class TransactionService {
 
     /**
      * Asserts the account exists and {@code verified} may read its transactions.
-     * BUSINESS keys may read any account belonging to their firm; PERSONAL /
-     * GOVERNMENT keys must own the account or be a member of it. Throws an
+     * BUSINESS keys respect their firm and optional account scope.
+     * GOVERNMENT keys may only read their scoped account. PERSONAL keys may also use membership. Throws an
      * {@link ApiException} (404 / 403) otherwise.
      */
     private void requireTransactionAccess(VerifiedToken verified, long accountId) {
@@ -177,7 +177,9 @@ public class TransactionService {
             log.debug("Access granted for accountId={}: firmId={}", accountId, verified.firmId());
         } else {
             boolean isOwner = verified.accountId() != null && verified.accountId() == accountId;
-            boolean isMember = !isOwner && membershipMapper.isMember(accountId, verified.ownerUuid()) > 0;
+            boolean isMember = !"GOVERNMENT".equals(verified.keyType())
+                    && !isOwner
+                    && membershipMapper.isMember(accountId, verified.ownerUuid()) > 0;
             if (!isOwner && !isMember) {
                 log.warn(
                         "Access denied: ownerUuid={} is neither owner nor member of accountId={}",

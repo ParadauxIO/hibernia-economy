@@ -498,3 +498,18 @@ MyBatis uses constructor mappings for immutable query results. Insert parameters
 hold generated IDs in the internal `GeneratedKey` class; mapper insert helpers
 return the ID, and services construct a new snapshot with it. Sales totals use an
 internal eight-column record before the service adds the leaderboards.
+
+### Government API keys (PAR-521)
+
+The API-key plugin issues `GOVERNMENT` keys with a required `account_id` and no
+`firm_id`, using the existing schema. Issuance validates an active government
+account through `TreasuryApi`; command authorization uses the dedicated
+`treasuryapi.government.issue` node (default false, including operators), also
+required for in-game reissue. No production role grants are added. The issuer
+owns key management; list/revoke do not need issuance permission.
+
+REST verification requires an exact positive integer account claim matching the
+persisted scope. Transfers and webhooks use that account; transaction reads must
+not fall back to issuer membership. Public reads retain their existing policy.
+Rotation retains scope and revocation is terminal. Per-key transfer limits remain
+future work; existing transfer guards still apply.
