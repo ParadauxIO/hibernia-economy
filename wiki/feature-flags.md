@@ -209,3 +209,20 @@ all supported consumers. Then remove the row in a new migration. Deleting a row
 while older consumers still check it disables the feature for those consumers.
 Keep keys unique forever. Per-player targeting, percentages, per-server overrides,
 and Realty-specific upstream adoption are outside this initial implementation.
+
+## Government API keys (PAR-521)
+
+V53 registers `treasury.government_api_keys` disabled without overwriting existing
+operator choices. Deploy compatible TreasuryAPI and REST consumers before enabling
+it through the backoffice or `node scripts/feature-flags.mjs set
+treasury.government_api_keys on PAR-521`. The separate
+`treasuryapi.government.issue` permission remains required and default-denied.
+
+While disabled, command/service issuance and in-game reissue are blocked. Valid
+government JWTs receive `404 FEATURE_DISABLED` at authentication, including for
+rotation; the rotation service also checks the flag. Other key types are unchanged.
+Listing, revocation, and admin credential invalidation remain available for cleanup.
+Government webhook deliveries remain pending and resume on re-enable; they do not
+consume delivery attempts or prevent other subscriptions from progressing. Ingestion
+continues queuing events while paused. Existing cache propagation and in-flight
+operation semantics apply. Turning off this flag does not revoke keys permanently.

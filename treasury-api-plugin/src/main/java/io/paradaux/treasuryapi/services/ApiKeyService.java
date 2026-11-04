@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ApiKeyService {
+    /** Issues a key for one active government account. Caller must enforce treasuryapi.government.issue. */
+    ApiKey issueGovernmentKey(int accountId, UUID ownerUuid);
+
     ApiKey issuePersonalKey(int accountId, UUID ownerUuid);
 
     ApiKey issueBusinessKey(int firmId, UUID ownerUuid);
@@ -17,7 +20,7 @@ public interface ApiKeyService {
      * Reissues (rotates) the key on behalf of {@code actingUuid}. The service is the
      * authoritative authorization boundary (treasury-api-plugin/plugin-architecture/0005):
      * it enforces that the acting player may manage the key — the current owner of a
-     * PERSONAL key, or a current proprietor of a BUSINESS key's firm — regardless of
+     * PERSONAL/GOVERNMENT key, or a current proprietor of a BUSINESS key's firm — regardless of
      * caller. Throws {@code NotFoundException} if no such key exists,
      * {@code NoPermissionException} if the acting player may not manage it, and
      * {@code ConflictException} if the key is revoked (revocation is terminal).

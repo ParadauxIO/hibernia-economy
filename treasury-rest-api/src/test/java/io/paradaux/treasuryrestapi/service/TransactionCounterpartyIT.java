@@ -1,5 +1,7 @@
 package io.paradaux.treasuryrestapi.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.treasuryrestapi.dto.TransactionFeedResponse;
 import io.paradaux.treasuryrestapi.dto.TransactionItem;
 import io.paradaux.treasuryrestapi.dto.TransactionItem.Counterparty;
@@ -8,14 +10,11 @@ import io.paradaux.treasuryrestapi.mapper.WebhookDeliveryMapper;
 import io.paradaux.treasuryrestapi.model.DueDelivery;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * PAR-15: every transaction item carries the account on the other leg —
@@ -35,8 +34,7 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
 
     private static final Counterparty FIRM =
             new Counterparty(2, "BUSINESS", "Acme Corporate Account", FOUNDER.toString());
-    private static final Counterparty TREASURY =
-            new Counterparty(3, "GOVERNMENT", "Treasury", GOV.toString());
+    private static final Counterparty TREASURY = new Counterparty(3, "GOVERNMENT", "Treasury", GOV.toString());
 
     private VerifiedToken token() {
         return new VerifiedToken(1L, PLAYER, "PERSONAL", 1L, null);
@@ -51,8 +49,8 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
 
     @Test
     void history_showsTheOtherLegForDebitsAndCredits() {
-        insertSettledTransfer(1, 2, "25.00", "buy", PLAYER);   // player pays the firm
-        insertSettledTransfer(3, 1, "100.00", "wage", GOV);    // treasury pays the player
+        insertSettledTransfer(1, 2, "25.00", "buy", PLAYER); // player pays the firm
+        insertSettledTransfer(3, 1, "100.00", "wage", GOV); // treasury pays the player
 
         TransactionsResponse resp = transactionService.getTransactions(token(), 1, 1, 20);
 
@@ -70,8 +68,8 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
     void history_counterpartyIsThePlayerFromTheFirmSide() {
         insertSettledTransfer(1, 2, "25.00", "buy", PLAYER);
 
-        TransactionsResponse resp = transactionService.getTransactions(
-                new VerifiedToken(2L, FOUNDER, "PERSONAL", 2L, null), 2, 1, 20);
+        TransactionsResponse resp =
+                transactionService.getTransactions(new VerifiedToken(2L, FOUNDER, "PERSONAL", 2L, null), 2, 1, 20);
 
         assertThat(resp.items()).singleElement().satisfies(item -> {
             assertThat(item.amount()).isEqualTo("25.00");
@@ -86,7 +84,8 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
 
         TransactionsResponse resp = transactionService.getTransactions(token(), 1, 1, 20);
 
-        assertThat(resp.items()).singleElement()
+        assertThat(resp.items())
+                .singleElement()
                 .satisfies(item -> assertThat(item.counterparty()).isNull());
     }
 
@@ -94,13 +93,15 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
     void history_extraLegsDoNotDuplicateRows() {
         // Not something the ledger writes today, but the join must not fan out.
         long txn = insertSettledTransfer(1, 2, "25.00", "split", PLAYER);
-        exec("INSERT INTO ledger_postings (txn_id, account_id, amount, memo) VALUES (?, 3, 0.00, 'fee')",
+        exec(
+                "INSERT INTO ledger_postings (txn_id, account_id, amount, memo) VALUES (?, 3, 0.00, 'fee')",
                 ps -> ps.setLong(1, txn));
 
         TransactionsResponse resp = transactionService.getTransactions(token(), 1, 1, 20);
 
         assertThat(resp.totalItems()).isEqualTo(1);
-        assertThat(resp.items()).singleElement()
+        assertThat(resp.items())
+                .singleElement()
                 .satisfies(item -> assertThat(item.counterparty()).isEqualTo(FIRM));
     }
 
@@ -114,7 +115,8 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
 
         assertThat(page2.totalItems()).isEqualTo(5);
         assertThat(page2.items()).extracting(TransactionItem::memo).containsExactly("p2", "p1");
-        assertThat(page2.items()).allSatisfy(item -> assertThat(item.counterparty()).isEqualTo(FIRM));
+        assertThat(page2.items())
+                .allSatisfy(item -> assertThat(item.counterparty()).isEqualTo(FIRM));
     }
 
     @Test
@@ -130,12 +132,11 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
 
     @Test
     void webhookPayload_carriesCounterparty() {
-        long sub = insertSubscription(PLAYER, "PERSONAL", 1, null, "https://example.com/hook",
-                "s".repeat(64), true, 0);
+        long sub = insertSubscription(PLAYER, "PERSONAL", 1, null, "https://example.com/hook", "s".repeat(64), true, 0);
         long txn = insertSettledTransfer(3, 1, "100.00", "wage", GOV);
         insertDueDelivery(sub, txn, 1, 0);
 
-        List<DueDelivery> due = deliveryMapper.findDue(10);
+        List<DueDelivery> due = deliveryMapper.findDue(10, true);
 
         assertThat(due).singleElement().satisfies(d -> {
             assertThat(d.getAmount()).isEqualByComparingTo("100.00");
