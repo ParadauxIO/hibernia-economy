@@ -40,6 +40,33 @@ class JwtTokenVerifierTest {
     private static final long ACC = 42L;
     private static final long FIRM = 9L;
 
+    private static io.paradaux.treasuryrestapi.service.FeatureFlagService enabledFlags() {
+        var flags = org.mockito.Mockito.mock(io.paradaux.treasuryrestapi.service.FeatureFlagService.class);
+        org.mockito.Mockito.when(flags.isEnabled("treasury.government_api_keys"))
+                .thenReturn(true);
+        return flags;
+    }
+
+    @Test
+    void governmentFlagCanDisableAnAlreadyIssuedToken() {
+        var flags = enabledFlags();
+        ApiKey key = personalKey();
+        key.setKeyType("GOVERNMENT");
+        var verifier = new JwtTokenVerifier(KEY, stub(id -> key), flags);
+        String token = baseBuilder("GOVERNMENT", b -> b.claim("acc", ACC))
+                .signWith(KEY)
+                .compact();
+        assertThat(verifier.verify(token).keyType()).isEqualTo("GOVERNMENT");
+        org.mockito.Mockito.when(flags.isEnabled("treasury.government_api_keys"))
+                .thenReturn(false);
+        TokenException disabled = catchThrowableOfType(TokenException.class, () -> verifier.verify(token));
+        assertThat(disabled.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(disabled.getErrorCode()).isEqualTo("FEATURE_DISABLED");
+        org.mockito.Mockito.when(flags.isEnabled("treasury.government_api_keys"))
+                .thenReturn(true);
+        assertThat(verifier.verify(token).accountId()).isEqualTo(ACC);
+    }
+
     @Test
     void governmentTokenRequiresExactlyOnePersistedAccount() {
         ApiKey key = personalKey();
@@ -124,7 +151,8 @@ class JwtTokenVerifierTest {
                                 "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8)); // 32 bytes
         SecretKey sharedKey = JwtKeys.deriveHmacKey(base64Secret);
 
-        JwtTokenVerifier verifier = new JwtTokenVerifier(sharedKey, stub(keyId -> keyId == KID ? personalKey() : null));
+        JwtTokenVerifier verifier =
+                new JwtTokenVerifier(sharedKey, stub(keyId -> keyId == KID ? personalKey() : null), enabledFlags());
         String token = baseBuilder("PERSONAL", b -> b.claim("acc", ACC))
                 .signWith(sharedKey, Jwts.SIG.HS256)
                 .compact();
@@ -245,7 +273,7 @@ class JwtTokenVerifierTest {
 
     @Test
     void keyNotFoundInDb_rejectedAsInvalidToken() {
-        JwtTokenVerifier verifier = new JwtTokenVerifier(KEY, stub(keyId -> null)); // no row
+        JwtTokenVerifier verifier = new JwtTokenVerifier(KEY, stub(keyId -> null), enabledFlags()); // no row
         String token = personalToken(t -> {});
 
         assertInvalid(verifier, token, "INVALID_TOKEN");
@@ -390,7 +418,7 @@ class JwtTokenVerifierTest {
     }
 
     private JwtTokenVerifier verifierFor(ApiKey key) {
-        return new JwtTokenVerifier(KEY, stub(keyId -> keyId == KID ? key : null));
+        return new JwtTokenVerifier(KEY, stub(keyId -> keyId == KID ? key : null), enabledFlags());
     }
 
     /** Minimal hand-rolled ApiKeyMapper; only findByKeyId is exercised by the verifier. */

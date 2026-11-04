@@ -40,7 +40,18 @@ apply even if the issuer has website staff permissions. Follow
 | `/treasuryapi government reissue <keyId>` | Rotate your key while preserving its account scope. |
 | `/treasuryapi government revoke <keyId>` | Permanently revoke your key. |
 
-Issuance and in-game reissue require `treasuryapi.government.issue`, default
+The release flag `treasury.government_api_keys` is **off by default**. Deploying
+V53 only registers it; enable it explicitly in **Admin → Feature flags** after
+compatible plugins and REST API deployments. Missing flags/providers fail closed.
+
+While off, issuance, in-game reissue and government-token REST authentication are
+unavailable (`404 FEATURE_DISABLED` for valid government tokens). Issuer listing
+and in-game revocation remain available, as do admin revocation/invalidation.
+Government webhook deliveries stay pending without consuming attempts; they
+resume from the queue when enabled again. Other key types keep working. Changes
+propagate through the shared flag cache; already-admitted work may finish.
+
+Issuance and in-game reissue also require `treasuryapi.government.issue`, default
 `false` even for operators. Keep this permission ungranted to production government
 roles. This is a privileged issuance capability for any active government account;
 account membership alone does not grant it. List and revoke use

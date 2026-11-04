@@ -1,10 +1,9 @@
 package io.paradaux.treasuryrestapi.model;
 
-import lombok.Data;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.Data;
 
 /**
  * A webhook delivery that is due to be attempted, joined with its subscription
@@ -18,6 +17,7 @@ public class DueDelivery {
     private long accountId;
     private int attempts;
     private String targetUrl;
+    private String keyType;
     private String secret;
     // payload (the matched account's posting view of the transaction)
     private long postingId;

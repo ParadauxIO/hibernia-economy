@@ -7,6 +7,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.paradaux.treasuryrestapi.mapper.ApiKeyMapper;
 import io.paradaux.treasuryrestapi.model.ApiKey;
+import io.paradaux.treasuryrestapi.service.FeatureFlagService;
 import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.slf4j.Logger;
@@ -35,10 +36,12 @@ public class JwtTokenVerifier {
     private static final Logger log = LoggerFactory.getLogger(JwtTokenVerifier.class);
 
     private final SecretKey signingKey;
+    private final FeatureFlagService flags;
     private final ApiKeyMapper apiKeyMapper;
 
-    public JwtTokenVerifier(SecretKey signingKey, ApiKeyMapper apiKeyMapper) {
+    public JwtTokenVerifier(SecretKey signingKey, ApiKeyMapper apiKeyMapper, FeatureFlagService flags) {
         this.signingKey = signingKey;
+        this.flags = flags;
         this.apiKeyMapper = apiKeyMapper;
     }
 
@@ -213,6 +216,9 @@ public class JwtTokenVerifier {
                         HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Token has an unrecognised key type.");
         }
 
+        if ("GOVERNMENT".equals(claimedType) && !flags.isEnabled("treasury.government_api_keys")) {
+            throw new TokenException(HttpStatus.NOT_FOUND, "FEATURE_DISABLED", "This feature is unavailable.");
+        }
         return new VerifiedToken(keyId, ownerUuid, claimedType, accountId, firmId);
     }
 }

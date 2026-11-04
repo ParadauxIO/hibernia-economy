@@ -501,6 +501,11 @@ internal eight-column record before the service adds the leaderboards.
 
 ### Government API keys (PAR-521)
 
+The default-off `treasury.government_api_keys` release flag (V53) gates issuance,
+rotation, REST authentication and government webhook delivery. Missing providers
+or keys fail closed. Listing/revocation and admin invalidation remain available;
+queued webhooks pause without consuming attempts and resume when enabled.
+
 The API-key plugin issues `GOVERNMENT` keys with a required `account_id` and no
 `firm_id`, using the existing schema. Issuance validates an active government
 account through `TreasuryApi`; command authorization uses the dedicated

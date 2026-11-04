@@ -3,6 +3,7 @@ package io.paradaux.treasuryapi.commands;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.treasury.api.FeatureFlagApi;
 import io.paradaux.treasuryapi.model.economy.ApiKey;
 import io.paradaux.treasuryapi.model.economy.KeyType;
 import io.paradaux.treasuryapi.services.ApiKeyService;
@@ -14,14 +15,17 @@ public class GovernmentKeyHandler {
 
     private final ApiKeyService apiKeyService;
     private final Message message;
+    private final FeatureFlagApi flags;
 
     @Inject
-    public GovernmentKeyHandler(ApiKeyService apiKeyService, Message message) {
+    public GovernmentKeyHandler(ApiKeyService apiKeyService, Message message, FeatureFlagApi flags) {
         this.apiKeyService = apiKeyService;
         this.message = message;
+        this.flags = flags;
     }
 
     public void doIssue(Player sender, int accountId) {
+        if (!requireEnabled(sender)) return;
         ApiKey key = apiKeyService.issueGovernmentKey(accountId, sender.getUniqueId());
         message.send(
                 sender,
@@ -57,6 +61,7 @@ public class GovernmentKeyHandler {
     }
 
     public void doReissue(Player sender, int keyId) {
+        if (!requireEnabled(sender)) return;
         ApiKey key = apiKeyService.getKey(keyId);
         if (key == null || key.getKeyType() != KeyType.GOVERNMENT) {
             message.send(sender, "treasuryapi.government.reissue.not-found");
@@ -97,5 +102,11 @@ public class GovernmentKeyHandler {
         }
         apiKeyService.revokeKey(keyId, sender.getUniqueId());
         message.send(sender, "treasuryapi.government.revoke.success", "keyId", String.valueOf(keyId));
+    }
+
+    private boolean requireEnabled(Player sender) {
+        if (flags.isEnabled("treasury.government_api_keys")) return true;
+        message.send(sender, "treasuryapi.government.disabled");
+        return false;
     }
 }

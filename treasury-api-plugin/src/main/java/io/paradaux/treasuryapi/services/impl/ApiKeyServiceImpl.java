@@ -8,6 +8,7 @@ import io.paradaux.common.JwtKeys;
 import io.paradaux.hibernia.framework.exceptions.ConflictException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import io.paradaux.hibernia.framework.exceptions.NotFoundException;
+import io.paradaux.treasury.api.FeatureFlagApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasuryapi.mappers.ApiKeyMapper;
@@ -32,14 +33,20 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     private final ApiConfiguration apiConfig;
     private final BusinessApi businessApi;
     private final TreasuryApi treasuryApi;
+    private final FeatureFlagApi flags;
 
     @Inject
     public ApiKeyServiceImpl(
-            ApiKeyMapper apiKeyMapper, ApiConfiguration apiConfig, BusinessApi businessApi, TreasuryApi treasuryApi) {
+            ApiKeyMapper apiKeyMapper,
+            ApiConfiguration apiConfig,
+            BusinessApi businessApi,
+            TreasuryApi treasuryApi,
+            FeatureFlagApi flags) {
         this.apiKeyMapper = apiKeyMapper;
         this.apiConfig = apiConfig;
         this.businessApi = businessApi;
         this.treasuryApi = treasuryApi;
+        this.flags = flags;
     }
 
     @Override
@@ -67,8 +74,15 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     @Override
     @Transactional
     public ApiKey issueGovernmentKey(int accountId, UUID ownerUuid) {
+        requireGovernmentEnabled();
         requireGovernmentAccount(accountId);
         return issue(KeyType.GOVERNMENT, accountId, null, ownerUuid);
+    }
+
+    private void requireGovernmentEnabled() {
+        if (!flags.isEnabled("treasury.government_api_keys")) {
+            throw new ConflictException("treasuryapi.government.disabled");
+        }
     }
 
     private void requireGovernmentAccount(Integer accountId) {
@@ -135,6 +149,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         }
 
         if (existing.getKeyType() == KeyType.GOVERNMENT) {
+            requireGovernmentEnabled();
             requireGovernmentAccount(existing.getAccountId());
         }
 

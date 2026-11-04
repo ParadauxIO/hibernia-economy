@@ -12,6 +12,21 @@ import org.junit.jupiter.api.Test;
 
 class FeatureFlagServiceIT extends EmbeddedDbIT {
     @Test
+    void governmentRegistrationDefaultsOffAndDoesNotOverwriteOperatorChoice() throws Exception {
+        String migration;
+        try (var in = getClass().getResourceAsStream("/db/migration/V53__government_api_keys_flag.sql")) {
+            assertNotNull(in);
+            migration = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        exec(migration, ps -> {});
+        var reader = new JdbcFeatureFlagReader(dataSource);
+        assertEquals(Boolean.FALSE, reader.read().get("treasury.government_api_keys"));
+        exec("UPDATE feature_flags SET enabled = 1 WHERE name = 'treasury.government_api_keys'", ps -> {});
+        exec(migration, ps -> {});
+        assertEquals(Boolean.TRUE, reader.read().get("treasury.government_api_keys"));
+    }
+
+    @Test
     void defaultOffAndDatabaseConstraints() throws Exception {
         exec("INSERT INTO feature_flags (name, description) VALUES ('business.preview', 'Preview')", ps -> {});
         var reader = new JdbcFeatureFlagReader(dataSource);
