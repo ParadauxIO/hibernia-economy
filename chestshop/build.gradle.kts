@@ -153,7 +153,7 @@ dependencies {
     testImplementation(libs.assertj.core)
     // MockBukkit — a real in-memory server so Bukkit-coupled services are exercised for
     // real (ItemStacks, inventories, signs) rather than mock-verified.
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.118.0")
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.119.0")
 
     // Shared startup + message-key test-kit (the startup + messages.properties audit).
     // Brings JUnit, Guice, the framework and MockBukkit transitively (declared `api`
@@ -164,7 +164,7 @@ dependencies {
     // DatabaseModule note above), so it's absent from the plugin's own deps. The startup
     // test builds the real SQLite-backed DatabaseModule (it runs schema DDL at wiring
     // time), so the driver must be on the test runtime classpath.
-    testRuntimeOnly("org.xerial:sqlite-jdbc:3.53.4.0")
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.54.1.0")
     // The in-repo Treasury/Business API classes are on the test *compile* classpath already
     // (testCompileOnly extendsFrom compileOnly, above); add them to the test *runtime* so the
     // market/account services (which mock TreasuryApi/MarketApi/ShopQueryApi/BusinessApi and
