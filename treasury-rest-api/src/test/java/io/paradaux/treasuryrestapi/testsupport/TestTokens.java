@@ -21,7 +21,7 @@ import javax.crypto.SecretKey;
  */
 public final class TestTokens {
 
-    /** {@code EmbeddedDbIT#insertApiKey}, passed as a method reference. */
+    /** {@code EmbeddedDbIT#insertTestTokenKey}, passed as a method reference. */
     @FunctionalInterface
     public interface KeySeeder {
         void insert(int keyId, String keyType, UUID owner, String jwtId, boolean revoked, LocalDateTime expiresAt);
@@ -37,7 +37,7 @@ public final class TestTokens {
     public static final UUID GOVERNMENT_OWNER = UUID.fromString("7e570000-0000-0000-0000-000000000003");
     public static final UUID SERVICE_OWNER = UUID.fromString("7e570000-0000-0000-0000-000000000004");
 
-    /** Scoped claims; no rows need to exist for them (api_keys.account_id/firm_id stay NULL). */
+    /** Scoped claims; the government fixture also persists its account scope. */
     public static final long PERSONAL_ACCOUNT = 9001;
 
     public static final long GOVERNMENT_ACCOUNT = 9003;

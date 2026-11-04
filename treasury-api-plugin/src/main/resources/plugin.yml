@@ -45,6 +45,17 @@ permissions:
         description: Revoke a business API key
         default: true
 
+    # Explicit grant only: do not grant issuance to production government roles.
+    treasuryapi.government.issue:
+        description: Issue or rotate a single-account government API key
+        default: false
+    treasuryapi.government.list:
+        description: List your government API keys
+        default: true
+    treasuryapi.government.revoke:
+        description: Revoke your government API keys
+        default: true
+
     # Explorer UI access
     treasuryapi.ui.user:
         description: Grant/revoke any configured explorer role (privileged recovery access)

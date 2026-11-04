@@ -1,11 +1,9 @@
 package io.paradaux.treasuryapi.startup;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.hibernia.framework.commander.annotations.Permission;
 import io.paradaux.treasuryapi.commands.TreasuryAPICommand;
-import org.bukkit.permissions.PermissionDefault;
-import org.bukkit.plugin.PluginDescriptionFile;
-import org.junit.jupiter.api.Test;
-
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.Map;
@@ -13,8 +11,9 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.bukkit.permissions.PermissionDefault;
+import org.bukkit.plugin.PluginDescriptionFile;
+import org.junit.jupiter.api.Test;
 
 /**
  * Pins the {@code plugin.yml} defaults behind every {@code /treasuryapi} route.
@@ -44,11 +43,26 @@ class TreasuryApiPermissionDefaultsTest {
         Map<String, org.bukkit.permissions.Permission> declared = declaredPermissions();
 
         for (String node : routePermissions()) {
-            PermissionDefault expected = OP_ONLY.contains(node) ? PermissionDefault.OP : PermissionDefault.TRUE;
+            PermissionDefault expected = node.equals("treasuryapi.government.issue")
+                    ? PermissionDefault.FALSE
+                    : OP_ONLY.contains(node) ? PermissionDefault.OP : PermissionDefault.TRUE;
             assertThat(declared.get(node).getDefault())
                     .as("plugin.yml default for %s", node)
                     .isEqualTo(expected);
         }
+    }
+
+    @Test
+    void governmentMintRoutesRequireDedicatedIssuePermission() throws Exception {
+        for (String method : new String[] {"governmentIssue", "governmentReissue"}) {
+            assertThat(TreasuryAPICommand.class
+                            .getMethod(method, org.bukkit.entity.Player.class, int.class)
+                            .getAnnotation(Permission.class)
+                            .value())
+                    .isEqualTo("treasuryapi.government.issue");
+        }
+        assertThat(declaredPermissions().get("treasuryapi.government.issue").getDefault())
+                .isEqualTo(PermissionDefault.FALSE);
     }
 
     /** The class-level root node plus every method-level route node. */
@@ -64,10 +78,12 @@ class TreasuryApiPermissionDefaultsTest {
 
     /** Parsed with Bukkit's own loader, from the processed plugin.yml on the classpath. */
     private static Map<String, org.bukkit.permissions.Permission> declaredPermissions() throws Exception {
-        try (InputStream in = TreasuryApiPermissionDefaultsTest.class.getClassLoader().getResourceAsStream("plugin.yml")) {
+        try (InputStream in =
+                TreasuryApiPermissionDefaultsTest.class.getClassLoader().getResourceAsStream("plugin.yml")) {
             assertThat(in).as("plugin.yml on the test classpath").isNotNull();
-            return new PluginDescriptionFile(in).getPermissions().stream()
-                    .collect(Collectors.toMap(org.bukkit.permissions.Permission::getName, Function.identity()));
+            return new PluginDescriptionFile(in)
+                    .getPermissions().stream()
+                            .collect(Collectors.toMap(org.bukkit.permissions.Permission::getName, Function.identity()));
         }
     }
 }

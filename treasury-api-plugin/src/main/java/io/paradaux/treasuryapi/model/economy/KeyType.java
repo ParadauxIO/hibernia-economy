@@ -9,9 +9,7 @@ package io.paradaux.treasuryapi.model.economy;
  * column values, so MyBatis' default enum handling round-trips each value through
  * {@link #name()} at the persistence boundary — no bespoke type handler needed.
  *
- * <p>{@code GOVERNMENT} is retained for forward-compat with the schema enum
- * (the migration baseline still permits it), even though no command path issues
- * a GOVERNMENT key today.
+ * <p>{@code GOVERNMENT} keys are always restricted to one government account.
  *
  * <p>{@code SERVICE} (schema V15) is the trusted-backend scope verified by
  * treasury-rest-api. It is listed so a SERVICE row maps cleanly instead of

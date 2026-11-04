@@ -1,5 +1,8 @@
 package io.paradaux.treasuryrestapi.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
@@ -7,16 +10,12 @@ import io.paradaux.treasuryrestapi.dto.RotateResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
+import java.time.LocalDateTime;
+import java.util.UUID;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-
-import javax.crypto.SecretKey;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Integration tests for {@link AuthService} rotation (finding
@@ -28,8 +27,11 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  */
 class AuthServiceIT extends EmbeddedDbIT {
 
-    @Autowired private AuthService authService;
-    @Autowired private SecretKey signingKey;
+    @Autowired
+    private AuthService authService;
+
+    @Autowired
+    private SecretKey signingKey;
 
     private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final LocalDateTime FUTURE = LocalDateTime.now().plusDays(30);
@@ -44,6 +46,16 @@ class AuthServiceIT extends EmbeddedDbIT {
     }
 
     // ── rotateToken ───────────────────────────────────────────────────────────────
+
+    @Test
+    void disabledGovernmentRotationDoesNotReplaceCredential() {
+        insertApiKey(5, "GOVERNMENT", OWNER, "government-old-jti", false, FUTURE);
+        var failure = catchThrowableOfType(
+                ApiException.class,
+                () -> authService.rotateToken(new VerifiedToken(5, OWNER, "GOVERNMENT", 42L, null)));
+        assertThat(failure.getErrorCode()).isEqualTo("FEATURE_DISABLED");
+        assertThat(jwtIdOf(5)).isEqualTo("government-old-jti");
+    }
 
     @Test
     void rotateToken_replacesJtiAndMintsVerifiableToken() {
@@ -70,8 +82,8 @@ class AuthServiceIT extends EmbeddedDbIT {
     void rotateToken_onRevokedKey_401_andJtiUnchanged() {
         insertApiKey(5, "PERSONAL", OWNER, "old-jti-0000", true, FUTURE);
 
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> authService.rotateToken(personalPrincipal(5, 42)));
+        ApiException ex =
+                catchThrowableOfType(ApiException.class, () -> authService.rotateToken(personalPrincipal(5, 42)));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(ex.getErrorCode()).isEqualTo("TOKEN_REVOKED");
         assertThat(jwtIdOf(5)).isEqualTo("old-jti-0000"); // no rotation happened
@@ -79,8 +91,8 @@ class AuthServiceIT extends EmbeddedDbIT {
 
     @Test
     void rotateToken_missingKey_401() {
-        ApiException ex = catchThrowableOfType(ApiException.class,
-                () -> authService.rotateToken(personalPrincipal(999, 42)));
+        ApiException ex =
+                catchThrowableOfType(ApiException.class, () -> authService.rotateToken(personalPrincipal(999, 42)));
         assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(ex.getErrorCode()).isEqualTo("TOKEN_REVOKED");
     }

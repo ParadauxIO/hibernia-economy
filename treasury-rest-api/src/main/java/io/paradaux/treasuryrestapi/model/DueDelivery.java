@@ -17,6 +17,7 @@ public class DueDelivery {
     private long accountId;
     private int attempts;
     private String targetUrl;
+    private String keyType;
     private String secret;
     // payload (the matched account's posting view of the transaction)
     private long postingId;

@@ -173,6 +173,9 @@ class RouteSecurityIT extends EmbeddedDbIT {
     @Autowired
     private SecretKey signingKey;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private io.paradaux.treasuryrestapi.service.FeatureFlagService flags;
+
     private TestTokens tokens;
 
     /** One concrete, requestable instance of a mapped route. */
@@ -180,7 +183,9 @@ class RouteSecurityIT extends EmbeddedDbIT {
 
     @BeforeEach
     void seedKeys() {
-        tokens = new TestTokens(signingKey, this::insertApiKey);
+        org.mockito.Mockito.when(flags.isEnabled("treasury.government_api_keys"))
+                .thenReturn(true);
+        tokens = new TestTokens(signingKey, this::insertTestTokenKey);
         tokens.seedAll();
     }
 

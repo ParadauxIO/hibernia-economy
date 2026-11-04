@@ -147,7 +147,7 @@ class TransactionCounterpartyIT extends EmbeddedDbIT {
         exec("UPDATE ledger_txns SET plugin_system = 'realty-auction' WHERE txn_id = ?", ps -> ps.setLong(1, txn));
         insertDueDelivery(sub, txn, 1, 0);
 
-        List<DueDelivery> due = deliveryMapper.findDue(10);
+        List<DueDelivery> due = deliveryMapper.findDue(10, true);
 
         assertThat(due).singleElement().satisfies(d -> {
             assertThat(d.getPayoutCategory()).isEqualTo("AUCTION_PROCEEDS");

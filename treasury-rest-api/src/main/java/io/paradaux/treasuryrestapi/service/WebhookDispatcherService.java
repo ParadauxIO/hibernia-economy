@@ -54,6 +54,7 @@ public class WebhookDispatcherService {
     private static final Logger log = LoggerFactory.getLogger(WebhookDispatcherService.class);
 
     private final LedgerMapper ledgerMapper;
+    private final FeatureFlagService flags;
     private final WebhookSubscriptionMapper subscriptionMapper;
     private final WebhookDeliveryMapper deliveryMapper;
     private final WebhookCursorMapper cursorMapper;
@@ -98,6 +99,7 @@ public class WebhookDispatcherService {
 
     public WebhookDispatcherService(
             LedgerMapper ledgerMapper,
+            FeatureFlagService flags,
             WebhookSubscriptionMapper subscriptionMapper,
             WebhookDeliveryMapper deliveryMapper,
             WebhookCursorMapper cursorMapper,
@@ -106,6 +108,7 @@ public class WebhookDispatcherService {
             ObjectMapper objectMapper,
             @Value("${treasury.webhook.connect-timeout-ms:5000}") long connectTimeoutMs) {
         this.ledgerMapper = ledgerMapper;
+        this.flags = flags;
         this.subscriptionMapper = subscriptionMapper;
         this.deliveryMapper = deliveryMapper;
         this.cursorMapper = cursorMapper;
@@ -198,7 +201,7 @@ public class WebhookDispatcherService {
     }
 
     private void deliverDue() {
-        List<DueDelivery> due = deliveryMapper.findDue(deliveryBatch);
+        List<DueDelivery> due = deliveryMapper.findDue(deliveryBatch, flags.isEnabled("treasury.government_api_keys"));
         if (due.isEmpty()) return;
 
         // Fan the batch out across a bounded pool: each delivery does a blocking
@@ -226,6 +229,8 @@ public class WebhookDispatcherService {
     }
 
     private void deliver(DueDelivery d) {
+        // Recheck when admitting each send; leave paused deliveries pending without consuming attempts.
+        if ("GOVERNMENT".equals(d.getKeyType()) && !flags.isEnabled("treasury.government_api_keys")) return;
         URI uri;
         try {
             uri = URI.create(d.getTargetUrl());

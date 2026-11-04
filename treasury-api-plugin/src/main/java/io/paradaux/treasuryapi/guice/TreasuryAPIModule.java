@@ -4,6 +4,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;
 import com.google.inject.multibindings.OptionalBinder;
 import io.paradaux.business.api.BusinessApi;
+import io.paradaux.treasury.api.FeatureFlagApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasuryapi.TreasuryAPI;
 import io.paradaux.treasuryapi.commands.BusinessKeyHandler;
@@ -56,6 +57,11 @@ public class TreasuryAPIModule extends AbstractModule {
         // Economy APIs obtained from Bukkit services (Treasury/Business load first).
         bind(TreasuryApi.class).toInstance(treasuryApi);
         bind(BusinessApi.class).toInstance(businessApi);
+        // Resolve the current Treasury provider on each check; absence fails closed.
+        bind(FeatureFlagApi.class).toInstance(key -> {
+            var flags = org.bukkit.Bukkit.getServicesManager().load(FeatureFlagApi.class);
+            return flags != null && flags.isEnabled(key);
+        });
 
         // Services
         bind(ApiKeyService.class).to(ApiKeyServiceImpl.class).in(Singleton.class);
@@ -81,12 +87,12 @@ public class TreasuryAPIModule extends AbstractModule {
     }
 
     private void bindLuckPerms() {
-        net.luckperms.api.LuckPerms lp =
-                org.bukkit.Bukkit.getServicesManager().load(net.luckperms.api.LuckPerms.class);
+        net.luckperms.api.LuckPerms lp = org.bukkit.Bukkit.getServicesManager().load(net.luckperms.api.LuckPerms.class);
         if (lp != null) {
             bind(net.luckperms.api.LuckPerms.class).toInstance(lp);
             OptionalBinder.newOptionalBinder(binder(), PlayerGroupSync.class)
-                    .setBinding().to(io.paradaux.treasuryapi.tasks.GroupReconciliationTask.class);
+                    .setBinding()
+                    .to(io.paradaux.treasuryapi.tasks.GroupReconciliationTask.class);
         }
     }
 

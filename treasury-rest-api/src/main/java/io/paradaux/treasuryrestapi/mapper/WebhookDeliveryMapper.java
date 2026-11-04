@@ -1,13 +1,12 @@
 package io.paradaux.treasuryrestapi.mapper;
 
 import io.paradaux.treasuryrestapi.model.DueDelivery;
+import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
-
-import java.util.List;
 
 @Mapper
 public interface WebhookDeliveryMapper {
@@ -19,9 +18,10 @@ public interface WebhookDeliveryMapper {
      */
     @Insert("INSERT IGNORE INTO webhook_delivery (subscription_id, txn_id, account_id) "
             + "VALUES (#{subscriptionId}, #{txnId}, #{accountId})")
-    int enqueue(@Param("subscriptionId") long subscriptionId,
-                @Param("txnId") long txnId,
-                @Param("accountId") long accountId);
+    int enqueue(
+            @Param("subscriptionId") long subscriptionId,
+            @Param("txnId") long txnId,
+            @Param("accountId") long accountId);
 
     /**
      * Deliveries due now, joined to their (still-active) subscription and the
@@ -37,7 +37,7 @@ public interface WebhookDeliveryMapper {
             + "FROM ("
             + "SELECT d.delivery_id AS deliveryId, d.subscription_id AS subscriptionId, d.txn_id AS txnId, "
             + "       d.account_id AS accountId, d.attempts, d.next_attempt_at AS nextAttemptAt, "
-            + "       s.target_url AS targetUrl, s.secret, "
+            + "       s.target_url AS targetUrl, s.secret, s.key_type AS keyType, "
             + "       lp.posting_id AS postingId, lp.amount, lp.memo, "
             + "       lt.message, lt.settlement_time AS settlementTime, "
             + "       lt.initiator_uuid_bin AS initiatorUuidBin, lt.plugin_system AS pluginSystem "
@@ -49,6 +49,7 @@ public interface WebhookDeliveryMapper {
             // index's next_attempt_at column satisfy the sort (due-order, oldest first);
             // delivery_id breaks ties deterministically.
             + "WHERE d.status = 'PENDING' AND d.next_attempt_at <= NOW() "
+            + "AND (#{governmentEnabled} = TRUE OR s.key_type <> 'GOVERNMENT') "
             + "ORDER BY d.next_attempt_at ASC, d.delivery_id ASC LIMIT #{limit}"
             + ") h "
             + "LEFT JOIN ledger_postings cp ON cp.posting_id = ("
@@ -56,7 +57,7 @@ public interface WebhookDeliveryMapper {
             + "    WHERE o.txn_id = h.txnId AND o.posting_id <> h.postingId) "
             + "LEFT JOIN accounts ca ON ca.account_id = cp.account_id "
             + "ORDER BY h.nextAttemptAt ASC, h.deliveryId ASC")
-    List<DueDelivery> findDue(@Param("limit") int limit);
+    List<DueDelivery> findDue(@Param("limit") int limit, @Param("governmentEnabled") boolean governmentEnabled);
 
     @Update("UPDATE webhook_delivery SET status = 'DELIVERED', attempts = attempts + 1, "
             + "http_status = #{httpStatus}, last_error = NULL WHERE delivery_id = #{id}")
@@ -66,8 +67,11 @@ public interface WebhookDeliveryMapper {
     @Update("UPDATE webhook_delivery SET attempts = attempts + 1, http_status = #{httpStatus}, "
             + "last_error = #{error}, next_attempt_at = NOW() + INTERVAL #{delaySeconds} SECOND "
             + "WHERE delivery_id = #{id}")
-    int markRetry(@Param("id") long id, @Param("httpStatus") Integer httpStatus,
-                  @Param("error") String error, @Param("delaySeconds") long delaySeconds);
+    int markRetry(
+            @Param("id") long id,
+            @Param("httpStatus") Integer httpStatus,
+            @Param("error") String error,
+            @Param("delaySeconds") long delaySeconds);
 
     @Update("UPDATE webhook_delivery SET status = 'FAILED', attempts = attempts + 1, "
             + "http_status = #{httpStatus}, last_error = #{error} WHERE delivery_id = #{id}")

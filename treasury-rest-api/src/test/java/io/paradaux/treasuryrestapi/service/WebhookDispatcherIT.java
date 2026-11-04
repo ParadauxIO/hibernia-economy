@@ -1,13 +1,12 @@
 package io.paradaux.treasuryrestapi.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.treasuryrestapi.testsupport.EmbeddedDbIT;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration tests for {@link WebhookDispatcherService} (finding
@@ -27,26 +26,50 @@ import static org.assertj.core.api.Assertions.assertThat;
  * auto-disable thresholds small enough to hit in one tick; the poll/initial delays are
  * pushed out so the {@code @Scheduled} loop never races the manual tick.
  */
-@TestPropertySource(properties = {
-        "treasury.webhook.enabled=true",
-        "treasury.webhook.settlement-lag-seconds=0",
-        "treasury.webhook.max-attempts=2",
-        "treasury.webhook.failure-threshold=3",
-        "treasury.webhook.retry-base-seconds=30",
-        "treasury.webhook.retry-max-seconds=3600",
-        "treasury.webhook.initial-delay-ms=600000",
-        "treasury.webhook.poll-ms=600000",
-})
+@TestPropertySource(
+        properties = {
+            "treasury.webhook.enabled=true",
+            "treasury.webhook.settlement-lag-seconds=0",
+            "treasury.webhook.max-attempts=2",
+            "treasury.webhook.failure-threshold=3",
+            "treasury.webhook.retry-base-seconds=30",
+            "treasury.webhook.retry-max-seconds=3600",
+            "treasury.webhook.initial-delay-ms=600000",
+            "treasury.webhook.poll-ms=600000",
+        })
 class WebhookDispatcherIT extends EmbeddedDbIT {
 
     @Autowired
     private WebhookDispatcherService dispatcher;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private FeatureFlagService flags;
 
     private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID INITIATOR = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private static final String BLOCKED_URL = "https://127.0.0.1/hook"; // loopback → SSRF re-check fails
 
     // ── ingest: cursor → enqueue matching deliveries ──────────────────────────────
+
+    @Test
+    void disabledGovernmentDeliveryPausesWithoutBlockingOtherSubscriptions() {
+        insertAccount(1, "GOVERNMENT", OWNER, "Government");
+        insertAccount(2, "PERSONAL", null, "Personal");
+        long government = insertSubscription(OWNER, "GOVERNMENT", 1, null, BLOCKED_URL, "s".repeat(64), true, 0);
+        long personal = insertSubscription(OWNER, "PERSONAL", 2, null, BLOCKED_URL, "s".repeat(64), true, 0);
+        long governmentTxn = insertSettledTxn(1, "10.00", "gov", INITIATOR);
+        long personalTxn = insertSettledTxn(2, "10.00", "personal", INITIATOR);
+        long paused = insertDueDelivery(government, governmentTxn, 1, 0);
+        long allowed = insertDueDelivery(personal, personalTxn, 2, 0);
+        dispatcher.tick();
+        assertThat(deliveryAttempts(paused)).isZero();
+        assertThat(deliveryStatus(paused)).isEqualTo("PENDING");
+        assertThat(deliveryAttempts(allowed)).isEqualTo(1);
+        org.mockito.Mockito.when(flags.isEnabled("treasury.government_api_keys"))
+                .thenReturn(true);
+        dispatcher.tick();
+        assertThat(deliveryAttempts(paused)).isEqualTo(1);
+    }
 
     @Test
     void ingest_enqueuesForAccountScopedSubscription_andAdvancesCursor() {
@@ -130,7 +153,8 @@ class WebhookDispatcherIT extends EmbeddedDbIT {
         long txnA = insertSettledTxn(1, "10.00", "a", INITIATOR);
         long txnB = insertSettledTxn(1, "10.00", "b", INITIATOR);
         long dA = insertDueDelivery(sub, txnA, 1, /* attempts */ 0); // delay 30 * 2^0 = 30
-        long dB = insertDueDelivery(sub, txnB, 1, /* attempts */ 1); // delay 30 * 2^1 = 60 (0+1<2? for B: attempts=1 → 1+1>=2 terminal!)
+        long dB = insertDueDelivery(
+                sub, txnB, 1, /* attempts */ 1); // delay 30 * 2^1 = 60 (0+1<2? for B: attempts=1 → 1+1>=2 terminal!)
 
         // Raise max-attempts locally is not possible here; instead assert the delay math
         // on the one that retries (dA) and that dB terminated (attempts 1 → terminal).
