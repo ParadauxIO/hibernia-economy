@@ -1,5 +1,13 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.treasury.mappers.GovernmentFineMapper;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.economy.Account;
@@ -9,32 +17,32 @@ import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
+import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class GovServiceImplTest {
 
-    @Mock AccountService accountService;
-    @Mock LedgerService ledgerService;
-    @Mock GovernmentFineMapper fineMapper;
-    @Mock GovernmentConfiguration govConfig;
-    @Mock PlayerDirectoryService playerDirectory;
+    @Mock
+    AccountService accountService;
+
+    @Mock
+    LedgerService ledgerService;
+
+    @Mock
+    GovernmentFineMapper fineMapper;
+
+    @Mock
+    GovernmentConfiguration govConfig;
+
+    @Mock
+    PlayerDirectoryService playerDirectory;
 
     private GovServiceImpl svc;
 
@@ -47,7 +55,8 @@ class GovServiceImplTest {
 
     @Test
     void createDepartmentAccount_rejectsWhenGovAccountAlreadyExists() {
-        when(accountService.getGovernmentAccountByName("Treasury")).thenReturn(new Account());
+        when(accountService.getGovernmentAccountByName("Treasury"))
+                .thenReturn(Account.builder().build());
 
         assertThatThrownBy(() -> svc.createDepartmentAccount("Treasury", actor))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -70,11 +79,11 @@ class GovServiceImplTest {
 
     @Test
     void createDepartmentAccount_createsWhenNameIsFree() {
-        Account created = new Account();
-        created.setDisplayName("Treasury");
+        Account created = Account.builder().displayName("Treasury").build();
         when(accountService.getGovernmentAccountByName("Treasury")).thenReturn(null);
         when(playerDirectory.resolveUuidByName("Treasury")).thenReturn(Optional.empty());
-        when(accountService.createAccount(eq(AccountType.GOVERNMENT), any(), eq("Treasury"))).thenReturn(created);
+        when(accountService.createAccount(eq(AccountType.GOVERNMENT), any(), eq("Treasury")))
+                .thenReturn(created);
 
         Account result = svc.createDepartmentAccount("Treasury", actor);
 
@@ -88,11 +97,12 @@ class GovServiceImplTest {
     private static final int GOV = 50;
 
     private void stubFineAccounts() {
-        Account gov = new Account();
-        gov.setAccountId(GOV);
-        gov.setAccountType(AccountType.GOVERNMENT);
+        Account gov = Account.builder()
+                .accountId(GOV)
+                .accountType(AccountType.GOVERNMENT)
+                .build();
         when(accountService.getAccountById(GOV)).thenReturn(gov);
-        when(accountService.getAccountById(DEBTOR)).thenReturn(new Account());
+        when(accountService.getAccountById(DEBTOR)).thenReturn(Account.builder().build());
     }
 
     @Test

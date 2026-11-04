@@ -1,14 +1,15 @@
 package io.paradaux.treasury.model.economy;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Value;
+import lombok.With;
 
-@Data
+@Builder(toBuilder = true)
+@Value
+@With
 @AllArgsConstructor
-@NoArgsConstructor
 public class AccountBalance {
     private int accountId;
     private BigDecimal balance;

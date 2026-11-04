@@ -4,16 +4,18 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Builder;
+import lombok.Value;
+import lombok.With;
 
 /**
  * Flattened view of a ledger posting joined with its parent transaction.
  * Used for paginated transaction history on an account.
  */
-@Data
+@Builder(toBuilder = true)
+@Value
+@With
 @AllArgsConstructor
-@NoArgsConstructor
 public class TransactionEntry {
     private long postingId;
     private long txnId;

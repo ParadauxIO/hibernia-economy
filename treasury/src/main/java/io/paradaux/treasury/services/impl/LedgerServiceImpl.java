@@ -80,7 +80,7 @@ public class LedgerServiceImpl implements LedgerService {
     private void ensurePrimitiveGovernmentAccount(String name) {
         Account existing = getOrCreateGovernmentAccount(name);
         if (existing.getCreditLimit() == null || existing.getCreditLimit().signum() >= 0) {
-            existing.setCreditLimit(BigDecimal.valueOf(-1));
+            existing = existing.withCreditLimit(BigDecimal.valueOf(-1));
             accountMapper.updateAccount(existing);
             log.info(
                     "Migrated GOVERNMENT account '{}' (id={}) to credit_limit=-1 (unlimited)",
@@ -527,13 +527,14 @@ public class LedgerServiceImpl implements LedgerService {
             @Nullable UUID authorizer,
             @Nullable String pluginSystem,
             byte @Nullable [] dedup) {
-        LedgerTxn txn = new LedgerTxn();
-        txn.setMessage(message);
-        txn.setInitiatorUuid(initiator);
-        txn.setAuthorizerUuid(authorizer);
-        txn.setPluginSystem(pluginSystem);
-        txn.setClientDedupKey(dedup);
-        ledgerMapper.insertTxnEntity(txn);
+        LedgerTxn txn = LedgerTxn.builder()
+                .message(message)
+                .initiatorUuid(initiator)
+                .authorizerUuid(authorizer)
+                .pluginSystem(pluginSystem)
+                .clientDedupKey(dedup)
+                .build();
+        txn = txn.withTxnId(ledgerMapper.insertTxnEntity(txn));
         return txn.getTxnId();
     }
 
@@ -553,7 +554,7 @@ public class LedgerServiceImpl implements LedgerService {
         // Primitive GOVERNMENT accounts (starting-balances, tax-income, fines, Eco)
         // are system faucets/sinks; the -1 sentinel disables the credit-limit check.
         Account account = AccountFactory.primitiveGovernment(name);
-        accountMapper.insertAccount(account);
+        account = account.withAccountId(accountMapper.insertAccount(account));
         accountMapper.seedBalance(account.getAccountId());
         log.info("Created GOVERNMENT account '{}' (id={})", name, account.getAccountId());
         return account;

@@ -54,7 +54,7 @@ class DataExportServiceImplTest {
 
     @Test
     void exportTransactionsFor_buildsCsvAndUploadsToBytebin() {
-        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
         UUID initiator = UUID.fromString("00000000-0000-0000-0000-000000000001");
         when(ledgerMapper.findAllTransactionsByAccount(eq(1), anyInt()))
                 .thenReturn(List.of(
@@ -83,9 +83,8 @@ class DataExportServiceImplTest {
 
     @Test
     void csv_containsStructuredCategorySeparateFromMemo() {
-        when(accountMapper.findById(1)).thenReturn(new Account());
-        TransactionEntry entry = txn(1L, 1L, 1, "12.50", "memo", null, null, "test");
-        entry.setPluginSystem("realty-auction");
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
+        TransactionEntry entry = txn(1L, 1L, 1, "12.50", "memo", null, null, "realty-auction");
         when(ledgerMapper.findAllTransactionsByAccount(eq(1), anyInt())).thenReturn(List.of(entry));
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         when(bytebinService.upload(body.capture(), eq("text/csv"))).thenReturn("url");
@@ -97,7 +96,7 @@ class DataExportServiceImplTest {
 
     @Test
     void csv_escapesCommas_quotes_and_newlines() {
-        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
         when(ledgerMapper.findAllTransactionsByAccount(eq(1), anyInt()))
                 .thenReturn(List.of(
                         txn(1L, 1L, 1, "1.00", "memo, has comma", null, null, "P1"),
@@ -116,7 +115,7 @@ class DataExportServiceImplTest {
 
     @Test
     void csv_handlesNullOptionalFields() {
-        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
         when(ledgerMapper.findAllTransactionsByAccount(eq(1), anyInt()))
                 .thenReturn(List.of(txn(1L, 1L, 1, "1.00", null, null, null, null)));
 
@@ -139,17 +138,18 @@ class DataExportServiceImplTest {
             UUID initiator,
             UUID authorizer,
             String pluginSystem) {
-        TransactionEntry e = new TransactionEntry();
-        e.setPostingId(postingId);
-        e.setTxnId(txnId);
-        e.setAccountId(accountId);
-        e.setAmount(new BigDecimal(amount));
-        e.setMemo(memo);
-        e.setSettlementTime(Instant.parse("2026-01-01T00:00:00Z"));
-        e.setMessage("ledger msg");
-        e.setInitiatorUuid(initiator);
-        e.setAuthorizerUuid(authorizer);
-        e.setPluginSystem(pluginSystem);
+        TransactionEntry e = TransactionEntry.builder()
+                .postingId(postingId)
+                .txnId(txnId)
+                .accountId(accountId)
+                .amount(new BigDecimal(amount))
+                .memo(memo)
+                .settlementTime(Instant.parse("2026-01-01T00:00:00Z"))
+                .message("ledger msg")
+                .initiatorUuid(initiator)
+                .authorizerUuid(authorizer)
+                .pluginSystem(pluginSystem)
+                .build();
         return e;
     }
 }

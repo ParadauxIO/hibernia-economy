@@ -238,7 +238,7 @@ public class AccountServiceImpl implements AccountService {
         // The id is cached on the next resolve, which reads the committed row.
         Account account = buildPersonalAccount(ownerUuid);
         try {
-            accountMapper.insertAccount(account);
+            account = account.withAccountId(accountMapper.insertAccount(account));
             accountMapper.seedBalance(account.getAccountId());
             return account.getAccountId();
         } catch (PersistenceException e) {
@@ -266,7 +266,7 @@ public class AccountServiceImpl implements AccountService {
         // disables the credit-limit check — the account can mint and burn freely.
         Account acc = new Account(0, AccountType.SYSTEM, owner, pluginName, false, false, true, BigDecimal.valueOf(-1));
         try {
-            accountMapper.insertAccount(acc);
+            acc = acc.withAccountId(accountMapper.insertAccount(acc));
             accountMapper.seedBalance(acc.getAccountId());
             log.info("Created SYSTEM account for plugin '{}' (id={})", pluginName, acc.getAccountId());
             return acc.getAccountId();
@@ -294,26 +294,27 @@ public class AccountServiceImpl implements AccountService {
         Objects.requireNonNull(displayName, "displayName");
         displayName = displayName.replaceAll("^ +| +$", "");
 
-        Account account = new Account();
-        account.setAccountType(accountType);
-        account.setOwnerUuid(ownerUuid);
-        account.setDisplayName(displayName);
-        account.setRequiresAuthorization(false);
-        account.setArchived(false);
+        Account account = Account.builder()
+                .accountType(accountType)
+                .ownerUuid(ownerUuid)
+                .displayName(displayName)
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .build();
         if (accountType == AccountType.SYSTEM) {
             // SYSTEM accounts are faucets/sinks that mint and burn freely — they ignore
             // credit limits. Default them to the -1 sentinel so the sentinel and the
             // type-based OverdraftPolicy check agree (PAR-319). Mirrors the direct
             // faucet defaults in getOrCreateSystemAccountId.
-            account.setAllowOverdraft(true);
-            account.setCreditLimit(BigDecimal.valueOf(-1));
+            account = account.withAllowOverdraft(true);
+            account = account.withCreditLimit(BigDecimal.valueOf(-1));
         } else {
-            account.setAllowOverdraft(false);
-            account.setCreditLimit(BigDecimal.ZERO);
+            account = account.withAllowOverdraft(false);
+            account = account.withCreditLimit(BigDecimal.ZERO);
         }
 
         try {
-            accountMapper.insertAccount(account);
+            account = account.withAccountId(accountMapper.insertAccount(account));
         } catch (RuntimeException e) {
             NameReservationErrors.userMessage(e).ifPresent(message -> {
                 // Preserve the JDBC cause so other plugin classloaders can classify the signal.
@@ -336,7 +337,7 @@ public class AccountServiceImpl implements AccountService {
     public void updateAccount(Account account) {
         Objects.requireNonNull(account, "account");
         if (account.getDisplayName() != null) {
-            account.setDisplayName(account.getDisplayName().replaceAll("^ +| +$", ""));
+            account = account.withDisplayName(account.getDisplayName().replaceAll("^ +| +$", ""));
         }
         if (accountMapper.findById(account.getAccountId()) == null) {
             throw new IllegalArgumentException("Account not found: " + account.getAccountId());
@@ -369,7 +370,7 @@ public class AccountServiceImpl implements AccountService {
     public void archiveAccount(int accountId) {
         Account account = accountMapper.findById(accountId);
         if (account == null) throw new IllegalArgumentException("Account not found: " + accountId);
-        account.setArchived(true);
+        account = account.withArchived(true);
         accountMapper.updateAccount(account);
         log.debug("Archived account id={}", accountId);
     }
@@ -379,7 +380,7 @@ public class AccountServiceImpl implements AccountService {
     public void unarchiveAccount(int accountId) {
         Account account = accountMapper.findById(accountId);
         if (account == null) throw new IllegalArgumentException("Account not found: " + accountId);
-        account.setArchived(false);
+        account = account.withArchived(false);
         accountMapper.updateAccount(account);
         log.debug("Unarchived account id={}", accountId);
     }
@@ -479,14 +480,15 @@ public class AccountServiceImpl implements AccountService {
     // ---- Private helpers ----
 
     static Account buildPersonalAccount(UUID ownerUuid) {
-        Account account = new Account();
-        account.setAccountType(AccountType.PERSONAL);
-        account.setOwnerUuid(ownerUuid);
-        account.setDisplayName(ownerUuid.toString());
-        account.setRequiresAuthorization(false);
-        account.setArchived(false);
-        account.setAllowOverdraft(false);
-        account.setCreditLimit(BigDecimal.ZERO);
+        Account account = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(ownerUuid)
+                .displayName(ownerUuid.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
         return account;
     }
 }

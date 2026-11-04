@@ -491,19 +491,21 @@ class InfoServiceImplTest extends ServerTest {
         io.paradaux.business.model.Firm firm = new io.paradaux.business.model.Firm();
         firm.setDisplayName("Acme Hardware");
         firm.setDefaultAccountId(99); // The selected wallet is a linked non-default account.
-        io.paradaux.treasury.model.economy.Account wallet = new io.paradaux.treasury.model.economy.Account();
-        wallet.setAccountId(46);
-        wallet.setDisplayName("ChestShops");
-        wallet.setAccountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS);
+        io.paradaux.treasury.model.economy.Account wallet = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(46)
+                .displayName("ChestShops")
+                .accountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS)
+                .build();
         when(treasury.getAccountById(46)).thenReturn(wallet);
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
         lenient().when(firms.resolveShopAlias("acme")).thenReturn(46);
         // Legacy names select the default wallet; its label also differs from the firm name.
         lenient().when(firms.getFirm("Old Shop")).thenReturn(firm);
-        io.paradaux.treasury.model.economy.Account defaultWallet = new io.paradaux.treasury.model.economy.Account();
-        defaultWallet.setAccountId(99);
-        defaultWallet.setDisplayName("Default Wallet");
-        defaultWallet.setAccountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS);
+        io.paradaux.treasury.model.economy.Account defaultWallet = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(99)
+                .displayName("Default Wallet")
+                .accountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS)
+                .build();
         lenient().when(treasury.getAccountById(99)).thenReturn(defaultWallet);
         lenient().when(firms.getFirmByAccountId(99)).thenReturn(firm);
         BusinessAccountServiceImpl resolver = new BusinessAccountServiceImpl();

@@ -242,8 +242,7 @@ class SalaryServiceImplTest {
     @Test
     void payout_transfersFromGovToEachPlayer() {
         UUID alice = UUID.randomUUID();
-        Account gov = new Account();
-        gov.setAccountId(7);
+        Account gov = Account.builder().accountId(7).build();
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
         when(accountService.getOrCreatePersonalAccountId(alice)).thenReturn(42);
         when(ledgerService.transferChecked(any())).thenReturn(new LedgerService.TransferResult(1L, true));
@@ -276,8 +275,7 @@ class SalaryServiceImplTest {
         // would pay a player twice. The key is derived from the period bucket
         // (interval 900s), so a retry/overlap collapses while the next period pays.
         UUID alice = UUID.randomUUID();
-        Account gov = new Account();
-        gov.setAccountId(7);
+        Account gov = Account.builder().accountId(7).build();
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
         when(accountService.getOrCreatePersonalAccountId(alice)).thenReturn(42);
 
@@ -306,8 +304,7 @@ class SalaryServiceImplTest {
         // the pre-insert check or by a concurrent-insert race, so it can't be defeated by
         // two runs both passing an earlier pre-check.
         UUID alice = UUID.randomUUID();
-        Account gov = new Account();
-        gov.setAccountId(7);
+        Account gov = Account.builder().accountId(7).build();
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
         when(accountService.getOrCreatePersonalAccountId(alice)).thenReturn(42);
         // The transfer collapses onto an existing period txn → created=false.
@@ -326,8 +323,7 @@ class SalaryServiceImplTest {
     void payout_continuesWhenOneTransferFails() {
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
-        Account gov = new Account();
-        gov.setAccountId(7);
+        Account gov = Account.builder().accountId(7).build();
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(gov);
         when(accountService.getOrCreatePersonalAccountId(a)).thenReturn(1);
         when(accountService.getOrCreatePersonalAccountId(b)).thenReturn(2);
@@ -358,8 +354,7 @@ class SalaryServiceImplTest {
         var payroll = svc.preparePayroll();
         config.publish(new SalaryConfiguration.Snapshot(
                 true, "NewGovernment", 900, Map.of("senator", BigDecimal.ONE), true, "afk", "true"));
-        Account government = new Account();
-        government.setAccountId(7);
+        Account government = Account.builder().accountId(7).build();
         when(accountService.getGovernmentAccountByName("DCGovernment")).thenReturn(government);
         when(accountService.getOrCreatePersonalAccountId(uuid)).thenReturn(8);
         when(ledgerService.transferChecked(any())).thenReturn(new LedgerService.TransferResult(1L, true));

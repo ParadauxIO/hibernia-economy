@@ -84,14 +84,14 @@ class TreasuryApiImplTest {
     @Test
     void getAccountByUUID_delegates() {
         UUID u = UUID.randomUUID();
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountService.getAccountByUUID(u)).thenReturn(a);
         assertThat(api.getAccountByUUID(u)).isSameAs(a);
     }
 
     @Test
     void getAccountById_delegates() {
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountService.getAccountById(5)).thenReturn(a);
         assertThat(api.getAccountById(5)).isSameAs(a);
     }
@@ -99,7 +99,8 @@ class TreasuryApiImplTest {
     @Test
     void getAccountsByOwner_delegates() {
         UUID u = UUID.randomUUID();
-        when(accountService.getAccountsByOwner(u)).thenReturn(List.of(new Account()));
+        when(accountService.getAccountsByOwner(u))
+                .thenReturn(List.of(Account.builder().build()));
         assertThat(api.getAccountsByOwner(u)).hasSize(1);
     }
 
@@ -113,7 +114,8 @@ class TreasuryApiImplTest {
     @Test
     void getAccountsByMember_delegates() {
         UUID u = UUID.randomUUID();
-        when(accountService.getAccountsByMember(u)).thenReturn(List.of(new Account()));
+        when(accountService.getAccountsByMember(u))
+                .thenReturn(List.of(Account.builder().build()));
         assertThat(api.getAccountsByMember(u)).hasSize(1);
     }
 
@@ -165,7 +167,7 @@ class TreasuryApiImplTest {
     @Test
     void resolveOrCreatePersonal_delegatesToLedger() {
         UUID u = UUID.randomUUID();
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(ledgerService.resolveOrCreatePersonal(u)).thenReturn(a);
         assertThat(api.resolveOrCreatePersonal(u)).isSameAs(a);
         verifyNoInteractions(accountService);
@@ -174,14 +176,14 @@ class TreasuryApiImplTest {
     @Test
     void createAccount_delegates() {
         UUID u = UUID.randomUUID();
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountService.createAccount(AccountType.BUSINESS, u, "biz")).thenReturn(a);
         assertThat(api.createAccount(AccountType.BUSINESS, u, "biz")).isSameAs(a);
     }
 
     @Test
     void updateAccount_delegates() {
-        Account a = new Account();
+        Account a = Account.builder().build();
         api.updateAccount(a);
         verify(accountService).updateAccount(a);
     }
@@ -214,7 +216,8 @@ class TreasuryApiImplTest {
         api.removeMember(1, u);
         verify(membershipService).removeMember(1, u);
 
-        when(membershipService.getMembers(1)).thenReturn(List.of(new AccountMember()));
+        when(membershipService.getMembers(1))
+                .thenReturn(List.of(AccountMember.builder().build()));
         assertThat(api.getMembers(1)).hasSize(1);
 
         api.addAuthorizer(1, u, by);
@@ -245,7 +248,7 @@ class TreasuryApiImplTest {
 
     @Test
     void getAccountsByIds_delegates() {
-        Map<Integer, Account> accounts = Map.of(1, new Account());
+        Map<Integer, Account> accounts = Map.of(1, Account.builder().build());
         when(accountService.getAccountsByIds(List.of(1))).thenReturn(accounts);
         assertThat(api.getAccountsByIds(List.of(1))).isSameAs(accounts);
     }
@@ -265,7 +268,7 @@ class TreasuryApiImplTest {
 
     @Test
     void getTransaction_delegates() {
-        LedgerTxn t = new LedgerTxn();
+        LedgerTxn t = LedgerTxn.builder().build();
         when(ledgerService.getTransaction(99L)).thenReturn(t);
         assertThat(api.getTransaction(99L)).isSameAs(t);
     }
@@ -280,7 +283,7 @@ class TreasuryApiImplTest {
 
     @Test
     void getGovernmentAccountByName_delegates() {
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountService.getGovernmentAccountByName("X")).thenReturn(a);
         assertThat(api.getGovernmentAccountByName("X")).isSameAs(a);
     }

@@ -1,0 +1,11 @@
+# key enabled age_ms expected
+business.preview	1	0	true
+business.preview	0	0	false
+business.preview	2	0	false
+business.preview	1	29999	true
+business.preview	1	30000	false
+business.preview	1	30001	false
+business.preview	1	-1	false
+Business.preview	1	0	false
+preview	1	0	false
+business.preview-bad	1	0	false

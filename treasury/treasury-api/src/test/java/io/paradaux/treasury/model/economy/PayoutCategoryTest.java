@@ -20,15 +20,17 @@ class PayoutCategoryTest {
 
     @Test
     void oldLedgerRowsDerivePurposeWithoutNewColumnsOrMemoParsing() {
-        LedgerTxn txn = new LedgerTxn();
-        txn.setPluginSystem("treasury-salary");
-        txn.setMessage("unrelated text");
+        LedgerTxn txn = LedgerTxn.builder()
+                .pluginSystem("treasury-salary")
+                .message("unrelated text")
+                .build();
         assertThat(txn.getPayoutCategory()).isEqualTo(PayoutCategory.EMPLOYEE);
-        TransactionEntry entry = new TransactionEntry();
-        entry.setPluginSystem("realty");
-        entry.setMemo("Rental Payment: employee-auction-house");
+        TransactionEntry entry = TransactionEntry.builder()
+                .pluginSystem("realty")
+                .memo("Rental Payment: employee-auction-house")
+                .build();
         assertThat(entry.getPayoutCategory()).isNull();
-        entry.setPluginSystem("realty-auction");
+        entry = entry.withPluginSystem("realty-auction");
         assertThat(entry.getPayoutCategory()).isEqualTo(PayoutCategory.AUCTION_PROCEEDS);
     }
 }

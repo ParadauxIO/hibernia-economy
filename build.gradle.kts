@@ -32,7 +32,7 @@ plugins {
 // build.gradle.kts override this for themselves.
 allprojects {
     group = "io.paradaux"
-    version = providers.gradleProperty("version").orElse("2.3.0-SNAPSHOT").get()
+    version = providers.gradleProperty("version").orElse("3.0.0-SNAPSHOT").get()
 }
 
 // =============================================================================

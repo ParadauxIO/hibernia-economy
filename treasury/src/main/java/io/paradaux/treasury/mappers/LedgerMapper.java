@@ -3,7 +3,6 @@ package io.paradaux.treasury.mappers;
 import io.paradaux.treasury.model.economy.LedgerPosting;
 import io.paradaux.treasury.model.economy.LedgerTxn;
 import io.paradaux.treasury.model.economy.TransactionEntry;
-import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.*;
 
@@ -17,18 +16,17 @@ public interface LedgerMapper {
        WHERE client_dedup_key = #{key}
        LIMIT 1
       """)
-    @Results(
-            id = "txnMap",
-            value = {
-                @Result(column = "txn_id", property = "txnId", id = true),
-                @Result(column = "trade_time", property = "tradeTime", javaType = Instant.class),
-                @Result(column = "settlement_time", property = "settlementTime", javaType = Instant.class),
-                @Result(column = "message", property = "message"),
-                @Result(column = "initiator_uuid_bin", property = "initiatorUuid"),
-                @Result(column = "authorizer_uuid_bin", property = "authorizerUuid"),
-                @Result(column = "plugin_system", property = "pluginSystem"),
-                @Result(column = "client_dedup_key", property = "clientDedupKey")
-            })
+    @Results(id = "txnMap")
+    @ConstructorArgs({
+        @Arg(column = "txn_id", javaType = long.class, id = true),
+        @Arg(column = "trade_time", javaType = java.time.Instant.class),
+        @Arg(column = "settlement_time", javaType = java.time.Instant.class),
+        @Arg(column = "message", javaType = String.class),
+        @Arg(column = "initiator_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "authorizer_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "plugin_system", javaType = String.class),
+        @Arg(column = "client_dedup_key", javaType = byte[].class)
+    })
     LedgerTxn findByDedupKey(@Param("key") byte[] clientKey);
 
     /**
@@ -73,15 +71,22 @@ public interface LedgerMapper {
       ) VALUES (
           CURRENT_TIMESTAMP,
           CURRENT_TIMESTAMP,
-          #{message},
-          #{initiatorUuid},
-          #{authorizerUuid},
-          #{pluginSystem},
-          #{clientDedupKey}
+          #{value.message},
+          #{value.initiatorUuid},
+          #{value.authorizerUuid},
+          #{value.pluginSystem},
+          #{value.clientDedupKey}
       )
       """)
-    @Options(useGeneratedKeys = true, keyProperty = "txnId", keyColumn = "txn_id")
-    int insertTxnEntity(LedgerTxn txn);
+    @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "txn_id")
+    int insertTxnEntityRow(GeneratedKey<LedgerTxn> row);
+
+    /** Inserts a snapshot and returns its generated ID without mutating it. */
+    default long insertTxnEntity(LedgerTxn value) {
+        GeneratedKey<LedgerTxn> row = new GeneratedKey<>(value);
+        insertTxnEntityRow(row);
+        return row.getId();
+    }
 
     @Insert(
             "INSERT INTO ledger_postings(txn_id, account_id, amount, memo) VALUES(#{txnId}, #{accountId}, #{amount}, #{memo})")
@@ -117,20 +122,19 @@ public interface LedgerMapper {
        ORDER BY p.posting_id DESC
        LIMIT #{limit} OFFSET #{offset}
       """)
-    @Results(
-            id = "txnEntryMap",
-            value = {
-                @Result(column = "posting_id", property = "postingId", id = true),
-                @Result(column = "txn_id", property = "txnId"),
-                @Result(column = "account_id", property = "accountId"),
-                @Result(column = "amount", property = "amount"),
-                @Result(column = "memo", property = "memo"),
-                @Result(column = "settlement_time", property = "settlementTime", javaType = Instant.class),
-                @Result(column = "message", property = "message"),
-                @Result(column = "initiator_uuid_bin", property = "initiatorUuid"),
-                @Result(column = "authorizer_uuid_bin", property = "authorizerUuid"),
-                @Result(column = "plugin_system", property = "pluginSystem")
-            })
+    @Results(id = "txnEntryMap")
+    @ConstructorArgs({
+        @Arg(column = "posting_id", javaType = long.class, id = true),
+        @Arg(column = "txn_id", javaType = long.class),
+        @Arg(column = "account_id", javaType = int.class),
+        @Arg(column = "amount", javaType = java.math.BigDecimal.class),
+        @Arg(column = "memo", javaType = String.class),
+        @Arg(column = "settlement_time", javaType = java.time.Instant.class),
+        @Arg(column = "message", javaType = String.class),
+        @Arg(column = "initiator_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "authorizer_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "plugin_system", javaType = String.class)
+    })
     List<TransactionEntry> findTransactionsByAccount(
             @Param("accountId") int accountId, @Param("limit") int limit, @Param("offset") int offset);
 

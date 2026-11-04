@@ -493,3 +493,34 @@ precedence. Its source-key rollups need no rebuild.
 SYSTEM wallets preserve plugin identity through `system_plugin_key`, but production
 wallets serve both receipts and payments. Their type or editable display name does
 not prove employee pay or auction proceeds; no new routing wallets are created.
+
+### Treasury API immutable snapshots (ADT-87)
+
+Treasury's account, balance, membership, transaction, fine and sales result models
+are immutable value objects. Their existing `get…` and `is…` accessors and
+all-argument constructors remain available. Public setters and no-argument
+constructors have been removed. Use a builder for new values, or `toBuilder()` /
+`with…` to create a replacement:
+
+```java
+Account updated = account.toBuilder().displayName("New name").build();
+treasury.updateAccount(updated);
+```
+
+Creating a replacement does not update Treasury; submit it through the existing
+API operation. Previously returned snapshots stay unchanged. `LedgerTxn` copies
+its deduplication key on construction and access; `SalesSummary` copies both
+leaderboard lists and exposes unmodifiable lists (null lists become empty).
+These guarantees also apply to builders and `with…` methods.
+
+This is a **breaking Java API change**, scheduled for the **3.0 major release**.
+Recompile integrations that construct or modify these models; replace no-arg plus
+setter initialization with builders, and retain the returned value from `with…`.
+Consumers that only read existing getters keep the same source interface. Do not
+publish this change as a 2.x release or mix old setter-based plugins with the new
+API. Database schema and HTTP payloads are unchanged.
+
+MyBatis uses constructor mappings for immutable query results. Insert parameters
+hold generated IDs in the internal `GeneratedKey` class; mapper insert helpers
+return the ID, and services construct a new snapshot with it. Sales totals use an
+internal eight-column record before the service adds the leaderboards.

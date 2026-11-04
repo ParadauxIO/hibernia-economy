@@ -1,11 +1,20 @@
 package io.paradaux.treasury.commands;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.commands.resolvers.PayTarget;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -18,28 +27,29 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class PayCommandTest {
 
     /** A name that exists as both a player alt and a GOVERNMENT account on DC. */
     private static final String COLLIDING_NAME = "DCGovernmentOR";
 
-    @Mock AccountService accountService;
-    @Mock LedgerService ledgerService;
-    @Mock PlayerDirectoryService playerDirectory;
-    @Mock Message message;
-    @Mock Player sender;
-    @Mock OfflinePlayer targetPlayer;
+    @Mock
+    AccountService accountService;
+
+    @Mock
+    LedgerService ledgerService;
+
+    @Mock
+    PlayerDirectoryService playerDirectory;
+
+    @Mock
+    Message message;
+
+    @Mock
+    Player sender;
+
+    @Mock
+    OfflinePlayer targetPlayer;
 
     private PayCommand command;
     private MockedStatic<Bukkit> bukkit;
@@ -76,10 +86,11 @@ class PayCommandTest {
         // No cached player for the name → falls through to the gov account.
         bukkit.when(() -> Bukkit.getOfflinePlayerIfCached(COLLIDING_NAME)).thenReturn(null);
 
-        var gov = new io.paradaux.treasury.model.economy.Account();
-        gov.setAccountId(49929);
-        gov.setDisplayName(COLLIDING_NAME);
-        gov.setArchived(false);
+        var gov = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(49929)
+                .displayName(COLLIDING_NAME)
+                .isArchived(false)
+                .build();
         when(accountService.getGovernmentAccountByName(COLLIDING_NAME)).thenReturn(gov);
         when(accountService.getOrCreatePersonalAccountId(any())).thenReturn(7);
         when(accountService.getBalanceReadOnly(7)).thenReturn(new BigDecimal("1000"));
