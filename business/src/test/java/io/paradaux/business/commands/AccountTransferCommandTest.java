@@ -8,7 +8,7 @@ import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.FirmTransactionService;
-import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.treasury.api.TreasuryApi;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -21,7 +21,7 @@ class AccountTransferCommandTest {
     private final FirmStaffService staff = mock(FirmStaffService.class);
     private final FirmTransactionService transfers = mock(FirmTransactionService.class);
     private final TreasuryApi treasury = mock(TreasuryApi.class);
-    private final Message message = mock(Message.class);
+    private final BusinessMessages message = mock(BusinessMessages.class);
     private final Player player = mock(Player.class);
     private final UUID actor = UUID.randomUUID();
     private final FirmName name = new FirmName("Acme");

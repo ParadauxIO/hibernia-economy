@@ -11,9 +11,9 @@ import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmTransactionService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
@@ -35,7 +35,7 @@ public class AccountCommands implements CommandHandler {
     private final FirmGate firmGate;
     private final FirmTransactionService audit;
     private final TreasuryApi treasury;
-    private final Message message;
+    private final BusinessMessages message;
     private final FirmNotificationService notifications;
     private final FirmPlayerService firmPlayers;
 
@@ -46,7 +46,7 @@ public class AccountCommands implements CommandHandler {
             FirmGate firmGate,
             FirmTransactionService audit,
             TreasuryApi treasury,
-            Message message,
+            BusinessMessages message,
             FirmNotificationService notifications,
             FirmPlayerService firmPlayers) {
         this.accounts = accounts;

@@ -9,9 +9,9 @@ import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmSalesNotificationService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.SalesQueryApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.api.market.SaleRow;
@@ -46,7 +46,7 @@ public class SalesCommands implements CommandHandler {
     private final FirmStaffService staff;
     private final TreasuryApi treasury;
     private final FirmConfiguration config;
-    private final Message message;
+    private final BusinessMessages message;
     private final FirmGate firmGate;
 
     @Inject
@@ -57,7 +57,7 @@ public class SalesCommands implements CommandHandler {
             FirmStaffService staff,
             TreasuryApi treasury,
             FirmConfiguration config,
-            Message message,
+            BusinessMessages message,
             FirmGate firmGate) {
         this.sales = sales;
         this.salesNotifications = salesNotifications;
