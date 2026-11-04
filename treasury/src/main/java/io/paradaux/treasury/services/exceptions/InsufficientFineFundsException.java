@@ -1,10 +1,10 @@
-package io.paradaux.treasury.api.exceptions;
+package io.paradaux.treasury.services.exceptions;
 
 import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Thrown by {@code issueFine} when the targeted player's account doesn't have
+ * Thrown by {@code issueFine} when the targeted player or debtor account doesn't have
  * enough funds to cover the fine. Wraps the underlying {@link IllegalStateException}
  * raised by the ledger service so handlers can render an i18n message without
  * scraping the message text.

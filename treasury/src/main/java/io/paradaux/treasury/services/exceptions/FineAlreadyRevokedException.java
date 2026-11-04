@@ -1,4 +1,4 @@
-package io.paradaux.treasury.api.exceptions;
+package io.paradaux.treasury.services.exceptions;
 
 /** Thrown when {@code revokeFine} is called on a fine that is already revoked. */
 public class FineAlreadyRevokedException extends TreasuryException {
@@ -10,5 +10,7 @@ public class FineAlreadyRevokedException extends TreasuryException {
         this.fineId = fineId;
     }
 
-    public long getFineId() { return fineId; }
+    public long getFineId() {
+        return fineId;
+    }
 }

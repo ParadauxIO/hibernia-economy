@@ -1,4 +1,4 @@
-package io.paradaux.treasury.api.exceptions;
+package io.paradaux.treasury.services.exceptions;
 
 /**
  * Thrown when a government account lookup fails — either by display name or
@@ -13,5 +13,7 @@ public class GovAccountNotFoundException extends TreasuryException {
         this.identifier = identifier;
     }
 
-    public String getIdentifier() { return identifier; }
+    public String getIdentifier() {
+        return identifier;
+    }
 }

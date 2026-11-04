@@ -39,6 +39,23 @@ The stable surface downstream code compiles against: `TreasuryApi`, `TaxApi`, th
 `AccountType`, `Page<T>`, …). Published as `io.paradaux:treasury-api`. **New public
 types go here, never in the plugin root.**
 
+Fine issuance/revocation and department-account administration remain internal
+`GovService` operations (ADT-84). There is no published `GovApi`; adding one
+requires a concrete consumer and an explicit contract for authorization and
+transaction ownership. The five government/fine exceptions
+(`FineNotFoundException`, `FineAlreadyRevokedException`,
+`InsufficientFineFundsException`, `PrimitiveAccountException`, and
+`GovAccountNotFoundException`) and their `TreasuryException` base now live in the
+plugin's `io.paradaux.treasury.services.exceptions` package, outside the published
+API jar. Their messages, payloads, causes, and command handling are unchanged.
+
+This removes the old `io.paradaux.treasury.api.exceptions` classes and is a source
+and binary compatibility break for consumers that imported them, even though no
+published operation declared them. Such consumers must remove those imports and
+rebuild; depending on the internal replacement package is not a supported API.
+`TreasuryApi.getGovernmentAccountByName` continues to return `null` for a missing
+account. The existing public models, including `GovernmentFine`, are unchanged.
+
 ---
 
 ## `business/` — companies (Paper plugin)
