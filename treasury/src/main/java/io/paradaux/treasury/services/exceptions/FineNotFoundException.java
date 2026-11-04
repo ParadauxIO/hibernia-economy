@@ -1,6 +1,6 @@
-package io.paradaux.treasury.api.exceptions;
+package io.paradaux.treasury.services.exceptions;
 
-/** Thrown when {@code revokeFine} or {@code getFine} can't find the requested id. */
+/** Thrown when {@code revokeFine} can't find the requested id. */
 public class FineNotFoundException extends TreasuryException {
     private static final long serialVersionUID = 1L;
     private final long fineId;
@@ -10,5 +10,7 @@ public class FineNotFoundException extends TreasuryException {
         this.fineId = fineId;
     }
 
-    public long getFineId() { return fineId; }
+    public long getFineId() {
+        return fineId;
+    }
 }

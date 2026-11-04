@@ -1,4 +1,4 @@
-package io.paradaux.treasury.api.exceptions;
+package io.paradaux.treasury.services.exceptions;
 
 /**
  * Thrown when an operation that targets a primitive (system-managed)
@@ -14,5 +14,7 @@ public class PrimitiveAccountException extends TreasuryException {
         this.accountName = accountName;
     }
 
-    public String getAccountName() { return accountName; }
+    public String getAccountName() {
+        return accountName;
+    }
 }
