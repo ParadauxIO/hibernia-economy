@@ -5,7 +5,7 @@ import com.google.inject.Singleton;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.business.threading.BusinessMessages;
 import java.util.Optional;
 import org.bukkit.entity.Player;
 
@@ -14,10 +14,10 @@ import org.bukkit.entity.Player;
 public final class FirmGate {
     private final FirmService firms;
     private final FirmStaffService staff;
-    private final Message message;
+    private final BusinessMessages message;
 
     @Inject
-    public FirmGate(FirmService firms, FirmStaffService staff, Message message) {
+    public FirmGate(FirmService firms, FirmStaffService staff, BusinessMessages message) {
         this.firms = firms;
         this.staff = staff;
         this.message = message;

@@ -7,9 +7,9 @@ import io.paradaux.business.commands.resolvers.OnlineFirmName;
 import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmPlayer;
 import io.paradaux.business.services.*;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.TransactionEntry;
@@ -26,7 +26,7 @@ public class MiscCommands implements CommandHandler {
     private final FirmGate firmGate;
     private final FirmTransactionService audit;
     private final TreasuryApi treasury;
-    private final Message message;
+    private final BusinessMessages message;
     private final FirmNotificationService notifications;
 
     @Inject
@@ -35,7 +35,7 @@ public class MiscCommands implements CommandHandler {
             FirmGate firmGate,
             FirmTransactionService audit,
             TreasuryApi treasury,
-            Message message,
+            BusinessMessages message,
             FirmNotificationService notifications) {
         this.firms = firms;
         this.firmGate = firmGate;

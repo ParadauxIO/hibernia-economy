@@ -7,7 +7,7 @@ import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.business.threading.BusinessMessages;
 import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 class FirmGateTest {
     private final FirmService firms = mock(FirmService.class);
     private final FirmStaffService staff = mock(FirmStaffService.class);
-    private final Message message = mock(Message.class);
+    private final BusinessMessages message = mock(BusinessMessages.class);
     private final Player player = mock(Player.class);
     private final UUID actor = UUID.randomUUID();
     private final FirmGate gate = new FirmGate(firms, staff, message);

@@ -4,10 +4,7 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
 import io.paradaux.business.services.RegionValidator;
-import org.bukkit.Bukkit;
-import org.bukkit.World;
-import org.bukkit.plugin.RegisteredServiceProvider;
-
+import io.paradaux.business.threading.MainThreadAccess;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +13,9 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
+import org.bukkit.plugin.RegisteredServiceProvider;
 
 /**
  * Validates region/plot ids against the Realty plugin's {@code RealtyBackend}
@@ -45,19 +45,22 @@ public class RealtyRegionValidator implements RegionValidator {
     private static final Logger LOG = Logger.getLogger("Business");
 
     private final Business plugin;
+    private final MainThreadAccess mainThread;
 
     /** Cached reflective handle to {@code RealtyBackend#getRegionState}; resolved lazily. */
-    private Method getRegionState;
+    private volatile Method getRegionState;
+
     private boolean resolutionAttempted;
 
     @Inject
-    public RealtyRegionValidator(Business plugin) {
+    public RealtyRegionValidator(Business plugin, MainThreadAccess mainThread) {
         this.plugin = plugin;
+        this.mainThread = mainThread;
     }
 
     @Override
     public Optional<Boolean> validate(String regionId) {
-        Object backend = resolveBackend();
+        Object backend = mainThread.read(this::resolveBackend);
         if (backend == null) {
             return Optional.empty();
         }
@@ -77,8 +80,11 @@ public class RealtyRegionValidator implements RegionValidator {
             Thread.currentThread().interrupt();
             return Optional.empty();
         } catch (ExecutionException ex) {
-            LOG.log(Level.WARNING, "Failed to snapshot worlds for Realty region lookup of '"
-                    + regionId + "'; treating as unvalidated.", ex);
+            LOG.log(
+                    Level.WARNING,
+                    "Failed to snapshot worlds for Realty region lookup of '" + regionId
+                            + "'; treating as unvalidated.",
+                    ex);
             return Optional.empty();
         }
 
@@ -92,8 +98,7 @@ public class RealtyRegionValidator implements RegionValidator {
             // Realty is present and recognised no world holding this region.
             return Optional.of(false);
         } catch (ReflectiveOperationException | RuntimeException ex) {
-            LOG.log(Level.WARNING, "Realty region lookup failed for '" + regionId
-                    + "'; treating as unvalidated.", ex);
+            LOG.log(Level.WARNING, "Realty region lookup failed for '" + regionId + "'; treating as unvalidated.", ex);
             return Optional.empty();
         }
     }
@@ -107,7 +112,9 @@ public class RealtyRegionValidator implements RegionValidator {
         if (Bukkit.isPrimaryThread()) {
             return collectWorldUids();
         }
-        return Bukkit.getScheduler().callSyncMethod(plugin, this::collectWorldUids).get();
+        return Bukkit.getScheduler()
+                .callSyncMethod(plugin, this::collectWorldUids)
+                .get();
     }
 
     private List<UUID> collectWorldUids() {
@@ -125,8 +132,7 @@ public class RealtyRegionValidator implements RegionValidator {
     private Object resolveBackend() {
         try {
             Class<?> backendClass = Class.forName(BACKEND_CLASS);
-            RegisteredServiceProvider<?> rsp =
-                    Bukkit.getServicesManager().getRegistration(backendClass);
+            RegisteredServiceProvider<?> rsp = Bukkit.getServicesManager().getRegistration(backendClass);
             if (rsp == null) {
                 return null;
             }
@@ -140,8 +146,10 @@ public class RealtyRegionValidator implements RegionValidator {
             return null; // Realty not on the classpath at all.
         } catch (NoSuchMethodException ex) {
             resolutionAttempted = true;
-            LOG.log(Level.WARNING, "RealtyBackend#getRegionState not found; "
-                    + "Realty API may have changed. HQ validation disabled.", ex);
+            LOG.log(
+                    Level.WARNING,
+                    "RealtyBackend#getRegionState not found; " + "Realty API may have changed. HQ validation disabled.",
+                    ex);
             return null;
         }
     }
