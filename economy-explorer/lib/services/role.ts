@@ -114,7 +114,9 @@ export async function listDirectRoleMembers(key: string, state: AdminRoleMembers
 }
 export async function setDirectRoleMember(key: string, uuid: string, grant: boolean): Promise<void> {
   roleKey.parse(key);
-  z.string().uuid().parse(uuid);
+  // Preserve the UUID-shaped identifiers accepted by Zod 3, without Zod 4's
+  // additional RFC version/variant restrictions.
+  z.guid().parse(uuid);
   await mutate('roles.assign', key, {
     action: grant ? 'role.assign' : 'role.unassign',
     snapshot: async trx => ({ player: uuid.toLowerCase(), directGrant: await directGrant(key, uuid, trx) }),

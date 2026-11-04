@@ -412,8 +412,8 @@ const ENVELOPE = z.object({
   f: z.array(z.string().max(LIMITS.param)).catch([]),
   sort: firstString.pipe(z.string().max(64).optional()).catch(undefined),
   dir: firstString.pipe(z.string().max(8).optional()).catch(undefined),
-  page: firstString.pipe(z.coerce.number().int().min(1).max(LIMITS.page).optional()).catch(undefined),
-  limit: firstString.pipe(z.coerce.number().int().min(1).max(10_000).optional()).catch(undefined),
+  page: firstString.pipe(z.coerce.number<string>().int().min(1).max(LIMITS.page).optional()).catch(undefined),
+  limit: firstString.pipe(z.coerce.number<string>().int().min(1).max(10_000).optional()).catch(undefined),
   cursor: firstString.pipe(z.string().max(LIMITS.cursor).optional()).catch(undefined),
 });
 
