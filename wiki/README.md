@@ -10,6 +10,8 @@ the code.
 
 ## Contents
 
+- **[Release feature flags](feature-flags.md)** — guard incomplete mechanics and Explorer features, manage rollout and disable safely.
+
 - **[Architecture](architecture.md)** — the big picture: the ledger as source of
   truth, how components talk, and how money flows.
 - **[Components](components.md)** — what each project is, its stack, and where
@@ -50,4 +52,6 @@ the code.
   every JVM project; `economy-explorer` is the lone Node/npm project.
 - **Two doc sets.** This wiki is for developers; `economy-explorer/docs` is for
   players and admins.
-- **`develop` is home.** Work targets `develop`; `main` is only for release tags.
+- **Work targets `main`.** Branch from main and open pull requests against main.
+  Use [release flags](feature-flags.md) to keep incomplete and migration-dependent
+  features inactive until an operator enables them.

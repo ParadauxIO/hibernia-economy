@@ -169,7 +169,7 @@ describe('AdminNav', () => {
     ['anon', ['Overview']],
     ['player', ['Overview']],
     ['moderator', ['Overview', 'Players', 'Transactions']],
-    ['admin', ['Overview', 'Players', 'Accounts', 'Firms', 'Transactions', 'Groups', 'Roles', 'Role grants', 'API keys', 'Webhooks', 'Audit log', 'Government units']],
+    ['admin', ['Overview', 'Feature flags', 'Players', 'Accounts', 'Firms', 'Transactions', 'Groups', 'Roles', 'Role grants', 'API keys', 'Webhooks', 'Audit log', 'Government units']],
   ])('lists only the tools the %s viewer holds', (role, expected) => {
     setViewer(role);
     navigation.pathname = '/admin';

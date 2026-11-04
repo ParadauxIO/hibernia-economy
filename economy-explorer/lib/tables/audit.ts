@@ -6,6 +6,7 @@ import { defineTable, type TableState } from './core';
  * lib/sql/audit.ts maps it back.
  */
 export const AUDIT_ACTIONS = [
+  { action: 'feature_flag.update', label: 'Feature flag: enable or disable' },
   { action: 'view', label: 'Viewed' },
   { action: 'relationship.read', label: 'Read through a relationship' },
   { action: 'account.transfer', label: 'Account: transfer' },
@@ -50,6 +51,7 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number]['action'];
 export const actionValue = (action: string): string => action.replaceAll('.', '-');
 
 export const AUDIT_TARGET_TYPES = [
+  { value: 'feature_flag', label: 'Feature flag' },
   { value: 'account', label: 'Account' },
   { value: 'firm', label: 'Firm' },
   { value: 'player', label: 'Player' },

@@ -189,9 +189,15 @@ days) or the dev server's secrets change.
 
 ## Release flow
 
-- Work lands on **`develop`**. The published API snapshots and the development
-  container images track `develop`.
-- Merge to **`main`** whenever a change is ready to release. Every push runs
+The `develop` triggers documented above describe legacy workflow configuration;
+there is currently no develop branch. They are not the contribution target.
+
+
+- Work lands on **`main`** through pull requests. Keep incomplete and
+  migration-dependent features behind [default-off release flags](feature-flags.md).
+  Explorer can deploy up to 12 hours before plugins apply migrations; an operator
+  enables those features after the schema and compatible consumers are ready.
+- Every push to **`main`** runs
   `plugin-release.yml`, which gates publication on the full reusable JVM check.
 - CI generates `YEAR.MONTH.RUN.ATTEMPT-gCOMMIT`, for example
   `2026.10.142.1-gabc123def456`. The calendar uses UTC; RUN is the release
