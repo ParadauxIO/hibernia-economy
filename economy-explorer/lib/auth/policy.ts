@@ -2,6 +2,8 @@ import type { Viewer } from './viewer';
 
 /** Stable action vocabulary. Role-to-permission mappings live in the database. */
 export const PERMISSION_DESCRIPTIONS = {
+  "feature_flags.read": "Read release feature flags for this economy.",
+  "feature_flags.update": "Enable or disable release features for this economy.",
   "player.read": "Read your own player dashboard and market activity.",
   "player.read.all": "Read any player dashboard.",
   "account.read": "Read account history through ownership or an account/firm relationship.",

@@ -187,8 +187,10 @@ and notes on running the test suites.
 
 ## Project conventions
 
-- **Branches:** work happens on **`develop`** (the integration branch). **`main`**
-  is reserved for release tagging.
+- **Branches:** branch from **`main`** and target **`main`** with pull requests.
+  Ship incomplete and migration-dependent features behind default-off
+  [release flags](wiki/feature-flags.md), preserving existing behavior until an
+  operator enables them after migrations and compatible deployments complete.
 - **Namespace:** all JVM code is under `io.paradaux.*`; build coordinates are
   `io.paradaux:<artifact>`.
 - **The ledger is authoritative:** never store balances or move money outside

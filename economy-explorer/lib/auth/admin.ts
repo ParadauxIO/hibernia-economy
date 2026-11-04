@@ -15,6 +15,7 @@ export interface AdminTool {
 }
 
 export const ADMIN_TOOLS: AdminTool[] = [
+  { href: '/admin/feature-flags', title: 'Feature flags', permission: 'feature_flags.read', desc: 'Enable or disable release features across this economy.', group: 'Oversight' },
   { href: '/admin/players', title: 'Players', permission: 'player.read.all', desc: 'Look up a player and open their personal dashboard.', group: 'Economy' },
   { href: '/admin/accounts', title: 'Accounts', permission: 'account.admin.read', desc: 'Move money, rename, change owner, archive. Each change needs its own permission.', group: 'Economy' },
   { href: '/admin/firms', title: 'Firms', permission: 'firm.admin.read', desc: 'Rename, update details or disband a firm.', group: 'Economy' },

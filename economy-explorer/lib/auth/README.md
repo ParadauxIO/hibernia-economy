@@ -4,13 +4,15 @@ Access is `authenticated AND permission AND resource relationship`. Explicit
 `*.read.all` permissions bypass the relationship for that resource only. Roles
 are database records, combined as sets; role names confer no implicit powers.
 
-`policy.ts` defines 45 stable, typed permission names and descriptions.
+`policy.ts` defines the stable, typed permission names and descriptions.
 `explorer_role_definition` and `explorer_role_permission` store editable bundles.
 V31 seeds player, government, moderator and admin; Admin → Roles can create,
 edit and delete other roles, edit defaults, and assign roles to players directly.
 The player baseline applies to every signed-in user and cannot be deleted, but
 its permission set can be empty. Admin starts with every permission and is editable.
 New permission names require an explicit migration/grant; there is no wildcard.
+V52 adds `feature_flags.read` and `feature_flags.update` for release controls,
+explicitly granted to admin. Release flags never replace permission checks.
 
 | Default role | Initial permissions |
 | --- | --- |

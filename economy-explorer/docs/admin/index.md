@@ -19,6 +19,8 @@ routine checklist and procedures by task.
 
 ## In this section
 
+- **[Release feature flags](/docs/admin/feature-flags)** — enable or disable features across this economy.
+
 - **[Service configuration](/docs/admin/config-services)** — TreasuryAPI, Explorer, REST, identity, caches and monitoring.
 - **[Explorer administration](/docs/admin/explorer-administration)** — player investigations, account/firm changes and audit evidence.
 - **[Access and credentials](/docs/admin/access-and-credentials)** — login recovery, keys, issuer limits and SERVICE-token rotation.

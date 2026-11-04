@@ -1,5 +1,8 @@
 # Release runbook — `develop` → `main` (through V42)
 
+> Historical V42 cutover procedure. Current work targets `main`; follow the
+> [feature-flag rollout guide](feature-flags.md) for migration-dependent releases.
+
 Ship one reviewed economy release through **V42**. Inspect each tenant's actual
 starting schema and deployed artifacts; **V15 is a historical baseline, not a
 verified current production state**. This is a **full-stop release**: old and new
