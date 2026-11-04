@@ -316,7 +316,8 @@ public class WebhookDispatcherService {
                         d.getCounterpartyAccountId(),
                         d.getCounterpartyAccountType(),
                         d.getCounterpartyDisplayName(),
-                        d.getCounterpartyOwnerUuidBin()));
+                        d.getCounterpartyOwnerUuidBin()),
+                d.getPayoutCategory());
         return new WebhookEvent("transaction", d.getDeliveryId(), d.getSubscriptionId(), d.getAccountId(), item);
     }
 

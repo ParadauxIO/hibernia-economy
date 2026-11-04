@@ -73,12 +73,25 @@ class DataExportServiceImplTest {
         // Header line is present
         assertThat(csv)
                 .startsWith(
-                        "posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system\n");
+                        "posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system,payout_category\n");
         // Each row contains the txn id and the formatted amount
         assertThat(csv).contains(",100.00,");
         assertThat(csv).contains(",-50.00,");
         assertThat(csv).contains("Vault");
         assertThat(csv).contains("MyPlugin");
+    }
+
+    @Test
+    void csv_containsStructuredCategorySeparateFromMemo() {
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
+        TransactionEntry entry = txn(1L, 1L, 1, "12.50", "memo", null, null, "realty-auction");
+        when(ledgerMapper.findAllTransactionsByAccount(eq(1), anyInt())).thenReturn(List.of(entry));
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        when(bytebinService.upload(body.capture(), eq("text/csv"))).thenReturn("url");
+        svc.exportTransactionsFor(1);
+        assertThat(body.getValue())
+                .contains(",realty-auction,AUCTION_PROCEEDS\n")
+                .contains(",12.50,memo,");
     }
 
     @Test

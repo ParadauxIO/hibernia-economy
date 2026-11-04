@@ -27,4 +27,8 @@ public class TransactionEntry {
     private UUID initiatorUuid;
     private UUID authorizerUuid;
     private String pluginSystem;
+    /** Structured purpose from the originating operation; memos and account labels are ignored. */
+    public @org.jetbrains.annotations.Nullable PayoutCategory getPayoutCategory() {
+        return PayoutCategory.fromSource(pluginSystem);
+    }
 }

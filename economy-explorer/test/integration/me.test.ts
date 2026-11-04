@@ -261,6 +261,20 @@ d('/me overview money rules', () => {
 });
 
 d('category SQL matches lib/categories', () => {
+  it.each([
+    ['realty-auction', '10.00', '', 0, 'auction_proceeds'],
+    ['realty-auction', '-10.00', '', 0, 'property'],
+    ['realty', '10.00', '', 0, 'property'],
+    ['treasury-salary', '10.00', '', 0, 'wages'],
+    ['realty-auction', '10.00', 'income', 0, 'taxes'],
+    ['realty-auction', '10.00', '', 1, 'internal'],
+  ])('classifies %s %s from provenance with tax/internal precedence', async (plugin, amount, tax, internal, expected) => {
+    const expr = categoryCaseSql({ pluginKey: sql`${plugin}`, taxKind: sql`${tax}`,
+      amount: sql`CAST(${amount} AS DECIMAL(19,2))`, counterType: sql`'PERSONAL'`, internal: sql`${internal}` });
+    const result = await sql<{ category: string }>`SELECT ${expr} AS category`.execute(db);
+    expect(result.rows[0]?.category).toBe(expected);
+  });
+
   it('categoryCaseSql agrees with categorize on every plugin, direction and counterparty', async () => {
     const plugins = [...Object.keys(PLUGIN_CATEGORIES), 'TreAsury-Core', ' ChestShop ', 'unknown-plugin'];
     const cases: { plugin: string; tax: string; amount: string; type: AccountType | null; internal: number }[] = [];
