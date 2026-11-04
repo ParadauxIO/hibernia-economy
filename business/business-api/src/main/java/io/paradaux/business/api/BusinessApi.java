@@ -12,6 +12,12 @@ package io.paradaux.business.api;
  * api.staff().isEmployed(firmId, playerUuid);
  * }</pre>
  *
+ * <p>Model results are immutable snapshots, with UUID-typed player identifiers.
+ * Lists returned by this provider are unmodifiable snapshots. Fetch again to
+ * observe later changes; use API operations to modify a firm, staff or roles.
+ * Bukkit {@code Player} objects in {@link StaffApi#getOnlineEmployees(int)} remain
+ * live server objects and must follow Bukkit's thread-access rules.
+ *
  * <p>API methods may throw {@link RuntimeException} subclasses for invalid
  * operations (e.g., entity not found, insufficient permissions, bad input).
  */

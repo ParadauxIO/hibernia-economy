@@ -3,14 +3,13 @@ package io.paradaux.business.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.mappers.FirmPlayerMapper;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 @Singleton
 public class FirmPlayerServiceImpl implements FirmPlayerService {

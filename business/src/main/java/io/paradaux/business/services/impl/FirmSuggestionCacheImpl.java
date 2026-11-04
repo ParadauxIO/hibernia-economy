@@ -2,10 +2,9 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmSuggestionCache;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;

@@ -4,9 +4,9 @@ import static org.mockito.Mockito.*;
 
 import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.commands.resolvers.OnlineFirmName;
-import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.*;
 import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.SalesQueryApi;

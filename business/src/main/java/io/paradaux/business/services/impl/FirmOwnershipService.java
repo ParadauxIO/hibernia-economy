@@ -5,7 +5,7 @@ import com.google.inject.Singleton;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.utils.StringUtils;
 import java.util.Objects;

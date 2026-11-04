@@ -3,13 +3,9 @@ package io.paradaux.business.chat;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import net.kyori.adventure.audience.Audience;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,6 +18,9 @@ import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.kyori.adventure.audience.Audience;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 /**
  * Default {@link FirmChatService}: owns firm-chat state and the single CarbonChat
@@ -86,15 +85,15 @@ public class FirmChatServiceImpl implements FirmChatService {
     // call therefore lives in CarbonFirmChat, which is only linked inside the guarded
     // initialise(). (Keeps the soft-dependency genuinely soft; the testWithoutCarbon
     // Gradle task builds the real injector without carbonchat-api to enforce it.)
-    private volatile CarbonFirmChat carbon;   // null when CarbonChat is absent
+    private volatile CarbonFirmChat carbon; // null when CarbonChat is absent
 
     @Inject
     public FirmChatServiceImpl(FirmService firms, FirmStaffService staff, Business plugin) {
         this(firms, staff, plugin.getLogger(), System::currentTimeMillis, FirmChatServiceImpl::holdsSpyPermission);
     }
 
-    FirmChatServiceImpl(FirmService firms, FirmStaffService staff, Logger log, LongSupplier clock,
-                        Predicate<UUID> spyPermitted) {
+    FirmChatServiceImpl(
+            FirmService firms, FirmStaffService staff, Logger log, LongSupplier clock, Predicate<UUID> spyPermitted) {
         this.firms = firms;
         this.staff = staff;
         this.log = log;
@@ -119,7 +118,8 @@ public class FirmChatServiceImpl implements FirmChatService {
             log.info("Registered the firm chat channel with CarbonChat.");
         } catch (Throwable t) {
             this.carbon = null;
-            log.info("CarbonChat unavailable — firm chat disabled (" + t.getClass().getSimpleName() + ").");
+            log.info("CarbonChat unavailable — firm chat disabled ("
+                    + t.getClass().getSimpleName() + ").");
         }
     }
 
@@ -276,8 +276,7 @@ public class FirmChatServiceImpl implements FirmChatService {
     @Override
     public boolean isSpyingOn(UUID uuid, Integer firmId) {
         Set<Integer> watched = firmSpies.get(uuid);
-        boolean spying = globalSpies.contains(uuid)
-                || (firmId != null && watched != null && watched.contains(firmId));
+        boolean spying = globalSpies.contains(uuid) || (firmId != null && watched != null && watched.contains(firmId));
         return spying && stillSpy(uuid);
     }
 
@@ -365,7 +364,10 @@ public class FirmChatServiceImpl implements FirmChatService {
             // ADT-100: value equality, not Integer reference identity — boxed
             // Integers above the JVM cache (>127) are not == even when equal, which
             // silently broke explicit /firm chat selection for firm ids over 127.
-            return mine.stream().filter(f -> firmId.equals(f.getFirmId())).findFirst().orElse(null);
+            return mine.stream()
+                    .filter(f -> firmId.equals(f.getFirmId()))
+                    .findFirst()
+                    .orElse(null);
         }
         return mine.size() == 1 ? mine.get(0) : null; // ambiguous when in multiple firms
     }

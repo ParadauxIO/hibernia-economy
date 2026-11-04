@@ -5,7 +5,7 @@ import static org.mockito.Mockito.*;
 
 import io.paradaux.business.dialogs.FirmDashboard;
 import io.paradaux.business.dialogs.FirmMenu;
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.*;
 import io.paradaux.hibernia.framework.curator.MenuManager;
 import io.paradaux.hibernia.framework.i18n.Message;

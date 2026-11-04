@@ -1,22 +1,21 @@
 package io.paradaux.business.commands.resolvers;
 
-import io.paradaux.business.model.FirmPlayer;
-import io.paradaux.business.services.FirmPlayerService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.services.FirmPlayerService;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Pure resolve/suggestions behaviour of {@link FirmPlayerResolver}
@@ -26,7 +25,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class FirmPlayerResolverTest {
 
-    @Mock FirmPlayerService players;
+    @Mock
+    FirmPlayerService players;
 
     private FirmPlayerResolver resolver() {
         return new FirmPlayerResolver(players);
@@ -94,8 +94,8 @@ class FirmPlayerResolverTest {
     @Test
     void resolve_byAmbiguousPrefix_returnsEmpty() {
         when(players.findByName("Da")).thenReturn(Optional.empty());
-        when(players.searchByPrefix("Da", 5)).thenReturn(List.of(
-                player(UUID.randomUUID(), "Dave"), player(UUID.randomUUID(), "Daisy")));
+        when(players.searchByPrefix("Da", 5))
+                .thenReturn(List.of(player(UUID.randomUUID(), "Dave"), player(UUID.randomUUID(), "Daisy")));
 
         assertThat(resolver().resolve("Da", null)).isEmpty();
     }
@@ -112,10 +112,11 @@ class FirmPlayerResolverTest {
 
     @Test
     void suggestions_returnDistinctCurrentNamesFromPrefixSearch() {
-        when(players.searchByPrefix("a", 20)).thenReturn(List.of(
-                player(UUID.randomUUID(), "Alice"),
-                player(UUID.randomUUID(), "Alice"), // duplicate name → collapsed
-                player(UUID.randomUUID(), "Anna")));
+        when(players.searchByPrefix("a", 20))
+                .thenReturn(List.of(
+                        player(UUID.randomUUID(), "Alice"),
+                        player(UUID.randomUUID(), "Alice"), // duplicate name → collapsed
+                        player(UUID.randomUUID(), "Anna")));
 
         assertThat(resolver().suggestions("a", null)).containsExactly("Alice", "Anna");
     }

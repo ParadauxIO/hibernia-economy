@@ -1,18 +1,17 @@
 package io.paradaux.business.commands;
 
-import io.paradaux.business.model.Firm;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.hibernia.framework.commander.annotations.Permission;
 import io.paradaux.hibernia.framework.i18n.Message;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
-
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
 
 class FirmReleaseNameCommandTest {
 
@@ -21,9 +20,10 @@ class FirmReleaseNameCommandTest {
         var method = FirmCommands.class.getMethod("adminReleaseName", CommandSender.class, int.class);
         assertThat(method.getAnnotation(Permission.class).value()).isEqualTo("business.admin.releasename");
         try (var stream = getClass().getResourceAsStream("/plugin.yml");
-             var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
             var plugin = YamlConfiguration.loadConfiguration(reader);
-            assertThat(plugin.getString("permissions.business.admin.releasename.default")).isEqualTo("op");
+            assertThat(plugin.getString("permissions.business.admin.releasename.default"))
+                    .isEqualTo("op");
         }
     }
 

@@ -64,4 +64,4 @@ jobs:
           REPO_USER: ${{ secrets.REPO_USER }}
           REPO_PASS: ${{ secrets.REPO_PASS }}
           VERSION: ${{ steps.pick.outputs.version }}
-        run: sh ./gradlew :business:business-api:clean :business:business-api:publish -Pversion="$VERSION"
+        run: sh ./gradlew :business:business-api:clean :business:business-api:publish -PbusinessApiVersion="$VERSION"

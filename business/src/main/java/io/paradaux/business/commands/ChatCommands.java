@@ -2,16 +2,15 @@ package io.paradaux.business.commands;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.business.chat.FirmChatService;
+import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.services.FirmService;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.business.chat.FirmChatService;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.services.FirmService;
-import io.paradaux.business.commands.resolvers.FirmName;
-import org.bukkit.entity.Player;
-
 import java.util.Optional;
+import org.bukkit.entity.Player;
 
 /**
  * {@code /firm chat} — enter the employee-only firm chat channel (PAR-20),
