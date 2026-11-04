@@ -11,19 +11,33 @@ import org.jetbrains.annotations.Nullable;
 
 /** One serial background reader per process; a failed refresh never renews state. */
 public final class FeatureFlagRuntime implements AutoCloseable {
-    private final FeatureFlagSnapshot snapshot = new FeatureFlagSnapshot();
+    private final FeatureFlagSnapshot snapshot;
     private final JdbcFeatureFlagReader reader;
     private final Consumer<String> log;
-    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread thread = new Thread(r, "economy-feature-flags");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ScheduledExecutorService worker;
     private @Nullable ScheduledFuture<?> task;
     private volatile boolean closed;
     private boolean failing;
 
     public FeatureFlagRuntime(DataSource dataSource, Consumer<String> log) {
+        this(
+                dataSource,
+                log,
+                Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread thread = new Thread(r, "economy-feature-flags");
+                    thread.setDaemon(true);
+                    return thread;
+                }),
+                new FeatureFlagSnapshot());
+    }
+
+    FeatureFlagRuntime(
+            DataSource dataSource,
+            Consumer<String> log,
+            ScheduledExecutorService worker,
+            FeatureFlagSnapshot snapshot) {
+        this.worker = worker;
+        this.snapshot = snapshot;
         reader = new JdbcFeatureFlagReader(dataSource);
         this.log = log;
     }

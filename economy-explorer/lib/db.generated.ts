@@ -410,6 +410,15 @@ export interface ExplorerWatchlist {
   viewerUuidBin: Buffer;
 }
 
+export interface FeatureFlags {
+  description: string;
+  enabled: Generated<number>;
+  name: string;
+  revision: Generated<number>;
+  updatedAt: Generated<Date>;
+  updatedBy: Generated<string | null>;
+}
+
 export interface Firm {
   createdAt: Generated<Date>;
   defaultAccountId: Generated<number | null>;
@@ -656,6 +665,7 @@ export interface DB {
   explorerRollupTypeDay: ExplorerRollupTypeDay;
   explorerSnapshotWealthDay: ExplorerSnapshotWealthDay;
   explorerWatchlist: ExplorerWatchlist;
+  featureFlags: FeatureFlags;
   firm: Firm;
   firmAccounts: FirmAccounts;
   firmCreationLock: FirmCreationLock;
