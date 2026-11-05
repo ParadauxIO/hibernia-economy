@@ -1,10 +1,10 @@
 package io.paradaux.chestshop.services;
 
+import java.util.List;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.InventoryHolder;
-import java.util.List;
 
 /**
  * The stateful block↔shop-sign geometry split out of {@code ShopBlockUtil} (PAR-282):
@@ -28,6 +28,13 @@ public interface ShopBlockService {
     Container findConnectedContainer(Block block);
 
     List<Sign> findConnectedShopSigns(InventoryHolder chestShopInventoryHolder);
+
+    /**
+     * As {@link #findConnectedShopSigns(InventoryHolder)}, optionally returning live sign states.
+     * Snapshots copy each sign's block entity; the hopper refresh only reads the lines and
+     * rewrites the counter, so it passes {@code false} (PAR-523).
+     */
+    List<Sign> findConnectedShopSigns(InventoryHolder chestShopInventoryHolder, boolean useSnapshot);
 
     List<Sign> findConnectedShopSigns(Block chestBlock);
 

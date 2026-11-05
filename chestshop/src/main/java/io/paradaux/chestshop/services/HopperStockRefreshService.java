@@ -256,7 +256,8 @@ public final class HopperStockRefreshService {
         if (!blocks.couldBeShopContainer(block) || !(block.getState(false) instanceof Container container)) return;
         Inventory inventory = container.getInventory();
         boolean counting = countersEnabled();
-        for (Sign sign : blocks.findConnectedShopSigns(getHolder(inventory, false))) {
+        // Live states: snapshots copied every sign's block entity on each refresh (PAR-523).
+        for (Sign sign : blocks.findConnectedShopSigns(getHolder(inventory, false), false)) {
             boolean admin = signs.isAdminShop(sign);
             if (config.isForceUnlimitedAdminShop() && admin) continue;
             if (refreshedSigns.add(position(sign))) {

@@ -139,14 +139,14 @@ class HopperStockRefreshServiceTest extends ServerTest {
         inventory.addItem(item(Material.DIAMOND, 10));
         for (int i = 0; i < 10_000; i++) refresh.markDirty(inventory);
         verifyNoInteractions(counters);
-        verify(blocks, never()).findConnectedShopSigns(any(InventoryHolder.class));
+        verify(blocks, never()).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
         ticks(99);
         assertThat(counter(east)).isEqualTo("1");
         inventory.setItem(0, item(Material.DIAMOND, 7));
         ticks(1);
         assertThat(counter(east)).isEqualTo("Q 1 : C 7");
         assertThat(counter(west)).isEqualTo("Q 1 : C 7");
-        verify(blocks, times(1)).findConnectedShopSigns(any(InventoryHolder.class));
+        verify(blocks, times(1)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
     }
 
     @Test

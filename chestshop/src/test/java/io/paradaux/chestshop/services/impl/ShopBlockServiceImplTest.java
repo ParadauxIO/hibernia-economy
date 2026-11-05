@@ -219,6 +219,51 @@ class ShopBlockServiceImplTest extends ServerTest {
     }
 
     @Test
+    void findConnectedShopSigns_liveAndSnapshotFindTheSameSigns() {
+        Block[] shop = shopWithWallSign();
+        InventoryHolder holder = (InventoryHolder) shop[0].getState();
+        List<Sign> live = service.findConnectedShopSigns(holder, false);
+        assertThat(live).hasSize(1);
+        assertThat(live.get(0).getBlock()).isEqualTo(shop[1]);
+        assertThat(SignService.getOwner(live.get(0))).isEqualTo("Notch");
+        assertThat(service.findConnectedShopSigns(holder, true))
+                .extracting(Sign::getBlock)
+                .containsExactly(shop[1]);
+    }
+
+    @Test
+    void findConnectedShopSigns_skipsTouchingSignHungOnAnotherChest() {
+        // Wall signs default to facing NORTH, so each hangs on the block to its SOUTH.
+        int x = base += 6;
+        Block chest = world.getBlockAt(x, 64, 0);
+        chest.setType(Material.CHEST);
+        Block own = shopSign(world.getBlockAt(x, 64, -1)); // hangs on chest
+        Block other = world.getBlockAt(x + 1, 64, 1);
+        other.setType(Material.CHEST);
+        Block touching = shopSign(world.getBlockAt(x + 1, 64, 0)); // touches chest, hangs on other
+
+        for (boolean snapshot : new boolean[] {true, false}) {
+            assertThat(service.findConnectedShopSigns((InventoryHolder) chest.getState(), snapshot))
+                    .extracting(Sign::getBlock)
+                    .containsExactly(own);
+            assertThat(service.findConnectedShopSigns((InventoryHolder) other.getState(), snapshot))
+                    .extracting(Sign::getBlock)
+                    .containsExactly(touching);
+        }
+    }
+
+    private static Block shopSign(Block block) {
+        block.setType(Material.OAK_WALL_SIGN);
+        Sign sign = (Sign) block.getState();
+        sign.setLine(SignService.NAME_LINE, "Notch");
+        sign.setLine(SignService.QUANTITY_LINE, "1");
+        sign.setLine(SignService.PRICE_LINE, "B 5");
+        sign.setLine(SignService.ITEM_LINE, "Diamond");
+        sign.update();
+        return block;
+    }
+
+    @Test
     void findConnectedShopSigns_doubleChest_emptyWhenSidesNotBlockStates() {
         DoubleChest dc = mock(DoubleChest.class);
         when(dc.getLeftSide(false)).thenReturn(mock(InventoryHolder.class));
