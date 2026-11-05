@@ -16,7 +16,7 @@ const TTL_MS = 60_000;
 const DAY_MS = 86_400_000;
 export const KEY_EXPIRY_DAYS = 14;
 
-/** The dispatcher holds GOVERNMENT deliveries while this flag is off (PAR-521). */
+/** The dispatcher holds deliveries to government-API-key webhooks while this flag is off (PAR-521, PAR-561). */
 const GOVERNMENT_KEYS_FLAG = 'treasury.government_api_keys';
 
 export async function getDashboardWebhooks(viewer: Viewer): Promise<WebhookHealth> {
