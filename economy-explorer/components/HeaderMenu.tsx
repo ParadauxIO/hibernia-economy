@@ -1,6 +1,6 @@
 'use client';
-// The phone menu: every section and its pages in one sheet, plus the theme
-// switch. A native modal <dialog>, so the browser provides the focus trap,
+// The phone menu: every section and its pages in one sheet, Admin for admins,
+// plus the theme switch. A native modal <dialog>, so the browser provides the focus trap,
 // inert page and Escape; focus returns to the Menu button on close.
 
 import Link from 'next/link';
@@ -10,6 +10,7 @@ import { useViewer } from '@/components/ViewerContext';
 import { ModeToggle } from '@/components/ModeToggle';
 import { CloseIcon, MenuIcon } from '@/components/HeaderIcons';
 import { itemMatches, sectionForPath, visibleSections } from '@/lib/nav';
+import { isAdminPath } from '@/components/HeaderAdmin';
 
 export function HeaderMenu() {
   const path = usePathname();
@@ -75,6 +76,13 @@ export function HeaderMenu() {
               </div>
             );
           })}
+          {viewer.isAdmin && (
+            <div className="shell-menu-section">
+              <Link href="/admin" prefetch={false} className="shell-menu-link is-section" aria-current={isAdminPath(path) ? 'page' : undefined} onClick={() => setOpen(false)}>
+                Admin
+              </Link>
+            </div>
+          )}
         </nav>
         <div className="shell-menu-foot">
           <span>Appearance</span>

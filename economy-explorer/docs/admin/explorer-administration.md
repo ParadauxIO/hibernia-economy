@@ -6,8 +6,16 @@ description: Operate player investigations, account and firm controls, and audit
 
 # Explorer administration
 
-Open [Admin](/admin). Tools appear according to individual permissions; a role
-name alone does not authorize an action. See [roles](/docs/admin/roles).
+Open [Admin](/admin) from the top bar (on a phone, from the menu). Tools appear
+in the sidebar according to individual permissions; a role name alone does not
+authorize an action. See [roles](/docs/admin/roles).
+
+The admin dashboard shows what needs attention: failing and auto-disabled
+webhooks, overdue webhook deliveries, API keys expiring within 14 days, and
+requests refused in the last 24 hours. Below that are the latest admin changes
+from the audit log, each plugin's latest ledger transaction, and the state of
+every feature flag. Each panel needs the permission of the tool it summarises,
+and its figures refresh about once a minute.
 Financial mutations require the [configured Treasury admin API](/docs/admin/config-services).
 
 ## Players, transactions and investigations

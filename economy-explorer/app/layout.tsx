@@ -18,6 +18,7 @@ import { HeaderSearch } from '@/components/HeaderSearch';
 import { HeaderNav, HeaderSectionNav } from '@/components/HeaderNav';
 import { HeaderMenu } from '@/components/HeaderMenu';
 import { HeaderAuth } from '@/components/HeaderAuth';
+import { HeaderAdmin } from '@/components/HeaderAdmin';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ModeToggle } from '@/components/ModeToggle';
 import { Footer } from '@/components/Footer';
@@ -128,6 +129,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <div className="shell-tools">
                   <HeaderSearch />
                   <ModeToggle className="shell-desktop-only" />
+                  <HeaderAdmin />
                   <HeaderAuth balance={balance} />
                   <HeaderMenu />
                 </div>

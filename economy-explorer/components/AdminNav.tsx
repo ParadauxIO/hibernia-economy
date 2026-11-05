@@ -1,6 +1,6 @@
 'use client';
 // Tool navigation for the admin area, styled as the design system's route
-// tabs. The account menu's "Admin" entry opens /admin; this lists every tool
+// tabs. The top bar's Admin button opens /admin; this lists every tool
 // the viewer holds and marks the current one. /transactions lives outside
 // /admin (its detail pages aren't admin-only) but is an admin tool, so it is
 // listed here too and renders this nav itself.
@@ -13,7 +13,7 @@ import { usePathname } from 'next/navigation';
 export function AdminNav() {
   const path = usePathname();
   const { permissions } = useViewer();
-  const links = [{ href: '/admin' as const, title: 'Overview' }, ...ADMIN_TOOLS.filter(t => permissions.includes(t.permission))];
+  const links = [{ href: '/admin' as const, title: 'Dashboard' }, ...ADMIN_TOOLS.filter(t => permissions.includes(t.permission))];
   return (
     <nav className="tabs admin-tabs" aria-label="Admin">
       {links.map((l) => {

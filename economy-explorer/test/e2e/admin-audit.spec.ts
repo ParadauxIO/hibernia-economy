@@ -80,13 +80,19 @@ test('the audit log needs audit.read, even for other admin tools', async ({ page
   await expect(page.getByRole('table')).toHaveCount(0);
 });
 
-test('the admin home is a quiet index of the tools the viewer holds', async ({ page, context }) => {
+test('the admin home is a dashboard, with the tools in the sidebar', async ({ page, context }) => {
   await loginAs(context, 'admin');
   await visit(page, '/admin');
-  for (const tool of ['Accounts', 'Role grants', 'Audit log']) {
-    await expect(page.getByRole('main').getByRole('link', { name: tool, exact: true }).first()).toBeVisible();
+  const main = page.getByRole('main');
+  for (const heading of ['Needs attention', 'Recent changes', 'Ledger writers', 'Feature flags']) {
+    await expect(main.getByRole('heading', { level: 2, name: heading })).toBeVisible();
   }
-  await page.getByRole('main').getByRole('link', { name: 'Role grants', exact: true }).first().click();
-  await expect(page).toHaveURL(/\/admin\/role-grants$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Role grants' })).toBeVisible();
+  await expect(main.getByRole('group', { name: 'Needs attention' }).getByText('Failing webhooks')).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Open audit log' })).toHaveAttribute('href', '/admin/audit');
+  // The tools live in the sidebar (a select on phones, so match the hidden links by markup), not in the page body.
+  const sidebar = page.locator('.sidebar-nav');
+  await expect(sidebar.locator('a[href="/admin"]')).toHaveText('Dashboard');
+  await expect(sidebar.locator('a[href="/admin"]')).toHaveAttribute('aria-current', 'page');
+  await expect(sidebar.locator('a[href="/admin/role-grants"]')).toHaveText('Role grants');
+  await expect(page.locator('.sidebar-content').getByRole('link', { name: 'Role grants', exact: true })).toHaveCount(0);
 });
