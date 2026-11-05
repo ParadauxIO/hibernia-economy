@@ -10,10 +10,10 @@ import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.business.utils.DateUtils;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 // Every staff command hits the DB and is annotated @Async to avoid main-thread blocking.
@@ -28,7 +28,7 @@ public class StaffCommands implements CommandHandler {
     private final FirmStaffService staff;
     private final FirmService firms;
     private final FirmNotificationService notifications;
-    private final Message message;
+    private final BusinessMessages message;
 
     @Inject
     public StaffCommands(
@@ -36,7 +36,7 @@ public class StaffCommands implements CommandHandler {
             FirmStaffService staff,
             FirmService firms,
             FirmNotificationService notifications,
-            Message message) {
+            BusinessMessages message) {
         this.players = players;
         this.staff = staff;
         this.firms = firms;

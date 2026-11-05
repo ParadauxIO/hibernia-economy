@@ -6,7 +6,7 @@ import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
-import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.business.threading.BusinessMessages;
 import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
@@ -16,7 +16,7 @@ class ShopAliasCommandTest {
     void managesAliasesForResolvedFirmWithPlayerIdentity() {
         var accounts = mock(FirmAccountService.class);
         var firms = mock(FirmService.class);
-        var message = mock(Message.class);
+        var message = mock(BusinessMessages.class);
         var player = mock(Player.class);
         UUID actor = UUID.randomUUID();
         when(player.getUniqueId()).thenReturn(actor);

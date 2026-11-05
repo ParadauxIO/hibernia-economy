@@ -10,6 +10,7 @@ import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.LedgerPosting;
 import io.paradaux.treasury.model.economy.LedgerTxn;
+import io.paradaux.treasury.model.economy.PayoutCategory;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
@@ -46,6 +47,56 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         ledgerMapper = injector.getInstance(LedgerMapper.class);
 
         ledgerService.bootstrapGovernmentAccounts();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"treasury-salary,EMPLOYEE", "realty-auction,AUCTION_PROCEEDS"})
+    void payoutCategory_survivesLedgerAndAllHistoryQueries(String sourcePlugin, PayoutCategory category) {
+        Account source = createPersonalAccount(100);
+        Account target = createPersonalAccount(0);
+        byte[] key = io.paradaux.treasury.utils.Idempotency.sha256("category:" + UUID.randomUUID());
+        TransferRequest request = new TransferRequest(
+                source.getAccountId(),
+                target.getAccountId(),
+                new BigDecimal("12.50"),
+                "same memo",
+                UUID.randomUUID(),
+                null,
+                sourcePlugin,
+                key);
+        long id = ledgerService.transfer(request);
+        assertThat(ledgerService.transfer(request)).isEqualTo(id);
+        assertThat(balanceOf(source)).isEqualByComparingTo("87.50");
+        assertThat(balanceOf(target)).isEqualByComparingTo("12.50");
+        assertThat(ledgerMapper.findTxnById(id).getPayoutCategory()).isEqualTo(category);
+        assertThat(ledgerMapper.findByDedupKey(key).getPayoutCategory()).isEqualTo(category);
+        assertThat(ledgerMapper.findByDedupKeyLocking(key).getPayoutCategory()).isEqualTo(category);
+        assertThat(ledgerMapper.findTransactionsByAccount(target.getAccountId(), 10, 0))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.getPayoutCategory()).isEqualTo(category));
+        assertThat(ledgerMapper.findAllTransactionsByAccount(target.getAccountId(), 10))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.getPayoutCategory()).isEqualTo(category));
+        assertThat(ledgerMapper.findTransactionsByAccounts(List.of(target.getAccountId()), 10, 0))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.getPayoutCategory()).isEqualTo(category));
+    }
+
+    @Test
+    void legacyTransfer_doesNotInferCategoryFromMemo() {
+        Account source = createPersonalAccount(100);
+        Account target = createPersonalAccount(0);
+        TransferRequest request = new TransferRequest(
+                source.getAccountId(),
+                target.getAccountId(),
+                new BigDecimal("12.50"),
+                "Employee salary and auction proceeds",
+                UUID.randomUUID(),
+                null,
+                "test",
+                null);
+        assertThat(ledgerMapper.findTxnById(ledgerService.transfer(request)).getPayoutCategory())
+                .isNull();
     }
 
     // ---------- transfer: amount validation ----------

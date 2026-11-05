@@ -37,6 +37,7 @@ the code.
 
 ## Quick links
 
+- [Business async Bukkit audit (ADT-70)](business-async-bukkit-audit.md) — call sites and thread-boundary verification.
 - [Repository README](../README.md)
 - [Contributing](../CONTRIBUTING.md) · [Security](../SECURITY.md)
 - [Discord (Hibernia Economy)](https://discord.gg/b88K3ETeHS) — support, ideas, and

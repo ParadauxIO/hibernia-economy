@@ -33,8 +33,9 @@ class FirmPlayerServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        svc = new FirmPlayerServiceImpl(mapper);
+        svc = new FirmPlayerServiceImpl(mapper, new io.paradaux.business.threading.MainThreadAccess(null));
         bukkit = Mockito.mockStatic(Bukkit.class);
+        bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
     }
 
     @AfterEach

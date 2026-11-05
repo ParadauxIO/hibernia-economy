@@ -43,4 +43,9 @@ public class LedgerTxn {
     public byte @Nullable [] getClientDedupKey() {
         return clientDedupKey == null ? null : clientDedupKey.clone();
     }
+
+    /** Structured purpose from the originating operation; memos and account labels are ignored. */
+    public @Nullable PayoutCategory getPayoutCategory() {
+        return PayoutCategory.fromSource(pluginSystem);
+    }
 }

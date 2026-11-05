@@ -39,6 +39,23 @@ The stable surface downstream code compiles against: `TreasuryApi`, `TaxApi`, th
 `AccountType`, `Page<T>`, …). Published as `io.paradaux:treasury-api`. **New public
 types go here, never in the plugin root.**
 
+Fine issuance/revocation and department-account administration remain internal
+`GovService` operations (ADT-84). There is no published `GovApi`; adding one
+requires a concrete consumer and an explicit contract for authorization and
+transaction ownership. The five government/fine exceptions
+(`FineNotFoundException`, `FineAlreadyRevokedException`,
+`InsufficientFineFundsException`, `PrimitiveAccountException`, and
+`GovAccountNotFoundException`) and their `TreasuryException` base now live in the
+plugin's `io.paradaux.treasury.services.exceptions` package, outside the published
+API jar. Their messages, payloads, causes, and command handling are unchanged.
+
+This removes the old `io.paradaux.treasury.api.exceptions` classes and is a source
+and binary compatibility break for consumers that imported them, even though no
+published operation declared them. Such consumers must remove those imports and
+rebuild; depending on the internal replacement package is not a supported API.
+`TreasuryApi.getGovernmentAccountByName` continues to return `null` for a missing
+account. The existing public models, including `GovernmentFine`, are unchanged.
+
 ---
 
 ## `business/` — companies (Paper plugin)
@@ -501,6 +518,32 @@ and current firm linkage. Firm-wide management requires a key without an account
 restriction. Account-scoped webhooks store only the selected account as their
 subscription scope so they cannot match sibling accounts. No schema migration is
 required; the existing nullable columns support both scopes.
+
+### Structured payout categories (PAR-554)
+
+Payout purpose comes from the originating operation's `plugin_system`, not a memo,
+recipient name, account label or manually chosen command argument. The public
+`PayoutCategory` enum maps `treasury-salary` to `EMPLOYEE` and `realty-auction` to
+`AUCTION_PROCEEDS`, case-insensitively. Unknown and mixed-purpose sources remain
+null. A generic `realty` payment is not necessarily an auction; a payment from
+`BusinessPlugin` is not necessarily employee pay.
+
+Realty uses `realty-auction` for partial and final auction bid settlements. Rentals,
+purchases and refunds retain `realty`. This uses the existing eight-argument
+`TransferRequest` API and works with older Treasury versions; install the matching
+Realty change to identify new auctions. No historical Realty transactions are
+reclassified by parsing their descriptions.
+
+`LedgerTxn` and `TransactionEntry` derive the category on read. REST history,
+cursor feeds and webhooks expose its name as `payoutCategory`; CSV appends
+`payout_category`. Existing salary history is classified immediately without a
+migration or data rewrite. Explorer maps incoming `realty-auction` flows to Auction
+proceeds and outgoing flows to Property, retaining its internal-transfer and tax
+precedence. Its source-key rollups need no rebuild.
+
+SYSTEM wallets preserve plugin identity through `system_plugin_key`, but production
+wallets serve both receipts and payments. Their type or editable display name does
+not prove employee pay or auction proceeds; no new routing wallets are created.
 
 ### Treasury API immutable snapshots (ADT-87)
 

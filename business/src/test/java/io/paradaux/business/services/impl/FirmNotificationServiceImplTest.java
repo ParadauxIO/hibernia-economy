@@ -1,17 +1,5 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.business.services.FirmStaffService;
-import org.bukkit.entity.Player;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -20,11 +8,25 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.threading.BusinessMessages;
+import java.util.List;
+import java.util.UUID;
+import org.bukkit.entity.Player;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class FirmNotificationServiceImplTest {
 
-    @Mock FirmStaffService staff;
-    @Mock Message message;
+    @Mock
+    FirmStaffService staff;
+
+    @Mock
+    BusinessMessages message;
 
     private FirmNotificationServiceImpl svc() {
         return new FirmNotificationServiceImpl(staff, message);
@@ -46,8 +48,7 @@ class FirmNotificationServiceImplTest {
         svc().notifyFirm(1, "business.notify.transfer.incoming", "amount", "$5");
 
         ArgumentCaptor<List<Player>> recipients = ArgumentCaptor.forClass(List.class);
-        verify(message).send(recipients.capture(), eq("business.notify.transfer.incoming"),
-                eq("amount"), eq("$5"));
+        verify(message).send(recipients.capture(), eq("business.notify.transfer.incoming"), eq("amount"), eq("$5"));
         assertThat(recipients.getValue()).containsExactlyInAnyOrder(a, b);
     }
 

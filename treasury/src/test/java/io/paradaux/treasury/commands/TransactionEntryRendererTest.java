@@ -58,6 +58,34 @@ class TransactionEntryRendererTest {
         }
     }
 
+    @Test
+    void rendersCategoryWithoutChangingStoredMemo() {
+        Message message = mock(Message.class);
+        AccountService accounts = mock(AccountService.class);
+        CommandSender recipient = mock(CommandSender.class);
+        when(accounts.formatAmount(new BigDecimal("15.00"))).thenReturn("$15.00");
+        TransactionEntry entry = TransactionEntry.builder()
+                .txnId(42)
+                .amount(new BigDecimal("15.00"))
+                .memo("Lot 17")
+                .pluginSystem("realty-auction")
+                .build();
+        TransactionEntryRenderer.send(recipient, message, accounts, entry);
+        verify(message)
+                .send(
+                        recipient,
+                        "treasury.transactions.entry",
+                        "txn",
+                        "42",
+                        "amount",
+                        Component.text("+$15.00", NamedTextColor.GREEN),
+                        "memo",
+                        "[AUCTION_PROCEEDS] Lot 17",
+                        "time",
+                        "—");
+        assertThat(entry.getMemo()).isEqualTo("Lot 17");
+    }
+
     private static boolean hasColoredText(Component component, String text, NamedTextColor color) {
         return (PlainTextComponentSerializer.plainText().serialize(component).equals(text)
                         && color.equals(component.color()))

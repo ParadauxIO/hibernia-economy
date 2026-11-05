@@ -13,6 +13,7 @@ import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.threading.MainThreadAccess;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.InternalException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
@@ -32,18 +33,22 @@ public class FirmStaffServiceImpl implements FirmStaffService {
     /** Lazy-injected to break the FirmStaffService ↔ FirmChatService cycle. */
     private final Provider<FirmChatService> chatProvider;
 
+    private final MainThreadAccess mainThread;
+
     @Inject
     public FirmStaffServiceImpl(
             FirmService firms,
             FirmRoleMapper roles,
             FirmStaffMapper staff,
             FirmAccountService accounts,
-            Provider<FirmChatService> chatProvider) {
+            Provider<FirmChatService> chatProvider,
+            MainThreadAccess mainThread) {
         this.firms = firms;
         this.roles = roles;
         this.staff = staff;
         this.accounts = accounts;
         this.chatProvider = chatProvider;
+        this.mainThread = mainThread;
     }
 
     /**
@@ -293,11 +298,11 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         return toOnline(getCurrentEmployees(firmId));
     }
 
-    private static List<Player> toOnline(List<FirmEmployee> employees) {
-        return employees.stream()
+    private List<Player> toOnline(List<FirmEmployee> employees) {
+        return mainThread.read(() -> employees.stream()
                 .map(e -> Bukkit.getPlayer(UUID.fromString(e.getPlayerUuid())))
                 .filter(Objects::nonNull)
-                .toList();
+                .toList());
     }
 
     public boolean hasPermission(Integer firmId, UUID playerId, RolePermission permission) {

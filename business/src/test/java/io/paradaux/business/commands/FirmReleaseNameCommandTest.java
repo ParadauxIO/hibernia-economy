@@ -5,8 +5,8 @@ import static org.mockito.Mockito.*;
 
 import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.Permission;
-import io.paradaux.hibernia.framework.i18n.Message;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import org.bukkit.command.CommandSender;
@@ -30,13 +30,13 @@ class FirmReleaseNameCommandTest {
     @Test
     void releaseUsesExactFirmIdAndReportsPreservedName() {
         FirmService firms = mock(FirmService.class);
-        Message message = mock(Message.class);
+        BusinessMessages message = mock(BusinessMessages.class);
         CommandSender sender = mock(CommandSender.class);
         Firm archived = new Firm();
         archived.setFirmId(42);
         archived.setDisplayName("Acme");
         when(firms.adminReleaseFirmName(42)).thenReturn(archived);
-        var command = new FirmCommands(null, null, firms, null, null, null, message);
+        var command = new FirmCommands(null, null, firms, null, null, null, message, null);
         command.adminReleaseName(sender, 42);
         verify(firms).adminReleaseFirmName(42);
         verifyNoMoreInteractions(firms);

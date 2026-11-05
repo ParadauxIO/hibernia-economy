@@ -748,6 +748,11 @@
           "message" : {
             "type" : "string"
           },
+          "payoutCategory" : {
+            "description" : "Purpose derived from the originating payment source; null for mixed or unknown sources.",
+            "enum" : [ "EMPLOYEE", "AUCTION_PROCEEDS" ],
+            "type" : [ "string", "null" ]
+          },
           "pluginSystem" : {
             "type" : "string"
           },

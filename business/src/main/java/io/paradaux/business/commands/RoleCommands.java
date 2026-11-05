@@ -6,9 +6,9 @@ import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.model.internal.FirmRole;
 import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmRoleService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.entity.Player;
@@ -18,10 +18,10 @@ import org.bukkit.entity.Player;
 public class RoleCommands implements CommandHandler {
 
     private final FirmRoleService roles;
-    private final Message message;
+    private final BusinessMessages message;
 
     @Inject
-    public RoleCommands(FirmRoleService roles, Message message) {
+    public RoleCommands(FirmRoleService roles, BusinessMessages message) {
         this.roles = roles;
         this.message = message;
     }

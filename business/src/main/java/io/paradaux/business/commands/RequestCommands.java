@@ -8,9 +8,10 @@ import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmRequestService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.threading.BusinessMessages;
+import io.paradaux.business.threading.MainThreadAccess;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import java.util.UUID;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -23,7 +24,8 @@ public class RequestCommands implements CommandHandler {
     private final FirmStaffService staff;
     private final FirmService firms;
     private final FirmNotificationService notifications;
-    private final Message message;
+    private final BusinessMessages message;
+    private final MainThreadAccess mainThread;
 
     @Inject
     public RequestCommands(
@@ -31,12 +33,14 @@ public class RequestCommands implements CommandHandler {
             FirmStaffService staff,
             FirmService firms,
             FirmNotificationService notifications,
-            Message message) {
+            BusinessMessages message,
+            MainThreadAccess mainThread) {
         this.requests = requests;
         this.staff = staff;
         this.firms = firms;
         this.notifications = notifications;
         this.message = message;
+        this.mainThread = mainThread;
     }
 
     @Route("offer <firm> <user>")
@@ -49,8 +53,9 @@ public class RequestCommands implements CommandHandler {
         requests.offerEmployment(firm, target.getUniqueId(), sender.getUniqueId());
         message.send(sender, "business.staff.offer.sender", "target", displayName(target), "firm", firm);
 
-        if (target.isOnline() && target.getPlayer() != null) {
-            message.send(target.getPlayer(), "business.staff.offer.target", "firm", firm, "sender", sender.getName());
+        Player onlineTarget = mainThread.read(target::getPlayer);
+        if (onlineTarget != null) {
+            message.send(onlineTarget, "business.staff.offer.target", "firm", firm, "sender", sender.getName());
         }
 
         message.send(
@@ -74,14 +79,10 @@ public class RequestCommands implements CommandHandler {
 
         message.send(sender, "business.staff.offer.rescinded.sender", "firm", firm, "target", displayName(target));
 
-        if (target.isOnline() && target.getPlayer() != null) {
+        Player onlineTarget = mainThread.read(target::getPlayer);
+        if (onlineTarget != null) {
             message.send(
-                    target.getPlayer(),
-                    "business.staff.offer.rescinded.target",
-                    "firm",
-                    firm,
-                    "sender",
-                    sender.getName());
+                    onlineTarget, "business.staff.offer.rescinded.target", "firm", firm, "sender", sender.getName());
         }
 
         message.send(
@@ -98,10 +99,11 @@ public class RequestCommands implements CommandHandler {
     // ADT (offer-target-name-npe): OfflinePlayer.getName() is null for a UUID Bukkit
     // has never cached (a typo'd/never-joined target), which would NPE inside the
     // @Async handler after the invite was already persisted. Fall back to the UUID.
-    private static String displayName(OfflinePlayer player) {
-        return player.getName() != null
-                ? player.getName()
-                : player.getUniqueId().toString();
+    private String displayName(OfflinePlayer player) {
+        return mainThread.read(() -> {
+            String name = player.getName();
+            return name != null ? name : player.getUniqueId().toString();
+        });
     }
 
     @Route("offer accept <firm>")
@@ -169,9 +171,10 @@ public class RequestCommands implements CommandHandler {
         if (requests.confirmTransferProprietorship(firm, target.getUniqueId(), code, sender.getUniqueId())) {
             message.send(sender, "business.firm.transfer.confirmed", "target", displayName(target));
 
-            if (target.isOnline() && target.getPlayer() != null) {
+            Player onlineTarget = mainThread.read(target::getPlayer);
+            if (onlineTarget != null) {
                 message.send(
-                        target.getPlayer(),
+                        onlineTarget,
                         "business.firm.transfer.offer",
                         "firm",
                         firm,
@@ -210,14 +213,10 @@ public class RequestCommands implements CommandHandler {
                 displayName(target),
                 "firm",
                 firm);
-        if (target.isOnline() && target.getPlayer() != null) {
+        Player onlineTarget = mainThread.read(target::getPlayer);
+        if (onlineTarget != null) {
             message.send(
-                    target.getPlayer(),
-                    "business.firm.transfer.cancelled.target",
-                    "firm",
-                    firm,
-                    "sender",
-                    sender.getName());
+                    onlineTarget, "business.firm.transfer.cancelled.target", "firm", firm, "sender", sender.getName());
         }
     }
 

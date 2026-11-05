@@ -8,7 +8,7 @@ import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.*;
-import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.treasury.api.SalesQueryApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import java.math.BigDecimal;
@@ -44,7 +44,7 @@ class FinanceCommandGateTest {
     private final SalesQueryApi sales = mock(SalesQueryApi.class);
     private final FirmConfiguration config = mock(FirmConfiguration.class);
     private final TreasuryApi treasury = mock(TreasuryApi.class);
-    private final Message message = mock(Message.class);
+    private final BusinessMessages message = mock(BusinessMessages.class);
     private final Player player = mock(Player.class);
     private final FirmGate gate = new FirmGate(firms, staff, message);
     private final AccountCommands accounts =

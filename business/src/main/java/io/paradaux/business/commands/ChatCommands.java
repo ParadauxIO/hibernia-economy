@@ -6,9 +6,9 @@ import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import java.util.Optional;
 import org.bukkit.entity.Player;
 
@@ -25,10 +25,10 @@ public class ChatCommands implements CommandHandler {
 
     private final FirmChatService firmChat;
     private final FirmService firms;
-    private final Message message;
+    private final BusinessMessages message;
 
     @Inject
-    public ChatCommands(FirmChatService firmChat, FirmService firms, Message message) {
+    public ChatCommands(FirmChatService firmChat, FirmService firms, BusinessMessages message) {
         this.firmChat = firmChat;
         this.firms = firms;
         this.message = message;

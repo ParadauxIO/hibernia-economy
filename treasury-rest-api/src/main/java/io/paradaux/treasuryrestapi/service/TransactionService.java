@@ -208,6 +208,7 @@ public class TransactionService {
                         row.getCounterpartyAccountId(),
                         row.getCounterpartyAccountType(),
                         row.getCounterpartyDisplayName(),
-                        row.getCounterpartyOwnerUuidBin()));
+                        row.getCounterpartyOwnerUuidBin()),
+                row.getPayoutCategory());
     }
 }

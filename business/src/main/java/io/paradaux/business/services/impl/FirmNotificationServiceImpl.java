@@ -2,14 +2,13 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.i18n.Message;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmStaffService;
-import org.bukkit.entity.Player;
-
+import io.paradaux.business.threading.BusinessMessages;
 import java.util.List;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.bukkit.entity.Player;
 
 /**
  * Default {@link FirmNotificationService}: fans a message out to the firm's online
@@ -22,10 +21,10 @@ import java.util.UUID;
 public class FirmNotificationServiceImpl implements FirmNotificationService {
 
     private final FirmStaffService staff;
-    private final Message message;
+    private final BusinessMessages message;
 
     @Inject
-    public FirmNotificationServiceImpl(FirmStaffService staff, Message message) {
+    public FirmNotificationServiceImpl(FirmStaffService staff, BusinessMessages message) {
         this.staff = staff;
         this.message = message;
     }

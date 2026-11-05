@@ -76,7 +76,12 @@ class FirmChatServiceTest {
 
     private FirmChatServiceImpl newService(FirmStaffService staffService) {
         return new FirmChatServiceImpl(
-                firms, staffService, Logger.getLogger("test"), now::get, uuid -> !spyPermissionRevoked.contains(uuid));
+                firms,
+                staffService,
+                Logger.getLogger("test"),
+                now::get,
+                uuid -> !spyPermissionRevoked.contains(uuid),
+                new io.paradaux.business.threading.MainThreadAccess(null));
     }
 
     private static Firm firm(int id, String displayName) {
@@ -161,7 +166,12 @@ class FirmChatServiceTest {
                 });
         FirmChatServiceImpl[] chat = new FirmChatServiceImpl[1];
         FirmStaffService realStaff = new FirmStaffServiceImpl(
-                firms, mock(FirmRoleMapper.class), staffMapper, mock(FirmAccountService.class), () -> chat[0]);
+                firms,
+                mock(FirmRoleMapper.class),
+                staffMapper,
+                mock(FirmAccountService.class),
+                () -> chat[0],
+                new io.paradaux.business.threading.MainThreadAccess(null));
         chat[0] = newService(realStaff);
         FirmChatChannel channel = registerWithCarbon(chat[0]);
 

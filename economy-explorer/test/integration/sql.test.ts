@@ -596,6 +596,13 @@ d('configurable authorization policy', () => {
     await expect(createRole({ ...custom, permissions: ['invented'] })).rejects.toThrow('Unknown permission');
     await expect(setDirectRoleMember('missing', BOB, true)).rejects.toThrow('Unknown role');
   });
+  it('rejects malformed player identifiers without granting a role', async () => {
+    await createRole(custom);
+    for (const uuid of ['not-a-uuid', BOB.replaceAll('-', ''), `${BOB}extra`]) {
+      await expect(setDirectRoleMember('auditor', uuid, true)).rejects.toThrow();
+    }
+    expect((await sql`SELECT 1 FROM explorer_role WHERE role = 'auditor'`.execute(db)).rows).toHaveLength(0);
+  });
 });
 
 d('published config (economy_config)', () => {

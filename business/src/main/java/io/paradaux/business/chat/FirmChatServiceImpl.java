@@ -6,6 +6,7 @@ import io.paradaux.business.Business;
 import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.threading.MainThreadAccess;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,6 +60,7 @@ public class FirmChatServiceImpl implements FirmChatService {
     private final Logger log;
     private final LongSupplier clock;
     private final Predicate<UUID> spyPermitted;
+    private final MainThreadAccess mainThread;
 
     /** player → the firm whose chat they're currently in. In-memory (cleared on leave). */
     private final Map<UUID, Selection> activeFirm = new ConcurrentHashMap<>();
@@ -88,17 +90,30 @@ public class FirmChatServiceImpl implements FirmChatService {
     private volatile CarbonFirmChat carbon; // null when CarbonChat is absent
 
     @Inject
-    public FirmChatServiceImpl(FirmService firms, FirmStaffService staff, Business plugin) {
-        this(firms, staff, plugin.getLogger(), System::currentTimeMillis, FirmChatServiceImpl::holdsSpyPermission);
+    public FirmChatServiceImpl(
+            FirmService firms, FirmStaffService staff, Business plugin, MainThreadAccess mainThread) {
+        this(
+                firms,
+                staff,
+                plugin.getLogger(),
+                System::currentTimeMillis,
+                uuid -> mainThread.read(() -> holdsSpyPermission(uuid)),
+                mainThread);
     }
 
     FirmChatServiceImpl(
-            FirmService firms, FirmStaffService staff, Logger log, LongSupplier clock, Predicate<UUID> spyPermitted) {
+            FirmService firms,
+            FirmStaffService staff,
+            Logger log,
+            LongSupplier clock,
+            Predicate<UUID> spyPermitted,
+            MainThreadAccess mainThread) {
         this.firms = firms;
         this.staff = staff;
         this.log = log;
         this.clock = clock;
         this.spyPermitted = spyPermitted;
+        this.mainThread = mainThread;
     }
 
     /**
@@ -242,7 +257,7 @@ public class FirmChatServiceImpl implements FirmChatService {
         if (out.containsKey(uuid)) {
             return;
         }
-        Player p = Bukkit.getPlayer(uuid);
+        Player p = mainThread.read(() -> Bukkit.getPlayer(uuid));
         if (p != null) {
             out.put(uuid, p);
         }

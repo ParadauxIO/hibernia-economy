@@ -32,4 +32,9 @@ public class DueDelivery {
     private String counterpartyAccountType;
     private String counterpartyDisplayName;
     private UUID counterpartyOwnerUuidBin;
+
+    public String getPayoutCategory() {
+        var category = io.paradaux.treasury.model.economy.PayoutCategory.fromSource(pluginSystem);
+        return category == null ? null : category.name();
+    }
 }

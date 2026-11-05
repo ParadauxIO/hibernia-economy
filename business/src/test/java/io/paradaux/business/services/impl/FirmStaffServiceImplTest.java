@@ -54,7 +54,8 @@ class FirmStaffServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        svc = new FirmStaffServiceImpl(firms, roles, staff, accounts, () -> chat);
+        svc = new FirmStaffServiceImpl(
+                firms, roles, staff, accounts, () -> chat, new io.paradaux.business.threading.MainThreadAccess(null));
     }
 
     private Firm acme() {
@@ -576,6 +577,7 @@ class FirmStaffServiceImplTest {
 
         // Roster members are filtered by online status; all are offline in tests.
         try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> org.bukkit.Bukkit.getPlayer(org.mockito.ArgumentMatchers.any(UUID.class)))
                     .thenReturn(null);
             assertThat(svc.getOnlineEmployees(1)).isEmpty();
@@ -589,6 +591,7 @@ class FirmStaffServiceImplTest {
         when(staff.listCurrentEmployeesByFirm(1)).thenReturn(new java.util.ArrayList<>());
 
         try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> org.bukkit.Bukkit.getPlayer(org.mockito.ArgumentMatchers.any(UUID.class)))
                     .thenReturn(null);
             assertThat(svc.getOnlineEmployees("Acme")).isEmpty();
