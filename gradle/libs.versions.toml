@@ -20,7 +20,7 @@ annotations = "26.1.0"
 # Runtime libraries
 guice = "7.0.0"
 hikari = "7.1.0"
-mariadb = "3.5.10"
+mariadb = "4.0.0"
 mybatis = "3.6.0"
 mybatis-guice = "4.1.1"
 reflections = "0.10.2"
