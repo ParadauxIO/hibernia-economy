@@ -1,0 +1,99 @@
+diff --git a/chestshop/src/main/java/io/paradaux/chestshop/listeners/ItemMoveListener.java b/chestshop/src/main/java/io/paradaux/chestshop/listeners/ItemMoveListener.java
+index 6adceab5..6417b2dd 100644
+--- a/chestshop/src/main/java/io/paradaux/chestshop/listeners/ItemMoveListener.java
++++ b/chestshop/src/main/java/io/paradaux/chestshop/listeners/ItemMoveListener.java
+@@ -1,41 +1,45 @@
+ package io.paradaux.chestshop.listeners;
+ 
+-import static io.paradaux.chestshop.utils.InventoryUtil.getHolder;
+-
+ import com.google.inject.Inject;
+ import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+-import io.paradaux.chestshop.services.HopperStockRefreshService;
+ import io.paradaux.chestshop.services.ShopBlockService;
++import io.paradaux.chestshop.services.SignService;
++import io.paradaux.chestshop.services.StockCounterService;
++import org.bukkit.block.Block;
+ import org.bukkit.block.BlockState;
++import org.bukkit.block.Sign;
+ import org.bukkit.event.EventHandler;
+ import org.bukkit.event.EventPriority;
+ import org.bukkit.event.Listener;
+ import org.bukkit.event.inventory.InventoryMoveItemEvent;
+-import org.bukkit.event.world.ChunkLoadEvent;
+-import org.bukkit.event.world.ChunkUnloadEvent;
+-import org.bukkit.event.world.WorldUnloadEvent;
+ import org.bukkit.inventory.InventoryHolder;
+ 
++import static io.paradaux.chestshop.utils.InventoryUtil.getHolder;
++
+ /**
++ * PAR-523 benchmark only: the listener as it was before 6b35b153, with the removed
++ * StockCounterServiceImpl.updateCounterOnItemMoveEvent inlined. Not shipped.
++ *
+  * @author Acrobot
+  */
+ public class ItemMoveListener implements Listener {
+ 
+-    private final HopperStockRefreshService stockRefresh;
++    private final StockCounterService stockCounter;
+     private final ChestShopConfiguration config;
+     private final ShopBlockService shopBlockService;
++    private final SignService signService;
+ 
+     @Inject
+-    public ItemMoveListener(
+-            HopperStockRefreshService stockRefresh, ChestShopConfiguration config, ShopBlockService shopBlockService) {
+-        this.stockRefresh = stockRefresh;
++    public ItemMoveListener(StockCounterService stockCounter, ChestShopConfiguration config,
++            ShopBlockService shopBlockService, SignService signService) {
++        this.stockCounter = stockCounter;
+         this.config = config;
+         this.shopBlockService = shopBlockService;
++        this.signService = signService;
+     }
+ 
+     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
+     public void onItemMove(InventoryMoveItemEvent event) {
+-        if (config.isTurnOffHopperProtection()) return;
+         InventoryHolder destinationHolder = getHolder(event.getDestination(), false);
+ 
+         if (!config.isTurnOffHopperProtection() && !(destinationHolder instanceof BlockState)) {
+@@ -45,32 +49,10 @@ public class ItemMoveListener implements Listener {
+                 return;
+             }
+         }
+-    }
+-
+-    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+-    public void onStockMove(InventoryMoveItemEvent event) {
+-        stockRefresh.markDirty(event.getSource());
+-        stockRefresh.markDirty(event.getDestination());
+-    }
+-
+-    @EventHandler(priority = EventPriority.MONITOR)
+-    public void onChunkLoad(ChunkLoadEvent event) {
+-        stockRefresh.loadChunk(
+-                event.getWorld().getUID(),
+-                event.getChunk().getX(),
+-                event.getChunk().getZ());
+-    }
+-
+-    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+-    public void onChunkUnload(ChunkUnloadEvent event) {
+-        stockRefresh.unloadChunk(
+-                event.getWorld().getUID(),
+-                event.getChunk().getX(),
+-                event.getChunk().getZ());
+-    }
+-
+-    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+-    public void onWorldUnload(WorldUnloadEvent event) {
+-        stockRefresh.unloadWorld(event.getWorld().getUID());
++        if (config.isUseStockCounter() && shopBlockService.isShopBlock(destinationHolder)) {
++            Block shopBlock = signService.getShopBlock(destinationHolder);
++            Sign connectedSign = shopBlockService.getConnectedSign(shopBlock);
++            stockCounter.updateCounterOnQuantityLine(connectedSign, destinationHolder.getInventory(), event.getItem());
++        }
+     }
+ }

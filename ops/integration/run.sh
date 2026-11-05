@@ -71,6 +71,27 @@ case "$PROFILE" in
     export IT_HOPPER_PROFILE=true
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*HopperStockRefreshE2ETest' --tests '*HopperMinecartProtectionTest'); fi
     ;;
+  hopper-bench)
+    # One PAR-523 benchmark sample; ops/integration/hopper-bench.mjs runs the matrix.
+    PROFILE_ARGS=()
+    export IT_HOPPER_BENCH=true
+    case "${IT_BENCH_VARIANT:-}" in
+      event-off|no-listener|worker) ;;
+      legacy)
+        if [ -z "${IT_BENCH_CHESTSHOP_JAR:-}" ] || [ ! -f "$IT_BENCH_CHESTSHOP_JAR" ]; then
+          echo "legacy variant requires IT_BENCH_CHESTSHOP_JAR (built by hopper-bench.mjs)" >&2
+          exit 2
+        fi
+        IT_BENCH_CHESTSHOP_JAR="$(realpath "$IT_BENCH_CHESTSHOP_JAR")"
+        ;;
+      *) echo "hopper-bench requires IT_BENCH_VARIANT=event-off|no-listener|legacy|worker" >&2; exit 2 ;;
+    esac
+    : "${IT_BENCH_SCENARIO:?hopper-bench requires IT_BENCH_SCENARIO}" "${IT_BENCH_OUT:?hopper-bench requires IT_BENCH_OUT}"
+    export IT_BENCH_WARMUP_S="${IT_BENCH_WARMUP_S:-90}" IT_BENCH_SAMPLE_S="${IT_BENCH_SAMPLE_S:-300}"
+    IT_BENCH_OUT="$(realpath -m "$IT_BENCH_OUT")"
+    export IT_BENCH_OUT
+    if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*HopperBenchmarkRun'); fi
+    ;;
   realty)
     PROFILE_ARGS=()
     for artifact in IT_REALTY_JAR IT_VAULT_JAR; do
@@ -138,7 +159,7 @@ case "$PROFILE" in
     PROFILE_ARGS=(-Dchestshop.integrations=true)
     if [ "${#TEST_ARGS[@]}" -eq 0 ]; then TEST_ARGS=(--tests '*ProtectionIntegrationCreationTest'); fi
     ;;
-  *) echo "unknown acceptance profile: $PROFILE (expected core, hopper, protection, restart, crash, rest-restart, tax, groups, nexo, providers, realty, webhook-failure or explorer)" >&2; exit 2 ;;
+  *) echo "unknown acceptance profile: $PROFILE (expected core, hopper, hopper-bench, protection, restart, crash, rest-restart, tax, groups, nexo, providers, realty, webhook-failure or explorer)" >&2; exit 2 ;;
 esac
 TESTS_DIR="$(cd "$TESTS_DIR" && pwd)"
 
@@ -463,9 +484,26 @@ if [ "$PROFILE" = protection ]; then
   printf 'WORLDGUARD_INTEGRATION: true\nGRIEFPREVENTION_INTEGRATION: true\n' \
     >"$SERVER/plugins/ChestShop/config.yml"
 fi
-if [ "$PROFILE" = hopper ]; then
+if [ "$PROFILE" = hopper ] || [ "$PROFILE" = hopper-bench ]; then
   mkdir -p "$SERVER/plugins/ChestShop"
   printf 'USE_STOCK_COUNTER: true\n' >"$SERVER/plugins/ChestShop/config.yml"
+fi
+if [ "$PROFILE" = hopper-bench ]; then
+  if [ "$IT_BENCH_VARIANT" = legacy ]; then
+    rm "$SERVER"/plugins/chestshop-*.jar
+    cp "$IT_BENCH_CHESTSHOP_JAR" "$SERVER/plugins/"
+  fi
+  # Production's hopper settings (cooldown-when-full off, occlusion ignored); event-off
+  # also sets disable-move-event. Paper fills in the remaining defaults; _version is
+  # this Paper build's world-config version, so no migration runs.
+  mkdir -p "$SERVER/config"
+  cat >"$SERVER/config/paper-world-defaults.yml" <<EOF
+_version: 31
+hopper:
+  cooldown-when-full: false
+  disable-move-event: $([ "$IT_BENCH_VARIANT" = event-off ] && echo true || echo false)
+  ignore-occluding-blocks: true
+EOF
 fi
 
 # Every mock player connects from 127.0.0.1; GriefPrevention's default of three
@@ -507,7 +545,9 @@ python3 "$ROOT/ops/integration/artifacts.py" --paper "$CACHE/$PAPER_JAR" \
     --plugins "$SERVER/plugins" --rest "${REST_JARS[0]}" --output "$WORK/runtime-artifacts.json"
 
 log "Starting Paper on :$MC_PORT (RCON :$RCON_PORT)"
-(cd "$SERVER" && exec "$JAVA_BIN" -Dterminal.jline=false -Dterminal.ansi=false -Xms1G -Xmx2G -Dcom.mojang.eula.agree=true \
+# IT_PAPER_HEAP: e.g. "-Xms4G -Xmx4G" for benchmarks, so heap resizing doesn't vary between runs.
+# shellcheck disable=SC2086
+(cd "$SERVER" && exec "$JAVA_BIN" -Dterminal.jline=false -Dterminal.ansi=false ${IT_PAPER_HEAP:--Xms1G -Xmx2G} -Dcom.mojang.eula.agree=true \
     -jar "$CACHE/$PAPER_JAR" --nogui >"$WORK/server.log" 2>&1) &
 PIDS+=($!)
 PAPER_PID="${PIDS[-1]}"
