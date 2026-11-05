@@ -111,7 +111,7 @@ async function AttentionPanel({ viewer }: { viewer: Viewer }) {
           <MetricCard
             label="Overdue deliveries"
             value={<Num value={webhooks.overdue} />}
-            info="Pending deliveries to live webhooks that are past their next attempt. A growing number means the dispatcher is behind or stuck. Deliveries to government webhooks are held, not overdue, while government API keys are switched off; they send when the flag is enabled."
+            info="Pending deliveries to live webhooks that are past their next attempt. A growing number means the dispatcher is behind or stuck. Deliveries to webhooks created through a government API key are held, not overdue, while government API keys are switched off; they send when the flag is enabled."
             meta={<>
               {webhooks.oldestOverdueAt
                 ? <>Oldest due <When value={webhooks.oldestOverdueAt} /></>

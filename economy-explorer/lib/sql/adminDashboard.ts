@@ -17,8 +17,9 @@ export interface WebhookHealth {
   overdue: number;
   oldestOverdueAt: Date | null;
   /**
-   * Deliveries to GOVERNMENT webhooks held while treasury.government_api_keys
-   * is off. The dispatcher queues them on purpose and sends them on re-enable.
+   * Deliveries to webhooks created through a government API key, held while
+   * treasury.government_api_keys is off. The dispatcher queues them on purpose
+   * and sends them on re-enable. Explorer-made government webhooks are not held (PAR-561).
    */
   paused: number;
   /** Ledger transactions the dispatcher has not scanned yet. */
@@ -36,7 +37,7 @@ export async function getWebhookHealth(governmentEnabled: boolean): Promise<Webh
     `.execute(db),
     // Mirrors the dispatcher's findDue gate (treasury-rest-api WebhookDeliveryMapper).
     sql<{ paused: number; c: string | number; oldest: Date | null }>`
-      SELECT (s.key_type = 'GOVERNMENT' AND ${governmentEnabled ? 0 : 1} = 1) AS paused,
+      SELECT (s.key_type = 'GOVERNMENT' AND s.api_key_id IS NOT NULL AND ${governmentEnabled ? 0 : 1} = 1) AS paused,
              COUNT(*) AS c, MIN(d.next_attempt_at) AS oldest
       FROM webhook_delivery d
       JOIN webhook_subscription s ON s.subscription_id = d.subscription_id
