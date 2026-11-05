@@ -18,6 +18,9 @@ public class DueDelivery {
     private int attempts;
     private String targetUrl;
     private String keyType;
+    /** The REST API key that created the subscription; null for Explorer-managed webhooks. */
+    private Long apiKeyId;
+
     private String secret;
     // payload (the matched account's posting view of the transaction)
     private long postingId;

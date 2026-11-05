@@ -56,6 +56,7 @@ class WebhookDispatcherIT extends EmbeddedDbIT {
         insertAccount(1, "GOVERNMENT", OWNER, "Government");
         insertAccount(2, "PERSONAL", null, "Personal");
         long government = insertSubscription(OWNER, "GOVERNMENT", 1, null, BLOCKED_URL, "s".repeat(64), true, 0);
+        createdByGovernmentKey(government, 1);
         long personal = insertSubscription(OWNER, "PERSONAL", 2, null, BLOCKED_URL, "s".repeat(64), true, 0);
         long governmentTxn = insertSettledTxn(1, "10.00", "gov", INITIATOR);
         long personalTxn = insertSettledTxn(2, "10.00", "personal", INITIATOR);
@@ -69,6 +70,45 @@ class WebhookDispatcherIT extends EmbeddedDbIT {
                 .thenReturn(true);
         dispatcher.tick();
         assertThat(deliveryAttempts(paused)).isEqualTo(1);
+    }
+
+    @Test
+    void explorerManagedGovernmentWebhookDeliversWhileTheFlagIsOff() {
+        // Government departments set these up in the Explorer before government API
+        // keys existed; the release flag must not silence them (PAR-561).
+        insertAccount(1, "GOVERNMENT", OWNER, "Government");
+        long explorer = insertSubscription(OWNER, "GOVERNMENT", 1, null, BLOCKED_URL, "s".repeat(64), true, 0);
+        long viaKey = insertSubscription(OWNER, "GOVERNMENT", 1, null, BLOCKED_URL, "s".repeat(64), true, 0);
+        createdByGovernmentKey(viaKey, 1);
+        long txn = insertSettledTxn(1, "10.00", "gov", INITIATOR);
+        long sent = insertDueDelivery(explorer, txn, 1, 0);
+        long held = insertDueDelivery(viaKey, txn, 1, 0);
+
+        dispatcher.tick();
+
+        assertThat(deliveryAttempts(sent)).isEqualTo(1);
+        assertThat(deliveryAttempts(held)).isZero();
+        assertThat(deliveryStatus(held)).isEqualTo("PENDING");
+    }
+
+    /** Marks a subscription as created through a government API key scoped to {@code accountId}. */
+    private void createdByGovernmentKey(long subscriptionId, int accountId) {
+        int keyId = (int) (5000 + subscriptionId);
+        insertApiKey(
+                keyId,
+                "GOVERNMENT",
+                OWNER,
+                UUID.randomUUID().toString(),
+                false,
+                java.time.LocalDateTime.now().plusDays(30));
+        exec("UPDATE api_keys SET account_id = ? WHERE key_id = ?", ps -> {
+            ps.setInt(1, accountId);
+            ps.setInt(2, keyId);
+        });
+        exec("UPDATE webhook_subscription SET api_key_id = ? WHERE subscription_id = ?", ps -> {
+            ps.setInt(1, keyId);
+            ps.setLong(2, subscriptionId);
+        });
     }
 
     @Test

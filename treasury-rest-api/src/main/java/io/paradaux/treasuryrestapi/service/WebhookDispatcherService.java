@@ -230,7 +230,7 @@ public class WebhookDispatcherService {
 
     private void deliver(DueDelivery d) {
         // Recheck when admitting each send; leave paused deliveries pending without consuming attempts.
-        if ("GOVERNMENT".equals(d.getKeyType()) && !flags.isEnabled("treasury.government_api_keys")) return;
+        if (heldByGovernmentFlag(d) && !flags.isEnabled("treasury.government_api_keys")) return;
         URI uri;
         try {
             uri = URI.create(d.getTargetUrl());
@@ -283,6 +283,15 @@ public class WebhookDispatcherService {
         } catch (Exception e) {
             onFailure(d, null, e.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * Webhooks created through a government API key are part of that release and
+     * pause with its flag. Explorer-managed government webhooks (no API key) existed
+     * before the flag and keep delivering (PAR-561).
+     */
+    static boolean heldByGovernmentFlag(DueDelivery d) {
+        return "GOVERNMENT".equals(d.getKeyType()) && d.getApiKeyId() != null;
     }
 
     private void onFailure(DueDelivery d, Integer httpStatus, String error) {
