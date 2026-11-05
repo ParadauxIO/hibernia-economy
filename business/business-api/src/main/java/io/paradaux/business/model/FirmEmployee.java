@@ -1,21 +1,18 @@
 package io.paradaux.business.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.LocalDateTime;
+import java.util.UUID;
+import lombok.Value;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+/** Immutable snapshot returned by the Business API. */
+@Value
 public class FirmEmployee {
     private Integer firmId;
-    private String playerUuid;
+    private UUID playerUuid;
     private String roleName;
     private LocalDateTime joinedAt;
     private LocalDateTime leftAt;
-    private String addedBy;
-    private String removedBy;
+    private UUID addedBy;
+    private UUID removedBy;
     private Boolean current;
 }

@@ -1,14 +1,13 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.Firm;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.paradaux.business.model.FirmProperty;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.testsupport.IntegrationTestBase;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class FirmPropertyMapperIT extends IntegrationTestBase {
 

@@ -3,8 +3,8 @@ package io.paradaux.business.commands;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
-import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.threading.BusinessMessages;

@@ -1,27 +1,5 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.InternalException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
-import io.paradaux.hibernia.framework.exceptions.NotFoundException;
-import io.paradaux.business.mappers.FirmRequestMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.services.FirmAccountService;
-import io.paradaux.business.services.FirmRequestService;
-import io.paradaux.business.services.FirmService;
-import io.paradaux.business.services.FirmStaffService;
-import org.apache.ibatis.exceptions.PersistenceException;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.sql.SQLIntegrityConstraintViolationException;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,13 +10,41 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.mappers.FirmRequestMapper;
+import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.services.FirmAccountService;
+import io.paradaux.business.services.FirmRequestService;
+import io.paradaux.business.services.FirmService;
+import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.InternalException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
+import java.sql.SQLIntegrityConstraintViolationException;
+import java.time.LocalDateTime;
+import java.util.UUID;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class FirmRequestServiceImplTest {
 
-    @Mock FirmRequestMapper requests;
-    @Mock FirmService firms;
-    @Mock FirmStaffService staff;
-    @Mock FirmAccountService accounts;
+    @Mock
+    FirmRequestMapper requests;
+
+    @Mock
+    FirmService firms;
+
+    @Mock
+    FirmStaffService staff;
+
+    @Mock
+    FirmAccountService accounts;
 
     private FirmRequestServiceImpl svc;
 
@@ -83,16 +89,14 @@ class FirmRequestServiceImplTest {
     @Test
     void offerEmployment_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.offerEmployment("Ghost", target, actor))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> svc.offerEmployment("Ghost", target, actor)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void offerEmployment_requiresAdminPermission() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm());
         when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -100,8 +104,7 @@ class FirmRequestServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm());
         when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(staff.isEmployedBy(1, target)).thenReturn(true);
-        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -109,8 +112,7 @@ class FirmRequestServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm());
         when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(staff.isEmployedBy(1, actor)).thenReturn(false);
-        assertThatThrownBy(() -> svc.offerEmployment("Acme", actor, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.offerEmployment("Acme", actor, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -119,8 +121,7 @@ class FirmRequestServiceImplTest {
         when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(staff.isEmployedBy(1, target)).thenReturn(false);
         when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(true);
-        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -129,7 +130,8 @@ class FirmRequestServiceImplTest {
         when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(staff.isEmployedBy(1, target)).thenReturn(false);
         when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(false);
-        when(requests.createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class))).thenReturn(1);
+        when(requests.createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class)))
+                .thenReturn(1);
 
         svc.offerEmployment("Acme", target, actor);
         verify(requests).createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class));
@@ -143,8 +145,7 @@ class FirmRequestServiceImplTest {
         when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(false);
         when(requests.createInvite(anyInt(), anyString(), anyString(), any())).thenReturn(0);
 
-        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor))
-                .isInstanceOf(InternalException.class);
+        assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor)).isInstanceOf(InternalException.class);
     }
 
     /**
@@ -165,7 +166,8 @@ class FirmRequestServiceImplTest {
 
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(requests);
         order.verify(requests).expireStaleInvite(1, target.toString());
-        order.verify(requests).createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class));
+        order.verify(requests)
+                .createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class));
     }
 
     @Test
@@ -178,7 +180,8 @@ class FirmRequestServiceImplTest {
         when(staff.isEmployedBy(1, target)).thenReturn(false);
         when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(false);
         when(requests.createInvite(anyInt(), anyString(), anyString(), any()))
-                .thenThrow(new PersistenceException("dup", new SQLIntegrityConstraintViolationException("uq_one_pending_invite")));
+                .thenThrow(new PersistenceException(
+                        "dup", new SQLIntegrityConstraintViolationException("uq_one_pending_invite")));
 
         assertThatThrownBy(() -> svc.offerEmployment("Acme", target, actor))
                 .isInstanceOf(BadCommandException.class)
@@ -405,7 +408,8 @@ class FirmRequestServiceImplTest {
     void beginTransferProprietorship_duplicateGetsFriendlyError() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firmOwnedBy(actor));
         PersistenceException pex = new PersistenceException(new SQLIntegrityConstraintViolationException("dup"));
-        when(requests.createTransferRequest(anyInt(), anyString(), anyString(), any())).thenThrow(pex);
+        when(requests.createTransferRequest(anyInt(), anyString(), anyString(), any()))
+                .thenThrow(pex);
         assertThatThrownBy(() -> svc.beginTransferProprietorship("Acme", target, actor))
                 .isInstanceOf(BadCommandException.class);
     }
@@ -416,7 +420,8 @@ class FirmRequestServiceImplTest {
         // A persistence failure that isn't a constraint violation means the row
         // was NOT stored — must not hand back a code (ADT-56).
         PersistenceException pex = new PersistenceException(new RuntimeException("db gone"));
-        when(requests.createTransferRequest(anyInt(), anyString(), anyString(), any())).thenThrow(pex);
+        when(requests.createTransferRequest(anyInt(), anyString(), anyString(), any()))
+                .thenThrow(pex);
         assertThatThrownBy(() -> svc.beginTransferProprietorship("Acme", target, actor))
                 .isInstanceOf(InternalException.class);
     }
@@ -451,7 +456,8 @@ class FirmRequestServiceImplTest {
         UUID owner = UUID.fromString(f.getProprietorUuid());
         when(firms.getFirmByNameOrId("Acme")).thenReturn(f);
         when(requests.confirmTransfer(1, target.toString(), "code")).thenReturn(1);
-        assertThat(svc.confirmTransferProprietorship("Acme", target, "code", owner)).isTrue();
+        assertThat(svc.confirmTransferProprietorship("Acme", target, "code", owner))
+                .isTrue();
     }
 
     @Test
@@ -460,7 +466,8 @@ class FirmRequestServiceImplTest {
         UUID owner = UUID.fromString(f.getProprietorUuid());
         when(firms.getFirmByNameOrId("Acme")).thenReturn(f);
         when(requests.confirmTransfer(1, target.toString(), "code")).thenReturn(0);
-        assertThat(svc.confirmTransferProprietorship("Acme", target, "code", owner)).isFalse();
+        assertThat(svc.confirmTransferProprietorship("Acme", target, "code", owner))
+                .isFalse();
     }
 
     @Test
@@ -572,7 +579,8 @@ class FirmRequestServiceImplTest {
         when(staff.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(staff.isEmployedBy(1, target)).thenReturn(false);
         when(requests.hasPendingJobOffer(1, target.toString())).thenReturn(false);
-        when(requests.createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class))).thenReturn(1);
+        when(requests.createInvite(eq(1), eq(target.toString()), eq(actor.toString()), any(LocalDateTime.class)))
+                .thenReturn(1);
 
         svc.offerEmployment(1, target, actor);
 

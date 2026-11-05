@@ -1,14 +1,13 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.FirmPlayer;
-import io.paradaux.business.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.testsupport.IntegrationTestBase;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Business reads the player directory ({@code economy_players}) but never writes
@@ -51,7 +50,6 @@ class FirmPlayerMapperIT extends IntegrationTestBase {
         insertPlayer(UUID.randomUUID(), "Bob");
 
         List<FirmPlayer> hits = mapper.searchByPrefix("al", 10);
-        assertThat(hits).extracting(FirmPlayer::getCurrentName)
-                .containsExactlyInAnyOrder("Alice", "Alex");
+        assertThat(hits).extracting(FirmPlayer::getCurrentName).containsExactlyInAnyOrder("Alice", "Alex");
     }
 }

@@ -1,9 +1,8 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.FirmPlayer;
-import org.apache.ibatis.annotations.*;
-
+import io.paradaux.business.model.internal.FirmPlayer;
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 /**
  * Read-only access to the player-directory cache. The directory is the
@@ -47,7 +46,5 @@ public interface FirmPlayerMapper {
         ORDER BY last_seen DESC
         LIMIT #{limit}
         """)
-    List<FirmPlayer> searchByPrefix(@Param("prefix") String prefix,
-                                    @Param("limit") int limit);
-
+    List<FirmPlayer> searchByPrefix(@Param("prefix") String prefix, @Param("limit") int limit);
 }

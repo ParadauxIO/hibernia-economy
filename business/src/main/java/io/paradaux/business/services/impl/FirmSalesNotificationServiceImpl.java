@@ -2,8 +2,8 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmPropertyService;
@@ -11,7 +11,6 @@ import io.paradaux.business.services.FirmSalesNotificationService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.api.market.ChestShopSaleRecord;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -51,10 +50,13 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
     private final Map<Integer, FirmBuffer> buffers = new ConcurrentHashMap<>();
 
     @Inject
-    public FirmSalesNotificationServiceImpl(FirmNotificationService notifications,
-                                            FirmPropertyService properties, FirmService firms,
-                                            FirmPlayerService players, TreasuryApi treasury,
-                                            FirmConfiguration config) {
+    public FirmSalesNotificationServiceImpl(
+            FirmNotificationService notifications,
+            FirmPropertyService properties,
+            FirmService firms,
+            FirmPlayerService players,
+            TreasuryApi treasury,
+            FirmConfiguration config) {
         this.notifications = notifications;
         this.properties = properties;
         this.firms = firms;
@@ -123,22 +125,37 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
         ChestShopSaleRecord first = sales.first();
 
         if (count == 1 && first != null) {
-            notifications.notifyFirm(firmId, "business.sales.notify.single",
-                    "firm", firmName,
-                    "action", action(first.direction()),
-                    "qty", first.quantity(),
-                    "item", first.itemName(),
-                    "customer", customerName(first.customerUuid()),
-                    "total", treasury.formatAmount(first.totalPrice()));
+            notifications.notifyFirm(
+                    firmId,
+                    "business.sales.notify.single",
+                    "firm",
+                    firmName,
+                    "action",
+                    action(first.direction()),
+                    "qty",
+                    first.quantity(),
+                    "item",
+                    first.itemName(),
+                    "customer",
+                    customerName(first.customerUuid()),
+                    "total",
+                    treasury.formatAmount(first.totalPrice()));
             return;
         }
 
-        notifications.notifyFirm(firmId, "business.sales.notify.digest",
-                "firm", firmName,
-                "count", count,
-                "since", TIME_FMT.format(sales.since()),
-                "items", sales.items(),
-                "total", treasury.formatAmount(sales.totalVolume()));
+        notifications.notifyFirm(
+                firmId,
+                "business.sales.notify.digest",
+                "firm",
+                firmName,
+                "count",
+                count,
+                "since",
+                TIME_FMT.format(sales.since()),
+                "items",
+                sales.items(),
+                "total",
+                treasury.formatAmount(sales.totalVolume()));
     }
 
     /** Firm-centric label: a customer BUY means the firm sold, and vice versa. */
@@ -203,8 +220,8 @@ public class FirmSalesNotificationServiceImpl implements FirmSalesNotificationSe
     }
 
     /** An immutable copy of a drained {@link FirmBuffer}. */
-    private record Snapshot(long count, ChestShopSaleRecord first, LocalDateTime since,
-                            BigDecimal totalVolume, String items) {}
+    private record Snapshot(
+            long count, ChestShopSaleRecord first, LocalDateTime since, BigDecimal totalVolume, String items) {}
 
     private static final class ItemAgg {
         private final String action;

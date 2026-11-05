@@ -203,9 +203,7 @@ class ApiKeyServiceImplTest {
         FirmApi firms = mock(FirmApi.class);
         when(businessApi.firms()).thenReturn(firms);
         when(firms.isProprietor(3, owner)).thenReturn(true);
-        var firm = new io.paradaux.business.model.Firm();
-        firm.setFirmId(3);
-        firm.setDefaultAccountId(6);
+        var firm = new io.paradaux.business.model.Firm(3, null, null, null, null, 6, null, null, null);
         when(firms.getFirmByAccountId(7)).thenReturn(firm);
         ApiKeyMapper mapper = mock(ApiKeyMapper.class);
         var service = service(mapper);
@@ -245,12 +243,11 @@ class ApiKeyServiceImplTest {
         assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
         when(firms.isProprietor(3, owner)).thenReturn(true);
         assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
-        var otherFirm = new io.paradaux.business.model.Firm();
-        otherFirm.setFirmId(4);
+        var otherFirm = new io.paradaux.business.model.Firm(4, null, null, null, null, null, null, null, null);
         when(firms.getFirmByAccountId(7)).thenReturn(otherFirm);
         assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
-        otherFirm.setFirmId(3);
-        otherFirm.setArchived(true);
+        otherFirm = new io.paradaux.business.model.Firm(3, null, null, null, null, null, true, null, null);
+        when(firms.getFirmByAccountId(7)).thenReturn(otherFirm);
         assertThrows(NoPermissionException.class, () -> service.issueBusinessKey(3, 7, owner));
         verifyNoMoreInteractions(mapper);
     }

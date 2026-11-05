@@ -204,10 +204,12 @@ there is currently no develop branch. They are not the contribution target.
   workflow's incrementing run number, ATTEMPT distinguishes retries, and COMMIT
   is the first 12 characters of the main commit. Keep this workflow as the sole
   owner of production versions; independent workflows have independent counters.
-- The four plugin filenames and embedded versions, plus the Maven versions of
-  `treasury-api` and `business-api`, share this value via Gradle's `-Pversion`.
-  No version-bump commit is needed. Local builds keep `2.3.0-SNAPSHOT`; API
-  snapshot publishing on develop is unchanged.
+- The four plugin filenames and embedded versions, plus the Maven version of
+  `treasury-api`, share this value via Gradle's `-Pversion`.
+  Business API 4 uses a separate semantic major: release CI supplies
+  `-PbusinessApiVersion=4.0.0-<bundle-version>`. Local builds and its develop
+  snapshot publisher default to `4.0.0-SNAPSHOT`. See the
+  [Business API migration guide](components.md#migrating-to-business-api-4-adt-106--adt-69).
 - GitHub release `economy-v<VERSION>` contains the four plugins, API jars, and
   `manifest.json`: full commit SHA, version, run ID, attempt, build time, plugin
   filenames and their SHA-256 checksums. API sources/Javadoc jars are included.

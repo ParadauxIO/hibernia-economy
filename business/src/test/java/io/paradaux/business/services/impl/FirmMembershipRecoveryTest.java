@@ -6,6 +6,10 @@ import static org.mockito.Mockito.*;
 
 import io.paradaux.business.mappers.*;
 import io.paradaux.business.model.*;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmAccount;
+import io.paradaux.business.model.internal.FirmEmployee;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;

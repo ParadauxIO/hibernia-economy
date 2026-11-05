@@ -1,9 +1,8 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.FirmEmployee;
-import org.apache.ibatis.annotations.*;
-
+import io.paradaux.business.model.internal.FirmEmployee;
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 public interface FirmStaffMapper {
 
@@ -15,8 +14,7 @@ public interface FirmStaffMapper {
               AND e.player_uuid_bin = uuid_to_bin(#{playerUuid})
               AND e.is_current = 1
             """)
-    String getCurrentRole(@Param("firmId") int firmId,
-                          @Param("playerUuid") String playerUuid);
+    String getCurrentRole(@Param("firmId") int firmId, @Param("playerUuid") String playerUuid);
 
     @Update("""
             UPDATE firm_employee e
@@ -28,9 +26,8 @@ public interface FirmStaffMapper {
                AND e.player_uuid_bin = uuid_to_bin(#{playerUuid})
                AND e.is_current = 1
             """)
-    int updateCurrentRole(@Param("firmId") int firmId,
-                          @Param("playerUuid") String playerUuid,
-                          @Param("newRole") String newRole);
+    int updateCurrentRole(
+            @Param("firmId") int firmId, @Param("playerUuid") String playerUuid, @Param("newRole") String newRole);
 
     @Select("""
             SELECT EXISTS(
@@ -41,8 +38,7 @@ public interface FirmStaffMapper {
                   AND e.is_current = 1
             )
             """)
-    boolean isEmployedBy(@Param("firmId") int firmId,
-                         @Param("playerUuid") String playerUuid);
+    boolean isEmployedBy(@Param("firmId") int firmId, @Param("playerUuid") String playerUuid);
 
     @Insert("""
             INSERT INTO firm_employee (firm_id, player_uuid_bin, role_id, joined_at, added_by_uuid_bin)
@@ -55,10 +51,11 @@ public interface FirmStaffMapper {
              WHERE r.firm_id = #{firmId}
                AND r.name = #{roleName}
             """)
-    int insertEmployment(@Param("firmId") int firmId,
-                         @Param("playerUuid") String playerUuid,
-                         @Param("roleName") String roleName,
-                         @Param("actorUuid") String actorUuid);
+    int insertEmployment(
+            @Param("firmId") int firmId,
+            @Param("playerUuid") String playerUuid,
+            @Param("roleName") String roleName,
+            @Param("actorUuid") String actorUuid);
 
     @Update("""
                 UPDATE firm_employee
@@ -68,9 +65,8 @@ public interface FirmStaffMapper {
                    AND player_uuid_bin = uuid_to_bin(#{playerUuid})
                    AND left_at IS NULL
             """)
-    int endCurrentEmployment(@Param("firmId") int firmId,
-                             @Param("playerUuid") String playerUuid,
-                             @Param("actorUuid") String actorUuid);
+    int endCurrentEmployment(
+            @Param("firmId") int firmId, @Param("playerUuid") String playerUuid, @Param("actorUuid") String actorUuid);
 
     @Select("""
             SELECT e.firm_id                                AS firmId,

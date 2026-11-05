@@ -21,9 +21,9 @@ public class BusinessGroupMembers {
         var firm = business.firms().getFirmById(id);
         if (firm == null || Boolean.TRUE.equals(firm.getArchived())) return Set.of();
         Set<UUID> members = new HashSet<>();
-        members.add(UUID.fromString(firm.getProprietorUuid()));
+        members.add(firm.getProprietorUuid());
         for (var employee : business.staff().getEmployees(id)) {
-            UUID player = UUID.fromString(employee.getPlayerUuid());
+            UUID player = employee.getPlayerUuid();
             if (business.staff().hasPermission(id, player, RolePermission.FINANCIAL)
                     || business.staff().hasPermission(id, player, RolePermission.ADMIN)) members.add(player);
         }

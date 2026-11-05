@@ -3,7 +3,7 @@ package io.paradaux.business.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.mappers.FirmPlayerMapper;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.threading.MainThreadAccess;
 import java.util.List;

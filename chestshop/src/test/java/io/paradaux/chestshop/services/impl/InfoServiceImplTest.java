@@ -488,9 +488,8 @@ class InfoServiceImplTest extends ServerTest {
         io.paradaux.business.api.BusinessApi business = mock(io.paradaux.business.api.BusinessApi.class);
         io.paradaux.business.api.FirmApi firms = mock(io.paradaux.business.api.FirmApi.class);
         when(business.firms()).thenReturn(firms);
-        io.paradaux.business.model.Firm firm = new io.paradaux.business.model.Firm();
-        firm.setDisplayName("Acme Hardware");
-        firm.setDefaultAccountId(99); // The selected wallet is a linked non-default account.
+        io.paradaux.business.model.Firm firm =
+                new io.paradaux.business.model.Firm(null, "Acme Hardware", null, null, null, 99, null, null, null);
         io.paradaux.treasury.model.economy.Account wallet = io.paradaux.treasury.model.economy.Account.builder()
                 .accountId(46)
                 .displayName("ChestShops")

@@ -1,6 +1,7 @@
 package io.paradaux.business.model;
 
-
+import io.paradaux.business.model.internal.FirmRole;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import java.util.List;
 
 public class FirmRoleDefaults {
@@ -11,8 +12,7 @@ public class FirmRoleDefaults {
                 new FirmRole(firmId, "Co-Proprietor", 2),
                 new FirmRole(firmId, "Manager", 3),
                 new FirmRole(firmId, "Supervisor", 4),
-                new FirmRole(firmId, "Employee", 5)
-        );
+                new FirmRole(firmId, "Employee", 5));
     }
 
     public static List<FirmRolePermission> getDefaultPermissions(Integer firmId) {
@@ -21,7 +21,6 @@ public class FirmRoleDefaults {
                 new FirmRolePermission(firmId, "Co-Proprietor", RolePermission.ADMIN),
                 new FirmRolePermission(firmId, "Manager", RolePermission.FINANCIAL),
                 new FirmRolePermission(firmId, "Supervisor", RolePermission.CHESTSHOP),
-                new FirmRolePermission(firmId, "Employee", RolePermission.DEFAULT)
-        );
+                new FirmRolePermission(firmId, "Employee", RolePermission.DEFAULT));
     }
 }

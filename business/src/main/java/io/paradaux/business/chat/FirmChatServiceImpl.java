@@ -3,7 +3,7 @@ package io.paradaux.business.chat;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.threading.MainThreadAccess;
