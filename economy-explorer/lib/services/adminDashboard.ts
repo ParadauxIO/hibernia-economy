@@ -2,6 +2,7 @@ import 'server-only';
 import { memo } from '@/lib/cache';
 import { requirePermission } from '@/lib/auth/access';
 import type { Viewer } from '@/lib/auth/viewer';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 import { countDeniedRequests, getApiKeyHealth, getWebhookHealth, listRecentChanges, type ApiKeyHealth, type DeniedRequests, type WebhookHealth } from '@/lib/sql/adminDashboard';
 import type { AuditEntry } from '@/lib/sql/audit';
 import { listFeatureFlags, type FeatureFlagRow } from '@/lib/sql/featureFlags';
@@ -15,9 +16,14 @@ const TTL_MS = 60_000;
 const DAY_MS = 86_400_000;
 export const KEY_EXPIRY_DAYS = 14;
 
-export function getDashboardWebhooks(viewer: Viewer): Promise<WebhookHealth> {
+/** The dispatcher holds GOVERNMENT deliveries while this flag is off (PAR-521). */
+const GOVERNMENT_KEYS_FLAG = 'treasury.government_api_keys';
+
+export async function getDashboardWebhooks(viewer: Viewer): Promise<WebhookHealth> {
   requirePermission(viewer, 'webhooks.read.all');
-  return memo('admin-dashboard:webhooks', TTL_MS, getWebhookHealth);
+  // Read the flag outside the cache, and key the cache by it, so a toggle shows within one refresh.
+  const government = await isFeatureEnabled(GOVERNMENT_KEYS_FLAG);
+  return memo(`admin-dashboard:webhooks:${government ? 'gov-on' : 'gov-off'}`, TTL_MS, () => getWebhookHealth(government));
 }
 
 export function getDashboardApiKeys(viewer: Viewer): Promise<ApiKeyHealth> {
