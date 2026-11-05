@@ -98,7 +98,7 @@ jobs:
       # Fork PRs get a read-only token, so annotate instead of creating a check.
       - name: Publish test results
         if: ${{ !cancelled() }}
-        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
+        uses: mikepenz/action-junit-report@8a133bfa3ecb0ea9024c1e2ae788b4c25f6cdb9d # v6.6.2
         with:
           report_paths: '**/build/test-results/*/TEST-*.xml'
           check_name: ${{ inputs.check-name }}
