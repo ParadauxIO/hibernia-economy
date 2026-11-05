@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
   const tools = adminToolsFor(viewer);
   const groups: AdminNavGroup[] = [
-    { items: [{ label: 'Overview', href: '/admin' }] },
+    { items: [{ label: 'Dashboard', href: '/admin' }] },
     ...GROUP_ORDER
       .map((group) => ({ label: group, items: tools.filter((t) => t.group === group).map((t) => ({ label: t.title, href: t.href })) }))
       .filter((g) => g.items.length > 0),

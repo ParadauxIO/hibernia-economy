@@ -105,6 +105,31 @@
     white-space: nowrap;
 }
 
+/* Admin: a quiet bordered link, accented while inside /admin. */
+.shell-admin {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--fg-soft);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    transition: border-color var(--t-fast), color var(--t-fast);
+}
+.shell-admin:hover { border-color: color-mix(in srgb, var(--fg-muted) 45%, var(--border)); color: var(--fg); }
+.shell-admin[aria-current] { border-color: var(--accent); color: var(--fg); }
+
+/* The bar is width-capped, so with the Admin button there is no room for the
+   search field at any viewport: admins get the icon (Ctrl K still opens it). */
+@media (min-width: 721px) {
+    .shell-tools:has(.shell-admin) .shell-search { width: 32px; min-width: 0; padding: 0; justify-content: center; }
+    .shell-tools:has(.shell-admin) .shell-search .shell-kbd,
+    .shell-tools:has(.shell-admin) .shell-search-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+}
+
 .shell-icon-button {
     display: inline-flex;
     flex: none;
