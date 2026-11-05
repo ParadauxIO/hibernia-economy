@@ -40,6 +40,8 @@ class HopperBenchmarkRun {
             String detach = switch (variant) {
                 case "event-off", "legacy", "worker" -> "WorldGuard";
                 case "no-listener" -> "WorldGuard,ChestShop";
+                // Production's ListenerControl (2026-06) also removes ChestShop's protection handler only.
+                case "worker-monitor-only" -> "WorldGuard,ChestShop/HIGHEST";
                 default -> throw new IllegalArgumentException("unknown variant " + variant);
             };
             assertThat(RconClient.send("diag bench detach " + detach)).startsWith("bench detached");

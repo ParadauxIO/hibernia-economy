@@ -54,8 +54,8 @@ import org.bukkit.scheduler.BukkitTask;
  *
  * <p>{@code /diag bench build <owner> <typical|overload>} places sorter chains, busy shops,
  * full destinations, hopper minecarts and counter probes in forceloaded chunks away from
- * spawn. {@code /diag bench detach <plugin>[,<plugin>...]} unregisters those plugins' move-event
- * handlers, as production's ListenerControl does. {@code /diag bench start <variant> <scenario> <seconds> <out.json>}
+ * spawn. {@code /diag bench detach <plugin>[/<PRIORITY>][,...]} unregisters those move-event
+ * handlers (all of a plugin's, or one priority), as production's ListenerControl does. {@code /diag bench start <variant> <scenario> <seconds> <out.json>}
  * records every tick's duration, main-thread CPU and allocation, a JFR profile, ChestShop's
  * refresh-queue depth, per-tick worker drain time and how long probe counters take to match
  * the chest once its transfers finish. {@code /diag bench status} reports progress.
@@ -105,7 +105,7 @@ final class HopperBench implements Listener {
                     sender.sendMessage(build(args[2], args[3]));
                 }
             }
-            case "detach" -> sender.sendMessage(args.length == 3 ? detach(Set.of(args[2].split(","))) : "usage: /diag bench detach <plugin>[,<plugin>...]");
+            case "detach" -> sender.sendMessage(args.length == 3 ? detach(Set.of(args[2].split(","))) : "usage: /diag bench detach <plugin>[/<PRIORITY>][,...]");
             case "start" -> {
                 if (args.length != 6) {
                     sender.sendMessage("usage: /diag bench start <variant> <scenario> <seconds> <out.json>");
@@ -270,11 +270,11 @@ final class HopperBench implements Listener {
         return container;
     }
 
-    private String detach(Set<String> plugins) {
+    private String detach(Set<String> targets) {
         List<String> removed = new ArrayList<>();
         for (RegisteredListener listener : InventoryMoveItemEvent.getHandlerList().getRegisteredListeners()) {
             String owner = listener.getPlugin().getName();
-            if (plugins.contains(owner)) {
+            if (targets.contains(owner) || targets.contains(owner + "/" + listener.getPriority())) {
                 InventoryMoveItemEvent.getHandlerList().unregister(listener);
                 removed.add(owner + "/" + listener.getPriority());
             }

@@ -94,29 +94,192 @@ stack uses the diagnostic Nexo stub; it does not certify real custom-item plugin
 or production load. The 10,000-event unit scenario demonstrates coalescing to one
 container discovery, not a CPU or tick-time benchmark.
 
-## Performance decision and enablement
+## Benchmark
 
-Passing correctness tests is not a production performance result. Before enabling
-this on a busy server, compare the disabled listener, the previous listener and
-this worker on the same disposable world, hardware, Java/Paper versions and plugin
-stack. Record the effective Paper hopper settings and ListenerControl rules.
+`ops/integration/hopper-bench.mjs` compares four variants on fresh disposable stacks
+(the `hopper-bench` profile of `run.sh`). All four run with `USE_STOCK_COUNTER: true` and
+production's Paper hopper settings (`cooldown-when-full: false`,
+`ignore-occluding-blocks: true`, Spigot's default transfer/check rates of 8 ticks).
+WorldGuard's move handler is unregistered in every variant, as production's
+ListenerControl does, so only ChestShop's handlers differ:
 
-Use repeated warmed runs with ordinary sorter networks, busy shops, full
-destinations, minecarts and dense chunks large enough to overflow the normal
-queue. Record workload sizes, transfer rate, p95/p99 tick time, allocation rate,
-worker/profile time, counter convergence latency and variation between runs.
-Choose acceptable tick-time overhead and refresh latency before judging the
-results. Event dispatch and the immediate protection lookup still have costs;
-the worker only bounds and coalesces deferred stock work.
+| Variant | What runs |
+|---|---|
+| `event-off` | `hopper.disable-move-event: true`: Paper fires no move events |
+| `no-listener` | events on; ChestShop's move handlers unregistered, as ListenerControl can |
+| `legacy` | the listener before 6b35b153 ([patch](../ops/integration/hopper-bench/legacy-listener.patch)) |
+| `worker` | this checkout: immediate protection and the batched refresh worker |
+| `worker-monitor-only` | the worker without ChestShop's HIGHEST (protection) handler, as production's ListenerControl config does |
 
-For an approved rollout, enable `USE_STOCK_COUNTER`, ensure Paper's effective
-`hopper.disable-move-event` is false, and remove the relevant ChestShop
-InventoryMoveItemEvent exclusion from ListenerControl. Confirm that both the
-protection and refresh handlers are registered, then repeat transfer and theft
-checks in the actual plugin stack.
+```bash
+node ops/integration/hopper-bench.mjs                  # 3 reps x 2 scenarios x 5 variants
+node ops/integration/hopper-bench.mjs --summarize build/hopper-bench/<stamp>
+```
 
-To stop deferred counter work, turn off `USE_STOCK_COUNTER` and reload ChestShop.
-This also disables other stock-counter updates, but retains immediate protection
-while the event listener remains registered. Disabling the whole listener also
-removes its minecart protection. Preserve the previous configuration and plugin
+Port and JDK settings come from the environment, as for `run.sh`. Each run builds the
+workload with `/diag bench build`, warms it up for 90 s and records 300 s. The order of
+variants is shuffled per repetition. Output goes to `build/hopper-bench/<stamp>/`:
+one JSON file per run plus `summary.md` and `summary.json`.
+
+Workloads (DcDiag `HopperBench`), all in forceloaded chunks outside the online owner's
+view distance:
+
+| | typical | overload |
+|---|---|---|
+| sorter chains: supply chest, 8 hopper/chest pairs, sink chest | 64 (1 chunk) | 320 (5 dense chunks) |
+| busy shops: supply → hopper → shop → hopper → sink; ¼ double chests, ¼ with two signs | 32 | 128 |
+| hoppers pushing into full chests, half of them shops | 8 | 32 |
+| hopper minecarts under chests, drained by a hopper; half under shops (pull cancelled) | 16 | 64 |
+| counter probes | 8 | 8 |
+
+Typical dirties about 1,300 positions per refresh interval. Overload dirties about
+6,000, which overflows the 4,096-position queue into chunk reconciliation of
+chunks holding about 1,100 tile entities each.
+
+Each run records:
+
+- every tick's duration (Paper `ServerTickEndEvent`)
+- main-thread CPU time and allocated bytes
+- items delivered to sink chests per second
+- a JFR profile (2 ms execution samples): ChestShop's share of main-thread samples,
+  split into worker, listener and other code
+- each worker drain timed on the main thread. DcDiag swaps ChestShop's scheduler task
+  for an identical timed call.
+- refresh-queue depth every second
+- probe latency: a probe shop fills with 8 items through a hopper, then drains through
+  a second hopper. Latency runs from the chest reaching its final count to the sign
+  showing that count, with a 30 s timeout.
+
+### Thresholds
+
+Fixed on 2026-11-05, before any run. Comparisons use medians across repetitions,
+against `event-off` in the same scenario:
+
+- mean MSPT at most 2% higher, and p99 tick time at most 0.5 ms higher;
+- no worker drain above 2 ms in any run;
+- probe p95 latency within the refresh interval plus 1 s (6 s at 100 ticks) for both
+  filling and draining, with no probe timeouts;
+- under sustained overload the queue levels off: in no run does the mean depth in the
+  final third of the sample exceed 1.1 times the middle third (plus 16).
+
+### Results
+
+Run on 2026-11-05 at commit 567acae7. Host: 16 vCPU AMD EPYC 9645 VM, shared with
+other work (load average 8–12 during the runs). Stack: Paper 26.3-206, Java 25.0.2
+(GraalVM CE), a 4 GB fixed heap and the stack from `run.sh`. Each cell is the median of
+3 runs (warmup 90 s, sample 300 s = 6,000 ticks). One attempt (overload `no-listener`,
+rep 3) failed and passed on retry; the retry overwrote its log. TPS stayed at 20.0
+throughout. `worker-monitor-only` ran after the other four, in the same way.
+
+**Typical** (1,420 tile entities; 280 items/s delivered with events off):
+
+| | event-off | no-listener | legacy | worker | worker-monitor-only |
+|---|---|---|---|---|---|
+| mean MSPT | 3.09 | 3.04 | 4.08 (+32%) | 3.82 (+24%) | 3.35 (+8%) |
+| p99 MSPT | 8.53 | 8.52 | 16.49 | 11.35 | 8.91 |
+| main CPU ms/tick | 2.89 | 2.91 | 3.79 | 3.66 | 3.37 |
+| main alloc MB/s | 6.1 | 5.8 | 20.2 | 13.8 | 9.0 |
+| worker drains > 2 ms per run | 1 | 0 | 1 | 113 | 69 |
+| worst worker drain, ms | 7.0 | 3.5 | 4.4 | 40.1 | 37.4 |
+| probe p95 fill / drain → sign, ms | — | — | 0 / never | 2,550 / 2,450 | 2,550 / 2,500 |
+
+**Overload** (6,648 tile entities; 1,281 items/s with events off):
+
+| | event-off | no-listener | legacy | worker | worker-monitor-only |
+|---|---|---|---|---|---|
+| mean MSPT | 5.86 | 5.86 | 8.52 (+45%) | 7.79 (+33%) | 6.78 (+16%) |
+| p99 MSPT | 17.74 | 19.06 | 39.22 | 26.85 | 22.88 |
+| main CPU ms/tick | 5.41 | 5.19 | 7.80 | 7.17 | 6.58 |
+| main alloc MB/s | 13.4 | 13.6 | 72.7 | 44.4 | 24.3 |
+| worker drains > 2 ms per run | 0 | 1 | 2 | 120 | 89 |
+| worst worker drain, ms | 4.0 | 4.9 | 4.7 | 28.5 | 24.7 |
+| probe p95 fill / drain → sign, ms (worst run) | — | — | 0 / never | 11,250 / 7,450 | 9,100 / 11,300 |
+| max queue: positions / chunks | — | — | — | 4,095 / 18 | 4,096 / 19 |
+
+Against the thresholds:
+
+- **`worker` fails in both scenarios.** Mean MSPT is 24% higher (typical) and 33%
+  higher (overload), p99 is 2.8 ms and 9.1 ms higher, and 110–150 drains per run
+  exceed 2 ms. Freshness passes in the typical scenario (about 2.5 s) and fails under
+  overload (7.4–11.3 s). The queue stays at its cap without growing, and no probe
+  timed out.
+- **`worker-monitor-only` also fails.** p99 passes in the typical scenario (+0.39 ms).
+  Mean MSPT is 8% and 16% higher, the long drains remain and overload freshness fails.
+- **`legacy` is worse than the worker on tick time**, by about 32–45% mean MSPT and
+  roughly twice the allocation. Its sign never reflects outgoing transfers: every
+  drain probe timed out.
+- **The event itself is cheap.** `no-listener` matches `event-off`: with no registered
+  handlers the cost is within run-to-run noise. The whole cost is ChestShop's handlers.
+- The baseline variants show 0–1 drains above 2 ms per run, and worst cases of 3–7 ms,
+  even with an empty queue. That is scheduling noise on the shared host. The worker's
+  100+ long drains per run are real; its single worst value is partly noise.
+- Protected variants deliver fewer items (260 against 280 per second) because the
+  minecarts under shop chests are blocked. In the baselines those minecarts empty the
+  shops.
+
+Where the drain time goes (a separate 120 s worker profile of the typical scenario).
+The drain is 10.8% of main-thread samples. The MONITOR enqueue handler is 2.8% and the
+protection handler 6.3%. Within the drain:
+
+- 63% is sign discovery (`findConnectedShopSigns`). Most of that is
+  `Block.getState()` taking full snapshots: of each neighbouring sign (53% of
+  discovery) and of the container, including all its item stacks (13%).
+- 20% is formatting the counter line (`updateCounterOnQuantityLine`).
+- 11% is `/find` stock publishing.
+
+The 0.5 ms phase budget is checked only between refreshes. A refresh that takes
+snapshots of large chests and their signs overruns it, so p99 drain time is 2.2–2.9 ms.
+
+## Enablement and rollback
+
+**Recommendation: do not enable hopper stock counters (`USE_STOCK_COUNTER`), and do not
+restore ChestShop's protection handler in ListenerControl, with this worker.** It fails
+the tick-time thresholds in every configuration measured. The old listener is worse.
+
+**Production may already be paying part of this cost.** Since PAR-544 the MONITOR
+handler refreshes `/find` stock even when `USE_STOCK_COUNTER` is off. Production's
+ListenerControl config (copy dated 2026-06-14 in the dev clone) removes only ChestShop's
+`highest` handler, and the clone's Paper `disable-move-event` is false. If production
+matches, it runs the `worker-monitor-only` variant above. This was not checked against
+production itself. Before deciding, confirm:
+
+1. `hopper.disable-move-event` in production's Universe/Paper world config
+2. ChestShop's `USE_STOCK_COUNTER` and `HOPPER_STOCK_REFRESH_INTERVAL_TICKS`
+3. the `ChestShop` entry in ListenerControl's `deactivated-events`
+
+If production matches and its tick budget matters more than hopper-driven `/find` stock,
+stop the worker by adding `monitor` to ListenerControl:
+
+```yaml
+deactivated-events:
+  ChestShop:
+    highest:
+    - inventory.InventoryMoveItemEvent
+    monitor:
+    - inventory.InventoryMoveItemEvent
+```
+
+Restart the server so ListenerControl applies the rule; ChestShop's reload does not
+re-register handlers. `/find` stock then updates only on trades, chest close, creation, discovery and
+resync, as it did before PAR-544. Sign counters are unaffected while `USE_STOCK_COUNTER`
+is off. Turning off `USE_STOCK_COUNTER` alone does **not** stop the worker.
+
+Before enabling, re-run the benchmark after these follow-ups:
+
+1. Read signs and containers without snapshots (`getState(false)`) during sign
+   discovery and refresh. Check that the counter writer and `/find` publisher remain
+   correct with live states.
+2. Then measure again. If discovery still dominates, add the durable shop-membership
+   index described above, so ordinary sorter containers skip discovery entirely.
+3. Enforce the phase budget more tightly, for example fewer refreshes per tick, so no
+   drain runs to tens of milliseconds.
+
+Use the same thresholds. Enabling also needs `USE_STOCK_COUNTER: true`, effective
+`disable-move-event: false` and both ChestShop handlers registered (remove the
+`highest` entry from ListenerControl). Then repeat the transfer and minecart theft checks
+on the real plugin stack.
+
+**Rollback:** restore the previous ListenerControl entries and `USE_STOCK_COUNTER`
+value, then restart. Removing the `highest` handler also removes immediate minecart
+theft protection, as in production today. Keep the previous configuration and plugin
 artifact for a full rollback.

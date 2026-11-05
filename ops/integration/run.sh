@@ -76,7 +76,7 @@ case "$PROFILE" in
     PROFILE_ARGS=()
     export IT_HOPPER_BENCH=true
     case "${IT_BENCH_VARIANT:-}" in
-      event-off|no-listener|worker) ;;
+      event-off|no-listener|worker|worker-monitor-only) ;;
       legacy)
         if [ -z "${IT_BENCH_CHESTSHOP_JAR:-}" ] || [ ! -f "$IT_BENCH_CHESTSHOP_JAR" ]; then
           echo "legacy variant requires IT_BENCH_CHESTSHOP_JAR (built by hopper-bench.mjs)" >&2
@@ -84,7 +84,7 @@ case "$PROFILE" in
         fi
         IT_BENCH_CHESTSHOP_JAR="$(realpath "$IT_BENCH_CHESTSHOP_JAR")"
         ;;
-      *) echo "hopper-bench requires IT_BENCH_VARIANT=event-off|no-listener|legacy|worker" >&2; exit 2 ;;
+      *) echo "hopper-bench requires IT_BENCH_VARIANT=event-off|no-listener|legacy|worker|worker-monitor-only" >&2; exit 2 ;;
     esac
     : "${IT_BENCH_SCENARIO:?hopper-bench requires IT_BENCH_SCENARIO}" "${IT_BENCH_OUT:?hopper-bench requires IT_BENCH_OUT}"
     export IT_BENCH_WARMUP_S="${IT_BENCH_WARMUP_S:-90}" IT_BENCH_SAMPLE_S="${IT_BENCH_SAMPLE_S:-300}"

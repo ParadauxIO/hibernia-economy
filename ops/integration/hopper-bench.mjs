@@ -3,7 +3,7 @@
 // scenarios and repetitions, then summarises the per-run JSON written by DcDiag.
 //
 //   node ops/integration/hopper-bench.mjs [--reps 3] [--scenarios typical,overload]
-//       [--variants event-off,no-listener,legacy,worker] [--warmup 90] [--sample 300]
+//       [--variants event-off,no-listener,legacy,worker,worker-monitor-only] [--warmup 90] [--sample 300]
 //       [--out build/hopper-bench/<stamp>] [--skip-build] [--keep-jfr]
 //   node ops/integration/hopper-bench.mjs --summarize <out dir>
 //
@@ -12,6 +12,8 @@
 //   no-listener  event on, ChestShop's move handlers unregistered (as ListenerControl can)
 //   legacy       the pre-6b35b153 listener (ops/integration/hopper-bench/legacy-listener.patch)
 //   worker       this checkout: immediate protection + batched refresh worker
+//   worker-monitor-only  the worker with ChestShop's HIGHEST (protection) handler removed:
+//                production's ListenerControl config as of 2026-06, which removes that one only
 // WorldGuard's move handler is unregistered in every variant, as production's ListenerControl does.
 //
 // Each run is a fresh disposable stack. Order is shuffled per repetition so drift on a
@@ -23,7 +25,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const VARIANTS = ['event-off', 'no-listener', 'legacy', 'worker'];
+const VARIANTS = ['event-off', 'no-listener', 'legacy', 'worker', 'worker-monitor-only'];
 const REFRESH_INTERVAL_MS = 100 * 50;
 
 // Fixed before any run (agreed 2026-11-05). Deltas are against event-off medians.
@@ -103,7 +105,10 @@ function runMatrix(opts) {
   const runs = join(opts.out, 'runs');
   mkdirSync(runs, { recursive: true });
   const legacyJar = opts.variants.includes('legacy') ? buildLegacyJar(opts.out) : null;
-  writeFileSync(join(opts.out, 'meta.json'), JSON.stringify({
+  // A resumed or extended run adds its own metadata instead of replacing the first.
+  const metaFile = existsSync(join(opts.out, 'meta.json'))
+    ? join(opts.out, `meta-${new Date().toISOString().replace(/[:.]/g, '-')}.json`) : join(opts.out, 'meta.json');
+  writeFileSync(metaFile, JSON.stringify({
     commit: git('rev-parse', 'HEAD'),
     started: new Date().toISOString(),
     host: { cpus: (readFileSync('/proc/cpuinfo', 'utf8').match(/^processor/gm) || []).length,
@@ -139,6 +144,7 @@ function runMatrix(opts) {
             },
           });
           writeFileSync(join(runs, `${id}.log`), (result.stdout ?? '') + (result.stderr ?? ''));
+          if (result.status !== 0) copyFileSync(join(runs, `${id}.log`), join(runs, `${id}.attempt${attempt}.log`));
           const serverLog = join(opts.out, 'work/server.log');
           if (existsSync(serverLog)) copyFileSync(serverLog, join(runs, `${id}.server.log`));
           const artifacts = join(opts.out, 'work/runtime-artifacts.json');
@@ -207,7 +213,7 @@ function judge(group, baseline) {
                 limit: THRESHOLDS.meanMsptIncreasePct, unit: '% vs event-off' },
     p99Mspt: { value: m(group, 'p99Mspt') - m(baseline, 'p99Mspt'), limit: THRESHOLDS.p99IncreaseMs, unit: 'ms vs event-off' },
   };
-  if (group.variant === 'worker') {
+  if (group.variant.startsWith('worker')) {
     checks.workerTickMax = { value: group.metrics.workerDrainMaxMs?.max, limit: THRESHOLDS.workerTickMaxMs, unit: 'ms, worst run' };
     checks.freshnessIn = { value: group.metrics.probeInP95Ms?.max, limit: THRESHOLDS.freshnessP95Ms, unit: 'ms p95, worst run' };
     checks.freshnessOut = { value: group.metrics.probeOutP95Ms?.max, limit: THRESHOLDS.freshnessP95Ms, unit: 'ms p95, worst run' };
