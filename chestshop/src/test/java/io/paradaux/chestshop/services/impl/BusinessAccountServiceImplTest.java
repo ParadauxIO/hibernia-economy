@@ -187,9 +187,7 @@ class BusinessAccountServiceImplTest {
     void resolve_nativeBusinessShowsFirmRatherThanWalletLabel() {
         service.bind(treasury, business);
         when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
-        Firm firm = new Firm();
-        firm.setDisplayName("Acme Hardware");
-        firm.setDefaultAccountId(99); // The shop wallet is not the firm's default account.
+        Firm firm = new Firm(null, "Acme Hardware", null, null, null, 99, null, null, null);
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
 
         Account account = service.resolveBusinessAccount("B:1A");
@@ -197,7 +195,8 @@ class BusinessAccountServiceImplTest {
         assertThat(account.getName()).isEqualTo("Acme Hardware");
         assertThat(account.getShortName()).isEqualTo("B:1A");
         assertThat(account.getUuid()).isEqualTo(BusinessAccountUtil.toBusinessUuid(46));
-        firm.setDisplayName("Acme Renamed");
+        when(firms.getFirmByAccountId(46))
+                .thenReturn(new Firm(null, "Acme Renamed", null, null, null, 99, null, null, null));
         assertThat(service.resolveBusinessAccount("B:1A").getName()).isEqualTo("Acme Renamed");
     }
 
@@ -206,9 +205,7 @@ class BusinessAccountServiceImplTest {
         service.bind(treasury, business);
         when(firms.resolveShopAlias("acme")).thenReturn(46);
         when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
-        Firm firm = new Firm();
-        firm.setDisplayName("Acme Hardware");
-        firm.setDefaultAccountId(99); // The shop wallet is not the firm's default account.
+        Firm firm = new Firm(null, "Acme Hardware", null, null, null, 99, null, null, null);
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
 
         Account account = service.resolveBusinessAccount("A:acme");
@@ -221,9 +218,7 @@ class BusinessAccountServiceImplTest {
     @Test
     void resolve_legacyBusinessShowsFirmRatherThanWalletLabel() {
         service.bind(treasury, business);
-        Firm firm = new Firm();
-        firm.setDisplayName("Acme Hardware");
-        firm.setDefaultAccountId(46);
+        Firm firm = new Firm(null, "Acme Hardware", null, null, null, 46, null, null, null);
         when(firms.getFirm("Old Shop")).thenReturn(firm);
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
         when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
@@ -248,11 +243,10 @@ class BusinessAccountServiceImplTest {
     void resolve_blankFirmNameKeepsWalletLabel() {
         service.bind(treasury, business);
         when(treasury.getAccountById(46)).thenReturn(treasuryAccount(46, "ChestShops"));
-        Firm firm = new Firm();
-        firm.setDisplayName(" ");
+        Firm firm = new Firm(null, " ", null, null, null, null, null, null, null);
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
         assertThat(service.resolveBusinessAccount("B:1A").getName()).isEqualTo("ChestShops");
-        firm.setDisplayName(null);
+        when(firms.getFirmByAccountId(46)).thenReturn(new Firm(null, null, null, null, null, null, null, null, null));
         assertThat(service.resolveBusinessAccount("B:1A").getName()).isEqualTo("ChestShops");
     }
 

@@ -7,7 +7,9 @@ plugins {
 }
 
 group = "io.paradaux"
-version = rootProject.version
+// ADT-106 / ADT-69: model construction and UUID descriptors break the 3.x API.
+// Keep this semantic version independent of the plugin bundle's calendar version.
+version = providers.gradleProperty("businessApiVersion").orElse("4.0.0-SNAPSHOT").get()
 description = "Business API"
 
 java {

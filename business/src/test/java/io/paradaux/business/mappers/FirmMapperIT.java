@@ -3,7 +3,7 @@ package io.paradaux.business.mappers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.testsupport.IntegrationTestBase;
 import java.util.List;
 import java.util.UUID;

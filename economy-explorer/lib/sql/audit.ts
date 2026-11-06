@@ -166,3 +166,16 @@ export async function countAuditByAction(): Promise<Record<string, number>> {
   for (const row of r.rows) out[actionValue(row.action)] = Number(row.c);
   return out;
 }
+
+/** The newest rows with any of `actions`, for the /admin dashboard. */
+export async function listLatestAuditByAction(actions: readonly string[], limit: number): Promise<AuditEntry[]> {
+  if (actions.length === 0) return [];
+  const r = await sql<RawRow>`
+    SELECT ${COLUMNS}
+    FROM explorer_audit e
+    WHERE e.action IN (${sql.join(actions)})
+    ORDER BY e.at DESC, e.audit_id DESC
+    LIMIT ${limit}
+  `.execute(db);
+  return r.rows.map(mapRow);
+}

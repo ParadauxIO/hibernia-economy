@@ -134,7 +134,15 @@ and the body is Discord's embed shape, not our event) — so don't expect one th
 - **Settled only.** A transaction is delivered once it has fully settled, so you never
   get a half-finished transfer.
 - **Retries.** A failed delivery (non-`2xx`, timeout, connection error) is retried with
-  an increasing backoff. A `429` from Discord is treated the same way.
+  an increasing backoff.
+- **Rate limits.** A `429` isn't a failure. Delivery to that webhook pauses for as long
+  as the response asks (`Retry-After`, or Discord's `X-RateLimit-Reset-After`, up to an
+  hour) and then carries on, without using up retries or counting towards auto-disable.
+  Deliveries to one webhook are sent one at a time, and when Discord reports
+  `X-RateLimit-Remaining: 0` we wait for the reset before sending the next.
+  Discord also limits each channel to about 30 posts a minute without saying so in
+  its headers, so Discord webhooks receive at most one post every few seconds; a
+  busy feed catches up steadily instead of in bursts.
 - **Auto-disable.** After many consecutive failures a webhook is automatically paused so
   a dead endpoint doesn't pile up forever. Fix your endpoint and **re-enable** it.
 - **At-least-once.** A delivery can, rarely, arrive more than once — use the

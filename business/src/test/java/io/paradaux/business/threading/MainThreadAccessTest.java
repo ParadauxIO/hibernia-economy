@@ -63,14 +63,14 @@ class MainThreadAccessTest {
         var staff = mock(io.paradaux.business.mappers.FirmStaffMapper.class);
         UUID owner = UUID.randomUUID();
         UUID offline = UUID.randomUUID();
-        var firm = new io.paradaux.business.model.Firm();
+        var firm = new io.paradaux.business.model.internal.Firm();
         firm.setFirmId(7);
         firm.setProprietorUuid(owner.toString());
         when(firms.getAnyFirmById(7)).thenReturn(firm);
         Thread serverThread = Thread.currentThread();
         when(staff.listCurrentEmployeesByFirm(7)).thenAnswer(call -> {
             assertThat(Thread.currentThread()).isNotSameAs(serverThread);
-            var employee = new io.paradaux.business.model.FirmEmployee();
+            var employee = new io.paradaux.business.model.internal.FirmEmployee();
             employee.setPlayerUuid(offline.toString());
             return new java.util.ArrayList<>(java.util.List.of(employee));
         });

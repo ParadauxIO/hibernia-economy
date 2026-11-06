@@ -1,12 +1,11 @@
 package io.paradaux.business.chat;
 
-import io.paradaux.business.model.Firm;
-import net.kyori.adventure.audience.Audience;
-import org.bukkit.entity.Player;
-
+import io.paradaux.business.model.internal.Firm;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import net.kyori.adventure.audience.Audience;
+import org.bukkit.entity.Player;
 
 /**
  * Owns firm-chat state and the single CarbonChat channel (PAR-20). Firm

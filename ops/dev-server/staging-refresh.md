@@ -132,7 +132,7 @@ On success **and failure**, all writers stay paused. After success:
    unmanaged clusters from Infisical and never mints a new token.
 2. Close stdin in the DB-only terminal and wait for MariaDB to stop.
 3. Resume the agent with `ctl resume`; it starts the installed plugins and resumes
-   normal `develop` deployment polling. This workflow does not pin releases.
+   normal `dev-latest` deployment polling. This workflow does not pin releases.
 4. Restore the recorded API/Explorer replica counts and GitOps/autoscaler state.
    Verify their images are compatible with the migrated schema.
 5. Check plugin startup and exercise a real staging transfer, business lookup,

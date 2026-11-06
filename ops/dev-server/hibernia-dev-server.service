@@ -13,7 +13,7 @@
 #   journalctl -u hibernia-dev-server -f
 
 [Unit]
-Description=DemocracyCraft dev server (deploys develop builds of hibernia-economy)
+Description=DemocracyCraft dev server (deploys selected development builds of hibernia-economy)
 Wants=network-online.target
 After=network-online.target
 

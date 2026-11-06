@@ -66,13 +66,6 @@ export function HeaderAuth({ balance }: { balance?: ReactNode }) {
           </Link>
         ))}
       </div>
-      {v.isAdmin && (
-        <div className="shell-menu-group" role="group" aria-label="Administration">
-          <Link role="menuitem" tabIndex={-1} href="/admin" prefetch={false} className="menu-item">
-            <span className="menu-item-label">Admin</span>
-          </Link>
-        </div>
-      )}
       <div className="shell-menu-group" role="group" aria-label="Session">
         <button
           type="button"

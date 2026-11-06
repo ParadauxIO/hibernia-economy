@@ -1,19 +1,23 @@
 package io.paradaux.business.services;
 
-import io.paradaux.business.model.FirmEmployee;
 import io.paradaux.business.model.RolePermission;
-import org.bukkit.entity.Player;
-
+import io.paradaux.business.model.internal.FirmEmployee;
 import java.util.List;
 import java.util.UUID;
+import org.bukkit.entity.Player;
 
 public interface FirmStaffService {
 
     void fireEmployee(String firmName, UUID playerId, UUID actorId);
+
     String promoteEmployee(String firmName, UUID playerId, UUID actorId);
+
     String demoteEmployee(String firmName, UUID playerId, UUID actorId);
+
     void resignFromFirm(String firmName, UUID playerId);
+
     List<FirmEmployee> getCurrentEmployees(String firmName);
+
     List<Player> getOnlineEmployees(String firmName);
 
     // ---- int-id overloads (structure/0004) ----------------------------------
@@ -23,11 +27,17 @@ public interface FirmStaffService {
     // the command entrypoints that resolve user name-or-id input.
 
     void fireEmployee(int firmId, UUID playerId, UUID actorId);
+
     String promoteEmployee(int firmId, UUID playerId, UUID actorId);
+
     String demoteEmployee(int firmId, UUID playerId, UUID actorId);
+
     void resignFromFirm(int firmId, UUID playerId);
+
     List<FirmEmployee> getCurrentEmployees(int firmId);
+
     List<Player> getOnlineEmployees(int firmId);
+
     FirmEmployee getProprietorAsEmployee(int firmId);
 
     /**
@@ -53,8 +63,12 @@ public interface FirmStaffService {
      * ADMIN check applies.
      */
     void hireEmployeeFromInvite(int firmId, UUID playerId, UUID inviter);
+
     boolean hasPermission(Integer firmId, UUID playerId, RolePermission permission);
+
     boolean isEmployedBy(Integer firmId, UUID playerId);
+
     String getCurrentRole(Integer firmId, UUID playerId);
+
     FirmEmployee getProprietorAsEmployee(String firmName);
 }

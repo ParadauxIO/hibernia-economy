@@ -1,10 +1,9 @@
-package io.paradaux.business.model;
-
-import org.junit.jupiter.api.Test;
-
-import java.util.UUID;
+package io.paradaux.business.model.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
 
 class FirmPlayerTest {
 

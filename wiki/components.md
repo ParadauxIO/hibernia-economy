@@ -131,11 +131,75 @@ Recovery is eventual: stale access can persist until a successful pass, longer
 during an outage. Immediate command-triggered sync still reports failures to the
 caller. No Treasury API or schema upgrade is required for this repair.
 
+Direct debits (PAR-557, default-off flag `business.direct_debits`, V54) let a
+customer accept a mandate that a firm may debit their PERSONAL account into the
+firm's default account. A mandate is either RECURRING (a fixed amount every
+day, week or month) or ON_DEMAND (any charges while the period total stays within
+the cap). Periods are UTC calendar periods, and all times come from the plugin
+clock, never the database `NOW()`.
+
+A collection happens in three steps:
+
+1. `DirectDebitStore` locks the mandate row, checks its status and the cap, and
+   commits a RESERVED `direct_debit_collection`. Concurrent charges therefore
+   can't exceed the cap.
+2. The service calls `TreasuryApi.transfer` with the customer recorded as
+   authorizer, `plugin_system = business-direct-debit`, and a dedup key derived
+   from the collection id. The customer's account authorization requirement is
+   not bypassed.
+3. The collection is settled as COLLECTED or FAILED.
+
+`DirectDebitJob` runs every minute and does three things:
+
+- It expires lapsed proposals.
+- It re-drives reservations left RESERVED for more than 5 minutes. The dedup key
+  collapses a transfer that already happened, so a crash never debits twice.
+- It collects due recurring mandates from the database's `next_due_at`. Failed
+  periods retry hourly, up to 3 attempts, and a mandate is suspended after 3
+  consecutive missed periods. Missed periods are never backfilled.
+
+Charging is in-game only. A REST charging endpoint would need the same
+reservation step, because `treasury-rest-api` has its own transfer engine.
+
 ### `business/business-api/` — public Business API (library jar)
 
 `FirmApi`, `StaffApi`, `RolePermission`, and firm model types. Published as
 `io.paradaux:business-api`. Consumed by ChestShop (and anything else that needs to
 route money to a firm or check a staff permission).
+
+#### Migrating to Business API 4 (ADT-106 / ADT-69)
+
+Version 4 replaces the mutable public models with final, immutable value classes:
+`Firm`, `FirmAccount`, `FirmEmployee`, `FirmPlayer`, `FirmRole`, and
+`FirmRolePermission`. `FirmBalanceEntry` remains an immutable record. Existing
+getter names are retained, but no-argument constructors and setters are removed.
+Use the all-argument constructor when constructing a model (for example in a test);
+use API operations for changes to stored business state.
+
+`Firm.getProprietorUuid()`, `FirmEmployee.getPlayerUuid()`, `getAddedBy()`,
+`getRemovedBy()`, and `FirmPlayer.getPlayerUuid()` now return `UUID`, not `String`.
+Remove `UUID.fromString(...)` around these getters; call `toString()` explicitly
+where text is needed. Nullable audit fields remain nullable. `FirmPlayer.getUniqueId()`
+and `getPlayerUuid()` return null for missing or malformed directory UUIDs, preserving
+the old tolerant player lookup contract. Invalid non-null firm/employee UUIDs fail
+conversion instead of returning an invalid identifier.
+
+The provider copies mutable internal MyBatis rows into snapshots. Later service
+updates cannot change a previously returned model or list. Returned lists are
+unmodifiable; copy them into an `ArrayList` if local list editing is needed. Fetch
+again to observe new state. The `Player` elements of `getOnlineEmployees()` remain
+live Bukkit objects; immutable result lists do not make Bukkit access thread-safe.
+
+This is a source and binary break: rebuild and deploy Business, ChestShop,
+TreasuryAPI, and external consumers together against API 4. Do not mix old and new
+API jars or shade a private API copy into a consumer. Database schema and storage
+formats are unchanged. Mutable rows now live only in the Business plugin's
+`io.paradaux.business.model.internal` package and are not a supported public API.
+
+The API defaults to `4.0.0-SNAPSHOT`, independently of the plugin calendar version.
+Use `-PbusinessApiVersion=...` to select the API version; `-Pversion` still controls
+the plugin bundle. Release CI publishes `4.0.0-<bundle-version>` so each API artifact
+is tied to its corresponding plugin bundle. Snapshot CI publishes `4.0.0-SNAPSHOT`.
 
 Account resolution (PAR-14) stays with the API that owns the relationship:
 
@@ -155,8 +219,8 @@ These are relationship reads, not permission or Treasury account-status checks.
 A proprietor can own several firms, so filtering Treasury accounts by owner is not
 a substitute for firm lookup. None of these reads creates an account; use
 `resolveOrCreatePersonal` only when creation and starting-balance funding are intended.
-Upgrade the Business provider with the API: older implementations remain compatible,
-but the default `getAccountIds` implementation throws `UnsupportedOperationException`
+Within a compatible API major version, the default `getAccountIds` implementation
+throws `UnsupportedOperationException`
 rather than silently reporting an incomplete list. No migration is needed.
 
 `FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's

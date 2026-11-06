@@ -1,6 +1,6 @@
 package io.paradaux.business.services;
 
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import java.util.List;
 import java.util.UUID;
 

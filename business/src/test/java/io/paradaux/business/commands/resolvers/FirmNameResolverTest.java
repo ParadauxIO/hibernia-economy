@@ -3,7 +3,7 @@ package io.paradaux.business.commands.resolvers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmSuggestionCache;
 import io.paradaux.business.services.impl.FirmSuggestionCacheImpl;
