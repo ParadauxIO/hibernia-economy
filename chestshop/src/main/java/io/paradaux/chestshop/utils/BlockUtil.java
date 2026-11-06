@@ -1,5 +1,8 @@
 package io.paradaux.chestshop.utils;
 
+import java.util.EnumSet;
+import java.util.Set;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -24,12 +27,36 @@ import org.bukkit.inventory.InventoryHolder;
 public final class BlockUtil {
 
     /** The faces off a chest that a second chest may extend it into (double-chest search). */
-    public static final BlockFace[] CHEST_EXTENSION_FACES = {BlockFace.EAST, BlockFace.NORTH, BlockFace.WEST, BlockFace.SOUTH};
+    public static final BlockFace[] CHEST_EXTENSION_FACES = {
+        BlockFace.EAST, BlockFace.NORTH, BlockFace.WEST, BlockFace.SOUTH
+    };
 
     /** The faces around a shop container that its sign/neighbours may sit on. */
-    public static final BlockFace[] SHOP_FACES = {BlockFace.SELF, BlockFace.DOWN, BlockFace.UP, BlockFace.EAST, BlockFace.NORTH, BlockFace.WEST, BlockFace.SOUTH};
+    public static final BlockFace[] SHOP_FACES = {
+        BlockFace.SELF, BlockFace.DOWN, BlockFace.UP, BlockFace.EAST, BlockFace.NORTH, BlockFace.WEST, BlockFace.SOUTH
+    };
 
-    private BlockUtil() {
+    /**
+     * Standing and wall sign materials. Hanging signs are excluded, as they are not shop
+     * signs. Hopper paths check a neighbour's type before fetching its block data, because
+     * {@code getBlockData()} allocates a new wrapper on every call (PAR-523).
+     */
+    private static final Set<Material> SIGN_TYPES = signTypes();
+
+    private BlockUtil() {}
+
+    private static Set<Material> signTypes() {
+        Set<Material> types = EnumSet.noneOf(Material.class);
+        for (Material material : Material.values()) {
+            String name = material.name();
+            if (!material.isLegacy() && name.endsWith("_SIGN") && !name.contains("HANGING")) types.add(material);
+        }
+        return types;
+    }
+
+    /** Whether {@code type} is a standing or wall sign. A cheap pre-check; block data decides. */
+    public static boolean isSignType(Material type) {
+        return SIGN_TYPES.contains(type);
     }
 
     /**
@@ -39,7 +66,7 @@ public final class BlockUtil {
      * @return Is this block a sign?
      */
     public static boolean isSign(Block block) {
-        if (!isLoaded(block)) {
+        if (!isLoaded(block) || !isSignType(block.getType())) {
             return false;
         }
 
@@ -81,7 +108,8 @@ public final class BlockUtil {
         } else if (blockData instanceof Sign) {
             direction = BlockFace.DOWN;
         } else {
-            throw new IllegalArgumentException("Cannot get direction of " + blockData.getClass().getSimpleName());
+            throw new IllegalArgumentException(
+                    "Cannot get direction of " + blockData.getClass().getSimpleName());
         }
         return sign.getBlock().getRelative(direction);
     }

@@ -67,9 +67,12 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
      */
     private static final long ASYNC_IDLE_HORIZON_TICKS = 40;
 
+    private final HopperBench bench = new HopperBench(this);
+
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(bench, this);
         getLogger().info("DcDiag enabled — logging interactions at MONITOR priority.");
     }
 
@@ -374,6 +377,8 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doAsyncIdle(sender, args);
             case "ingeststub":
                 return doIngestStub(sender, args);
+            case "bench":
+                return bench.command(sender, args);
             default:
                 sender.sendMessage("unknown subcommand: " + args[0]);
                 return true;

@@ -73,6 +73,43 @@ class WorldEditShopCleanupListenerTest {
         verify(world, never()).getChunkAt(anyInt(), anyInt());
     }
 
+    @Test
+    void editedSignsInvalidateHopperRefreshEvenWithTheMarketOff() throws Exception {
+        var plugin = mock(org.bukkit.plugin.java.JavaPlugin.class);
+        var server = mock(org.bukkit.Server.class);
+        var plugins = mock(org.bukkit.plugin.PluginManager.class);
+        var market = mock(io.paradaux.chestshop.services.MarketService.class);
+        var sync = mock(io.paradaux.chestshop.services.MarketSyncService.class);
+        var refresh = mock(io.paradaux.chestshop.services.HopperStockRefreshService.class);
+        when(plugin.getServer()).thenReturn(server);
+        when(server.getPluginManager()).thenReturn(plugins);
+        when(market.enabled()).thenReturn(false);
+        var world = mock(org.bukkit.World.class);
+        var worldId = java.util.UUID.randomUUID();
+        when(world.getUID()).thenReturn(worldId);
+        when(world.isChunkLoaded(-2, 2)).thenReturn(true);
+        when(server.getWorld("world")).thenReturn(world);
+        var editWorld = mock(com.sk89q.worldedit.world.World.class);
+        when(editWorld.getName()).thenReturn("world");
+        var event = mock(com.sk89q.worldedit.event.extent.EditSessionEvent.class);
+        when(event.getWorld()).thenReturn(editWorld);
+        when(event.getStage()).thenReturn(com.sk89q.worldedit.EditSession.Stage.BEFORE_CHANGE);
+        Extent extent = mock(Extent.class);
+        when(event.getExtent()).thenReturn(extent);
+        var listener = new WorldEditShopCleanupListener(plugin, market, sync, refresh);
+        listener.onEditSession(event);
+        var captured = org.mockito.ArgumentCaptor.forClass(Extent.class);
+        verify(event).setExtent(captured.capture());
+        BlockState sign = block("minecraft:oak_sign");
+        BlockVector3 pos = BlockVector3.at(-17, 64, 33);
+        when(extent.setBlock(pos, sign)).thenReturn(true);
+        captured.getValue().setBlock(pos, sign);
+        Operations.complete(captured.getValue().commit());
+        listener.drain();
+        verify(refresh).blockChanged(worldId, -17, 33);
+        verifyNoInteractions(sync);
+    }
+
     private BlockState block(String id) {
         BlockState state = mock(BlockState.class);
         BlockType type = mock(BlockType.class);
