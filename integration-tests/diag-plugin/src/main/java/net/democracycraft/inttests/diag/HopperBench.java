@@ -114,6 +114,12 @@ final class HopperBench implements Listener {
                 }
             }
             case "status" -> sender.sendMessage("bench " + status);
+            case "noop" -> {
+                // The dispatch floor: Paper builds every move event once any handler exists.
+                Bukkit.getPluginManager().registerEvent(InventoryMoveItemEvent.class, this, EventPriority.MONITOR,
+                        (listener, event) -> {}, plugin);
+                sender.sendMessage("bench noop handler registered: " + handlers());
+            }
             default -> sender.sendMessage("usage: /diag bench <build|detach|start|status>");
         }
         return true;
@@ -399,6 +405,10 @@ final class HopperBench implements Listener {
         final Queue queue;
         final DoubleList tickMs = new DoubleList();
         final DoubleList drainMs = new DoubleList();
+        // CPU time ignores descheduling, so it stays comparable when the host is busy.
+        final DoubleList tickCpuMs = new DoubleList();
+        final DoubleList drainCpuMs = new DoubleList();
+        long lastCpu;
         final DoubleList inLatency = new DoubleList(), outLatency = new DoubleList();
         int inMisses, outMisses;
         final List<int[]> backlog = new ArrayList<>();
@@ -409,8 +419,11 @@ final class HopperBench implements Listener {
             this.out = out;
             this.ticks = seconds * 20L;
             // Only this window's drains: the timed task outlives the sample, and analysis runs async.
-            this.queue = Queue.attach(ms -> {
-                if (sample == this) drainMs.add(ms);
+            this.queue = Queue.attach((wall, cpuMs) -> {
+                if (sample == this) {
+                    drainMs.add(wall);
+                    drainCpuMs.add(cpuMs);
+                }
             });
             jfrFile = out.resolveSibling(out.getFileName() + ".jfr");
             jfr.enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(2));
@@ -419,6 +432,7 @@ final class HopperBench implements Listener {
             jfr.setToDisk(true);
             sinkStart = sinkItems();
             cpuStart = threads.getThreadCpuTime(main.threadId());
+            lastCpu = cpuStart;
             allocStart = threads.getThreadAllocatedBytes(main.threadId());
             jfr.start();
             wallStart = System.nanoTime();
@@ -435,6 +449,9 @@ final class HopperBench implements Listener {
 
         void tick(double ms) {
             tickMs.add(ms);
+            long cpuNow = threads.getCurrentThreadCpuTime();
+            tickCpuMs.add((cpuNow - lastCpu) / 1e6);
+            lastCpu = cpuNow;
             if (tickMs.size() % 20 == 0 && queue != null) backlog.add(queue.depth());
             if (tickMs.size() >= ticks) finish();
         }
@@ -470,11 +487,14 @@ final class HopperBench implements Listener {
             j.put("tickMs", tickMs.summary());
             j.put("ticksOver50ms", tickMs.countAbove(50));
             j.put("mainCpuMsPerTick", cpu / 1e6 / tickMs.size());
+            j.put("tickCpuMs", tickCpuMs.summary());
             j.put("mainAllocMBPerSec", alloc / 1048576.0 / seconds);
             j.put("itemsDeliveredPerSec", moved / seconds);
             j.put("profile", profile.toMap());
             j.put("workerDrainMs", queue == null ? null : drainMs.summary());
             j.put("workerTicksOver2ms", queue == null ? null : drainMs.countAbove(2));
+            j.put("workerDrainCpuMs", queue == null ? null : drainCpuMs.summary());
+            j.put("workerCpuTicksOver2ms", queue == null ? null : drainCpuMs.countAbove(2));
             j.put("probeInMs", inLatency.summary()).put("probeInMisses", inMisses);
             j.put("probeOutMs", outLatency.summary()).put("probeOutMisses", outMisses);
             j.put("backlog", backlogSummary());
@@ -525,7 +545,11 @@ final class HopperBench implements Listener {
     private record Queue(Object service, Field pending, Field reconciliation, Field recovery,
             Field deferredPositions, Field deferredChunks) {
 
-        static Queue attach(java.util.function.DoubleConsumer drainMs) throws ReflectiveOperationException {
+        interface DrainSink {
+            void accept(double wallMs, double cpuMs);
+        }
+
+        static Queue attach(DrainSink drainMs) throws ReflectiveOperationException {
             Plugin chestShop = Bukkit.getPluginManager().getPlugin("ChestShop");
             if (chestShop == null) return null;
             Field injectorField = chestShop.getClass().getDeclaredField("injector");
@@ -540,13 +564,15 @@ final class HopperBench implements Listener {
             drain.setAccessible(true);
             original.cancel();
             BukkitTask timed = Bukkit.getScheduler().runTaskTimer(chestShop, () -> {
+                var cpuClock = ManagementFactory.getThreadMXBean();
                 long begin = System.nanoTime();
+                long cpuBegin = cpuClock.getCurrentThreadCpuTime();
                 try {
                     drain.invoke(service);
                 } catch (ReflectiveOperationException e) {
                     throw new IllegalStateException(e);
                 }
-                drainMs.accept((System.nanoTime() - begin) / 1e6);
+                drainMs.accept((System.nanoTime() - begin) / 1e6, (cpuClock.getCurrentThreadCpuTime() - cpuBegin) / 1e6);
             }, 1L, 1L);
             task.set(service, timed);
             return new Queue(service, field(type, "pending"), field(type, "reconciliation"), field(type, "recovery"),

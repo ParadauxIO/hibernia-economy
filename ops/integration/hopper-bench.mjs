@@ -10,6 +10,7 @@
 // Variants (all with USE_STOCK_COUNTER true and production's Paper hopper settings):
 //   event-off    Paper hopper.disable-move-event: true — no InventoryMoveItemEvent at all
 //   no-listener  event on, ChestShop's move handlers unregistered (as ListenerControl can)
+//   noop-listener  as no-listener plus one empty MONITOR handler: the cost of dispatch alone
 //   legacy       the pre-6b35b153 listener (ops/integration/hopper-bench/legacy-listener.patch)
 //   worker       this checkout: immediate protection + batched refresh worker
 //   worker-monitor-only  the worker with ChestShop's HIGHEST (protection) handler removed:
@@ -25,10 +26,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const VARIANTS = ['event-off', 'no-listener', 'legacy', 'worker', 'worker-monitor-only'];
+const VARIANTS = ['event-off', 'no-listener', 'noop-listener', 'legacy', 'worker', 'worker-monitor-only'];
 const REFRESH_INTERVAL_MS = 100 * 50;
 
 // Fixed before any run (agreed 2026-11-05). Deltas are against event-off medians.
+// Judged on main-thread CPU time per tick: wall-clock MSPT also counts time the server
+// spends descheduled, which on a shared host swamped the effect being measured
+// (2026-11-06: event-off MSPT +45% between days, its CPU per tick +3%).
 const THRESHOLDS = {
   meanMsptIncreasePct: 2,
   p99IncreaseMs: 0.5,
@@ -163,6 +167,11 @@ function runMatrix(opts) {
 const METRICS = {
   meanMspt: (r) => r.tickMs.mean,
   p95Mspt: (r) => r.tickMs.p95,
+  meanTickCpu: (r) => r.tickCpuMs?.mean,
+  p99TickCpu: (r) => r.tickCpuMs?.p99,
+  workerDrainCpuP99Ms: (r) => r.workerDrainCpuMs?.p99,
+  workerDrainCpuMaxMs: (r) => r.workerDrainCpuMs?.max,
+  workerCpuTicksOver2ms: (r) => r.workerCpuTicksOver2ms,
   p99Mspt: (r) => r.tickMs.p99,
   maxMspt: (r) => r.tickMs.max,
   tps: (r) => r.tps,
@@ -209,12 +218,14 @@ function judge(group, baseline) {
   if (!baseline) return null;
   const m = (g, k) => g.metrics[k]?.median;
   const checks = {
-    meanMspt: { value: pct(m(group, 'meanMspt') - m(baseline, 'meanMspt'), m(baseline, 'meanMspt')),
-                limit: THRESHOLDS.meanMsptIncreasePct, unit: '% vs event-off' },
-    p99Mspt: { value: m(group, 'p99Mspt') - m(baseline, 'p99Mspt'), limit: THRESHOLDS.p99IncreaseMs, unit: 'ms vs event-off' },
+    meanTickCpu: { value: pct(m(group, 'meanTickCpu') - m(baseline, 'meanTickCpu'), m(baseline, 'meanTickCpu')),
+                   limit: THRESHOLDS.meanMsptIncreasePct, unit: '% CPU/tick vs event-off' },
+    p99TickCpu: { value: m(group, 'p99TickCpu') - m(baseline, 'p99TickCpu'), limit: THRESHOLDS.p99IncreaseMs,
+                  unit: 'ms CPU/tick vs event-off' },
   };
   if (group.variant.startsWith('worker')) {
-    checks.workerTickMax = { value: group.metrics.workerDrainMaxMs?.max, limit: THRESHOLDS.workerTickMaxMs, unit: 'ms, worst run' };
+    checks.workerTickMax = { value: group.metrics.workerDrainCpuMaxMs?.max, limit: THRESHOLDS.workerTickMaxMs,
+                             unit: 'ms drain CPU, worst run' };
     checks.freshnessIn = { value: group.metrics.probeInP95Ms?.max, limit: THRESHOLDS.freshnessP95Ms, unit: 'ms p95, worst run' };
     checks.freshnessOut = { value: group.metrics.probeOutP95Ms?.max, limit: THRESHOLDS.freshnessP95Ms, unit: 'ms p95, worst run' };
     checks.probeMisses = { value: group.metrics.probeMisses?.max, limit: 0, unit: 'timeouts, worst run' };
@@ -268,6 +279,11 @@ function markdown(summary) {
       ['p95 MSPT', (g) => f(g.metrics.p95Mspt)],
       ['p99 MSPT', (g) => f(g.metrics.p99Mspt)],
       ['max MSPT', (g) => f(g.metrics.maxMspt, 1)],
+      ['mean CPU ms/tick', (g) => f(g.metrics.meanTickCpu, 3)],
+      ['p99 CPU ms/tick', (g) => f(g.metrics.p99TickCpu)],
+      ['worker drain CPU p99 ms', (g) => f(g.metrics.workerDrainCpuP99Ms, 3)],
+      ['worker drain CPU max ms', (g) => f(g.metrics.workerDrainCpuMaxMs, 2)],
+      ['worker drains > 2 ms CPU', (g) => f(g.metrics.workerCpuTicksOver2ms, 0)],
       ['mean MSPT CV %', (g) => (g.metrics.meanMspt ? g.metrics.meanMspt.cvPct.toFixed(1) : '—')],
       ['TPS', (g) => f(g.metrics.tps)],
       ['main CPU ms/tick', (g) => f(g.metrics.mainCpuMsPerTick, 3)],

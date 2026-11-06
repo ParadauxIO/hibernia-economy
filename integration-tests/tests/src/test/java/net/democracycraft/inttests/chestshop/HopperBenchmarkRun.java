@@ -39,12 +39,15 @@ class HopperBenchmarkRun {
             // charge its per-event cost to every variant that keeps events on.
             String detach = switch (variant) {
                 case "event-off", "legacy", "worker" -> "WorldGuard";
-                case "no-listener" -> "WorldGuard,ChestShop";
+                case "no-listener", "noop-listener" -> "WorldGuard,ChestShop";
                 // Production's ListenerControl (2026-06) also removes ChestShop's protection handler only.
                 case "worker-monitor-only" -> "WorldGuard,ChestShop/HIGHEST";
                 default -> throw new IllegalArgumentException("unknown variant " + variant);
             };
             assertThat(RconClient.send("diag bench detach " + detach)).startsWith("bench detached");
+            if (variant.equals("noop-listener")) {
+                assertThat(RconClient.send("diag bench noop")).startsWith("bench noop");
+            }
             Thread.sleep(Duration.ofSeconds(warmup));
             String started = RconClient.send("diag bench start " + variant + " " + scenario + " " + seconds + " " + out);
             assertThat(started).startsWith("bench started");
