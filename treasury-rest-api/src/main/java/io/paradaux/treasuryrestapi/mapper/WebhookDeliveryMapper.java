@@ -75,6 +75,20 @@ public interface WebhookDeliveryMapper {
             @Param("error") String error,
             @Param("delaySeconds") long delaySeconds);
 
+    /** Records a rate-limited send without using an attempt; {@link #deferSubscription} schedules the retry. */
+    @Update("UPDATE webhook_delivery SET http_status = #{httpStatus}, last_error = #{error} WHERE delivery_id = #{id}")
+    int markRateLimited(@Param("id") long id, @Param("httpStatus") Integer httpStatus, @Param("error") String error);
+
+    /**
+     * Moves every pending delivery of a subscription to at least {@code delaySeconds}
+     * from now, so a rate-limited endpoint drops out of the due batch until its
+     * window resets and other subscriptions are served meanwhile.
+     */
+    @Update(
+            "UPDATE webhook_delivery SET next_attempt_at = GREATEST(next_attempt_at, NOW() + INTERVAL #{delaySeconds} SECOND) "
+                    + "WHERE subscription_id = #{subscriptionId} AND status = 'PENDING'")
+    int deferSubscription(@Param("subscriptionId") long subscriptionId, @Param("delaySeconds") long delaySeconds);
+
     @Update("UPDATE webhook_delivery SET status = 'FAILED', attempts = attempts + 1, "
             + "http_status = #{httpStatus}, last_error = #{error} WHERE delivery_id = #{id}")
     int markFailed(@Param("id") long id, @Param("httpStatus") Integer httpStatus, @Param("error") String error);
