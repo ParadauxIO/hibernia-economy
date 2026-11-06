@@ -225,15 +225,18 @@ class HopperStockRefreshServiceTest extends ServerTest {
     @Test
     void containerWithoutShopSignIsDiscoveredOncePerTtl() {
         Inventory sorter = chestAt(4, 64, 4);
+        Inventory neighbour = chestAt(8, 64, 4); // same chunk
         for (int round = 0; round < 3; round++) {
             refresh.markDirty(sorter);
+            refresh.markDirty(neighbour);
             ticks(100);
         }
-        verify(blocks, times(1)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
-        ticks(HopperStockRefreshService.NOT_SHOP_TTL_TICKS);
-        refresh.markDirty(sorter);
-        ticks(100);
         verify(blocks, times(2)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        ticks(HopperStockRefreshService.NOT_SHOP_TTL_TICKS + 256); // TTL plus the largest jitter
+        refresh.markDirty(sorter);
+        refresh.markDirty(neighbour);
+        ticks(100);
+        verify(blocks, times(4)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
     }
 
     @Test

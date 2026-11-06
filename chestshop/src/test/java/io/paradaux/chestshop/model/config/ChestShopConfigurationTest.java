@@ -35,6 +35,8 @@ class ChestShopConfigurationTest {
         ChestShopConfiguration cfg = TestConfigs.with(TestConfigs.defaults(), "shopContainersRaw", List.of("chest"));
         var first = cfg.getShopContainers();
         assertThat(cfg.getShopContainers()).isSameAs(first);
+        TestConfigs.with(cfg, "shopContainersRaw", new java.util.ArrayList<>(List.of("chest"))); // equal, new list
+        assertThat(cfg.getShopContainers()).isSameAs(first);
         assertThatThrownBy(() -> first.add(Material.STONE)).isInstanceOf(UnsupportedOperationException.class);
 
         TestConfigs.with(cfg, "shopContainersRaw", List.of("chest", "barrel"));

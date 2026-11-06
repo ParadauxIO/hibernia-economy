@@ -246,7 +246,8 @@ public class ChestShopConfiguration {
     public Set<Material> getShopContainers() {
         List<String> raw = shopContainersRaw == null ? List.of() : shopContainersRaw;
         ParsedContainers parsed = shopContainers;
-        if (parsed != null && parsed.names().equals(raw)) {
+        // A reload assigns a new list, so identity is the common, cheap hit.
+        if (parsed != null && (parsed.source() == raw || parsed.names().equals(raw))) {
             return parsed.materials();
         }
         EnumSet<Material> set = EnumSet.noneOf(Material.class);
@@ -258,12 +259,12 @@ public class ChestShopConfiguration {
                 log.warn(name + " is not a valid Material name in the config!");
             }
         }
-        parsed = new ParsedContainers(List.copyOf(raw), Collections.unmodifiableSet(set));
+        parsed = new ParsedContainers(raw, List.copyOf(raw), Collections.unmodifiableSet(set));
         shopContainers = parsed;
         return parsed.materials();
     }
 
-    private record ParsedContainers(List<String> names, Set<Material> materials) {}
+    private record ParsedContainers(List<String> source, List<String> names, Set<Material> materials) {}
 
     @Getter(lombok.AccessLevel.NONE)
     private volatile ParsedContainers shopContainers;

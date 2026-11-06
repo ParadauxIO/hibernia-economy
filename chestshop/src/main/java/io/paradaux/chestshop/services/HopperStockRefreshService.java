@@ -75,8 +75,9 @@ public final class HopperStockRefreshService {
     // Containers last found with no shop sign, by chunk, with the tick that finding expires. Only
     // refresh work uses it: protection always checks the live world. Block changes nearby, a
     // supported world edit and chunk unload drop a chunk's entries; the TTL covers other edits.
-    private final Map<ChunkKey, Map<Position, Long>> notShop = new HashMap<>();
-    private int notShopCount;
+    // One lookup per transfer: expiry by position, plus a per-chunk index used only to forget.
+    private final Map<Position, Long> notShop = new HashMap<>();
+    private final Map<ChunkKey, Set<Position>> notShopByChunk = new HashMap<>();
     private final ShopStockPublisher stock;
     private BukkitTask task;
     private long tick;
@@ -130,7 +131,7 @@ public final class HopperStockRefreshService {
         deferredChunks.clear();
         deferredPositions = 0;
         notShop.clear();
-        notShopCount = 0;
+        notShopByChunk.clear();
     }
 
     /** No sign search, inventory scan, database call or task allocation on the transfer path. */
@@ -163,7 +164,7 @@ public final class HopperStockRefreshService {
     }
 
     private void enqueue(Position pos) {
-        if (pending.containsKey(pos) || knownNotShop(pos)) return;
+        if (knownNotShop(pos) || pending.containsKey(pos)) return;
         if (pending.size() < MAX_PENDING) {
             pending.put(pos, tick);
         } else {
@@ -172,27 +173,31 @@ public final class HopperStockRefreshService {
     }
 
     private boolean knownNotShop(Position pos) {
-        Map<Position, Long> chunk = notShop.get(pos.chunk());
-        Long expires = chunk == null ? null : chunk.get(pos);
+        Long expires = notShop.get(pos);
         if (expires == null) return false;
         if (tick < expires) return true;
-        chunk.remove(pos);
-        notShopCount--;
-        if (chunk.isEmpty()) notShop.remove(pos.chunk());
+        notShop.remove(pos);
+        notShopByChunk.computeIfPresent(pos.chunk(), (key, chunk) -> {
+            chunk.remove(pos);
+            return chunk.isEmpty() ? null : chunk;
+        });
         return false;
     }
 
     private void rememberNotShop(Position pos) {
-        if (notShopCount >= MAX_NOT_SHOP) return; // past the cap, refreshes simply rediscover
-        if (notShop.computeIfAbsent(pos.chunk(), ignored -> new HashMap<>()).put(pos, tick + NOT_SHOP_TTL_TICKS)
-                == null) {
-            notShopCount++;
+        if (notShop.size() >= MAX_NOT_SHOP) return; // past the cap, refreshes simply rediscover
+        // Jitter the expiry so a sorter network discovered in one burst does not expire in one.
+        long expires = tick + NOT_SHOP_TTL_TICKS + (pos.hashCode() & 0xFF);
+        if (notShop.put(pos, expires) == null) {
+            notShopByChunk
+                    .computeIfAbsent(pos.chunk(), ignored -> new HashSet<>())
+                    .add(pos);
         }
     }
 
     private void forgetNotShop(ChunkKey key) {
-        Map<Position, Long> dropped = notShop.remove(key);
-        if (dropped != null) notShopCount -= dropped.size();
+        Set<Position> dropped = notShopByChunk.remove(key);
+        if (dropped != null) dropped.forEach(notShop::remove);
     }
 
     /**
@@ -254,11 +259,8 @@ public final class HopperStockRefreshService {
             return true;
         });
         deferredChunks.removeIf(key -> key.world().equals(world));
-        notShop.entrySet().removeIf(entry -> {
-            if (!entry.getKey().world().equals(world)) return false;
-            notShopCount -= entry.getValue().size();
-            return true;
-        });
+        notShop.keySet().removeIf(pos -> pos.world().equals(world));
+        notShopByChunk.keySet().removeIf(key -> key.world().equals(world));
     }
 
     void drain() {
