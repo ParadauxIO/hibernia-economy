@@ -19,8 +19,10 @@ import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.DoubleChest;
 import org.bukkit.block.Sign;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.Chest;
 import org.bukkit.block.data.type.WallSign;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -274,6 +276,79 @@ class ShopBlockServiceImplTest extends ServerTest {
     @Test
     void findConnectedShopSigns_otherHolder_empty() {
         assertThat(service.findConnectedShopSigns(mock(InventoryHolder.class))).isEmpty();
+    }
+
+    // ---- type pre-checks (PAR-523) --------------------------------------------
+
+    @Test
+    void isSignType_matchesSignBlockDataForEveryMaterial() {
+        int signs = 0;
+        for (Material material : Material.values()) {
+            if (!material.isBlock() || material.isLegacy()) continue;
+            BlockData data;
+            try {
+                data = material.createBlockData();
+            } catch (RuntimeException unsupported) {
+                continue; // MockBukkit lacks data for some blocks
+            }
+            boolean sign = data instanceof org.bukkit.block.data.type.Sign || data instanceof WallSign;
+            assertThat(io.paradaux.chestshop.utils.BlockUtil.isSignType(material))
+                    .as(material.name())
+                    .isEqualTo(sign);
+            if (sign) signs++;
+        }
+        assertThat(signs).as("sign materials checked").isGreaterThanOrEqualTo(20);
+    }
+
+    @Test
+    void couldBeShopInventory_rejectsOnlyTypesNoConfiguredContainerHolds() {
+        Block chest = world.getBlockAt(base += 6, 64, 0);
+        chest.setType(Material.CHEST);
+        Block hopper = world.getBlockAt(base += 6, 64, 0);
+        hopper.setType(Material.HOPPER);
+        Inventory chestInventory = ((Container) chest.getState()).getInventory();
+        Inventory hopperInventory = ((Container) hopper.getState()).getInventory();
+        assertThat(service.couldBeShopInventory(chestInventory)).isTrue();
+        assertThat(service.couldBeShopInventory(hopperInventory)).isFalse();
+
+        // A configured container with no known inventory type disables the pre-check.
+        ChestShopConfiguration dropper =
+                TestConfigs.with(TestConfigs.defaults(), "shopContainersRaw", List.of("CHEST", "DROPPER"));
+        ShopBlockServiceImpl permissive = new ShopBlockServiceImpl(dropper, new SignService(dropper));
+        assertThat(permissive.couldBeShopInventory(hopperInventory)).isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "CHEST, CHEST", "TRAPPED_CHEST, CHEST", "BARREL, BARREL",
+        "SHULKER_BOX, SHULKER_BOX", "RED_SHULKER_BOX, SHULKER_BOX", "DROPPER,"
+    })
+    void inventoryType_mapsKnownContainersAndLeavesOthersUnfiltered(Material container, String expected) {
+        assertThat(ShopBlockServiceImpl.inventoryType(container))
+                .isEqualTo(expected == null ? null : org.bukkit.event.inventory.InventoryType.valueOf(expected));
+    }
+
+    @Test
+    void couldBeShopInventory_unknownTypeIsNotFiltered() {
+        assertThat(service.couldBeShopInventory(mock(Inventory.class))).isTrue();
+    }
+
+    @Test
+    void findConnectedShopSigns_liveFindsAStandingSignOnTop() {
+        int x = base += 6;
+        Block chest = world.getBlockAt(x, 64, 0);
+        chest.setType(Material.CHEST);
+        Block top = world.getBlockAt(x, 65, 0);
+        top.setType(Material.OAK_SIGN);
+        Sign sign = (Sign) top.getState();
+        sign.setLine(SignService.NAME_LINE, "Notch");
+        sign.setLine(SignService.QUANTITY_LINE, "1");
+        sign.setLine(SignService.PRICE_LINE, "B 5");
+        sign.setLine(SignService.ITEM_LINE, "Diamond");
+        sign.update();
+        assertThat(service.findConnectedShopSigns((InventoryHolder) chest.getState(), false))
+                .extracting(Sign::getBlock)
+                .containsExactly(top);
     }
 
     // ---- isShopBlock ------------------------------------------------------------
@@ -532,6 +607,7 @@ class ShopBlockServiceImplTest extends ServerTest {
         Block wallFace = loadedMock();
         WallSign wd = mock(WallSign.class);
         when(wd.getFacing()).thenReturn(BlockFace.NORTH); // == the search face below
+        when(wallFace.getType()).thenReturn(Material.OAK_WALL_SIGN);
         when(wallFace.getBlockData()).thenReturn(wd);
         Sign sign = mock(Sign.class);
         when(sign.getLines()).thenReturn(new String[] {"Notch", "64", "B 5", "Diamond"});

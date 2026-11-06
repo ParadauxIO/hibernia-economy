@@ -14,6 +14,7 @@ import io.paradaux.chestshop.utils.InventoryUtil;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -22,6 +23,8 @@ import org.bukkit.block.DoubleChest;
 import org.bukkit.block.Sign;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.WallSign;
+import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
 /**
@@ -190,7 +193,7 @@ public class ShopBlockServiceImpl implements ShopBlockService {
     public Sign findAnyNearbyShopSign(Block block) {
         for (BlockFace bf : BlockUtil.SHOP_FACES) {
             Block faceBlock = block.getRelative(bf);
-            if (!BlockUtil.isLoaded(faceBlock)) {
+            if (!BlockUtil.isLoaded(faceBlock) || !BlockUtil.isSignType(faceBlock.getType())) {
                 continue;
             }
 
@@ -219,6 +222,30 @@ public class ShopBlockServiceImpl implements ShopBlockService {
         return block != null
                 && BlockUtil.isLoaded(block)
                 && config.getShopContainers().contains(block.getType());
+    }
+
+    @Override
+    public boolean couldBeShopInventory(Inventory inventory) {
+        InventoryType type = inventory.getType();
+        if (type == null) {
+            return true; // unknown: leave the decision to couldBeShopContainer
+        }
+        for (Material container : config.getShopContainers()) {
+            InventoryType expected = inventoryType(container);
+            if (expected == null || expected == type) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The inventory type a container material holds, or {@code null} when unknown (no filtering). */
+    static InventoryType inventoryType(Material container) {
+        return switch (container) {
+            case CHEST, TRAPPED_CHEST -> InventoryType.CHEST;
+            case BARREL -> InventoryType.BARREL;
+            default -> container.name().endsWith("SHULKER_BOX") ? InventoryType.SHULKER_BOX : null;
+        };
     }
 
     @Override

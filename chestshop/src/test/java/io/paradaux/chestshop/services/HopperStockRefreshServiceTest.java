@@ -31,6 +31,7 @@ import org.bukkit.block.data.type.WallSign;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -147,6 +148,40 @@ class HopperStockRefreshServiceTest extends ServerTest {
         assertThat(counter(east)).isEqualTo("Q 1 : C 7");
         assertThat(counter(west)).isEqualTo("Q 1 : C 7");
         verify(blocks, times(1)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        // Both signs trade diamonds: the item is parsed once for the batch, not once per sign.
+        verify(counters, times(1)).determineItemTradedByShop("Diamond");
+    }
+
+    @Test
+    void wildcardSignsCountByPatternAndUnparseableItemsAreSkipped() {
+        when(stock.enabled()).thenReturn(true);
+        Inventory inventory = chestAt(4, 64, 4);
+        Block wildcard = signAt(5, 64, 4, BlockFace.EAST);
+        Sign sign = (Sign) wildcard.getState();
+        SignText.setLine(sign, 3, "diamond*");
+        sign.update();
+        Inventory other = chestAt(8, 64, 4);
+        Block unknown = signAt(9, 64, 4, BlockFace.EAST);
+        sign = (Sign) unknown.getState();
+        SignText.setLine(sign, 3, "Unobtainium");
+        sign.update();
+        refresh.markDirty(inventory);
+        refresh.markDirty(other);
+        ticks(100);
+        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, never()).updateCounterForItem(any(), any(), any());
+        verify(stock, never()).publish(any(Sign.class), any(Inventory.class), any(ItemStack.class));
+        assertThat(counter(unknown)).isEqualTo("1");
+    }
+
+    @Test
+    void hopperInventoriesAreNeverQueued() {
+        Block hopper = world.getBlockAt(12, 64, 4);
+        hopper.setType(Material.HOPPER);
+        refresh.markDirty(((Container) hopper.getState()).getInventory());
+        ticks(200);
+        verify(blocks, never()).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        verify(blocks, never()).couldBeShopContainer(any(Block.class));
     }
 
     @Test
@@ -184,7 +219,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         sign.setType(Material.AIR);
         ticks(100);
         assertThat(sign.getType()).isEqualTo(Material.AIR);
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -232,7 +267,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         assertThat(enumerations).hasValue(0);
         refresh.loadChunk(world.getUID(), 0, 0); // restored once, not on every later load
         ticks(200);
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -271,8 +306,10 @@ class HopperStockRefreshServiceTest extends ServerTest {
         Block signBlock = signAt(5, 64, 4, BlockFace.EAST);
         refresh.markDirty(inventory);
         ticks(100);
-        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class));
-        verifyNoInteractions(counters);
+        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class), any(ItemStack.class));
+        // The item is still resolved for /find, but no counter is written.
+        verify(counters, never()).updateCounterForItem(any(), any(), any());
+        verify(counters, never()).updateCounterOnQuantityLine(any(), any());
         assertThat(counter(signBlock)).isEqualTo("1");
 
         Sign sign = (Sign) signBlock.getState();
@@ -280,7 +317,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         sign.update();
         refresh.markDirty(inventory);
         ticks(100);
-        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class));
+        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class), any(ItemStack.class));
     }
 
     @Test
@@ -370,7 +407,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         server.getPluginManager().callEvent(allowed);
         assertThat(allowed.isCancelled()).isFalse();
         ticks(200);
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -398,13 +435,13 @@ class HopperStockRefreshServiceTest extends ServerTest {
         containers.add(shopSigns.getFirst().getState());
         refresh.reconcileChunk(world.getUID(), 0, 0);
         ticks(100);
-        verify(counters, times(32)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(32)).updateCounterForItem(any(), any(), any());
         assertThat(counter(shopSigns.get(32))).isEqualTo("1");
         ticks(1);
-        verify(counters, times(64)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(64)).updateCounterForItem(any(), any(), any());
         ticks(1);
         assertThat(counter(shopSigns.getLast())).isEqualTo("Q 1 : C 0");
-        verify(counters, times(65)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(65)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -441,7 +478,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         refresh.unloadWorld(world.getUID());
         ticks(200);
         assertThat(counter(shopSigns.getLast())).isEqualTo("1");
-        verify(counters, times(32)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(32)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -518,7 +555,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         assertThat(counter(sign)).isEqualTo("1");
         ticks(1);
         assertThat(counter(sign)).isEqualTo("Q 1 : C 0");
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -551,7 +588,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         assertThat(counter(sign)).isEqualTo("1");
         ticks(1);
         assertThat(counter(sign)).isEqualTo("Q 1 : C 0");
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test

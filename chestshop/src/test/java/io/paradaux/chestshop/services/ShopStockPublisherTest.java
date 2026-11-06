@@ -194,6 +194,7 @@ class ShopStockPublisherTest {
         when(market.enabled()).thenReturn(false);
         publisher.publish(sign(4, "Diamond"), inventory);
 
+        publisher.publish(sign(5, "Diamond"), inventory, diamond);
         assertThat(pending).isEmpty();
         verifyNoInteractions(api);
     }

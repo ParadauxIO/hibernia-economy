@@ -4,6 +4,7 @@ import java.util.List;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
 /**
@@ -43,6 +44,13 @@ public interface ShopBlockService {
     boolean couldBeShopContainer(Block block);
 
     boolean couldBeShopContainer(InventoryHolder holder);
+
+    /**
+     * A cheap pre-check from the inventory's type alone: {@code false} only when no configured
+     * shop container could own an inventory of this type (a hopper, say). Hopper paths call
+     * it before resolving the holder; {@link #couldBeShopContainer} still decides (PAR-523).
+     */
+    boolean couldBeShopInventory(Inventory inventory);
 
     boolean isShopBlock(Block block);
 

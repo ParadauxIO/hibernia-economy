@@ -36,13 +36,14 @@ public class ItemMoveListener implements Listener {
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
     public void onItemMove(InventoryMoveItemEvent event) {
         if (config.isTurnOffHopperProtection()) return;
+        // Only a shop container can be robbed: decide that from the source's type first.
+        if (!shopBlockService.couldBeShopInventory(event.getSource())) return;
         InventoryHolder destinationHolder = getHolder(event.getDestination(), false);
 
-        if (!config.isTurnOffHopperProtection() && !(destinationHolder instanceof BlockState)) {
+        if (!(destinationHolder instanceof BlockState)) {
             InventoryHolder sourceHolder = getHolder(event.getSource(), false);
             if (shopBlockService.isShopBlock(sourceHolder)) {
                 event.setCancelled(true);
-                return;
             }
         }
     }

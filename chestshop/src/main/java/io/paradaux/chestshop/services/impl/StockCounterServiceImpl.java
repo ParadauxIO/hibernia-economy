@@ -148,11 +148,25 @@ public class StockCounterServiceImpl implements StockCounterService {
     public void updateCounterOnQuantityLine(Sign sign, Inventory chestShopInventory, ItemStack... extraItems) {
         String pattern = SignService.getItem(sign);
         boolean wildcard = WildcardItems.isPattern(pattern);
-        ItemStack itemTradedByShop = wildcard ? null : determineItemTradedByShop(sign);
+        ItemStack itemTradedByShop = wildcard ? null : determineItemTradedByShop(pattern);
         if (!wildcard && itemTradedByShop == null) {
             return;
         }
+        writeCounter(sign, chestShopInventory, pattern, wildcard, itemTradedByShop, extraItems);
+    }
 
+    @Override
+    public void updateCounterForItem(Sign sign, Inventory chestShopInventory, ItemStack itemTradedByShop) {
+        writeCounter(sign, chestShopInventory, null, false, itemTradedByShop);
+    }
+
+    private void writeCounter(
+            Sign sign,
+            Inventory chestShopInventory,
+            String pattern,
+            boolean wildcard,
+            ItemStack itemTradedByShop,
+            ItemStack... extraItems) {
         int quantity;
         try {
             quantity = SignService.getQuantity(sign);

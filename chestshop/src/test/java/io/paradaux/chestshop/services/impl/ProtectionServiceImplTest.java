@@ -1,5 +1,13 @@
 package io.paradaux.chestshop.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.chestshop.model.BuildPermission;
 import io.paradaux.chestshop.model.ProtectionCheck;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
@@ -7,6 +15,8 @@ import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.ShopBlockService;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.support.TestConfigs;
+import java.lang.reflect.Method;
+import java.util.function.Consumer;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -18,17 +28,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Method;
-import java.util.function.Consumer;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Shop/chest protection gating. Block/sign geometry is driven through Mockito stubs of the Bukkit
@@ -64,6 +63,15 @@ class ProtectionServiceImplTest {
         lenient().when(b.getX()).thenReturn(0);
         lenient().when(b.getZ()).thenReturn(0);
         lenient().when(b.getBlockData()).thenReturn(data);
+        // Real sign blocks carry a sign material; BlockUtil.isSign checks it before the data.
+        lenient()
+                .when(b.getType())
+                .thenReturn(
+                        data instanceof WallSign
+                                ? org.bukkit.Material.OAK_WALL_SIGN
+                                : data instanceof org.bukkit.block.data.type.Sign
+                                        ? org.bukkit.Material.OAK_SIGN
+                                        : org.bukkit.Material.STONE);
         return b;
     }
 
@@ -169,7 +177,9 @@ class ProtectionServiceImplTest {
     void view_worldGuardProviderNoOp_isAllowed() {
         Block b = plainBlock();
         when(shopBlockService.couldBeShopContainer(b)).thenReturn(false);
-        protection.setWorldGuardProtection(check -> { /* no-op provider */ });
+        protection.setWorldGuardProtection(check -> {
+            /* no-op provider */
+        });
         assertThat(protection.canView(b, player, false)).isTrue();
     }
 
@@ -206,14 +216,18 @@ class ProtectionServiceImplTest {
 
     @Test
     void build_worldGuardAllows_griefPreventionDenies() {
-        protection.setWorldGuardBuilding(bp -> { /* leaves it allowed */ });
+        protection.setWorldGuardBuilding(bp -> {
+            /* leaves it allowed */
+        });
         protection.setGriefPreventionBuilding(BuildPermission::disallow);
         assertThat(protection.canBuild(player, loc(), loc())).isFalse();
     }
 
     @Test
     void build_onlyGriefPrevention_allows() {
-        protection.setGriefPreventionBuilding(bp -> { /* allowed */ });
+        protection.setGriefPreventionBuilding(bp -> {
+            /* allowed */
+        });
         assertThat(protection.canBuild(player, loc(), loc())).isTrue();
     }
 
@@ -231,8 +245,9 @@ class ProtectionServiceImplTest {
     }
 
     private void noContainersAround(Block signOwn) {
-        for (BlockFace f : new BlockFace[]{BlockFace.UP, BlockFace.DOWN, BlockFace.EAST,
-                BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH}) {
+        for (BlockFace f : new BlockFace[] {
+            BlockFace.UP, BlockFace.DOWN, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH
+        }) {
             Block n = plainBlock();
             lenient().when(signOwn.getRelative(f)).thenReturn(n);
             lenient().when(shopBlockService.couldBeShopContainer(n)).thenReturn(false);
@@ -264,7 +279,7 @@ class ProtectionServiceImplTest {
         Block northNonSign = plainBlock();
         Block southNonSign = plainBlock();
         when(base.getRelative(BlockFace.EAST)).thenReturn(eastNonSign);
-        when(base.getRelative(BlockFace.WEST)).thenReturn(own);   // equals the placing sign block -> skipped
+        when(base.getRelative(BlockFace.WEST)).thenReturn(own); // equals the placing sign block -> skipped
         when(base.getRelative(BlockFace.NORTH)).thenReturn(northNonSign);
         when(base.getRelative(BlockFace.SOUTH)).thenReturn(southNonSign);
 
@@ -275,7 +290,7 @@ class ProtectionServiceImplTest {
     void placeSign_noConflictingShops_walksEveryContinueBranch_thenChecksPlacement() {
         Block own = plainBlock();
         Block base = plainBlock();
-        noContainersAround(own);          // canBePlaced: nothing around 'own' is a container...
+        noContainersAround(own); // canBePlaced: nothing around 'own' is a container...
         Sign sign = placingSign(own, base); // ...re-stubs own.getRelative(SOUTH) -> base (attachment)
 
         // UP: valid, base-attached, but owned by the player -> continue
@@ -309,8 +324,8 @@ class ProtectionServiceImplTest {
         Sign connected = mock(Sign.class);
         when(shopBlockService.getConnectedSign(container)).thenReturn(connected);
         when(accounts.hasPermission(eq(player), any(), eq(connected))).thenReturn(false);
-        for (BlockFace f : new BlockFace[]{BlockFace.DOWN, BlockFace.EAST, BlockFace.WEST,
-                BlockFace.NORTH, BlockFace.SOUTH}) {
+        for (BlockFace f :
+                new BlockFace[] {BlockFace.DOWN, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH}) {
             Block n = plainBlock();
             when(own.getRelative(f)).thenReturn(n);
             lenient().when(shopBlockService.couldBeShopContainer(n)).thenReturn(false);
@@ -333,8 +348,8 @@ class ProtectionServiceImplTest {
         when(own.getRelative(BlockFace.UP)).thenReturn(container);
         when(shopBlockService.couldBeShopContainer(container)).thenReturn(true);
         when(shopBlockService.getConnectedSign(container)).thenReturn(null);
-        for (BlockFace f : new BlockFace[]{BlockFace.DOWN, BlockFace.EAST, BlockFace.WEST,
-                BlockFace.NORTH, BlockFace.SOUTH}) {
+        for (BlockFace f :
+                new BlockFace[] {BlockFace.DOWN, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH}) {
             Block n = plainBlock();
             when(own.getRelative(f)).thenReturn(n);
             lenient().when(shopBlockService.couldBeShopContainer(n)).thenReturn(false);

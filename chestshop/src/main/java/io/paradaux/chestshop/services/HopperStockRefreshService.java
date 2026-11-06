@@ -21,6 +21,7 @@ import org.bukkit.block.DoubleChest;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -123,7 +124,8 @@ public final class HopperStockRefreshService {
 
     /** No sign search, inventory scan, database call or task allocation on the transfer path. */
     public void markDirty(Inventory inventory) {
-        if (!enabled()) return;
+        // Most transfers have a hopper at one end: skip it before resolving any holder.
+        if (!enabled() || !blocks.couldBeShopInventory(inventory)) return;
         enqueue(getHolder(inventory, false));
     }
 
@@ -214,6 +216,8 @@ public final class HopperStockRefreshService {
         }
         if (pending.isEmpty() && reconciliation.isEmpty() && recovery.isEmpty()) return;
         Set<Position> refreshedSigns = new HashSet<>();
+        // Items resolved this tick, by sign item line: parsing dominated each counter update.
+        Map<String, ItemStack> items = new HashMap<>();
         long start = nanoTime.getAsLong();
         for (int i = 0; i < MAX_PER_TICK && !pending.isEmpty(); i++) {
             var iterator = pending.entrySet().iterator();
@@ -221,14 +225,14 @@ public final class HopperStockRefreshService {
             if (entry.getValue() + refreshIntervalTicks() > tick) break;
             Position pos = entry.getKey();
             iterator.remove();
-            refresh(pos, refreshedSigns);
+            refresh(pos, refreshedSigns, items);
             if (nanoTime.getAsLong() - start >= PHASE_BUDGET_NANOS) break;
         }
         // Reserve a separate allowance so a busy normal queue cannot starve overflow recovery.
         start = nanoTime.getAsLong();
         if (recovery.isEmpty()) beginRecovery();
         for (int i = 0; i < MAX_PER_TICK && !recovery.isEmpty(); i++) {
-            refresh(recovery.removeFirst(), refreshedSigns);
+            refresh(recovery.removeFirst(), refreshedSigns, items);
             if (nanoTime.getAsLong() - start >= PHASE_BUDGET_NANOS) break;
         }
     }
@@ -249,7 +253,7 @@ public final class HopperStockRefreshService {
         }
     }
 
-    private void refresh(Position pos, Set<Position> refreshedSigns) {
+    private void refresh(Position pos, Set<Position> refreshedSigns, Map<String, ItemStack> items) {
         World world = plugin.getServer().getWorld(pos.world());
         if (world == null || !world.isChunkLoaded(pos.x() >> 4, pos.z() >> 4)) return;
         var block = world.getBlockAt(pos.x(), pos.y(), pos.z());
@@ -260,11 +264,18 @@ public final class HopperStockRefreshService {
         for (Sign sign : blocks.findConnectedShopSigns(getHolder(inventory, false), false)) {
             boolean admin = signs.isAdminShop(sign);
             if (config.isForceUnlimitedAdminShop() && admin) continue;
-            if (refreshedSigns.add(position(sign))) {
+            if (!refreshedSigns.add(position(sign))) continue;
+            String code = SignService.getItem(sign);
+            if (WildcardItems.isPattern(code)) {
+                // Wildcard shops count by pattern and have no registry row.
                 if (counting) counters.updateCounterOnQuantityLine(sign, inventory);
-                // The registry records no stock for admin shops.
-                if (!admin) stock.publish(sign, inventory);
+                continue;
             }
+            ItemStack item = items.computeIfAbsent(code, counters::determineItemTradedByShop);
+            if (item == null) continue;
+            if (counting) counters.updateCounterForItem(sign, inventory, item);
+            // The registry records no stock for admin shops.
+            if (!admin) stock.publish(sign, inventory, item);
         }
     }
 

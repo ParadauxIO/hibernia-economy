@@ -3,6 +3,7 @@ package io.paradaux.chestshop.model.config;
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationComponent;
 import io.paradaux.hibernia.framework.configurator.annotations.ConfigurationValue;
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -237,21 +238,35 @@ public class ChestShopConfiguration {
 
     // ── Adapter getters for the types the Configurator can't bind natively ──────
 
-    /** Allowed shop container materials, parsed from the configured names. */
+    /**
+     * Allowed shop container materials, parsed from the configured names. Hopper paths call
+     * this for every container they check, so the parsed set is kept until the list changes
+     * (PAR-523). The set is unmodifiable.
+     */
     public Set<Material> getShopContainers() {
+        List<String> raw = shopContainersRaw == null ? List.of() : shopContainersRaw;
+        ParsedContainers parsed = shopContainers;
+        if (parsed != null && parsed.names().equals(raw)) {
+            return parsed.materials();
+        }
         EnumSet<Material> set = EnumSet.noneOf(Material.class);
-        if (shopContainersRaw != null) {
-            for (String name : shopContainersRaw) {
-                Material m = Material.getMaterial(name.toUpperCase(Locale.ROOT));
-                if (m != null) {
-                    set.add(m);
-                } else {
-                    log.warn(name + " is not a valid Material name in the config!");
-                }
+        for (String name : raw) {
+            Material m = Material.getMaterial(name.toUpperCase(Locale.ROOT));
+            if (m != null) {
+                set.add(m);
+            } else {
+                log.warn(name + " is not a valid Material name in the config!");
             }
         }
-        return set;
+        parsed = new ParsedContainers(List.copyOf(raw), Collections.unmodifiableSet(set));
+        shopContainers = parsed;
+        return parsed.materials();
     }
+
+    private record ParsedContainers(List<String> names, Set<Material> materials) {}
+
+    @Getter(lombok.AccessLevel.NONE)
+    private volatile ParsedContainers shopContainers;
 
     /** Worlds in which empty shops are removed (empty = all worlds). */
     public Set<String> getRemoveEmptyWorlds() {
