@@ -230,56 +230,77 @@ protection handler 6.3%. Within the drain:
 The 0.5 ms phase budget is checked only between refreshes. A refresh that takes
 snapshots of large chests and their signs overruns it, so p99 drain time is 2.2–2.9 ms.
 
+### After the snapshot fix
+
+Sign discovery now resolves each sign's container from block data and takes a state
+only for the chest's own signs. The refresh worker reads those signs as live states.
+Public and legacy `uBlock` lookups still return snapshots. The same 120 s profile
+afterwards:
+
+- the drain fell from 10.8% to 5.6% of main-thread samples;
+- discovery fell from 6.8% to 1.8% of main-thread samples, and snapshots no longer
+  appear in it;
+- within the drain, counter formatting is now 34%, discovery 32% (mostly
+  `isShopBlock`'s neighbour scan) and `/find` publishing 18%.
+
+The repeat matrix (2026-11-06; `event-off`, `worker` and `worker-monitor-only`; 3 reps)
+ran on a saturated host: load average 16–18 on 16 vCPUs, against 8–12 the day before.
+The `event-off` baseline alone rose 45–50% (typical 3.09 → 4.50 ms mean MSPT) with
+run-to-run variation up to 14%, so its tick-time deltas are not comparable with the
+first matrix. Main-thread CPU above `event-off` changed little:
+
+- typical: 0.77 → 0.53 ms per tick (`worker`), 0.48 → 0.59 (`worker-monitor-only`)
+- overload: 1.75 → 1.63 (`worker`), 1.17 → 1.03 (`worker-monitor-only`)
+
+Drains above 2 ms remain (130–290 per run). The worker still fails the mean-MSPT
+and long-drain thresholds in both scenarios, and overload freshness. Repeat the
+matrix on a quiet host before judging the fix's tick-time effect.
+
 ## Enablement and rollback
 
-**Recommendation: do not enable hopper stock counters (`USE_STOCK_COUNTER`), and do not
-restore ChestShop's protection handler in ListenerControl, with this worker.** It fails
-the tick-time thresholds in every configuration measured. The old listener is worse.
+**Recommendation: do not enable hopper stock counters on a server where tick time
+matters, and do not count this worker as production-ready.** It fails the tick-time
+thresholds in every configuration measured, before and after the snapshot fix. The old
+listener is worse.
 
-**Production may already be paying part of this cost.** Since PAR-544 the MONITOR
-handler refreshes `/find` stock even when `USE_STOCK_COUNTER` is off. Production's
-ListenerControl config (copy dated 2026-06-14 in the dev clone) removes only ChestShop's
-`highest` handler, and the clone's Paper `disable-move-event` is false. If production
-matches, it runs the `worker-monitor-only` variant above. This was not checked against
-production itself. Before deciding, confirm:
+**Production already runs it.** Checked on 2026-11-06 against the live server's files:
 
-1. `hopper.disable-move-event` in production's Universe/Paper world config
-2. ChestShop's `USE_STOCK_COUNTER` and `HOPPER_STOCK_REFRESH_INTERVAL_TICKS`
-3. the `ChestShop` entry in ListenerControl's `deactivated-events`
+- ChestShop `2026.11.43.1-gde8cc832c686` includes the worker;
+- `USE_STOCK_COUNTER: true` with `HOPPER_STOCK_REFRESH_INTERVAL_TICKS: 100`;
+- `hopper.disable-move-event: false`, with no per-world override found;
+- ListenerControl's ChestShop entry is commented out, so both move handlers are
+  registered.
 
-If production matches and its tick budget matters more than hopper-driven `/find` stock,
-stop the worker by adding `monitor` to ListenerControl:
+In these workloads that costs between the `worker-monitor-only` and `worker` columns:
+roughly 8–33% mean MSPT, depending on load.
+
+To stop the worker in production, deactivate ChestShop's MONITOR handler:
 
 ```yaml
 deactivated-events:
   ChestShop:
-    highest:
-    - inventory.InventoryMoveItemEvent
     monitor:
     - inventory.InventoryMoveItemEvent
 ```
 
 Restart the server so ListenerControl applies the rule; ChestShop's reload does not
-re-register handlers. `/find` stock then updates only on trades, chest close, creation, discovery and
-resync, as it did before PAR-544. Sign counters are unaffected while `USE_STOCK_COUNTER`
-is off. Turning off `USE_STOCK_COUNTER` alone does **not** stop the worker.
+re-register handlers. Sign counters and `/find` stock then update only on trades, chest
+close, creation, discovery and resync. Turning off `USE_STOCK_COUNTER` alone does
+**not** stop the worker: since PAR-544 it also runs for `/find` stock. Leave the
+HIGHEST (protection) handler as it is unless that decision is made separately.
 
-Before enabling, re-run the benchmark after these follow-ups:
+Before enabling more widely:
 
-1. Read signs and containers without snapshots (`getState(false)`) during sign
-   discovery and refresh. Check that the counter writer and `/find` publisher remain
-   correct with live states.
-2. Then measure again. If discovery still dominates, add the durable shop-membership
-   index described above, so ordinary sorter containers skip discovery entirely.
-3. Enforce the phase budget more tightly, for example fewer refreshes per tick, so no
-   drain runs to tens of milliseconds.
+1. Repeat the matrix on a quiet host with the snapshot fix.
+2. If discovery still matters, add the durable shop-membership index described
+   above, so ordinary sorter containers skip discovery entirely.
+3. Reduce counter formatting and `/find` publishing cost per refresh, and enforce the
+   phase budget more tightly so no drain runs to tens of milliseconds.
 
-Use the same thresholds. Enabling also needs `USE_STOCK_COUNTER: true`, effective
-`disable-move-event: false` and both ChestShop handlers registered (remove the
-`highest` entry from ListenerControl). Then repeat the transfer and minecart theft checks
-on the real plugin stack.
+Use the same thresholds. Enabling needs `USE_STOCK_COUNTER: true`, effective
+`disable-move-event: false` and both ChestShop handlers registered. Then repeat the
+transfer and minecart theft checks on the real plugin stack.
 
 **Rollback:** restore the previous ListenerControl entries and `USE_STOCK_COUNTER`
-value, then restart. Removing the `highest` handler also removes immediate minecart
-theft protection, as in production today. Keep the previous configuration and plugin
-artifact for a full rollback.
+value, then restart. Keep the previous configuration and plugin artifact for a full
+rollback.
