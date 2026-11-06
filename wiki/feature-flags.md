@@ -226,3 +226,17 @@ Government webhook deliveries remain pending and resume on re-enable; they do no
 consume delivery attempts or prevent other subscriptions from progressing. Ingestion
 continues queuing events while paused. Existing cache propagation and in-flight
 operation semantics apply. Turning off this flag does not revoke keys permanently.
+
+## Business direct debits (PAR-557)
+
+V54 creates `direct_debit_mandate` and `direct_debit_collection` and registers
+`business.direct_debits` disabled. Deploy a Business build containing the feature
+before enabling it through the backoffice or `node scripts/feature-flags.mjs set
+business.direct_debits on PAR-557`. Explorer doesn't read the new tables.
+
+While disabled, every `/business debit` command replies `business.debit.disabled`,
+every service entry point rejects, and the one-minute collection job does nothing.
+Disabling pauses collections without ending mandates. After re-enabling, an overdue
+recurring mandate is collected once, for the current period only; missed periods
+aren't backfilled. Reservations left unsettled while disabled are settled on the
+first job run afterwards.
