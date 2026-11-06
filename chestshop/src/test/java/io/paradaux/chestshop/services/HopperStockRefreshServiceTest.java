@@ -175,6 +175,45 @@ class HopperStockRefreshServiceTest extends ServerTest {
     }
 
     @Test
+    void parsedItemsAreReusedAcrossBatchesUntilTheirTtl() {
+        Inventory inventory = chestAt(4, 64, 4);
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        for (int round = 1; round <= 3; round++) {
+            inventory.setItem(0, item(Material.DIAMOND, round));
+            refresh.markDirty(inventory);
+            ticks(100);
+            assertThat(counter(sign)).isEqualTo("Q 1 : C " + round);
+        }
+        verify(counters, times(1)).determineItemTradedByShop("Diamond");
+        ticks(HopperStockRefreshService.ITEM_TTL_TICKS);
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(counters, times(2)).determineItemTradedByShop("Diamond");
+    }
+
+    @Test
+    void positionsAndChunksCompareByValue() {
+        var world = java.util.UUID.randomUUID();
+        var copy = new java.util.UUID(world.getMostSignificantBits(), world.getLeastSignificantBits());
+        var a = new HopperStockRefreshService.Position(world, 1, 2, 3);
+        assertThat(a)
+                .isEqualTo(new HopperStockRefreshService.Position(copy, 1, 2, 3))
+                .hasSameHashCodeAs(new HopperStockRefreshService.Position(copy, 1, 2, 3))
+                .isNotEqualTo(new HopperStockRefreshService.Position(world, 1, 2, 4))
+                .isNotEqualTo(new HopperStockRefreshService.Position(world, 1, 3, 3))
+                .isNotEqualTo(new HopperStockRefreshService.Position(world, 0, 2, 3))
+                .isNotEqualTo(new HopperStockRefreshService.Position(java.util.UUID.randomUUID(), 1, 2, 3))
+                .isNotEqualTo("1,2,3");
+        assertThat(a.chunk())
+                .isEqualTo(new HopperStockRefreshService.ChunkKey(copy, 0, 0))
+                .hasSameHashCodeAs(new HopperStockRefreshService.ChunkKey(copy, 0, 0))
+                .isNotEqualTo(new HopperStockRefreshService.ChunkKey(world, 0, 1))
+                .isNotEqualTo(new HopperStockRefreshService.ChunkKey(world, 1, 0))
+                .isNotEqualTo(new HopperStockRefreshService.ChunkKey(java.util.UUID.randomUUID(), 0, 0))
+                .isNotEqualTo(a);
+    }
+
+    @Test
     void hopperInventoriesAreNeverQueued() {
         Block hopper = world.getBlockAt(12, 64, 4);
         hopper.setType(Material.HOPPER);

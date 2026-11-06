@@ -48,13 +48,52 @@ public final class HopperStockRefreshService {
     static final int MAX_NOT_SHOP = 65_536;
     private static final long PHASE_BUDGET_NANOS = 500_000;
 
-    record ChunkKey(UUID world, int x, int z) {}
+    // Hand-written equality: these key a lookup on every hopper transfer. Coordinates are
+    // compared first, and a world's UUID is normally the same instance.
+    record ChunkKey(UUID world, int x, int z) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof ChunkKey k && x == k.x && z == k.z && (world == k.world || world.equals(k.world));
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * x + z;
+        }
+    }
 
     record Position(UUID world, int x, int y, int z) {
         ChunkKey chunk() {
             return new ChunkKey(world, x >> 4, z >> 4);
         }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Position p
+                    && x == p.x
+                    && y == p.y
+                    && z == p.z
+                    && (world == p.world || world.equals(p.world));
+        }
+
+        @Override
+        public int hashCode() {
+            return (x * 31 + z) * 31 + y;
+        }
     }
+
+    /**
+     * How long a parsed sign item is reused. Parsing consults custom-item providers and fires
+     * the legacy ItemParseEvent, and dominated each refresh. After a provider reload a counter
+     * may count the previous definition for this long; it never affects trades.
+     */
+    static final int ITEM_TTL_TICKS = 600;
+
+    static final int MAX_PARSED_ITEMS = 1024;
+
+    private record ParsedItem(ItemStack item, long expires) {}
+
+    private final Map<String, ParsedItem> parsedItems = new HashMap<>();
 
     private final JavaPlugin plugin;
     private final ChestShopConfiguration config;
@@ -144,6 +183,7 @@ public final class HopperStockRefreshService {
         deferredPositions = 0;
         notShop.clear();
         notShopByChunk.clear();
+        parsedItems.clear();
     }
 
     /** No sign search, inventory scan, database call or task allocation on the transfer path. */
@@ -286,8 +326,6 @@ public final class HopperStockRefreshService {
         }
         if (pending.isEmpty() && reconciliation.isEmpty() && recovery.isEmpty()) return;
         Set<Position> refreshedSigns = new HashSet<>();
-        // Items resolved this tick, by sign item line: parsing dominated each counter update.
-        Map<String, ItemStack> items = new HashMap<>();
         long start = nanoTime.getAsLong();
         for (int i = 0; i < MAX_PER_TICK && !pending.isEmpty(); i++) {
             var iterator = pending.entrySet().iterator();
@@ -295,14 +333,14 @@ public final class HopperStockRefreshService {
             if (entry.getValue() + refreshIntervalTicks() > tick) break;
             Position pos = entry.getKey();
             iterator.remove();
-            refresh(pos, refreshedSigns, items);
+            refresh(pos, refreshedSigns);
             if (nanoTime.getAsLong() - start >= PHASE_BUDGET_NANOS) break;
         }
         // Reserve a separate allowance so a busy normal queue cannot starve overflow recovery.
         start = nanoTime.getAsLong();
         if (recovery.isEmpty()) beginRecovery();
         for (int i = 0; i < MAX_PER_TICK && !recovery.isEmpty(); i++) {
-            refresh(recovery.removeFirst(), refreshedSigns, items);
+            refresh(recovery.removeFirst(), refreshedSigns);
             if (nanoTime.getAsLong() - start >= PHASE_BUDGET_NANOS) break;
         }
     }
@@ -323,7 +361,18 @@ public final class HopperStockRefreshService {
         }
     }
 
-    private void refresh(Position pos, Set<Position> refreshedSigns, Map<String, ItemStack> items) {
+    private ItemStack itemFor(String code) {
+        ParsedItem parsed = parsedItems.get(code);
+        if (parsed == null || tick >= parsed.expires()) {
+            if (parsedItems.size() >= MAX_PARSED_ITEMS) parsedItems.clear();
+            // Unparseable codes are remembered too, so a broken sign is not reparsed each batch.
+            parsed = new ParsedItem(counters.determineItemTradedByShop(code), tick + ITEM_TTL_TICKS);
+            parsedItems.put(code, parsed);
+        }
+        return parsed.item();
+    }
+
+    private void refresh(Position pos, Set<Position> refreshedSigns) {
         refreshes++;
         World world = plugin.getServer().getWorld(pos.world());
         if (world == null || !world.isChunkLoaded(pos.x() >> 4, pos.z() >> 4)) return;
@@ -352,7 +401,7 @@ public final class HopperStockRefreshService {
                 if (counting) counters.updateCounterOnQuantityLine(sign, inventory);
                 continue;
             }
-            ItemStack item = items.computeIfAbsent(code, counters::determineItemTradedByShop);
+            ItemStack item = itemFor(code);
             if (item == null) continue;
             if (counting) counters.updateCounterForItem(sign, inventory, item);
             // The registry records no stock for admin shops.
