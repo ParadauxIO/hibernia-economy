@@ -108,6 +108,10 @@ class WebhookRateLimitIT extends EmbeddedDbIT {
     @Autowired
     private WebhookDispatcherService dispatcher;
 
+    /** The real lease (always granted without Redis), spied so a test can take it away mid-batch. */
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    private WebhookRedisLock lock;
+
     @BeforeEach
     void resetEndpoint() {
         hits.clear();
@@ -221,5 +225,21 @@ class WebhookRateLimitIT extends EmbeddedDbIT {
         assertThat(hitsOn("/limited")).isEqualTo(1);
         assertThat(hitsOn("/ok-other")).isEqualTo(1);
         assertThat(deliveryAttempts(otherDelivery)).isEqualTo(1);
+    }
+
+    @Test
+    void stopsSendingAsSoonAsTheLeaseIsLostMidBatch() {
+        long sub = subscription(1, "/ok");
+        long sent = due(sub, 1);
+        long left = due(sub, 1);
+        // Granted for the tick and the first send, then another replica holds it.
+        org.mockito.Mockito.doReturn(true, true, false).when(lock).tryAcquireOrRenew();
+
+        dispatcher.tick();
+
+        assertThat(hitsOn("/ok")).isEqualTo(1);
+        assertThat(deliveryStatus(sent)).isEqualTo("DELIVERED");
+        assertThat(deliveryStatus(left)).isEqualTo("PENDING");
+        assertThat(deliveryAttempts(left)).isZero();
     }
 }

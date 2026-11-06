@@ -59,7 +59,7 @@ treasury:
     retry-max-seconds: ${WEBHOOK_RETRY_MAX_SECONDS:3600}
     failure-threshold: ${WEBHOOK_FAILURE_THRESHOLD:15}
     max-per-key: ${WEBHOOK_MAX_PER_KEY:20}
-    lock-ttl-ms: ${WEBHOOK_LOCK_TTL_MS:15000}
+    lock-ttl-ms: ${WEBHOOK_LOCK_TTL_MS:30000}
 
 management:
   endpoints:
