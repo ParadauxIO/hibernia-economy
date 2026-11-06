@@ -86,6 +86,13 @@ async function seedGov() {
   await sql`INSERT INTO explorer_gov_unit_account (unit_id, account_id) VALUES (1, 102), (1, 103), (2, 104), (3, 101)`.execute(db);
 
   const at = (day: string, time: string) => `${day} ${time}`;
+  // Historical payroll: include both range boundaries, exclude another unit
+  // and non-wage credits, and retain recipients absent from the last 31 days.
+  await txn(at(addDays(TODAY, -90), '23:59:59'), 'treasury-salary', 'Salary', [[102, '-200.00'], [3, '200.00']]);
+  await txn(at(addDays(TODAY, -89), '00:00:00'), 'treasury-salary', 'Salary', [[102, '-100.00'], [3, '100.00']]);
+  await txn(at(addDays(TODAY, -60), '10:00:00'), 'treasury-salary', 'Salary', [[104, '-900.00'], [3, '900.00']]);
+  await txn(at(addDays(TODAY, -60), '11:00:00'), 'Treasury-Core', 'Grant', [[102, '-800.00'], [3, '800.00']]);
+
   await txn(at(D3, '10:00:00'), 'ChestShop', 'ChestShop sales tax (diamond)', [[1, '-10.00'], [102, '10.00']]);
   await txn(at(D3, '11:00:00'), 'treasury', 'Personal balance tax (24h 0m @ 1.0%/wk)', [[2, '-25.00'], [101, '25.00']]);
   const fine = await txn(at(D2, '09:00:00'), 'treasury', 'Fine: speeding', [[2, '-40.00'], [102, '40.00']]);
@@ -221,13 +228,13 @@ d('gov queries stay inside the scope', () => {
   it('overview: totals, net flow, monthly bars, balance and largest movements', async () => {
     const o = await getOverview(scope, govSelection(scope, undefined), RANGE);
     // Opening balances plus the fixture postings (the balance trigger applies them).
-    expect(o.treasury).toBe('70505.00');
+    expect(o.treasury).toBe('69405.00');
     expect(o.net).toBe('505.00');
     expect(o.flows.coverage.covered).toBe(true);
     expect(o.flows.breakdown).toMatchObject({ totalRevenue: '80.00', taxes: '40.00', fines: '40.00', totalSpending: '575.00', governmentIn: '1200.00', governmentOut: '200.00' });
     expect(o.months.reduce((s, m) => s + Number(m.revenue), 0)).toBe(80);
-    expect(o.balance.data[o.balance.data.length - 1]?.balance).toBe('70505.00');
-    expect(o.balance.data[0]?.balance).toBe('70000.00');
+    expect(o.balance.data[o.balance.data.length - 1]?.balance).toBe('69405.00');
+    expect(o.balance.data[0]?.balance).toBe('68900.00'); // 70,000 less 1,100 historical outflows
     expect(accountsOf(o.movements.rows).every((id) => ids.includes(id))).toBe(true);
     expect(accountsOf(o.movements.rows).filter((id) => OUT_OF_SCOPE.includes(id))).toEqual([]);
     expect(o.movements.rows.slice(0, 3).map((m) => [m.account_id, m.amount])).toEqual([[102, '1000.00'], [102, '-500.00'], [102, '-200.00']]);
@@ -250,7 +257,7 @@ d('gov queries stay inside the scope', () => {
     const commerce = rows.find((r) => r.accountId === 102)!;
     expect(commerce).toMatchObject({ net30: '305.00', unit: { slug: 'commerce', name: 'Commerce' } });
     expect(commerce.spark).toHaveLength(30);
-    expect(commerce.spark[commerce.spark.length - 1]).toBe(50305);
+    expect(commerce.spark[commerce.spark.length - 1]).toBe(49205);
   });
 
   it('revenue: tax kinds, fines and top payers (players and firms)', async () => {
@@ -277,6 +284,33 @@ d('gov queries stay inside the scope', () => {
     expect(p.analysis.cadenceMinutes).toBe(15);
     expect(p.analysis.missed).toBe(2);
     expect(p.recipients.map((r) => [r.account_id, r.total, r.payments])).toEqual([[1, '45.00', 3], [2, '30.00', 2]]);
+  });
+
+  it('payroll recipients cover 90 days without widening scope or the run window', async () => {
+    const range = { from: addDays(TODAY, -89), to: TODAY };
+    const p = await getPayroll(scope, ids, range);
+    expect(p.recipientCoverage.covered).toBe(true);
+    expect(p.total).toBe('175.00');
+    expect(p.recipients.map((r) => [r.account_id, r.total, r.payments])).toEqual([
+      [3, '100.00', 1], [1, '45.00', 3], [2, '30.00', 2],
+    ]);
+    expect(p.analysis.runs).toHaveLength(5);
+    expect(p.rawRange.capped).toBe(true);
+    // Recomputing an old day replaces rather than doubles its recipients.
+    await recomputeDay(rollupDb(), 'gov_recipient_day', range.from);
+    expect((await getPayroll(scope, ids, range)).recipients).toEqual(p.recipients);
+  });
+
+  it('payroll recipients expose incomplete backfill separately from totals', async () => {
+    await sql`UPDATE explorer_rollup_coverage SET history_complete = 0, from_day = ${D3}
+      WHERE job = 'gov_recipient_day'`.execute(db);
+    try {
+      const p = await getPayroll(scope, ids, { from: addDays(TODAY, -89), to: TODAY });
+      expect(p.coverage.covered).toBe(true);
+      expect(p.recipientCoverage).toMatchObject({ covered: false, coveredFrom: D3 });
+    } finally {
+      await markHistoryComplete(rollupDb(), 'gov_recipient_day');
+    }
   });
 
   it('fines: only in-scope fines, chips, summary and export', async () => {

@@ -1,7 +1,6 @@
 import { hasPermission } from '@/lib/auth/policy';
 import { buildMetadata } from '@/lib/metadata';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { getViewer } from '@/lib/auth/viewer';
 import { auditView } from '@/lib/audit';
 import { meGate } from '@/lib/services/me';
@@ -83,7 +82,7 @@ export default async function WebhooksPage() {
               {hooks.map((h) => (
                 <tr key={h.id}>
                   <td>
-                    <Link href={`/me/developer/webhooks/${h.id}` as Route} className="rowlink" prefetch={false}>
+                    <Link href={`/me/developer/webhooks/${h.id}`} className="rowlink" prefetch={false}>
                       <span className="mono">{h.url}</span>
                     </Link>
                     {h.isDiscord && <span className="badge badge-active" style={{ marginLeft: 6 }} title="Deliveries are sent as a rich Discord embed">Discord</span>}
@@ -100,7 +99,7 @@ export default async function WebhooksPage() {
                   <td className="amount mono">{fmtN(h.consecutiveFailures)}</td>
                   <td className="ts"><LocalTimestamp value={h.createdAt} /></td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <Link href={`/me/developer/webhooks/${h.id}` as Route} className="btn" prefetch={false}>Deliveries</Link>{' '}
+                    <Link href={`/me/developer/webhooks/${h.id}`} className="btn" prefetch={false}>Deliveries</Link>{' '}
                     {hasPermission(viewer, 'webhooks.manage') && <WebhookRowActions id={h.id} active={h.active} url={h.url} />}
                   </td>
                 </tr>

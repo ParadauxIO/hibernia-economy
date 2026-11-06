@@ -27,14 +27,20 @@ add phantom stock. Unlimited admin shops are skipped, as are counters when
 Each refreshed non-admin shop is also measured for the `/find` registry
 (`current_stock` and `estimated_capacity`) by `ShopStockPublisher`:
 
-- A reading equal to the last value written for that sign, by any path, writes nothing.
-- Changed readings are coalesced per sign and written by one async batch at a time,
-  so registry writes stay in order and never run on the server thread.
-- Trade, chest-close, creation and resync writes stay synchronous. They report their
-  value to the publisher, which drops queued hopper readings for that sign and makes
-  an in-flight one skip its write. An older hopper reading therefore cannot replace a newer one.
-- Wildcard shops have no registry row and are skipped. Plugin disable flushes
-  queued writes synchronously.
+- A reading equal to the last submitted value for that sign, by any path, writes nothing.
+- Changed readings are coalesced per sign until the next tick, then submitted to the
+  same FIFO background writer as trade, chest-close, creation, discovery, resync,
+  deletion and toggle registry mutations. Database writes never run in the hopper callback.
+- Newer authoritative observations drop pending hopper readings before submission.
+  Already-submitted readings precede the newer observation in the FIFO, so they cannot
+  overwrite it later. Only immutable records and scalar values enter the writer.
+- Preview and finder reads wait for preceding registry writes on their background threads.
+  Sale recording remains synchronous because Treasury dispatches a Bukkit sale event.
+- Baselines are indexed by world/chunk; chunk unload drops one bucket without scanning
+  unrelated shops. Wildcard shops have no registry row and are skipped.
+- Plugin disable submits pending hopper readings and waits up to 15 seconds for the
+  writer to drain, logging if it cannot finish. Registry writes remain best-effort analytics;
+  this queue is not a durable transaction log.
 
 This prototype uses a lazy index of pending container coordinates. It does **not**
 cache positive or negative shop membership: each batch discovers signs afresh.

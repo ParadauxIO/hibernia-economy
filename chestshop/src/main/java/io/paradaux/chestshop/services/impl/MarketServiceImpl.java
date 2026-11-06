@@ -8,6 +8,7 @@ import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketService;
+import io.paradaux.chestshop.services.OrderedMarketWriter;
 import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.MaterialUtil;
 import io.paradaux.chestshop.utils.PriceUtil;
@@ -65,7 +66,8 @@ public class MarketServiceImpl implements MarketService {
 
     @Override
     public void init() {
-        market = load(MarketApi.class);
+        MarketApi api = load(MarketApi.class);
+        market = api == null ? null : new OrderedMarketWriter(api);
         shopQuery = load(ShopQueryApi.class);
         treasury = load(TreasuryApi.class);
         // Business is a soft dependency: its API classes only exist when the plugin is installed,
@@ -107,6 +109,16 @@ public class MarketServiceImpl implements MarketService {
     @Override
     public MarketApi market() {
         return market;
+    }
+
+    @Override
+    public void awaitWrites() {
+        if (market instanceof OrderedMarketWriter writer) writer.awaitWrites();
+    }
+
+    @Override
+    public void close() {
+        if (market instanceof OrderedMarketWriter writer) writer.close();
     }
 
     @Override
@@ -171,12 +183,20 @@ public class MarketServiceImpl implements MarketService {
         }
     }
 
-    private String itemKey(ItemStack item) {
-        String code = canonicalCode(item);
-        return code != null ? code : itemCodes.encode(item, MaterialUtil.MAXIMUM_SIGN_WIDTH);
+    private record ItemIdentity(String key, String name, boolean custom, String data) {}
+
+    /** Resolve plugin item identity once per observation, not once per DTO field. */
+    private ItemIdentity identity(ItemStack item) {
+        String canonical = canonicalCode(item);
+        String vanilla = itemCodes.encode(item, 0);
+        boolean custom = (canonical != null && vanilla != null && !canonical.equalsIgnoreCase(vanilla))
+                || (vanilla != null && vanilla.contains("#"))
+                || item.hasItemMeta();
+        String key = canonical != null ? canonical : itemCodes.encode(item, MaterialUtil.MAXIMUM_SIGN_WIDTH);
+        return new ItemIdentity(key, itemName(item, custom, canonical), custom, itemData(item, custom));
     }
 
-    private String itemName(ItemStack item) {
+    private String itemName(ItemStack item, boolean custom, String canonical) {
         if (item.hasItemMeta()) {
             ItemMeta meta = item.getItemMeta();
             net.kyori.adventure.text.Component displayName = meta != null ? meta.displayName() : null;
@@ -189,8 +209,8 @@ public class MarketServiceImpl implements MarketService {
                 }
             }
         }
-        if (isCustom(item)) {
-            String code = canonicalCode(item);
+        if (custom) {
+            String code = canonical;
             if (code != null && !code.isBlank()) {
                 return pretty(code);
             }
@@ -225,17 +245,8 @@ public class MarketServiceImpl implements MarketService {
         return sb.length() > 0 ? sb.toString() : raw;
     }
 
-    private boolean isCustom(ItemStack item) {
-        String vanilla = itemCodes.encode(item, 0);
-        String canonical = canonicalCode(item);
-        if (canonical != null && vanilla != null && !canonical.equalsIgnoreCase(vanilla)) {
-            return true;
-        }
-        return (vanilla != null && vanilla.contains("#")) || item.hasItemMeta();
-    }
-
-    private String itemData(ItemStack item) {
-        if (!isCustom(item)) {
+    private String itemData(ItemStack item, boolean custom) {
+        if (!custom) {
             return null;
         }
         try {
@@ -277,6 +288,7 @@ public class MarketServiceImpl implements MarketService {
             Long txnId) {
         Location l = sign.getLocation();
         BigDecimal unit = quantity > 0 ? total.divide(BigDecimal.valueOf(quantity), 4, RoundingMode.HALF_UP) : total;
+        ItemIdentity identity = identity(item);
         return new ChestShopSaleRecord(
                 txnId,
                 direction,
@@ -287,10 +299,10 @@ public class MarketServiceImpl implements MarketService {
                 owner.ownerUuid(),
                 owner.admin(),
                 item.getType().name(),
-                itemKey(item),
-                itemName(item),
-                isCustom(item),
-                itemData(item),
+                identity.key(),
+                identity.name(),
+                identity.custom(),
+                identity.data(),
                 quantity,
                 unit,
                 total,
@@ -334,6 +346,7 @@ public class MarketServiceImpl implements MarketService {
             int batch,
             Integer currentStock,
             Integer estimatedCapacity) {
+        ItemIdentity identity = identity(item);
         return new ChestShopShopRecord(
                 worldName(l),
                 l.getBlockX(),
@@ -345,10 +358,10 @@ public class MarketServiceImpl implements MarketService {
                 owner.firmId(),
                 owner.ownerUuid(),
                 item.getType().name(),
-                itemKey(item),
-                itemName(item),
-                isCustom(item),
-                itemData(item),
+                identity.key(),
+                identity.name(),
+                identity.custom(),
+                identity.data(),
                 nonNegativeOrNull(buyPrice),
                 nonNegativeOrNull(sellPrice),
                 batch,

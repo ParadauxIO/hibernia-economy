@@ -126,7 +126,7 @@ class RestApiSecurityTest {
                 firmBDefaultAcc[0] = BusinessLedger.firmDefaultAccountId(firmBId).orElseThrow();
                 Barrier.settle();
                 pb.chatCommand("/business deposit " + firmB + " 50");
-                pb.awaitMessageContaining("Deposited", TIMEOUT);
+                pb.awaitMessageContaining("Paid", TIMEOUT);
             });
 
             // Issue a BUSINESS key for firm A; try to transfer FROM firm B's

@@ -4,17 +4,16 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.commands.resolvers.OnlineFirmName;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
-import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.FirmTransactionService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.Account;
@@ -33,10 +32,10 @@ public class AccountCommands implements CommandHandler {
 
     private final FirmAccountService accounts;
     private final FirmService firms;
-    private final FirmStaffService staff;
+    private final FirmGate firmGate;
     private final FirmTransactionService audit;
     private final TreasuryApi treasury;
-    private final Message message;
+    private final BusinessMessages message;
     private final FirmNotificationService notifications;
     private final FirmPlayerService firmPlayers;
 
@@ -44,15 +43,15 @@ public class AccountCommands implements CommandHandler {
     public AccountCommands(
             FirmAccountService accounts,
             FirmService firms,
-            FirmStaffService staff,
+            FirmGate firmGate,
             FirmTransactionService audit,
             TreasuryApi treasury,
-            Message message,
+            BusinessMessages message,
             FirmNotificationService notifications,
             FirmPlayerService firmPlayers) {
         this.accounts = accounts;
         this.firms = firms;
-        this.staff = staff;
+        this.firmGate = firmGate;
         this.audit = audit;
         this.treasury = treasury;
         this.message = message;
@@ -436,17 +435,9 @@ public class AccountCommands implements CommandHandler {
     @Description("Show the balance of a specific firm account")
     public void accountBalance(
             @Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("accountId") Integer accountId) {
-        String firmName = firmRef.value();
-        Firm firm = firms.getFirmByNameOrId(firmName);
-        if (firm == null) {
-            message.send(sender, "business.general.firm-not-found");
-            return;
-        }
-
-        if (!canAccessFirmFinances(firm, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm firm = resolved.get();
 
         String balance = audit.getFormattedAccountBalance(firm.getFirmId(), accountId);
         message.send(
@@ -471,17 +462,9 @@ public class AccountCommands implements CommandHandler {
             @Arg("firm") FirmName firmRef,
             @Arg("accountId") Integer accountId,
             @Arg("amount") BigDecimal amount) {
-        String firmName = firmRef.value();
-        Firm firm = firms.getFirmByNameOrId(firmName);
-        if (firm == null) {
-            message.send(sender, "business.general.firm-not-found");
-            return;
-        }
-
-        if (!canAccessFirmFinances(firm, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm firm = resolved.get();
 
         // The service throws framework semantic exceptions that the ErrorRenderer maps
         // to the player's locale via each exception's key (plugin-architecture/0002).
@@ -509,17 +492,9 @@ public class AccountCommands implements CommandHandler {
             @Arg("firm") FirmName firmRef,
             @Arg("accountId") Integer accountId,
             @Arg("amount") BigDecimal amount) {
-        String firmName = firmRef.value();
-        Firm firm = firms.getFirmByNameOrId(firmName);
-        if (firm == null) {
-            message.send(sender, "business.general.firm-not-found");
-            return;
-        }
-
-        if (!canAccessFirmFinances(firm, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm firm = resolved.get();
 
         audit.withdrawFromAccount(firm.getFirmId(), accountId, sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
@@ -532,6 +507,57 @@ public class AccountCommands implements CommandHandler {
                 accountId,
                 "amount",
                 formatted);
+    }
+
+    @Route("account transfer <firm> <fromAccountId> <toAccountId> <amount>")
+    @Permission("business.account.finance")
+    @Async
+    @Description("Move money directly between two accounts belonging to the same firm")
+    public void accountTransfer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("fromAccountId") Integer fromAccountId,
+            @Arg("toAccountId") Integer toAccountId,
+            @Arg("amount") BigDecimal amount) {
+        doAccountTransfer(sender, firmRef, fromAccountId, toAccountId, amount, null);
+    }
+
+    @Route("account transfer <firm> <fromAccountId> <toAccountId> <amount> <memo>")
+    @Permission("business.account.finance")
+    @Async
+    @Description("Move money between the firm's accounts with a memo recorded in the ledger")
+    public void accountTransfer(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("fromAccountId") Integer fromAccountId,
+            @Arg("toAccountId") Integer toAccountId,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
+        doAccountTransfer(sender, firmRef, fromAccountId, toAccountId, amount, memo);
+    }
+
+    private void doAccountTransfer(
+            Player sender,
+            FirmName firmRef,
+            Integer fromAccountId,
+            Integer toAccountId,
+            BigDecimal amount,
+            String memo) {
+        var resolved = firmGate.resolveForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm firm = resolved.get();
+        audit.transferBetweenAccounts(firm.getFirmId(), fromAccountId, toAccountId, sender.getUniqueId(), amount, memo);
+        message.send(
+                sender,
+                "business.account.transfer.success",
+                "firm",
+                firm.getDisplayName(),
+                "fromAccountId",
+                fromAccountId,
+                "toAccountId",
+                toAccountId,
+                "amount",
+                treasury.formatAmount(amount));
     }
 
     // ---- ACCOUNT PAY: PLAYER -> BUSINESS ----------------------------------------
@@ -577,17 +603,9 @@ public class AccountCommands implements CommandHandler {
             @Arg("accountId") Integer accountId,
             @Arg("player") FirmPlayer target,
             @Arg("amount") BigDecimal amount) {
-        String firmName = firmRef.value();
-        Firm firm = firms.getFirmByNameOrId(firmName);
-        if (firm == null) {
-            message.send(sender, "business.general.firm-not-found");
-            return;
-        }
-
-        if (!canAccessFirmFinances(firm, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm firm = resolved.get();
 
         audit.payPlayerFromAccount(firm.getFirmId(), accountId, target.getUniqueId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
@@ -635,10 +653,7 @@ public class AccountCommands implements CommandHandler {
             return;
         }
 
-        if (!canAccessFirmFinances(firm, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        if (!firmGate.requireFinanceAccess(sender, firm)) return;
 
         audit.payFirmFromAccount(firm.getFirmId(), accountId, targetF.getFirmId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
@@ -685,17 +700,9 @@ public class AccountCommands implements CommandHandler {
             @Arg("firm") FirmName firmRef,
             @Arg("accountId") Integer accountId,
             @Arg("page") Integer page) {
-        String firmName = firmRef.value();
-        Firm firm = firms.getFirmByNameOrId(firmName);
-        if (firm == null) {
-            message.send(sender, "business.general.firm-not-found");
-            return;
-        }
-
-        if (!canAccessFirmFinances(firm, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm firm = resolved.get();
 
         Page<TransactionEntry> txPage = audit.getAccountTransactions(firm.getFirmId(), accountId, page, TX_PAGE_SIZE);
 
@@ -735,9 +742,5 @@ public class AccountCommands implements CommandHandler {
                     "nextPage",
                     txPage.pageNumber() + 1);
         }
-    }
-
-    private boolean canAccessFirmFinances(Firm firm, Player player) {
-        return CommandSupport.canAccessFirmFinances(firms, staff, firm.getFirmId(), player.getUniqueId());
     }
 }

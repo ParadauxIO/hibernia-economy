@@ -90,6 +90,23 @@ supported setting in this fork. Check the installed
 plugins and your tenant configuration before changing them; normal build permissions
 and add-on restrictions can still reject shop creation or trades.
 
+With `WORLDGUARD_INTEGRATION: true`, `WORLDGUARD_ONLY_IN_REGION` defaults to
+`true`: shops still require a region, as in earlier fork versions. Set it to
+`false` to permit shops outside regions while respecting explicit `allow-shop`
+denials. `WORLDGUARD_USE_FLAG: true` takes precedence and requires an explicit
+`allow-shop: allow`; a missing region manager cannot grant that permission.
+`WORLDGUARD_USE_PROTECTION` independently retains WorldGuard chest/use protection.
+PlotSquared is not an integrated protection provider in this fork.
+
+## Editing shop signs
+
+Submitting unchanged text does not charge a fee or recreate the shop. A successful
+front-side edit retires the old shop, refunds its old owner according to
+`SHOP_REFUND_PRICE`, and registers the replacement; the editor pays the configured
+`SHOP_CREATION_PRICE`. The editor needs enough funds for that fee before any refund.
+Rejected replacements keep the existing sign and listing. Replacing a shop with
+ordinary text removes the shop and applies the normal removal refund.
+
 ## Custom items (Nexo)
 
 Support for **Nexo** custom items is **built into ChestShop** — no companion plugin is

@@ -4,12 +4,12 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.commands.resolvers.OnlineFirmName;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.*;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.TransactionEntry;
@@ -23,22 +23,22 @@ public class MiscCommands implements CommandHandler {
     private static final int TX_PAGE_SIZE = 10;
 
     private final FirmService firms;
-    private final FirmStaffService staff;
+    private final FirmGate firmGate;
     private final FirmTransactionService audit;
     private final TreasuryApi treasury;
-    private final Message message;
+    private final BusinessMessages message;
     private final FirmNotificationService notifications;
 
     @Inject
     public MiscCommands(
             FirmService firms,
-            FirmStaffService staff,
+            FirmGate firmGate,
             FirmTransactionService audit,
             TreasuryApi treasury,
-            Message message,
+            BusinessMessages message,
             FirmNotificationService notifications) {
         this.firms = firms;
-        this.staff = staff;
+        this.firmGate = firmGate;
         this.audit = audit;
         this.treasury = treasury;
         this.message = message;
@@ -63,50 +63,6 @@ public class MiscCommands implements CommandHandler {
         message.send(sender, "business.finance.balance", "firm", f.getDisplayName(), "balance", balance);
     }
 
-    // ---- DEPOSIT ----------------------------------------------------------------
-
-    @Route("deposit <firm> <amount>")
-    @Permission("business.finance")
-    @Async
-    @Description("Deposit from your personal account into a firm's treasury account")
-    public void deposit(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("amount") BigDecimal amount) {
-        doDeposit(sender, firmRef, amount, null);
-    }
-
-    @Route("deposit <firm> <amount> <memo>")
-    @Permission("business.finance")
-    @Async
-    @Description("Deposit into a firm's treasury with a memo recorded on the transaction")
-    public void deposit(
-            @Sender Player sender,
-            @Arg("firm") FirmName firmRef,
-            @Arg("amount") BigDecimal amount,
-            @GreedyArg("memo") String memo) {
-        doDeposit(sender, firmRef, amount, memo);
-    }
-
-    private void doDeposit(Player sender, FirmName firmRef, BigDecimal amount, String memo) {
-        String firm = firmRef.value();
-        Firm f = firms.getFirmByNameOrId(firm);
-        if (f == null) {
-            message.send(sender, "business.firm.not-found", "firm", firm);
-            return;
-        }
-
-        if (!canAccessFirmFinances(f, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
-
-        // Service throws framework semantic exceptions (invalid-amount, insufficient
-        // funds, no-permission, no-account) that the framework's ErrorRenderer resolves
-        // to the player's locale via the key each carries — no catch-and-hand-format
-        // here (plugin-architecture/0002).
-        audit.deposit(f.getFirmId(), sender.getUniqueId(), amount, memo);
-        String formatted = treasury.formatAmount(amount);
-        message.send(sender, "business.finance.deposit.success", "firm", f.getDisplayName(), "amount", formatted);
-    }
-
     // ---- WITHDRAW ---------------------------------------------------------------
 
     @Route("withdraw <firm> <amount>")
@@ -114,17 +70,9 @@ public class MiscCommands implements CommandHandler {
     @Async
     @Description("Withdraw from a firm's treasury account into your personal account")
     public void withdraw(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("amount") BigDecimal amount) {
-        String firm = firmRef.value();
-        Firm f = firms.getFirmByNameOrId(firm);
-        if (f == null) {
-            message.send(sender, "business.firm.not-found", "firm", firm);
-            return;
-        }
-
-        if (!canAccessFirmFinances(f, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveNamedForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm f = resolved.get();
 
         audit.withdraw(f.getFirmId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
@@ -133,11 +81,25 @@ public class MiscCommands implements CommandHandler {
 
     // ---- PAY: PLAYER -> BUSINESS ------------------------------------------------
 
+    @Route("deposit <firm> <amount>")
     @Route("pay into <firm> <amount>")
     @Permission("business.pay")
     @Async
     @Description("Pay money from your personal account into a business")
     public void payInto(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("amount") BigDecimal amount) {
+        payInto(sender, firmRef, amount, null);
+    }
+
+    @Route("deposit <firm> <amount> <memo>")
+    @Route("pay into <firm> <amount> <memo>")
+    @Permission("business.pay")
+    @Async
+    @Description("Pay money into a business with a memo recorded on the transaction")
+    public void payInto(
+            @Sender Player sender,
+            @Arg("firm") FirmName firmRef,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("memo") String memo) {
         String firm = firmRef.value();
         Firm f = firms.getFirmByNameOrId(firm);
         if (f == null) {
@@ -145,7 +107,7 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        audit.payIntoFirm(f.getFirmId(), sender.getUniqueId(), amount);
+        audit.payIntoFirm(f.getFirmId(), sender.getUniqueId(), amount, memo);
         String formatted = treasury.formatAmount(amount);
         message.send(sender, "business.finance.pay.into.success", "firm", f.getDisplayName(), "amount", formatted);
         notifications.notifyFirmExcept(
@@ -171,17 +133,9 @@ public class MiscCommands implements CommandHandler {
             @Arg("firm") FirmName firmRef,
             @Arg("player") FirmPlayer target,
             @Arg("amount") BigDecimal amount) {
-        String firm = firmRef.value();
-        Firm f = firms.getFirmByNameOrId(firm);
-        if (f == null) {
-            message.send(sender, "business.firm.not-found", "firm", firm);
-            return;
-        }
-
-        if (!canAccessFirmFinances(f, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveNamedForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm f = resolved.get();
 
         audit.payPlayer(f.getFirmId(), target.getUniqueId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
@@ -226,10 +180,7 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        if (!canAccessFirmFinances(f, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        if (!firmGate.requireFinanceAccess(sender, f)) return;
 
         audit.payFirm(f.getFirmId(), targetF.getFirmId(), sender.getUniqueId(), amount);
         String formatted = treasury.formatAmount(amount);
@@ -317,10 +268,7 @@ public class MiscCommands implements CommandHandler {
             return;
         }
 
-        if (!canAccessFirmFinances(source, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        if (!firmGate.requireFinanceAccess(sender, source)) return;
 
         audit.payFirm(source.getFirmId(), target.getFirmId(), sender.getUniqueId(), amount, memo);
         String formatted = treasury.formatAmount(amount);
@@ -360,17 +308,9 @@ public class MiscCommands implements CommandHandler {
     @Async
     @Description("Show firm transaction history")
     public void transactions(@Sender Player sender, @Arg("firm") FirmName firmRef, @Arg("page") Integer page) {
-        String firm = firmRef.value();
-        Firm f = firms.getFirmByNameOrId(firm);
-        if (f == null) {
-            message.send(sender, "business.firm.not-found", "firm", firm);
-            return;
-        }
-
-        if (!canAccessFirmFinances(f, sender)) {
-            message.send(sender, "business.general.no-permission");
-            return;
-        }
+        var resolved = firmGate.resolveNamedForFinances(sender, firmRef.value());
+        if (resolved.isEmpty()) return;
+        Firm f = resolved.get();
 
         Page<TransactionEntry> txPage = audit.getAggregateTransactions(f.getFirmId(), page, TX_PAGE_SIZE);
 
@@ -400,9 +340,5 @@ public class MiscCommands implements CommandHandler {
                     "nextPage",
                     txPage.pageNumber() + 1);
         }
-    }
-
-    private boolean canAccessFirmFinances(Firm f, Player player) {
-        return CommandSupport.canAccessFirmFinances(firms, staff, f.getFirmId(), player.getUniqueId());
     }
 }

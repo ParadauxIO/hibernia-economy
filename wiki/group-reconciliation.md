@@ -1,7 +1,11 @@
 # Explorer group reconciliation (PAR-101)
 
 TreasuryAPI refreshes Explorer memberships at startup and every
-`reconciliation.interval-seconds` (clamped to 1–1800 seconds). Set
+`reconciliation.interval-seconds` (clamped to 1–1800 real seconds). Both jobs use
+Paper's asynchronous scheduler independently of server TPS, so low TPS does not
+stretch the refresh interval past the one-hour database lease. Jobs are cancelled
+when the plugin disables. Failed or slow reconciliation can still let leases expire.
+Set
 `reconciliation.enabled: false` to stop both crons. Business/Realty bindings run
 independently of LuckPerms. Realty is an optional soft dependency; Business is
 already required by TreasuryAPI.

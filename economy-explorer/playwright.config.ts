@@ -18,6 +18,7 @@ if (managed) {
   process.env.E2E_AUTH_SHIM = '1';
   process.env.E2E_AUTH_SECRET = 'e2e-only-not-a-secret';
   process.env.E2E_BASE_URL = baseURL;
+  process.env.E2E_LINKED_STORAGE = '.context/linked-visitor.json';
 }
 
 export default defineConfig({
@@ -59,6 +60,9 @@ export default defineConfig({
   }),
   use: {
     baseURL,
+    // Workers reload this config after E2E_BASE_URL has been set, so retain
+    // the managed fixture path in their inherited environment.
+    ...(process.env.E2E_LINKED_STORAGE && { storageState: process.env.E2E_LINKED_STORAGE }),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

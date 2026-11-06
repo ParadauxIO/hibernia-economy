@@ -2,15 +2,14 @@ package io.paradaux.business.commands.resolvers;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.commander.spi.ParameterResolver;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
-import org.bukkit.command.CommandSender;
-
+import io.paradaux.hibernia.framework.commander.spi.ParameterResolver;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.bukkit.command.CommandSender;
 
 @Singleton
 public final class FirmPlayerResolver implements ParameterResolver<FirmPlayer> {
@@ -66,9 +65,8 @@ public final class FirmPlayerResolver implements ParameterResolver<FirmPlayer> {
             String norm = s.trim();
             // Support compact 32-char UUID too, because players paste weird stuff
             if (norm.length() == 32) {
-                norm = norm.substring(0, 8) + "-" + norm.substring(8, 12) + "-" +
-                        norm.substring(12, 16) + "-" + norm.substring(16, 20) + "-" +
-                        norm.substring(20);
+                norm = norm.substring(0, 8) + "-" + norm.substring(8, 12) + "-" + norm.substring(12, 16) + "-"
+                        + norm.substring(16, 20) + "-" + norm.substring(20);
             }
             return UUID.fromString(norm.toLowerCase(Locale.ROOT));
         } catch (Exception ignored) {

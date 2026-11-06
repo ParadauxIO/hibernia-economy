@@ -190,7 +190,9 @@ Push a non-main branch whose **tip commit** is authored by GitHub user
 `ParadauxIO` and contains the exact, case-sensitive marker `[DEPLOY]` anywhere
 in its message. The push and any rerun must also be initiated by `ParadauxIO`.
 The shared `deployment-policy.yml` checks the event and commit identity before
-any deployment build starts. A marker in an older commit does not qualify.
+any deployment build starts. Each publishing job checks the policy again, so a
+non-owner rerunning only failed jobs cannot reuse an earlier owner's approval.
+A marker in an older commit does not qualify.
 
 For example, with your Git author email linked to your GitHub account:
 
@@ -216,18 +218,25 @@ repository collaborators, not protection against someone who can edit workflows.
 ## Release flow
 
 - Work branches from **`main`**, the default branch. Development deployments
-  use the explicit `[DEPLOY]` trigger below.
-- Merge to **`main`** whenever a change is ready to release. Every push runs
-  `plugin-release.yml`, which gates publication on the full reusable JVM check.
+  use the explicit `[DEPLOY]` trigger above.
+- Work lands on **`main`** through pull requests. Keep incomplete and
+  migration-dependent features behind [default-off release flags](feature-flags.md).
+  Explorer can deploy up to 12 hours before plugins apply migrations; an operator
+  enables those features after the schema and compatible consumers are ready.
+- Every push to **`main`** runs
+  `plugin-release.yml`, which waits for successful full main-push CI and its `ci-gate`.
 - CI generates `YEAR.MONTH.RUN.ATTEMPT-gCOMMIT`, for example
   `2026.10.142.1-gabc123def456`. The calendar uses UTC; RUN is the release
   workflow's incrementing run number, ATTEMPT distinguishes retries, and COMMIT
   is the first 12 characters of the main commit. Keep this workflow as the sole
   owner of production versions; independent workflows have independent counters.
-- The four plugin filenames and embedded versions, plus the Maven versions of
-  `treasury-api` and `business-api`, share this value via Gradle's `-Pversion`.
-  No version-bump commit is needed. Local builds keep `2.3.0-SNAPSHOT`; API
-  snapshot publishing follows authorized `[DEPLOY]` pushes.
+- The four plugin filenames and embedded versions, plus the Maven version of
+  `treasury-api`, share this value via Gradle's `-Pversion`.
+  Business API 4 uses a separate semantic major: release CI supplies
+  `-PbusinessApiVersion=4.0.0-<bundle-version>`. Local builds and its development
+  snapshot publisher default to `4.0.0-SNAPSHOT`. API snapshots publish only on
+  authorized `[DEPLOY]` pushes. See the
+  [Business API migration guide](components.md#migrating-to-business-api-4-adt-106--adt-69).
 - GitHub release `economy-v<VERSION>` contains the four plugins, API jars, and
   `manifest.json`: full commit SHA, version, run ID, attempt, build time, plugin
   filenames and their SHA-256 checksums. API sources/Javadoc jars are included.
@@ -239,7 +248,7 @@ repository collaborators, not protection against someone who can edit workflows.
 - Builds may finish out of order. They deliberately do not update GitHub's
   `latest` pointer. Select an explicit release tag/commit for deployment; do not
   infer deployment order from completion timestamps.
-- Develop plugin builds use `YEAR.MONTH.RUN.ATTEMPT-dev-gCOMMIT`. The existing
+- Development plugin builds use `YEAR.MONTH.RUN.ATTEMPT-dev-gCOMMIT`. The existing
   `dev-latest` prerelease remains a rolling pointer for the dev deploy agent;
   the manifest's `jars` array remains compatible with that agent.
 - Production deployment should download the selected release, verify its
@@ -363,3 +372,55 @@ already have committed. Inspect schema/history, recover from a compatible backup
 when needed, and deploy a corrected complete release. The administrative Flyway
 workflows remain available for deliberate recovery and rehearsal, not as a second
 automatic migration owner.
+
+### Report the live plugin release to Tasklie
+
+Treasury can report the **running** economy bundle after Paper's server-load event,
+when Treasury, Business, ChestShop and TreasuryAPI are all enabled at the same
+release version. Uploading jars to `plugins/update` does not send a report.
+Reporting is opt-in and does not restart the server or affect economy availability.
+
+In Tasklie's API and MCP settings, create a Paradaux workspace API key with a role
+that can manage settings (`settings.manage`), then
+configure Treasury's `config.yml` on the intended production server:
+
+```yaml
+tasklie:
+  enabled: true
+  token: "" # Prefer TASKLIE_DEPLOYMENT_TOKEN in the server environment.
+  environment: democracycraft-plugins
+  app: democracycraft-plugins
+```
+
+Supply the token through `TASKLIE_DEPLOYMENT_TOKEN` or `tasklie.token` and restart
+normally. Keep reporting disabled in sandbox clones; never copy the production
+reporting token into a clone. Development and snapshot version strings are
+rejected, but a clone running production jars still needs reporting disabled.
+Use a distinct environment for each server's plugin bundle. In particular, do not
+reuse Explorer's environment: Tasklie currently groups live releases by project
+and environment, not by application. Custom environments show a live deployment;
+only the literal `production` environment drives Tasklie's production delivery
+status and automatic issue completion.
+
+The plugin calls `POST https://app.taskl.ie/api/public/w/paradaux/deployments/completions`
+with the workspace key as a bearer token. Treasury supplies `source: custom`,
+the 12-character commit embedded in its release version as `sha`, repository
+`ParadauxIO/hibernia-economy`, the configured environment, and a `completedAt`
+startup timestamp. The `eventId` combines `tasklie.app` (a stable server name,
+at most 100 characters) with that timestamp. Tasklie displays the commit rather
+than the full plugin version and resolves it through its GitHub integration.
+Link the repository to the correct Tasklie project and configure the GitHub App
+for PR and task association. This endpoint uses workspace API keys, not the
+separate `tdp_…` credential used by `/api/public/hooks/argo`; existing Argo
+credentials do not need to be replaced.
+
+HTTP runs asynchronously with a 10-second request timeout, without following
+redirects. Temporary connection failures, HTTP 429 and server errors retry every
+60 seconds, up to ten attempts per startup. Every retry keeps the same timestamp
+and payload for idempotency; a disabled/mismatched plugin stops subsequent
+attempts. Only a JSON response with `status: "ok"` or `status: "duplicate"` counts as success.
+Authentication/configuration failures stop retries and leave a warning; reporting
+never logs credentials or response bodies. After fixing configuration, restart to
+retry. Look for `Tasklie confirmed live economy release <version>` in the server
+log and the matching commit on Tasklie's Deployments page. This records successful
+activation, not ongoing server uptime or health.

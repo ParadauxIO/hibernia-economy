@@ -36,7 +36,41 @@ class FoundShopTest {
                 1,
                 2,
                 3,
-                distanceSquared);
+                distanceSquared,
+                null,
+                false);
+    }
+
+    @Test
+    void affordableBatchesUsesExactDecimalsAndDoesNotOverflow() {
+        assertThat(funded("0.10", "0.03").affordableBatches()).isEqualTo(java.math.BigInteger.valueOf(3));
+        assertThat(funded("0.09", "0.03").affordableBatches()).isEqualTo(java.math.BigInteger.valueOf(3));
+        assertThat(funded("0.02", "0.03").affordableBatches()).isEqualTo(java.math.BigInteger.ZERO);
+        assertThat(funded("-1", "0.03").affordableBatches()).isEqualTo(java.math.BigInteger.ZERO);
+        assertThat(funded("999999999999999999999.99", "0.01").affordableBatches())
+                .isEqualTo(new java.math.BigInteger("99999999999999999999999"));
+    }
+
+    private static FoundShop funded(String balance, String price) {
+        return new FoundShop(
+                "stone",
+                "Stone",
+                "STONE",
+                false,
+                null,
+                "Owner",
+                null,
+                new BigDecimal(price),
+                16,
+                64,
+                64,
+                "world",
+                0,
+                64,
+                0,
+                0,
+                new BigDecimal(balance),
+                false);
     }
 
     // ── shopType ───────────────────────────────────────────────────────────────

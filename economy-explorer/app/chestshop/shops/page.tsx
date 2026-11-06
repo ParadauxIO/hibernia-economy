@@ -6,6 +6,7 @@ import { FilterBar } from '@/components/FilterBar';
 import { ShopOwner } from '@/components/market/ShopOwner';
 import { ShopTable } from '@/components/market/ShopTable';
 import { searchItemsAction } from '@/lib/actions/entity';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { CURRENCY_SYMBOL } from '@/lib/currency';
 import { buildMetadata } from '@/lib/metadata';
 import { serverIdentity } from '@/lib/serverIdentity';
@@ -23,6 +24,7 @@ export async function generateMetadata() {
 /** Spec §5.5 market shops: live shop signs, cheapest first, with map links. Prices and stock are as last observed. */
 export default async function ShopsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
+  await requireLinkedViewer('/chestshop/shops', sp);
   const parsed = parseTableState(sp, shopsTable);
   const sellSide = parsed.filters.some((f) => f.field === 'direction' && f.values.length === 1 && f.values[0] === 'sell');
   // Best price first: cheapest when buying, highest buy-back when selling. The

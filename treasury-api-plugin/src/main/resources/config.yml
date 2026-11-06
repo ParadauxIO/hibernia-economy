@@ -38,7 +38,8 @@ keycloak:
 # LP also syncs account_group_access relationships and requires LuckPerms.
 # Business/Realty mappings use explorer_group_sync (see wiki/group-reconciliation.md).
 # These run independently of LP; Realty is optional.
-# Runs at startup, then at most every 1800s; derived snapshots expire after one hour.
+# Runs at startup, then every 1–1800 real seconds, independently of server TPS.
+# Derived snapshots expire after one hour if reconciliation cannot refresh them.
 reconciliation:
   enabled: true
   interval-seconds: 1800

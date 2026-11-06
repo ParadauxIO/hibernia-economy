@@ -1,5 +1,5 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { ExportMenu, MetricCard, MetricRow, Money, Num, PageHeader, Pct, Section, Tag, When } from '@democracycraft/design-system';
 import { DataTable, TableEmpty, TablePager, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -20,7 +20,7 @@ export async function generateMetadata() {
 }
 
 const TABLE_ID = 'gov-fines-table';
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 const columns: Column<FineRow>[] = [
   { key: 'player', header: 'Fined player', cell: (f) => <PlayerRef uuid={f.player_uuid} name={f.player_name} /> },
@@ -31,7 +31,7 @@ const columns: Column<FineRow>[] = [
   { key: 'status', header: 'Status', cell: (f) => f.revoked ? <Tag tone="warn">Revoked</Tag> : <Tag tone="pos">Active</Tag> },
   {
     key: 'amount', header: 'Amount', sort: 'amount', numeric: true,
-    cell: (f) => f.txn_id ? <Link href={`/transactions/${f.txn_id}` as Route} prefetch={false} title={`Transaction #${f.txn_id}`}><Money value={f.amount} /></Link> : <Money value={f.amount} />,
+    cell: (f) => f.txn_id ? <Link href={`/transactions/${f.txn_id}`} prefetch={false} title={`Transaction #${f.txn_id}`}><Money value={f.amount} /></Link> : <Money value={f.amount} />,
   },
 ];
 

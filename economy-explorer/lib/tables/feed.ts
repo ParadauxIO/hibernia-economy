@@ -51,13 +51,13 @@ export interface FeedPosition {
  * row and Newer reads back from the first; an oldest-first feed is the mirror.
  * `extra` carries params the table doesn't own (an open drawer is dropped).
  */
-export function feedLinks<T extends AnyTable>(
-  pathname: string,
+export function feedLinks<T extends AnyTable, Path extends string>(
+  pathname: Path,
   state: TableState<T>,
   table: T,
   pos: FeedPosition,
   extra: [string, string][] = [],
-): { newerHref: string | null; olderHref: string | null } {
+) {
   const keep = extra.filter(([k]) => k !== BACK_PARAM && k !== JUMP_PARAM);
   const next = pos.hasNext && pos.last ? tableHref(pathname, withCursor(state, pos.last) as TableState, table, keep) : null;
   const prev = pos.hasPrev && pos.first ? tableHref(pathname, withCursor(state, pos.first) as TableState, table, [...keep, [BACK_PARAM, '1']]) : null;

@@ -70,7 +70,7 @@ moderation — see [Permission nodes](#permission-nodes).
 | `/business admin rename <firm> <newname>` | Rename a firm. |
 | `/business admin set hq <firm> <plot>` | Set any firm's HQ plot. |
 | `/business admin set discord <firm> <url>` | Set any firm's Discord invite. |
-| `/business admin set proprietor <firm> <player>` | Reassign a firm's proprietor. |
+| `/business admin set proprietor <firm> <player>` | Transfer the firm and its linked account ownership and access to a new proprietor. |
 | `/business admin chatspy [firm]` | Toggle chat oversight for all firms or the named firm; requires CarbonChat and `business.admin.chatspy` (operator default). |
 
 ## Staff
@@ -168,6 +168,7 @@ spend from it.
 |---|---|
 | `/business account deposit <firm> <accountId> <amount>` | Put your money into the account. |
 | `/business account withdraw <firm> <accountId> <amount>` | Take money out (authorizer only). |
+| `/business account transfer <firm> <fromAccountId> <toAccountId> <amount> [memo]` | Move money directly between two live accounts of the same firm; requires spending authority on the source. |
 | `/business account pay into <firm> <accountId> <amount>` | Pay your own money into the account. |
 | `/business account pay player <firm> <accountId> <player> <amount>` | Pay a player from the account. |
 | `/business account pay business <firm> <accountId> <target> <amount>` | Pay another firm from the account. |
@@ -204,6 +205,19 @@ Shorthand that acts on the firm's **default** account, so you don't pass an ID:
 | `/business transactions <firm> [page]` | History across all the firm's accounts. |
 
 ## Ownership transfer
+
+The admin proprietor command ends any employee role held by the incoming or
+outgoing owner, preserves employment history, cancels pending ownership transfers,
+and records who performed the handover. Other employees retain their roles.
+Linked accounts keep their IDs, balances and shop aliases; account ownership and
+access are reconciled to the new proprietor and the remaining staff roles. Shops
+linked to those accounts stay linked.
+
+If Treasury is unavailable, the command reports that ownership changed but account
+access still needs repair. The automatic reconciliation job retries ownership and
+permissions from the committed firm state; rerunning the command also retries.
+Until repair completes, some accounts may still grant the previous owner access.
+
 
 Handing the firm to someone else is a confirmed, two-sided handshake:
 
@@ -287,7 +301,7 @@ in-firm role.
 | `/business account addmember` · `removemember` · `addauthorizer` · `removeauthorizer` | `business.account.addmember` · `.removemember` · `.addauthorizer` · `.removeauthorizer` | **owner only** |
 | `/business account list` · `members` · `authorizers` | `business.account.list` · `.members` · `.authorizers` | — |
 | `/business account pay into` | `business.pay` | — |
-| `/business account deposit` · `withdraw` · `pay player` · `pay business` · `balance` · `transactions` | `business.account.finance` | `ADMIN` or `FINANCIAL` |
+| `/business account deposit` · `withdraw` · `transfer` · `pay player` · `pay business` · `balance` · `transactions` | `business.account.finance` | `ADMIN` or `FINANCIAL` |
 | `/business transfer begin` · `confirm` · `cancel` | `business.transfer.begin` · `.confirm` · `.cancel` | owner only |
 | `/business transfer complete` · `reject` | `business.transfer.complete` · `.reject` | — (the recipient) |
 | `/business attribute set hq` · `discord` | `business.attribute.hq` · `business.attribute.discord` | `ADMIN` |

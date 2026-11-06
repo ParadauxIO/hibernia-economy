@@ -246,6 +246,9 @@ only those accounts. Unit membership never grants access by itself.
 and other income; **Spending** separates wages and other expenses. Top payment
 lists cover at most the last 31 days of the selected range. **Payroll** shows
 payments and unusual changes for review; a flag is not proof of wrongdoing.
+Its top 50 recipients follow the selected 7d, 30d, 90d, YTD or 1y range,
+ranked by wages received. Historical recipients show “Preparing history” while
+the worker backfills them. Run history remains limited to the last 31 days.
 
 **Fines** supports reason search, active/revoked filters and pagination. Summary
 totals cover the selected period and permitted accounts, independently of the
@@ -340,6 +343,9 @@ travel, and admin shops are unlimited. The location opens the server map.
 Use **Search** in the header to find accounts, firms and players. Escape closes
 search and returns focus to its button. Account and firm directories keep names
 and balances together on narrow screens; expand **Details** for other columns.
+When space is limited, transaction history uses compact rows: names on the left,
+complete amounts on the right, and running balances underneath. Select a
+transaction to read its full name, message and other details.
 The players, firms, items and shops directories use the same search and filter chips
 as the accounts directory below, and keep them in the page address.
 

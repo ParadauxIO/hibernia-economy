@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, PageHeader, When } from '@democracycraft/design-system';
 import { DataTable, TableEmpty, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -37,7 +38,7 @@ export async function generateMetadata() {
 }
 
 const TABLE_ID = 'transactions-table';
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 const TXN_PARAM = 'txn';
 const FOLLOW_PARAM = 'follow';
 

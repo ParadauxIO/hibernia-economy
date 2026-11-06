@@ -87,6 +87,17 @@ test.describe('government workspace pages', () => {
 test.describe('government workspace scope and behaviour', () => {
   test.skip(!secret || !process.env.E2E_AUTH_SHIM, 'needs the managed e2e app (signed sessions and the auth shim)');
 
+  test('revenue shows exact corporate brackets and legacy receipts in the selected scope', async ({ page, context }) => {
+    await signInOfficial(context);
+    await visit(page, '/gov/revenue?range=90d');
+    const table = page.getByRole('table', { name: 'Balance tax revenue by bracket', exact: true });
+    await expect(table).toContainText('$100,000 ≤ balance < $200,000');
+    await expect(table.getByRole('row').filter({ hasText: '$100,000 ≤ balance' })).toContainText('1%');
+    await expect(table.getByRole('row').filter({ hasText: '$100,000 ≤ balance' })).toContainText('700.00');
+    await expect(table.getByRole('row').filter({ hasText: 'Bracket unavailable' })).toContainText('700.00');
+    await expect(table).not.toContainText('Personal balance tax');
+  });
+
   test('the workspace needs government access', async ({ page, context }) => {
     await visit(page, '/gov');
     await expect(page.locator('.privacy-gate')).toBeVisible();
@@ -159,6 +170,20 @@ test.describe('government workspace scope and behaviour', () => {
     const href = await page.getByRole('link', { name: 'Download CSV' }).getAttribute('href');
     const csv = await (await context.request.get(`${baseURL}${href}`)).text();
     expect(csv.split('\r\n')[0]).toBe('Section,Item,Amount');
+  });
+
+  test('payroll recipients follow the date picker beyond 31 days', async ({ page, context }) => {
+    await signInOfficial(context);
+    await visit(page, '/gov/payroll?unit=commerce&range=30d');
+    const recipients = page.locator('#gov-payroll-recipients');
+    await expect(recipients.getByRole('row').filter({ hasText: 'Merchant' })).toContainText('2,250');
+    await page.getByRole('button', { name: '90d', exact: true }).click();
+    await expect(page).toHaveURL(/range=90d/);
+    await expect(page).toHaveURL(/unit=commerce/);
+    await expect(recipients.getByRole('row').filter({ hasText: 'Merchant' })).toContainText('3,150');
+    await expect(recipients.getByRole('row').filter({ hasText: 'Trader' })).toContainText('2,700');
+    await page.reload();
+    await expect(recipients.getByRole('row').filter({ hasText: 'Merchant' })).toContainText('3,150');
   });
 
   test('/government redirects to the workspace with its filters', async ({ context }) => {

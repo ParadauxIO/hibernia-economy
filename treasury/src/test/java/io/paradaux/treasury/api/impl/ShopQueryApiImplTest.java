@@ -44,6 +44,7 @@ class ShopQueryApiImplTest {
                 null,
                 null,
                 null,
+                null,
                 "Steve",
                 "DIAMOND",
                 "DIAMOND",

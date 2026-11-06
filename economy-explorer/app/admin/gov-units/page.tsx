@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import '../../gov/gov.css';
 import Link from 'next/link';
 import { Money, PageHeader, Section, Tag } from '@democracycraft/design-system';
@@ -21,7 +22,7 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Government units', description: 'Group government accounts into units.', path: '/admin/gov-units' });
 }
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 const TABLE_ID = 'gov-unit-accounts';
 type UnitAdminRow = GovUnitRow & { accounts: number; parent_name: string | null };
 

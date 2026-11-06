@@ -69,7 +69,8 @@ public class Business extends JavaPlugin {
                         ReloadCommand.class,
                         TaxCommands.class,
                         SalesCommands.class,
-                        ChatCommands.class)
+                        ChatCommands.class,
+                        io.paradaux.business.commands.DirectDebitCommands.class)
                 .dialogs(io.paradaux.business.dialogs.FirmMenu.class)
                 .menus(io.paradaux.business.dialogs.FirmDashboard.class)
                 .resolvers(FirmPlayerResolver.class, FirmNameResolver.class, OnlineFirmNameResolver.class)
@@ -131,6 +132,7 @@ public class Business extends JavaPlugin {
         expireRequestsJob = injector.getInstance(ExpireRequestsJob.class);
         expireRequestsJob.schedule();
         injector.getInstance(ReconcileAccountMembersJob.class).schedule();
+        injector.getInstance(io.paradaux.business.jobs.DirectDebitJob.class).schedule();
 
         // 4) Register public API
         BusinessApi api = injector.getInstance(BusinessApi.class);

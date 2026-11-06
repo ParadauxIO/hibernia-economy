@@ -18,7 +18,7 @@ it('applies inclusive calendar dates, retaining unrelated parameters and clearin
   fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-01' } });
   fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-10-20' } });
   await user.click(screen.getByRole('button', { name: 'Apply range' }));
-  expect(navigation.router.push).toHaveBeenCalledWith('/economy?unit=commerce&range=custom&from=2026-10-01&to=2026-10-20', { scroll: false });
+  expect(navigation.router.push).toHaveBeenCalledWith('?unit=commerce&range=custom&from=2026-10-01&to=2026-10-20', { scroll: false });
 });
 
 it('discards cancelled drafts and follows the current URL range when reopened', async () => {

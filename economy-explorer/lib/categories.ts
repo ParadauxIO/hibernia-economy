@@ -9,12 +9,13 @@
 
 export const CATEGORIES = [
   'wages', 'shop_sales', 'shop_purchases', 'taxes', 'fines', 'property', 'business',
-  'crime', 'jobs', 'transfers', 'api', 'internal', 'other',
+  'crime', 'jobs', 'transfers', 'api', 'internal', 'other', 'auction_proceeds',
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   wages: 'Wages & salary',
+  auction_proceeds: 'Auction proceeds',
   shop_sales: 'Shop sales',
   shop_purchases: 'Shop purchases',
   taxes: 'Taxes',
@@ -59,6 +60,7 @@ export const PLUGIN_CATEGORIES: Readonly<Record<string, Rule>> = {
   'treasury-salary': 'wages',
   chestshop: { in: 'shop_sales', out: 'shop_purchases' },
   realty: 'property',
+  'realty-auction': { in: 'auction_proceeds', out: 'property' },
   griefprevention: 'property',
   griefpreventionui: 'property',
   griefprevgui: 'property',

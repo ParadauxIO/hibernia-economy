@@ -1,25 +1,5 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmPlayer;
-import io.paradaux.business.model.config.FirmConfiguration;
-import io.paradaux.business.services.FirmNotificationService;
-import io.paradaux.business.services.FirmPlayerService;
-import io.paradaux.business.services.FirmPropertyService;
-import io.paradaux.business.services.FirmService;
-import io.paradaux.treasury.api.TreasuryApi;
-import io.paradaux.treasury.api.market.ChestShopSaleRecord;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -30,15 +10,45 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.services.FirmNotificationService;
+import io.paradaux.business.services.FirmPlayerService;
+import io.paradaux.business.services.FirmPropertyService;
+import io.paradaux.business.services.FirmService;
+import io.paradaux.treasury.api.TreasuryApi;
+import io.paradaux.treasury.api.market.ChestShopSaleRecord;
+import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class FirmSalesNotificationServiceImplTest {
 
-    @Mock FirmNotificationService notifications;
-    @Mock FirmPropertyService properties;
-    @Mock FirmService firms;
-    @Mock FirmPlayerService players;
-    @Mock TreasuryApi treasury;
-    @Mock FirmConfiguration config;
+    @Mock
+    FirmNotificationService notifications;
+
+    @Mock
+    FirmPropertyService properties;
+
+    @Mock
+    FirmService firms;
+
+    @Mock
+    FirmPlayerService players;
+
+    @Mock
+    TreasuryApi treasury;
+
+    @Mock
+    FirmConfiguration config;
 
     private FirmSalesNotificationServiceImpl svc;
 
@@ -51,7 +61,8 @@ class FirmSalesNotificationServiceImplTest {
 
     @Test
     void singleSale_sendsSingleLine() {
-        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY)).thenReturn(Optional.of(true));
+        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY))
+                .thenReturn(Optional.of(true));
         when(players.findByUuid(any(UUID.class))).thenReturn(Optional.of(firmPlayer("Steve")));
 
         svc.record(sale(7, "BUY", "Cobblestone", 64, "128.00"));
@@ -62,7 +73,8 @@ class FirmSalesNotificationServiceImplTest {
 
     @Test
     void burst_condensesIntoDigestAggregatedByItem() {
-        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY)).thenReturn(Optional.of(true));
+        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY))
+                .thenReturn(Optional.of(true));
 
         svc.record(sale(7, "BUY", "Cobblestone", 64, "64.00"));
         svc.record(sale(7, "BUY", "Cobblestone", 64, "64.00"));
@@ -75,7 +87,7 @@ class FirmSalesNotificationServiceImplTest {
         // Placeholders are flattened key,value pairs; find the ones we care about.
         Object[] ph = captor.getValue();
         assertThat(placeholder(ph, "count")).isEqualTo(3L);
-        assertThat(placeholder(ph, "total")).isEqualTo("$228.00");          // 64 + 64 + 100
+        assertThat(placeholder(ph, "total")).isEqualTo("$228.00"); // 64 + 64 + 100
         // Cobblestone aggregated to 128 and listed before Iron (higher qty).
         assertThat(String.valueOf(placeholder(ph, "items")))
                 .contains("sold 128x Cobblestone")
@@ -91,7 +103,8 @@ class FirmSalesNotificationServiceImplTest {
 
     @Test
     void disabledFirm_buffersButSendsNothing() {
-        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY)).thenReturn(Optional.of(false));
+        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY))
+                .thenReturn(Optional.of(false));
         svc.record(sale(7, "BUY", "Cobblestone", 64, "64.00"));
         svc.flush();
         verify(notifications, never()).notifyFirm(anyInt(), any(), any());
@@ -105,16 +118,20 @@ class FirmSalesNotificationServiceImplTest {
     @Test
     void recordRacingFlush_deliversEverySaleExactlyOnce() throws Exception {
         int total = 20_000;
-        lenient().when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY))
+        lenient()
+                .when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY))
                 .thenReturn(Optional.of(true));
         lenient().when(players.findByUuid(any(UUID.class))).thenReturn(Optional.empty());
         java.util.concurrent.atomic.AtomicLong delivered = new java.util.concurrent.atomic.AtomicLong();
-        lenient().doAnswer(inv -> {
-            Object[] ph = (Object[]) inv.getRawArguments()[2]; // the varargs array itself
-            Object count = placeholder(ph, "count");
-            delivered.addAndGet(count == null ? 1L : (Long) count); // the single-line form has no count
-            return null;
-        }).when(notifications).notifyFirm(anyInt(), any(), any(Object[].class));
+        lenient()
+                .doAnswer(inv -> {
+                    Object[] ph = (Object[]) inv.getRawArguments()[2]; // the varargs array itself
+                    Object count = placeholder(ph, "count");
+                    delivered.addAndGet(count == null ? 1L : (Long) count); // the single-line form has no count
+                    return null;
+                })
+                .when(notifications)
+                .notifyFirm(anyInt(), any(), any(Object[].class));
 
         ChestShopSaleRecord sale = sale(7, "BUY", "Cobblestone", 1, "1.00");
         java.util.concurrent.atomic.AtomicBoolean recording = new java.util.concurrent.atomic.AtomicBoolean(true);
@@ -136,7 +153,8 @@ class FirmSalesNotificationServiceImplTest {
 
     @Test
     void toggle_flipsAndPersists() {
-        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY)).thenReturn(Optional.of(false));
+        when(properties.getBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY))
+                .thenReturn(Optional.of(false));
         assertThat(svc.toggle(7)).isTrue();
         verify(properties).setBoolean(7, FirmSalesNotificationServiceImpl.NOTIFY_KEY, true);
     }
@@ -144,9 +162,29 @@ class FirmSalesNotificationServiceImplTest {
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static ChestShopSaleRecord sale(Integer firmId, String direction, String item, int qty, String total) {
-        return new ChestShopSaleRecord(null, direction, UUID.randomUUID(), 700, "BUSINESS", firmId, null, false,
-                item, item, item, false, null,
-                qty, new BigDecimal("1.00"), new BigDecimal(total), BigDecimal.ZERO, "world", 1, 1, 1, 0);
+        return new ChestShopSaleRecord(
+                null,
+                direction,
+                UUID.randomUUID(),
+                700,
+                "BUSINESS",
+                firmId,
+                null,
+                false,
+                item,
+                item,
+                item,
+                false,
+                null,
+                qty,
+                new BigDecimal("1.00"),
+                new BigDecimal(total),
+                BigDecimal.ZERO,
+                "world",
+                1,
+                1,
+                1,
+                0);
     }
 
     private static Firm firm(int id, String name) {

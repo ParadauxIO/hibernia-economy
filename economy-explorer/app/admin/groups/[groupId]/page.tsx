@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import type { Route } from 'next';
+import { GroupMetadataForm } from './metadata-form';
+import { TablePager } from '@democracycraft/design-system/table';
+import { FilterBar } from '@/components/FilterBar';
+import { adminGroupMembersTable } from '@/lib/tables/admin';
+import { parseTableState, tableHref, withPage } from '@/lib/tables/core';
+import { RouterLink } from '../../_components/table';
 import { notFound } from 'next/navigation';
 import { MetricCard, MetricRow, Num, PageHeader, Section } from '@democracycraft/design-system';
 import { BackLink } from '@democracycraft/design-system/next';
@@ -24,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ groupId: 
 }
 
 
-export default async function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
+export default async function GroupDetailPage({ params, searchParams }: { params: Promise<{ groupId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await getViewer();
   if (!hasPermission(viewer, 'groups.read')) return <AdminGate viewer={viewer} title="Group access required" permission="groups.read" />;
 
@@ -36,7 +41,8 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
   if (!group) notFound();
   await auditView(viewer, { path: `/admin/groups/${id}`, targetType: 'group', targetId: String(id) });
 
-  const [members, roles, counts] = await Promise.all([listGroupMembers(id), listRoleDefinitions(), groupMemberCountsBySource(id)]);
+  const state = parseTableState(await searchParams, adminGroupMembersTable);
+  const [members, roles, counts] = await Promise.all([listGroupMembers(id, state), listRoleDefinitions(), groupMemberCountsBySource(id)]);
   const delegable = group.capabilities.every(key => roles.find(r => r.key === key)?.permissions.every(p => viewer.permissions.includes(p)));
   const assignable = roles.filter(role => role.permissions.every(p => viewer.permissions.includes(p)) || group.capabilities.includes(role.key));
   const compliance = roles.find(role => role.key === 'compliance');
@@ -59,6 +65,9 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
         meta={group.luckpermsNode ? <>Synced from LuckPerms <code>{group.luckpermsNode}</code></> : undefined}
       />
 
+      {hasPermission(viewer, 'groups.update') && <Section title="Group details">
+        <GroupMetadataForm groupId={group.groupId} name={group.name} description={group.description} />
+      </Section>}
       <MetricRow label="Group summary">
         <MetricCard label="Live members" value={<Num value={group.activeMemberCount} />} meta={group.memberCount > group.activeMemberCount ? `${group.memberCount} including expired syncs` : 'Members whose grant is current'} />
         <MetricCard label="Roles granted" value={<Num value={group.capabilities.length} />} meta={linked.map(r => r.name).join(', ') || 'None yet'} />
@@ -72,8 +81,8 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
       >
         <ol className={styles.steps}>
           <li>Set where members come from under <a href="#sources">Membership sources</a>: a LuckPerms group (for example <code>group.doc</code>), a firm, a region, or manual members.</li>
-          <li>Tick the roles they should get{compliance ? <>, for example <Link href={`/admin/roles/${compliance.key}` as Route} prefetch={false}>{compliance.name}</Link> for a department that needs the compliance tools</> : null}.</li>
-          <li>Membership then follows the source automatically. What each role allows is edited on its <Link href={'/admin/roles' as Route} prefetch={false}>role page</Link>.</li>
+          <li>Tick the roles they should get{compliance ? <>, for example <Link href={`/admin/roles/${compliance.key}`} prefetch={false}>{compliance.name}</Link> for a department that needs the compliance tools</> : null}.</li>
+          <li>Membership then follows the source automatically. What each role allows is edited on its <Link href={'/admin/roles'} prefetch={false}>role page</Link>.</li>
         </ol>
         <CapabilitiesForm
           groupId={id}
@@ -104,7 +113,10 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ gr
       </Section>
 
       <Section id="members" title="Members" description="Manual members can be added and removed here; synced rows are owned by their source." divider>
-        <MemberManager groupId={id} members={members} disabled={!delegable || !hasPermission(viewer, 'groups.members.update')} />
+        <FilterBar table={adminGroupMembersTable} total={members.total} />
+        <MemberManager groupId={id} members={members.rows} disabled={!delegable || !hasPermission(viewer, 'groups.members.update')} />
+        <TablePager page={members.page} totalPages={Math.max(1, Math.ceil(members.total / state.limit))}
+          hrefFor={(p) => tableHref(`/admin/groups/${id}`, withPage(state, p), adminGroupMembersTable)} link={RouterLink} label="Group member pages" />
       </Section>
     </>
   );

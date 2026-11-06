@@ -48,8 +48,11 @@ class FirmChatWithoutCarbonTest {
     void initialiseSoftDisablesFirmChat() {
         Business plugin = mock(Business.class);
         when(plugin.getLogger()).thenReturn(Logger.getLogger("test"));
-        FirmChatServiceImpl service =
-                new FirmChatServiceImpl(mock(FirmService.class), mock(FirmStaffService.class), plugin);
+        FirmChatServiceImpl service = new FirmChatServiceImpl(
+                mock(FirmService.class),
+                mock(FirmStaffService.class),
+                plugin,
+                new io.paradaux.business.threading.MainThreadAccess(plugin));
 
         service.initialise();
 

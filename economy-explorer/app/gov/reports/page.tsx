@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { DescriptionList, MetricCard, MetricRow, Money, Num, PageHeader, Section } from '@democracycraft/design-system';
 import { DataTable, type Column } from '@democracycraft/design-system/table';
 import { buildMetadata } from '@/lib/metadata';
@@ -45,7 +44,7 @@ export default async function GovReportsPage({ searchParams }: { searchParams: P
       <div className="gov-controls">
         <UnitSelect value={page.selection.key} options={options} />
         <nav aria-label="Report month" className="gov-inline-actions">
-          {months.slice(0, 6).map((m) => <Link key={m} href={`/gov/reports?month=${m.slice(0, 7)}${unitParam}` as Route} prefetch={false}
+          {months.slice(0, 6).map((m) => <Link key={m} href={`/gov/reports?month=${m.slice(0, 7)}${unitParam}`} prefetch={false}
             className="btn btn-quiet" aria-current={m === month ? 'page' : undefined}>{monthName(m)}</Link>)}
         </nav>
       </div>

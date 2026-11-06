@@ -2,10 +2,10 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmAccount;
 import io.paradaux.business.model.FirmBalanceEntry;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmAccount;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmTransactionService;
@@ -422,12 +422,17 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
 
     @Override
     public long payIntoFirm(Integer firmId, UUID payerUuid, BigDecimal amount) {
+        return payIntoFirm(firmId, payerUuid, amount, null);
+    }
+
+    @Override
+    public long payIntoFirm(Integer firmId, UUID payerUuid, BigDecimal amount, String memo) {
         int destAccountId = resolveAccountId(firmId);
         return payIn(
                 destAccountId,
                 payerUuid,
                 amount,
-                "Business payment: " + playerName(payerUuid) + " -> " + firmName(firmId));
+                reasonWithMemo("Business payment: " + playerName(payerUuid) + " -> " + firmName(firmId), memo));
     }
 
     @Override
@@ -496,6 +501,32 @@ public class FirmTransactionServiceImpl implements FirmTransactionService {
                 amount,
                 "Business payment: " + firmName(sourceFirmId) + " #" + sourceAccountId + " -> "
                         + firmName(targetFirmId));
+    }
+
+    @Override
+    public long transferBetweenAccounts(
+            Integer firmId,
+            Integer fromAccountId,
+            Integer toAccountId,
+            UUID actorUuid,
+            BigDecimal amount,
+            String memo) {
+        requireValidAmount(amount);
+        validateAccountBelongsToFirm(firmId, fromAccountId);
+        validateAccountBelongsToFirm(firmId, toAccountId);
+        if (fromAccountId.equals(toAccountId)) {
+            throw new BadCommandException("business.account.transfer.same-account");
+        }
+        for (int accountId : new int[] {fromAccountId, toAccountId}) {
+            Account account = treasury.getAccountById(accountId);
+            if (account == null) {
+                throw new NotFoundException(KEY_NO_ACCOUNT);
+            }
+            if (account.isArchived()) {
+                throw new ConflictException(KEY_ARCHIVED);
+            }
+        }
+        return payOut(fromAccountId, toAccountId, actorUuid, amount, reasonWithMemo("Business account transfer", memo));
     }
 
     /**

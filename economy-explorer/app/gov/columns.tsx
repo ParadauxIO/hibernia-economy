@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { Money, When } from '@democracycraft/design-system';
 import type { Column } from '@democracycraft/design-system/table';
 import type { MovementRow, OfficialRow, PayerRow } from '@/lib/sql/government';
@@ -19,7 +18,7 @@ export const movementColumns: Column<MovementRow>[] = [
   { key: 'counterparty', header: 'Counterparty', secondary: true, cell: (m) => <Counterparty m={m} /> },
   { key: 'memo', header: 'Description', secondary: true, cell: (m) => <><span>{m.message}</span>{m.plugin_system && <span className="dt-sub"> · {m.plugin_system}</span>}</> },
   { key: 'by', header: 'Initiated by', secondary: true, cell: (m) => <PlayerRef uuid={m.initiator_uuid} name={m.initiator_name} fallback="—" /> },
-  { key: 'amount', header: 'Amount', numeric: true, cell: (m) => <Link href={`/transactions/${m.txn_id}` as Route} prefetch={false} title={`Transaction #${m.txn_id}`}><Money value={m.amount} sign="exceptZero" tone="auto" /></Link> },
+  { key: 'amount', header: 'Amount', numeric: true, cell: (m) => <Link href={`/transactions/${m.txn_id}`} prefetch={false} title={`Transaction #${m.txn_id}`}><Money value={m.amount} sign="exceptZero" tone="auto" /></Link> },
 ];
 
 /** The ledger-side audit feed: the same rows with both people shown. */
@@ -30,7 +29,7 @@ export const ledgerColumns: Column<MovementRow>[] = [
   { key: 'auth', header: 'Authorized by', secondary: true, cell: (m) => m.authorizer_uuid ? <PlayerRef uuid={m.authorizer_uuid} name={m.authorizer_name} /> : <span className="muted">—</span> },
   { key: 'counterparty', header: 'Counterparty', secondary: true, cell: (m) => <Counterparty m={m} /> },
   { key: 'memo', header: 'Description', secondary: true, optional: true, cell: (m) => m.message },
-  { key: 'amount', header: 'Amount', numeric: true, cell: (m) => <Link href={`/transactions/${m.txn_id}` as Route} prefetch={false} title={`Transaction #${m.txn_id}`}><Money value={m.amount} sign="exceptZero" tone="auto" /></Link> },
+  { key: 'amount', header: 'Amount', numeric: true, cell: (m) => <Link href={`/transactions/${m.txn_id}`} prefetch={false} title={`Transaction #${m.txn_id}`}><Money value={m.amount} sign="exceptZero" tone="auto" /></Link> },
 ];
 
 export function officialColumns(verb: string): Column<OfficialRow>[] {

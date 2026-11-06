@@ -6,15 +6,14 @@ import com.google.inject.Singleton;
 import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
-import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmAccount;
-import io.paradaux.business.model.FirmRole;
 import io.paradaux.business.model.FirmRoleDefaults;
-import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmAccount;
+import io.paradaux.business.model.internal.FirmRole;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmAreaShopService;
 import io.paradaux.business.services.FirmService;
@@ -45,10 +44,10 @@ public class FirmServiceImpl implements FirmService {
     private static final Logger LOG = Logger.getLogger("Business");
 
     private final FirmMapper firms;
+    private final FirmOwnershipService ownership;
     private final TreasuryApi treasury;
     private final FirmAccountsMapper accounts;
     private final FirmRoleMapper roles;
-    private final FirmRequestMapper requests;
     /** Lazy-injected to break the FirmService ↔ FirmStaffService cycle. */
     private final Provider<FirmStaffService> staffProvider;
     /** Lazy-injected to break the FirmService ↔ FirmAccountService cycle. */
@@ -65,20 +64,20 @@ public class FirmServiceImpl implements FirmService {
     @Inject
     public FirmServiceImpl(
             FirmMapper firms,
+            FirmOwnershipService ownership,
             TreasuryApi treasury,
             FirmAccountsMapper accounts,
             FirmRoleMapper roles,
-            FirmRequestMapper requests,
             Provider<FirmStaffService> staffProvider,
             Provider<FirmAccountService> firmAccountServiceProvider,
             FirmConfiguration firmConfig,
             FirmAreaShopService areas,
             Provider<FirmChatService> chatProvider) {
         this.firms = firms;
+        this.ownership = ownership;
         this.treasury = treasury;
         this.accounts = accounts;
         this.roles = roles;
-        this.requests = requests;
         this.staffProvider = staffProvider;
         this.firmAccountServiceProvider = firmAccountServiceProvider;
         this.firmConfig = firmConfig;
@@ -539,59 +538,20 @@ public class FirmServiceImpl implements FirmService {
         firms.updateFirm(update);
     }
 
-    /**
-     * Admin-forced proprietor change. This is the direct-override analog of a
-     * player transfer, so it must do everything the transfer-accept flow does
-     * besides the request gating: hand the firm's treasury accounts to the new
-     * proprietor and re-sync access. Without the reassignment the account
-     * owner/authorizers stay on the previous proprietor and the new one is locked
-     * out of the firm's money — the exact stranding the transfer flow prevents at
-     * FirmRequestServiceImpl#completeTransferProprietorship (PAR-141).
-     *
-     * <p>The Treasury account reassignment is cross-plugin IPC and cannot enrol in
-     * this JDBC {@code @Transactional}, so every DB write must happen <em>before</em>
-     * it — otherwise a DB write that throws after the IPC would roll the firm row
-     * back while the account owner change stays committed in Treasury, diverging
-     * ownership from money (the ADT-11 class). So the order is: DB proprietor update,
-     * cancel any in-flight transfer, record the audit row, and only then the IPC —
-     * mirroring the transfer-accept flow, which is deliberately ordered IPC-last for
-     * the same reason. (This closes the DB-write-after-IPC window; it does not close
-     * the pre-existing multi-account partial-IPC window inside the reassignment loop,
-     * which is shared with the consent-transfer path.)
-     */
-    @Transactional
+    /** Commit the handover before cross-plugin writes; persisted links drive recovery. */
     @Override
     public void adminSetProprietor(String firmName, UUID newProprietor, UUID actorId) {
         Firm firm = requireFirm(firmName);
-        // Capture the outgoing proprietor before the update for the audit row.
-        UUID previousProprietor = UUID.fromString(firm.getProprietorUuid());
-
-        // A proprietor cannot also occupy an employee slot (mirrors the transfer flow).
-        if (staffProvider.get().isEmployedBy(firm.getFirmId(), newProprietor)) {
-            staffProvider.get().resignFromFirm(firmName, newProprietor);
+        ownership.transfer(firm.getFirmId(), newProprietor, actorId);
+        try {
+            firmAccountServiceProvider.get().reassignAccountsToNewProprietor(firm.getFirmId(), newProprietor);
+        } catch (RuntimeException e) {
+            LOG.log(Level.SEVERE, "Firm " + firm.getFirmId() + " transferred; account reconciliation pending", e);
+            throw new BadCommandException("Firm ownership changed, but account access is still being repaired. "
+                    + "Automatic reconciliation will retry; you can also rerun this command.");
+        } finally {
+            chatProvider.get().membershipChanged(firm.getFirmId());
         }
-
-        updateProprietor(firm.getFirmId(), newProprietor);
-
-        // Cancel any in-flight (PENDING/CONFIRMED) player transfer for this firm, so a
-        // transfer the previous proprietor had started can't later be completed and
-        // re-hand the firm to a third party after this override (PAR-315).
-        requests.cancelActiveTransfers(firm.getFirmId());
-
-        // Audit the forced handover in the same log as consent transfers, so a
-        // staff/DOC override is traceable (who did it, from whom, to whom) instead
-        // of an invisible proprietor change (PAR-315). Recorded before the IPC so no
-        // DB write follows the un-rollback-able Treasury reassignment below.
-        requests.recordAdminOverride(
-                firm.getFirmId(),
-                previousProprietor.toString(),
-                newProprietor.toString(),
-                actorId.toString(),
-                StringUtils.random32());
-
-        // Hand the firm's Treasury accounts to the new proprietor and re-sync access.
-        // Cross-plugin IPC — kept last so nothing that can throw follows it.
-        firmAccountServiceProvider.get().reassignAccountsToNewProprietor(firm.getFirmId(), newProprietor);
     }
 
     private Firm requireFirm(String firmName) {
@@ -657,6 +617,12 @@ public class FirmServiceImpl implements FirmService {
     public Firm getAnyFirmById(int firmId) {
         // Archived-inclusive: the raw mapper returns disbanded firms too (ADT-96).
         return firms.getFirmById(firmId);
+    }
+
+    @Override
+    @Nullable
+    public Firm getAnyFirmByName(String name) {
+        return firms.getFirmByName(name);
     }
 
     @Override

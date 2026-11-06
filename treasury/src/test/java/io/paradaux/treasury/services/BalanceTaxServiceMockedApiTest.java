@@ -70,8 +70,7 @@ class BalanceTaxServiceMockedApiTest {
         UUID player = UUID.randomUUID();
         long now = 1_700_000_000L;
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
-        ab.setBalance(null);
+        AccountBalance ab = AccountBalance.builder().balance(null).build();
         when(accountMapper.readBalance(42)).thenReturn(ab);
 
         svc.collect(player, now - 86_400, now);
@@ -95,12 +94,11 @@ class BalanceTaxServiceMockedApiTest {
         long now = 1_700_000_000L;
         long lastLogin = now - 7L * 24 * 3600 / 2;
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
-        ab.setBalance(new BigDecimal("100000.00"));
+        AccountBalance ab =
+                AccountBalance.builder().balance(new BigDecimal("100000.00")).build();
         when(accountMapper.readBalance(42)).thenReturn(ab);
 
-        Account dest = new Account();
-        dest.setAccountId(99);
+        Account dest = Account.builder().accountId(99).build();
         when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
 
         when(taxApi.collectTax(any(TaxCollection.class))).thenReturn(new TaxResult.Skipped("dedup"));
@@ -116,12 +114,11 @@ class BalanceTaxServiceMockedApiTest {
         long now = 1_700_000_000L;
         long lastLogin = now - 7L * 24 * 3600 / 2;
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
-        ab.setBalance(new BigDecimal("100000.00"));
+        AccountBalance ab =
+                AccountBalance.builder().balance(new BigDecimal("100000.00")).build();
         when(accountMapper.readBalance(42)).thenReturn(ab);
 
-        Account dest = new Account();
-        dest.setAccountId(99);
+        Account dest = Account.builder().accountId(99).build();
         when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
 
         when(taxApi.collectTax(any(TaxCollection.class))).thenReturn(new TaxResult.Failed("boom"));
@@ -137,12 +134,11 @@ class BalanceTaxServiceMockedApiTest {
         long now = 1_700_000_000L;
         long lastLogin = now - 7L * 24 * 3600 / 2;
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
-        ab.setBalance(new BigDecimal("100000.00"));
+        AccountBalance ab =
+                AccountBalance.builder().balance(new BigDecimal("100000.00")).build();
         when(accountMapper.readBalance(42)).thenReturn(ab);
 
-        Account dest = new Account();
-        dest.setAccountId(99);
+        Account dest = Account.builder().accountId(99).build();
         when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
 
         when(taxApi.collectTax(any(TaxCollection.class)))
@@ -163,8 +159,8 @@ class BalanceTaxServiceMockedApiTest {
         long now = 1_700_000_000L;
         long lastLogin = now - 7L * 24 * 3600 / 2;
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
-        ab.setBalance(new BigDecimal("100000.00"));
+        AccountBalance ab =
+                AccountBalance.builder().balance(new BigDecimal("100000.00")).build();
         when(accountMapper.readBalance(42)).thenReturn(ab);
 
         // Configured government account does not exist → resolveDestinationAccountId
@@ -209,9 +205,9 @@ class BalanceTaxServiceMockedApiTest {
         long now = 1_700_000_000L;
         long lastLogin = now - 7L * 24 * 3600 / 2;
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
+        AccountBalance ab = AccountBalance.builder().build();
         // Balance below the 100000 bracket → 0.00 weekly rate → weeklyRate<=0 guard.
-        ab.setBalance(new BigDecimal("50.00"));
+        ab = ab.withBalance(new BigDecimal("50.00"));
         when(accountMapper.readBalance(42)).thenReturn(ab);
 
         svc.collect(player, lastLogin, now);
@@ -227,8 +223,8 @@ class BalanceTaxServiceMockedApiTest {
         // the computed tax rounds below Money.MINIMUM_AMOUNT (0.01) → skip.
         long lastLogin = now - 1;
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
-        ab.setBalance(new BigDecimal("100000.00"));
+        AccountBalance ab =
+                AccountBalance.builder().balance(new BigDecimal("100000.00")).build();
         when(accountMapper.readBalance(42)).thenReturn(ab);
 
         svc.collect(player, lastLogin, now);
@@ -240,8 +236,7 @@ class BalanceTaxServiceMockedApiTest {
     void destinationResolvedOnce_cachedAcrossCollections() {
         // resolveDestinationAccountId caches the id; a second collection must not
         // re-query the government account name.
-        Account dest = new Account();
-        dest.setAccountId(99);
+        Account dest = Account.builder().accountId(99).build();
         when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(dest);
         when(taxApi.collectTax(any(TaxCollection.class)))
                 .thenReturn(new TaxResult.Collected(1L, new BigDecimal("500.00"), 99));
@@ -251,8 +246,9 @@ class BalanceTaxServiceMockedApiTest {
         for (int i = 0; i < 2; i++) {
             UUID player = UUID.randomUUID();
             when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-            AccountBalance ab = new AccountBalance();
-            ab.setBalance(new BigDecimal("100000.00"));
+            AccountBalance ab = AccountBalance.builder()
+                    .balance(new BigDecimal("100000.00"))
+                    .build();
             when(accountMapper.readBalance(42)).thenReturn(ab);
             svc.collect(player, lastLogin, now);
         }
@@ -266,8 +262,8 @@ class BalanceTaxServiceMockedApiTest {
         svc = new io.paradaux.treasury.services.impl.BalanceTaxServiceImpl(config, taxApi, accountMapper);
         UUID player = UUID.randomUUID();
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance balance = new AccountBalance();
-        balance.setBalance(new BigDecimal("100000"));
+        AccountBalance balance =
+                AccountBalance.builder().balance(new BigDecimal("100000")).build();
         var replacement = BalanceTaxConfiguration.forTesting(
                         true, "NewGovernment", new TreeMap<>(java.util.Map.of(BigDecimal.ZERO, new BigDecimal("0.02"))))
                 .snapshot();
@@ -275,10 +271,8 @@ class BalanceTaxServiceMockedApiTest {
             config.publish(replacement);
             return balance;
         });
-        Account oldGovernment = new Account();
-        oldGovernment.setAccountId(7);
-        Account newGovernment = new Account();
-        newGovernment.setAccountId(8);
+        Account oldGovernment = Account.builder().accountId(7).build();
+        Account newGovernment = Account.builder().accountId(8).build();
         when(accountMapper.findGovernmentAccountByName("DCGovernment")).thenReturn(oldGovernment);
         when(accountMapper.findGovernmentAccountByName("NewGovernment")).thenReturn(newGovernment);
         when(taxApi.collectTax(any())).thenReturn(new TaxResult.Skipped("test"));
@@ -296,11 +290,10 @@ class BalanceTaxServiceMockedApiTest {
 
     private TaxCollection collectedFor(UUID player, String balance, long previous, long now) {
         when(accountMapper.findPersonalAccountId(player)).thenReturn(42);
-        AccountBalance ab = new AccountBalance();
-        ab.setBalance(new BigDecimal(balance));
+        AccountBalance ab =
+                AccountBalance.builder().balance(new BigDecimal(balance)).build();
         when(accountMapper.readBalance(42)).thenReturn(ab);
-        Account dest = new Account();
-        dest.setAccountId(99);
+        Account dest = Account.builder().accountId(99).build();
         // lenient: the destination is cached after the first collection.
         org.mockito.Mockito.lenient()
                 .when(accountMapper.findGovernmentAccountByName("DCGovernment"))
@@ -326,7 +319,7 @@ class BalanceTaxServiceMockedApiTest {
         assertThat(c.sourceAccountId()).isEqualTo(42);
         assertThat(c.destinationAccountId()).isEqualTo(99);
         assertThat(c.taxType()).isEqualTo("personal-balance-tax");
-        assertThat(c.description()).isEqualTo("Personal balance tax (3d 12h @ 1%/wk)");
+        assertThat(c.description()).isEqualTo("Personal balance tax (3d 12h @ 1%/wk) [bracket:100000:*:0.01]");
         // One collection per (player, login): a replayed login event can't tax twice.
         assertThat(c.dedupKey())
                 .isEqualTo(io.paradaux.treasury.utils.Idempotency.sha256("balance-tax:" + player + ":" + now));
@@ -342,7 +335,7 @@ class BalanceTaxServiceMockedApiTest {
         TaxCollection c = collectedFor(player, "100000.00", now - 6, now);
 
         assertThat(c.amount()).isEqualTo(new BigDecimal("0.01"));
-        assertThat(c.description()).isEqualTo("Personal balance tax (0h 0m @ 1%/wk)");
+        assertThat(c.description()).isEqualTo("Personal balance tax (0h 0m @ 1%/wk) [bracket:100000:*:0.01]");
     }
 
     @Test

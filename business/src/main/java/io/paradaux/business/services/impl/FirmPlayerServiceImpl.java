@@ -3,23 +3,26 @@ package io.paradaux.business.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.mappers.FirmPlayerMapper;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
-
+import io.paradaux.business.threading.MainThreadAccess;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 @Singleton
 public class FirmPlayerServiceImpl implements FirmPlayerService {
 
     private final FirmPlayerMapper mapper;
 
+    private final MainThreadAccess mainThread;
+
     @Inject
-    public FirmPlayerServiceImpl(FirmPlayerMapper mapper) {
+    public FirmPlayerServiceImpl(FirmPlayerMapper mapper, MainThreadAccess mainThread) {
         this.mapper = mapper;
+        this.mainThread = mainThread;
     }
 
     @Override
@@ -53,11 +56,12 @@ public class FirmPlayerServiceImpl implements FirmPlayerService {
 
     @Override
     public boolean isOnline(UUID uuid) {
-        return Bukkit.getPlayer(uuid) != null;
+        return uuid != null && mainThread.read(() -> Bukkit.getPlayer(uuid) != null);
     }
 
     @Override
     public Player getPlayer(FirmPlayer player) {
-        return Bukkit.getPlayer(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        return uuid == null ? null : mainThread.read(() -> Bukkit.getPlayer(uuid));
     }
 }

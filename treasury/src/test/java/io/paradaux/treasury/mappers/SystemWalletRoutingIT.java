@@ -34,7 +34,7 @@ class SystemWalletRoutingIT extends IntegrationTestBase {
                 TreasuryConstants.TREASURY_PLUGIN_NAME,
                 null));
         Account wallet = mapper.findById(walletId);
-        wallet.setDisplayName("Renamed wallet");
+        wallet = wallet.withDisplayName("Renamed wallet");
         mapper.updateAccount(wallet);
 
         // A fresh service lookup and the race-recovery locking read must both find
@@ -69,7 +69,7 @@ class SystemWalletRoutingIT extends IntegrationTestBase {
         AccountService service = injector.getInstance(AccountService.class);
         AccountMapper mapper = injector.getInstance(AccountMapper.class);
         Account generic = service.createAccount(AccountType.SYSTEM, UUID.randomUUID(), "GenericPlugin");
-        generic.setDisplayName("Generic label");
+        generic = generic.withDisplayName("Generic label");
         mapper.updateAccount(generic);
         assertThat(service.getOrCreateSystemAccountId("GenericPlugin", UUID.randomUUID()))
                 .isEqualTo(generic.getAccountId());
@@ -119,7 +119,7 @@ class SystemWalletRoutingIT extends IntegrationTestBase {
                 assertThat(result.get(30, java.util.concurrent.TimeUnit.SECONDS))
                         .isEqualTo(id);
             Account account = mapper.findById(id);
-            account.setDisplayName("Racing label");
+            account = account.withDisplayName("Racing label");
             mapper.updateAccount(account);
             results.clear();
             for (int i = 0; i < 8; i++)

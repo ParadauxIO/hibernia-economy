@@ -88,6 +88,10 @@ public class ItemServiceImpl implements ItemService {
     /** Parse a sign item string into an {@link ItemStack} (custom / alias / vanilla material), or {@code null}. */
     @Override
     public ItemStack parse(String itemString) {
+        // A bare database code is an exact escape from custom names and alias collisions.
+        if (itemString != null && itemString.matches("#[0-9a-zA-Z]+")) {
+            return itemCodes.decode(itemString);
+        }
         CustomItemResolver resolver = customItems;
         ItemStack item = resolver != null ? resolver.parseItem(itemString) : null;
         com.Acrobot.ChestShop.Events.ItemParseEvent event = new com.Acrobot.ChestShop.Events.ItemParseEvent(itemString);
@@ -186,6 +190,13 @@ public class ItemServiceImpl implements ItemService {
 
             ItemStack codeItem = parse(code);
             if (!materialService.equals(itemStack, codeItem)) {
+                String stored = itemCodes.getItemCode(itemStack);
+                String exact = stored == null ? null : "#" + stored;
+                if (exact != null
+                        && (maxWidth <= 0 || getMinecraftStringWidth(exact) <= maxWidth)
+                        && materialService.equals(itemStack, parse(exact))) {
+                    return exact;
+                }
                 throw new IllegalArgumentException("Cannot generate code for item " + itemStack
                         + " with maximum length of " + maxWidth
                         + " (code " + code + " results in item " + codeItem + ")");

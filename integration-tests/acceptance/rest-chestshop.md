@@ -1,6 +1,6 @@
 # Public ChestShop REST assertion review (PAR-499)
 
-`ShopDirectoryTest` covers unauthenticated GET `/api/v1/chestshop/shops` with
+`ShopDirectoryTest` covers authenticated GET `/api/v1/chestshop/shops` with
 three Paper-created BUSINESS shops belonging to a fresh firm: dirt batches of
 2 for 7 and 1 for 19, and stone batches of 3 for 11. The diagnostic fixture
 fires the actual creation event; it is not a player sign-placement packet test.
@@ -50,7 +50,7 @@ enforce days 1..365 and key length 190: invalid windows/length return INVALID_PA
 while accepted boundaries for a never-seen item return 404 ITEM_NOT_FOUND.
 The ledger checkpoint remains unchanged. These are validation checks, not
 populated items/detail aggregation coverage. HTTP binding errors, encoded path
-edge cases, anonymous throttling and cache-validation interactions remain gaps.
+edge cases, per-owner throttling and cache-validation interactions remain gaps.
 
 ## Populated items, item detail and global stats
 
@@ -65,7 +65,7 @@ recorded trade date. Item-directory search returns the one exact item and totals
 Global stats are compared to aggregate DB counts/volume across the shared test
 stack; this checks HTTP aggregation/mapping rather than independently deriving
 all earlier tests' sales. A bounded one-second poll accommodates an existing
-60-second stats cache without exhausting the anonymous request budget. The
+60-second stats cache without exhausting the authenticated request budget. The
 selected clean runs need not exercise cache expiry. Exact final buyer/firm/owner
 balances are 9982/18/10000, buyer inventory five and customer sale count two.
 Sell-direction, tax/net-versus-gross semantics, old-window exclusions, no-sales
@@ -127,7 +127,7 @@ one stocked offer. The traded-item directory is empty for that material.
 A real customer then buys two items for 9. Both identical, previously warmed
 URLs must converge within 60 seconds to one trade, quantity two and volume nine.
 Detail must also show average 4.5, one daily point and offer stock 22; the directory
-must acquire the item. Polling is spaced 1.5 seconds apart to respect anonymous
+must acquire the item. Polling is spaced 1.5 seconds apart to respect authenticated
 rate limits. This accepts immediate invalidation as well as TTL refresh; it does
 not require stale data or certify an exact expiration instant. It detects caches
 that never refresh and aggregate endpoints that fail to acquire a first trade.
@@ -236,3 +236,15 @@ requirement that future HTTP policy must retain this behavior. Neighboring
 `FindDialogTest` cases independently prove hidden exclusion and re-show inclusion
 for both find aliases. A hidden shop must not be treated as deactivated or unable
 to trade merely because it is absent from `/find`.
+
+## API authentication
+
+All `/api/v1/chestshop/**` requests require an active Treasury API key in
+`Authorization: Bearer <jwt>`. PERSONAL, BUSINESS, GOVERNMENT and SERVICE keys
+can read these endpoints. Missing, malformed, expired, revoked or superseded keys
+are rejected with HTTP 401. The default budget is 120 requests/minute per owner
+and route (600 for BUSINESS), subject to configured owner overrides.
+
+`RouteSecurityIT` checks the authentication wall across all four routes. Market
+E2E tests use a fresh SERVICE key per test and revoke it afterward. The explorer's
+market pages read the database directly and do not require client changes.

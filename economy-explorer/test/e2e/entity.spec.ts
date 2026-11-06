@@ -12,7 +12,7 @@ async function mainText(page: Page): Promise<string> {
   return (await page.getByRole('main').innerText()).replace(/\s+/g, ' ');
 }
 
-test.describe('account page, logged out', () => {
+test.describe('account page, unrelated linked visitor', () => {
   test('a business account names its firm first and keeps the history private', async ({ page }) => {
     await visit(page, '/accounts/3');
     await expect(page.getByRole('heading', { level: 1, name: 'Acme Corporate Account' })).toBeVisible();
@@ -23,10 +23,11 @@ test.describe('account page, logged out', () => {
     await expect(header).toContainText(/Opened \w{3} \d{1,2}, \d{4}/);
     // Public activity totals for business and government accounts (§14 Q2).
     await expect(page.getByText('Money in, 30 days')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Account summary' }).locator('.metric').filter({ has: page.getByText('Balance', { exact: true }) })).toContainText('$25,000.00');
     await expect(page.getByRole('button', { name: 'Copy /pay command' })).toHaveAttribute('title', '/firm account pay into 1 3 <amount>');
     const gate = page.locator(GATE);
     await expect(gate).toContainText('This account’s history is private');
-    await expect(gate.getByRole('button', { name: 'Log in to see your own account' })).toBeVisible();
+    await expect(gate.getByRole('button', { name: 'Log in to see your own account' })).toHaveCount(0);
     // The Related rail stays visible, so the visitor has somewhere to go.
     const related = page.getByRole('complementary', { name: 'Related' });
     await expect(related.getByRole('link', { name: 'Acme Corp' })).toHaveAttribute('href', '/firms/Acme%20Corp');
@@ -37,6 +38,7 @@ test.describe('account page, logged out', () => {
   test('a personal account shows its owner and no activity totals', async ({ page }) => {
     await visit(page, '/accounts/1');
     await expect(page.locator('.page-header')).toContainText('Personal account of Alice.');
+    await expect(page.getByRole('group', { name: 'Account summary' })).toContainText('$5,000.00');
     await expect(page.getByText('Money in, 30 days')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Copy /pay command' })).toHaveAttribute('title', '/pay Alice <amount>');
     await expect(page.getByRole('complementary', { name: 'Related' }).getByRole('link', { name: 'Acme Corp' })).toBeVisible();
@@ -51,7 +53,7 @@ test.describe('account page, logged out', () => {
   });
 
   test('exports need access', async ({ request }) => {
-    expect((await request.get('/api/export/account-transactions?f=account:in:1&format=csv')).status()).toBe(401);
+    expect((await request.get('/api/export/account-transactions?f=account:in:1&format=csv')).status()).toBe(403);
   });
 });
 
@@ -64,6 +66,7 @@ test.describe('account page, with access', () => {
   test('the owner sees charts, counterparties and a filterable, cursor-paged history', async ({ page }) => {
     await visit(page, '/accounts/1');
     await expect(page.locator(GATE)).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Account summary' })).toContainText('$5,000.00');
     await expect(page.getByRole('heading', { name: 'Balance', level: 2 })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Top counterparties' })).toBeVisible();
     const table = page.getByRole('table', { name: 'Transactions' });
@@ -121,12 +124,16 @@ test.describe('firms', () => {
   test('public overview, gated members and financials', async ({ page }) => {
     await visit(page, '/firms/Acme%20Corp');
     await expect(page.locator('.page-header')).toContainText('Run by Alice, its proprietor.');
+    await expect(page.locator('.page-header')).toContainText('Firm balance $25,000.00');
     await expect(page.getByRole('table', { name: 'Firm accounts' })).toContainText('Acme Corporate Account');
+    await expect(page.getByRole('table', { name: 'Firm accounts' })).toContainText('$25,000.00');
     await expect(page.getByRole('table', { name: 'Top items' })).toContainText('Diamond');
     await page.getByRole('link', { name: /^Members/ }).click();
     await expect(page.locator(GATE)).toContainText('Members are private to the firm');
+    await expect(page.locator('.page-header')).toContainText('Firm balance $25,000.00');
     await page.getByRole('link', { name: 'Financials' }).click();
     await expect(page.locator(GATE)).toContainText('Financials are private to the firm');
+    await expect(page.locator('.page-header')).toContainText('Firm balance $25,000.00');
   });
 
   test('the directory is a chip table', async ({ page }) => {

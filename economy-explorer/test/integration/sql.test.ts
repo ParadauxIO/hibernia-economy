@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 import { db, uuidToBin } from '@/lib/db';
 import { getViewer } from '@/lib/auth/viewer';
 import { createRole, updateRole, deleteRole, setDirectRoleMember, type RoleInput } from '@/lib/services/role';
-import { setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, removeManualMember } from '@/lib/services/group';
+import { updateGroupMetadata, getGroup, setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, removeManualMember } from '@/lib/services/group';
 import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '@/lib/sql/role';
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { permissionsFor } from '../role-fixtures';
@@ -431,6 +431,21 @@ d('configurable authorization policy', () => {
     await sql`INSERT INTO explorer_role (player_uuid_bin, role) VALUES (${uuidToBin(ALICE)}, 'admin')`.execute(db);
     vi.mocked(getViewer).mockResolvedValue({ anon: false, keycloakSub: 'test-policy-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['player', 'admin'], permissions: permissionsFor('admin') });
   });
+  it('renames a group in place without changing membership, grants or sources', async () => {
+    const before = await getGroup(1);
+    expect(before).not.toBeNull();
+    await updateGroupMetadata(1, { name: 'Renamed operators', description: 'Updated description' });
+    expect(await getGroup(1)).toEqual({ ...before, name: 'Renamed operators', description: 'Updated description' });
+    await updateGroupMetadata(1, { name: 'Renamed operators', description: '' });
+    expect((await getGroup(1))?.description).toBeNull();
+    await expect(updateGroupMetadata(1, { name: ' ', description: null })).rejects.toThrow();
+    await expect(updateGroupMetadata(1, { name: 'x'.repeat(65), description: null })).rejects.toThrow();
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (2, 'Other group')`.execute(db);
+    const other = await getGroup(2);
+    expect(other).not.toBeNull();
+    await expect(updateGroupMetadata(1, { name: other!.name, description: null })).rejects.toThrow('already exists');
+    expect((await getGroup(1))?.name).toBe('Renamed operators');
+  });
   const custom: RoleInput = { key: 'auditor', name: 'Account auditor', description: 'Scoped custom role', permissions: ['account.read.all'] };
   it('seeds exactly the permission catalogue for admin and the documented defaults', async () => {
     const roles = await listRoleDefinitions();
@@ -472,6 +487,21 @@ d('configurable authorization policy', () => {
     await createRole(custom);
     expect((await resolveAuthorization(BOB)).roles).not.toContain('auditor');
     expect((await resolveAuthorization(CAROL)).roles).not.toContain('auditor');
+  });
+  it('opens government for linked and unlinked logins through the player baseline without synced memberships (PAR-546)', async () => {
+    const { canSeeGovernment } = await import('@/lib/viewerSnapshot');
+    const role = (await listRoleDefinitions()).find(r => r.key === 'player')!;
+    await updateRole({ ...role, permissions: [...role.permissions, 'government.read.all'] }, role.revision);
+    for (const uuid of [null, DAVE]) {
+      const authorization = await resolveAuthorization(uuid);
+      expect(authorization.roles).toEqual(['player']);
+      expect(authorization.permissions).toContain('government.read.all');
+      expect(canSeeGovernment({ anon: false, keycloakSub: 'baseline-test', minecraftUuid: uuid,
+        minecraftName: null, linked: uuid !== null, role: 'player', capabilities: authorization.roles,
+        permissions: authorization.permissions }, false)).toBe(true);
+    }
+    await updateRole(role, role.revision + 1);
+    expect((await resolveAuthorization(null)).permissions).not.toContain('government.read.all');
   });
   it('edits the authenticated baseline without any implicit permission fallback', async () => {
     await updateRole({ key: 'player', name: 'Player', description: null, permissions: [] }, 1);
@@ -565,6 +595,13 @@ d('configurable authorization policy', () => {
     // @ts-expect-error Exercise untrusted server-action input.
     await expect(createRole({ ...custom, permissions: ['invented'] })).rejects.toThrow('Unknown permission');
     await expect(setDirectRoleMember('missing', BOB, true)).rejects.toThrow('Unknown role');
+  });
+  it('rejects malformed player identifiers without granting a role', async () => {
+    await createRole(custom);
+    for (const uuid of ['not-a-uuid', BOB.replaceAll('-', ''), `${BOB}extra`]) {
+      await expect(setDirectRoleMember('auditor', uuid, true)).rejects.toThrow();
+    }
+    expect((await sql`SELECT 1 FROM explorer_role WHERE role = 'auditor'`.execute(db)).rows).toHaveLength(0);
   });
 });
 

@@ -1,0 +1,39 @@
+package io.paradaux.treasury.services.exceptions;
+
+import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
+
+/**
+ * Thrown by {@code issueFine} when the targeted player or debtor account doesn't have
+ * enough funds to cover the fine. Wraps the underlying {@link IllegalStateException}
+ * raised by the ledger service so handlers can render an i18n message without
+ * scraping the message text.
+ */
+public class InsufficientFineFundsException extends TreasuryException {
+    private static final long serialVersionUID = 1L;
+    private final @Nullable UUID playerUuid;
+    private final @Nullable Integer debtorAccountId;
+
+    public InsufficientFineFundsException(UUID playerUuid, Throwable cause) {
+        super("Player " + playerUuid + " has insufficient funds to cover the fine", cause);
+        this.playerUuid = playerUuid;
+        this.debtorAccountId = null;
+    }
+
+    /** For fines whose debtor is an account rather than a player (e.g. a firm). */
+    public InsufficientFineFundsException(int debtorAccountId, Throwable cause) {
+        super("Account " + debtorAccountId + " has insufficient funds to cover the fine", cause);
+        this.playerUuid = null;
+        this.debtorAccountId = debtorAccountId;
+    }
+
+    /** The fined player, or {@code null} if the debtor was an account (firm fine). */
+    public @Nullable UUID getPlayerUuid() {
+        return playerUuid;
+    }
+
+    /** The debited account, or {@code null} if the debtor was a player. */
+    public @Nullable Integer getDebtorAccountId() {
+        return debtorAccountId;
+    }
+}

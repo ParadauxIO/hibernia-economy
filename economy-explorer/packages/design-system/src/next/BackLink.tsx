@@ -1,9 +1,9 @@
-import Link from 'next/link';
 import type { Route } from 'next';
+import Link from 'next/link';
 
-export function BackLink({ href, label }: { href: string; label: string }) {
+export function BackLink<T extends string>({ href, label }: { href: Route<T>; label: string }) {
   return (
-    <Link href={href as Route} className="back-link" prefetch={false}>
+    <Link href={href} className="back-link" prefetch={false}>
       ← {label}
     </Link>
   );

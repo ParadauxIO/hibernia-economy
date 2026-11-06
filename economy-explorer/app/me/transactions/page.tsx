@@ -1,5 +1,5 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader } from '@democracycraft/design-system';
 import { CursorPager } from '@democracycraft/design-system/next';
 import { TableEmpty, type LinkComponent } from '@democracycraft/design-system/table';
@@ -24,7 +24,7 @@ export async function generateMetadata() {
 }
 
 const TABLE_ID = 'me-transactions';
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
 export default async function MyTransactionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -67,8 +67,8 @@ export default async function MyTransactionsPage({ searchParams }: { searchParam
       empty={<TableEmpty noun={page.window ? 'transactions in this window' : 'transactions'} filters={activeFilters} clearHref={href(cleared(state))} link={RouterLink} />} />
 
     <CursorPager
-      newerHref={page.isFirstPage ? undefined : href(firstPage) as Route}
-      olderHref={page.nextCursor ? href({ ...state, cursor: page.nextCursor }) as Route : undefined}
+      newerHref={page.isFirstPage ? undefined : href(firstPage)}
+      olderHref={page.nextCursor ? href({ ...state, cursor: page.nextCursor }) : undefined}
       summary={page.isFirstPage ? 'Newest first' : 'Older transactions · Newer returns to the latest'} />
   </>;
 }

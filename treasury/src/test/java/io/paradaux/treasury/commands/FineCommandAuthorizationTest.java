@@ -163,7 +163,7 @@ class FineCommandAuthorizationTest {
     @CsvSource({"issue, false", "issue, true", "firm, false", "firm, true"})
     void missingOrArchivedAccountIsRejectedBeforeAuthorization(String route, boolean archived) {
         Account account = account(GOV_ID, "Police");
-        account.setArchived(true);
+        account = account.withArchived(true);
         when(accounts.getGovernmentAccountByName("Police")).thenReturn(archived ? account : null);
 
         invoke(route);
@@ -188,9 +188,7 @@ class FineCommandAuthorizationTest {
     }
 
     private static Account account(int id, String name) {
-        Account account = new Account();
-        account.setAccountId(id);
-        account.setDisplayName(name);
+        Account account = Account.builder().accountId(id).displayName(name).build();
         return account;
     }
 }

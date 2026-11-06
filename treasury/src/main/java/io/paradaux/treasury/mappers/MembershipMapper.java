@@ -1,11 +1,9 @@
 package io.paradaux.treasury.mappers;
 
 import io.paradaux.treasury.model.economy.AccountMember;
-import org.apache.ibatis.annotations.*;
-
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.apache.ibatis.annotations.*;
 
 /**
  * Per-account access on the consolidated {@code account_access} table (PAR-249).
@@ -64,9 +62,10 @@ public interface MembershipMapper {
           removed_at = NULL,
           added_by_uuid_bin = VALUES(added_by_uuid_bin)
       """)
-    int addMember(@Param("accountId") int accountId,
-                  @Param("memberUuid") UUID memberUuid,
-                  @Param("addedByUuid") UUID addedByUuid);
+    int addMember(
+            @Param("accountId") int accountId,
+            @Param("memberUuid") UUID memberUuid,
+            @Param("addedByUuid") UUID addedByUuid);
 
     /** Grant at least VIEWER; keep an active MEMBER/AUTHORIZER, else (re)set to VIEWER. */
     @Insert("""
@@ -77,9 +76,10 @@ public interface MembershipMapper {
           removed_at = NULL,
           added_by_uuid_bin = VALUES(added_by_uuid_bin)
       """)
-    int addViewer(@Param("accountId") int accountId,
-                  @Param("viewerUuid") UUID viewerUuid,
-                  @Param("addedByUuid") UUID addedByUuid);
+    int addViewer(
+            @Param("accountId") int accountId,
+            @Param("viewerUuid") UUID viewerUuid,
+            @Param("addedByUuid") UUID addedByUuid);
 
     /**
      * Promote an existing access row to AUTHORIZER. The service guarantees the
@@ -89,8 +89,7 @@ public interface MembershipMapper {
       UPDATE account_access SET level = 'AUTHORIZER', removed_at = NULL
        WHERE account_id = #{accountId} AND subject_uuid_bin = #{authorizerUuid}
       """)
-    int promoteToAuthorizer(@Param("accountId") int accountId,
-                            @Param("authorizerUuid") UUID authorizerUuid);
+    int promoteToAuthorizer(@Param("accountId") int accountId, @Param("authorizerUuid") UUID authorizerUuid);
 
     // ---- Removals (soft-delete) ----
 
@@ -100,8 +99,7 @@ public interface MembershipMapper {
        WHERE account_id = #{accountId} AND subject_uuid_bin = #{memberUuid}
          AND level IN ('MEMBER','AUTHORIZER') AND removed_at IS NULL
       """)
-    int removeMember(@Param("accountId") int accountId,
-                     @Param("memberUuid") UUID memberUuid);
+    int removeMember(@Param("accountId") int accountId, @Param("memberUuid") UUID memberUuid);
 
     /** Demote an authorizer back to MEMBER (they remain a member). */
     @Update("""
@@ -109,8 +107,7 @@ public interface MembershipMapper {
        WHERE account_id = #{accountId} AND subject_uuid_bin = #{authorizerUuid}
          AND level = 'AUTHORIZER' AND removed_at IS NULL
       """)
-    int removeAuthorizer(@Param("accountId") int accountId,
-                         @Param("authorizerUuid") UUID authorizerUuid);
+    int removeAuthorizer(@Param("accountId") int accountId, @Param("authorizerUuid") UUID authorizerUuid);
 
     /** Revoke a pure viewer's access; never touches a member/authorizer. */
     @Update("""
@@ -118,8 +115,7 @@ public interface MembershipMapper {
        WHERE account_id = #{accountId} AND subject_uuid_bin = #{viewerUuid}
          AND level = 'VIEWER' AND removed_at IS NULL
       """)
-    int removeViewer(@Param("accountId") int accountId,
-                     @Param("viewerUuid") UUID viewerUuid);
+    int removeViewer(@Param("accountId") int accountId, @Param("viewerUuid") UUID viewerUuid);
 
     // ---- Listing ----
 
@@ -129,11 +125,12 @@ public interface MembershipMapper {
        WHERE account_id = #{accountId} AND level IN ('MEMBER','AUTHORIZER') AND removed_at IS NULL
        ORDER BY created_at
       """)
-    @Results(id = "accessMap", value = {
-            @Result(column = "account_id", property = "accountId"),
-            @Result(column = "subject_uuid_bin", property = "memberUuid"),
-            @Result(column = "added_by_uuid_bin", property = "addedByUuid"),
-            @Result(column = "created_at", property = "createdAt", javaType = Instant.class)
+    @Results(id = "accessMap")
+    @ConstructorArgs({
+        @Arg(column = "account_id", javaType = int.class),
+        @Arg(column = "subject_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "added_by_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "created_at", javaType = java.time.Instant.class)
     })
     List<AccountMember> getMembers(@Param("accountId") int accountId);
 

@@ -45,6 +45,7 @@ else.
 
 ## Per-row actions
 
+- **Details** — inspect the latest 50 deliveries, change the public HTTPS delivery URL, or rotate the signing secret (shown once).
 - **Pause / Enable** — re-enabling clears the failure counter and the auto-disabled flag.
 - **Delete** — removes the subscription and its delivery history; no further events are
   sent.
@@ -58,9 +59,9 @@ else.
 
 Access needs `webhooks.read.all`; creation, update and deletion separately require
 `webhooks.create.all`, `webhooks.update.all` and `webhooks.delete.all`. Admin API
-configuration and its SERVICE token must also work. The fleet console does not
-have every owner self-service control; use the owner's detail page for their
-secret rotation and delivery history.
+configuration and its SERVICE token must also work. Open **Details** in the fleet console for delivery history, URL changes and
+secret rotation. Reading requires `webhooks.read.all`; URL and secret changes
+require `webhooks.update.all`. Signing secrets are never written to the audit log.
 
 1. Record subscription ID, account/firm, active/auto-disabled state and the last
    successful delivery. Keep the endpoint URL/secret private. Check that the
@@ -88,7 +89,7 @@ and auto-disable after 15 consecutive subscription failures. Redis lease TTL
 defaults to 15 seconds; API-key subscription limit is 20. Overrides are listed in
 [service configuration](/docs/admin/config-services).
 
-For a leaked secret, pause the subscription, rotate through owner self-service,
+For a leaked secret, pause the subscription, rotate through admin Details or owner self-service,
 update the receiver and verify signatures before resuming. Deleting a subscription
 also removes delivery history: preserve needed evidence first. Generic receivers
 must reject missing/malformed signatures and deduplicate by `deliveryId`, not only

@@ -6,6 +6,7 @@ import io.paradaux.treasuryrestapi.dto.FirmEmployeeResponse;
 import io.paradaux.treasuryrestapi.dto.FirmResponse;
 import io.paradaux.treasuryrestapi.dto.FirmRoleResponse;
 import io.paradaux.treasuryrestapi.dto.FirmUpdateRequest;
+import io.paradaux.treasuryrestapi.dto.PublicFirmAccountResponse;
 import io.paradaux.treasuryrestapi.dto.PublicFirmResponse;
 import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.mapper.FirmMapper;
@@ -39,6 +40,26 @@ public class FirmService {
 
     public FirmService(FirmMapper firmMapper) {
         this.firmMapper = firmMapper;
+    }
+
+    public List<PublicFirmAccountResponse> listPublicAccounts(String firmName) {
+        return publicAccounts(firmMapper.findFirmByDisplayName(firmName));
+    }
+
+    public List<PublicFirmAccountResponse> listPublicAccountsById(long firmId) {
+        return publicAccounts(firmMapper.findFirmById(firmId));
+    }
+
+    private List<PublicFirmAccountResponse> publicAccounts(Firm firm) {
+        if (firm == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "FIRM_NOT_FOUND", "Firm not found.");
+        }
+        return firmMapper.listFirmAccounts(firm.getFirmId()).stream()
+                .map(a -> new PublicFirmAccountResponse(
+                        a.getAccountId(),
+                        a.getDisplayName(),
+                        java.util.Objects.equals(firm.getDefaultAccountId(), a.getAccountId())))
+                .toList();
     }
 
     /** Public firm profile — any authenticated caller, looked up by display name. */

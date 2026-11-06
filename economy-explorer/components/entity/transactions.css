@@ -1,0 +1,65 @@
+/* Keep names flexible and give complete monetary values their natural width. */
+.dt-wrap:has(.transaction-table) { container-type: inline-size; }
+.transaction-table [data-col="amount"],
+.transaction-table [data-col="balance"],
+.transaction-table [data-col="when"] { width: 1%; white-space: nowrap; }
+.transaction-table [data-col="counterparty"],
+.transaction-table [data-col="description"],
+.transaction-table [data-col="message"],
+.transaction-table [data-col="account"] { max-width: 0; min-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transaction-table .txn-message { max-width: 100%; }
+.transaction-balance-label { display: none; }
+
+/* A compact bank-style activity row: identity left, money right, context below.
+   The underlying table and column keys remain available to assistive technology
+   and the Columns menu. The transaction link opens the complete record. */
+@container (max-width: 760px) {
+  .transaction-table { display: block; }
+  .transaction-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .transaction-table tbody { display: block; }
+  .transaction-table tbody tr:not(.dt-empty-row) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    column-gap: var(--space-4);
+    row-gap: var(--space-1);
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--border-soft);
+    align-items: baseline;
+  }
+  .transaction-table tbody tr:last-child { border-bottom: 0; }
+  .dt.transaction-table tbody td {
+    display: block;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    font-size: var(--text-xs);
+    line-height: var(--leading-sm);
+    color: var(--fg-muted);
+  }
+  .transaction-table tbody td.dt-secondary { display: block; }
+  .transaction-table .dt-more { display: none; }
+  .transaction-table .dt-linked:hover { background: var(--bg-soft); }
+  .transaction-table .dt-linked:has(.dt-rowlink:focus-visible) { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+  .dt.transaction-table .dt-linked:hover td,
+  .dt.transaction-table .dt-linked:has(.dt-rowlink:focus-visible) td { background: transparent; box-shadow: none; }
+  .dt.transaction-table tbody [data-col="amount"] { grid-column: 2; grid-row: 1; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--fg); }
+  .transaction-table tbody [data-col="when"] { grid-column: 1; grid-row: 2; overflow: hidden; text-overflow: ellipsis; }
+  .transaction-table tbody [data-col="category"] { grid-column: 2; grid-row: 3; text-align: right; }
+  .transaction-table .dt-cat { color: var(--fg-muted); }
+  .transaction-table .dt-cat::before { display: none; }
+  .transaction-table .entity-id { display: none; }
+  .transaction-table .entity-link { max-width: 100%; }
+  .transaction-table .dt-rowlink { color: inherit; font-weight: inherit; }
+  .transaction-table .txn-message { color: var(--fg-muted); }
+
+  .dt.account-transaction-table tbody [data-col="counterparty"],
+  .dt.feed-transaction-table tbody [data-col="description"] { grid-column: 1; grid-row: 1; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--fg); }
+  .account-transaction-table tbody [data-col="balance"] { grid-column: 2; grid-row: 2; }
+  .account-transaction-table .transaction-balance-label { display: inline; }
+  .account-transaction-table tbody [data-col="message"] { grid-column: 1; grid-row: 3; }
+  .feed-transaction-table tbody [data-col="counterparty"] { grid-column: 1; grid-row: 3; }
+  .feed-transaction-table tbody [data-col="account"] { grid-column: 1; grid-row: 4; }
+  .feed-transaction-table tbody [data-col="description"] .dt-sub { display: none; }
+}

@@ -1,12 +1,6 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
-import io.paradaux.treasury.api.exceptions.FineAlreadyRevokedException;
-import io.paradaux.treasury.api.exceptions.FineNotFoundException;
-import io.paradaux.treasury.api.exceptions.GovAccountNotFoundException;
-import io.paradaux.treasury.api.exceptions.InsufficientFineFundsException;
-import io.paradaux.treasury.api.exceptions.PrimitiveAccountException;
 import io.paradaux.treasury.mappers.GovernmentFineMapper;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.economy.Account;
@@ -17,16 +11,21 @@ import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
+import io.paradaux.treasury.services.exceptions.FineAlreadyRevokedException;
+import io.paradaux.treasury.services.exceptions.FineNotFoundException;
+import io.paradaux.treasury.services.exceptions.GovAccountNotFoundException;
+import io.paradaux.treasury.services.exceptions.InsufficientFineFundsException;
+import io.paradaux.treasury.services.exceptions.PrimitiveAccountException;
 import io.paradaux.treasury.utils.Idempotency;
 import io.paradaux.treasury.utils.Money;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.mybatis.guice.transactional.Transactional;
 
 @Slf4j
 public class GovServiceImpl implements GovService {
@@ -39,27 +38,29 @@ public class GovServiceImpl implements GovService {
     private final Clock clock;
 
     @Inject
-    public GovServiceImpl(AccountService accountService,
-                          LedgerService ledgerService,
-                          GovernmentFineMapper fineMapper,
-                          GovernmentConfiguration govConfig,
-                          PlayerDirectoryService playerDirectory) {
+    public GovServiceImpl(
+            AccountService accountService,
+            LedgerService ledgerService,
+            GovernmentFineMapper fineMapper,
+            GovernmentConfiguration govConfig,
+            PlayerDirectoryService playerDirectory) {
         this(accountService, ledgerService, fineMapper, govConfig, playerDirectory, Clock.systemUTC());
     }
 
     /** Test seam: lets a test pin the clock so the per-second fine dedup key is deterministic. */
-    GovServiceImpl(AccountService accountService,
-                   LedgerService ledgerService,
-                   GovernmentFineMapper fineMapper,
-                   GovernmentConfiguration govConfig,
-                   PlayerDirectoryService playerDirectory,
-                   Clock clock) {
+    GovServiceImpl(
+            AccountService accountService,
+            LedgerService ledgerService,
+            GovernmentFineMapper fineMapper,
+            GovernmentConfiguration govConfig,
+            PlayerDirectoryService playerDirectory,
+            Clock clock) {
         this.accountService = accountService;
-        this.ledgerService  = ledgerService;
-        this.fineMapper     = fineMapper;
-        this.govConfig      = govConfig;
+        this.ledgerService = ledgerService;
+        this.fineMapper = fineMapper;
+        this.govConfig = govConfig;
         this.playerDirectory = playerDirectory;
-        this.clock          = clock;
+        this.clock = clock;
     }
 
     // ---- Account management ----
@@ -80,7 +81,8 @@ public class GovServiceImpl implements GovService {
             throw new IllegalArgumentException("A player named '" + name + "' already exists; "
                     + "a GOVERNMENT account must not share a player's name (use a distinct name)");
         }
-        Account created = accountService.createAccount(AccountType.GOVERNMENT, TreasuryConstants.VIRTUAL_TREASURY_OWNER, name);
+        Account created =
+                accountService.createAccount(AccountType.GOVERNMENT, TreasuryConstants.VIRTUAL_TREASURY_OWNER, name);
         log.info("Department account '{}' (id={}) created by {}", name, created.getAccountId(), createdBy);
         return created;
     }
@@ -137,12 +139,16 @@ public class GovServiceImpl implements GovService {
 
     @Override
     @Transactional
-    public GovernmentFine issueFine(int debtorAccountId, int govAccountId, BigDecimal amount, String reason, UUID issuedBy) {
+    public GovernmentFine issueFine(
+            int debtorAccountId, int govAccountId, BigDecimal amount, String reason, UUID issuedBy) {
         Account debtorAccount = accountService.getAccountById(debtorAccountId);
         if (debtorAccount == null) {
             throw new IllegalArgumentException("No account found with id " + debtorAccountId);
         }
-        return doIssueFine(debtorAccountId, null, govAccountId, amount, reason, issuedBy);
+        // Preserve personal fine history and notifications even when the caller
+        // addresses the debtor by account number (PAR-522).
+        UUID playerUuid = debtorAccount.getAccountType() == AccountType.PERSONAL ? debtorAccount.getOwnerUuid() : null;
+        return doIssueFine(debtorAccountId, playerUuid, govAccountId, amount, reason, issuedBy);
     }
 
     /**
@@ -150,8 +156,8 @@ public class GovServiceImpl implements GovService {
      * account into the government account, and records the fine. {@code playerUuid}
      * is the fined player for player fines, or {@code null} for firm/account fines.
      */
-    private GovernmentFine doIssueFine(int debtorAccountId, UUID playerUuid, int govAccountId,
-                                       BigDecimal amount, String reason, UUID issuedBy) {
+    private GovernmentFine doIssueFine(
+            int debtorAccountId, UUID playerUuid, int govAccountId, BigDecimal amount, String reason, UUID issuedBy) {
         Money.requirePositive(amount, "fine amount > 0");
 
         Account govAccount = accountService.getAccountById(govAccountId);
@@ -182,8 +188,7 @@ public class GovServiceImpl implements GovService {
                     issuedBy,
                     null,
                     TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey
-            ));
+                    dedupKey));
         } catch (IllegalStateException e) {
             // LedgerService.transfer throws IllegalStateException for insufficient
             // funds (and a few other failure modes). The fine path only ever debits
@@ -202,8 +207,11 @@ public class GovServiceImpl implements GovService {
             // the debtor be refunded twice for one debit. uq_fines_txn backstops this.
             GovernmentFine existing = fineMapper.findFineByTxnIdForUpdate(txnId);
             if (existing != null) {
-                log.info("Fine double-submit collapsed onto existing fine: id={} txn={} issuedBy={}",
-                        existing.getFineId(), txnId, issuedBy);
+                log.info(
+                        "Fine double-submit collapsed onto existing fine: id={} txn={} issuedBy={}",
+                        existing.getFineId(),
+                        txnId,
+                        issuedBy);
                 return existing;
             }
         }
@@ -217,9 +225,16 @@ public class GovServiceImpl implements GovService {
                 .txnId(txnId)
                 .issuedBy(issuedBy)
                 .build();
-        fineMapper.insertFine(fine);
-        log.info("Fine issued: id={} debtorAccount={} player={} govAccount={} amount={} txn={} issuedBy={}",
-                fine.getFineId(), debtorAccountId, playerUuid, govAccount.getAccountId(), normalized, txnId, issuedBy);
+        fine = fine.withFineId(fineMapper.insertFine(fine));
+        log.info(
+                "Fine issued: id={} debtorAccount={} player={} govAccount={} amount={} txn={} issuedBy={}",
+                fine.getFineId(),
+                debtorAccountId,
+                playerUuid,
+                govAccount.getAccountId(),
+                normalized,
+                txnId,
+                issuedBy);
         return fine;
     }
 
@@ -239,9 +254,10 @@ public class GovServiceImpl implements GovService {
         if (debtorAccount == null) {
             // Keep the player-fine wording (a pinned regression message) when the
             // debtor was a player; firm fines get the account-oriented wording.
-            throw new IllegalStateException(fine.getPlayerUuid() != null
-                    ? "Player account not found for fine " + fineId
-                    : "Debtor account not found for fine " + fineId);
+            throw new IllegalStateException(
+                    fine.getPlayerUuid() != null
+                            ? "Player account not found for fine " + fineId
+                            : "Debtor account not found for fine " + fineId);
         }
         Account finesAccount = accountService.getAccountById(fine.getGovAccountId());
         if (finesAccount == null) {
@@ -257,15 +273,20 @@ public class GovServiceImpl implements GovService {
                 revokedBy,
                 null,
                 TreasuryConstants.TREASURY_PLUGIN_NAME,
-                dedupKey
-        ));
+                dedupKey));
 
         fineMapper.revokeFine(fineId, revokedBy, revokeTxnId);
-        fine.setRevoked(true);
-        fine.setRevokedBy(revokedBy);
-        fine.setRevokeTxnId(revokeTxnId);
-        log.info("Fine revoked: id={} debtorAccount={} player={} amount={} reverseTxn={} revokedBy={}",
-                fineId, debtorAccountId, fine.getPlayerUuid(), fine.getAmount(), revokeTxnId, revokedBy);
+        fine = fine.withRevoked(true);
+        fine = fine.withRevokedBy(revokedBy);
+        fine = fine.withRevokeTxnId(revokeTxnId);
+        log.info(
+                "Fine revoked: id={} debtorAccount={} player={} amount={} reverseTxn={} revokedBy={}",
+                fineId,
+                debtorAccountId,
+                fine.getPlayerUuid(),
+                fine.getAmount(),
+                revokeTxnId,
+                revokedBy);
         return fine;
     }
 

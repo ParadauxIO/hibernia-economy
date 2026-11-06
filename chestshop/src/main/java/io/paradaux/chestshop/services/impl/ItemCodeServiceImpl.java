@@ -1,16 +1,22 @@
 package io.paradaux.chestshop.services.impl;
-import lombok.extern.slf4j.Slf4j;
 
-import io.paradaux.chestshop.services.MaterialService;
-import io.paradaux.chestshop.services.ItemCodeService;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.chestshop.ChestShop;
-import io.paradaux.chestshop.model.Item;
 import io.paradaux.chestshop.mappers.ItemCodeMapper;
+import io.paradaux.chestshop.model.Item;
+import io.paradaux.chestshop.services.ItemCodeService;
+import io.paradaux.chestshop.services.MaterialService;
 import io.paradaux.chestshop.utils.MaterialUtil;
 import io.paradaux.chestshop.utils.StringUtil;
 import io.paradaux.chestshop.utils.encoding.Base62;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.ObjectInputFilter;
+import java.io.ObjectInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.configuration.file.YamlConstructor;
@@ -22,14 +28,6 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.error.YAMLException;
 import org.yaml.snakeyaml.nodes.Tag;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.ByteArrayInputStream;
-import java.io.ObjectInputFilter;
-import java.io.ObjectInputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 /**
  * Owns the item-code <em>logic</em>: serialising an {@link ItemStack} to/from the
@@ -52,7 +50,10 @@ public class ItemCodeServiceImpl implements ItemCodeService {
     private final Yaml yaml = new Yaml(new YamlBukkitConstructor(), new YamlRepresenter(), new DumperOptions());
 
     @Inject
-    public ItemCodeServiceImpl(ItemCodeMapper items, MaterialService materialService, @com.google.inject.name.Named("dataFolder") java.io.File dataFolder) {
+    public ItemCodeServiceImpl(
+            ItemCodeMapper items,
+            MaterialService materialService,
+            @com.google.inject.name.Named("dataFolder") java.io.File dataFolder) {
         this.items = items;
         this.materialService = materialService;
         this.dataFolder = dataFolder;
@@ -89,7 +90,8 @@ public class ItemCodeServiceImpl implements ItemCodeService {
                 log.error("Error while updating metadata-version from " + previousVersion + " to " + newVersion, e);
             }
         } else {
-            log.warn("Error while updating Item Metadata database! While the plugin will still run it will work less efficiently.");
+            log.warn(
+                    "Error while updating Item Metadata database! While the plugin will still run it will work less efficiently.");
         }
     }
 
@@ -189,6 +191,9 @@ public class ItemCodeServiceImpl implements ItemCodeService {
     /** The {@link ItemStack} for a canonical sign string (material + durability + #code), or {@code null}. */
     @Override
     public ItemStack decode(String itemName) {
+        if (itemName != null && itemName.matches("#[0-9a-zA-Z]+")) {
+            return getFromCode(itemName.substring(1));
+        }
         String[] split = itemName.split("[:#]");
         for (int i = 0; i < split.length; i++) {
             split[i] = split[i].trim();
@@ -196,7 +201,7 @@ public class ItemCodeServiceImpl implements ItemCodeService {
 
         Integer durability = MaterialUtil.getDurability(itemName);
         Material material = materialService.getMaterial(split[0]);
-        if (material == null) {
+        if (material == null || !material.isItem()) {
             return null;
         }
 
@@ -274,23 +279,22 @@ public class ItemCodeServiceImpl implements ItemCodeService {
                         }
                     }
                 } catch (IOException | ClassNotFoundException e) {
-                    log.error("Unable to convert item with ID "
-                            + Base62.encode(id) + " (" + id + ")", e);
+                    log.error("Unable to convert item with ID " + Base62.encode(id) + " (" + id + ")", e);
                 } catch (StackOverflowError e) {
-                    log.error("Item with ID "
-                            + Base62.encode(id) + " (" + id + ") is corrupted. Sorry :(");
+                    log.error("Item with ID " + Base62.encode(id) + " (" + id + ") is corrupted. Sorry :(");
                 }
                 if (seen % 1000 == 0) {
                     log.info("Checked " + seen + " items. Updated " + updated + "...");
                 }
             }
         } catch (RuntimeException e) {
-            log.error("Unable to update metadata version of all items from " + previousVersion + " to " + newVersion, e);
+            log.error(
+                    "Unable to update metadata version of all items from " + previousVersion + " to " + newVersion, e);
             return false;
         }
 
-        log.info("Finished updating database in " + (System.currentTimeMillis() - start) / 1000.0
-                + "s. " + updated + " items out of " + seen + " were updated!");
+        log.info("Finished updating database in " + (System.currentTimeMillis() - start) / 1000.0 + "s. " + updated
+                + " items out of " + seen + " were updated!");
         return true;
     }
 
@@ -380,14 +384,15 @@ public class ItemCodeServiceImpl implements ItemCodeService {
             log.error("Item-code blob encoding migration failed", e);
             return false;
         }
-        log.info("Finished item-code blob encoding migration in "
-                + (System.currentTimeMillis() - start) / 1000.0 + "s. " + updated + " of " + seen + " rewritten.");
+        log.info("Finished item-code blob encoding migration in " + (System.currentTimeMillis() - start) / 1000.0
+                + "s. " + updated + " of " + seen + " rewritten.");
         return true;
     }
 
     private static final class YamlBukkitConstructor extends YamlConstructor {
         YamlBukkitConstructor() {
-            this.yamlConstructors.put(new Tag(Tag.PREFIX + "org.bukkit.inventory.ItemStack"), yamlConstructors.get(Tag.MAP));
+            this.yamlConstructors.put(
+                    new Tag(Tag.PREFIX + "org.bukkit.inventory.ItemStack"), yamlConstructors.get(Tag.MAP));
         }
     }
 }

@@ -27,7 +27,7 @@ import {
 
 export type AuditTargetType =
   | 'account' | 'transaction' | 'firm' | 'player' | 'chestshop' | 'global'
-  | 'group' | 'role' | 'api_key' | 'webhook';
+  | 'group' | 'role' | 'api_key' | 'webhook' | 'feature_flag';
 
 type SignedIn = Extract<Viewer, { anon: false }>;
 

@@ -1,44 +1,51 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.InternalException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmEmployee;
-import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmEmployee;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.InternalException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FirmStaffServiceImplTest {
 
-    @Mock FirmService firms;
-    @Mock FirmRoleMapper roles;
-    @Mock FirmStaffMapper staff;
-    @Mock FirmAccountService accounts;
-    @Mock FirmChatService chat;
+    @Mock
+    FirmService firms;
+
+    @Mock
+    FirmRoleMapper roles;
+
+    @Mock
+    FirmStaffMapper staff;
+
+    @Mock
+    FirmAccountService accounts;
+
+    @Mock
+    FirmChatService chat;
 
     private FirmStaffServiceImpl svc;
 
@@ -47,7 +54,8 @@ class FirmStaffServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        svc = new FirmStaffServiceImpl(firms, roles, staff, accounts, () -> chat);
+        svc = new FirmStaffServiceImpl(
+                firms, roles, staff, accounts, () -> chat, new io.paradaux.business.threading.MainThreadAccess(null));
     }
 
     private Firm acme() {
@@ -64,8 +72,7 @@ class FirmStaffServiceImplTest {
     @Test
     void hireEmployee_failsForUnknownFirm() {
         when(firms.getFirmById(99)).thenReturn(null);
-        assertThatThrownBy(() -> svc.hireEmployee(99, target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.hireEmployee(99, target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -88,7 +95,8 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, actor)).thenReturn(true);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
         when(roles.findLowestRole(1)).thenReturn("Employee");
-        when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString())).thenReturn(1);
+        when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString()))
+                .thenReturn(1);
 
         svc.hireEmployee(1, target, actor);
 
@@ -104,16 +112,14 @@ class FirmStaffServiceImplTest {
     @Test
     void hireEmployeeFromInvite_failsForUnknownFirm() {
         when(firms.getFirmById(99)).thenReturn(null);
-        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(99, target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(99, target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
     void hireEmployeeFromInvite_rejectsHiringSelf() {
         Firm firm = acme();
         when(firms.getFirmById(1)).thenReturn(firm);
-        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, actor, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, actor, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -121,8 +127,7 @@ class FirmStaffServiceImplTest {
         Firm firm = acme();
         when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(true);
-        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -131,7 +136,8 @@ class FirmStaffServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
         when(roles.findLowestRole(1)).thenReturn(null);
-        when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString())).thenReturn(1);
+        when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString()))
+                .thenReturn(1);
 
         svc.hireEmployeeFromInvite(1, target, actor);
 
@@ -145,7 +151,8 @@ class FirmStaffServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
         when(roles.findLowestRole(1)).thenReturn("Intern");
-        when(staff.insertEmployment(1, target.toString(), "Intern", actor.toString())).thenReturn(1);
+        when(staff.insertEmployment(1, target.toString(), "Intern", actor.toString()))
+                .thenReturn(1);
 
         svc.hireEmployeeFromInvite(1, target, actor);
 
@@ -158,10 +165,10 @@ class FirmStaffServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
         when(roles.findLowestRole(1)).thenReturn("Employee");
-        when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString())).thenReturn(0);
+        when(staff.insertEmployment(1, target.toString(), "Employee", actor.toString()))
+                .thenReturn(0);
 
-        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, target, actor))
-                .isInstanceOf(InternalException.class);
+        assertThatThrownBy(() -> svc.hireEmployeeFromInvite(1, target, actor)).isInstanceOf(InternalException.class);
         verify(accounts, never()).syncAllFirmAccounts(anyInt());
     }
 
@@ -170,8 +177,7 @@ class FirmStaffServiceImplTest {
     @Test
     void fireEmployee_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.fireEmployee("Ghost", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.fireEmployee("Ghost", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -182,8 +188,7 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, actor)).thenReturn(false);
         when(staff.isEmployedBy(1, actor.toString())).thenReturn(false);
 
-        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -193,8 +198,7 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, actor)).thenReturn(true); // actor is proprietor
         when(firms.isProprietor(1, target)).thenReturn(true); // target also proprietor
 
-        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -203,8 +207,7 @@ class FirmStaffServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
         when(firms.isProprietor(1, actor)).thenReturn(true);
 
-        assertThatThrownBy(() -> svc.fireEmployee("Acme", actor, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.fireEmployee("Acme", actor, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -231,8 +234,7 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, target)).thenReturn(false);
         when(staff.endCurrentEmployment(1, target.toString(), actor.toString())).thenReturn(0);
 
-        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -243,8 +245,7 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, target)).thenReturn(false);
         when(staff.endCurrentEmployment(1, target.toString(), actor.toString())).thenReturn(2);
 
-        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor))
-                .isInstanceOf(InternalException.class);
+        assertThatThrownBy(() -> svc.fireEmployee("Acme", target, actor)).isInstanceOf(InternalException.class);
     }
 
     // ---------- promoteEmployee ----------
@@ -252,16 +253,14 @@ class FirmStaffServiceImplTest {
     @Test
     void promoteEmployee_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.promoteEmployee("Ghost", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.promoteEmployee("Ghost", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
     void promoteEmployee_cannotPromoteSelf() {
         Firm firm = acme();
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
-        assertThatThrownBy(() -> svc.promoteEmployee("Acme", actor, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.promoteEmployee("Acme", actor, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -270,8 +269,7 @@ class FirmStaffServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
         when(firms.isProprietor(1, actor)).thenReturn(false);
         when(staff.isEmployedBy(1, actor.toString())).thenReturn(false);
-        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -280,8 +278,7 @@ class FirmStaffServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
         when(firms.isProprietor(1, actor)).thenReturn(true);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
-        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -293,8 +290,7 @@ class FirmStaffServiceImplTest {
         when(staff.getCurrentRole(1, target.toString())).thenReturn("Manager");
         when(roles.getRank(1, "Manager")).thenReturn(2);
         when(roles.findRoleAbove(1, 2)).thenReturn(null);
-        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -321,8 +317,7 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, actor)).thenReturn(true);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(true);
         when(staff.getCurrentRole(1, target.toString())).thenReturn("   ");
-        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor))
-                .isInstanceOf(InternalException.class);
+        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor)).isInstanceOf(InternalException.class);
     }
 
     @Test
@@ -333,8 +328,7 @@ class FirmStaffServiceImplTest {
         when(staff.isEmployedBy(1, target.toString())).thenReturn(true);
         when(staff.getCurrentRole(1, target.toString())).thenReturn("Manager");
         when(roles.getRank(1, "Manager")).thenReturn(null);
-        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor))
-                .isInstanceOf(InternalException.class);
+        assertThatThrownBy(() -> svc.promoteEmployee("Acme", target, actor)).isInstanceOf(InternalException.class);
     }
 
     // ---------- demoteEmployee ----------
@@ -363,23 +357,20 @@ class FirmStaffServiceImplTest {
         when(staff.getCurrentRole(1, target.toString())).thenReturn("Employee");
         when(roles.getRank(1, "Employee")).thenReturn(5);
         when(roles.findRoleBelow(1, 5)).thenReturn(null);
-        assertThatThrownBy(() -> svc.demoteEmployee("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.demoteEmployee("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
     void demoteEmployee_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.demoteEmployee("Ghost", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.demoteEmployee("Ghost", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
     void demoteEmployee_cannotDemoteSelf() {
         Firm firm = acme();
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
-        assertThatThrownBy(() -> svc.demoteEmployee("Acme", actor, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.demoteEmployee("Acme", actor, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -388,8 +379,7 @@ class FirmStaffServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
         when(firms.isProprietor(1, actor)).thenReturn(true);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
-        assertThatThrownBy(() -> svc.demoteEmployee("Acme", target, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.demoteEmployee("Acme", target, actor)).isInstanceOf(BadCommandException.class);
     }
 
     // ---------- resign ----------
@@ -397,8 +387,7 @@ class FirmStaffServiceImplTest {
     @Test
     void resign_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.resignFromFirm("Ghost", target))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.resignFromFirm("Ghost", target)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -406,8 +395,7 @@ class FirmStaffServiceImplTest {
         Firm firm = acme();
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm);
         when(staff.isEmployedBy(1, target.toString())).thenReturn(false);
-        assertThatThrownBy(() -> svc.resignFromFirm("Acme", target))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.resignFromFirm("Acme", target)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -450,9 +438,8 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, actor)).thenReturn(false);
         when(staff.isEmployedBy(1, actor.toString())).thenReturn(true);
         when(staff.getCurrentRole(1, actor.toString())).thenReturn("Manager");
-        when(roles.listPermissionsByRole(1, "Manager")).thenReturn(List.of(
-                new FirmRolePermission(1, "Manager", RolePermission.FINANCIAL)
-        ));
+        when(roles.listPermissionsByRole(1, "Manager"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Manager", RolePermission.FINANCIAL)));
         assertThat(svc.hasPermission(1, actor, RolePermission.FINANCIAL)).isTrue();
     }
 
@@ -461,9 +448,8 @@ class FirmStaffServiceImplTest {
         when(firms.isProprietor(1, actor)).thenReturn(false);
         when(staff.isEmployedBy(1, actor.toString())).thenReturn(true);
         when(staff.getCurrentRole(1, actor.toString())).thenReturn("Manager");
-        when(roles.listPermissionsByRole(1, "Manager")).thenReturn(List.of(
-                new FirmRolePermission(1, "Manager", RolePermission.FINANCIAL)
-        ));
+        when(roles.listPermissionsByRole(1, "Manager"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Manager", RolePermission.FINANCIAL)));
         assertThat(svc.hasPermission(1, actor, RolePermission.ADMIN)).isFalse();
     }
 
@@ -474,9 +460,9 @@ class FirmStaffServiceImplTest {
         Firm firm = acme();
         when(firms.getAnyFirmByNameOrId("Acme")).thenReturn(firm);
         when(roles.findProprietorRoleName(1)).thenReturn("Boss");
-        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(new java.util.ArrayList<>(List.of(
-                new FirmEmployee(1, target.toString(), "Employee", LocalDateTime.now(), null, actor.toString(), null, true)
-        )));
+        when(staff.listCurrentEmployeesByFirm(1))
+                .thenReturn(new java.util.ArrayList<>(List.of(new FirmEmployee(
+                        1, target.toString(), "Employee", LocalDateTime.now(), null, actor.toString(), null, true))));
 
         List<FirmEmployee> emps = svc.getCurrentEmployees("Acme");
 
@@ -488,8 +474,7 @@ class FirmStaffServiceImplTest {
     @Test
     void getCurrentEmployees_unknownFirm_throws() {
         when(firms.getAnyFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.getCurrentEmployees("Ghost"))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.getCurrentEmployees("Ghost")).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -505,8 +490,7 @@ class FirmStaffServiceImplTest {
     @Test
     void getProprietorAsEmployee_unknownFirm_throws() {
         when(firms.getAnyFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.getProprietorAsEmployee("Ghost"))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.getProprietorAsEmployee("Ghost")).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -578,9 +562,9 @@ class FirmStaffServiceImplTest {
     void getCurrentEmployees_byId_prependsProprietor() {
         when(firms.getAnyFirmById(1)).thenReturn(acme());
         when(roles.findProprietorRoleName(1)).thenReturn("Boss");
-        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(new java.util.ArrayList<>(List.of(
-                new FirmEmployee(1, target.toString(), "Employee", LocalDateTime.now(), null, actor.toString(), null, true)
-        )));
+        when(staff.listCurrentEmployeesByFirm(1))
+                .thenReturn(new java.util.ArrayList<>(List.of(new FirmEmployee(
+                        1, target.toString(), "Employee", LocalDateTime.now(), null, actor.toString(), null, true))));
 
         assertThat(svc.getCurrentEmployees(1)).hasSize(2);
     }
@@ -593,6 +577,7 @@ class FirmStaffServiceImplTest {
 
         // Roster members are filtered by online status; all are offline in tests.
         try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> org.bukkit.Bukkit.getPlayer(org.mockito.ArgumentMatchers.any(UUID.class)))
                     .thenReturn(null);
             assertThat(svc.getOnlineEmployees(1)).isEmpty();
@@ -606,6 +591,7 @@ class FirmStaffServiceImplTest {
         when(staff.listCurrentEmployeesByFirm(1)).thenReturn(new java.util.ArrayList<>());
 
         try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
+            bukkit.when(org.bukkit.Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> org.bukkit.Bukkit.getPlayer(org.mockito.ArgumentMatchers.any(UUID.class)))
                     .thenReturn(null);
             assertThat(svc.getOnlineEmployees("Acme")).isEmpty();

@@ -1,6 +1,6 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.model.internal.Firm;
 import java.util.List;
 import org.apache.ibatis.annotations.*;
 
@@ -78,6 +78,14 @@ public interface FirmMapper {
             WHERE firm_id = #{firmId} AND is_archived = 1 AND name_released = 0
             """)
     int releaseFirmName(@Param("firmId") int firmId);
+
+    /** Lock the ownership snapshot until the handover transaction commits. */
+    @Select("""
+            SELECT firm_id AS firmId, bin_to_uuid(proprietor_uuid_bin) AS proprietorUuid,
+                   is_archived AS archived
+            FROM firm WHERE firm_id = #{firmId} FOR UPDATE
+            """)
+    Firm lockFirm(@Param("firmId") int firmId);
 
     @Select("""
             SELECT f.firm_id                     AS firmId,

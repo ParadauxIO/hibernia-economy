@@ -1,7 +1,6 @@
 package io.paradaux.treasury.api.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.model.config.GovernmentConfiguration;
@@ -18,12 +17,12 @@ import io.paradaux.treasury.services.TaxCycleRegistry;
 import io.paradaux.treasury.utils.AccountFactory;
 import io.paradaux.treasury.utils.Money;
 import io.paradaux.treasury.utils.TreasuryConstants;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
+import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Production implementation of {@link TaxApi}.
@@ -53,13 +52,14 @@ public class TaxApiImpl implements TaxApi {
     private record Destination(String name, int id) {}
 
     @Inject
-    public TaxApiImpl(LedgerService ledgerService,
-                      AccountMapper accountMapper,
-                      GovernmentConfiguration govConfig,
-                      TaxCycleConfiguration cycleConfig,
-                      SourceIncomeTaxConfiguration sourceIncomeTaxConfig,
-                      TaxCycleRegistry cycleRegistry,
-                      EconomyNotifier notifier) {
+    public TaxApiImpl(
+            LedgerService ledgerService,
+            AccountMapper accountMapper,
+            GovernmentConfiguration govConfig,
+            TaxCycleConfiguration cycleConfig,
+            SourceIncomeTaxConfiguration sourceIncomeTaxConfig,
+            TaxCycleRegistry cycleRegistry,
+            EconomyNotifier notifier) {
         this.ledgerService = ledgerService;
         this.accountMapper = accountMapper;
         this.govConfig = govConfig;
@@ -92,16 +92,24 @@ public class TaxApiImpl implements TaxApi {
                     collection.initiator(),
                     null,
                     collection.pluginSystem(),
-                    collection.dedupKey()
-            ));
+                    collection.dedupKey()));
             result = new TaxResult.Collected(txnId, amount, destinationId);
             cycleRegistry.recordCollected(destinationId, collection.taxType(), amount);
             notifier.notifyTaxCollected(collection.sourceAccountId(), collection.taxType(), amount);
-            log.debug("Tax collected: type={} amount={} src={} dest={} txn={}",
-                    collection.taxType(), amount, collection.sourceAccountId(), destinationId, txnId);
+            log.debug(
+                    "Tax collected: type={} amount={} src={} dest={} txn={}",
+                    collection.taxType(),
+                    amount,
+                    collection.sourceAccountId(),
+                    destinationId,
+                    txnId);
         } catch (Exception e) {
-            log.warn("Tax collection failed: type={} src={} amount={} reason={}",
-                    collection.taxType(), collection.sourceAccountId(), amount, e.getMessage());
+            log.warn(
+                    "Tax collection failed: type={} src={} amount={} reason={}",
+                    collection.taxType(),
+                    collection.sourceAccountId(),
+                    amount,
+                    e.getMessage());
             cycleRegistry.recordFailed();
             result = new TaxResult.Failed(e.getMessage() != null ? e.getMessage() : "Transfer failed");
         }
@@ -133,8 +141,8 @@ public class TaxApiImpl implements TaxApi {
             byte @Nullable [] dedupKey) {
         BigDecimal tax = TaxApi.computeTax(transactionAmount, rate);
         if (tax.compareTo(Money.MINIMUM_AMOUNT) < 0) {
-            return new TaxResult.Skipped("Computed tax " + tax + " is below the $0.01 minimum (rate="
-                    + rate + ", base=" + transactionAmount + ")");
+            return new TaxResult.Skipped("Computed tax " + tax + " is below the $0.01 minimum (rate=" + rate + ", base="
+                    + transactionAmount + ")");
         }
         return collectTax(TaxCollection.toAccount(
                 sourceAccountId, destinationAccountId, tax, taxType, description, initiator, pluginSystem, dedupKey));
@@ -152,8 +160,8 @@ public class TaxApiImpl implements TaxApi {
             byte @Nullable [] dedupKey) {
         BigDecimal tax = TaxApi.computeTax(transactionAmount, rate);
         if (tax.compareTo(Money.MINIMUM_AMOUNT) < 0) {
-            return new TaxResult.Skipped("Computed tax " + tax + " is below the $0.01 minimum (rate="
-                    + rate + ", base=" + transactionAmount + ")");
+            return new TaxResult.Skipped("Computed tax " + tax + " is below the $0.01 minimum (rate=" + rate + ", base="
+                    + transactionAmount + ")");
         }
         return collectTax(TaxCollection.toDefaultAccount(
                 sourceAccountId, tax, taxType, description, initiator, pluginSystem, dedupKey));
@@ -183,8 +191,8 @@ public class TaxApiImpl implements TaxApi {
     @Override
     public boolean isCycleEnabled(TaxCycleType cycleType) {
         return switch (cycleType) {
-            case DAILY   -> cycleConfig.isDailyEnabled();
-            case WEEKLY  -> cycleConfig.isWeeklyEnabled();
+            case DAILY -> cycleConfig.isDailyEnabled();
+            case WEEKLY -> cycleConfig.isWeeklyEnabled();
             case MONTHLY -> cycleConfig.isMonthlyEnabled();
         };
     }
@@ -207,9 +215,8 @@ public class TaxApiImpl implements TaxApi {
     // ---- Source income tax ----
 
     @Override
-    public TaxResult applySourceIncomeTax(@NotNull UUID playerUuid,
-                                          @NotNull BigDecimal depositAmount,
-                                          @NotNull String pluginName) {
+    public TaxResult applySourceIncomeTax(
+            @NotNull UUID playerUuid, @NotNull BigDecimal depositAmount, @NotNull String pluginName) {
         SourceIncomeTaxConfiguration.Snapshot sourceIncomeTaxConfig = this.sourceIncomeTaxConfig.snapshot();
         if (!sourceIncomeTaxConfig.isEnabled()) {
             return new TaxResult.Skipped("Source income tax is disabled");
@@ -227,8 +234,8 @@ public class TaxApiImpl implements TaxApi {
 
         BigDecimal taxAmount = TaxApi.computeTax(depositAmount, rate);
         if (taxAmount.compareTo(Money.MINIMUM_AMOUNT) < 0) {
-            return new TaxResult.Skipped("Computed income tax " + taxAmount
-                    + " is below the $0.01 minimum (rate=" + rate + ", deposit=" + depositAmount + ")");
+            return new TaxResult.Skipped("Computed income tax " + taxAmount + " is below the $0.01 minimum (rate="
+                    + rate + ", deposit=" + depositAmount + ")");
         }
 
         int destinationId = resolveSourceIncomeTaxDestination(sourceIncomeTaxConfig.getGovernmentAccount());
@@ -241,8 +248,7 @@ public class TaxApiImpl implements TaxApi {
                 "Income tax on deposit from " + pluginName + " ($" + depositAmount + ")",
                 TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
                 "treasury",
-                null
-        );
+                null);
 
         return collectTax(collection);
     }
@@ -273,10 +279,12 @@ public class TaxApiImpl implements TaxApi {
 
         // Primitive GOVERNMENT account: overdraft on, -1 = unlimited credit (faucet/sink).
         Account account = AccountFactory.primitiveGovernment(accountName);
-        accountMapper.insertAccount(account);
+        account = account.withAccountId(accountMapper.insertAccount(account));
         accountMapper.seedBalance(account.getAccountId());
-        log.warn("Default tax-collection account '{}' was missing — created on demand. "
-                + "bootstrapGovernmentAccounts() should have created it.", accountName);
+        log.warn(
+                "Default tax-collection account '{}' was missing — created on demand. "
+                        + "bootstrapGovernmentAccounts() should have created it.",
+                accountName);
         return account.getAccountId();
     }
 }

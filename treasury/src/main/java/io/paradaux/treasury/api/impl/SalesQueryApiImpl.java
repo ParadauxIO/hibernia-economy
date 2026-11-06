@@ -6,6 +6,7 @@ import io.paradaux.treasury.api.market.SaleRow;
 import io.paradaux.treasury.api.market.SalesQuery;
 import io.paradaux.treasury.api.market.SalesSummary;
 import io.paradaux.treasury.mappers.ChestShopSalesReadMapper;
+import io.paradaux.treasury.mappers.SalesTotals;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -55,15 +56,12 @@ public class SalesQueryApiImpl implements SalesQueryApi {
     public SalesSummary summarize(SalesQuery query, int topN) {
         requireOwnerScope(query);
         LocalDateTime since = since(query);
-        SalesSummary summary = mapper.summarizeTotals(query, since);
+        SalesTotals summary = mapper.summarizeTotals(query, since);
         if (summary == null) {
             // COUNT(*) always returns a row, so this is defensive only.
-            summary = new SalesSummary(
-                    0, 0, BigDecimal.ZERO, BigDecimal.ZERO, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO, null, null);
+            summary = new SalesTotals(0, 0, BigDecimal.ZERO, BigDecimal.ZERO, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO);
         }
-        summary.setTopItems(mapper.topItems(query, since, topN));
-        summary.setTopCustomers(mapper.topCustomers(query, since, topN));
-        return summary;
+        return summary.toSummary(mapper.topItems(query, since, topN), mapper.topCustomers(query, since, topN));
     }
 
     /**

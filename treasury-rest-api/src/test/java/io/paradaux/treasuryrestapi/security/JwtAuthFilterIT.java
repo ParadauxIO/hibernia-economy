@@ -29,11 +29,14 @@ class JwtAuthFilterIT extends EmbeddedDbIT {
     @Autowired
     private SecretKey signingKey;
 
+    @Autowired
+    private io.paradaux.treasuryrestapi.service.FeatureFlagService flags;
+
     private TestTokens tokens;
 
     @BeforeEach
     void seedKeys() {
-        tokens = new TestTokens(signingKey, this::insertApiKey);
+        tokens = new TestTokens(signingKey, this::insertTestTokenKey);
         tokens.seedAll();
     }
 
@@ -45,6 +48,31 @@ class JwtAuthFilterIT extends EmbeddedDbIT {
 
     private void expect401(ResultActions r, String code) throws Exception {
         r.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.error").value(code));
+    }
+
+    @Test
+    void governmentTokenFollowsDatabaseFlagAndOtherKeysRemainAvailable() throws Exception {
+        exec(
+                "INSERT INTO feature_flags (name, description) VALUES ('treasury.government_api_keys', 'Test') ON DUPLICATE KEY UPDATE enabled = 0",
+                ps -> {});
+        awaitFlag(false);
+        me("Bearer " + tokens.government())
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("FEATURE_DISABLED"));
+        me("Bearer " + tokens.personal()).andExpect(status().isOk());
+        exec("UPDATE feature_flags SET enabled = 1 WHERE name = 'treasury.government_api_keys'", ps -> {});
+        awaitFlag(true);
+        me("Bearer " + tokens.government()).andExpect(status().isOk());
+        exec("UPDATE feature_flags SET enabled = 0 WHERE name = 'treasury.government_api_keys'", ps -> {});
+        awaitFlag(false);
+        me("Bearer " + tokens.government()).andExpect(status().isNotFound());
+    }
+
+    private void awaitFlag(boolean enabled) throws InterruptedException {
+        long deadline = System.nanoTime() + java.time.Duration.ofSeconds(9).toNanos();
+        while (flags.isEnabled("treasury.government_api_keys") != enabled && System.nanoTime() < deadline)
+            Thread.sleep(25);
+        org.junit.jupiter.api.Assertions.assertEquals(enabled, flags.isEnabled("treasury.government_api_keys"));
     }
 
     @Test

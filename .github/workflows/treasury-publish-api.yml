@@ -38,6 +38,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Recheck on failed-job reruns, which can reuse the selection job.
+      - name: Require deployment authorization
+        run: node .github/scripts/deployment-policy.mjs --require
+
       - name: Set up JVM build
         uses: ./.github/actions/setup-jvm
 

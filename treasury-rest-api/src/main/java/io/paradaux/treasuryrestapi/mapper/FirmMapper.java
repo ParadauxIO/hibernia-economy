@@ -50,6 +50,11 @@ public interface FirmMapper {
             + "FROM firm WHERE firm_id = #{firmId}")
     Firm findFirmById(@Param("firmId") long firmId);
 
+    @Select("SELECT f.firm_id, f.display_name FROM firm f "
+            + "JOIN firm_accounts fa ON fa.firm_id = f.firm_id "
+            + "WHERE fa.account_id = #{accountId} AND fa.removed_at IS NULL")
+    Firm findFirmByAccountId(@Param("accountId") long accountId);
+
     /** Serialize disband against ownership writes; hold through all sweeps and archival. */
     @Select("SELECT firm_id, display_name, proprietor_uuid_bin AS proprietorUuid, "
             + "       discord_url, hq_region, default_account_id, is_archived AS archived, created_at "

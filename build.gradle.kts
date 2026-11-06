@@ -25,14 +25,14 @@ plugins {
     // declared with its version inside economy-flyway/build.gradle.kts.
 }
 
-// The treasury-api / business-api subprojects derive their version from
-// rootProject.version (they publish under it), so set it here. The publish
+// treasury-api derives its version from rootProject.version. business-api has
+// an independent semantic major via -PbusinessApiVersion; set shared versions here. The publish
 // workflows pass -Pversion=… to cut a release, so honour that property; default
 // to the dev snapshot otherwise. Plugins/apps that pin their own version in their
 // build.gradle.kts override this for themselves.
 allprojects {
     group = "io.paradaux"
-    version = providers.gradleProperty("version").orElse("2.3.0-SNAPSHOT").get()
+    version = providers.gradleProperty("version").orElse("3.0.0-SNAPSHOT").get()
 }
 
 // =============================================================================

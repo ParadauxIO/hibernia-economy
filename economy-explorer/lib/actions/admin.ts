@@ -1,6 +1,6 @@
 'use server';
 import { revalidatePath } from 'next/cache';
-import { getViewer } from '@/lib/auth/viewer';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import {
   setRateLimitOverride,
   clearRateLimitOverride,
@@ -9,10 +9,11 @@ import {
 } from '@/lib/treasury';
 import { auditMutation } from '@/lib/audit';
 import {
+  updateGroupMetadata,
   createGroup,
   deleteGroup,
   getGroup,
-  listGroupMembers,
+  isManualMember,
   setGroupCapabilities,
   setGroupSyncSource,
   setLuckpermsNode,
@@ -47,14 +48,10 @@ function groupSnapshot(g: GroupSummary | null) {
   };
 }
 
-async function isManualMember(groupId: number, uuid: string): Promise<boolean> {
-  return (await listGroupMembers(groupId)).some((m) => m.uuid === uuid && m.source === 'manual');
-}
-
 // ---- Group RBAC management -------------------------------------------------
 
 export async function createGroupAction(args: { name: string; description: string | null }): Promise<ActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'groups.create');
   try {
     const name = args.name.trim();
@@ -73,7 +70,7 @@ export async function createGroupAction(args: { name: string; description: strin
 }
 
 export async function deleteGroupAction(groupId: number): Promise<ActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'groups.delete');
   try {
     const before = groupSnapshot(await getGroup(groupId));
@@ -87,7 +84,7 @@ export async function deleteGroupAction(groupId: number): Promise<ActionResult> 
 }
 
 export async function setGroupCapabilitiesAction(groupId: number, capabilities: string[]): Promise<ActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'groups.roles.update');
   try {
     const before = (await getGroup(groupId))?.capabilities ?? null;
@@ -105,7 +102,7 @@ export async function setGroupCapabilitiesAction(groupId: number, capabilities: 
 }
 
 export async function setLuckpermsNodeAction(groupId: number, node: string | null): Promise<ActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'groups.sync.update');
   try {
     const before = await getGroup(groupId);
@@ -126,7 +123,7 @@ export async function setLuckpermsNodeAction(groupId: number, node: string | nul
 
 /** Set or clear a group's firm (`business`) or region (`realty`) source. */
 export async function setGroupSyncSourceAction(groupId: number, source: 'business' | 'realty', selector: string | null): Promise<ActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'groups.sync.update');
   try {
     const pick = (g: GroupSummary | null) => g?.syncSources.find((s) => s.source === source)?.selector ?? null;
@@ -146,7 +143,7 @@ export async function setGroupSyncSourceAction(groupId: number, source: 'busines
 }
 
 export async function addGroupMemberAction(groupId: number, identifier: string): Promise<ActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'groups.members.update');
   try {
     const uuid = await resolvePlayerUuid(identifier);
@@ -165,7 +162,7 @@ export async function addGroupMemberAction(groupId: number, identifier: string):
 }
 
 export async function removeGroupMemberAction(groupId: number, playerUuid: string): Promise<ActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'groups.members.update');
   try {
     const was = await isManualMember(groupId, playerUuid);
@@ -188,7 +185,7 @@ function keySnapshot(k: Awaited<ReturnType<typeof findAdminApiKey>>) {
 }
 
 export async function revokeApiKeyAction(keyId: number): Promise<{ ok: boolean; error?: string }> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'api_keys.revoke');
   try {
     const before = keySnapshot(await findAdminApiKey(keyId));
@@ -213,7 +210,7 @@ export async function revokeApiKeyAction(keyId: number): Promise<{ ok: boolean; 
  * the new token in-game.
  */
 export async function rotateApiKeyAction(keyId: number): Promise<{ ok: boolean; expiresAt?: string; error?: string }> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'api_keys.rotate');
   try {
     const before = keySnapshot(await findAdminApiKey(keyId));
@@ -239,7 +236,7 @@ export async function setRateLimitAction(args: {
   multiplier: number;
   note: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'rate_limits.update');
   try {
     const mult = clamp(args.multiplier, 0.1, 1000);
@@ -265,4 +262,20 @@ export async function setRateLimitAction(args: {
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
+}
+
+export async function updateGroupMetadataAction(groupId: number, input: unknown): Promise<ActionResult> {
+  const viewer = await requireLinkedViewer();
+  requirePermission(viewer, 'groups.update');
+  try {
+    const before = groupSnapshot(await getGroup(groupId));
+    await updateGroupMetadata(groupId, input);
+    await auditMutation(viewer, {
+      action: 'group.update', path: `/admin/groups/${groupId}`, targetType: 'group', targetId: groupId,
+      before, after: groupSnapshot(await getGroup(groupId)),
+    });
+    revalidatePath('/admin/groups');
+    revalidatePath(`/admin/groups/${groupId}`);
+    return { ok: true };
+  } catch (e) { return failure(e); }
 }

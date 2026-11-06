@@ -66,6 +66,20 @@ income-tax
 - The big picture of where tax flows: the [Money flow](/money-flow) view on the
   Explorer.
 
+## Government revenue by bracket
+
+Officials can open **[Government revenue](/gov/revenue)** to see personal and
+corporate balance-tax receipts by exact balance bracket and weekly rate. The table
+uses the selected accounts and date range. Lower bounds are inclusive and upper
+bounds are exclusive; the highest bracket has no upper bound.
+
+These are amounts actually received, not estimates. Personal tax is prorated over
+time, and a corporate bracket is based on the firm's combined taxable balance,
+even when several accounts pay portions of the tax. Brackets and rates are kept
+as they were at collection time, including after configuration changes. Older
+receipts without a recorded exact bracket appear as **Bracket unavailable**.
+**Preparing history** means aggregation is still catching up for the selected period.
+
 ## Where to go next
 
 - The flip side — money the government pays out: **[Salaries](/docs/guides/salaries)**.

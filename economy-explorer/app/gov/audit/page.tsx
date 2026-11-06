@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { ExportMenu, PageHeader, Section } from '@democracycraft/design-system';
 import { CursorPager } from '@democracycraft/design-system/next';
@@ -21,7 +22,7 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Government audit', description: 'Who moved money in and out of government accounts in your scope on {server}.', path: '/gov/audit' });
 }
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 export default async function GovAuditPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;

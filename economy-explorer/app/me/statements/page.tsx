@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { Money, PageHeader, Section, TableWrap } from '@democracycraft/design-system';
 import { getViewer } from '@/lib/auth/viewer';
 import { buildMetadata } from '@/lib/metadata';
@@ -36,7 +35,7 @@ export default async function StatementsPage() {
           <tbody>{months.map((m, i) => <tr key={m.month}>
             <th scope="row">
               {m.covered
-                ? <Link href={`/me/statements/${m.month}` as Route} prefetch={false}>{monthLabel(m.month)}</Link>
+                ? <Link href={`/me/statements/${m.month}`} prefetch={false}>{monthLabel(m.month)}</Link>
                 : monthLabel(m.month)}
               {i === 0 && <span className="dt-sub"> · so far</span>}
             </th>

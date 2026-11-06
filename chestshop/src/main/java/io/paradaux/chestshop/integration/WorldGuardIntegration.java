@@ -182,7 +182,7 @@ public class WorldGuardIntegration implements Integration {
     }
 
     /** WorldGuard region gating for shop creation (WORLDGUARD_INTEGRATION). */
-    private static final class Building {
+    static final class Building {
         private final WorldGuardPlugin worldGuard;
         private final WorldGuardPlatform platform;
         private final ChestShopConfiguration config;
@@ -197,13 +197,23 @@ public class WorldGuardIntegration implements Integration {
             ApplicableRegionSet regions =
                     getApplicableRegions(event.getSign().getBlock().getLocation());
 
-            if (regions == null) {
-                event.allow(false);
-            } else if (config.isWorldguardUseFlag()) {
-                event.allow(regions.queryState(worldGuard.wrapPlayer(event.getPlayer()), ShopFlag.ENABLE_SHOP)
-                        == StateFlag.State.ALLOW);
-            } else {
-                event.allow(regions.size() > 0);
+            checkRegions(event, regions, worldGuard.wrapPlayer(event.getPlayer()), config, ShopFlag.ENABLE_SHOP);
+        }
+
+        static void checkRegions(
+                BuildPermission event,
+                ApplicableRegionSet regions,
+                LocalPlayer player,
+                ChestShopConfiguration config,
+                StateFlag shopFlag) {
+            if (!event.isAllowed()) return;
+            if (config.isWorldguardUseFlag()) {
+                // An absent region manager cannot satisfy an explicit allow-shop requirement.
+                event.allow(regions != null && regions.queryState(player, shopFlag) == StateFlag.State.ALLOW);
+            } else if (config.isWorldguardOnlyInRegion()) {
+                event.allow(regions != null && regions.size() > 0);
+            } else if (regions != null && regions.queryState(player, shopFlag) == StateFlag.State.DENY) {
+                event.disallow();
             }
         }
 

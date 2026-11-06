@@ -107,7 +107,7 @@ describe('suggest', () => {
 
 describe('suggestEntities (searchPreview contract)', () => {
   it('returns only accounts, firms and players, in that order, `limit` each', async () => {
-    sqlMock.findItemsByPrefix.mockResolvedValue([{ kind: 'item', label: 'Diamond', secondary: null, item_key: 'DIAMOND', last_traded_at: null, href: '/x', match: 'prefix' } satisfies SearchHit]);
+    sqlMock.findItemsByPrefix.mockResolvedValue([{ kind: 'item', label: 'Diamond', secondary: null, item_key: 'DIAMOND', last_traded_at: null, href: '/accounts/1', match: 'prefix' } satisfies SearchHit]);
     sqlMock.findFirmsByPrefix.mockResolvedValue([{ ...account(0, 'Acme Corp', 'prefix'), kind: 'firm', account_id: null, firm_id: 1, firm_name: 'Acme Corp' }]);
     sqlMock.findAccountsByPrefix.mockResolvedValue([account(3, 'Acme', 'exact'), account(4, 'Acme 2', 'prefix')]);
     const hits = await suggestEntities('acme', 1);

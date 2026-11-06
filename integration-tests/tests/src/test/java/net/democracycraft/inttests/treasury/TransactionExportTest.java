@@ -48,10 +48,12 @@ class TransactionExportTest {
             String csv = export(sender, root + " export");
             String[] rows = csv.split("\n");
             assertThat(rows).hasSize(3);
-            assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system");
+            assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system,payout_category");
             assertThat(rows[1]).startsWith(postingId(transaction, account) + "," + transaction + "," + account + ",-23.45,");
             String quotedMemo = "\"ExportMemo, \"\"quoted\"\"\"";
             assertThat(rows[1]).contains(quotedMemo + ",", "," + quotedMemo + "," + sender.getUuid() + ",");
+            assertThat(rows[1]).endsWith(",rest-api,");
+            assertThat(rows[2]).endsWith(",");
             assertThat(rows[2].split(",", 5)[2]).isEqualTo(String.valueOf(account));
             assertThat(rows[2].split(",", 5)[3]).isEqualTo("10000.00");
             JsonNode upload = captures().get(0);
@@ -195,9 +197,10 @@ class TransactionExportTest {
     private static void assertSharedCsv(String csv, int account, long transaction, MockPlayer initiator) throws Exception {
         String[] rows = csv.split("\n");
         assertThat(rows).hasSize(2);
-        assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system");
+        assertThat(rows[0]).isEqualTo("posting_id,txn_id,account_id,amount,memo,settlement_time,message,initiator_uuid,authorizer_uuid,plugin_system,payout_category");
         assertThat(rows[1]).startsWith(postingId(transaction, account) + "," + transaction + "," + account + ",23.45,")
-                .contains("SharedExport", initiator.getUuid().toString());
+                .contains("SharedExport", initiator.getUuid().toString())
+                .endsWith(",");
     }
 
     private static String export(MockPlayer player, String command) throws Exception {

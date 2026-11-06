@@ -7,6 +7,8 @@ import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -25,6 +27,33 @@ class MiscCommandsTest {
     private static String freshFirmName(String tag) {
         // Keep firm names distinct from player names generated in the same millisecond.
         return "Firm" + tag + Long.toHexString(Instant.now().toEpochMilli());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"deposit", "pay into"})
+    void outsiderCanPayWithoutGainingMembership(String command) {
+        String firm = freshFirmName("Public");
+        try (MockPlayer owner = MockPlayer.connectLocal(Usernames.fresh("DpO"));
+             MockPlayer payer = MockPlayer.connectLocal(Usernames.fresh("DpP"))) {
+            Ledger.waitForPersonalBalance(owner.getUuid(), TIMEOUT);
+            BigDecimal before = Ledger.waitForPersonalBalance(payer.getUuid(), TIMEOUT);
+            Ops.run(owner.getUsername(), () -> {
+                owner.chatCommand("/business create " + firm);
+                owner.awaitMessageContaining("Successfully created", TIMEOUT);
+            });
+            int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
+            BigDecimal firmBefore = BusinessLedger.firmDefaultBalance(firmId).orElseThrow();
+            Barrier.settle();
+            payer.drainMessages();
+            payer.chatCommand("/firm " + command + " " + firm + " 12.50 Invoice 42");
+            payer.awaitMessageContaining("Paid", TIMEOUT);
+            Ledger.waitForPersonalBalance(payer.getUuid(), before.subtract(new BigDecimal("12.50")), TIMEOUT);
+            BusinessLedger.waitForFirmDefaultBalance(firmId, firmBefore.add(new BigDecimal("12.50")), TIMEOUT);
+            assertThat(BusinessLedger.isCurrentEmployee(firmId, payer.getUuid())).isFalse();
+            assertThat(Ledger.initiatedPostingsAfter(payer.getUuid(), 0))
+                    .filteredOn(p -> p.message().endsWith(": Invoice 42"))
+                    .hasSize(2);
+        }
     }
 
     @Test
@@ -62,7 +91,7 @@ class MiscCommandsTest {
 
                 Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " " + amount.toPlainString());
-                p.awaitMessageContaining("Deposited", TIMEOUT);
+                p.awaitMessageContaining("Paid", TIMEOUT);
 
                 Ledger.waitForPersonalBalance(p.getUuid(), personalStart.subtract(amount), TIMEOUT);
                 BusinessLedger.waitForFirmDefaultBalance(firmId, firmStart.add(amount), TIMEOUT);
@@ -85,7 +114,7 @@ class MiscCommandsTest {
 
                 Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " " + amount.toPlainString());
-                p.awaitMessageContaining("Deposited", TIMEOUT);
+                p.awaitMessageContaining("Paid", TIMEOUT);
                 Ledger.waitForPersonalBalance(p.getUuid(), personalStart.subtract(amount), TIMEOUT);
 
                 Barrier.settle();
@@ -131,7 +160,7 @@ class MiscCommandsTest {
 
                 Barrier.settle();
                 p.chatCommand("/business deposit " + firm + " 25");
-                p.awaitMessageContaining("Deposited", TIMEOUT);
+                p.awaitMessageContaining("Paid", TIMEOUT);
 
                 Barrier.settle();
                 p.chatCommand("/business transactions " + firm);

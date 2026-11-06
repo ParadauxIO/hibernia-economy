@@ -68,6 +68,7 @@ public final class PreviewListener implements Listener {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             boolean visible;
             try {
+                marketService.awaitWrites();
                 visible = marketService.shopQuery().previewVisible(id, presentation.defaultVisible());
             } catch (RuntimeException e) {
                 return;

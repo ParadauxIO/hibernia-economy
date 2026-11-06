@@ -1,3 +1,4 @@
+import type { SidebarGroup } from '@democracycraft/design-system/next';
 import '../gallery.css';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -9,7 +10,7 @@ import * as f from '../fixtures';
 
 export const metadata: Metadata = { title: 'Mock /me overview', robots: { index: false, follow: false } };
 
-const NAV = [
+const NAV: SidebarGroup[] = [
   { items: [
     { label: 'Overview', href: '/design-system/mock-me' },
     { label: 'Transactions', href: '#transactions' },

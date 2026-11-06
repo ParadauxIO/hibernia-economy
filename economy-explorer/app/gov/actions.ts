@@ -1,4 +1,5 @@
 'use server';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 // Typeaheads behind the /gov filter chips. Account suggestions come only from
 // the viewer's scope; player names are public (economy_players).
 
@@ -9,6 +10,7 @@ import type { EntityOption } from '@/lib/tables/core';
 const PLAYER_FIELDS = new Set(['issuer', 'player', 'initiator', 'actor']);
 
 export async function searchGovEntitiesAction(field: string, text: string): Promise<EntityOption[]> {
+  await requireLinkedViewer();
   if (typeof field !== 'string' || typeof text !== 'string') return [];
   const scope = await govScopeOrNull();
   if (!scope) return [];

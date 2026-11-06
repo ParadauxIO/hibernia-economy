@@ -29,8 +29,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Registry stock writes for hopper refreshes (PAR-544): unchanged readings write nothing, the
- * database runs off the main thread in order, and synchronous writers supersede queued values.
- * The scheduler is driven by hand so each async batch and its main-thread completion are explicit.
+ * observations reach the ordered writer on the next tick, and newer authoritative writes
+ * supersede pending values. The main-thread scheduler is driven explicitly.
  */
 class ShopStockPublisherTest {
 
@@ -39,8 +39,7 @@ class ShopStockPublisherTest {
     private ItemService items;
     private World world;
     private Inventory inventory;
-    private final Deque<Runnable> async = new ArrayDeque<>();
-    private final Deque<Runnable> sync = new ArrayDeque<>();
+    private final Deque<Runnable> pending = new ArrayDeque<>();
     private ShopStockPublisher publisher;
     private final ItemStack diamond = mock(ItemStack.class);
 
@@ -52,15 +51,9 @@ class ShopStockPublisherTest {
         when(plugin.getServer()).thenReturn(server);
         when(server.getScheduler()).thenReturn(scheduler);
         lenient()
-                .when(scheduler.runTaskAsynchronously(any(Plugin.class), any(Runnable.class)))
-                .thenAnswer(call -> {
-                    async.add(call.getArgument(1));
-                    return null;
-                });
-        lenient()
                 .when(scheduler.runTask(any(Plugin.class), any(Runnable.class)))
                 .thenAnswer(call -> {
-                    sync.add(call.getArgument(1));
+                    pending.add(call.getArgument(1));
                     return null;
                 });
         market = mock(MarketService.class);
@@ -87,14 +80,13 @@ class ShopStockPublisherTest {
         when(market.capacityOf(diamond, inventory)).thenReturn(capacity);
     }
 
-    /** Run one async batch and its main-thread completion. */
+    /** Submit one coalesced batch to the ordered registry writer. */
     private void completeBatch() {
-        async.removeFirst().run();
-        sync.removeFirst().run();
+        pending.removeFirst().run();
     }
 
     @Test
-    void writesChangedStockOffTheMainThread() {
+    void submitsChangedStockOnTheNextTick() {
         measure(12, 100);
         publisher.publish(sign(1, "Diamond"), inventory);
 
@@ -111,13 +103,13 @@ class ShopStockPublisherTest {
         completeBatch();
         publisher.publish(sign, inventory);
 
-        assertThat(async).isEmpty();
+        assertThat(pending).isEmpty();
         verify(api, org.mockito.Mockito.times(1))
                 .updateShopStock(anyString(), anyInt(), anyInt(), anyInt(), any(), any());
     }
 
     @Test
-    void readingsDuringAnInFlightBatchCoalesceToTheNewest() {
+    void readingsBeforeTheNextTickCoalesceToTheNewest() {
         Sign sign = sign(1, "Diamond");
         measure(12, 100);
         publisher.publish(sign, inventory);
@@ -126,14 +118,13 @@ class ShopStockPublisherTest {
         measure(10, 102);
         publisher.publish(sign, inventory);
 
-        assertThat(async).hasSize(1); // one batch in flight at a time
+        assertThat(pending).hasSize(1); // one next-tick batch
         completeBatch();
-        completeBatch();
-        // The in-flight 12 was superseded before it ran and 11 was replaced while queued.
+        // Both older readings were superseded before submission.
         verify(api).updateShopStock("world", 1, 64, 0, 10, 102);
         verify(api, org.mockito.Mockito.times(1))
                 .updateShopStock(anyString(), anyInt(), anyInt(), anyInt(), any(), any());
-        assertThat(async).isEmpty();
+        assertThat(pending).isEmpty();
     }
 
     @Test
@@ -152,11 +143,11 @@ class ShopStockPublisherTest {
     }
 
     @Test
-    void tradeWriteSupersedesAnInFlightHopperReading() {
+    void tradeWriteSupersedesAPendingHopperReading() {
         Sign sign = sign(1, "Diamond");
         measure(12, 100);
         publisher.publish(sign, inventory);
-        // A trade stored 11 synchronously before the async batch ran.
+        // A trade submitted 11 to the writer before the next tick.
         publisher.recorded(sign.getLocation(), 11, 101);
         completeBatch();
 
@@ -164,7 +155,7 @@ class ShopStockPublisherTest {
         // The trade's value is the new baseline, so re-reading it writes nothing.
         measure(11, 101);
         publisher.publish(sign, inventory);
-        assertThat(async).isEmpty();
+        assertThat(pending).isEmpty();
     }
 
     @Test
@@ -173,7 +164,7 @@ class ShopStockPublisherTest {
         publisher.recorded(sign.getLocation(), 12, 100);
         measure(12, 100);
         publisher.publish(sign, inventory);
-        assertThat(async).isEmpty();
+        assertThat(pending).isEmpty();
 
         measure(9, 103);
         publisher.publish(sign, inventory);
@@ -203,7 +194,7 @@ class ShopStockPublisherTest {
         when(market.enabled()).thenReturn(false);
         publisher.publish(sign(4, "Diamond"), inventory);
 
-        assertThat(async).isEmpty();
+        assertThat(pending).isEmpty();
         verifyNoInteractions(api);
     }
 
@@ -222,25 +213,25 @@ class ShopStockPublisherTest {
     }
 
     @Test
-    void flushWritesQueuedStockSynchronously() {
+    void flushSubmitsAllPendingStockBeforeShutdown() {
         Sign first = sign(1, "Diamond");
         Sign second = sign(2, "Diamond");
         measure(12, 100);
-        publisher.publish(first, inventory); // in flight
-        publisher.publish(second, inventory); // queued behind it
+        publisher.publish(first, inventory); // pending for next tick
+        publisher.publish(second, inventory); // coalesced into the same tick
 
         publisher.flush();
         verify(api).updateShopStock("world", 2, 64, 0, 12, 100);
-        // The batch still in flight completes after disable without being lost.
+        // The scheduled callback after flush is harmless.
         completeBatch();
         verify(api).updateShopStock("world", 1, 64, 0, 12, 100);
     }
 
     @Test
-    void flushedNewerReadingIsNotOverwrittenByTheOlderInFlightBatch() {
+    void flushSubmitsOnlyTheNewestReading() {
         Sign sign = sign(1, "Diamond");
         measure(12, 100);
-        publisher.publish(sign, inventory); // in flight
+        publisher.publish(sign, inventory); // pending for next tick
         measure(9, 103);
         publisher.publish(sign, inventory); // queued
 
@@ -259,10 +250,10 @@ class ShopStockPublisherTest {
         publisher.publish(sign(1, "Diamond"), inventory);
 
         completeBatch();
-        // The batch finished and released the in-flight slot.
+        // The next observation can schedule a new submission.
         measure(5, 107);
         publisher.publish(sign(1, "Diamond"), inventory);
-        assertThat(async).hasSize(1);
+        assertThat(pending).hasSize(1);
     }
 
     @Test
@@ -275,7 +266,7 @@ class ShopStockPublisherTest {
         publisher.publish(sign, inventory);
         publisher.recorded(orphan, 12, 100);
         publisher.forget(orphan);
-        assertThat(async).isEmpty();
+        assertThat(pending).isEmpty();
     }
 
     @Test
@@ -297,10 +288,10 @@ class ShopStockPublisherTest {
         publisher.unloadChunk("world", 0, 0);
         publisher.unloadWorld("elsewhere");
         for (Sign sign : java.util.List.of(otherChunkX, otherChunkZ, otherWorld)) publisher.publish(sign, inventory);
-        assertThat(async).isEmpty(); // their baselines survived
+        assertThat(pending).isEmpty(); // their baselines survived
         publisher.unloadWorld("nether");
         publisher.publish(otherWorld, inventory);
-        assertThat(async).hasSize(1);
+        assertThat(pending).hasSize(1);
     }
 
     @Test
@@ -322,5 +313,38 @@ class ShopStockPublisherTest {
         completeBatch();
 
         verifyNoInteractions(api);
+    }
+
+    @Test
+    void forgettingOneShopPreservesOtherBaselinesInTheSameChunk() {
+        measure(12, 100);
+        Sign first = sign(1, "Diamond");
+        Sign second = sign(2, "Diamond");
+        publisher.recorded(first.getLocation(), 12, 100);
+        publisher.recorded(second.getLocation(), 12, 100);
+        publisher.forget(first.getLocation());
+        publisher.forget("absent", 1, 64, 0);
+        publisher.publish(second, inventory);
+        assertThat(pending).isEmpty();
+        publisher.publish(first, inventory);
+        completeBatch();
+        verify(api).updateShopStock("world", 1, 64, 0, 12, 100);
+        verify(api, never()).updateShopStock("world", 2, 64, 0, 12, 100);
+    }
+
+    @Test
+    void failedSubmissionAfterChunkUnloadDoesNotPreventRetryOnReload() {
+        measure(12, 100);
+        Sign sign = sign(-1, "Diamond");
+        publisher.publish(sign, inventory);
+        publisher.unloadChunk("world", -1, 0);
+        org.mockito.Mockito.doThrow(new IllegalStateException("writer unavailable"))
+                .doNothing()
+                .when(api)
+                .updateShopStock("world", -1, 64, 0, 12, 100);
+        completeBatch();
+        publisher.publish(sign, inventory);
+        completeBatch();
+        verify(api, org.mockito.Mockito.times(2)).updateShopStock("world", -1, 64, 0, 12, 100);
     }
 }

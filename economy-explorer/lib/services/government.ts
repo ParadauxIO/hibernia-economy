@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import 'server-only';
 import { deriveBalances } from '@/lib/balances';
 import { findTxnBounds } from '@/lib/sql/accountHistory';
@@ -12,7 +13,7 @@ import {
   findPlayerNames, listFines, selectGovAccountDayNets, selectGovCounterparties, selectGovFlowGroups, selectGovLedger,
   selectGovMonthlyFlows, selectGovPluginOutflowDays, selectGovViews, selectLargestMovements, selectMoversByOfficial,
   selectSalaryBuckets, selectSalaryRecipients, selectTopFinePayers, selectTopTaxPayers, summariseFines,
-  summariseFinesForPeriod, topFineIssuers,
+  summariseFinesForPeriod, topFineIssuers, selectTaxBracketRevenue, type TaxBracketRevenueRow,
   type CounterpartyRow, type FineRow, type FineSummaryRow, type IssuerRow, type MovementRow, type OfficialRow, type PayerRow,
   type SalaryRecipientRow, type TxnWindow, type ViewRow,
 } from '@/lib/sql/government';
@@ -135,7 +136,7 @@ export interface MonthBar { month: string; revenue: string; spending: string; go
 export interface UnitCard {
   key: string;
   name: string;
-  href: string;
+  href: AppHref;
   balance: string;
   net: string;
   readable: number;
@@ -188,7 +189,7 @@ function unitCards(scope: GovScope, selectionKey: string, nets: Map<number, Cent
     ? scope.units.filter((u) => u.depth === 0)
     : scope.units.filter((u) => u.parentUnitId === parent && parent !== null);
   const netOf = (ids: readonly number[]) => toDbString(ids.reduce((s, id) => s + (nets.get(id) ?? 0n), 0n));
-  const cards = shown.map((u) => ({
+  const cards: UnitCard[] = shown.map((u) => ({
     key: u.slug, name: u.name, href: `/gov?unit=${encodeURIComponent(u.slug)}${query}`, balance: balanceOf(scope, u.readableIds),
     net: netOf(u.readableIds), readable: u.readableIds.length, total: u.totalAccounts, partial: u.partial,
   }));
@@ -285,6 +286,7 @@ export async function getGovAccounts(scope: GovScope, accountIds: readonly numbe
 // ── revenue ───────────────────────────────────────────────────────────────
 
 export interface Revenue {
+  brackets: { rows: TaxBracketRevenueRow[]; coverage: Coverage };
   flows: Flows;
   taxPayers: PayerRow[];
   finePayers: (PayerRow & { player_uuid: string | null; player_name: string | null })[];
@@ -292,16 +294,18 @@ export interface Revenue {
 }
 
 export async function getRevenue(scope: GovScope, accountIds: readonly number[], range: DayRange): Promise<Revenue> {
-  const flows = await govFlows(scope, accountIds, range);
+  const map = await rollupCoverage();
+  const flows = await govFlows(scope, accountIds, range, map);
   const raw = rawRange(range);
   const { fromTs, toTs } = bounds(raw);
-  const [taxPayers, finePayers] = await Promise.all([
+  const [taxPayers, finePayers, bracketRows] = await Promise.all([
     flows.taxKinds.length
       ? cachedRaw('gov-tax-payers', accountIds, raw, flows.taxKinds.join(','), () => selectTopTaxPayers(accountIds, flows.taxKinds, fromTs, toTs, 15), TAX_PAYERS_CACHE_MS)
       : Promise.resolve([]),
     selectTopFinePayers(accountIds, ts(range.from), bounds(range).toTs, 15),
+    selectTaxBracketRevenue(accountIds, range.from, range.to),
   ]);
-  return { flows, taxPayers, finePayers, topRange: raw };
+  return { flows, taxPayers, finePayers, topRange: raw, brackets: { rows: bracketRows, coverage: jobCoverage(map, 'tax_bracket_day', range) } };
 }
 
 // ── spending ──────────────────────────────────────────────────────────────
@@ -346,6 +350,7 @@ export interface Payroll {
   payments: number;
   analysis: PayrollAnalysis;
   recipients: SalaryRecipientRow[];
+  recipientCoverage: Coverage;
   rawRange: DayRange & { capped: boolean };
 }
 
@@ -354,10 +359,11 @@ export async function getPayroll(scope: GovScope, accountIds: readonly number[],
   const plugins = flows.wagePlugins;
   const raw = rawRange(range);
   const { fromTs, toTs } = bounds(raw);
-  const [days, buckets, recipients] = await Promise.all([
+  const [days, buckets, recipients, coverageMap] = await Promise.all([
     selectGovPluginOutflowDays(accountIds, plugins, range.from, range.to),
     plugins.length ? cachedRaw('gov-payroll-runs', accountIds, raw, plugins.join(','), () => selectSalaryBuckets(accountIds, plugins, fromTs, toTs)) : Promise.resolve([]),
-    plugins.length ? cachedRaw('gov-payroll-recipients', accountIds, raw, plugins.join(','), () => selectSalaryRecipients(accountIds, plugins, fromTs, toTs, 50)) : Promise.resolve([]),
+    plugins.length ? selectSalaryRecipients(accountIds, plugins, range.from, range.to, 50) : Promise.resolve([]),
+    rollupCoverage(),
   ]);
   const total = days.reduce((s, d) => s + parseMoney(d.outflow), 0n);
   return {
@@ -368,6 +374,7 @@ export async function getPayroll(scope: GovScope, accountIds: readonly number[],
     payments: days.reduce((s, d) => s + d.txn_count, 0),
     analysis: analysePayroll(buckets),
     recipients,
+    recipientCoverage: jobCoverage(coverageMap, 'gov_recipient_day', range),
     rawRange: raw,
   };
 }

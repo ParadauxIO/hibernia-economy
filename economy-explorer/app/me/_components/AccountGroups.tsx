@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { Money, TableWrap } from '@democracycraft/design-system';
 import { EntityLink } from '@democracycraft/design-system/next';
 import { relationLabel, type AccountGroup } from '@/lib/services/meGroups';
@@ -18,7 +17,7 @@ export function AccountGroups({ groups, firmLinks = true }: { groups: readonly A
           <div>
             <h3 id={headingId} className="me-group-title">
               {g.kind === 'business' && g.firmId !== null && firmLinks
-                ? <Link href={`/firms/${encodeURIComponent(g.title)}` as Route} prefetch={false}>{g.title}</Link>
+                ? <Link href={`/firms/${encodeURIComponent(g.title)}`} prefetch={false}>{g.title}</Link>
                 : g.title}
               {g.role && <span className="me-group-role"> · your role: {g.role}</span>}
             </h3>

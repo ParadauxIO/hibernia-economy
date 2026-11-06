@@ -21,8 +21,7 @@ class BusinessGroupMembersTest {
                 finance = UUID.randomUUID(),
                 admin = UUID.randomUUID(),
                 ordinary = UUID.randomUUID();
-        Firm firm = new Firm();
-        firm.setProprietorUuid(owner.toString());
+        Firm firm = new Firm(null, null, owner, null, null, null, null, null, null);
         when(firms.getFirmById(7)).thenReturn(firm);
         when(staff.getEmployees(7)).thenReturn(List.of(employee(finance), employee(admin), employee(ordinary)));
         when(staff.hasPermission(7, finance, RolePermission.FINANCIAL)).thenReturn(true);
@@ -31,15 +30,13 @@ class BusinessGroupMembersTest {
         assertThat(resolver.resolve("7")).containsExactlyInAnyOrder(owner, finance, admin);
         when(staff.getEmployees(7)).thenReturn(List.of(employee(ordinary)));
         assertThat(resolver.resolve("7")).containsExactly(owner);
-        firm.setArchived(true);
+        when(firms.getFirmById(7)).thenReturn(new Firm(7, null, owner, null, null, null, true, null, null));
         assertThat(resolver.resolve("7")).isEmpty();
         assertThat(resolver.resolve("8")).isEmpty();
         assertThatThrownBy(() -> resolver.resolve("0")).isInstanceOf(IllegalArgumentException.class);
     }
 
     private FirmEmployee employee(UUID id) {
-        FirmEmployee employee = new FirmEmployee();
-        employee.setPlayerUuid(id.toString());
-        return employee;
+        return new FirmEmployee(7, id, null, null, null, null, null, true);
     }
 }

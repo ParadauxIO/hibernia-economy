@@ -11,6 +11,20 @@ import org.junit.jupiter.api.Test;
 /** Exact member descriptors extracted from the six installed add-on jars. */
 class LegacyAddonAbiTest extends ServerTest {
     @Test
+    void legacyPricingFacadePreservesBuySellAndFreePrices() throws Exception {
+        Class<?> prices = Class.forName("com.Acrobot.Breeze.Utils.PriceUtil");
+        assertThat((java.math.BigDecimal)
+                        prices.getMethod("getExactBuyPrice", String.class).invoke(null, "B 2.5k:S free"))
+                .isEqualByComparingTo("2500");
+        assertThat((java.math.BigDecimal)
+                        prices.getMethod("getExactSellPrice", String.class).invoke(null, "B 2.5k:S free"))
+                .isEqualByComparingTo("0");
+        assertThat((java.math.BigDecimal)
+                        prices.getMethod("getExactSellPrice", String.class).invoke(null, "B 10"))
+                .isEqualByComparingTo("-1");
+    }
+
+    @Test
     void installedAddonReferencesResolveWithTheirOriginalDescriptors() throws Exception {
         try (var reader = new BufferedReader(new InputStreamReader(
                 getClass().getResourceAsStream("/legacy-addon-abi.tsv"), java.nio.charset.StandardCharsets.UTF_8))) {

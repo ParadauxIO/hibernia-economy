@@ -10,6 +10,8 @@ the code.
 
 ## Contents
 
+- **[Release feature flags](feature-flags.md)** — guard incomplete mechanics and Explorer features, manage rollout and disable safely.
+
 - **[Architecture](architecture.md)** — the big picture: the ledger as source of
   truth, how components talk, and how money flows.
 - **[Components](components.md)** — what each project is, its stack, and where
@@ -20,6 +22,7 @@ the code.
   deploys are gated.
 - **[CI/CD](ci-cd.md)** — the GitHub Actions workflows, container builds, and the
   release flow.
+- **[Tenant documentation notes](explorer-doc-notes.md)** — configure public page-top notes per deployment.
 - **[Explorer verification](explorer-verification.md)** — redesign budgets, browser checks, analytics and deployment evidence.
 - **[Release runbook](release-runbook.md)** — the order of operations for a
   release that changes the schema: backup, stop, migrate, deploy, verify, rollback.
@@ -34,6 +37,7 @@ the code.
 
 ## Quick links
 
+- [Business async Bukkit audit (ADT-70)](business-async-bukkit-audit.md) — call sites and thread-boundary verification.
 - [Repository README](../README.md)
 - [Contributing](../CONTRIBUTING.md) · [Security](../SECURITY.md)
 - [Discord (Hibernia Economy)](https://discord.gg/b88K3ETeHS) — support, ideas, and
@@ -49,4 +53,6 @@ the code.
   every JVM project; `economy-explorer` is the lone Node/npm project.
 - **Two doc sets.** This wiki is for developers; `economy-explorer/docs` is for
   players and admins.
-- **`develop` is home.** Work targets `develop`; `main` is only for release tags.
+- **Work targets `main`.** Branch from main and open pull requests against main.
+  Use [release flags](feature-flags.md) to keep incomplete and migration-dependent
+  features inactive until an operator enables them.

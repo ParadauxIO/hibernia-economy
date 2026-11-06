@@ -1355,31 +1355,43 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 540,
+      "line": 538,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 551,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 597,
       "value": "\"business.pay\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 571,
+      "line": 628,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 610,
+      "line": 667,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 671,
+      "line": 728,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 680,
+      "line": 737,
       "value": "\"business.account.finance\""
     },
     {
@@ -1593,7 +1605,33 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 539,
+      "line": 537,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account transfer <firm> <fromAccountId> <toAccountId> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 550,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account transfer <firm> <fromAccountId> <toAccountId> <amount> <memo>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 596,
       "roots": [
         "db",
         "democracybusiness",
@@ -1606,7 +1644,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 570,
+      "line": 627,
       "roots": [
         "db",
         "democracybusiness",
@@ -1619,7 +1657,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 609,
+      "line": 666,
       "roots": [
         "db",
         "democracybusiness",
@@ -1632,7 +1670,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 670,
+      "line": 727,
       "roots": [
         "db",
         "democracybusiness",
@@ -1645,7 +1683,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 679,
+      "line": 736,
       "roots": [
         "db",
         "democracybusiness",

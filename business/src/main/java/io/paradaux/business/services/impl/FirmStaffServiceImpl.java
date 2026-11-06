@@ -3,26 +3,25 @@ package io.paradaux.business.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.Singleton;
-
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.InternalException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmEmployee;
-import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmEmployee;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
-
+import io.paradaux.business.threading.MainThreadAccess;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.InternalException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 @Singleton
 public class FirmStaffServiceImpl implements FirmStaffService {
@@ -34,14 +33,22 @@ public class FirmStaffServiceImpl implements FirmStaffService {
     /** Lazy-injected to break the FirmStaffService ↔ FirmChatService cycle. */
     private final Provider<FirmChatService> chatProvider;
 
+    private final MainThreadAccess mainThread;
+
     @Inject
-    public FirmStaffServiceImpl(FirmService firms, FirmRoleMapper roles, FirmStaffMapper staff, FirmAccountService accounts,
-                                Provider<FirmChatService> chatProvider) {
+    public FirmStaffServiceImpl(
+            FirmService firms,
+            FirmRoleMapper roles,
+            FirmStaffMapper staff,
+            FirmAccountService accounts,
+            Provider<FirmChatService> chatProvider,
+            MainThreadAccess mainThread) {
         this.firms = firms;
         this.roles = roles;
         this.staff = staff;
         this.accounts = accounts;
         this.chatProvider = chatProvider;
+        this.mainThread = mainThread;
     }
 
     /**
@@ -76,7 +83,7 @@ public class FirmStaffServiceImpl implements FirmStaffService {
             throw new BadCommandException("You can’t fire the proprietor.");
         }
 
-        if(playerId.equals(actorId)) {
+        if (playerId.equals(actorId)) {
             throw new BadCommandException("You cannot do this to yourself.");
         }
 
@@ -121,9 +128,7 @@ public class FirmStaffServiceImpl implements FirmStaffService {
             throw new BadCommandException("Player is already employed by this firm.");
         }
         String defaultRole = resolveDefaultRole(firm.getFirmId());
-        int rows = staff.insertEmployment(
-                firm.getFirmId(), playerId.toString(), defaultRole, actorId.toString()
-        );
+        int rows = staff.insertEmployment(firm.getFirmId(), playerId.toString(), defaultRole, actorId.toString());
         if (rows != 1) throw new InternalException("Failed to hire employee.");
         accounts.syncAllFirmAccounts(firm.getFirmId());
     }
@@ -143,7 +148,7 @@ public class FirmStaffServiceImpl implements FirmStaffService {
             throw new BadCommandException("No such firm");
         }
 
-        if(playerId.equals(actorId)) {
+        if (playerId.equals(actorId)) {
             throw new BadCommandException("You cannot do this to yourself.");
         }
 
@@ -196,7 +201,7 @@ public class FirmStaffServiceImpl implements FirmStaffService {
             throw new BadCommandException("No such firm");
         }
 
-        if(playerId.equals(actorId)) {
+        if (playerId.equals(actorId)) {
             throw new BadCommandException("You cannot do this to yourself.");
         }
 
@@ -293,11 +298,11 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         return toOnline(getCurrentEmployees(firmId));
     }
 
-    private static List<Player> toOnline(List<FirmEmployee> employees) {
-        return employees.stream()
+    private List<Player> toOnline(List<FirmEmployee> employees) {
+        return mainThread.read(() -> employees.stream()
                 .map(e -> Bukkit.getPlayer(UUID.fromString(e.getPlayerUuid())))
                 .filter(Objects::nonNull)
-                .toList();
+                .toList());
     }
 
     public boolean hasPermission(Integer firmId, UUID playerId, RolePermission permission) {
@@ -314,7 +319,6 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         }
         return false;
     }
-
 
     @Override
     public boolean isEmployedBy(Integer firmId, UUID playerId) {
@@ -345,6 +349,14 @@ public class FirmStaffServiceImpl implements FirmStaffService {
         if (proprietorRoleName == null) {
             proprietorRoleName = "Proprietor";
         }
-        return new FirmEmployee(firm.getFirmId(), firm.getProprietorUuid(), proprietorRoleName, firm.getCreatedAt(), null, firm.getProprietorUuid(), null, true);
+        return new FirmEmployee(
+                firm.getFirmId(),
+                firm.getProprietorUuid(),
+                proprietorRoleName,
+                firm.getCreatedAt(),
+                null,
+                firm.getProprietorUuid(),
+                null,
+                true);
     }
 }

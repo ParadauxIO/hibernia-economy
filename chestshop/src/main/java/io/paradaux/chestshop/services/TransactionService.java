@@ -66,8 +66,8 @@ public interface TransactionService {
      * and benefits from a warm Treasury connection pool, but it cannot be moved off-thread
      * without breaking the goods/money atomicity. The market sync ({@code market.onTransaction})
      * also stays on-thread because {@code MarketApi.recordSale} fires a synchronous Bukkit
-     * event ({@code ChestShopSaleEvent}), which Paper forbids from an async context. The one
-     * deferrable step — the shop-log file write — is dispatched async in {@link #logTransaction}.
+     * event ({@code ChestShopSaleEvent}), which Paper forbids from an async context. Registry updates use the ordered background writer, and
+     * shop-log file writes are dispatched async in {@link #logTransaction}.
      * A fuller async redesign would need a goods-move → async-settle → main-thread-reverse
      * handshake and is deliberately out of scope here (tail-latency, not a correctness bug).
      */

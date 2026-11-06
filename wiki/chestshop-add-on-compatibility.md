@@ -50,7 +50,19 @@ present. Existing native files are preserved. It accepts the legacy keys:
 
 Templates accept `%owner%`, `%buy-price%`, `%sell-price%`,
 `%buy-price-unit%`, `%sell-price-unit%`, `%quantity%`, `%stock%`, `%capacity%`,
-`%distance%`, `%region-name%`, `%world%`, `%x%`, `%y%` and `%z%`.
+`%distance%`, `%region-name%`, `%world%`, `%x%`, `%y%`, `%z%`,
+`%account-balance%`, `%affordable-batches%` and `%affordable-items%`.
+For stores buying items from the customer (the finder's Sell offers), results show
+the paying account balance and how many full advertised batches/items those funds
+cover. These lines are appended to existing/custom lore unless it already contains
+the corresponding placeholders; no config rewrite is needed. Unlimited admin funds
+and free trades show unlimited affordability; unavailable balances show Unknown.
+Balances refresh on each search and do not reserve funds; shared accounts can change
+before arrival. The item-space estimate is separate from the funds limit. A Sell
+offer with known remaining space below one full advertised batch is excluded even
+when Hide full is off. A two-way shop retains its customer Buy offer. Unknown
+capacity retains the existing behavior rather than being treated as known-full.
+
 Player/world names are inserted as text rather than MiniMessage markup.
 The plain-text `FIND_LOCATION_FORMAT` and `PREVIEW_NAME_FORMAT` settings remain
 in the main `config.yml`.
@@ -67,6 +79,12 @@ player's permissions, and only while the player remains in the result's world.
 An empty left-click command disables transit. An empty right-click command opens
 the item inspector instead. Reload presentation settings with `/chestshop reload`;
 existing floating previews immediately receive the new scale.
+
+Fallback validation of floating previews is spread across 500 ticks (25 seconds
+at 20 TPS), with at most 100 sign checks per tick. Edits that bypass normal shop
+events can therefore leave an old preview visible until its next check. Cycles
+take longer at lower TPS or above 50,000 loaded previews. Normal shop removal and
+chunk unload still remove previews immediately.
 
 Native `/find toggle preview|visibility|hologram <true|false>` and
 `/csdb find ...` aliases remain available after the old database add-on is removed.

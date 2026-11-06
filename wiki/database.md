@@ -196,7 +196,7 @@ workflows offer are `democracycraft` and `statecraft`. The migrate workflow runs
 audit trail.
 
 A manual run uses the migrations of the branch picked under *Use workflow from*
-(the repository default is `develop`) — pick the ref you are actually deploying.
+(the repository default is `main`) — pick the ref you are actually deploying.
 
 > [!IMPORTANT]
 > Applying the schema and deploying the code are **separate, unsynchronised**

@@ -6,6 +6,8 @@ import com.google.inject.name.Named;
 import io.paradaux.chestshop.model.FoundShop;
 import java.io.File;
 import java.io.IOException;
+import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -95,24 +97,31 @@ public final class FindPresentation {
     }
 
     public List<Component> lore(FoundShop shop, ShopDisplayService displays) {
-        List<String> lines = settings.getStringList(prefix(shop) + ".lore");
+        return loreTemplates(shop).stream()
+                .map(line -> render(line, shop, displays))
+                .toList();
+    }
+
+    private List<String> loreTemplates(FoundShop shop) {
+        List<String> lines = new ArrayList<>(settings.getStringList(prefix(shop) + ".lore"));
         if (lines.isEmpty())
-            lines = List.of(
+            lines.addAll(List.of(
                     "Buy: %buy-price% (%buy-price-unit%/ea) | Sell: %sell-price% (%sell-price-unit%/ea)",
-                    "Quantity: %quantity% | Stock: %stock% | Remaining capacity: %capacity%", "%world%: %x%, %y%, %z%");
-        return lines.stream().map(line -> render(line, shop, displays)).toList();
+                    "Quantity: %quantity% | Stock: %stock% | Remaining capacity: %capacity%",
+                    "%world%: %x%, %y%, %z%"));
+        // Existing/custom templates must also expose buying power without requiring a config rewrite.
+        if (shop.sellPrice() != null) {
+            if (lines.stream().noneMatch(line -> line.contains("%account-balance%")))
+                lines.add("Account balance: %account-balance%");
+            if (lines.stream().noneMatch(line -> line.contains("%affordable-batches%")))
+                lines.add("Affordable batches: %affordable-batches% | Items: %affordable-items%");
+        }
+        return lines;
     }
 
     public Component details(FoundShop shop, ShopDisplayService displays) {
-        String path = prefix(shop);
-        String name = settings.getString(path + ".display-name", "<aqua>%owner%</aqua>");
-        List<String> lore = settings.getStringList(path + ".lore");
-        if (lore.isEmpty())
-            lore = List.of(
-                    "Buy: %buy-price% (%buy-price-unit%/ea) | Sell: %sell-price% (%sell-price-unit%/ea)",
-                    "Quantity: %quantity% | Stock: %stock% | Remaining capacity: %capacity%", "%world%: %x%, %y%, %z%");
-        String template = name + "\n" + String.join("\n", lore);
-        return render(template, shop, displays);
+        String name = settings.getString(prefix(shop) + ".display-name", "<aqua>%owner%</aqua>");
+        return render(name + "\n" + String.join("\n", loreTemplates(shop)), shop, displays);
     }
 
     private Component render(String template, FoundShop shop, ShopDisplayService displays) {
@@ -125,6 +134,21 @@ public final class FindPresentation {
         values.put("sell-price", price(shop.sellPriceValue()));
         values.put("buy-price-unit", price(shop.unitBuyPrice()));
         values.put("sell-price-unit", price(shop.unitSellPrice()));
+        values.put(
+                "account-balance",
+                shop.unlimitedFunds()
+                        ? "Unlimited"
+                        : shop.accountBalance() == null
+                                ? "Unknown"
+                                : String.format(java.util.Locale.ROOT, "$%.2f", shop.accountBalance()));
+        BigInteger batches = shop.affordableBatches();
+        String unbounded = shop.unlimitedAffordableBatches() ? "Unlimited" : "Unknown";
+        values.put("affordable-batches", batches == null ? unbounded : batches.toString());
+        values.put(
+                "affordable-items",
+                batches == null
+                        ? unbounded
+                        : batches.multiply(BigInteger.valueOf(shop.batchQty())).toString());
         values.put("distance", shop.distanceBlocks() < 0 ? "∞" : shop.distanceBlocks() + "m");
         values.put("world", shop.world());
         values.put("x", Integer.toString(shop.x()));

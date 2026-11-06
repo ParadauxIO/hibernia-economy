@@ -229,6 +229,21 @@ export async function listFirmAccounts(firmId: number): Promise<FirmAccountRow[]
   return r.rows;
 }
 
+/** Historical links for the admin report only; never use this to grant account access. */
+export interface FirmAccountHistoryRow extends FirmAccountRow { removed_at: Date | null }
+export async function listFirmAccountHistory(firmId: number): Promise<FirmAccountHistoryRow[]> {
+  const r = await sql<FirmAccountHistoryRow>`
+    SELECT a.account_id, a.display_name, a.account_type, a.is_archived AS archived,
+           COALESCE(abm.balance, 0.00) AS balance, fa.removed_at
+    FROM firm_accounts fa
+    JOIN accounts a ON a.account_id = fa.account_id
+    LEFT JOIN account_balances_mat abm ON abm.account_id = a.account_id
+    WHERE fa.firm_id = ${firmId}
+    ORDER BY a.account_id
+  `.execute(db);
+  return r.rows;
+}
+
 export interface PlayerFirmMembership {
   firm_id: number;
   display_name: string;
@@ -556,4 +571,24 @@ export async function selectMonthlyFlows(accountIds: readonly number[], fromDay:
     ORDER BY month
   `.execute(db);
   return r.rows.map((row) => ({ ...row, is_internal: Number(row.is_internal) }));
+}
+
+/** Operator snapshot, including access before/after a reconciliation. */
+export async function getFirmOperationState(firmId: number) {
+  const flags = await sql<{ nameReleased: number; taxExempt: number }>`
+    SELECT name_released AS nameReleased,
+      EXISTS(SELECT 1 FROM firm_properties p WHERE p.firm_id = f.firm_id
+        AND p.\`key\` = 'balance-tax.exempt' AND p.type = 'BOOLEAN' AND p.value = 'true' AND p.deleted_at IS NULL) AS taxExempt
+    FROM firm f WHERE firm_id = ${firmId}
+  `.execute(db);
+  if (!flags.rows[0]) return null;
+  const access = await sql<{ accountId: number; ownerUuid: string; subjectUuid: string | null; level: string | null }>`
+    SELECT a.account_id AS accountId, bin_to_uuid(a.owner_uuid_bin) AS ownerUuid,
+      bin_to_uuid(aa.subject_uuid_bin) AS subjectUuid, aa.level
+    FROM firm_accounts fa JOIN accounts a ON a.account_id = fa.account_id
+    LEFT JOIN account_access aa ON aa.account_id = a.account_id AND aa.removed_at IS NULL
+    WHERE fa.firm_id = ${firmId} AND fa.removed_at IS NULL
+    ORDER BY a.account_id, aa.subject_uuid_bin
+  `.execute(db);
+  return { nameReleased: !!flags.rows[0].nameReleased, taxExempt: !!flags.rows[0].taxExempt, accounts: access.rows };
 }

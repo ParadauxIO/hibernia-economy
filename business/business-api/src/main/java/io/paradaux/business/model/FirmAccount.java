@@ -1,14 +1,10 @@
 package io.paradaux.business.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.LocalDateTime;
+import lombok.Value;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+/** Immutable snapshot returned by the Business API. */
+@Value
 public class FirmAccount {
     private Integer firmId;
     private Integer accountId;

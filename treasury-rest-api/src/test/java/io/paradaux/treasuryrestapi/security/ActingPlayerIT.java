@@ -39,7 +39,7 @@ class ActingPlayerIT extends EmbeddedDbIT {
 
     @BeforeEach
     void seed() {
-        tokens = new TestTokens(signingKey, this::insertApiKey);
+        tokens = new TestTokens(signingKey, this::insertTestTokenKey);
         tokens.seedAll();
         insertAccount(1, "BUSINESS", null, "Source");
         insertAccount(2, "BUSINESS", null, "Destination");

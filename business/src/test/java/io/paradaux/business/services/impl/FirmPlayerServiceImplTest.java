@@ -5,7 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.business.mappers.FirmPlayerMapper;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.model.internal.FirmPlayer;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Bukkit;
@@ -33,8 +33,9 @@ class FirmPlayerServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        svc = new FirmPlayerServiceImpl(mapper);
+        svc = new FirmPlayerServiceImpl(mapper, new io.paradaux.business.threading.MainThreadAccess(null));
         bukkit = Mockito.mockStatic(Bukkit.class);
+        bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
     }
 
     @AfterEach

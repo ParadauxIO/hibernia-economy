@@ -17,9 +17,9 @@ import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
-import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.config.BalanceTaxConfiguration;
 import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmAreaShopService;
 import io.paradaux.business.services.FirmBalanceTaxService.BalanceTaxCycleResult;
@@ -70,6 +70,7 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
     private LedgerService ledger;
     private FirmServiceImpl firms;
     private FirmTransactionServiceImpl transactions;
+    private FirmAccountService accounts;
     private final FirmConfiguration firmConfig = mock(FirmConfiguration.class);
 
     @BeforeEach
@@ -78,7 +79,7 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
                 new io.paradaux.treasury.guice.DatabaseModule(dataSource), new TestServicesModule());
         ledger = treasuryInjector.getInstance(LedgerService.class);
         ledger.bootstrapGovernmentAccounts();
-        treasury = treasuryInjector.getInstance(TreasuryApiImpl.class);
+        treasury = org.mockito.Mockito.spy(treasuryInjector.getInstance(TreasuryApiImpl.class));
 
         Injector business = Guice.createInjector(
                 new MyBatisModule() {
@@ -87,6 +88,7 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
                         environmentId("real-treasury-test");
                         bindTransactionFactoryType(JdbcTransactionFactory.class);
                         addMapperClass(FirmMapper.class);
+                        addMapperClass(io.paradaux.business.mappers.FirmStaffMapper.class);
                         addMapperClass(FirmAccountsMapper.class);
                         addMapperClass(FirmRoleMapper.class);
                         addMapperClass(FirmRequestMapper.class);
@@ -100,7 +102,7 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
                         bind(io.paradaux.business.services.FirmService.class).to(FirmServiceImpl.class);
                         bind(FirmConfiguration.class).toInstance(firmConfig);
                         bind(FirmStaffService.class).toInstance(mock(FirmStaffService.class));
-                        bind(FirmAccountService.class).toInstance(mock(FirmAccountService.class));
+                        bind(FirmAccountService.class).to(FirmAccountServiceImpl.class);
                         bind(FirmAreaShopService.class).toInstance(mock(FirmAreaShopService.class));
                         bind(FirmChatService.class).toInstance(mock(FirmChatService.class));
                         bind(FirmPlayerService.class).toInstance(mock(FirmPlayerService.class));
@@ -108,6 +110,85 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
                 });
         firms = business.getInstance(FirmServiceImpl.class);
         transactions = business.getInstance(FirmTransactionServiceImpl.class);
+        accounts = business.getInstance(FirmAccountService.class);
+    }
+
+    @Test
+    void failedSecondAccountKeepsCommittedHandoverAndRecoveryFinishesIt() {
+        UUID oldOwner = UUID.randomUUID();
+        UUID newOwner = UUID.randomUUID();
+        Firm firm = firms.createFirm("Recovery", oldOwner);
+        Account extra = treasury.createAccount(AccountType.BUSINESS, oldOwner, "Second");
+        mapper(FirmAccountsMapper.class).insertFirmAccount(firm.getFirmId(), extra.getAccountId());
+        var reassignments = new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.doAnswer(call -> {
+                    if (reassignments.incrementAndGet() == 2) {
+                        throw new IllegalStateException("Treasury unavailable");
+                    }
+                    return call.callRealMethod();
+                })
+                .when(treasury)
+                .reassignOwner(anyInt(), any());
+
+        assertThatThrownBy(() -> firms.adminSetProprietor("Recovery", newOwner, UUID.randomUUID()))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("ownership changed");
+        sqlSession.clearCache();
+        assertThat(mapper(FirmMapper.class).getFirmById(firm.getFirmId()).getProprietorUuid())
+                .isEqualToIgnoringCase(newOwner.toString());
+        assertThat(List.of(firm.getDefaultAccountId(), extra.getAccountId()))
+                .extracting(id -> treasury.getAccountById(id).getOwnerUuid())
+                .containsExactlyInAnyOrder(oldOwner, newOwner);
+
+        accounts.reconcileLinkedAccounts();
+        for (int accountId : List.of(firm.getDefaultAccountId(), extra.getAccountId())) {
+            assertThat(treasury.getAccountById(accountId).getOwnerUuid()).isEqualTo(newOwner);
+            assertThat(treasury.canAccessAccount(oldOwner, accountId)).isFalse();
+            assertThat(treasury.canAccessAccount(newOwner, accountId)).isTrue();
+        }
+    }
+
+    @Test
+    void adminTransferMovesAllAccountsAndRevokesBothStaleOwnerRoles() {
+        UUID oldOwner = UUID.randomUUID();
+        UUID newOwner = UUID.randomUUID();
+        UUID employee = UUID.randomUUID();
+        UUID admin = UUID.randomUUID();
+        Firm firm = firms.createFirm("Handover", oldOwner);
+        mapper(FirmAccountsMapper.class).setShopAlias(firm.getFirmId(), firm.getDefaultAccountId(), "handover");
+        Account extra = treasury.createAccount(AccountType.BUSINESS, oldOwner, "Second");
+        mapper(FirmAccountsMapper.class).insertFirmAccount(firm.getFirmId(), extra.getAccountId());
+        var staff = mapper(io.paradaux.business.mappers.FirmStaffMapper.class);
+        staff.insertEmployment(firm.getFirmId(), oldOwner.toString(), "Manager", admin.toString());
+        staff.insertEmployment(firm.getFirmId(), newOwner.toString(), "Manager", admin.toString());
+        staff.insertEmployment(firm.getFirmId(), employee.toString(), "Manager", admin.toString());
+        for (int accountId : List.of(firm.getDefaultAccountId(), extra.getAccountId())) {
+            treasury.addMember(accountId, oldOwner, oldOwner);
+            treasury.addAuthorizer(accountId, oldOwner, oldOwner);
+        }
+
+        firms.adminSetProprietor("Handover", newOwner, admin);
+        sqlSession.clearCache();
+        assertThat(mapper(FirmMapper.class).getFirmById(firm.getFirmId()).getProprietorUuid())
+                .isEqualToIgnoringCase(newOwner.toString());
+        assertThat(staff.isEmployedBy(firm.getFirmId(), newOwner.toString())).isFalse();
+        assertThat(staff.isEmployedBy(firm.getFirmId(), oldOwner.toString())).isFalse();
+        assertThat(staff.isEmployedBy(firm.getFirmId(), employee.toString())).isTrue();
+        assertThat(mapper(FirmAccountsMapper.class).resolveShopAlias("handover"))
+                .isEqualTo(firm.getDefaultAccountId());
+        for (int accountId : List.of(firm.getDefaultAccountId(), extra.getAccountId())) {
+            assertThat(treasury.getAccountById(accountId).getOwnerUuid()).isEqualTo(newOwner);
+            assertThat(treasury.canAccessAccount(oldOwner, accountId)).isFalse();
+            assertThat(treasury.canAccessAccount(newOwner, accountId)).isTrue();
+            assertThat(treasury.getAuthorizers(accountId))
+                    .extracting(AccountMember::getMemberUuid)
+                    .contains(newOwner)
+                    .doesNotContain(oldOwner, employee);
+            assertThat(treasury.getMembers(accountId))
+                    .extracting(AccountMember::getMemberUuid)
+                    .contains(newOwner, employee)
+                    .doesNotContain(oldOwner);
+        }
     }
 
     @Test
@@ -171,6 +252,54 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
     }
 
     @Test
+    void accountTransfer_movesOnlyFirmBalances_andRecordsMemo() {
+        UUID owner = UUID.randomUUID();
+        Firm firm = firms.createFirm("Acme", owner);
+        int source = firm.getDefaultAccountId();
+        int reserve =
+                treasury.createAccount(AccountType.BUSINESS, owner, "Reserve").getAccountId();
+        mapper(FirmAccountsMapper.class).insertFirmAccount(firm.getFirmId(), reserve);
+        transactions.deposit(firm.getFirmId(), owner, new BigDecimal("300.00"));
+        int personal = treasury.resolveOrCreatePersonal(owner).getAccountId();
+        BigDecimal personalBefore = treasury.getBalanceByAccountId(personal);
+
+        transactions.transferBetweenAccounts(
+                firm.getFirmId(), source, reserve, owner, new BigDecimal("120.50"), "  July   reserve  ");
+
+        assertThat(treasury.getBalanceByAccountId(source)).isEqualByComparingTo("179.50");
+        assertThat(treasury.getBalanceByAccountId(reserve)).isEqualByComparingTo("120.50");
+        assertThat(treasury.getBalanceByAccountId(personal)).isEqualByComparingTo(personalBefore);
+        assertThat(treasury.getTransactionHistory(reserve, 0, 10).items())
+                .singleElement()
+                .satisfies(entry -> {
+                    assertThat(entry.getAmount()).isEqualByComparingTo("120.50");
+                    assertThat(entry.getMessage()).isEqualTo("Business account transfer: July reserve");
+                });
+
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, reserve, owner, new BigDecimal("179.51"), null))
+                .isInstanceOf(ExceedsLimitException.class);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, reserve, UUID.randomUUID(), BigDecimal.ONE, null))
+                .isInstanceOf(io.paradaux.hibernia.framework.exceptions.NoPermissionException.class);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, source, owner, BigDecimal.ONE, null))
+                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, reserve, owner, BigDecimal.ZERO, null))
+                .isInstanceOf(BadCommandException.class);
+        Firm other = firms.createFirm("Other", owner);
+        assertThatThrownBy(() -> transactions.transferBetweenAccounts(
+                        firm.getFirmId(), source, other.getDefaultAccountId(), owner, BigDecimal.ONE, null))
+                .isInstanceOf(BadCommandException.class);
+        assertThat(treasury.getBalanceByAccountId(source)).isEqualByComparingTo("179.50");
+        assertThat(treasury.getBalanceByAccountId(reserve)).isEqualByComparingTo("120.50");
+        assertThat(treasury.getBalanceByAccountId(other.getDefaultAccountId())).isEqualByComparingTo("0");
+        assertThat(treasury.getBalanceByAccountId(personal)).isEqualByComparingTo(personalBefore);
+        assertThat(treasury.getTransactionHistory(reserve, 0, 10).items()).hasSize(1);
+    }
+
+    @Test
     void weeklyBalanceTax_collectsExactlyTheFirmTotal_andIsIdempotentPerPeriod() {
         UUID owner = UUID.randomUUID();
         Firm firm = firms.createFirm("Taxed", owner);
@@ -210,7 +339,8 @@ class RealTreasuryFirmFlowsIT extends IntegrationTestBase {
 
     private FirmBalanceTaxServiceImpl balanceTax(Firm firm, List<Integer> accountIds, BigDecimal rate) {
         BalanceTaxConfiguration config = mock(BalanceTaxConfiguration.class);
-        when(config.getWeeklyRate(any())).thenReturn(rate);
+        when(config.getBracket(any()))
+                .thenReturn(new io.paradaux.common.BalanceTaxBrackets.Bracket(BigDecimal.ZERO, null, rate));
         when(config.getGovernmentAccount()).thenReturn("DCGovernment");
         io.paradaux.business.services.FirmService firmService = mock(io.paradaux.business.services.FirmService.class);
         when(firmService.listAllActiveFirms()).thenReturn(List.of(firm));

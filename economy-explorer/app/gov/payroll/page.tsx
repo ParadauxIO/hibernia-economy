@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { MetricCard, MetricRow, Money, Num, PageHeader, Section, Segmented, Tag, When } from '@democracycraft/design-system';
 import { DataTable, TablePager, type Column, type LinkComponent } from '@democracycraft/design-system/table';
@@ -14,7 +15,7 @@ export async function generateMetadata() {
   return buildMetadata({ title: 'Government payroll', description: 'Government payroll in your scope on {server}.', path: '/gov/payroll' });
 }
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 const PAGE = 50;
 const STATUS_LABEL: Record<PayrollRun['status'], string> = { ok: 'On time', late: 'Late', missed: 'After missed runs', duplicate: 'Possible duplicate', resumed: 'Resumed after a pause' };
 
@@ -43,8 +44,8 @@ export default async function GovPayrollPage({ searchParams }: { searchParams: P
   const runs = [...a.runs].reverse().filter((r) => view === 'all' || r.status !== 'ok');
   const totalPages = Math.max(1, Math.ceil(runs.length / PAGE));
   const current = Math.min(Math.max(1, Number(sp.rpage) || 1), totalPages);
-  const base = `/gov/payroll?${new URLSearchParams(page.extra).toString()}`;
-  const runsHref = (v: string, n = 1) => `${base}&runs=${v}${n > 1 ? `&rpage=${n}` : ''}`;
+  const base = `/gov/payroll?${new URLSearchParams(page.extra).toString()}` as const;
+  const runsHref = (v: string, n = 1) => `${base}&runs=${v}${n > 1 ? `&rpage=${n}` : ''}` as const;
 
   return <>
     <PageHeader title="Payroll" subtitle={`${page.selection.label} · ${page.range.label}`} />
@@ -73,9 +74,9 @@ export default async function GovPayrollPage({ searchParams }: { searchParams: P
           <TablePager page={current} totalPages={totalPages} hrefFor={(n) => runsHref(view, n)} link={RouterLink} />
         </Section>
 
-        <Section title="Recipients" divider description={<>Who received wages, largest first. <RawNote range={p.rawRange} /></>}>
+        <Section title="Recipients" divider description={<>Top 50 recipients for {page.range.label}, largest first. <Freshness coverage={p.recipientCoverage} /></>}>
           <DataTable id="gov-payroll-recipients" label="Payroll recipients" columns={recipientColumns} rows={p.recipients} rowKey={(r) => r.account_id}
-            empty={<p className="dt-empty-text">No recipients in this window.</p>} />
+            empty={<p className="dt-empty-text">{p.recipientCoverage.covered ? 'No recipients in this window.' : 'Preparing history.'}</p>} />
         </Section>
       </>}
   </>;

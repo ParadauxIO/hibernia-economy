@@ -25,7 +25,7 @@ export default async function GovLayout({ children }: { children: ReactNode }) {
       { label: 'Payroll', href: '/gov/payroll' },
       { label: 'Fines', href: '/gov/fines' },
       { label: 'Reports', href: '/gov/reports' },
-      ...(access.scope.canAudit ? [{ label: 'Audit', href: '/gov/audit' }] : []),
+      ...(access.scope.canAudit ? [{ label: 'Audit', href: '/gov/audit' as const }] : []),
     ] });
   }
   if (compliance) nav.push({ label: 'Compliance', items: [{ label: 'Watchlist', href: '/gov/compliance' }] });

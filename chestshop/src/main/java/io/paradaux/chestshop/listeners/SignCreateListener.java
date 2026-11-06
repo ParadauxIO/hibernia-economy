@@ -14,9 +14,12 @@ import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.BlockUtil;
 import io.paradaux.chestshop.utils.SignText;
 import io.paradaux.chestshop.utils.StringUtil;
+import java.util.Arrays;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.SignChangeEvent;
 
@@ -45,8 +48,9 @@ public class SignCreateListener implements Listener {
         this.shopBlockService = shopBlockService;
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSignChange(SignChangeEvent event) {
+        if (event.isCancelled() || event.getSide() != Side.FRONT) return;
         Block signBlock = event.getBlock();
 
         if (!BlockUtil.isSign(signBlock)) {
@@ -55,7 +59,8 @@ public class SignCreateListener implements Listener {
 
         Sign sign = (Sign) BlockUtil.getState(signBlock, false);
 
-        if (signService.isValid(sign) && !accounts.canAccess(event.getPlayer(), sign)) {
+        boolean shopExisted = signService.isValid(sign);
+        if (shopExisted && !accounts.canAccess(event.getPlayer(), sign)) {
             // There was already a shop here, but the player does not have permission to change it
             event.setCancelled(true);
             sign.update();
@@ -78,17 +83,25 @@ public class SignCreateListener implements Listener {
             return;
         }
 
+        if (shopExisted && Arrays.equals(event.getLines(), sign.getLines())) return;
+
         String[] lines = StringUtil.stripColourCodes(event.getLines());
 
         if (!signService.validateSign(lines)) {
             // Check if a valid shop already existed previously
-            if (signService.isValid(sign)) {
+            if (shopExisted) {
                 signBreak.sendShopDestroyed(sign, event.getPlayer());
             }
             return;
         }
 
         ShopCreation preEvent = shops.create(event.getPlayer(), sign, lines);
+
+        // A failed replacement must leave the existing shop and its registry entry intact.
+        if (shopExisted && preEvent.isCancelled()) {
+            event.setCancelled(true);
+            return;
+        }
 
         if (preEvent.getOutcome().shouldBreakSign()) {
             event.setCancelled(true);
@@ -116,6 +129,10 @@ public class SignCreateListener implements Listener {
                 shopBlockService.findConnectedContainer(preEvent.getSign()),
                 preEvent.getSignLines(),
                 preEvent.getOwnerAccount());
-        shops.onCreated(postEvent);
+        if (shopExisted) {
+            shops.onEdited(postEvent);
+        } else {
+            shops.onCreated(postEvent);
+        }
     }
 }

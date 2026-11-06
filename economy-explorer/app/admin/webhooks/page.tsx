@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Section, Tag, When } from '@democracycraft/design-system';
 import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -39,8 +38,8 @@ const columns: Column<AdminWebhookRow>[] = [
     key: 'scope',
     header: 'Scope',
     cell: (h) => (h.scope === 'firm'
-      ? (h.firmName ? <Link href={`/firms/${encodeURIComponent(h.firmName)}` as Route} prefetch={false}>Firm: {h.firmName}</Link> : `Firm #${h.firmId}`)
-      : h.accountId ? <Link href={`/accounts/${h.accountId}` as Route} prefetch={false}>Account: {h.accountName ?? `#${h.accountId}`}</Link> : '—'),
+      ? (h.firmName ? <Link href={`/firms/${encodeURIComponent(h.firmName)}`} prefetch={false}>Firm: {h.firmName}</Link> : `Firm #${h.firmId}`)
+      : h.accountId ? <Link href={`/accounts/${h.accountId}`} prefetch={false}>Account: {h.accountName ?? `#${h.accountId}`}</Link> : '—'),
   },
   {
     key: 'status',
@@ -50,7 +49,7 @@ const columns: Column<AdminWebhookRow>[] = [
   { key: 'failures', header: 'Failures', sort: 'failures', numeric: true, secondary: true, cell: (h) => fmtN(h.consecutiveFailures) },
   { key: 'source', header: 'Created through', secondary: true, optional: true, cell: (h) => (h.viaApiKey ? 'API key' : 'Explorer') },
   { key: 'created', header: 'Created', sort: 'created', sortFirst: 'desc', secondary: true, optional: true, cell: (h) => <When value={h.createdAt} /> },
-  { key: 'actions', header: <span className="sr-only">Actions</span>, label: 'Actions', align: 'end', cell: (h) => <AdminWebhookRowActions id={h.id} active={h.active} url={h.url} /> },
+  { key: 'actions', header: <span className="sr-only">Actions</span>, label: 'Actions', align: 'end', cell: (h) => <><Link href={`/admin/webhooks/${h.id}`} prefetch={false}>Details</Link><AdminWebhookRowActions id={h.id} active={h.active} url={h.url} /></> },
 ];
 
 export default async function AdminWebhooksPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

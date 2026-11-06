@@ -132,7 +132,7 @@ plugins.withId("java") {
 
 // Only files that differ from this ref are checked/formatted, so adopting the
 // formatter didn't need a whole-repo reformat that would conflict with every open
-// branch. Override with -PspotlessRatchetFrom=<ref> (e.g. origin/main).
+// branch. Override with -PspotlessRatchetFrom=<ref> (e.g. a release branch).
 //
 // The ref must exist locally: CI has to check out with full history
 // (actions/checkout `fetch-depth: 0`) or `git fetch origin main`. When it's

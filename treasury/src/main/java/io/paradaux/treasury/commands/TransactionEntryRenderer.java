@@ -29,6 +29,8 @@ final class TransactionEntryRenderer {
                 sign + formattedAmount, entry.getAmount().signum() >= 0 ? NamedTextColor.GREEN : NamedTextColor.RED);
         String memo = entry.getMemo() != null ? entry.getMemo() : entry.getMessage();
         if (memo == null) memo = "—";
+        if (entry.getPayoutCategory() != null)
+            memo = "[" + entry.getPayoutCategory().name() + "] " + memo;
         // Message treats String placeholders as literal text, including player-authored memos.
         String time = entry.getSettlementTime() != null ? TIME_FMT.format(entry.getSettlementTime()) : "—";
 

@@ -27,6 +27,7 @@ public interface ShopQueryMapper {
             s.world_uuid AS worldUuid,
             s.sign_x AS signX, s.sign_y AS signY, s.sign_z AS signZ,
             s.is_admin_shop AS adminShop,
+            s.shop_account_id AS shopAccountId,
             s.shop_account_type AS shopAccountType,
             s.shop_firm_id AS shopFirmId,
             s.shop_owner_uuid_bin AS shopOwnerUuid,

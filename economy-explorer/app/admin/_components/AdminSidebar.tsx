@@ -1,4 +1,5 @@
 'use client';
+import type { AppHref } from '@/lib/routes';
 
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -7,7 +8,7 @@ import styles from '../admin.module.css';
 
 export interface AdminNavGroup {
   label?: string;
-  items: { label: string; href: string }[];
+  items: { label: string; href: AppHref }[];
 }
 
 /**
@@ -21,7 +22,7 @@ export function AdminSidebar({ groups, children }: { groups: AdminNavGroup[]; ch
   const current = hrefs
     .filter((href) => pathname === href || (href !== '/admin' && pathname.startsWith(`${href}/`)))
     .sort((a, b) => b.length - a.length)[0];
-  const nav: SidebarGroup[] = groups.map((g) => ({
+  const nav: SidebarGroup<AppHref>[] = groups.map((g) => ({
     label: g.label,
     items: g.items.map((i) => ({ ...i, current: i.href === current })),
   }));

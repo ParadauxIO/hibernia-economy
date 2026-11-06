@@ -3,19 +3,33 @@
 // icon is missing or fails to load. Reused on cards, tables, and the item
 // detail header.
 
-import { useState } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+
+const IconOrigin = createContext('https://static.minecraftitemids.com');
+
+/** The server supplies the runtime mirror origin, so deployments need no rebuild. */
+export function ItemIconProvider({ origin, children }: { origin: string; children: ReactNode }) {
+  return <IconOrigin.Provider value={origin}>{children}</IconOrigin.Provider>;
+}
+
+function safeIconUrl(icon: string | null, origin: string): string | null {
+  if (!icon || /[\\\u0000-\u0020\u007f]/.test(icon)) return null;
+  if (icon.startsWith('/') && !icon.startsWith('//')) return icon;
+  try {
+    const url = new URL(icon);
+    return url.protocol === 'https:' && url.origin === origin && !url.username && !url.password ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 export function ItemIcon({ icon, name, size = 36 }: { icon: string | null; name: string; size?: number }) {
   // Remember WHICH icon failed, not just that one did: React reuses the instance
   // across list re-renders, so a 404 must not stick to a different item.
   const [failedIcon, setFailedIcon] = useState<string | null>(null);
-  const failed = failedIcon !== null && failedIcon === icon;
+  const safeIcon = safeIconUrl(icon, useContext(IconOrigin));
+  const failed = failedIcon !== null && failedIcon === safeIcon;
   const dim = { width: size, height: size };
-  // Defence-in-depth: only ever feed an http(s) or root-relative URL into <img src>.
-  // Callers pass itemIconUrl()'s output (already regex-validated), but guarding here
-  // means a future caller can't smuggle a javascript:/data: string into the DOM
-  // (ADT itemicon-unvalidated-src).
-  const safeIcon = icon && /^(https?:\/\/|\/)/.test(icon) ? icon : null;
   if (!safeIcon || failed) {
     return (
       <span className="item-icon item-icon-fallback" style={{ ...dim, fontSize: Math.round(size * 0.42) }} aria-hidden>

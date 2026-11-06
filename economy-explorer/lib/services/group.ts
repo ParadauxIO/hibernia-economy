@@ -1,4 +1,6 @@
 import 'server-only';
+import { z } from 'zod';
+import type { AdminGroupMembersState } from '@/lib/tables/admin';
 import { getViewer } from '@/lib/auth/viewer';
 import { requirePermission } from '@/lib/auth/access';
 import { assertCanGrantRoles, withPolicyMutation } from '@/lib/auth/delegation';
@@ -6,6 +8,7 @@ import type { Permission } from '@/lib/auth/policy';
 import type { Executor } from '@/lib/sql/role';
 import type { Viewer } from '@/lib/auth/viewer';
 import {
+  updateGroupMetadata as updateGroupMetadataRow,
   clearSyncedMembers,
   listGroups as listGroupsDal,
   selectGroupById,
@@ -22,6 +25,8 @@ import {
   deleteGroupSync,
   clearSourceMembers,
   countGroupMembersBySource,
+  countGroupMembers,
+  isManualGroupMember,
   type GroupSummary,
   type GroupMember,
   type GroupSyncSource,
@@ -122,8 +127,12 @@ export function groupMemberCountsBySource(groupId: number) {
   return countGroupMembersBySource(groupId);
 }
 
-export function listGroupMembers(groupId: number): Promise<GroupMember[]> {
-  return listGroupMembersDal(groupId);
+export async function listGroupMembers(groupId: number, state: AdminGroupMembersState) {
+  requirePermission(await getViewer(), 'groups.read');
+  const total = await countGroupMembers(groupId, state);
+  const page = Math.min(state.page, Math.max(1, Math.ceil(total / state.limit)));
+  const rows = await listGroupMembersDal(groupId, { ...state, page });
+  return { rows, total, page };
 }
 
 export async function addManualMember(groupId: number, playerUuid: string, addedBy: string | null): Promise<void> {
@@ -154,4 +163,24 @@ export async function resolvePlayerUuid(input: string): Promise<string | null> {
     return trimmed.toLowerCase();
   }
   return findPlayerUuidByName(trimmed);
+}
+
+export function isManualMember(groupId: number, uuid: string): Promise<boolean> {
+  return isManualGroupMember(groupId, uuid);
+}
+
+const groupMetadata = z.object({
+  name: z.string().trim().min(1, 'Name is required.').max(64),
+  description: z.string().trim().max(255).nullable(),
+});
+export async function updateGroupMetadata(groupId: number, input: unknown): Promise<void> {
+  requirePermission(await getViewer(), 'groups.update');
+  const value = groupMetadata.parse(input);
+  if (!Number.isSafeInteger(groupId) || groupId <= 0) throw new Error('Invalid group.');
+  try {
+    await mutateGroup(groupId, 'groups.update', trx => updateGroupMetadataRow(groupId, value.name, value.description || null, trx));
+  } catch (e) {
+    if (e && typeof e === 'object' && 'code' in e && e.code === 'ER_DUP_ENTRY') throw new Error('A group with that name already exists.');
+    throw e;
+  }
 }

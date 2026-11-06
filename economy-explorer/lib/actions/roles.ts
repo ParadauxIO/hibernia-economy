@@ -1,6 +1,6 @@
 'use server';
 import { revalidatePath } from 'next/cache';
-import { getViewer } from '@/lib/auth/viewer';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { requirePermission } from '@/lib/auth/access';
 import { createRole, updateRole, deleteRole, setDirectRoleMember, type RoleInput } from '@/lib/services/role';
 import { resolvePlayerUuid } from '@/lib/services/group';
@@ -8,7 +8,7 @@ import type { Permission } from '@/lib/auth/policy';
 
 async function run(permission: Permission, operation: () => Promise<void>) {
   try {
-    requirePermission(await getViewer(), permission);
+    requirePermission(await requireLinkedViewer(), permission);
     await operation();
     revalidatePath('/admin', 'layout');
     return { ok: true };

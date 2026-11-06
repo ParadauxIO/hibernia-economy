@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { EntityBadge, PageHeader, Section, Tag, When } from '@democracycraft/design-system';
 import { DataTable, TablePager, columnOptions, type Column } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -54,7 +53,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
       sort: 'name',
       cell: (a) => (
         <>
-          <Link href={`/accounts/${a.account_id}` as Route} prefetch={false}>{accountLabel(a)}</Link>
+          <Link href={`/accounts/${a.account_id}`} prefetch={false}>{accountLabel(a)}</Link>
           <span className="dt-sub">{` #${a.account_id}`}</span>
           {a.archived ? <> <Tag tone="neg">Archived</Tag></> : null}
         </>

@@ -19,18 +19,17 @@ public interface AccountMapper {
               FROM accounts
              WHERE account_id = #{accountId}
             """)
-    @Results(
-            id = "accountMap",
-            value = {
-                @Result(column = "account_id", property = "accountId", id = true),
-                @Result(column = "account_type", property = "accountType"),
-                @Result(column = "owner_uuid_bin", property = "ownerUuid"),
-                @Result(column = "display_name", property = "displayName"),
-                @Result(column = "requires_authorization", property = "requiresAuthorization"),
-                @Result(column = "is_archived", property = "isArchived"),
-                @Result(column = "allow_overdraft", property = "allowOverdraft"),
-                @Result(column = "credit_limit", property = "creditLimit")
-            })
+    @Results(id = "accountMap")
+    @ConstructorArgs({
+        @Arg(column = "account_id", javaType = Integer.class, id = true),
+        @Arg(column = "account_type", javaType = io.paradaux.treasury.model.economy.AccountType.class),
+        @Arg(column = "owner_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "display_name", javaType = String.class),
+        @Arg(column = "requires_authorization", javaType = boolean.class),
+        @Arg(column = "is_archived", javaType = boolean.class),
+        @Arg(column = "allow_overdraft", javaType = boolean.class),
+        @Arg(column = "credit_limit", javaType = java.math.BigDecimal.class)
+    })
     Account findById(@Param("accountId") int accountId);
 
     @Select("""
@@ -170,18 +169,25 @@ public interface AccountMapper {
                 credit_limit
             )
             VALUES(
-                #{accountType},
-                #{ownerUuid},
-                #{displayName},
-                CASE WHEN #{accountType} = 'SYSTEM' THEN #{displayName} END,
-                #{requiresAuthorization},
-                #{isArchived},
-                #{allowOverdraft},
-                #{creditLimit}
+                #{value.accountType},
+                #{value.ownerUuid},
+                #{value.displayName},
+                CASE WHEN #{value.accountType} = 'SYSTEM' THEN #{value.displayName} END,
+                #{value.requiresAuthorization},
+                #{value.isArchived},
+                #{value.allowOverdraft},
+                #{value.creditLimit}
             )
             """)
-    @Options(useGeneratedKeys = true, keyProperty = "accountId", keyColumn = "account_id")
-    int insertAccount(Account account);
+    @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "account_id")
+    int insertAccountRow(GeneratedKey<Account> row);
+
+    /** Inserts a snapshot and returns its generated ID without mutating it. */
+    default int insertAccount(Account value) {
+        GeneratedKey<Account> row = new GeneratedKey<>(value);
+        insertAccountRow(row);
+        return Math.toIntExact(row.getId());
+    }
 
     @Insert("""
             INSERT INTO account_balances_mat(account_id, balance, version)
@@ -195,13 +201,12 @@ public interface AccountMapper {
              WHERE account_id = #{accountId}
              FOR UPDATE
             """)
-    @Results(
-            id = "balanceMap",
-            value = {
-                @Result(column = "account_id", property = "accountId", id = true),
-                @Result(column = "balance", property = "balance"),
-                @Result(column = "version", property = "version")
-            })
+    @Results(id = "balanceMap")
+    @ConstructorArgs({
+        @Arg(column = "account_id", javaType = int.class, id = true),
+        @Arg(column = "balance", javaType = java.math.BigDecimal.class),
+        @Arg(column = "version", javaType = long.class)
+    })
     AccountBalance lockBalance(@Param("accountId") int accountId);
 
     /** Non-locking balance read for read-only API calls. */
@@ -289,14 +294,13 @@ public interface AccountMapper {
              ORDER BY b.balance DESC
              LIMIT #{limit} OFFSET #{offset}
             """)
-    @Results(
-            id = "balanceEntryMap",
-            value = {
-                @Result(column = "account_id", property = "accountId", id = true),
-                @Result(column = "owner_uuid_bin", property = "ownerUuid"),
-                @Result(column = "display_name", property = "displayName"),
-                @Result(column = "balance", property = "balance")
-            })
+    @Results(id = "balanceEntryMap")
+    @ConstructorArgs({
+        @Arg(column = "account_id", javaType = int.class, id = true),
+        @Arg(column = "owner_uuid_bin", javaType = java.util.UUID.class),
+        @Arg(column = "display_name", javaType = String.class),
+        @Arg(column = "balance", javaType = java.math.BigDecimal.class)
+    })
     List<BalanceEntry> getTopBalances(@Param("limit") int limit, @Param("offset") int offset);
 
     // ---- economy summary ----
@@ -314,7 +318,9 @@ public interface AccountMapper {
                AND a.account_type IN ('PERSONAL', 'BUSINESS', 'GOVERNMENT')
              GROUP BY a.account_type
             """)
-    @Results({@Result(column = "account_type", property = "accountType"), @Result(column = "total", property = "total")
+    @ConstructorArgs({
+        @Arg(column = "account_type", javaType = AccountType.class),
+        @Arg(column = "total", javaType = java.math.BigDecimal.class)
     })
     List<AccountTypeTotal> getEconomyTotalsByType();
 

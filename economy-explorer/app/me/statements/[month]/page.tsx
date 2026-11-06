@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { notFound } from 'next/navigation';
 import { MetricCard, MetricRow, Money, PageHeader, Section, Segmented, TableWrap } from '@democracycraft/design-system';
 import { Waterfall } from '@/components/charts/AreaTimeline';
@@ -73,8 +72,8 @@ export default async function StatementPage({ params, searchParams }: {
       </span>} />
 
     <div className="me-statement-meta me-no-print">
-      <Link href={`/me/statements/${prev}${qs}` as Route} prefetch={false}>← {monthLabel(prev)}</Link>
-      {hasNext && <Link href={`/me/statements/${next}${qs}` as Route} prefetch={false}>{monthLabel(next)} →</Link>}
+      <Link href={`/me/statements/${prev}${qs}`} prefetch={false}>← {monthLabel(prev)}</Link>
+      {hasNext && <Link href={`/me/statements/${next}${qs}`} prefetch={false}>{monthLabel(next)} →</Link>}
       <Updated coverage={s.coverage} />
     </div>
 

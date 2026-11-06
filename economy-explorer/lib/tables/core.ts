@@ -412,8 +412,8 @@ const ENVELOPE = z.object({
   f: z.array(z.string().max(LIMITS.param)).catch([]),
   sort: firstString.pipe(z.string().max(64).optional()).catch(undefined),
   dir: firstString.pipe(z.string().max(8).optional()).catch(undefined),
-  page: firstString.pipe(z.coerce.number().int().min(1).max(LIMITS.page).optional()).catch(undefined),
-  limit: firstString.pipe(z.coerce.number().int().min(1).max(10_000).optional()).catch(undefined),
+  page: firstString.pipe(z.coerce.number<string>().int().min(1).max(LIMITS.page).optional()).catch(undefined),
+  limit: firstString.pipe(z.coerce.number<string>().int().min(1).max(10_000).optional()).catch(undefined),
   cursor: firstString.pipe(z.string().max(LIMITS.cursor).optional()).catch(undefined),
 });
 
@@ -520,7 +520,7 @@ export function serializeTableState(state: TableState, table: AnyTable, extra: [
 }
 
 /** `pathname?query` for a state, or just the pathname when every param is default. */
-export function tableHref(pathname: string, state: TableState, table: AnyTable, extra: [string, string][] = []): string {
+export function tableHref<Path extends string>(pathname: Path, state: TableState, table: AnyTable, extra: [string, string][] = []): Path | `${Path}?${string}` {
   const qs = serializeTableState(state, table, extra);
   return qs ? `${pathname}?${qs}` : pathname;
 }

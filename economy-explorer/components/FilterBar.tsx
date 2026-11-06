@@ -2,10 +2,10 @@
 // Search, filter chips, quick filters, the Columns menu and the summary line
 // for a table declared with defineTable (spec §5.5). All state lives in the URL:
 // this component reads it with parseTableState and writes it back with
-// tableHref, and the server page re-renders the DataTable.
+// serializeTableState, and the server page re-renders the DataTable.
 
 import '@democracycraft/design-system/table/styles.css';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useOptimistic, useRef, useState, useSyncExternalStore, useTransition, type KeyboardEvent, type ReactNode } from 'react';
 import { Popover } from '@democracycraft/design-system/popover';
 import type { ColumnOption } from '@democracycraft/design-system/table';
@@ -20,7 +20,7 @@ import {
   parseSearchInput,
   parseTableState,
   quickFilters,
-  tableHref,
+  serializeTableState,
   withFilter,
   withFilters,
   withoutFilter,
@@ -119,7 +119,6 @@ export function FilterBar({
   table, total, totalIsFloor = false, counts, entityLabels, searchEntity, columns, tableId, currency = '$', exportSlot,
 }: FilterBarProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const urlState = useMemo(() => parseTableState(params, table), [params, table]);
   const [pending, startTransition] = useTransition();
@@ -145,7 +144,7 @@ export function FilterBar({
   const textOf = (f: FilterState) => filterText(f, table, { currency, entityLabels: labels });
 
   function go(next: TableState) {
-    const href = tableHref(pathname, next, table, foreignParams(params, new Set(params.keys())));
+    const href = `?${serializeTableState(next, table, foreignParams(params, new Set(params.keys())))}` as const;
     startTransition(() => {
       setOptimistic(next);
       router.push(href, { scroll: false });

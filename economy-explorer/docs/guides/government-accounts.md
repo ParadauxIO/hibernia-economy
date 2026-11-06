@@ -148,3 +148,12 @@ says **Preparing history** is still being calculated after an update.
 - Every government and fine command, with arguments: the
   **[Treasury reference](/docs/reference/treasury#government-accounts)**.
 - How the different account types relate: **[Accounts & money](/docs/concepts/accounts-and-money)**.
+
+### Target an account number
+
+Use `/government payout-account Police 123 250 reimbursement` to pay Treasury
+account #123, or `/fine account Police 123 50 zoning breach` to fine it into Police.
+These commands accept every account type and avoid name ambiguity. Existing
+government account permissions still apply; fining a SYSTEM account requires
+Treasury admin permission. Personal fines remain in the player's fine history,
+and revocation refunds the original account.

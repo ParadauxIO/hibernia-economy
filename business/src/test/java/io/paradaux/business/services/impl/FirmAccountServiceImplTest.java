@@ -14,11 +14,11 @@ import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmAccount;
-import io.paradaux.business.model.FirmEmployee;
-import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmAccount;
+import io.paradaux.business.model.internal.FirmEmployee;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
@@ -106,8 +106,7 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
 
-        Account acc = new Account();
-        acc.setAccountId(99);
+        Account acc = Account.builder().accountId(99).build();
         when(treasury.createAccount(eq(AccountType.BUSINESS), eq(actor), eq("Sub")))
                 .thenReturn(acc);
         when(firmAccounts.isFirmAccount(1, 99)).thenReturn(true); // for syncAccountMembers below
@@ -145,10 +144,8 @@ class FirmAccountServiceImplTest {
     void listAccounts_resolvesEachAccount() {
         when(firmAccounts.listAccountsByFirm(1))
                 .thenReturn(List.of(new FirmAccount(1, 10, null), new FirmAccount(1, 11, null)));
-        Account a1 = new Account();
-        a1.setAccountId(10);
-        Account a2 = new Account();
-        a2.setAccountId(11);
+        Account a1 = Account.builder().accountId(10).build();
+        Account a2 = Account.builder().accountId(11).build();
         // One batch read instead of one getAccountById per account (ADT-36).
         when(treasury.getAccountsByIds(List.of(10, 11))).thenReturn(Map.of(10, a1, 11, a2));
 
@@ -386,6 +383,7 @@ class FirmAccountServiceImplTest {
         when(treasury.getMembers(anyInt())).thenReturn(List.of());
         when(treasury.getAuthorizers(anyInt())).thenReturn(List.of());
 
+        when(treasury.getAccountById(anyInt())).thenReturn(Account.builder().build());
         svc.reassignAccountsToNewProprietor(1, newProprietor);
 
         // Owner reassigned on every live firm account...
@@ -568,7 +566,7 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
-        when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(treasury.getAccountById(7)).thenReturn(Account.builder().build());
         when(firmAccounts.getShopAliasReservation("AcmeShop")).thenReturn(7);
         when(firmAccounts.setShopAlias(1, 7, "AcmeShop")).thenReturn(1);
         when(firmAccounts.setShopAlias(1, 7, null)).thenReturn(1);
@@ -623,10 +621,10 @@ class FirmAccountServiceImplTest {
         assertThat(svc.resolveShopAlias("unknown")).isNull();
         when(firmAccounts.resolveShopAlias("Acme")).thenReturn(7);
         assertThat(svc.resolveShopAlias("Acme")).isNull();
-        Account account = new Account();
+        Account account = Account.builder().build();
         when(treasury.getAccountById(7)).thenReturn(account);
         assertThat(svc.resolveShopAlias("Acme")).isEqualTo(7);
-        account.setArchived(true);
+        when(treasury.getAccountById(7)).thenReturn(account.withArchived(true));
         assertThat(svc.resolveShopAlias("Acme")).isNull();
     }
 
@@ -635,7 +633,7 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
-        when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(treasury.getAccountById(7)).thenReturn(Account.builder().build());
         when(firmAccounts.getShopAliasReservation("acme")).thenReturn(7);
         when(firmAccounts.setShopAlias(1, 7, "acme"))
                 .thenThrow(new org.apache.ibatis.exceptions.PersistenceException(
@@ -655,7 +653,7 @@ class FirmAccountServiceImplTest {
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 7)).thenReturn(true);
-        when(treasury.getAccountById(7)).thenReturn(new Account());
+        when(treasury.getAccountById(7)).thenReturn(Account.builder().build());
         when(firmAccounts.getShopAliasReservation("acme")).thenReturn(99);
         assertThatThrownBy(() -> svc.setShopAlias(1, 7, "acme", actor))
                 .isInstanceOf(BadCommandException.class)

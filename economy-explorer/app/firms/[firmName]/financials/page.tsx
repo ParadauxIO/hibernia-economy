@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { AccessGate, ExportMenu, Money, Section } from '@democracycraft/design-system';
 import { RangePicker } from '@democracycraft/design-system/next';
@@ -146,7 +147,7 @@ function Statement({ statement }: { statement: MonthStatement }) {
   return <DataTable id="firm-statement" label={`Statement for ${monthName(statement.month)}`} columns={columns} rows={rows} rowKey={(l) => l.key} density="compact" />;
 }
 
-function Months({ statements, selected, href }: { statements: MonthStatement[]; selected: string | null; href: (m: string) => string }) {
+function Months({ statements, selected, href }: { statements: MonthStatement[]; selected: string | null; href: (m: string) => AppHref }) {
   const columns: Column<MonthStatement>[] = [
     { key: 'month', header: 'Month', cell: (s) => <Link href={href(s.month)} aria-current={s.month === selected ? 'true' : undefined}>{monthName(s.month)}</Link> },
     { key: 'rev', header: 'Revenue', numeric: true, cell: (s) => <Money value={s.totalRevenue} /> },

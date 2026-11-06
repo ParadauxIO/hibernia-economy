@@ -209,6 +209,9 @@ public class ChestShopConfiguration {
     @ConfigurationValue(path = "WORLDGUARD_INTEGRATION", defaultValue = "false")
     private boolean worldguardIntegration;
 
+    @ConfigurationValue(path = "WORLDGUARD_ONLY_IN_REGION", defaultValue = "true")
+    private boolean worldguardOnlyInRegion;
+
     @ConfigurationValue(path = "WORLDGUARD_USE_FLAG", defaultValue = "false")
     private boolean worldguardUseFlag;
 

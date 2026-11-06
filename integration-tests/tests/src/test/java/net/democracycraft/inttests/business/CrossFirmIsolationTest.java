@@ -110,7 +110,7 @@ class CrossFirmIsolationTest {
                 // the isolation check were broken.
                 Barrier.settle();
                 b.chatCommand("/business deposit " + firmB + " 100");
-                b.awaitMessageContaining("Deposited", TIMEOUT);
+                b.awaitMessageContaining("Paid", TIMEOUT);
             });
 
             Ops.run(aOwner, () -> {

@@ -1,3 +1,5 @@
+import './transactions.css';
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
 import { Money, When } from '@democracycraft/design-system';
 import { CursorPager, EntityLink } from '@democracycraft/design-system/next';
@@ -11,7 +13,7 @@ import { SCAN_WINDOW, accountTxnsTable, type AccountTxnsState } from '@/lib/tabl
 import { cleared, filterText, tableHref, withCursor, withQuery, withoutFilter, type EntityOption } from '@/lib/tables/core';
 import { DateWithYear } from './bits';
 
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 const TABLE_ID = 'account-txns';
 
 function categoryTone(category: string): string {
@@ -59,7 +61,7 @@ function columns(running: boolean): Column<TxnView>[] {
     },
   ];
   if (running) {
-    cols.push({ key: 'balance', header: 'Balance after', numeric: true, secondary: true, optional: true, cell: (t) => t.balanceAfter === null ? '—' : <Money value={t.balanceAfter} /> });
+    cols.push({ key: 'balance', header: 'Balance after', numeric: true, secondary: true, optional: true, cell: (t) => <><span className="transaction-balance-label">Balance </span>{t.balanceAfter === null ? '—' : <Money value={t.balanceAfter} />}</> });
   }
   return cols;
 }
@@ -70,7 +72,7 @@ function columns(running: boolean): Column<TxnView>[] {
  * say how far back they looked when it ran out before a page filled.
  */
 export function AccountTransactions({ pathname, state, page, extra, searchEntity, exportSlot }: {
-  pathname: string;
+  pathname: AppHref;
   state: AccountTxnsState;
   page: TxnPage;
   /** Params the table doesn't own (the range), kept on every link. */
@@ -78,7 +80,7 @@ export function AccountTransactions({ pathname, state, page, extra, searchEntity
   searchEntity: (field: string, text: string) => Promise<EntityOption[]>;
   exportSlot?: React.ReactNode;
 }) {
-  const href = (s: AccountTxnsState) => `${tableHref(pathname, s, accountTxnsTable, extra)}#transactions`;
+  const href = (s: AccountTxnsState) => `${tableHref(pathname, s, accountTxnsTable, extra)}#transactions` as const;
   const describe = { currency: CURRENCY_SYMBOL, entityLabels: page.entityLabels };
   const activeFilters = [
     ...(state.q ? [{ text: `“${state.q}”`, removeHref: href(withQuery(state, '')) }] : []),
@@ -95,7 +97,7 @@ export function AccountTransactions({ pathname, state, page, extra, searchEntity
     <FilterBar table={accountTxnsTable} entityLabels={page.entityLabels} searchEntity={searchEntity}
       columns={columnOptions(cols)} tableId={TABLE_ID} currency={CURRENCY_SYMBOL} exportSlot={exportSlot} />
     {page.implicitDays !== null && <p className="txn-note">Text search covers the past {page.implicitDays} days. Add a Date filter to search another period.</p>}
-    <DataTable id={TABLE_ID} label="Transactions" columns={cols} rows={page.rows} rowKey={(t) => t.txnId}
+    <DataTable className="transaction-table account-transaction-table" id={TABLE_ID} label="Transactions" columns={cols} rows={page.rows} rowKey={(t) => t.txnId}
       rowHref={(t) => `/transactions/${t.txnId}`} link={RouterLink} density="compact"
       empty={page.searchedBackTo
         ? <p className="dt-empty-text">No matches in the {SCAN_WINDOW.toLocaleString('en-US')} transactions before <DateWithYear value={page.searchedBackTo} />. Use Older to keep looking, or narrow the Date filter.</p>

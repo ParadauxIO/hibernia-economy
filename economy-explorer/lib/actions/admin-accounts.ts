@@ -1,7 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
+import type { Viewer } from '@/lib/auth/viewer';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { requirePermission } from '@/lib/auth/access';
 import type { Permission } from '@/lib/auth/policy';
 import { auditMutation } from '@/lib/audit';
@@ -23,7 +24,7 @@ async function run<T>(
   audit: { action: string; path: string; targetId: string; before: () => Promise<unknown>; after: (result: T) => Promise<unknown> },
   op: (viewer: Extract<Viewer, { anon: false }>) => Promise<T>,
 ): Promise<Result<T>> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, permission);
   try {
     const before = await audit.before();
@@ -50,8 +51,12 @@ function accountAudit(action: string, path: string, accountId: number) {
 
 /** Move money between two accounts with a memo (admin). The acting player is recorded as the initiator. */
 export async function adminTransferAction(args: {
-  fromAccountId: number; toAccountId: number; amount: string; memo: string;
+  fromAccountId: number; toAccountId: number; amount: string; memo: string; idempotencyKey: string;
 }): Promise<Result<TransferResult>> {
+  if (typeof args.idempotencyKey !== 'string' || !/^[0-9a-f-]{36}$/i.test(args.idempotencyKey)) {
+    return { ok: false, error: 'A valid transfer retry key is required.' };
+  }
+  const { idempotencyKey, ...body } = args;
   const balances = async () => {
     const [from, to] = await Promise.all([findAccount(args.fromAccountId), findAccount(args.toAccountId)]);
     return { fromBalance: from?.balance ?? null, toBalance: to?.balance ?? null };
@@ -64,7 +69,7 @@ export async function adminTransferAction(args: {
       before: balances,
       after: async (r) => ({ txnId: r.txnId, amount: r.amount, memo: r.memo, ...(await balances()) }),
     },
-    () => adminTransfer(args),
+    () => adminTransfer(body, idempotencyKey),
   );
 }
 

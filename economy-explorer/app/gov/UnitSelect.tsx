@@ -1,15 +1,13 @@
 'use client';
 
 import { useId, useTransition } from 'react';
-import type { Route } from 'next';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export interface UnitOption { value: string; label: string; depth: number }
 
 /** The unit selector every /gov page shares. Writes `?unit=` and drops pagination. */
 export function UnitSelect({ value, options }: { value: string; options: UnitOption[] }) {
   const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const [pending, start] = useTransition();
   const id = useId();
@@ -20,7 +18,7 @@ export function UnitSelect({ value, options }: { value: string; options: UnitOpt
       for (const key of ['page', 'cursor', 'vcursor']) next.delete(key);
       if (e.target.value === 'all') next.delete('unit'); else next.set('unit', e.target.value);
       const qs = next.toString();
-      start(() => router.push(`${pathname}${qs ? `?${qs}` : ''}` as Route, { scroll: false }));
+      start(() => router.push(`?${qs}`, { scroll: false }));
     }}>
       {options.map((o) => <option key={o.value} value={o.value}>{`${' '.repeat(o.depth)}${o.label}`}</option>)}
     </select>

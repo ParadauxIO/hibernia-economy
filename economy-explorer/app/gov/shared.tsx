@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { Tag, When } from '@democracycraft/design-system';
 import { EntityLink, RangePicker } from '@democracycraft/design-system/next';
 import { accountLabel, looksLikeUuid, shortenUuid } from '@/lib/format';
@@ -108,7 +107,7 @@ export function PartyRef({ row }: { row: { account_id: number; display_name: str
   if (row.account_type === 'PERSONAL') {
     return <span className="gov-party">
       <PlayerRef uuid={row.owner_uuid} name={row.owner_name} />
-      {row.account_id > 0 && <span className="dt-sub">· <Link href={`/accounts/${row.account_id}` as Route} prefetch={false}>account #{row.account_id}</Link></span>}
+      {row.account_id > 0 && <span className="dt-sub">· <Link href={`/accounts/${row.account_id}`} prefetch={false}>account #{row.account_id}</Link></span>}
     </span>;
   }
   return <AccountRef id={row.account_id} name={row.display_name} type={row.account_type} />;

@@ -54,7 +54,7 @@ public final class ExplorerFixture {
             fixture.put("outsiderFirmName", firm);
             Ops.run(outsider.getUsername(), () -> {
                 outsider.chatCommand("/business deposit " + firm + " 123.45");
-                outsider.awaitMessageContaining("Deposited", timeout);
+                outsider.awaitMessageContaining("Paid", timeout);
                 Barrier.settle();
             });
             int firmAccount = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();

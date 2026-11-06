@@ -60,7 +60,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: >-
           sh ./gradlew release :treasury:treasury-api:assemble :business:business-api:assemble
-          -Pci=true -Pversion="$RELEASE_VERSION"
+          -Pci=true -Pversion="$RELEASE_VERSION" -PbusinessApiVersion="4.0.0-$RELEASE_VERSION"
 
       - name: Write plugin manifest
         env:
@@ -74,7 +74,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: >-
           sh ./gradlew :treasury:treasury-api:publish :business:business-api:publish
-          -Pci=true -Pversion="$RELEASE_VERSION"
+          -Pci=true -Pversion="$RELEASE_VERSION" -PbusinessApiVersion="4.0.0-$RELEASE_VERSION"
 
       # Upload everything before making the release visible. Never replace an
       # existing release or retag it. Consumers must select an explicit tag.

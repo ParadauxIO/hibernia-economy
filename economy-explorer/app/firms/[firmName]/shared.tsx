@@ -1,6 +1,8 @@
+import type { TabItem } from '@democracycraft/design-system/next';
+import type { AppHref } from '@/lib/routes';
 import '@/components/entity/entity.css';
 import { notFound } from 'next/navigation';
-import { EntityBadge, InfoTip, PageHeader, Tag } from '@democracycraft/design-system';
+import { EntityBadge, InfoTip, Money, PageHeader, Tag } from '@democracycraft/design-system';
 import { EntityLink, Tabs } from '@democracycraft/design-system/next';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { CopyButton } from '@/components/entity/CopyButton';
@@ -9,6 +11,7 @@ import { auditRelationshipRead, auditView } from '@/lib/audit';
 import { canViewFirmFinancials, canViewFirmInternals, findFirmByDisplayName, hasElevatedRead, isFirmMember } from '@/lib/auth/access';
 import { getViewer, type Viewer } from '@/lib/auth/viewer';
 import { firmHref, playerHref, playerName, previewHref } from '@/lib/entityLinks';
+import { sumBy } from '@/lib/money';
 import { getFirmPublic, type FirmPublic } from '@/lib/services/firm';
 import type { FirmRow } from '@/lib/sql/firm';
 
@@ -52,7 +55,7 @@ export function FirmHeader({ loaded, tab }: { loaded: LoadedFirm; tab: FirmTab }
   const { firm, pub } = loaded;
   const s = pub.summary;
   const base = firmHref(firm.display_name);
-  const tabs = [
+  const tabs: TabItem<AppHref>[] = [
     { label: 'Overview', href: base, current: tab === 'overview' },
     { label: 'Members', href: `${base}/members`, current: tab === 'members', count: s.staff_count },
     { label: 'Financials', href: `${base}/financials`, current: tab === 'financials' },
@@ -68,6 +71,7 @@ export function FirmHeader({ loaded, tab }: { loaded: LoadedFirm; tab: FirmTab }
           preview={previewHref('player', firm.proprietor_uuid)} />, its proprietor.</>
         : undefined}
       meta={<>
+        <span className="entity-meta-item">Firm balance <Money value={sumBy(pub.accounts.filter((a) => !a.archived), (a) => a.balance)} /></span>
         <span className="entity-meta-item">Founded <DateWithYear value={firm.created_at} /></span>
         {firm.hq_region && <span className="entity-meta-item">HQ {firm.hq_region}</span>}
         <span className="entity-meta-item">{s.staff_count.toLocaleString('en-US')} staff · {s.account_count.toLocaleString('en-US')} {s.account_count === 1 ? 'account' : 'accounts'}

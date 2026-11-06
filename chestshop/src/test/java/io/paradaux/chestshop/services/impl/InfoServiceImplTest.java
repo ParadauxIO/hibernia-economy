@@ -56,7 +56,6 @@ import org.bukkit.inventory.meta.trim.ArmorTrim;
 import org.bukkit.inventory.meta.trim.TrimMaterial;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.map.MapView;
-import org.bukkit.potion.PotionData;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
@@ -329,20 +328,38 @@ class InfoServiceImplTest extends ServerTest {
         return metaItem(Material.POTION, meta);
     }
 
-    private PotionData baseData(boolean upgraded, boolean extended) {
-        PotionData d = mock(PotionData.class);
-        lenient().when(d.getType()).thenReturn(PotionType.SWIFTNESS);
-        lenient().when(d.isUpgraded()).thenReturn(upgraded);
-        lenient().when(d.isExtended()).thenReturn(extended);
-        return d;
+    @Test
+    void potion_withoutBaseData_stillDisplaysCustomEffects() {
+        PotionMeta meta = mock(PotionMeta.class);
+        when(meta.getCustomEffects()).thenReturn(List.of(new PotionEffect(PotionEffectType.SPEED, 200, 0)));
+        assertThat(collect(potionItem(meta))).contains("iteminfo_potion");
+    }
+
+    @Test
+    void potion_withoutBaseOrEffects_omitsEmptyPotionLine() {
+        PotionMeta meta = mock(PotionMeta.class);
+        assertThat(collect(potionItem(meta))).doesNotContain("iteminfo_potion");
+    }
+
+    @Test
+    void potion_withoutBase_preservesCustomEffects() {
+        PotionMeta meta = mock(PotionMeta.class);
+        when(meta.getCustomEffects()).thenReturn(List.of(new PotionEffect(PotionEffectType.SPEED, 60, 0)));
+        ItemInfoLines lines = info.collectItemInfo(sender, potionItem(meta));
+        Component potion = lines.getMessages().stream()
+                .filter(entry -> entry.getKey().equals("iteminfo_potion"))
+                .findFirst()
+                .orElseThrow()
+                .getValue();
+        String text = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                .serialize(potion);
+        assertThat(text).contains("Speed", "0:03").doesNotStartWith("\n").doesNotContain("Potion of");
     }
 
     @Test
     void potion_upgraded_withBaseTypeAndEffects() {
         PotionMeta meta = mock(PotionMeta.class);
-        PotionData data = baseData(true, false); // -> "II"
-        when(meta.getBasePotionData()).thenReturn(data);
-        when(meta.getBasePotionType()).thenReturn(PotionType.SWIFTNESS); // extended: non-null
+        when(meta.getBasePotionType()).thenReturn(PotionType.STRONG_SWIFTNESS); // extended: non-null
         List<PotionEffect> effects = List.of(
                 new PotionEffect(PotionEffectType.SPEED, 200, 1),
                 new PotionEffect(PotionEffectType.JUMP_BOOST, 100, 0));
@@ -352,22 +369,18 @@ class InfoServiceImplTest extends ServerTest {
     }
 
     @Test
-    void potion_extended_noBaseTypeNoEffects() {
+    void potion_extended_withBaseTypeNoEffects() {
         PotionMeta meta = mock(PotionMeta.class);
-        PotionData data = baseData(false, true); // -> "+"
-        when(meta.getBasePotionData()).thenReturn(data);
-        when(meta.getBasePotionType()).thenReturn(null); // extended: skips base type
+        when(meta.getBasePotionType()).thenReturn(PotionType.LONG_SWIFTNESS);
         when(meta.getCustomEffects()).thenReturn(List.of()); // extended: empty -> no line
 
-        // basic emits the potion line; extended produces an empty message and adds nothing.
+        // The modern base type carries the extended variant without legacy PotionData.
         assertThat(collect(potionItem(meta))).contains("iteminfo_potion");
     }
 
     @Test
     void potion_plain_nullBaseTypeWithEffect() {
         PotionMeta meta = mock(PotionMeta.class);
-        PotionData data = baseData(false, false); // neither
-        when(meta.getBasePotionData()).thenReturn(data);
         when(meta.getBasePotionType()).thenReturn(null);
         when(meta.getCustomEffects()).thenReturn(List.of(new PotionEffect(PotionEffectType.SPEED, 60, 0)));
 
@@ -475,22 +488,23 @@ class InfoServiceImplTest extends ServerTest {
         io.paradaux.business.api.BusinessApi business = mock(io.paradaux.business.api.BusinessApi.class);
         io.paradaux.business.api.FirmApi firms = mock(io.paradaux.business.api.FirmApi.class);
         when(business.firms()).thenReturn(firms);
-        io.paradaux.business.model.Firm firm = new io.paradaux.business.model.Firm();
-        firm.setDisplayName("Acme Hardware");
-        firm.setDefaultAccountId(99); // The selected wallet is a linked non-default account.
-        io.paradaux.treasury.model.economy.Account wallet = new io.paradaux.treasury.model.economy.Account();
-        wallet.setAccountId(46);
-        wallet.setDisplayName("ChestShops");
-        wallet.setAccountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS);
+        io.paradaux.business.model.Firm firm =
+                new io.paradaux.business.model.Firm(null, "Acme Hardware", null, null, null, 99, null, null, null);
+        io.paradaux.treasury.model.economy.Account wallet = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(46)
+                .displayName("ChestShops")
+                .accountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS)
+                .build();
         when(treasury.getAccountById(46)).thenReturn(wallet);
         when(firms.getFirmByAccountId(46)).thenReturn(firm);
         lenient().when(firms.resolveShopAlias("acme")).thenReturn(46);
         // Legacy names select the default wallet; its label also differs from the firm name.
         lenient().when(firms.getFirm("Old Shop")).thenReturn(firm);
-        io.paradaux.treasury.model.economy.Account defaultWallet = new io.paradaux.treasury.model.economy.Account();
-        defaultWallet.setAccountId(99);
-        defaultWallet.setDisplayName("Default Wallet");
-        defaultWallet.setAccountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS);
+        io.paradaux.treasury.model.economy.Account defaultWallet = io.paradaux.treasury.model.economy.Account.builder()
+                .accountId(99)
+                .displayName("Default Wallet")
+                .accountType(io.paradaux.treasury.model.economy.AccountType.BUSINESS)
+                .build();
         lenient().when(treasury.getAccountById(99)).thenReturn(defaultWallet);
         lenient().when(firms.getFirmByAccountId(99)).thenReturn(firm);
         BusinessAccountServiceImpl resolver = new BusinessAccountServiceImpl();

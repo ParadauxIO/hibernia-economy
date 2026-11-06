@@ -1,5 +1,5 @@
+import type { AppHref } from '@/lib/routes';
 import Link from 'next/link';
-import type { Route } from 'next';
 import { MiniSpark, Money, PageHeader, Tag } from '@democracycraft/design-system';
 import { DataTable, TableEmpty, columnOptions, type Column, type LinkComponent } from '@democracycraft/design-system/table';
 import { FilterBar } from '@/components/FilterBar';
@@ -18,7 +18,7 @@ export async function generateMetadata() {
 }
 
 const TABLE_ID = 'gov-accounts-table';
-const RouterLink: LinkComponent = Link;
+const RouterLink: LinkComponent<AppHref> = Link;
 
 const columns: Column<GovAccountView>[] = [
   { key: 'name', header: 'Account', sort: 'name', cell: (a) => <AccountRef id={a.accountId} name={a.displayName} /> },
@@ -84,6 +84,6 @@ export default async function GovAccountsPage({ searchParams }: { searchParams: 
     <DataTable id={TABLE_ID} label="Government accounts" columns={columns} rows={shown} rowKey={(a) => a.accountId}
       sort={state.sort} sortHref={(field, dir) => href(withSort(state, field, dir, govAccountsTable))} link={RouterLink}
       empty={<TableEmpty noun="accounts" filters={active} clearHref={href(cleared(state))} link={RouterLink} />} />
-    <p className="muted small">Each account links to its page. <Link href={'/gov' as Route}>Back to the overview</Link>.</p>
+    <p className="muted small">Each account links to its page. <Link href={'/gov'}>Back to the overview</Link>.</p>
   </>;
 }

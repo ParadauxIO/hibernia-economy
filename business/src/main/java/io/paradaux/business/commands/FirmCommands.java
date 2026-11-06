@@ -5,22 +5,23 @@ import com.google.inject.Singleton;
 import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.commands.resolvers.OnlineFirmName;
-import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.FirmBalanceEntry;
-import io.paradaux.business.model.FirmPlayer;
 import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmPlayer;
 import io.paradaux.business.services.FirmDisbandConfirmationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.FirmTransactionService;
+import io.paradaux.business.threading.BusinessMessages;
+import io.paradaux.business.threading.MainThreadAccess;
+// Every route here hits the DB and/or Treasury; @Async on each so the main
+// server thread doesn't block on JDBC/IPC.
 import io.paradaux.business.utils.NameValidator;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.exceptions.InternalException;
-import io.paradaux.hibernia.framework.i18n.Message;
-// Every route here hits the DB and/or Treasury; @Async on each so the main
-// server thread doesn't block on JDBC/IPC.
 import io.paradaux.treasury.model.Page;
 import java.util.List;
 import java.util.Optional;
@@ -40,7 +41,8 @@ public class FirmCommands implements CommandHandler {
     private final FirmTransactionService transactions;
     private final FirmDisbandConfirmationService disbandConfirmations;
     private final FirmChatService firmChat;
-    private final Message message;
+    private final BusinessMessages message;
+    private final MainThreadAccess mainThread;
 
     @Inject
     public FirmCommands(
@@ -50,7 +52,8 @@ public class FirmCommands implements CommandHandler {
             FirmTransactionService transactions,
             FirmDisbandConfirmationService disbandConfirmations,
             FirmChatService firmChat,
-            Message message) {
+            BusinessMessages message,
+            MainThreadAccess mainThread) {
         this.players = players;
         this.staff = staff;
         this.firms = firms;
@@ -58,6 +61,7 @@ public class FirmCommands implements CommandHandler {
         this.disbandConfirmations = disbandConfirmations;
         this.firmChat = firmChat;
         this.message = message;
+        this.mainThread = mainThread;
     }
 
     @Route("create <firm>")
@@ -468,14 +472,15 @@ public class FirmCommands implements CommandHandler {
         }
         // Don't reassign to a player Bukkit has never seen — an offline UUID is fabricated
         // for an unknown/typo'd name, which would orphan the firm to a ghost owner.
-        if (!target.hasPlayedBefore() && !target.isOnline()) {
+        if (!mainThread.read(() -> target.hasPlayedBefore() || target.isOnline())) {
             message.send(sender, "business.general.player-not-found");
             return;
         }
         firms.adminSetProprietor(firm, target.getUniqueId(), sender.getUniqueId());
-        String targetName = target.getName() != null
-                ? target.getName()
-                : target.getUniqueId().toString();
+        String targetName = mainThread.read(() -> {
+            String name = target.getName();
+            return name != null ? name : target.getUniqueId().toString();
+        });
         message.send(
                 sender, "business.firm.admin.proprietor.success", "firm", f.getDisplayName(), "player", targetName);
     }

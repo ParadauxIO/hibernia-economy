@@ -174,6 +174,24 @@ public abstract class EmbeddedDbIT {
                 });
     }
 
+    /** Seeds the shared HTTP token fixtures, including the mandatory government account scope. */
+    protected void insertTestTokenKey(
+            int keyId, String keyType, UUID owner, String jwtId, boolean revoked, java.time.LocalDateTime expiresAt) {
+        insertApiKey(keyId, keyType, owner, jwtId, revoked, expiresAt);
+        if ("GOVERNMENT".equals(keyType)) {
+            exec(
+                    "INSERT IGNORE INTO accounts (account_id, account_type, owner_uuid_bin, display_name) VALUES (?, 'GOVERNMENT', ?, 'Test government')",
+                    ps -> {
+                        ps.setLong(1, TestTokens.GOVERNMENT_ACCOUNT);
+                        ps.setBytes(2, EmbeddedMariaDb.uuidBytes(owner));
+                    });
+            exec("UPDATE api_keys SET account_id = ? WHERE key_id = ?", ps -> {
+                ps.setLong(1, TestTokens.GOVERNMENT_ACCOUNT);
+                ps.setInt(2, keyId);
+            });
+        }
+    }
+
     protected String jwtIdOf(int keyId) {
         try (Connection c = dataSource.getConnection();
                 PreparedStatement ps = c.prepareStatement("SELECT jwt_id FROM api_keys WHERE key_id = ?")) {

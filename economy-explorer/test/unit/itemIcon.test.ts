@@ -24,4 +24,9 @@ describe('itemIconUrl', () => {
     vi.stubEnv('ITEM_ICON_BASE', 'https://cdn.example/sprites'); // no trailing slash
     expect(itemIconUrl('STONE')).toBe('https://cdn.example/sprites/stone.png');
   });
+  it.each(['http://cdn.example/icons', '//cdn.example/icons', 'https://user:pass@cdn.example/icons', 'javascript:alert(1)', 'https://cdn.example/icons?x=1', 'https://cdn.example/icons#x'])('falls back for an unsafe mirror (%s)', (base) => {
+    vi.stubEnv('ITEM_ICON_BASE', base);
+    expect(itemIconUrl('STONE')).toBe('https://static.minecraftitemids.com/64/stone.png');
+  });
+
 });

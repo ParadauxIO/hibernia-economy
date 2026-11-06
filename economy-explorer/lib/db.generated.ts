@@ -164,6 +164,46 @@ export interface ChestshopShop {
   worldUuid: Generated<Buffer | null>;
 }
 
+export interface DirectDebitCollection {
+  amount: Decimal;
+  attempts: Generated<number>;
+  collectionId: Generated<number>;
+  createdAt: Date;
+  failureReason: Generated<string | null>;
+  initiatorUuidBin: Buffer;
+  mandateId: number;
+  memo: Generated<string | null>;
+  periodStart: Date;
+  recurringPeriod: Generated<Date | null>;
+  status: Generated<"COLLECTED" | "FAILED" | "RESERVED">;
+  txnId: Generated<number | null>;
+  updatedAt: Date;
+}
+
+export interface DirectDebitMandate {
+  acceptedAt: Generated<Date | null>;
+  amount: Generated<Decimal | null>;
+  cap: Decimal;
+  endedAt: Generated<Date | null>;
+  endedByUuidBin: Generated<Buffer | null>;
+  endReason: Generated<string | null>;
+  expiresAt: Date;
+  firmId: number;
+  kind: "ON_DEMAND" | "RECURRING";
+  mandateId: Generated<number>;
+  missedPeriods: Generated<number>;
+  nextDueAt: Generated<Date | null>;
+  payeeAccountId: number;
+  payerAccountId: number;
+  payerUuidBin: Buffer;
+  pendingOnly: Generated<number | null>;
+  period: "DAILY" | "MONTHLY" | "WEEKLY";
+  proposedAt: Date;
+  proposedByUuidBin: Buffer;
+  reference: string;
+  status: Generated<"ACTIVE" | "CANCELLED" | "EXPIRED" | "PENDING" | "REJECTED" | "SUSPENDED">;
+}
+
 export interface EconomyConfig {
   configKey: string;
   configValue: string;
@@ -316,6 +356,16 @@ export interface ExplorerRollupEconomyDay {
   volume: Generated<Decimal>;
 }
 
+export interface ExplorerRollupGovRecipientDay {
+  accountId: number;
+  day: Date;
+  lastPaid: Date;
+  payments: number;
+  pluginKey: string;
+  recipientId: number;
+  total: Decimal;
+}
+
 export interface ExplorerRollupHourHeatmap {
   day: Date;
   hour: number;
@@ -364,6 +414,14 @@ export interface ExplorerRollupRun {
   startedAt: Generated<Date>;
 }
 
+export interface ExplorerRollupTaxBracketDay {
+  accountId: number;
+  bracketKey: string;
+  collected: Decimal;
+  day: Date;
+  taxKind: string;
+}
+
 export interface ExplorerRollupTypeDay {
   accountType: "BUSINESS" | "GOVERNMENT" | "PERSONAL" | "SYSTEM";
   day: Date;
@@ -390,6 +448,15 @@ export interface ExplorerWatchlist {
   accountId: number;
   createdAt: Generated<Date>;
   viewerUuidBin: Buffer;
+}
+
+export interface FeatureFlags {
+  description: string;
+  enabled: Generated<number>;
+  name: string;
+  revision: Generated<number>;
+  updatedAt: Generated<Date>;
+  updatedBy: Generated<string | null>;
 }
 
 export interface Firm {
@@ -610,6 +677,8 @@ export interface DB {
   chestshopPreviewPreference: ChestshopPreviewPreference;
   chestshopSale: ChestshopSale;
   chestshopShop: ChestshopShop;
+  directDebitCollection: DirectDebitCollection;
+  directDebitMandate: DirectDebitMandate;
   economyConfig: EconomyConfig;
   economyPlayers: EconomyPlayers;
   explorerAudit: ExplorerAudit;
@@ -628,14 +697,17 @@ export interface DB {
   explorerRollupAccountDay: ExplorerRollupAccountDay;
   explorerRollupCoverage: ExplorerRollupCoverage;
   explorerRollupEconomyDay: ExplorerRollupEconomyDay;
+  explorerRollupGovRecipientDay: ExplorerRollupGovRecipientDay;
   explorerRollupHourHeatmap: ExplorerRollupHourHeatmap;
   explorerRollupItemDay: ExplorerRollupItemDay;
   explorerRollupPairDay: ExplorerRollupPairDay;
   explorerRollupPairMonth: ExplorerRollupPairMonth;
   explorerRollupRun: ExplorerRollupRun;
+  explorerRollupTaxBracketDay: ExplorerRollupTaxBracketDay;
   explorerRollupTypeDay: ExplorerRollupTypeDay;
   explorerSnapshotWealthDay: ExplorerSnapshotWealthDay;
   explorerWatchlist: ExplorerWatchlist;
+  featureFlags: FeatureFlags;
   firm: Firm;
   firmAccounts: FirmAccounts;
   firmCreationLock: FirmCreationLock;

@@ -60,6 +60,85 @@ class FindPresentationTest extends ServerTest {
                 .isEqualTo(0.5f);
     }
 
+    @Test
+    void customLoreGetsBuyingPowerWithoutRewritingSettings() throws Exception {
+        Files.createDirectories(root.resolve("ChestShop"));
+        Path config = root.resolve("ChestShop/find.yml");
+        String yaml = "shop-template-both:\n  lore: ['Custom capacity %capacity%']\n";
+        Files.writeString(config, yaml);
+        var presentation = new FindPresentation(config.getParent().toFile());
+        var displays = mock(ShopDisplayService.class);
+        var shop = funded(new BigDecimal("31.99"), new BigDecimal("16.00"), false);
+        String lore = String.join(
+                "\n",
+                presentation.lore(shop, displays).stream()
+                        .map(PlainTextComponentSerializer.plainText()::serialize)
+                        .toList());
+        assertThat(lore).contains("Custom capacity 27", "Account balance: $31.99", "Affordable batches: 1 | Items: 16");
+        assertThat(PlainTextComponentSerializer.plainText().serialize(presentation.details(shop, displays)))
+                .contains(lore);
+        assertThat(Files.readString(config)).isEqualTo(yaml);
+    }
+
+    @Test
+    void explicitBuyingPowerPlaceholdersDoNotGetDuplicateLines() throws Exception {
+        Files.createDirectories(root.resolve("ChestShop"));
+        Files.writeString(
+                root.resolve("ChestShop/find.yml"),
+                "shop-template-both:\n  lore: ['Funds %account-balance%; batches %affordable-batches%; items %affordable-items%']\n");
+        var presentation = new FindPresentation(root.resolve("ChestShop").toFile());
+        assertThat(presentation.lore(
+                        funded(new BigDecimal("32"), new BigDecimal("16"), false), mock(ShopDisplayService.class)))
+                .singleElement()
+                .satisfies(line -> assertThat(
+                                PlainTextComponentSerializer.plainText().serialize(line))
+                        .isEqualTo("Funds $32.00; batches 2; items 32"));
+    }
+
+    @Test
+    void distinguishesUnlimitedFundsFreeOffersAndUnknownBalance() {
+        var presentation = new FindPresentation();
+        var displays = mock(ShopDisplayService.class);
+        assertThat(PlainTextComponentSerializer.plainText()
+                        .serialize(presentation.details(funded(null, BigDecimal.TEN, true), displays)))
+                .contains("Account balance: Unlimited", "Affordable batches: Unlimited");
+        assertThat(PlainTextComponentSerializer.plainText()
+                        .serialize(presentation.details(funded(BigDecimal.ZERO, BigDecimal.ZERO, false), displays)))
+                .contains("Account balance: $0.00", "Affordable batches: Unlimited");
+        assertThat(PlainTextComponentSerializer.plainText()
+                        .serialize(presentation.details(funded(null, BigDecimal.ZERO, false), displays)))
+                .contains("Account balance: Unknown", "Affordable batches: Unlimited");
+        assertThat(PlainTextComponentSerializer.plainText()
+                        .serialize(presentation.details(funded(null, BigDecimal.TEN, false), displays)))
+                .contains("Account balance: Unknown", "Affordable batches: Unknown");
+        assertThat(PlainTextComponentSerializer.plainText()
+                        .serialize(presentation.details(funded(BigDecimal.TEN, null, false), displays)))
+                .doesNotContain("Account balance", "Affordable batches");
+    }
+
+    private static FoundShop funded(BigDecimal balance, BigDecimal sellPrice, boolean unlimited) {
+        FoundShop s = shop();
+        return new FoundShop(
+                s.itemKey(),
+                s.itemName(),
+                s.material(),
+                s.itemCustom(),
+                s.itemData(),
+                s.ownerName(),
+                s.buyPrice(),
+                sellPrice,
+                s.batchQty(),
+                s.stock(),
+                s.capacity(),
+                s.world(),
+                s.x(),
+                s.y(),
+                s.z(),
+                s.distanceSquared(),
+                balance,
+                unlimited);
+    }
+
     static FoundShop shop() {
         return new FoundShop(
                 "STONE",
@@ -77,6 +156,8 @@ class FindPresentationTest extends ServerTest {
                 -3,
                 64,
                 8,
-                100);
+                100,
+                null,
+                false);
     }
 }

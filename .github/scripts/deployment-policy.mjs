@@ -21,4 +21,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const allowed = deploymentAllowed(event, process.env, process.env.ALLOW_PRODUCTION === 'true');
   fs.appendFileSync(process.env.GITHUB_OUTPUT, `allowed=${allowed}\n`);
   console.log(allowed ? 'Deployment authorized.' : 'Deployment skipped: trigger does not match deployment policy.');
+  // Failed-job reruns may reuse a successful selection job. Publication jobs
+  // must require authorization again with the current triggering actor.
+  if (!allowed && process.argv.includes('--require')) process.exitCode = 1;
 }

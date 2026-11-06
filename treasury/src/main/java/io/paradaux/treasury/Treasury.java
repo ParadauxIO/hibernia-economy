@@ -4,10 +4,12 @@ import com.google.inject.*;
 import com.google.inject.Module;
 import com.zaxxer.hikari.HikariDataSource;
 import io.paradaux.common.DataSourceProvider;
+import io.paradaux.common.flags.FeatureFlagRuntime;
 import io.paradaux.hibernia.framework.commander.CommandManager;
 import io.paradaux.hibernia.framework.events.ListenerManager;
 import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.treasury.adapters.VaultEconomyRegistrar;
+import io.paradaux.treasury.api.FeatureFlagApi;
 import io.paradaux.treasury.api.MarketApi;
 import io.paradaux.treasury.api.SalesQueryApi;
 import io.paradaux.treasury.api.ShopQueryApi;
@@ -56,6 +58,7 @@ public class Treasury extends JavaPlugin {
     private Injector injector;
 
     private DataSource dataSource;
+    private FeatureFlagRuntime featureFlags;
 
     @Override
     public void onEnable() {
@@ -180,6 +183,11 @@ public class Treasury extends JavaPlugin {
             log.warn("Could not publish config to economy_config (is economy-flyway V32 applied?): {}", e.toString());
         }
 
+        featureFlags = new FeatureFlagRuntime(dataSource, message -> log.warn(message));
+        Bukkit.getServicesManager()
+                .register(FeatureFlagApi.class, featureFlags::isEnabled, this, ServicePriority.Highest);
+        featureFlags.start();
+
         // 4) Register commands.
         injector.getInstance(CommandManager.class).registerAll();
 
@@ -202,6 +210,7 @@ public class Treasury extends JavaPlugin {
         scheduleSalaries();
 
         log.info("Treasury enabled.");
+        io.paradaux.treasury.deployment.TasklieDeploymentListener.register(this);
     }
 
     private void scheduleSalaries() {
@@ -220,6 +229,8 @@ public class Treasury extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        Bukkit.getServicesManager().unregisterAll(this);
+        if (featureFlags != null) featureFlags.close();
         if (dataSource instanceof HikariDataSource hds) {
             hds.close();
         }

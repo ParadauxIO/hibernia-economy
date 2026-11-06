@@ -1,22 +1,26 @@
 package io.paradaux.business.services.impl;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
 import io.paradaux.business.mappers.*;
 import io.paradaux.business.model.*;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmAccount;
+import io.paradaux.business.model.internal.FirmEmployee;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.treasury.api.TreasuryApi;
+import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 class FirmMembershipRecoveryTest {
     private final TreasuryApi treasury = mock(TreasuryApi.class);
@@ -35,6 +39,7 @@ class FirmMembershipRecoveryTest {
     private final AtomicBoolean failOnce = new AtomicBoolean();
     private int writes;
     private Firm firm;
+    private Account account;
 
     private FirmAccountServiceImpl service() {
         return new FirmAccountServiceImpl(treasury, links, firms, staff, roles, firmService);
@@ -42,15 +47,28 @@ class FirmMembershipRecoveryTest {
 
     @BeforeEach
     void setup() {
+        account = Account.builder().build();
+        account = account.withOwnerUuid(owner);
+        when(treasury.getAccountById(99)).thenAnswer(call -> account);
+        doAnswer(call -> {
+                    account = account.withOwnerUuid(call.getArgument(1));
+                    afterWrite("reassignOwner");
+                    return null;
+                })
+                .when(treasury)
+                .reassignOwner(eq(99), any());
         firm = new Firm();
         firm.setFirmId(1);
         firm.setProprietorUuid(owner.toString());
         when(firms.getFirmById(1)).thenReturn(firm);
         when(links.isFirmAccount(1, 99)).thenReturn(true);
         when(links.listActiveAccountLinks()).thenReturn(List.of(link(99)));
-        when(staff.listCurrentEmployeesByFirm(1)).thenReturn(List.of(employee(hired, "Admin"), employee(demoted, "Finance")));
-        when(roles.getFirmRolePermissions(1, "Admin")).thenReturn(List.of(new FirmRolePermission(1, "Admin", RolePermission.ADMIN)));
-        when(roles.getFirmRolePermissions(1, "Finance")).thenReturn(List.of(new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
+        when(staff.listCurrentEmployeesByFirm(1))
+                .thenReturn(List.of(employee(hired, "Admin"), employee(demoted, "Finance")));
+        when(roles.getFirmRolePermissions(1, "Admin"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Admin", RolePermission.ADMIN)));
+        when(roles.getFirmRolePermissions(1, "Finance"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Finance", RolePermission.FINANCIAL)));
         members.addAll(Set.of(owner, fired, demoted));
         authorizers.addAll(members);
         when(treasury.getMembers(99)).thenAnswer(call -> rows(members));
@@ -58,29 +76,37 @@ class FirmMembershipRecoveryTest {
         // Model Treasury's committed state, including removeMember's authorizer
         // cascade. Each injected error occurs AFTER a write, as with a lost reply.
         doAnswer(call -> {
-            members.add(call.getArgument(1));
-            afterWrite("addMember");
-            return null;
-        }).when(treasury).addMember(eq(99), any(), any());
+                    members.add(call.getArgument(1));
+                    afterWrite("addMember");
+                    return null;
+                })
+                .when(treasury)
+                .addMember(eq(99), any(), any());
         doAnswer(call -> {
-            UUID id = call.getArgument(1);
-            members.remove(id);
-            authorizers.remove(id);
-            afterWrite("removeMember");
-            return null;
-        }).when(treasury).removeMember(eq(99), any());
+                    UUID id = call.getArgument(1);
+                    members.remove(id);
+                    authorizers.remove(id);
+                    afterWrite("removeMember");
+                    return null;
+                })
+                .when(treasury)
+                .removeMember(eq(99), any());
         doAnswer(call -> {
-            UUID id = call.getArgument(1);
-            assertThat(members).contains(id);
-            authorizers.add(id);
-            afterWrite("addAuthorizer");
-            return null;
-        }).when(treasury).addAuthorizer(eq(99), any(), any());
+                    UUID id = call.getArgument(1);
+                    assertThat(members).contains(id);
+                    authorizers.add(id);
+                    afterWrite("addAuthorizer");
+                    return null;
+                })
+                .when(treasury)
+                .addAuthorizer(eq(99), any(), any());
         doAnswer(call -> {
-            authorizers.remove(call.getArgument(1));
-            afterWrite("removeAuthorizer");
-            return null;
-        }).when(treasury).removeAuthorizer(eq(99), any());
+                    authorizers.remove(call.getArgument(1));
+                    afterWrite("removeAuthorizer");
+                    return null;
+                })
+                .when(treasury)
+                .removeAuthorizer(eq(99), any());
     }
 
     private void afterWrite(String operation) {
@@ -122,11 +148,11 @@ class FirmMembershipRecoveryTest {
     void persistentFailureDoesNotStarveOtherAccountsAndIsRetriedNextPass() {
         when(links.listActiveAccountLinks()).thenReturn(List.of(link(98), link(99)));
         when(links.isFirmAccount(1, 98)).thenReturn(true);
-        when(treasury.getMembers(98)).thenThrow(new IllegalStateException("offline"));
+        when(treasury.getAccountById(98)).thenThrow(new IllegalStateException("offline"));
         FirmAccountServiceImpl svc = service();
         svc.reconcileLinkedAccounts();
         svc.reconcileLinkedAccounts();
-        verify(treasury, times(2)).getMembers(98);
+        verify(treasury, times(2)).getAccountById(98);
         assertThat(members).containsExactlyInAnyOrder(owner, hired, demoted);
         assertThat(authorizers).containsExactlyInAnyOrder(owner, hired);
     }
@@ -152,8 +178,42 @@ class FirmMembershipRecoveryTest {
         verifyNoInteractions(treasury);
     }
 
+    @Test
+    void restartRepairsOwnerLeftBehindByPartialTransfer() {
+        account = account.withOwnerUuid(fired);
+        service().reconcileLinkedAccounts();
+        assertThat(account.getOwnerUuid()).isEqualTo(owner);
+        assertThat(members).containsExactlyInAnyOrder(owner, hired, demoted);
+        assertThat(authorizers).containsExactlyInAnyOrder(owner, hired);
+        int completedWrites = writes;
+        service().reconcileLinkedAccounts();
+        assertThat(writes).isEqualTo(completedWrites);
+    }
+
+    @Test
+    void ownerWriteWithLostReplyIsRecoveredOnNextPass() {
+        account = account.withOwnerUuid(fired);
+        failedOperation = "reassignOwner";
+        failOnce.set(true);
+        service().reconcileLinkedAccounts();
+        service().reconcileLinkedAccounts();
+        assertThat(account.getOwnerUuid()).isEqualTo(owner);
+        assertThat(authorizers).containsExactlyInAnyOrder(owner, hired);
+    }
+
+    @Test
+    void delayedTransferRetryUsesLatestProprietor() {
+        account = account.withOwnerUuid(fired);
+        when(links.listAccountsByFirm(1)).thenReturn(List.of(link(99)));
+        service().reassignAccountsToNewProprietor(1, fired);
+        assertThat(account.getOwnerUuid()).isEqualTo(owner);
+        assertThat(authorizers).containsExactlyInAnyOrder(owner, hired);
+    }
+
     private List<AccountMember> rows(Set<UUID> ids) {
-        return ids.stream().map(id -> new AccountMember(99, id, owner, Instant.EPOCH)).toList();
+        return ids.stream()
+                .map(id -> new AccountMember(99, id, owner, Instant.EPOCH))
+                .toList();
     }
 
     private FirmAccount link(int accountId) {

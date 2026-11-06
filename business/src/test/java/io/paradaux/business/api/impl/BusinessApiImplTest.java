@@ -9,12 +9,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmEmployee;
-import io.paradaux.business.model.FirmPlayer;
-import io.paradaux.business.model.FirmRole;
-import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
+import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.model.internal.FirmEmployee;
+import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.model.internal.FirmRole;
+import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmRequestService;
@@ -22,9 +22,12 @@ import io.paradaux.business.services.FirmRoleService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.FirmTransactionService;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -87,7 +90,20 @@ class BusinessApiImplTest {
     void firms_getFirm_delegates() {
         Firm f = new Firm();
         when(firmService.getAnyFirmByNameOrId("Acme")).thenReturn(f);
-        assertThat(api.firms().getFirm("Acme")).isSameAs(f);
+        assertThat(api.firms().getFirm("Acme"))
+                .isEqualTo(new io.paradaux.business.model.Firm(null, null, null, null, null, null, null, null, null));
+    }
+
+    @Test
+    void firms_getFirmByName_doesNotInterpretNumericNamesAsIds() {
+        Firm named = new Firm();
+        named.setFirmId(99);
+        when(firmService.getAnyFirmByName("42")).thenReturn(named);
+        assertThat(api.firms().getFirmByName("42"))
+                .extracting(io.paradaux.business.model.Firm::getFirmId)
+                .isEqualTo(99);
+        verify(firmService, never()).getAnyFirmByNameOrId(any());
+        verify(firmService, never()).getAnyFirmById(anyInt());
     }
 
     @Test
@@ -118,7 +134,8 @@ class BusinessApiImplTest {
     void firms_createFirm_delegates() {
         Firm f = new Firm();
         when(firmService.createFirm("Acme", actor)).thenReturn(f);
-        assertThat(api.firms().createFirm("Acme", actor)).isSameAs(f);
+        assertThat(api.firms().createFirm("Acme", actor))
+                .isEqualTo(new io.paradaux.business.model.Firm(null, null, null, null, null, null, null, null, null));
     }
 
     @Test
@@ -191,7 +208,8 @@ class BusinessApiImplTest {
         Firm f = new Firm();
         when(accountService.getFirmIdByAccountId(99)).thenReturn(7);
         when(firmService.getAnyFirmById(7)).thenReturn(f);
-        assertThat(api.firms().getFirmByAccountId(99)).isSameAs(f);
+        assertThat(api.firms().getFirmByAccountId(99))
+                .isEqualTo(new io.paradaux.business.model.Firm(null, null, null, null, null, null, null, null, null));
     }
 
     @Test
@@ -215,7 +233,10 @@ class BusinessApiImplTest {
         assertThat(api.firms().getAccountIds(7)).containsExactlyInAnyOrder(41, 42);
         for (int accountId : api.firms().getAccountIds(7)) {
             assertThat(api.firms().getFirmIdByAccountId(accountId)).isEqualTo(7);
-            assertThat(api.firms().getFirmByAccountId(accountId)).isSameAs(firm);
+            assertThat(api.firms().getFirmByAccountId(accountId))
+                    .extracting(
+                            io.paradaux.business.model.Firm::getFirmId, io.paradaux.business.model.Firm::getArchived)
+                    .containsExactly(7, true);
         }
     }
 
@@ -397,5 +418,143 @@ class BusinessApiImplTest {
     void players_searchByPrefix_delegates() {
         when(playerService.searchByPrefix("a", 5)).thenReturn(List.of(new FirmPlayer()));
         assertThat(api.players().searchByPrefix("a", 5)).hasSize(1);
+    }
+
+    @Test
+    void everyFirmReadReturnsAnIndependentSnapshotWithTypedOwner() {
+        var created = LocalDateTime.of(2026, 1, 2, 3, 4);
+        var updated = created.plusDays(1);
+        Firm row = new Firm();
+        row.setFirmId(7);
+        row.setDisplayName("Acme");
+        row.setProprietorUuid(actor.toString());
+        row.setDiscordUrl("https://discord.gg/acme");
+        row.setHqRegion("hq-7");
+        row.setDefaultAccountId(41);
+        row.setArchived(false);
+        row.setCreatedAt(created);
+        row.setUpdatedAt(updated);
+        var rows = new ArrayList<>(List.of(row));
+        when(firmService.getAnyFirmByNameOrId("Acme")).thenReturn(row);
+        when(firmService.getAnyFirmByName("Acme")).thenReturn(row);
+        when(firmService.getAnyFirmById(7)).thenReturn(row);
+        when(accountService.getFirmIdByAccountId(41)).thenReturn(7);
+        when(firmService.createFirm("Acme", actor)).thenReturn(row);
+        when(firmService.listAllFirms(1, 10)).thenReturn(rows);
+        when(firmService.listOwnedOrMemberFirms(actor)).thenReturn(rows);
+        var listed = api.firms().listFirms(1, 10);
+        var owned = api.firms().getPlayerFirms(actor);
+        var snapshots = List.of(
+                api.firms().getFirm("Acme"),
+                api.firms().getFirmByName("Acme"),
+                api.firms().getFirmById(7),
+                api.firms().getFirmByAccountId(41),
+                api.firms().createFirm("Acme", actor),
+                listed.getFirst(),
+                owned.getFirst());
+        row.setArchived(true);
+        row.setProprietorUuid(target.toString());
+        row.setDisplayName("Renamed");
+        rows.clear();
+        var expected = new io.paradaux.business.model.Firm(
+                7, "Acme", actor, "https://discord.gg/acme", "hq-7", 41, false, created, updated);
+        assertThat(snapshots).allSatisfy(snapshot -> assertThat(snapshot).isEqualTo(expected));
+        assertThat(listed).containsExactly(expected);
+        assertThat(owned).containsExactly(expected);
+        assertThatThrownBy(listed::clear).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(owned::clear).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(api.firms().getFirmById(7).getDisplayName()).isEqualTo("Renamed");
+        assertThat(api.firms().getFirm("missing")).isNull();
+        assertThat(api.firms().getFirmByName("missing")).isNull();
+        assertThat(api.firms().getFirmById(999)).isNull();
+    }
+
+    @Test
+    void employeeSnapshotCopiesAuditIdsAndNullableHistory() {
+        var joined = LocalDateTime.of(2026, 1, 2, 3, 4);
+        var left = joined.plusDays(1);
+        UUID remover = UUID.randomUUID();
+        FirmEmployee row = new FirmEmployee(
+                7, target.toString(), "Lead", joined, left, actor.toString(), remover.toString(), false);
+        var rows = new ArrayList<>(List.of(row));
+        when(staffService.getCurrentEmployees(7)).thenReturn(rows);
+        var snapshots = api.staff().getEmployees(7);
+        row.setRoleName("Other");
+        row.setPlayerUuid(actor.toString());
+        rows.clear();
+        assertThat(snapshots)
+                .containsExactly(new io.paradaux.business.model.FirmEmployee(
+                        7, target, "Lead", joined, left, actor, remover, false));
+        assertThatThrownBy(snapshots::clear).isInstanceOf(UnsupportedOperationException.class);
+        when(staffService.getCurrentEmployees(7))
+                .thenReturn(
+                        List.of(new FirmEmployee(7, target.toString(), "Employee", joined, null, null, null, true)));
+        assertThat(api.staff().getEmployees(7))
+                .containsExactly(new io.paradaux.business.model.FirmEmployee(
+                        7, target, "Employee", joined, null, null, null, true));
+    }
+
+    @Test
+    void rolesAndPermissionsAreDetachedFromServiceState() {
+        FirmRole role = new FirmRole(7, "Lead", 2);
+        FirmRolePermission permission = new FirmRolePermission(7, "Lead", RolePermission.FINANCIAL);
+        var roles = new ArrayList<>(List.of(role));
+        var permissions = new ArrayList<>(List.of(permission));
+        when(roleService.getFirmRoles(7)).thenReturn(roles);
+        when(roleService.getFirmRolePermissions(7, "Lead")).thenReturn(permissions);
+        var roleSnapshots = api.roles().getRoles(7);
+        var permissionSnapshots = api.roles().getRolePermissions(7, "Lead");
+        role.setRoleRankOrder(9);
+        permission.setPermission(RolePermission.ADMIN);
+        roles.clear();
+        permissions.clear();
+        assertThat(roleSnapshots).containsExactly(new io.paradaux.business.model.FirmRole(7, "Lead", 2));
+        assertThat(permissionSnapshots)
+                .containsExactly(
+                        new io.paradaux.business.model.FirmRolePermission(7, "Lead", RolePermission.FINANCIAL));
+        assertThatThrownBy(roleSnapshots::clear).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(permissionSnapshots::clear).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void playerReadsCopyDirectoryStateAndPreserveMissingOrMalformedUuidContract() {
+        var firstSeen = LocalDateTime.of(2026, 1, 2, 3, 4);
+        var lastSeen = firstSeen.plusDays(1);
+        FirmPlayer row = new FirmPlayer(target.toString(), "Alice", "alice", firstSeen, lastSeen);
+        var rows = new ArrayList<>(List.of(row));
+        when(playerService.findByUuid(target)).thenReturn(Optional.of(row));
+        when(playerService.findByName("Alice")).thenReturn(Optional.of(row));
+        when(playerService.searchByPrefix("a", 5)).thenReturn(rows);
+        var byId = api.players().findByUuid(target).orElseThrow();
+        var byName = api.players().findByName("Alice").orElseThrow();
+        var searched = api.players().searchByPrefix("a", 5);
+        row.setCurrentName("Renamed");
+        row.setPlayerUuid("broken");
+        rows.clear();
+        var expected = new io.paradaux.business.model.FirmPlayer(target, "Alice", "alice", firstSeen, lastSeen);
+        assertThat(byId).isEqualTo(expected);
+        assertThat(byName).isEqualTo(expected);
+        assertThat(searched).containsExactly(expected);
+        assertThatThrownBy(searched::clear).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(api.players().findByUuid(target).orElseThrow().getPlayerUuid())
+                .isNull();
+        assertThat(api.players().findByName("missing")).isEmpty();
+    }
+
+    @Test
+    void accountAndOnlinePlayerListsCannotMutateServiceCollections() {
+        var ids = new ArrayList<>(List.of(41, 42));
+        Player player = org.mockito.Mockito.mock(Player.class);
+        var online = new ArrayList<>(List.of(player));
+        when(accountService.listAccountIds(7)).thenReturn(ids);
+        when(staffService.getOnlineEmployees(7)).thenReturn(online);
+        var accountSnapshot = api.firms().getAccountIds(7);
+        var onlineSnapshot = api.staff().getOnlineEmployees(7);
+        ids.clear();
+        online.clear();
+        assertThat(accountSnapshot).containsExactly(41, 42);
+        assertThat(onlineSnapshot).containsExactly(player);
+        assertThatThrownBy(accountSnapshot::clear).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(onlineSnapshot::clear).isInstanceOf(UnsupportedOperationException.class);
     }
 }

@@ -1,8 +1,8 @@
 package io.paradaux.chestshop.model;
 
 import io.paradaux.treasury.api.market.ShopResult;
-
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Objects;
 
 /**
@@ -27,13 +27,29 @@ public record FoundShop(
         Integer stock,
         Integer capacity,
         String world,
-        int x, int y, int z,
-        long distanceSquared
-) {
+        int x,
+        int y,
+        int z,
+        long distanceSquared,
+        BigDecimal accountBalance,
+        boolean unlimitedFunds) {
 
     /** Build from a registry row, computing distance from the querying player's position. */
-    public static FoundShop from(ShopResult r, String queryWorld, int qx, int qy, int qz,
-                                 boolean hasPosition) {
+    public static FoundShop from(ShopResult r, String queryWorld, int qx, int qy, int qz, boolean hasPosition) {
+        return from(r, queryWorld, qx, qy, qz, hasPosition, r.sellPrice(), null, false);
+    }
+
+    /** Build a search result with only the currently affordable SELL offer. */
+    public static FoundShop from(
+            ShopResult r,
+            String queryWorld,
+            int qx,
+            int qy,
+            int qz,
+            boolean hasPosition,
+            BigDecimal sellPrice,
+            BigDecimal accountBalance,
+            boolean unlimitedFunds) {
         long distSq;
         if (!hasPosition || queryWorld == null || !queryWorld.equals(r.world())) {
             distSq = Long.MAX_VALUE; // unknown / cross-world → "∞"
@@ -44,10 +60,37 @@ public record FoundShop(
             distSq = dx * dx + dy * dy + dz * dz;
         }
         return new FoundShop(
-                r.itemKey(), r.itemName(), r.material(), r.itemCustom(), r.itemData(),
-                r.ownerName(), r.buyPrice(), r.sellPrice(), Math.max(1, r.batchQty()),
-                r.currentStock(), r.estimatedCapacity(),
-                r.world(), r.signX(), r.signY(), r.signZ(), distSq);
+                r.itemKey(),
+                r.itemName(),
+                r.material(),
+                r.itemCustom(),
+                r.itemData(),
+                r.ownerName(),
+                r.buyPrice(),
+                sellPrice,
+                Math.max(1, r.batchQty()),
+                r.currentStock(),
+                r.estimatedCapacity(),
+                r.world(),
+                r.signX(),
+                r.signY(),
+                r.signZ(),
+                distSq,
+                accountBalance,
+                unlimitedFunds);
+    }
+
+    /** Full advertised batches covered by this search's balance snapshot; null if unknown/unlimited. */
+    public BigInteger affordableBatches() {
+        if (sellPrice == null || sellPrice.signum() == 0 || unlimitedFunds || accountBalance == null) return null;
+        return accountBalance
+                .max(BigDecimal.ZERO)
+                .divideToIntegralValue(sellPrice)
+                .toBigIntegerExact();
+    }
+
+    public boolean unlimitedAffordableBatches() {
+        return sellPrice != null && (sellPrice.signum() == 0 || unlimitedFunds);
     }
 
     public ShopType shopType() {

@@ -77,29 +77,38 @@ public class BusinessApiImpl implements BusinessApi {
         @Override
         public Firm getFirm(String nameOrId) {
             // Reads include archived firms so API consumers can still display defunct firms.
-            return service.getAnyFirmByNameOrId(nameOrId);
+            return ApiSnapshots.firm(service.getAnyFirmByNameOrId(nameOrId));
+        }
+
+        @Override
+        public Firm getFirmByName(String name) {
+            return ApiSnapshots.firm(service.getAnyFirmByName(name));
         }
 
         @Override
         public Firm getFirmById(int firmId) {
             // Typed path: resolve straight by id (archived-inclusive, matching getFirm)
             // instead of the int→String→int round-trip the default would do (ADT-108/96).
-            return service.getAnyFirmById(firmId);
+            return ApiSnapshots.firm(service.getAnyFirmById(firmId));
         }
 
         @Override
         public List<Firm> listFirms(int page, int pageSize) {
-            return service.listAllFirms(page, pageSize);
+            return service.listAllFirms(page, pageSize).stream()
+                    .map(ApiSnapshots::firm)
+                    .toList();
         }
 
         @Override
         public List<Firm> getPlayerFirms(UUID playerId) {
-            return service.listOwnedOrMemberFirms(playerId);
+            return service.listOwnedOrMemberFirms(playerId).stream()
+                    .map(ApiSnapshots::firm)
+                    .toList();
         }
 
         @Override
         public Firm createFirm(String name, UUID proprietorId) {
-            return service.createFirm(name, proprietorId);
+            return ApiSnapshots.firm(service.createFirm(name, proprietorId));
         }
 
         @Override
@@ -143,12 +152,12 @@ public class BusinessApiImpl implements BusinessApi {
         public Firm getFirmByAccountId(int accountId) {
             Integer firmId = accounts.getFirmIdByAccountId(accountId);
             if (firmId == null) return null;
-            return service.getAnyFirmById(firmId);
+            return ApiSnapshots.firm(service.getAnyFirmById(firmId));
         }
 
         @Override
         public List<Integer> getAccountIds(int firmId) {
-            return accounts.listAccountIds(firmId);
+            return List.copyOf(accounts.listAccountIds(firmId));
         }
 
         @Override
@@ -166,12 +175,14 @@ public class BusinessApiImpl implements BusinessApi {
 
         @Override
         public List<FirmEmployee> getEmployees(int firmId) {
-            return service.getCurrentEmployees(firmId);
+            return service.getCurrentEmployees(firmId).stream()
+                    .map(ApiSnapshots::employee)
+                    .toList();
         }
 
         @Override
         public List<Player> getOnlineEmployees(int firmId) {
-            return service.getOnlineEmployees(firmId);
+            return List.copyOf(service.getOnlineEmployees(firmId));
         }
 
         @Override
@@ -226,12 +237,14 @@ public class BusinessApiImpl implements BusinessApi {
 
         @Override
         public List<FirmRole> getRoles(int firmId) {
-            return service.getFirmRoles(firmId);
+            return service.getFirmRoles(firmId).stream().map(ApiSnapshots::role).toList();
         }
 
         @Override
         public List<FirmRolePermission> getRolePermissions(int firmId, String roleName) {
-            return service.getFirmRolePermissions(firmId, roleName);
+            return service.getFirmRolePermissions(firmId, roleName).stream()
+                    .map(ApiSnapshots::permission)
+                    .toList();
         }
 
         @Override
@@ -282,17 +295,19 @@ public class BusinessApiImpl implements BusinessApi {
 
         @Override
         public Optional<FirmPlayer> findByUuid(UUID uuid) {
-            return service.findByUuid(uuid);
+            return service.findByUuid(uuid).map(ApiSnapshots::player);
         }
 
         @Override
         public Optional<FirmPlayer> findByName(String name) {
-            return service.findByName(name);
+            return service.findByName(name).map(ApiSnapshots::player);
         }
 
         @Override
         public List<FirmPlayer> searchByPrefix(String prefix, int limit) {
-            return service.searchByPrefix(prefix, limit);
+            return service.searchByPrefix(prefix, limit).stream()
+                    .map(ApiSnapshots::player)
+                    .toList();
         }
     }
 }
