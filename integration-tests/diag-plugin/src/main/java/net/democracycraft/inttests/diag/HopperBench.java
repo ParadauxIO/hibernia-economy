@@ -408,7 +408,10 @@ final class HopperBench implements Listener {
             this.variant = variant;
             this.out = out;
             this.ticks = seconds * 20L;
-            this.queue = Queue.attach(drainMs);
+            // Only this window's drains: the timed task outlives the sample, and analysis runs async.
+            this.queue = Queue.attach(ms -> {
+                if (sample == this) drainMs.add(ms);
+            });
             jfrFile = out.resolveSibling(out.getFileName() + ".jfr");
             jfr.enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(2));
             jfr.enable("jdk.ObjectAllocationSample").with("throttle", "300/s");
@@ -522,7 +525,7 @@ final class HopperBench implements Listener {
     private record Queue(Object service, Field pending, Field reconciliation, Field recovery,
             Field deferredPositions, Field deferredChunks) {
 
-        static Queue attach(DoubleList drainMs) throws ReflectiveOperationException {
+        static Queue attach(java.util.function.DoubleConsumer drainMs) throws ReflectiveOperationException {
             Plugin chestShop = Bukkit.getPluginManager().getPlugin("ChestShop");
             if (chestShop == null) return null;
             Field injectorField = chestShop.getClass().getDeclaredField("injector");
@@ -543,7 +546,7 @@ final class HopperBench implements Listener {
                 } catch (ReflectiveOperationException e) {
                     throw new IllegalStateException(e);
                 }
-                drainMs.add((System.nanoTime() - begin) / 1e6);
+                drainMs.accept((System.nanoTime() - begin) / 1e6);
             }, 1L, 1L);
             task.set(service, timed);
             return new Queue(service, field(type, "pending"), field(type, "reconciliation"), field(type, "recovery"),
