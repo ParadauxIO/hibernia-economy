@@ -111,10 +111,15 @@ async function AttentionPanel({ viewer }: { viewer: Viewer }) {
           <MetricCard
             label="Overdue deliveries"
             value={<Num value={webhooks.overdue} />}
-            info="Pending deliveries to live webhooks that are past their next attempt. A growing number means the dispatcher is behind or stuck."
-            meta={webhooks.oldestOverdueAt
-              ? <>Oldest due <When value={webhooks.oldestOverdueAt} /></>
-              : webhooks.dispatcherLag > 0 ? `${webhooks.dispatcherLag} transactions not yet scanned` : 'Dispatcher up to date'}
+            info="Pending deliveries to live webhooks that are past their next attempt. A growing number means the dispatcher is behind or stuck. Deliveries to webhooks created through a government API key are held, not overdue, while government API keys are switched off; they send when the flag is enabled."
+            meta={<>
+              {webhooks.oldestOverdueAt
+                ? <>Oldest due <When value={webhooks.oldestOverdueAt} /></>
+                : webhooks.dispatcherLag > 0 ? `${webhooks.dispatcherLag} transactions not yet scanned` : 'Dispatcher up to date'}
+              {webhooks.paused > 0 && <><br />{hasPermission(viewer, 'feature_flags.read')
+                ? <Review href="/admin/feature-flags">{webhooks.paused} government deliveries held</Review>
+                : `${webhooks.paused} government deliveries held`}</>}
+            </>}
           />
         )}
         {keys && (

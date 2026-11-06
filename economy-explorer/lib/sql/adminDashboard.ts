@@ -13,15 +13,21 @@ export interface WebhookHealth {
   live: number;
   failing: number;
   disabled: number;
-  /** PENDING deliveries past their next attempt, to live subscriptions only. */
+  /** PENDING deliveries past their next attempt that the dispatcher should be sending. */
   overdue: number;
   oldestOverdueAt: Date | null;
+  /**
+   * Deliveries to webhooks created through a government API key, held while
+   * treasury.government_api_keys is off. The dispatcher queues them on purpose
+   * and sends them on re-enable. Explorer-made government webhooks are not held (PAR-561).
+   */
+  paused: number;
   /** Ledger transactions the dispatcher has not scanned yet. */
   dispatcherLag: number;
   dispatcherAt: Date | null;
 }
 
-export async function getWebhookHealth(): Promise<WebhookHealth> {
+export async function getWebhookHealth(governmentEnabled: boolean): Promise<WebhookHealth> {
   const [subs, due, cursor] = await Promise.all([
     sql<{ live: string | number | null; failing: string | number | null; disabled: string | number | null }>`
       SELECT SUM(s.active = 1 AND s.disabled_at IS NULL) AS live,
@@ -29,11 +35,14 @@ export async function getWebhookHealth(): Promise<WebhookHealth> {
              SUM(s.disabled_at IS NOT NULL) AS disabled
       FROM webhook_subscription s
     `.execute(db),
-    sql<{ c: string | number; oldest: Date | null }>`
-      SELECT COUNT(*) AS c, MIN(d.next_attempt_at) AS oldest
+    // Mirrors the dispatcher's findDue gate (treasury-rest-api WebhookDeliveryMapper).
+    sql<{ paused: number; c: string | number; oldest: Date | null }>`
+      SELECT (s.key_type = 'GOVERNMENT' AND s.api_key_id IS NOT NULL AND ${governmentEnabled ? 0 : 1} = 1) AS paused,
+             COUNT(*) AS c, MIN(d.next_attempt_at) AS oldest
       FROM webhook_delivery d
       JOIN webhook_subscription s ON s.subscription_id = d.subscription_id
       WHERE d.status = 'PENDING' AND d.next_attempt_at <= NOW() AND s.active = 1 AND s.disabled_at IS NULL
+      GROUP BY paused
     `.execute(db),
     sql<{ lag: string | number | null; updated_at: Date | null }>`
       SELECT (SELECT MAX(lt.txn_id) FROM ledger_txns lt) - c.last_dispatched_txn_id AS lag, c.updated_at
@@ -41,12 +50,15 @@ export async function getWebhookHealth(): Promise<WebhookHealth> {
     `.execute(db),
   ]);
   const s = subs.rows[0];
+  const sending = due.rows.find((r) => Number(r.paused) === 0);
+  const held = due.rows.find((r) => Number(r.paused) === 1);
   return {
     live: Number(s?.live ?? 0),
     failing: Number(s?.failing ?? 0),
     disabled: Number(s?.disabled ?? 0),
-    overdue: Number(due.rows[0]?.c ?? 0),
-    oldestOverdueAt: due.rows[0]?.oldest ?? null,
+    overdue: Number(sending?.c ?? 0),
+    oldestOverdueAt: sending?.oldest ?? null,
+    paused: Number(held?.c ?? 0),
     dispatcherLag: Math.max(0, Number(cursor.rows[0]?.lag ?? 0)),
     dispatcherAt: cursor.rows[0]?.updated_at ?? null,
   };

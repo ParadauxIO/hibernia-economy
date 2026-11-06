@@ -47,8 +47,9 @@ compatible plugins and REST API deployments. Missing flags/providers fail closed
 While off, issuance, in-game reissue and government-token REST authentication are
 unavailable (`404 FEATURE_DISABLED` for valid government tokens). Issuer listing
 and in-game revocation remain available, as do admin revocation/invalidation.
-Government webhook deliveries stay pending without consuming attempts; they
-resume from the queue when enabled again. Other key types keep working. Changes
+Deliveries to webhooks created through a government API key stay pending
+without consuming attempts; they resume from the queue when enabled again.
+Government webhooks set up in the Explorer are not affected. Other key types keep working. Changes
 propagate through the shared flag cache; already-admitted work may finish.
 
 Issuance and in-game reissue also require `treasuryapi.government.issue`, default

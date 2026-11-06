@@ -11,7 +11,9 @@ in the sidebar according to individual permissions; a role name alone does not
 authorize an action. See [roles](/docs/admin/roles).
 
 The admin dashboard shows what needs attention: failing and auto-disabled
-webhooks, overdue webhook deliveries, API keys expiring within 14 days, and
+webhooks, overdue webhook deliveries (deliveries to webhooks created through a
+government API key, held while government API keys are switched off, are
+counted separately), API keys expiring within 14 days, and
 requests refused in the last 24 hours. Below that are the latest admin changes
 from the audit log, each plugin's latest ledger transaction, and the state of
 every feature flag. Each panel needs the permission of the tool it summarises,

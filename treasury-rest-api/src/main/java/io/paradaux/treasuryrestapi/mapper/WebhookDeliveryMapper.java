@@ -37,7 +37,7 @@ public interface WebhookDeliveryMapper {
             + "FROM ("
             + "SELECT d.delivery_id AS deliveryId, d.subscription_id AS subscriptionId, d.txn_id AS txnId, "
             + "       d.account_id AS accountId, d.attempts, d.next_attempt_at AS nextAttemptAt, "
-            + "       s.target_url AS targetUrl, s.secret, s.key_type AS keyType, "
+            + "       s.target_url AS targetUrl, s.secret, s.key_type AS keyType, s.api_key_id AS apiKeyId, "
             + "       lp.posting_id AS postingId, lp.amount, lp.memo, "
             + "       lt.message, lt.settlement_time AS settlementTime, "
             + "       lt.initiator_uuid_bin AS initiatorUuidBin, lt.plugin_system AS pluginSystem "
@@ -49,7 +49,9 @@ public interface WebhookDeliveryMapper {
             // index's next_attempt_at column satisfy the sort (due-order, oldest first);
             // delivery_id breaks ties deterministically.
             + "WHERE d.status = 'PENDING' AND d.next_attempt_at <= NOW() "
-            + "AND (#{governmentEnabled} = TRUE OR s.key_type <> 'GOVERNMENT') "
+            // Only webhooks created through a government API key wait for the release
+            // flag; Explorer-managed government webhooks (api_key_id NULL) predate it (PAR-561).
+            + "AND (#{governmentEnabled} = TRUE OR s.key_type <> 'GOVERNMENT' OR s.api_key_id IS NULL) "
             + "ORDER BY d.next_attempt_at ASC, d.delivery_id ASC LIMIT #{limit}"
             + ") h "
             + "LEFT JOIN ledger_postings cp ON cp.posting_id = ("
@@ -72,6 +74,20 @@ public interface WebhookDeliveryMapper {
             @Param("httpStatus") Integer httpStatus,
             @Param("error") String error,
             @Param("delaySeconds") long delaySeconds);
+
+    /** Records a rate-limited send without using an attempt; {@link #deferSubscription} schedules the retry. */
+    @Update("UPDATE webhook_delivery SET http_status = #{httpStatus}, last_error = #{error} WHERE delivery_id = #{id}")
+    int markRateLimited(@Param("id") long id, @Param("httpStatus") Integer httpStatus, @Param("error") String error);
+
+    /**
+     * Moves every pending delivery of a subscription to at least {@code delaySeconds}
+     * from now, so a rate-limited endpoint drops out of the due batch until its
+     * window resets and other subscriptions are served meanwhile.
+     */
+    @Update(
+            "UPDATE webhook_delivery SET next_attempt_at = GREATEST(next_attempt_at, NOW() + INTERVAL #{delaySeconds} SECOND) "
+                    + "WHERE subscription_id = #{subscriptionId} AND status = 'PENDING'")
+    int deferSubscription(@Param("subscriptionId") long subscriptionId, @Param("delaySeconds") long delaySeconds);
 
     @Update("UPDATE webhook_delivery SET status = 'FAILED', attempts = attempts + 1, "
             + "http_status = #{httpStatus}, last_error = #{error} WHERE delivery_id = #{id}")
