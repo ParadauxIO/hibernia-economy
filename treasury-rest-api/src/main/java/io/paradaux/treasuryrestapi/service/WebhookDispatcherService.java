@@ -91,6 +91,17 @@ public class WebhookDispatcherService {
     @Value("${treasury.webhook.retry-max-seconds:3600}")
     private long retryMaxSeconds;
 
+    /**
+     * Hosts whose per-channel limit isn't reported in rate-limit headers (Discord
+     * allows roughly 30 posts a minute per channel). Each webhook on them waits
+     * {@link #pacedIntervalSeconds} between posts so a busy feed never trips it (PAR-565).
+     */
+    @Value("${treasury.webhook.paced-hosts:discord.com,discordapp.com,canary.discord.com,ptb.discord.com}")
+    private List<String> pacedHosts;
+
+    @Value("${treasury.webhook.paced-interval-seconds:3}")
+    private long pacedIntervalSeconds;
+
     @Value("${treasury.webhook.delivery-concurrency:8}")
     private int deliveryConcurrency;
 
@@ -320,8 +331,10 @@ public class WebhookDispatcherService {
                 deliveryMapper.markDelivered(d.getDeliveryId(), sc);
                 subscriptionMapper.resetFailures(d.getSubscriptionId());
                 // Discord reports when the bucket is empty; pause before the next send
-                // rather than spend a request on a 429.
+                // rather than spend a request on a 429. Paced hosts also wait a fixed
+                // interval between posts, for the limit they don't report.
                 Duration wait = rateLimitWait(resp.headers(), false);
+                if (isPaced(uri)) wait = longer(wait, Duration.ofSeconds(pacedIntervalSeconds));
                 return wait == null ? null : clampWait(wait);
             }
             onFailure(d, sc, "HTTP " + sc);
@@ -351,6 +364,14 @@ public class WebhookDispatcherService {
         Duration wait = longer(seconds(headers, "Retry-After"), seconds(headers, "X-RateLimit-Reset-After"));
         if (wait == null) return limited ? Duration.ofSeconds(retryBaseSeconds) : null;
         return wait;
+    }
+
+    private boolean isPaced(URI uri) {
+        if (pacedIntervalSeconds <= 0 || uri.getHost() == null || pacedHosts == null) return false;
+        String host = uri.getHost().toLowerCase(java.util.Locale.ROOT);
+        return pacedHosts.stream()
+                .map(h -> h.trim().toLowerCase(java.util.Locale.ROOT))
+                .anyMatch(host::equals);
     }
 
     private Duration clampWait(Duration wait) {

@@ -57,6 +57,10 @@ treasury:
     max-attempts: ${WEBHOOK_MAX_ATTEMPTS:5}
     retry-base-seconds: ${WEBHOOK_RETRY_BASE_SECONDS:30}
     retry-max-seconds: ${WEBHOOK_RETRY_MAX_SECONDS:3600}
+    # Hosts with an unreported per-channel limit (Discord: ~30 posts/min); each
+    # webhook on them waits this long between posts. 0 disables pacing.
+    paced-hosts: ${WEBHOOK_PACED_HOSTS:discord.com,discordapp.com,canary.discord.com,ptb.discord.com}
+    paced-interval-seconds: ${WEBHOOK_PACED_INTERVAL_SECONDS:3}
     failure-threshold: ${WEBHOOK_FAILURE_THRESHOLD:15}
     max-per-key: ${WEBHOOK_MAX_PER_KEY:20}
     lock-ttl-ms: ${WEBHOOK_LOCK_TTL_MS:30000}
