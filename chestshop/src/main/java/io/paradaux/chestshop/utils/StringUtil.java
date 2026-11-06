@@ -1,6 +1,5 @@
 package io.paradaux.chestshop.utils;
 
-
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -12,9 +11,7 @@ import java.util.stream.Collectors;
  */
 public final class StringUtil {
 
-    private StringUtil() {
-    }
-
+    private StringUtil() {}
 
     /**
      * Capitalizes every first letter of a word
@@ -53,8 +50,13 @@ public final class StringUtil {
      * @return Stripped string
      */
     public static String stripColourCodes(String string) {
-        return string == null ? null : string.replaceAll("(?i)§[0-9A-FK-OR]", "");
+        // Sign validation calls this for every line it reads, including on hopper paths: skip
+        // the regex when there is no colour code, and never recompile it (PAR-523).
+        if (string == null || string.indexOf('§') < 0) return string;
+        return COLOUR_CODE.matcher(string).replaceAll("");
     }
+
+    private static final java.util.regex.Pattern COLOUR_CODE = java.util.regex.Pattern.compile("(?i)§[0-9A-FK-OR]");
 
     /**
      * Stips colour codes from an array of strings
@@ -71,8 +73,17 @@ public final class StringUtil {
         return output;
     }
 
-    private static final String characters = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~¦ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×áíóúñÑªº¿®¬½¼¡«»";
-    private static final int[] extraWidth = {4,2,5,6,6,6,6,3,5,5,5,6,2,6,2,6,6,6,6,6,6,6,6,6,6,6,2,2,5,6,5,6,7,6,6,6,6,6,6,6,6,4,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,4,6,4,6,6,3,6,6,6,6,6,5,6,6,2,6,5,3,6,6,6,6,6,6,6,4,6,6,6,6,6,6,5,2,5,7,6,6,6,6,6,6,6,6,6,6,6,6,4,6,3,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,4,6,6,3,6,6,6,6,6,6,6,7,6,6,6,2,6,6,8,9,9,6,6,6,8,8,6,8,8,8,8,8,6,6,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,6,9,9,9,5,9,9,8,7,7,8,7,8,8,8,7,8,8,7,9,9,6,7,7,7,7,7,9,6,7,8,7,6,6,9,7,6,7,1};
+    private static final String characters =
+            " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_'abcdefghijklmnopqrstuvwxyz{|}~¦ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×áíóúñÑªº¿®¬½¼¡«»";
+    private static final int[] extraWidth = {
+        4, 2, 5, 6, 6, 6, 6, 3, 5, 5, 5, 6, 2, 6, 2, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 2, 2, 5, 6, 5, 6, 7, 6, 6, 6, 6,
+        6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 4, 6, 6, 3, 6, 6, 6, 6, 6, 5, 6, 6, 2,
+        6, 5, 3, 6, 6, 6, 6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 5, 2, 5, 7, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 3, 6,
+        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 6, 3, 6, 6, 6, 6, 6, 6, 6, 7, 6, 6, 6, 2, 6, 6, 8, 9, 9, 6,
+        6, 6, 8, 8, 6, 8, 8, 8, 8, 8, 6, 6, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+        6, 9, 9, 9, 5, 9, 9, 8, 7, 7, 8, 7, 8, 8, 8, 7, 8, 8, 7, 9, 9, 6, 7, 7, 7, 7, 7, 9, 6, 7, 8, 7, 6, 6, 9, 7, 6,
+        7, 1
+    };
 
     /**
      * Get the width that a character is displayed with in the default resource pack.
@@ -112,8 +123,7 @@ public final class StringUtil {
      * @return The string with all whitespace from front and back stripped; returns null if input is null
      */
     public static String strip(String string) {
-        if (string == null)
-            return null;
+        if (string == null) return null;
         // The result stripped string
         StringBuilder stripped = new StringBuilder();
         // The current white space which only gets added once we find a non-whitespace character
@@ -147,7 +157,7 @@ public final class StringUtil {
     public static Map<String, String> map(String... values) {
         Map<String, String> map = new LinkedHashMap<>();
 
-        for (int i = 0; i + 1 < values.length; i+=2) {
+        for (int i = 0; i + 1 < values.length; i += 2) {
             map.put(values[i], values[i + 1]);
         }
 
