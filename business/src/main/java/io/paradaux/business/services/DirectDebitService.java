@@ -1,8 +1,8 @@
 package io.paradaux.business.services;
 
-import io.paradaux.business.model.directdebit.DirectDebitKind;
-import io.paradaux.business.model.directdebit.DirectDebitMandate;
-import io.paradaux.business.model.directdebit.DirectDebitPeriod;
+import io.paradaux.business.internal.model.directdebit.DirectDebitKind;
+import io.paradaux.business.internal.model.directdebit.DirectDebitMandate;
+import io.paradaux.business.internal.model.directdebit.DirectDebitPeriod;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;

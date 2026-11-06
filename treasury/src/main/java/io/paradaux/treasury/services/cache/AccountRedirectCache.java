@@ -2,9 +2,8 @@ package io.paradaux.treasury.services.cache;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.treasury.internal.model.economy.AccountRedirect;
 import io.paradaux.treasury.mappers.AccountRedirectMapper;
-import io.paradaux.treasury.model.economy.AccountRedirect;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;

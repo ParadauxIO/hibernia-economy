@@ -1,20 +1,19 @@
 package io.paradaux.treasury.services.impl;
 
-import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
-import io.paradaux.treasury.model.config.DiscordWebhookConfiguration;
-import io.paradaux.treasury.model.tax.TaxCycleReport;
-import io.paradaux.treasury.services.TaxWebhookService;
+import static io.paradaux.treasury.services.impl.DiscordWebhooks.escapeJson;
+import static io.paradaux.treasury.services.impl.DiscordWebhooks.field;
+import static io.paradaux.treasury.services.impl.DiscordWebhooks.formatMoney;
 
+import com.google.inject.Inject;
+import io.paradaux.treasury.internal.model.config.DiscordWebhookConfiguration;
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
+import io.paradaux.treasury.services.TaxWebhookService;
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
-
-import static io.paradaux.treasury.services.impl.DiscordWebhooks.escapeJson;
-import static io.paradaux.treasury.services.impl.DiscordWebhooks.field;
-import static io.paradaux.treasury.services.impl.DiscordWebhooks.formatMoney;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TaxWebhookServiceImpl implements TaxWebhookService {
@@ -25,7 +24,7 @@ public class TaxWebhookServiceImpl implements TaxWebhookService {
 
     // Discord embed colours
     private static final int COLOR_SCHEDULED = 0x57F287; // green
-    private static final int COLOR_MANUAL    = 0xE67E22; // orange
+    private static final int COLOR_MANUAL = 0xE67E22; // orange
 
     private final DiscordWebhookConfiguration config;
     private final HttpClient httpClient;
@@ -59,8 +58,8 @@ public class TaxWebhookServiceImpl implements TaxWebhookService {
                 ? "Manually triggered by **" + (report.triggeredBy() != null ? report.triggeredBy() : "unknown") + "**."
                 : "Scheduled collection completed.";
 
-        String footerText = "Period: " + DISPLAY_FMT.format(report.periodStart())
-                + " UTC | Treasury" + (report.manual() ? " | Manual Run" : "");
+        String footerText = "Period: " + DISPLAY_FMT.format(report.periodStart()) + " UTC | Treasury"
+                + (report.manual() ? " | Manual Run" : "");
 
         StringBuilder fields = new StringBuilder();
 

@@ -3,9 +3,9 @@ package io.paradaux.treasury.services;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.tax.TaxCycleReport;
 import io.paradaux.treasury.model.tax.TaxCycleType;
 import java.math.BigDecimal;
 import java.time.Instant;

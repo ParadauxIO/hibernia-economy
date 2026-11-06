@@ -1,7 +1,6 @@
 package io.paradaux.treasury.services;
 
-import io.paradaux.treasury.model.salary.SalaryPayment;
-
+import io.paradaux.treasury.internal.model.salary.SalaryPayment;
 import java.util.List;
 
 /**
@@ -15,13 +14,14 @@ public interface SalaryService {
 
     /** Carries the funding account across the main-thread/async boundary. */
     record Payroll(List<SalaryPayment> payments, String governmentAccount) {
-        public Payroll { payments = List.copyOf(payments); }
+        public Payroll {
+            payments = List.copyOf(payments);
+        }
     }
 
     Payroll preparePayroll();
 
     int payoutPayroll(Payroll payroll);
-
 
     /**
      * Resolve the salary owed to each currently-online player (highest-paying

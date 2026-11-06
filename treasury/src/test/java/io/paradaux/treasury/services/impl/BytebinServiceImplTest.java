@@ -1,21 +1,20 @@
 package io.paradaux.treasury.services.impl;
 
-import com.sun.net.httpserver.HttpServer;
-import io.paradaux.treasury.model.config.BytebinConfiguration;
-import io.paradaux.treasury.testsupport.TestConfigs;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sun.net.httpserver.HttpServer;
+import io.paradaux.treasury.internal.model.config.BytebinConfiguration;
+import io.paradaux.treasury.testsupport.TestConfigs;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class BytebinServiceImplTest {
 
@@ -46,8 +45,7 @@ class BytebinServiceImplTest {
         server.start();
 
         int port = server.getAddress().getPort();
-        config = TestConfigs.bytebin("http://127.0.0.1:" + port + "/post",
-                "https://example.test/");
+        config = TestConfigs.bytebin("http://127.0.0.1:" + port + "/post", "https://example.test/");
     }
 
     @AfterEach
@@ -83,8 +81,7 @@ class BytebinServiceImplTest {
         responseBody = "{\"unexpected\":\"field\"}";
         BytebinServiceImpl svc = new BytebinServiceImpl(config);
 
-        assertThatThrownBy(() -> svc.upload("x", "text/plain"))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> svc.upload("x", "text/plain")).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

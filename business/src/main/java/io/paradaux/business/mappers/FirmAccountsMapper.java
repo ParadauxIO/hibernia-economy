@@ -1,6 +1,6 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.internal.FirmAccount;
+import io.paradaux.business.internal.model.FirmAccount;
 import java.util.List;
 import org.apache.ibatis.annotations.*;
 

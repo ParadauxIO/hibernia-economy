@@ -1,27 +1,23 @@
 package io.paradaux.treasury.commands;
 
-import io.paradaux.treasury.utils.TreasuryConstants;
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-import java.util.UUID;
-
 /** Shared {@link CommandSender}/UUID idioms used across the treasury command layer. */
 final class CommandSenders {
 
-    private CommandSenders() {
-    }
+    private CommandSenders() {}
 
     /**
      * The initiator UUID to attribute an action to: the player's UUID, or the
      * virtual console initiator when run from console / RCON.
      */
     static UUID actorOf(CommandSender sender) {
-        return sender instanceof Player p
-                ? p.getUniqueId()
-                : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
+        return sender instanceof Player p ? p.getUniqueId() : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR;
     }
 
     /** A player's current name for the given UUID, falling back to the UUID string. */

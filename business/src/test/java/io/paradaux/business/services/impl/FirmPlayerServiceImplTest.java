@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.internal.model.FirmPlayer;
 import io.paradaux.business.mappers.FirmPlayerMapper;
-import io.paradaux.business.model.internal.FirmPlayer;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Bukkit;

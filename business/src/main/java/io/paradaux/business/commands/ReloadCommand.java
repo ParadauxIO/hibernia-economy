@@ -2,8 +2,8 @@ package io.paradaux.business.commands;
 
 import com.google.inject.Inject;
 import io.paradaux.business.Business;
-import io.paradaux.business.model.config.BalanceTaxConfiguration;
-import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.internal.model.config.BalanceTaxConfiguration;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
 import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
