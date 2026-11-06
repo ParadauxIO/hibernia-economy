@@ -2,7 +2,7 @@ package io.paradaux.business.commands.resolvers;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.internal.model.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.hibernia.framework.commander.spi.ParameterResolver;
 import java.util.List;

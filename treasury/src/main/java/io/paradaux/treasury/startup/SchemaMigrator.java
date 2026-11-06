@@ -1,6 +1,6 @@
 package io.paradaux.treasury.startup;
 
-import io.paradaux.treasury.model.config.DatabaseConfiguration;
+import io.paradaux.treasury.internal.model.config.DatabaseConfiguration;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 

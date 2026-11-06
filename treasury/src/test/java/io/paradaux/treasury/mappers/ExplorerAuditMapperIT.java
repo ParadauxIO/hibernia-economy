@@ -1,14 +1,13 @@
 package io.paradaux.treasury.mappers;
 
-import io.paradaux.treasury.model.economy.ExplorerAuditEntry;
-import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.treasury.internal.model.economy.ExplorerAuditEntry;
+import io.paradaux.treasury.testsupport.IntegrationTestBase;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Verifies the Treasury plugin can append in-game audit records to the shared

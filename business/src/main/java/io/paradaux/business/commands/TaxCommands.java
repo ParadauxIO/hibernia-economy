@@ -3,7 +3,7 @@ package io.paradaux.business.commands;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.commands.resolvers.FirmName;
-import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.services.FirmBalanceTaxService;
 import io.paradaux.business.services.FirmPropertyService;
 import io.paradaux.business.services.FirmService;

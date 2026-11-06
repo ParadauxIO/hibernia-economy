@@ -1,5 +1,7 @@
 package io.paradaux.treasury.services;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Provides;
@@ -7,18 +9,15 @@ import com.google.inject.Singleton;
 import com.google.inject.util.Modules;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.guice.DatabaseModule;
-import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
+import io.paradaux.treasury.internal.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
 import io.paradaux.treasury.testsupport.TestServicesModule;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Verifies {@code BalanceTaxService} falls back to the default tax-collection account
@@ -39,13 +38,12 @@ class BalanceTaxFallbackIT extends IntegrationTestBase {
         // Override the BalanceTaxConfiguration so it points at a non-existent account.
         this.injector = Guice.createInjector(
                 new DatabaseModule(this.dataSource),
-                Modules.override(new TestServicesModule()).with(new BrokenDestinationModule())
-        );
-        ledgerService     = injector.getInstance(LedgerService.class);
-        accountService    = injector.getInstance(AccountService.class);
+                Modules.override(new TestServicesModule()).with(new BrokenDestinationModule()));
+        ledgerService = injector.getInstance(LedgerService.class);
+        accountService = injector.getInstance(AccountService.class);
         balanceTaxService = injector.getInstance(BalanceTaxService.class);
-        directory         = injector.getInstance(PlayerDirectoryService.class);
-        taxApi            = injector.getInstance(TaxApi.class);
+        directory = injector.getInstance(PlayerDirectoryService.class);
+        taxApi = injector.getInstance(TaxApi.class);
         ledgerService.bootstrapGovernmentAccounts();
     }
 
@@ -73,11 +71,12 @@ class BalanceTaxFallbackIT extends IntegrationTestBase {
     }
 
     static class BrokenDestinationModule extends AbstractModule {
-        @Provides @Singleton
+        @Provides
+        @Singleton
         BalanceTaxConfiguration brokenBalanceConfig() {
             NavigableMap<BigDecimal, BigDecimal> brackets = new TreeMap<>();
-            brackets.put(new BigDecimal("0.00"),       BigDecimal.ZERO);
-            brackets.put(new BigDecimal("100000.00"),  new BigDecimal("0.01"));
+            brackets.put(new BigDecimal("0.00"), BigDecimal.ZERO);
+            brackets.put(new BigDecimal("100000.00"), new BigDecimal("0.01"));
             return BalanceTaxConfiguration.forTesting(true, "DoesNotExist", brackets);
         }
     }

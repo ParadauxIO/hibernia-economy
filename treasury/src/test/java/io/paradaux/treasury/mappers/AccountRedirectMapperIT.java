@@ -2,8 +2,8 @@ package io.paradaux.treasury.mappers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.treasury.internal.model.economy.AccountRedirect;
 import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.economy.AccountRedirect;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.services.cache.AccountRedirectCache;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;

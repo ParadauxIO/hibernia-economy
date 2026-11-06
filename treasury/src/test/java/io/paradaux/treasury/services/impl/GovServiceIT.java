@@ -3,8 +3,8 @@ package io.paradaux.treasury.services.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.paradaux.treasury.internal.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.mappers.GovernmentFineMapper;
-import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.GovernmentFine;
@@ -303,7 +303,7 @@ class GovServiceIT extends IntegrationTestBase {
                 "test funding",
                 fromPlayer,
                 null,
-                io.paradaux.treasury.utils.TreasuryConstants.TREASURY_PLUGIN_NAME,
+                io.paradaux.treasury.internal.utils.TreasuryConstants.TREASURY_PLUGIN_NAME,
                 null));
     }
 
@@ -549,7 +549,7 @@ class GovServiceIT extends IntegrationTestBase {
                 .as("ledger initiator must be the admin who issued the fine")
                 .isEqualTo(admin);
         assertThat(txn.getInitiatorUuid())
-                .isNotEqualTo(io.paradaux.treasury.utils.TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
+                .isNotEqualTo(io.paradaux.treasury.internal.utils.TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
     }
 
     @Test

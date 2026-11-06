@@ -250,7 +250,7 @@ pitest {
     targetClasses.set(
         listOf(
             "io.paradaux.business.services.impl.*",
-            "io.paradaux.business.api.impl.*",
+            "io.paradaux.business.internal.api.*",
             "io.paradaux.business.utils.*",
         ),
     )

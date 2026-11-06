@@ -24,10 +24,10 @@ import io.paradaux.business.commands.resolvers.FirmPlayerResolver;
 import io.paradaux.business.commands.resolvers.OnlineFirmNameResolver;
 import io.paradaux.business.guice.BusinessModule;
 import io.paradaux.business.guice.DatabaseModule;
+import io.paradaux.business.internal.model.config.DatabaseConfiguration;
 import io.paradaux.business.jobs.ReconcileAccountMembersJob;
 import io.paradaux.business.listeners.ChestShopSaleListener;
 import io.paradaux.business.listeners.FirmBalanceTaxListener;
-import io.paradaux.business.model.config.DatabaseConfiguration;
 import io.paradaux.hibernia.framework.guice.HiberniaModule;
 import io.paradaux.hibernia.testsupport.HiberniaStartupAssertion;
 import io.paradaux.treasury.api.SalesQueryApi;
@@ -79,7 +79,7 @@ class BusinessStartupTest {
     void realInjectorRegistersAllCommandsAndListeners() {
         // The exact HiberniaModule wiring Business.onEnable() builds.
         HiberniaModule hibernia = HiberniaModule.forPlugin(plugin)
-                .scanConfiguration("io.paradaux.business.model.config")
+                .scanConfiguration("io.paradaux.business.internal.model.config")
                 .handlers(
                         AccountCommands.class,
                         io.paradaux.business.commands.MenuCommands.class,

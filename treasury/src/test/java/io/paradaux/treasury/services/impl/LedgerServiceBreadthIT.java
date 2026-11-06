@@ -2,6 +2,7 @@ package io.paradaux.treasury.services.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.LedgerMapper;
 import io.paradaux.treasury.model.Page;
@@ -13,7 +14,6 @@ import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;

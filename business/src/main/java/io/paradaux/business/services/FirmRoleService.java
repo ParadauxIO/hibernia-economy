@@ -1,7 +1,7 @@
 package io.paradaux.business.services;
 
-import io.paradaux.business.model.internal.FirmRole;
-import io.paradaux.business.model.internal.FirmRolePermission;
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import java.util.List;
 import java.util.UUID;
 

@@ -1,0 +1,15 @@
+package io.paradaux.business.internal.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor // consistent with the sibling DTOs; needed for MyBatis/JSON reflective instantiation (ADT
+// inconsistent-noargs-ctor)
+public class FirmRole {
+    private Integer firmId;
+    private String roleName;
+    private Integer roleRankOrder;
+}

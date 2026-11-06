@@ -2,8 +2,8 @@ package io.paradaux.business.mappers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.paradaux.business.model.FirmProperty;
-import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmProperty;
 import io.paradaux.business.testsupport.IntegrationTestBase;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;

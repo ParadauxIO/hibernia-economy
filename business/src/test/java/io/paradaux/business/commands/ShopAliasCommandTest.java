@@ -3,7 +3,7 @@ package io.paradaux.business.commands;
 import static org.mockito.Mockito.*;
 
 import io.paradaux.business.commands.resolvers.FirmName;
-import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.threading.BusinessMessages;

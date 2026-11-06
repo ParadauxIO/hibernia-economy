@@ -1,18 +1,17 @@
 package io.paradaux.treasury.services.cache;
 
-import io.paradaux.treasury.mappers.AccountRedirectMapper;
-import io.paradaux.treasury.model.economy.AccountRedirect;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.treasury.internal.model.economy.AccountRedirect;
+import io.paradaux.treasury.mappers.AccountRedirectMapper;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link AccountRedirectCache} — the in-memory mirror of
@@ -87,9 +86,7 @@ class AccountRedirectCacheTest {
         // notion of "next", get() returns it verbatim without a second lookup.
         UUID a = UUID.randomUUID();
         UUID b = UUID.randomUUID();
-        when(mapper.findAllRedirects()).thenReturn(List.of(
-                redirect(a, 200),
-                redirect(b, 300)));
+        when(mapper.findAllRedirects()).thenReturn(List.of(redirect(a, 200), redirect(b, 300)));
 
         assertThat(cache.get(a)).isEqualTo(200);
         assertThat(cache.get(b)).isEqualTo(300);

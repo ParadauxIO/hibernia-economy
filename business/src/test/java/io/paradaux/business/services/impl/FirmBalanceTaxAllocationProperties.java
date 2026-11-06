@@ -9,8 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.business.Business;
-import io.paradaux.business.model.config.BalanceTaxConfiguration;
-import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.config.BalanceTaxConfiguration;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmPropertyService;
 import io.paradaux.business.services.FirmService;

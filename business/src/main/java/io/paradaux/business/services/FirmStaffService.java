@@ -1,7 +1,7 @@
 package io.paradaux.business.services;
 
+import io.paradaux.business.internal.model.FirmEmployee;
 import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.model.internal.FirmEmployee;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.entity.Player;

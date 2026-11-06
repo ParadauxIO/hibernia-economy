@@ -1,12 +1,11 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
+import io.paradaux.treasury.internal.model.economy.ExplorerAuditEntry;
 import io.paradaux.treasury.mappers.ExplorerAuditMapper;
-import io.paradaux.treasury.model.economy.ExplorerAuditEntry;
 import io.paradaux.treasury.services.AuditService;
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class AuditServiceImpl implements AuditService {
@@ -15,6 +14,7 @@ public class AuditServiceImpl implements AuditService {
     private static final String AUDIT_ROLE = "treasury.transactions.audit";
     /** Distinguishes an in-game command from the explorer's HTTP methods. */
     private static final String CMD_METHOD = "CMD";
+
     private static final String TARGET_ACCOUNT = "account";
     private static final int OUTCOME_OK = 200;
 
@@ -28,8 +28,7 @@ public class AuditServiceImpl implements AuditService {
     // Not @Transactional: the single insert auto-commits, and any failure is
     // swallowed (fail-open) so logging can never break the audit read it records.
     @Override
-    public void recordTransactionAudit(UUID actorUuid, String actorName, int accountId,
-                                       String commandPath, int page) {
+    public void recordTransactionAudit(UUID actorUuid, String actorName, int accountId, String commandPath, int page) {
         try {
             ExplorerAuditEntry entry = new ExplorerAuditEntry();
             entry.setActorSub("minecraft:" + actorUuid);
@@ -43,8 +42,11 @@ public class AuditServiceImpl implements AuditService {
             entry.setOutcome(OUTCOME_OK);
             explorerAuditMapper.insert(entry);
         } catch (RuntimeException ex) {
-            log.warn("Failed to persist transaction-audit log (actor={}, account={}): {}",
-                    actorName, accountId, ex.toString());
+            log.warn(
+                    "Failed to persist transaction-audit log (actor={}, account={}): {}",
+                    actorName,
+                    accountId,
+                    ex.toString());
         }
     }
 }

@@ -10,9 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.paradaux.business.model.config.FirmConfiguration;
-import io.paradaux.business.model.internal.Firm;
-import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmPlayer;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmPropertyService;

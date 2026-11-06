@@ -1,6 +1,6 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.FirmProperty;
+import io.paradaux.business.internal.model.FirmProperty;
 import org.apache.ibatis.annotations.*;
 
 /**
@@ -34,10 +34,11 @@ public interface FirmPropertyMapper {
             type = #{type},
             deleted_at = NULL
         """)
-    void setProperty(@Param("firmId") int firmId,
-                     @Param("key") String key,
-                     @Param("value") String value,
-                     @Param("type") String type);
+    void setProperty(
+            @Param("firmId") int firmId,
+            @Param("key") String key,
+            @Param("value") String value,
+            @Param("type") String type);
 
     /** Soft-deletes the property by stamping {@code deleted_at}. */
     @Update("""
