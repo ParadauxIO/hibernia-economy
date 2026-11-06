@@ -64,7 +64,7 @@
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.72.1",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^3.2.7",
+    "vitest": "^5.0.5",
     "wait-on": "^9.5.1"
   }
 }

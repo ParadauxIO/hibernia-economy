@@ -36,7 +36,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'text-summary', 'html', 'lcov'],
+      reporter: ['text', 'text-summary', 'html', 'lcov', 'json', 'json-summary'],
       // Every module vitest can meaningfully reach: lib, shared components, and
       // the client/server modules that live beside routes (forms, panels).
       include: ['lib/**/*.ts', 'components/**/*.{ts,tsx}', 'packages/design-system/src/**/*.{ts,tsx}', 'app/**/*.{ts,tsx}', 'proxy.ts'],
@@ -51,13 +51,21 @@ export default defineConfig({
         'app/**/route.ts',
         'app/{robots,sitemap}.ts',
       ],
-      // A few points under the measured figures, so a regression fails but
-      // noise doesn't. CI runs with the SQL integration suite (RUN_INTEGRATION=1):
-      // measured lines/statements 39.02%, functions 58.88%, branches 82.83%.
-      // Without a DB (local unit + component run): 28.13%, 43.44%, 85.56%.
-      thresholds: process.env.RUN_INTEGRATION === '1'
-        ? { lines: 36, statements: 36, functions: 55, branches: 80 }
-        : { lines: 25, statements: 25, functions: 40, branches: 82 },
+      // AST remapping counts decisions in unexecuted code too. Keep the full
+      // source scope and separate baselines for CI's SQL suite and local runs.
+      // Measurements and gate rationale: ../wiki/explorer-coverage.md.
+      thresholds: {
+        ...(process.env.RUN_INTEGRATION === '1'
+          ? { lines: 69, statements: 67, functions: 63, branches: 59 }
+          : { lines: 44, statements: 42, functions: 35, branches: 40 }),
+        // Aggregate headroom must not hide a loss in these critical modules.
+        'lib/auth/{admin,capabilities,routeAccess}.ts': {
+          perFile: true, lines: 100, statements: 100, functions: 100, branches: 100,
+        },
+        'lib/money.ts': {
+          lines: 100, statements: 100, functions: 100, branches: 95,
+        },
+      },
     },
   },
 });

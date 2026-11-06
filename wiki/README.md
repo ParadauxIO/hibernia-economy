@@ -24,6 +24,7 @@ the code.
   release flow.
 - **[Tenant documentation notes](explorer-doc-notes.md)** — configure public page-top notes per deployment.
 - **[Explorer verification](explorer-verification.md)** — redesign budgets, browser checks, analytics and deployment evidence.
+- **[Explorer coverage](explorer-coverage.md)** — Vitest 5 migration evidence, coverage baselines and regression gates.
 - **[Release runbook](release-runbook.md)** — the order of operations for a
   release that changes the schema: backup, stop, migrate, deploy, verify, rollback.
 - **[Shop registry backfill](shop-registry-backfill.md)** — importing legacy shops at cutover.
