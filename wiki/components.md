@@ -131,6 +131,36 @@ Recovery is eventual: stale access can persist until a successful pass, longer
 during an outage. Immediate command-triggered sync still reports failures to the
 caller. No Treasury API or schema upgrade is required for this repair.
 
+Direct debits (PAR-557, default-off flag `business.direct_debits`, V54) let a
+customer accept a mandate that a firm may debit their PERSONAL account into the
+firm's default account. A mandate is either RECURRING (a fixed amount every
+day, week or month) or ON_DEMAND (any charges while the period total stays within
+the cap). Periods are UTC calendar periods, and all times come from the plugin
+clock, never the database `NOW()`.
+
+A collection happens in three steps:
+
+1. `DirectDebitStore` locks the mandate row, checks its status and the cap, and
+   commits a RESERVED `direct_debit_collection`. Concurrent charges therefore
+   can't exceed the cap.
+2. The service calls `TreasuryApi.transfer` with the customer recorded as
+   authorizer, `plugin_system = business-direct-debit`, and a dedup key derived
+   from the collection id. The customer's account authorization requirement is
+   not bypassed.
+3. The collection is settled as COLLECTED or FAILED.
+
+`DirectDebitJob` runs every minute and does three things:
+
+- It expires lapsed proposals.
+- It re-drives reservations left RESERVED for more than 5 minutes. The dedup key
+  collapses a transfer that already happened, so a crash never debits twice.
+- It collects due recurring mandates from the database's `next_due_at`. Failed
+  periods retry hourly, up to 3 attempts, and a mandate is suspended after 3
+  consecutive missed periods. Missed periods are never backfilled.
+
+Charging is in-game only. A REST charging endpoint would need the same
+reservation step, because `treasury-rest-api` has its own transfer engine.
+
 ### `business/business-api/` — public Business API (library jar)
 
 `FirmApi`, `StaffApi`, `RolePermission`, and firm model types. Published as

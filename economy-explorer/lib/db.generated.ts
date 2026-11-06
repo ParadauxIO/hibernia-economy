@@ -164,6 +164,46 @@ export interface ChestshopShop {
   worldUuid: Generated<Buffer | null>;
 }
 
+export interface DirectDebitCollection {
+  amount: Decimal;
+  attempts: Generated<number>;
+  collectionId: Generated<number>;
+  createdAt: Date;
+  failureReason: Generated<string | null>;
+  initiatorUuidBin: Buffer;
+  mandateId: number;
+  memo: Generated<string | null>;
+  periodStart: Date;
+  recurringPeriod: Generated<Date | null>;
+  status: Generated<"COLLECTED" | "FAILED" | "RESERVED">;
+  txnId: Generated<number | null>;
+  updatedAt: Date;
+}
+
+export interface DirectDebitMandate {
+  acceptedAt: Generated<Date | null>;
+  amount: Generated<Decimal | null>;
+  cap: Decimal;
+  endedAt: Generated<Date | null>;
+  endedByUuidBin: Generated<Buffer | null>;
+  endReason: Generated<string | null>;
+  expiresAt: Date;
+  firmId: number;
+  kind: "ON_DEMAND" | "RECURRING";
+  mandateId: Generated<number>;
+  missedPeriods: Generated<number>;
+  nextDueAt: Generated<Date | null>;
+  payeeAccountId: number;
+  payerAccountId: number;
+  payerUuidBin: Buffer;
+  pendingOnly: Generated<number | null>;
+  period: "DAILY" | "MONTHLY" | "WEEKLY";
+  proposedAt: Date;
+  proposedByUuidBin: Buffer;
+  reference: string;
+  status: Generated<"ACTIVE" | "CANCELLED" | "EXPIRED" | "PENDING" | "REJECTED" | "SUSPENDED">;
+}
+
 export interface EconomyConfig {
   configKey: string;
   configValue: string;
@@ -637,6 +677,8 @@ export interface DB {
   chestshopPreviewPreference: ChestshopPreviewPreference;
   chestshopSale: ChestshopSale;
   chestshopShop: ChestshopShop;
+  directDebitCollection: DirectDebitCollection;
+  directDebitMandate: DirectDebitMandate;
   economyConfig: EconomyConfig;
   economyPlayers: EconomyPlayers;
   explorerAudit: ExplorerAudit;

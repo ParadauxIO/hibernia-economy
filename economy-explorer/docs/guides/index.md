@@ -19,6 +19,8 @@ result using only in-game commands.
   and promote or remove staff.
 - **[Business accounts & money](/docs/guides/business-accounts)** — fund accounts, split
   money across them, and pay people.
+- **[Direct debits](/docs/guides/direct-debits)** — approve a business to charge you up
+  to a limit, or set one up for your firm's customers.
 - **[Selling with ChestShops](/docs/guides/chestshop-basics)** — build a chest shop
   with a sign.
 - **[ChestShops for your firm](/docs/guides/chestshop-business)** — route shop sales
