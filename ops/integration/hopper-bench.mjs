@@ -153,7 +153,8 @@ function runMatrix(opts) {
           if (existsSync(serverLog)) copyFileSync(serverLog, join(runs, `${id}.server.log`));
           const artifacts = join(opts.out, 'work/runtime-artifacts.json');
           if (existsSync(artifacts)) copyFileSync(artifacts, join(runs, `${id}.artifacts.json`));
-          if (!opts.keepJfr) rmSync(`${json}.jfr`, { force: true });
+          // Worker profiles are small (about 1.5 MB per 120 s) and explain each iteration's result.
+          if (!opts.keepJfr && !variant.startsWith('worker')) rmSync(`${json}.jfr`, { force: true });
           if (result.status === 0 && existsSync(json)) { built = true; break; }
           console.error(`${id} failed (exit ${result.status}); see ${join(runs, `${id}.log`)}`);
         }
