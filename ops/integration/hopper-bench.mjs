@@ -169,6 +169,12 @@ const METRICS = {
   meanMspt: (r) => r.tickMs.mean,
   p95Mspt: (r) => r.tickMs.p95,
   meanTickCpu: (r) => r.tickCpuMs?.mean,
+  // ChestShop's own main-thread CPU per tick, from the same run's profile: immune to the
+  // run-to-run drift of a shared host, which reached ±10% CPU/tick at load average 40.
+  chestShopCpuMsPerTick: (r) => r.tickCpuMs && r.profile.mainSamples
+    ? r.tickCpuMs.mean * (r.profile.workerSamples + r.profile.listenerSamples + r.profile.otherChestShopSamples)
+      / r.profile.mainSamples
+    : undefined,
   p99TickCpu: (r) => r.tickCpuMs?.p99,
   workerDrainCpuP99Ms: (r) => r.workerDrainCpuMs?.p99,
   workerDrainCpuMaxMs: (r) => r.workerDrainCpuMs?.max,
@@ -223,6 +229,8 @@ function judge(group, baseline) {
                    limit: THRESHOLDS.meanMsptIncreasePct, unit: '% CPU/tick vs event-off' },
     p99TickCpu: { value: m(group, 'p99TickCpu') - m(baseline, 'p99TickCpu'), limit: THRESHOLDS.p99IncreaseMs,
                   unit: 'ms CPU/tick vs event-off' },
+    chestShopCpu: { value: pct(m(group, 'chestShopCpuMsPerTick'), m(baseline, 'meanTickCpu')),
+                    limit: THRESHOLDS.meanMsptIncreasePct, unit: '% of event-off CPU/tick spent in ChestShop' },
   };
   if (group.variant.startsWith('worker')) {
     checks.workerTickMax = { value: group.metrics.workerDrainCpuMaxMs?.max, limit: THRESHOLDS.workerTickMaxMs,
@@ -281,6 +289,7 @@ function markdown(summary) {
       ['p99 MSPT', (g) => f(g.metrics.p99Mspt)],
       ['max MSPT', (g) => f(g.metrics.maxMspt, 1)],
       ['mean CPU ms/tick', (g) => f(g.metrics.meanTickCpu, 3)],
+      ['ChestShop CPU ms/tick (profile)', (g) => f(g.metrics.chestShopCpuMsPerTick, 3)],
       ['p99 CPU ms/tick', (g) => f(g.metrics.p99TickCpu)],
       ['worker drain CPU p99 ms', (g) => f(g.metrics.workerDrainCpuP99Ms, 3)],
       ['worker drain CPU max ms', (g) => f(g.metrics.workerDrainCpuMaxMs, 2)],

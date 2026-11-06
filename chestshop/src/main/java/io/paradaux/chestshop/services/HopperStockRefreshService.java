@@ -81,6 +81,11 @@ public final class HopperStockRefreshService {
     private final ShopStockPublisher stock;
     private BukkitTask task;
     private long tick;
+    // Running totals for diagnostics and the PAR-523 benchmark: positions refreshed, shop signs
+    // refreshed and transfers that skipped a known non-shop. Main thread only.
+    private long refreshes;
+    private long signRefreshes;
+    private long notShopSkips;
 
     @Inject
     public HopperStockRefreshService(
@@ -108,6 +113,13 @@ public final class HopperStockRefreshService {
         this.signs = signs;
         this.counters = counters;
         this.nanoTime = nanoTime;
+    }
+
+    /** Running totals since start: positions refreshed, shop signs refreshed, known non-shops skipped. */
+    public record Stats(long refreshes, long signRefreshes, long notShopSkips) {}
+
+    public Stats stats() {
+        return new Stats(refreshes, signRefreshes, notShopSkips);
     }
 
     public void start() {
@@ -175,7 +187,10 @@ public final class HopperStockRefreshService {
     private boolean knownNotShop(Position pos) {
         Long expires = notShop.get(pos);
         if (expires == null) return false;
-        if (tick < expires) return true;
+        if (tick < expires) {
+            notShopSkips++;
+            return true;
+        }
         notShop.remove(pos);
         notShopByChunk.computeIfPresent(pos.chunk(), (key, chunk) -> {
             chunk.remove(pos);
@@ -309,6 +324,7 @@ public final class HopperStockRefreshService {
     }
 
     private void refresh(Position pos, Set<Position> refreshedSigns, Map<String, ItemStack> items) {
+        refreshes++;
         World world = plugin.getServer().getWorld(pos.world());
         if (world == null || !world.isChunkLoaded(pos.x() >> 4, pos.z() >> 4)) return;
         var block = world.getBlockAt(pos.x(), pos.y(), pos.z());
@@ -329,6 +345,7 @@ public final class HopperStockRefreshService {
             boolean admin = signs.isAdminShop(sign);
             if (config.isForceUnlimitedAdminShop() && admin) continue;
             if (!refreshedSigns.add(position(sign))) continue;
+            signRefreshes++;
             String code = SignService.getItem(sign);
             if (WildcardItems.isPattern(code)) {
                 // Wildcard shops count by pattern and have no registry row.

@@ -412,6 +412,7 @@ final class HopperBench implements Listener {
         final DoubleList inLatency = new DoubleList(), outLatency = new DoubleList();
         int inMisses, outMisses;
         final List<int[]> backlog = new ArrayList<>();
+        long[] totalsStart, totalsEnd;
         long elapsed;
 
         Sample(String variant, int seconds, Path out) throws ReflectiveOperationException {
@@ -431,6 +432,7 @@ final class HopperBench implements Listener {
             jfr.enable("jdk.GarbageCollection");
             jfr.setToDisk(true);
             sinkStart = sinkItems();
+            totalsStart = queue == null ? new long[0] : queue.readTotals();
             cpuStart = threads.getThreadCpuTime(main.threadId());
             lastCpu = cpuStart;
             allocStart = threads.getThreadAllocatedBytes(main.threadId());
@@ -462,6 +464,7 @@ final class HopperBench implements Listener {
             long alloc = threads.getThreadAllocatedBytes(main.threadId()) - allocStart;
             jfr.stop();
             long sinkEnd = sinkItems();
+            totalsEnd = queue == null ? new long[0] : queue.readTotals();
             sample = null;
             status = "analyzing";
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -498,6 +501,11 @@ final class HopperBench implements Listener {
             j.put("probeInMs", inLatency.summary()).put("probeInMisses", inMisses);
             j.put("probeOutMs", outLatency.summary()).put("probeOutMisses", outMisses);
             j.put("backlog", backlogSummary());
+            Map<String, Object> rates = new LinkedHashMap<>();
+            for (int i = 0; i < totalsEnd.length; i++) {
+                rates.put(Queue.TOTALS.get(i) + "PerSec", (totalsEnd[i] - totalsStart[i]) / seconds);
+            }
+            j.put("workerRates", rates);
             j.put("javaVersion", System.getProperty("java.version"));
             j.put("serverVersion", Bukkit.getVersion());
             j.put("hopperSettings", world.getName() + ":" + hopperSettings());
@@ -543,7 +551,20 @@ final class HopperBench implements Listener {
      * The replacement stays after the sample: the benchmark server is discarded afterwards.
      */
     private record Queue(Object service, Field pending, Field reconciliation, Field recovery,
-            Field deferredPositions, Field deferredChunks) {
+            Field deferredPositions, Field deferredChunks, List<Field> totalFields) {
+
+        static final List<String> TOTALS = List.of("refreshes", "signRefreshes", "notShopSkips");
+
+        /** The worker's running totals, or empty when this build predates them. */
+        long[] readTotals() {
+            long[] values = new long[totalFields.size()];
+            try {
+                for (int i = 0; i < values.length; i++) values[i] = totalFields.get(i).getLong(service);
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException(e);
+            }
+            return values;
+        }
 
         interface DrainSink {
             void accept(double wallMs, double cpuMs);
@@ -575,8 +596,14 @@ final class HopperBench implements Listener {
                 drainMs.accept((System.nanoTime() - begin) / 1e6, (cpuClock.getCurrentThreadCpuTime() - cpuBegin) / 1e6);
             }, 1L, 1L);
             task.set(service, timed);
+            List<Field> totals = new ArrayList<>();
+            try {
+                for (String name : TOTALS) totals.add(field(type, name));
+            } catch (NoSuchFieldException olderBuild) {
+                totals.clear();
+            }
             return new Queue(service, field(type, "pending"), field(type, "reconciliation"), field(type, "recovery"),
-                    field(type, "deferredPositions"), field(type, "deferredChunks"));
+                    field(type, "deferredPositions"), field(type, "deferredChunks"), totals);
         }
 
         /** Through the public Injector interface: Guice's implementation class is not public. */
