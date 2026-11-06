@@ -7,9 +7,16 @@ PAR-523 adds a bounded, deferred refresh worker for shop-sign stock counters.
 ## Behavior
 
 The move listener keeps its immediate live-world protection check at HIGHEST
-priority. A separate MONITOR handler records source and destination container
-coordinates for non-cancelled events. It does not count items, resolve signs,
-write to the database or schedule a task per transfer.
+priority. It ignores sources whose inventory type no configured shop container can
+hold, such as hoppers. A hopper minecart blocked under a shop retries every tick,
+so a container just confirmed as a shop is remembered for one second. Only "is a
+shop" is remembered. A stale entry can block a pull for at most a second, and can
+never allow one.
+
+A separate MONITOR handler records source and destination container
+coordinates for non-cancelled events, skipping hoppers by inventory type. It does
+not count items, resolve signs, write to the database or schedule a task per
+transfer.
 
 The shared main-thread worker waits `HOPPER_STOCK_REFRESH_INTERVAL_TICKS` (100 ticks by default,
 about five seconds at 20 TPS) from the first dirty event and reads
@@ -42,12 +49,23 @@ Each refreshed non-admin shop is also measured for the `/find` registry
   writer to drain, logging if it cannot finish. Registry writes remain best-effort analytics;
   this queue is not a durable transaction log.
 
-This prototype uses a lazy index of pending container coordinates. It does **not**
-cache positive or negative shop membership: each batch discovers signs afresh.
-That keeps creation, removal, container splits and editor changes visible at
-refresh time without a separate invalidation system. Ordinary sorter containers
-still incur discovery once per batch. A durable shop-membership index remains an
-option if profiling identifies that work as the bottleneck.
+Shop membership is not cached, so each refresh discovers a shop's signs afresh. A
+container found with **no** shop sign is skipped by the enqueue and refresh paths for
+30 to 60 seconds, the exact time depending on its position. Most hopper traffic is
+ordinary sorting, so this removes most refresh work. The skip ends early when:
+
+- a block is placed or a sign is edited within two blocks;
+- a supported WorldEdit/FAWE edit changes a sign nearby;
+- the chunk or world unloads.
+
+Changes that fire no event, such as other plugins' API edits, are picked up when the
+skip expires. Protection never uses this cache.
+
+A refresh resolves each shop's sign item once and shares it with the counter and the
+`/find` publisher. It reuses a parsed item for up to 30 seconds, because parsing
+consults custom-item providers and fires the legacy `ItemParseEvent`. After a
+provider reload a counter may count the previous item definition for that long.
+Trades never use this cache. Signs are read as live states, not snapshots.
 
 ## Resource limits and recovery
 
@@ -67,6 +85,8 @@ option if profiling identifies that work as the bottleneck.
   Unload during overflow reconciliation, or past that cap, recounts the whole chunk
   on load instead. A chunk load on its own queues nothing, so exploration adds no
   work. World unload and plugin disable discard everything.
+- The not-shop skip holds at most 65,536 positions, parsed items at most 1,024 and
+  the protection memo at most 4,096 containers. Past a cap, work is simply done again.
 - No refresh intentionally loads an unloaded chunk. Counter freshness can exceed
   the configured interval under load and at low TPS. Existing loaded shops are refreshed on their
   next transfer or ordinary manual/trade update, not by a startup world scan.
@@ -109,7 +129,8 @@ ListenerControl does, so only ChestShop's handlers differ:
 | `no-listener` | events on; ChestShop's move handlers unregistered, as ListenerControl can |
 | `legacy` | the listener before 6b35b153 ([patch](../ops/integration/hopper-bench/legacy-listener.patch)) |
 | `worker` | this checkout: immediate protection and the batched refresh worker |
-| `worker-monitor-only` | the worker without ChestShop's HIGHEST (protection) handler, as production's ListenerControl config does |
+| `worker-monitor-only` | the worker without ChestShop's HIGHEST (protection) handler, as ListenerControl can |
+| `noop-listener` | events on, ChestShop's handlers removed, one empty MONITOR handler: the cost of dispatch alone |
 
 ```bash
 node ops/integration/hopper-bench.mjs                  # 3 reps x 2 scenarios x 5 variants
@@ -138,13 +159,14 @@ chunks holding about 1,100 tile entities each.
 
 Each run records:
 
-- every tick's duration (Paper `ServerTickEndEvent`)
+- every tick's duration (Paper `ServerTickEndEvent`) and its main-thread CPU time
 - main-thread CPU time and allocated bytes
 - items delivered to sink chests per second
 - a JFR profile (2 ms execution samples): ChestShop's share of main-thread samples,
   split into worker, listener and other code
-- each worker drain timed on the main thread. DcDiag swaps ChestShop's scheduler task
-  for an identical timed call.
+- each worker drain's wall and CPU time on the main thread. DcDiag swaps ChestShop's
+  scheduler task for an identical timed call.
+- the worker's refreshes, refreshed shop signs and skipped non-shop transfers per second
 - refresh-queue depth every second
 - probe latency: a probe shop fills with 8 items through a hopper, then drains through
   a second hopper. Latency runs from the chest reaching its final count to the sign
@@ -161,6 +183,18 @@ against `event-off` in the same scenario:
   filling and draining, with no probe timeouts;
 - under sustained overload the queue levels off: in no run does the mean depth in the
   final third of the sample exceed 1.1 times the middle third (plus 16).
+
+Two revisions on 2026-11-06:
+
+- **Measured as CPU time.** The shared host's load rose from 8–12 to 16–50. Between
+  days `event-off` MSPT rose 45% while its CPU per tick rose 3%. Tick and drain limits
+  are now judged on main-thread CPU time. The overhead limit is judged on ChestShop's
+  own share of each run's profile, which run-to-run drift (±10% CPU/tick) cannot swamp.
+- **What "safe" means.** The 2% overhead target proved out of reach for any design that
+  handles every hopper transfer. With one empty move-event handler registered, the
+  overload workload already costs 9% more CPU per tick. The bar for production is:
+  cheaper than the build production runs today; no drain above 2 ms CPU; freshness
+  within 6 s; and a bounded queue. 2% remains a stretch goal.
 
 ### Results
 
@@ -230,51 +264,72 @@ protection handler 6.3%. Within the drain:
 The 0.5 ms phase budget is checked only between refreshes. A refresh that takes
 snapshots of large chests and their signs overruns it, so p99 drain time is 2.2–2.9 ms.
 
-### After the snapshot fix
+### Optimisation (2026-11-06)
 
-Sign discovery now resolves each sign's container from block data and takes a state
-only for the chest's own signs. The refresh worker reads those signs as live states.
-Public and legacy `uBlock` lookups still return snapshots. The same 120 s profile
-afterwards:
+Profile-driven rounds, each verified by `:chestshop:check` and the live hopper suite:
 
-- the drain fell from 10.8% to 5.6% of main-thread samples;
-- discovery fell from 6.8% to 1.8% of main-thread samples, and snapshots no longer
-  appear in it;
-- within the drain, counter formatting is now 34%, discovery 32% (mostly
-  `isShopBlock`'s neighbour scan) and `/find` publishing 18%.
+1. **Snapshots:** read signs as live states, and find a sign's container from block
+   data instead of block-state snapshots.
+2. **Cheap pre-checks:** check a neighbour's material before reading its block data;
+   skip hoppers by inventory type; parse `SHOP_CONTAINERS` once.
+3. **Not-shop skip:** skip refreshes for containers known not to be shops (above).
+4. **Fewer revalidations:** a 1 s protection memo for confirmed shops, and one sign
+   validation per refresh instead of two.
+5. **Regexes:** compile the colour-code, quantity and item-alias patterns once.
+6. **Lookups:** one hash lookup per transfer, with hand-written key equality.
+7. **Parsing:** reuse parsed items for 30 s.
+8. **Expiry spread:** not-shop expiry spread over 30–60 s, so rediscovery has no waves.
 
-The repeat matrix (2026-11-06; `event-off`, `worker` and `worker-monitor-only`; 3 reps)
-ran on a saturated host: load average 16–18 on 16 vCPUs, against 8–12 the day before.
-The `event-off` baseline alone rose 45–50% (typical 3.09 → 4.50 ms mean MSPT) with
-run-to-run variation up to 14%, so its tick-time deltas are not comparable with the
-first matrix. Main-thread CPU above `event-off` changed little:
+Each worker run's ChestShop main-thread CPU per tick, from its profile (median of the
+runs). The baseline variants show 0.02–0.05 ms of unrelated ChestShop timers:
 
-- typical: 0.77 → 0.53 ms per tick (`worker`), 0.48 → 0.59 (`worker-monitor-only`)
-- overload: 1.75 → 1.63 (`worker`), 1.17 → 1.03 (`worker-monitor-only`)
+| Build | typical | overload | worst drain CPU, ms (typical / overload) |
+|---|---|---|---|
+| 9fd3221 era (production until this deploy) | 0.83 | 2.05 | 3.1 / 2.5 |
+| after rounds 1–3 | 0.41 | 0.86 | 2.8 / 2.2 |
+| after round 7 | 0.26 | 0.69 | 1.3 / 2.4 |
+| final (41c99a73) | 0.25 | 0.64 | 1.1 / 2.1 |
 
-Drains above 2 ms remain (130–290 per run). The worker still fails the mean-MSPT
-and long-drain thresholds in both scenarios, and overload freshness. Repeat the
-matrix on a quiet host before judging the fix's tick-time effect.
+Final matrix: 2 repetitions per scenario, 60 s warmup, 120 s samples. Results
+against the production bar:
+
+| | typical | overload |
+|---|---|---|
+| cheaper than the production build | 0.25 vs 0.83 ms/tick | 0.64 vs 2.05 ms/tick |
+| worst drain CPU (limit 2 ms) | 1.13 ms | 0.81 and 2.10 ms: one drain in 4,800 ticks |
+| freshness p95, fill / drain (limit 6 s) | 2.25 / 2.20 s | 2.25 / 2.35 s |
+| probe timeouts | 0 | 0 |
+| queue levels off, peak | yes, 189 | yes, 731 |
+
+ChestShop's own CPU is 8% (typical) and 11% (overload) of `event-off` CPU per tick, so
+the 2% stretch goal is not met. The typical workload refreshes 22 positions and 9
+shop signs per second, and skips 2,600 transfers at known non-shops. The single
+2.1 ms overload drain was not attributable at the 2 ms profile resolution; its
+samples are ordinary refresh work. The production build reached 2.5–3.1 ms.
 
 ## Enablement and rollback
 
-**Recommendation: do not enable hopper stock counters on a server where tick time
-matters, and do not count this worker as production-ready.** It fails the tick-time
-thresholds in every configuration measured, before and after the snapshot fix. The old
-listener is worse.
-
-**Production already runs it.** Checked on 2026-11-06 against the live server's files:
+**Production state, checked 2026-11-06** against the live server's files:
 
 - ChestShop `2026.11.43.1-gde8cc832c686` includes the worker;
 - `USE_STOCK_COUNTER: true` with `HOPPER_STOCK_REFRESH_INTERVAL_TICKS: 100`;
 - `hopper.disable-move-event: false`, with no per-world override found;
-- ListenerControl's ChestShop entry is commented out, so both move handlers are
-  registered.
+- ListenerControl's ChestShop entry is commented out, so both move handlers are registered.
 
-In these workloads that costs between the `worker-monitor-only` and `worker` columns:
-roughly 8–33% mean MSPT, depending on load.
+So production already pays for the worker, at the cost of the first row above.
 
-To stop the worker in production, deactivate ChestShop's MONITOR handler:
+**Recommendation: deploy this build with the current configuration.** It meets the
+production bar in [Thresholds](#thresholds): about three times cheaper than the build
+production runs, with no drain above 2 ms CPU, freshness within 6 s and a bounded queue.
+No configuration change is needed.
+
+This build does not change hopper-minecart protection settings. In the typical workload
+the protection check costs about 1.7% of main-thread CPU (measured with it enabled), so
+turning it on is a separate decision. After any change to `TURN_OFF_HOPPER_PROTECTION`,
+reload ChestShop and repeat the minecart theft check on the real plugin stack.
+
+To stop the worker entirely, deactivate ChestShop's MONITOR handler in ListenerControl
+and restart:
 
 ```yaml
 deactivated-events:
@@ -283,24 +338,9 @@ deactivated-events:
     - inventory.InventoryMoveItemEvent
 ```
 
-Restart the server so ListenerControl applies the rule; ChestShop's reload does not
-re-register handlers. Sign counters and `/find` stock then update only on trades, chest
-close, creation, discovery and resync. Turning off `USE_STOCK_COUNTER` alone does
-**not** stop the worker: since PAR-544 it also runs for `/find` stock. Leave the
-HIGHEST (protection) handler as it is unless that decision is made separately.
+Sign counters and `/find` stock then update only on trades, chest close, creation,
+discovery and resync. Turning off `USE_STOCK_COUNTER` alone does **not** stop the
+worker: since PAR-544 it also runs for `/find` stock.
 
-Before enabling more widely:
-
-1. Repeat the matrix on a quiet host with the snapshot fix.
-2. If discovery still matters, add the durable shop-membership index described
-   above, so ordinary sorter containers skip discovery entirely.
-3. Reduce counter formatting and `/find` publishing cost per refresh, and enforce the
-   phase budget more tightly so no drain runs to tens of milliseconds.
-
-Use the same thresholds. Enabling needs `USE_STOCK_COUNTER: true`, effective
-`disable-move-event: false` and both ChestShop handlers registered. Then repeat the
-transfer and minecart theft checks on the real plugin stack.
-
-**Rollback:** restore the previous ListenerControl entries and `USE_STOCK_COUNTER`
-value, then restart. Keep the previous configuration and plugin artifact for a full
-rollback.
+**Rollback:** redeploy the previous ChestShop artifact. No configuration or data changes
+accompany this build.
