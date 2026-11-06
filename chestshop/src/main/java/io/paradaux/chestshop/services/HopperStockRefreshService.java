@@ -42,8 +42,12 @@ import org.bukkit.scheduler.BukkitTask;
 public final class HopperStockRefreshService {
     static final int MAX_PENDING = 4096;
     static final int MAX_PER_TICK = 32;
-    /** How long a container found without a shop sign is skipped, absent any nearby block change. */
-    static final int NOT_SHOP_TTL_TICKS = 1200;
+    /**
+     * How long a container found without a shop sign is skipped, absent any nearby block change:
+     * between the base and twice the base, by position. Spreading expiry turns rediscovery of a
+     * sorter network into a steady trickle rather than a burst every minute.
+     */
+    static final int NOT_SHOP_TTL_TICKS = 600;
 
     static final int MAX_NOT_SHOP = 65_536;
     private static final long PHASE_BUDGET_NANOS = 500_000;
@@ -241,8 +245,7 @@ public final class HopperStockRefreshService {
 
     private void rememberNotShop(Position pos) {
         if (notShop.size() >= MAX_NOT_SHOP) return; // past the cap, refreshes simply rediscover
-        // Jitter the expiry so a sorter network discovered in one burst does not expire in one.
-        long expires = tick + NOT_SHOP_TTL_TICKS + (pos.hashCode() & 0xFF);
+        long expires = tick + NOT_SHOP_TTL_TICKS + Math.floorMod(pos.hashCode(), NOT_SHOP_TTL_TICKS);
         if (notShop.put(pos, expires) == null) {
             notShopByChunk
                     .computeIfAbsent(pos.chunk(), ignored -> new HashSet<>())

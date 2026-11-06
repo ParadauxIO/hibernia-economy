@@ -273,7 +273,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         verify(blocks, times(2)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
         // Two discoveries, then two skipped transfers per later round; no shop signs.
         assertThat(refresh.stats()).isEqualTo(new HopperStockRefreshService.Stats(2, 0, 4));
-        ticks(HopperStockRefreshService.NOT_SHOP_TTL_TICKS + 256); // TTL plus the largest jitter
+        ticks(2 * HopperStockRefreshService.NOT_SHOP_TTL_TICKS); // the longest spread expiry
         refresh.markDirty(sorter);
         refresh.markDirty(neighbour);
         ticks(100);
