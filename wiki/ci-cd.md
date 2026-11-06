@@ -2,12 +2,12 @@
 
 All automation lives at the repo root in **`.github/`** — GitHub only reads
 workflows from the root, which is the natural home in a monorepo. One workflow,
-**`ci.yml`**, gates every pull request and every push to `develop`/`main`; the
+**`ci.yml`**, gates every pull request and every push to `main`; the
 rest publish, deploy or operate on the database.
 
 ## The CI pipeline (`ci.yml`)
 
-Runs on pull requests to `develop`/`main`, pushes to them, nightly (03:23 UTC)
+Runs on pull requests to `main`, pushes to them, nightly (03:23 UTC)
 and on demand (*Run workflow*, with an optional live-suite test filter and
 migration base ref).
 
@@ -28,7 +28,7 @@ checks can't be path-filtered, so the expensive jobs skip themselves instead and
 `ci-gate`'s `needs`, or it gates nothing.
 
 PR runs are cancelled when a newer commit is pushed to the PR; runs on
-`develop`/`main` never are.
+`main` never is.
 
 ### `./gradlew check` is the contract
 
@@ -40,7 +40,7 @@ workflow change needed. `build` adds `assemble`, so a broken `shadowJar` or
 `bootJar` also fails the PR.
 
 The **build cache** is on (`org.gradle.caching=true` in `gradle.properties`), and
-`setup-gradle` saves it from `develop` runs, so an untouched module's tests are
+`setup-gradle` saves it from `main` runs, so an untouched module's tests are
 restored rather than re-run. The **configuration cache** is not enabled: the
 `copyPlugin` staging task (`io.paradaux.paper-server-conventions`) and ChestShop's
 `processResources` aren't compatible with it yet.
@@ -81,8 +81,8 @@ input) for nightly/manual runs:
    against a migrated DB, then commit it).
 
 Both scripts run locally the same way, e.g.
-`node economy-flyway/scripts/check-migrations.mjs origin/develop` and
-`DB_PORT=3306 DB_PASSWORD=… economy-flyway/scripts/upgrade-test.sh origin/develop`
+`node economy-flyway/scripts/check-migrations.mjs origin/main` and
+`DB_PORT=3306 DB_PASSWORD=… economy-flyway/scripts/upgrade-test.sh origin/main`
 (it drops and recreates `DB_NAME`, default `economy_upgrade`).
 
 The pre-cutover `main` migration tree at `36d7d90` is a pinned exception:
@@ -101,19 +101,16 @@ applies. Guard regression tests run in the Migrations job.
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `jvm-check` / `explorer-check` | `workflow_call` only | The reusable JVM and explorer test jobs. `ci.yml` calls them, and so do the publish/image workflows, so a release is gated on the same job definition as a merge. |
-| `treasury-publish-api` / `business-publish-api` | push to `develop` | `jvm-check` on that API's projects, then publish the `*-api` snapshot. Manual runs are restricted to `develop`. |
+| `treasury-publish-api` / `business-publish-api` | authorized `[DEPLOY]` push | `jvm-check` on that API's projects, then publish the `*-api` snapshot. Development publishing requires the marker and owner identity below. |
 | `plugin-release` | every push to `main`, manual on `main` | Wait for the exact commit’s full main-push CI and `ci-gate`, publish all four plugins and both API libraries, then SFTP-stage enabled targets for their next restart. |
-| `treasury-rest-api-docker` | push to `main`/`develop` | `jvm-check` on `:treasury-rest-api:check`, then build and push the image to **Harbor**. |
-| `economy-explorer-docker` | push to `main`/`develop`, manual | `explorer-check`, then build and push the image to **Harbor**. |
+| `treasury-rest-api-docker` | push to `main`, authorized `[DEPLOY]` push, manual production run | `jvm-check` on `:treasury-rest-api:check`, then build and push the image to **Harbor**. |
+| `economy-explorer-docker` | push to `main`, authorized `[DEPLOY]` push, manual production run | `explorer-check`, then build and push the image to **Harbor**. |
 | `economy-flyway-info` / `-migrate` / `-staging-clean` | manual (`workflow_dispatch`) | Gated schema operations (see [database.md](database.md)). Info's `flywayValidate` ignores pending migrations and fails on anything else. |
-| `dev-server-publish` | push to `develop` on a plugin or `economy-flyway/**` | Build the plugin bundle and replace the rolling `dev-latest` prerelease, which the dev server deploys (below). |
+| `dev-server-publish` | authorized `[DEPLOY]` push | Build the plugin bundle and replace the rolling `dev-latest` prerelease, which the dev server deploys (below). |
 
-Except for `plugin-release` (which releases every main push), the publish/image
-workflows keep **`paths:` filters**, which follow the Gradle
-`project(...)` edges, not just the module's own folder (`common/**`, the
-version catalog, `build-logic/**`…). When you add a `project(...)` dependency to
-a published module, add its path there. `ci.yml` needs no such list: it runs
-`check` on everything.
+Deployment workflows use the shared event policy instead of path filters, so
+an empty `[DEPLOY]` commit can select a complete development build. Main pushes
+build both production images. `ci.yml` continues to run `check` on everything.
 
 ### Conventions
 
@@ -145,7 +142,7 @@ registry and are rolled out by **Argo CD Image Updater**. Images are tagged
 `<env>-sha-<short>` per overlay, where the env prefix (`development` /
 `production`) is what Argo watches:
 
-- push to **`develop`** → `development-sha-…` (+ `:latest`)
+- authorized **`[DEPLOY]` branch push** → `development-sha-…` (+ `:latest`)
 - push to **`main`** → `production-sha-…` (+ `:prod`)
 
 Registry credentials and Harbor coordinates come from repo/organization secrets
@@ -154,7 +151,7 @@ Registry credentials and Harbor coordinates come from repo/organization secrets
 ### Dev server
 
 The sandboxed copy of the production server on the paseo machine
-(`~/democracycraft-clone`, started by its `start-local.sh`) runs `develop`.
+(`~/democracycraft-clone`, started by its `start-local.sh`) runs the selected `[DEPLOY]` commit.
 CI never connects to it: `dev-server-publish` publishes the jars and a
 `manifest.json` (commit, jar names) as the `dev-latest` prerelease, and
 [`ops/dev-server/agent.mjs`](../ops/dev-server/agent.mjs), run by the
@@ -169,7 +166,7 @@ The agent also restarts the server if it crashes.
 - Console and agent logs: `journalctl -u hibernia-dev-server -f`
 - `node ~/democracycraft-clone/dev-deploy/agent.mjs ctl status | console <cmd> | deploy | pause | resume`
 - Pause before running `clone.sh`, then `ctl deploy` after resuming to put the
-  `develop` jars back over the production ones it downloads.
+  selected development jars back over the production ones it downloads.
 - Installing the agent: see the header of
   [`hibernia-dev-server.service`](../ops/dev-server/hibernia-dev-server.service).
   To update it, copy the new `agent.mjs` over the installed one and run
@@ -187,18 +184,47 @@ admin token.
 or refreshes that Secret; run it on srv3 when the token nears expiry (180
 days) or the dev server's secrets change.
 
+## Select a development deployment
+
+Push a non-main branch whose **tip commit** is authored by GitHub user
+`ParadauxIO` and contains the exact, case-sensitive marker `[DEPLOY]` anywhere
+in its message. The push and any rerun must also be initiated by `ParadauxIO`.
+The shared `deployment-policy.yml` checks the event and commit identity before
+any deployment build starts. Each publishing job checks the policy again, so a
+non-owner rerunning only failed jobs cannot reuse an earlier owner's approval.
+A marker in an older commit does not qualify.
+
+For example, with your Git author email linked to your GitHub account:
+
+```bash
+git commit --allow-empty -m "[DEPLOY] Test this branch in development"
+git push origin HEAD
+```
+
+This selects the tip revision for all five development publishers: the rolling
+`dev-latest` plugin bundle, Treasury and Business API snapshots, and both Harbor
+images tagged `development-sha-<short>` and `latest`. Path filters do not apply,
+so an empty marker commit deploys the complete selection. Existing tests still
+gate API and image publishing. Publication is serialized per destination across
+branches; separate workflows may complete at different times.
+
+Ordinary branch pushes, tag pushes, and manual development dispatches do not
+deploy. Main remains the production branch: each main push builds production
+images, and manual image dispatches on main are supported. A marker on main does
+not publish development artifacts. A branch must contain these workflow changes
+before it supports this trigger. This is a deployment-selection policy for
+repository collaborators, not protection against someone who can edit workflows.
+
 ## Release flow
 
-The `develop` triggers documented above describe legacy workflow configuration;
-there is currently no develop branch. They are not the contribution target.
-
-
+- Work branches from **`main`**, the default branch. Development deployments
+  use the explicit `[DEPLOY]` trigger above.
 - Work lands on **`main`** through pull requests. Keep incomplete and
   migration-dependent features behind [default-off release flags](feature-flags.md).
   Explorer can deploy up to 12 hours before plugins apply migrations; an operator
   enables those features after the schema and compatible consumers are ready.
 - Every push to **`main`** runs
-  `plugin-release.yml`, which gates publication on the full reusable JVM check.
+  `plugin-release.yml`, which waits for successful full main-push CI and its `ci-gate`.
 - CI generates `YEAR.MONTH.RUN.ATTEMPT-gCOMMIT`, for example
   `2026.10.142.1-gabc123def456`. The calendar uses UTC; RUN is the release
   workflow's incrementing run number, ATTEMPT distinguishes retries, and COMMIT
@@ -207,8 +233,9 @@ there is currently no develop branch. They are not the contribution target.
 - The four plugin filenames and embedded versions, plus the Maven version of
   `treasury-api`, share this value via Gradle's `-Pversion`.
   Business API 4 uses a separate semantic major: release CI supplies
-  `-PbusinessApiVersion=4.0.0-<bundle-version>`. Local builds and its develop
-  snapshot publisher default to `4.0.0-SNAPSHOT`. See the
+  `-PbusinessApiVersion=4.0.0-<bundle-version>`. Local builds and its development
+  snapshot publisher default to `4.0.0-SNAPSHOT`. API snapshots publish only on
+  authorized `[DEPLOY]` pushes. See the
   [Business API migration guide](components.md#migrating-to-business-api-4-adt-106--adt-69).
 - GitHub release `economy-v<VERSION>` contains the four plugins, API jars, and
   `manifest.json`: full commit SHA, version, run ID, attempt, build time, plugin
@@ -221,7 +248,7 @@ there is currently no develop branch. They are not the contribution target.
 - Builds may finish out of order. They deliberately do not update GitHub's
   `latest` pointer. Select an explicit release tag/commit for deployment; do not
   infer deployment order from completion timestamps.
-- Develop plugin builds use `YEAR.MONTH.RUN.ATTEMPT-dev-gCOMMIT`. The existing
+- Development plugin builds use `YEAR.MONTH.RUN.ATTEMPT-dev-gCOMMIT`. The existing
   `dev-latest` prerelease remains a rolling pointer for the dev deploy agent;
   the manifest's `jars` array remains compatible with that agent.
 - Production deployment should download the selected release, verify its
@@ -250,7 +277,7 @@ should follow the `:<project>:<task>` form.
 and its `ci-gate` job to succeed before publishing an immutable release. This
 covers the full main CI pipeline, including JVM, mutation, explorer, migration
 and live integration suites. It replaces the release workflow's duplicate JVM-only
-check. PR runs, develop runs and filtered manual CI runs cannot authorize a release.
+check. PR runs, development branch runs and filtered manual CI runs cannot authorize a release.
 Manual release runs and retries use the same gate. Failed/cancelled CI, missing or
 skipped gates, API errors and a 100-minute wait timeout block publication and
 staging. After fixing/rerunning CI, retry the release workflow for that commit.
