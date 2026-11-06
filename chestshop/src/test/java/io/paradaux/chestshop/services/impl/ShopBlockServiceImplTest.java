@@ -329,6 +329,18 @@ class ShopBlockServiceImplTest extends ServerTest {
     }
 
     @Test
+    void couldBeShopInventory_followsConfigurationChanges() {
+        ChestShopConfiguration cfg = TestConfigs.with(TestConfigs.defaults(), "shopContainersRaw", List.of("CHEST"));
+        ShopBlockServiceImpl reloading = new ShopBlockServiceImpl(cfg, new SignService(cfg));
+        Block hopper = world.getBlockAt(base += 6, 64, 0);
+        hopper.setType(Material.HOPPER);
+        Inventory hopperInventory = ((Container) hopper.getState()).getInventory();
+        assertThat(reloading.couldBeShopInventory(hopperInventory)).isFalse();
+        TestConfigs.with(cfg, "shopContainersRaw", List.of("CHEST", "DROPPER"));
+        assertThat(reloading.couldBeShopInventory(hopperInventory)).isTrue();
+    }
+
+    @Test
     void couldBeShopInventory_unknownTypeIsNotFiltered() {
         assertThat(service.couldBeShopInventory(mock(Inventory.class))).isTrue();
     }

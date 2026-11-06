@@ -12,7 +12,9 @@ import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.BlockUtil;
 import io.paradaux.chestshop.utils.InventoryUtil;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -139,22 +141,32 @@ public class ShopBlockServiceImpl implements ShopBlockService {
             Block leftChest = ((BlockState) leftChestSide).getBlock();
             Block rightChest = ((BlockState) rightChestSide).getBlock();
 
-            if (isShopBlock(leftChest)) {
+            if (attachedSignsPossible(leftChest, useSnapshot)) {
                 result.addAll(findConnectedShopSigns(leftChest, useSnapshot));
             }
 
-            if (isShopBlock(rightChest)) {
+            if (attachedSignsPossible(rightChest, useSnapshot)) {
                 result.addAll(findConnectedShopSigns(rightChest, useSnapshot));
             }
         } else if (chestShopInventoryHolder instanceof BlockState) {
             Block chestBlock = ((BlockState) chestShopInventoryHolder).getBlock();
 
-            if (isShopBlock(chestBlock)) {
+            if (attachedSignsPossible(chestBlock, useSnapshot)) {
                 result.addAll(findConnectedShopSigns(chestBlock, useSnapshot));
             }
         }
 
         return result;
+    }
+
+    /**
+     * The live (hopper refresh) path skips the {@link #isShopBlock} gate: it validates every
+     * nearby sign, then the per-block search validates the attached ones again. Without the
+     * gate the result is the same, because that search returns only valid signs attached to
+     * this block. The snapshot path keeps its historical order (PAR-523).
+     */
+    private boolean attachedSignsPossible(Block chest, boolean useSnapshot) {
+        return useSnapshot ? isShopBlock(chest) : couldBeShopContainer(chest);
     }
 
     @Override
@@ -224,19 +236,32 @@ public class ShopBlockServiceImpl implements ShopBlockService {
                 && config.getShopContainers().contains(block.getType());
     }
 
+    // Inventory types the configured containers hold, derived once per parsed SHOP_CONTAINERS
+    // set; null when some container's type is unknown, which disables the pre-check.
+    private Set<Material> inventoryTypesFor;
+    private Set<InventoryType> shopInventoryTypes;
+
     @Override
     public boolean couldBeShopInventory(Inventory inventory) {
         InventoryType type = inventory.getType();
         if (type == null) {
             return true; // unknown: leave the decision to couldBeShopContainer
         }
-        for (Material container : config.getShopContainers()) {
-            InventoryType expected = inventoryType(container);
-            if (expected == null || expected == type) {
-                return true;
+        Set<Material> containers = config.getShopContainers();
+        if (containers != inventoryTypesFor) {
+            Set<InventoryType> types = EnumSet.noneOf(InventoryType.class);
+            for (Material container : containers) {
+                InventoryType expected = inventoryType(container);
+                if (expected == null) {
+                    types = null;
+                    break;
+                }
+                types.add(expected);
             }
+            shopInventoryTypes = types;
+            inventoryTypesFor = containers;
         }
-        return false;
+        return shopInventoryTypes == null || shopInventoryTypes.contains(type);
     }
 
     /** The inventory type a container material holds, or {@code null} when unknown (no filtering). */

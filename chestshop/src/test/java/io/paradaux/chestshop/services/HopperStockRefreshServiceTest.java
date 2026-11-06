@@ -484,6 +484,27 @@ class HopperStockRefreshServiceTest extends ServerTest {
     }
 
     @Test
+    void blockedMinecartRetriesReuseTheShopFindingButOrdinaryChestsAreCheckedEveryTime() {
+        Inventory shop = chestAt(4, 64, 4);
+        signAt(5, 64, 4, BlockFace.EAST);
+        Inventory plain = chestAt(8, 64, 4);
+        Inventory cart = chest(27); // non-block destination, as with a minecart
+        var listener = new ItemMoveListener(refresh, config, blocks);
+        for (int i = 0; i < 5; i++) {
+            var pull = new InventoryMoveItemEvent(shop, item(Material.DIAMOND, 1), cart, false);
+            listener.onItemMove(pull);
+            assertThat(pull.isCancelled()).isTrue();
+        }
+        for (int i = 0; i < 5; i++) {
+            var pull = new InventoryMoveItemEvent(plain, item(Material.DIAMOND, 1), cart, false);
+            listener.onItemMove(pull);
+            assertThat(pull.isCancelled()).isFalse();
+        }
+        // One check for the shop's five retries; "not a shop" is never remembered.
+        verify(blocks, times(6)).isShopBlock(any(InventoryHolder.class));
+    }
+
+    @Test
     void busyContainerDoesNotPostponeOlderPendingWork() {
         TestConfigs.with(config, "hopperStockRefreshIntervalTicks", 20);
         Inventory inventory = chestAt(4, 64, 4);
