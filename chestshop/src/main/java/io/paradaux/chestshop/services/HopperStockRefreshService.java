@@ -42,6 +42,10 @@ import org.bukkit.scheduler.BukkitTask;
 public final class HopperStockRefreshService {
     static final int MAX_PENDING = 4096;
     static final int MAX_PER_TICK = 32;
+    /** How long a container found without a shop sign is skipped, absent any nearby block change. */
+    static final int NOT_SHOP_TTL_TICKS = 1200;
+
+    static final int MAX_NOT_SHOP = 65_536;
     private static final long PHASE_BUDGET_NANOS = 500_000;
 
     record ChunkKey(UUID world, int x, int z) {}
@@ -68,6 +72,11 @@ public final class HopperStockRefreshService {
     private final Map<ChunkKey, Set<Position>> deferred = new HashMap<>();
     private final Set<ChunkKey> deferredChunks = new LinkedHashSet<>();
     private int deferredPositions;
+    // Containers last found with no shop sign, by chunk, with the tick that finding expires. Only
+    // refresh work uses it: protection always checks the live world. Block changes nearby, a
+    // supported world edit and chunk unload drop a chunk's entries; the TTL covers other edits.
+    private final Map<ChunkKey, Map<Position, Long>> notShop = new HashMap<>();
+    private int notShopCount;
     private final ShopStockPublisher stock;
     private BukkitTask task;
     private long tick;
@@ -120,6 +129,8 @@ public final class HopperStockRefreshService {
         deferred.clear();
         deferredChunks.clear();
         deferredPositions = 0;
+        notShop.clear();
+        notShopCount = 0;
     }
 
     /** No sign search, inventory scan, database call or task allocation on the transfer path. */
@@ -152,11 +163,47 @@ public final class HopperStockRefreshService {
     }
 
     private void enqueue(Position pos) {
-        if (pending.containsKey(pos)) return;
+        if (pending.containsKey(pos) || knownNotShop(pos)) return;
         if (pending.size() < MAX_PENDING) {
             pending.put(pos, tick);
         } else {
             reconcileChunk(pos.world(), pos.x() >> 4, pos.z() >> 4);
+        }
+    }
+
+    private boolean knownNotShop(Position pos) {
+        Map<Position, Long> chunk = notShop.get(pos.chunk());
+        Long expires = chunk == null ? null : chunk.get(pos);
+        if (expires == null) return false;
+        if (tick < expires) return true;
+        chunk.remove(pos);
+        notShopCount--;
+        if (chunk.isEmpty()) notShop.remove(pos.chunk());
+        return false;
+    }
+
+    private void rememberNotShop(Position pos) {
+        if (notShopCount >= MAX_NOT_SHOP) return; // past the cap, refreshes simply rediscover
+        if (notShop.computeIfAbsent(pos.chunk(), ignored -> new HashMap<>()).put(pos, tick + NOT_SHOP_TTL_TICKS)
+                == null) {
+            notShopCount++;
+        }
+    }
+
+    private void forgetNotShop(ChunkKey key) {
+        Map<Position, Long> dropped = notShop.remove(key);
+        if (dropped != null) notShopCount -= dropped.size();
+    }
+
+    /**
+     * A block changed at this column: containers within two blocks may have become shops (a
+     * sign placed or edited, a chest joined into a double chest), so rediscover them.
+     */
+    public void blockChanged(UUID world, int x, int z) {
+        for (int cx = (x - 2) >> 4; cx <= (x + 2) >> 4; cx++) {
+            for (int cz = (z - 2) >> 4; cz <= (z + 2) >> 4; cz++) {
+                forgetNotShop(new ChunkKey(world, cx, cz));
+            }
         }
     }
 
@@ -178,6 +225,7 @@ public final class HopperStockRefreshService {
         World loaded = plugin.getServer().getWorld(world);
         if (loaded != null) stock.unloadChunk(loaded.getName(), x, z);
         ChunkKey key = new ChunkKey(world, x, z);
+        forgetNotShop(key);
         Set<Position> dropped = new LinkedHashSet<>();
         pending.keySet().removeIf(pos -> pos.chunk().equals(key) && dropped.add(pos));
         recovery.removeIf(pos -> pos.chunk().equals(key) && dropped.add(pos));
@@ -206,6 +254,11 @@ public final class HopperStockRefreshService {
             return true;
         });
         deferredChunks.removeIf(key -> key.world().equals(world));
+        notShop.entrySet().removeIf(entry -> {
+            if (!entry.getKey().world().equals(world)) return false;
+            notShopCount -= entry.getValue().size();
+            return true;
+        });
     }
 
     void drain() {
@@ -257,11 +310,20 @@ public final class HopperStockRefreshService {
         World world = plugin.getServer().getWorld(pos.world());
         if (world == null || !world.isChunkLoaded(pos.x() >> 4, pos.z() >> 4)) return;
         var block = world.getBlockAt(pos.x(), pos.y(), pos.z());
-        if (!blocks.couldBeShopContainer(block) || !(block.getState(false) instanceof Container container)) return;
+        if (!blocks.couldBeShopContainer(block) || !(block.getState(false) instanceof Container container)) {
+            rememberNotShop(pos);
+            return;
+        }
         Inventory inventory = container.getInventory();
         boolean counting = countersEnabled();
         // Live states: snapshots copied every sign's block entity on each refresh (PAR-523).
-        for (Sign sign : blocks.findConnectedShopSigns(getHolder(inventory, false), false)) {
+        var shopSigns = blocks.findConnectedShopSigns(getHolder(inventory, false), false);
+        if (shopSigns.isEmpty()) {
+            // Most hopper traffic is ordinary sorting: skip this container until something changes.
+            rememberNotShop(pos);
+            return;
+        }
+        for (Sign sign : shopSigns) {
             boolean admin = signs.isAdminShop(sign);
             if (config.isForceUnlimitedAdminShop() && admin) continue;
             if (!refreshedSigns.add(position(sign))) continue;

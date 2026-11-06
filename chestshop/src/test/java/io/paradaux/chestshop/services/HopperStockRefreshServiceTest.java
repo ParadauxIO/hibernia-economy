@@ -223,6 +223,79 @@ class HopperStockRefreshServiceTest extends ServerTest {
     }
 
     @Test
+    void containerWithoutShopSignIsDiscoveredOncePerTtl() {
+        Inventory sorter = chestAt(4, 64, 4);
+        for (int round = 0; round < 3; round++) {
+            refresh.markDirty(sorter);
+            ticks(100);
+        }
+        verify(blocks, times(1)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        ticks(HopperStockRefreshService.NOT_SHOP_TTL_TICKS);
+        refresh.markDirty(sorter);
+        ticks(100);
+        verify(blocks, times(2)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+    }
+
+    @Test
+    void placingOrEditingASignNearbyEndsTheNotShopSkip() {
+        Inventory inventory = chestAt(4, 64, 4);
+        inventory.addItem(item(Material.DIAMOND, 3));
+        refresh.markDirty(inventory);
+        ticks(100); // no sign yet: remembered as not a shop
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        refresh.markDirty(inventory);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("1"); // still skipped: no block change was reported
+
+        ItemMoveListener listener = new ItemMoveListener(refresh, config, blocks);
+        listener.onSignChange(new org.bukkit.event.block.SignChangeEvent(
+                sign, server.addPlayer(), new String[] {"Notch", "1", "B 5", "Diamond"}));
+        refresh.markDirty(inventory);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 3");
+    }
+
+    @Test
+    void placedBlocksWithinTwoBlocksAcrossAChunkEdgeEndTheSkip() {
+        world.loadChunk(1, 0);
+        Inventory inventory = chestAt(17, 64, 4); // chunk 1; the change below is in chunk 0
+        inventory.addItem(item(Material.DIAMOND, 2));
+        refresh.markDirty(inventory);
+        ticks(100);
+        Block sign = signAt(18, 64, 4, BlockFace.EAST);
+        Block placed = world.getBlockAt(15, 64, 4);
+        placed.setType(Material.STONE);
+        ItemMoveListener listener = new ItemMoveListener(refresh, config, blocks);
+        listener.onBlockPlace(new org.bukkit.event.block.BlockPlaceEvent(
+                placed,
+                placed.getState(),
+                placed.getRelative(BlockFace.DOWN),
+                item(Material.STONE, 1),
+                server.addPlayer(),
+                true,
+                org.bukkit.inventory.EquipmentSlot.HAND));
+        refresh.markDirty(inventory);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 2");
+    }
+
+    @Test
+    void chunkUnloadForgetsNotShopFindings() {
+        Inventory inventory = chestAt(4, 64, 4);
+        refresh.markDirty(inventory);
+        ticks(100);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        refresh.loadChunk(world.getUID(), 0, 0);
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(blocks, times(2)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        refresh.unloadWorld(world.getUID());
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(blocks, times(3)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+    }
+
+    @Test
     void unloadDiscardsCoordinatesAndReloadReconcilesWithoutAnotherTransfer() {
         Inventory inventory = chestAt(4, 64, 4);
         Block sign = signAt(5, 64, 4, BlockFace.EAST);

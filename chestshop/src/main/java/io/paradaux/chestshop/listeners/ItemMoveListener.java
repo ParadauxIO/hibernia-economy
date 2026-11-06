@@ -6,10 +6,13 @@ import com.google.inject.Inject;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.HopperStockRefreshService;
 import io.paradaux.chestshop.services.ShopBlockService;
+import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
@@ -52,6 +55,21 @@ public class ItemMoveListener implements Listener {
     public void onStockMove(InventoryMoveItemEvent event) {
         stockRefresh.markDirty(event.getSource());
         stockRefresh.markDirty(event.getDestination());
+    }
+
+    // A placed or edited sign, or a chest joining a double chest, can turn a container into a shop.
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        blockChanged(event.getBlock());
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+    public void onSignChange(SignChangeEvent event) {
+        blockChanged(event.getBlock());
+    }
+
+    private void blockChanged(Block block) {
+        stockRefresh.blockChanged(block.getWorld().getUID(), block.getX(), block.getZ());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
