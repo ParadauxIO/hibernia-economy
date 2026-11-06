@@ -244,6 +244,14 @@ public class WebhookDispatcherService {
      */
     private void sendInOrder(List<DueDelivery> group) {
         for (DueDelivery d : group) {
+            // A tick can outlast the lease (each webhook's queue is sent one at a
+            // time), and another replica takes over once it expires. Renew before
+            // every send and stop the moment we no longer hold it, so two replicas
+            // never send the same due delivery.
+            if (!lock.tryAcquireOrRenew()) {
+                log.warn("Webhook dispatcher lease lost mid-batch; leaving the rest to the new holder");
+                return;
+            }
             Duration wait = deliver(d);
             if (wait != null) {
                 long seconds = Math.max(1, (wait.toMillis() + 999) / 1000);
