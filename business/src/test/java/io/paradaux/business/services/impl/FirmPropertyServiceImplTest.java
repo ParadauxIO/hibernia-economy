@@ -1,23 +1,23 @@
 package io.paradaux.business.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import io.paradaux.business.internal.model.FirmProperty;
 import io.paradaux.business.mappers.FirmPropertyMapper;
-import io.paradaux.business.model.FirmProperty;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FirmPropertyServiceImplTest {
 
-    @Mock FirmPropertyMapper mapper;
+    @Mock
+    FirmPropertyMapper mapper;
 
     private FirmPropertyServiceImpl svc;
 

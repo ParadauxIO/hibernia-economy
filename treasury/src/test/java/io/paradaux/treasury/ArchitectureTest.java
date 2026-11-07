@@ -1,10 +1,13 @@
 package io.paradaux.treasury;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import io.paradaux.treasury.api.TreasuryApi;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,6 +20,25 @@ class ArchitectureTest {
     private static final JavaClasses MAIN = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages("io.paradaux.treasury");
+
+    @Test
+    void pluginPackagesNeverOverlapThePublishedApi() {
+        // Import each artifact separately: importPackages includes both on the flat test classpath.
+        var pluginClasses = new ClassFileImporter()
+                .importUrl(Treasury.class.getProtectionDomain().getCodeSource().getLocation());
+        var apiClasses = new ClassFileImporter()
+                .importUrl(
+                        TreasuryApi.class.getProtectionDomain().getCodeSource().getLocation());
+
+        assertThat(pluginClasses).isNotEmpty();
+        assertThat(apiClasses).isNotEmpty();
+        assertThat(pluginClasses.stream().map(JavaClass::getPackageName).distinct())
+                .as("Treasury implementation packages must be separate from treasury-api")
+                .doesNotContainAnyElementsOf(apiClasses.stream()
+                        .map(JavaClass::getPackageName)
+                        .distinct()
+                        .toList());
+    }
 
     @Test
     void entrypointsNeverTouchTheMappers() {

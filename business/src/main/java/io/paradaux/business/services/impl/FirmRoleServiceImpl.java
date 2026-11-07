@@ -2,11 +2,11 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.model.internal.Firm;
-import io.paradaux.business.model.internal.FirmRole;
-import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmRoleService;
 import io.paradaux.business.services.FirmService;

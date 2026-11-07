@@ -1,15 +1,14 @@
 package io.paradaux.treasury.mappers;
 
-import io.paradaux.treasury.model.economy.AccountRedirect;
+import io.paradaux.treasury.internal.model.economy.AccountRedirect;
+import java.util.List;
+import java.util.UUID;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Result;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Select;
-
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Lookups for {@code account_redirects} — the table that routes Vault
@@ -45,8 +44,8 @@ public interface AccountRedirectMapper {
      */
     @Select("SELECT redirect_uuid_bin, account_id FROM account_redirects")
     @Results({
-            @Result(column = "redirect_uuid_bin", property = "redirectUuid"),
-            @Result(column = "account_id", property = "accountId")
+        @Result(column = "redirect_uuid_bin", property = "redirectUuid"),
+        @Result(column = "account_id", property = "accountId")
     })
     List<AccountRedirect> findAllRedirects();
 
@@ -62,7 +61,5 @@ public interface AccountRedirectMapper {
                 account_id = VALUES(account_id),
                 note       = VALUES(note)
             """)
-    int upsertRedirect(@Param("uuid") UUID uuid,
-                       @Param("accountId") int accountId,
-                       @Param("note") String note);
+    int upsertRedirect(@Param("uuid") UUID uuid, @Param("accountId") int accountId, @Param("note") String note);
 }

@@ -150,8 +150,8 @@ val coverageExcludes = listOf(
     "io/paradaux/treasury/events/**",
     "io/paradaux/treasury/tasks/**",
     "io/paradaux/treasury/guice/**",
-    "io/paradaux/treasury/utils/CallingPluginDetector.class",
-    "io/paradaux/treasury/utils/LoggingConfigurer.class",
+    "io/paradaux/treasury/internal/utils/CallingPluginDetector.class",
+    "io/paradaux/treasury/internal/utils/LoggingConfigurer.class",
     "io/paradaux/treasury/mappers/**",
 )
 
@@ -247,16 +247,16 @@ pitest {
         listOf(
             "io.paradaux.treasury.services.impl.*",
             "io.paradaux.treasury.services.cache.*",
-            "io.paradaux.treasury.api.impl.*",
+            "io.paradaux.treasury.internal.api.*",
             "io.paradaux.treasury.adapters.VaultEconomyAdapter*",
-            "io.paradaux.treasury.utils.*",
+            "io.paradaux.treasury.internal.utils.*",
         ),
     )
     excludedClasses.set(
         listOf(
             // Bukkit/log4j glue (also outside the jacoco gate).
-            "io.paradaux.treasury.utils.CallingPluginDetector*",
-            "io.paradaux.treasury.utils.LoggingConfigurer*",
+            "io.paradaux.treasury.internal.utils.CallingPluginDetector*",
+            "io.paradaux.treasury.internal.utils.LoggingConfigurer*",
         ),
     )
     // DB ITs run under PIT and share one schema: one minion at a time (see the

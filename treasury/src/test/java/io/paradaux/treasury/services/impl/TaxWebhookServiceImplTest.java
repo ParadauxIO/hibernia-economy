@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.sun.net.httpserver.HttpServer;
-import io.paradaux.treasury.model.config.DiscordWebhookConfiguration;
-import io.paradaux.treasury.model.tax.TaxCycleReport;
+import io.paradaux.treasury.internal.model.config.DiscordWebhookConfiguration;
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
 import io.paradaux.treasury.model.tax.TaxCycleType;
 import io.paradaux.treasury.testsupport.TestConfigs;
 import java.io.IOException;

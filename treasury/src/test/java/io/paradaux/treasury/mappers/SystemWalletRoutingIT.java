@@ -3,13 +3,13 @@ package io.paradaux.treasury.mappers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.UUID;

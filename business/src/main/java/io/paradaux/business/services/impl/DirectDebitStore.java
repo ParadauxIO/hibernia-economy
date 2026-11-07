@@ -2,12 +2,12 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.business.internal.model.directdebit.CollectionStatus;
+import io.paradaux.business.internal.model.directdebit.DirectDebitCollection;
+import io.paradaux.business.internal.model.directdebit.DirectDebitKind;
+import io.paradaux.business.internal.model.directdebit.DirectDebitMandate;
+import io.paradaux.business.internal.model.directdebit.DirectDebitStatus;
 import io.paradaux.business.mappers.DirectDebitMapper;
-import io.paradaux.business.model.directdebit.CollectionStatus;
-import io.paradaux.business.model.directdebit.DirectDebitCollection;
-import io.paradaux.business.model.directdebit.DirectDebitKind;
-import io.paradaux.business.model.directdebit.DirectDebitMandate;
-import io.paradaux.business.model.directdebit.DirectDebitStatus;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ConflictException;
 import io.paradaux.hibernia.framework.exceptions.ExceedsLimitException;

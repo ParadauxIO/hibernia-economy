@@ -1,13 +1,12 @@
 package io.paradaux.treasury.services;
 
-import io.paradaux.treasury.model.tax.TaxCycleReport;
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
 import io.paradaux.treasury.model.tax.TaxCycleType;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Owns mutable state related to tax cycles:
@@ -38,8 +37,7 @@ public interface TaxCycleRegistry {
 
     // ---- Cycle session ----
 
-    void startSession(TaxCycleType cycleType, Instant periodStart,
-                      boolean manual, @Nullable String triggeredBy);
+    void startSession(TaxCycleType cycleType, Instant periodStart, boolean manual, @Nullable String triggeredBy);
 
     void recordCollected(int destinationAccountId, String taxType, BigDecimal amount);
 
@@ -49,5 +47,6 @@ public interface TaxCycleRegistry {
 
     boolean hasActiveSession();
 
-    @Nullable TaxCycleReport endSession();
+    @Nullable
+    TaxCycleReport endSession();
 }

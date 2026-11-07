@@ -1,7 +1,7 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.directdebit.DirectDebitCollection;
-import io.paradaux.business.model.directdebit.DirectDebitMandate;
+import io.paradaux.business.internal.model.directdebit.DirectDebitCollection;
+import io.paradaux.business.internal.model.directdebit.DirectDebitMandate;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;

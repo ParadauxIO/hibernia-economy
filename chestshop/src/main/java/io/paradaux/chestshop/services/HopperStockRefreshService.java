@@ -21,6 +21,7 @@ import org.bukkit.block.DoubleChest;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -41,15 +42,62 @@ import org.bukkit.scheduler.BukkitTask;
 public final class HopperStockRefreshService {
     static final int MAX_PENDING = 4096;
     static final int MAX_PER_TICK = 32;
+    /**
+     * How long a container found without a shop sign is skipped, absent any nearby block change:
+     * between the base and twice the base, by position. Spreading expiry turns rediscovery of a
+     * sorter network into a steady trickle rather than a burst every minute.
+     */
+    static final int NOT_SHOP_TTL_TICKS = 600;
+
+    static final int MAX_NOT_SHOP = 65_536;
     private static final long PHASE_BUDGET_NANOS = 500_000;
 
-    record ChunkKey(UUID world, int x, int z) {}
+    // Hand-written equality: these key a lookup on every hopper transfer. Coordinates are
+    // compared first, and a world's UUID is normally the same instance.
+    record ChunkKey(UUID world, int x, int z) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof ChunkKey k && x == k.x && z == k.z && (world == k.world || world.equals(k.world));
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * x + z;
+        }
+    }
 
     record Position(UUID world, int x, int y, int z) {
         ChunkKey chunk() {
             return new ChunkKey(world, x >> 4, z >> 4);
         }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Position p
+                    && x == p.x
+                    && y == p.y
+                    && z == p.z
+                    && (world == p.world || world.equals(p.world));
+        }
+
+        @Override
+        public int hashCode() {
+            return (x * 31 + z) * 31 + y;
+        }
     }
+
+    /**
+     * How long a parsed sign item is reused. Parsing consults custom-item providers and fires
+     * the legacy ItemParseEvent, and dominated each refresh. After a provider reload a counter
+     * may count the previous definition for this long; it never affects trades.
+     */
+    static final int ITEM_TTL_TICKS = 600;
+
+    static final int MAX_PARSED_ITEMS = 1024;
+
+    private record ParsedItem(ItemStack item, long expires) {}
+
+    private final Map<String, ParsedItem> parsedItems = new HashMap<>();
 
     private final JavaPlugin plugin;
     private final ChestShopConfiguration config;
@@ -67,9 +115,20 @@ public final class HopperStockRefreshService {
     private final Map<ChunkKey, Set<Position>> deferred = new HashMap<>();
     private final Set<ChunkKey> deferredChunks = new LinkedHashSet<>();
     private int deferredPositions;
+    // Containers last found with no shop sign, by chunk, with the tick that finding expires. Only
+    // refresh work uses it: protection always checks the live world. Block changes nearby, a
+    // supported world edit and chunk unload drop a chunk's entries; the TTL covers other edits.
+    // One lookup per transfer: expiry by position, plus a per-chunk index used only to forget.
+    private final Map<Position, Long> notShop = new HashMap<>();
+    private final Map<ChunkKey, Set<Position>> notShopByChunk = new HashMap<>();
     private final ShopStockPublisher stock;
     private BukkitTask task;
     private long tick;
+    // Running totals for diagnostics and the PAR-523 benchmark: positions refreshed, shop signs
+    // refreshed and transfers that skipped a known non-shop. Main thread only.
+    private long refreshes;
+    private long signRefreshes;
+    private long notShopSkips;
 
     @Inject
     public HopperStockRefreshService(
@@ -99,6 +158,13 @@ public final class HopperStockRefreshService {
         this.nanoTime = nanoTime;
     }
 
+    /** Running totals since start: positions refreshed, shop signs refreshed, known non-shops skipped. */
+    public record Stats(long refreshes, long signRefreshes, long notShopSkips) {}
+
+    public Stats stats() {
+        return new Stats(refreshes, signRefreshes, notShopSkips);
+    }
+
     public void start() {
         if (task == null) {
             task = plugin.getServer().getScheduler().runTaskTimer(plugin, this::drain, 1L, 1L);
@@ -119,11 +185,15 @@ public final class HopperStockRefreshService {
         deferred.clear();
         deferredChunks.clear();
         deferredPositions = 0;
+        notShop.clear();
+        notShopByChunk.clear();
+        parsedItems.clear();
     }
 
     /** No sign search, inventory scan, database call or task allocation on the transfer path. */
     public void markDirty(Inventory inventory) {
-        if (!enabled()) return;
+        // Most transfers have a hopper at one end: skip it before resolving any holder.
+        if (!enabled() || !blocks.couldBeShopInventory(inventory)) return;
         enqueue(getHolder(inventory, false));
     }
 
@@ -150,11 +220,53 @@ public final class HopperStockRefreshService {
     }
 
     private void enqueue(Position pos) {
-        if (pending.containsKey(pos)) return;
+        if (knownNotShop(pos) || pending.containsKey(pos)) return;
         if (pending.size() < MAX_PENDING) {
             pending.put(pos, tick);
         } else {
             reconcileChunk(pos.world(), pos.x() >> 4, pos.z() >> 4);
+        }
+    }
+
+    private boolean knownNotShop(Position pos) {
+        Long expires = notShop.get(pos);
+        if (expires == null) return false;
+        if (tick < expires) {
+            notShopSkips++;
+            return true;
+        }
+        notShop.remove(pos);
+        notShopByChunk.computeIfPresent(pos.chunk(), (key, chunk) -> {
+            chunk.remove(pos);
+            return chunk.isEmpty() ? null : chunk;
+        });
+        return false;
+    }
+
+    private void rememberNotShop(Position pos) {
+        if (notShop.size() >= MAX_NOT_SHOP) return; // past the cap, refreshes simply rediscover
+        long expires = tick + NOT_SHOP_TTL_TICKS + Math.floorMod(pos.hashCode(), NOT_SHOP_TTL_TICKS);
+        if (notShop.put(pos, expires) == null) {
+            notShopByChunk
+                    .computeIfAbsent(pos.chunk(), ignored -> new HashSet<>())
+                    .add(pos);
+        }
+    }
+
+    private void forgetNotShop(ChunkKey key) {
+        Set<Position> dropped = notShopByChunk.remove(key);
+        if (dropped != null) dropped.forEach(notShop::remove);
+    }
+
+    /**
+     * A block changed at this column: containers within two blocks may have become shops (a
+     * sign placed or edited, a chest joined into a double chest), so rediscover them.
+     */
+    public void blockChanged(UUID world, int x, int z) {
+        for (int cx = (x - 2) >> 4; cx <= (x + 2) >> 4; cx++) {
+            for (int cz = (z - 2) >> 4; cz <= (z + 2) >> 4; cz++) {
+                forgetNotShop(new ChunkKey(world, cx, cz));
+            }
         }
     }
 
@@ -176,6 +288,7 @@ public final class HopperStockRefreshService {
         World loaded = plugin.getServer().getWorld(world);
         if (loaded != null) stock.unloadChunk(loaded.getName(), x, z);
         ChunkKey key = new ChunkKey(world, x, z);
+        forgetNotShop(key);
         Set<Position> dropped = new LinkedHashSet<>();
         pending.keySet().removeIf(pos -> pos.chunk().equals(key) && dropped.add(pos));
         recovery.removeIf(pos -> pos.chunk().equals(key) && dropped.add(pos));
@@ -204,6 +317,8 @@ public final class HopperStockRefreshService {
             return true;
         });
         deferredChunks.removeIf(key -> key.world().equals(world));
+        notShop.keySet().removeIf(pos -> pos.world().equals(world));
+        notShopByChunk.keySet().removeIf(key -> key.world().equals(world));
     }
 
     void drain() {
@@ -249,21 +364,51 @@ public final class HopperStockRefreshService {
         }
     }
 
+    private ItemStack itemFor(String code) {
+        ParsedItem parsed = parsedItems.get(code);
+        if (parsed == null || tick >= parsed.expires()) {
+            if (parsedItems.size() >= MAX_PARSED_ITEMS) parsedItems.clear();
+            // Unparseable codes are remembered too, so a broken sign is not reparsed each batch.
+            parsed = new ParsedItem(counters.determineItemTradedByShop(code), tick + ITEM_TTL_TICKS);
+            parsedItems.put(code, parsed);
+        }
+        return parsed.item();
+    }
+
     private void refresh(Position pos, Set<Position> refreshedSigns) {
+        refreshes++;
         World world = plugin.getServer().getWorld(pos.world());
         if (world == null || !world.isChunkLoaded(pos.x() >> 4, pos.z() >> 4)) return;
         var block = world.getBlockAt(pos.x(), pos.y(), pos.z());
-        if (!blocks.couldBeShopContainer(block) || !(block.getState(false) instanceof Container container)) return;
+        if (!blocks.couldBeShopContainer(block) || !(block.getState(false) instanceof Container container)) {
+            rememberNotShop(pos);
+            return;
+        }
         Inventory inventory = container.getInventory();
         boolean counting = countersEnabled();
-        for (Sign sign : blocks.findConnectedShopSigns(getHolder(inventory, false))) {
+        // Live states: snapshots copied every sign's block entity on each refresh (PAR-523).
+        var shopSigns = blocks.findConnectedShopSigns(getHolder(inventory, false), false);
+        if (shopSigns.isEmpty()) {
+            // Most hopper traffic is ordinary sorting: skip this container until something changes.
+            rememberNotShop(pos);
+            return;
+        }
+        for (Sign sign : shopSigns) {
             boolean admin = signs.isAdminShop(sign);
             if (config.isForceUnlimitedAdminShop() && admin) continue;
-            if (refreshedSigns.add(position(sign))) {
+            if (!refreshedSigns.add(position(sign))) continue;
+            signRefreshes++;
+            String code = SignService.getItem(sign);
+            if (WildcardItems.isPattern(code)) {
+                // Wildcard shops count by pattern and have no registry row.
                 if (counting) counters.updateCounterOnQuantityLine(sign, inventory);
-                // The registry records no stock for admin shops.
-                if (!admin) stock.publish(sign, inventory);
+                continue;
             }
+            ItemStack item = itemFor(code);
+            if (item == null) continue;
+            if (counting) counters.updateCounterForItem(sign, inventory, item);
+            // The registry records no stock for admin shops.
+            if (!admin) stock.publish(sign, inventory, item);
         }
     }
 

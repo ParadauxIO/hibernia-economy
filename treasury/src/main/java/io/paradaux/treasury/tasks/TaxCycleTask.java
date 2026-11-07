@@ -2,11 +2,11 @@ package io.paradaux.treasury.tasks;
 
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.event.TaxCycleEvent;
-import io.paradaux.treasury.model.tax.TaxCycleReport;
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
+import io.paradaux.treasury.internal.utils.TaxCycleSchedule;
 import io.paradaux.treasury.model.tax.TaxCycleType;
 import io.paradaux.treasury.services.TaxCycleRegistry;
 import io.paradaux.treasury.services.TaxWebhookService;
-import io.paradaux.treasury.utils.TaxCycleSchedule;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZonedDateTime;

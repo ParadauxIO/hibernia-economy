@@ -31,6 +31,7 @@ import org.bukkit.block.data.type.WallSign;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -139,14 +140,87 @@ class HopperStockRefreshServiceTest extends ServerTest {
         inventory.addItem(item(Material.DIAMOND, 10));
         for (int i = 0; i < 10_000; i++) refresh.markDirty(inventory);
         verifyNoInteractions(counters);
-        verify(blocks, never()).findConnectedShopSigns(any(InventoryHolder.class));
+        verify(blocks, never()).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
         ticks(99);
         assertThat(counter(east)).isEqualTo("1");
         inventory.setItem(0, item(Material.DIAMOND, 7));
         ticks(1);
         assertThat(counter(east)).isEqualTo("Q 1 : C 7");
         assertThat(counter(west)).isEqualTo("Q 1 : C 7");
-        verify(blocks, times(1)).findConnectedShopSigns(any(InventoryHolder.class));
+        verify(blocks, times(1)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        // Both signs trade diamonds: the item is parsed once for the batch, not once per sign.
+        verify(counters, times(1)).determineItemTradedByShop("Diamond");
+    }
+
+    @Test
+    void wildcardSignsCountByPatternAndUnparseableItemsAreSkipped() {
+        when(stock.enabled()).thenReturn(true);
+        Inventory inventory = chestAt(4, 64, 4);
+        Block wildcard = signAt(5, 64, 4, BlockFace.EAST);
+        Sign sign = (Sign) wildcard.getState();
+        SignText.setLine(sign, 3, "diamond*");
+        sign.update();
+        Inventory other = chestAt(8, 64, 4);
+        Block unknown = signAt(9, 64, 4, BlockFace.EAST);
+        sign = (Sign) unknown.getState();
+        SignText.setLine(sign, 3, "Unobtainium");
+        sign.update();
+        refresh.markDirty(inventory);
+        refresh.markDirty(other);
+        ticks(100);
+        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, never()).updateCounterForItem(any(), any(), any());
+        verify(stock, never()).publish(any(Sign.class), any(Inventory.class), any(ItemStack.class));
+        assertThat(counter(unknown)).isEqualTo("1");
+    }
+
+    @Test
+    void parsedItemsAreReusedAcrossBatchesUntilTheirTtl() {
+        Inventory inventory = chestAt(4, 64, 4);
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        for (int round = 1; round <= 3; round++) {
+            inventory.setItem(0, item(Material.DIAMOND, round));
+            refresh.markDirty(inventory);
+            ticks(100);
+            assertThat(counter(sign)).isEqualTo("Q 1 : C " + round);
+        }
+        verify(counters, times(1)).determineItemTradedByShop("Diamond");
+        ticks(HopperStockRefreshService.ITEM_TTL_TICKS);
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(counters, times(2)).determineItemTradedByShop("Diamond");
+    }
+
+    @Test
+    void positionsAndChunksCompareByValue() {
+        var world = java.util.UUID.randomUUID();
+        var copy = new java.util.UUID(world.getMostSignificantBits(), world.getLeastSignificantBits());
+        var a = new HopperStockRefreshService.Position(world, 1, 2, 3);
+        assertThat(a)
+                .isEqualTo(new HopperStockRefreshService.Position(copy, 1, 2, 3))
+                .hasSameHashCodeAs(new HopperStockRefreshService.Position(copy, 1, 2, 3))
+                .isNotEqualTo(new HopperStockRefreshService.Position(world, 1, 2, 4))
+                .isNotEqualTo(new HopperStockRefreshService.Position(world, 1, 3, 3))
+                .isNotEqualTo(new HopperStockRefreshService.Position(world, 0, 2, 3))
+                .isNotEqualTo(new HopperStockRefreshService.Position(java.util.UUID.randomUUID(), 1, 2, 3))
+                .isNotEqualTo("1,2,3");
+        assertThat(a.chunk())
+                .isEqualTo(new HopperStockRefreshService.ChunkKey(copy, 0, 0))
+                .hasSameHashCodeAs(new HopperStockRefreshService.ChunkKey(copy, 0, 0))
+                .isNotEqualTo(new HopperStockRefreshService.ChunkKey(world, 0, 1))
+                .isNotEqualTo(new HopperStockRefreshService.ChunkKey(world, 1, 0))
+                .isNotEqualTo(new HopperStockRefreshService.ChunkKey(java.util.UUID.randomUUID(), 0, 0))
+                .isNotEqualTo(a);
+    }
+
+    @Test
+    void hopperInventoriesAreNeverQueued() {
+        Block hopper = world.getBlockAt(12, 64, 4);
+        hopper.setType(Material.HOPPER);
+        refresh.markDirty(((Container) hopper.getState()).getInventory());
+        ticks(200);
+        verify(blocks, never()).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        verify(blocks, never()).couldBeShopContainer(any(Block.class));
     }
 
     @Test
@@ -184,7 +258,85 @@ class HopperStockRefreshServiceTest extends ServerTest {
         sign.setType(Material.AIR);
         ticks(100);
         assertThat(sign.getType()).isEqualTo(Material.AIR);
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
+    }
+
+    @Test
+    void containerWithoutShopSignIsDiscoveredOncePerTtl() {
+        Inventory sorter = chestAt(4, 64, 4);
+        Inventory neighbour = chestAt(8, 64, 4); // same chunk
+        for (int round = 0; round < 3; round++) {
+            refresh.markDirty(sorter);
+            refresh.markDirty(neighbour);
+            ticks(100);
+        }
+        verify(blocks, times(2)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        // Two discoveries, then two skipped transfers per later round; no shop signs.
+        assertThat(refresh.stats()).isEqualTo(new HopperStockRefreshService.Stats(2, 0, 4));
+        ticks(2 * HopperStockRefreshService.NOT_SHOP_TTL_TICKS); // the longest spread expiry
+        refresh.markDirty(sorter);
+        refresh.markDirty(neighbour);
+        ticks(100);
+        verify(blocks, times(4)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+    }
+
+    @Test
+    void placingOrEditingASignNearbyEndsTheNotShopSkip() {
+        Inventory inventory = chestAt(4, 64, 4);
+        inventory.addItem(item(Material.DIAMOND, 3));
+        refresh.markDirty(inventory);
+        ticks(100); // no sign yet: remembered as not a shop
+        Block sign = signAt(5, 64, 4, BlockFace.EAST);
+        refresh.markDirty(inventory);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("1"); // still skipped: no block change was reported
+
+        ItemMoveListener listener = new ItemMoveListener(refresh, config, blocks);
+        listener.onSignChange(new org.bukkit.event.block.SignChangeEvent(
+                sign, server.addPlayer(), new String[] {"Notch", "1", "B 5", "Diamond"}));
+        refresh.markDirty(inventory);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 3");
+    }
+
+    @Test
+    void placedBlocksWithinTwoBlocksAcrossAChunkEdgeEndTheSkip() {
+        world.loadChunk(1, 0);
+        Inventory inventory = chestAt(17, 64, 4); // chunk 1; the change below is in chunk 0
+        inventory.addItem(item(Material.DIAMOND, 2));
+        refresh.markDirty(inventory);
+        ticks(100);
+        Block sign = signAt(18, 64, 4, BlockFace.EAST);
+        Block placed = world.getBlockAt(15, 64, 4);
+        placed.setType(Material.STONE);
+        ItemMoveListener listener = new ItemMoveListener(refresh, config, blocks);
+        listener.onBlockPlace(new org.bukkit.event.block.BlockPlaceEvent(
+                placed,
+                placed.getState(),
+                placed.getRelative(BlockFace.DOWN),
+                item(Material.STONE, 1),
+                server.addPlayer(),
+                true,
+                org.bukkit.inventory.EquipmentSlot.HAND));
+        refresh.markDirty(inventory);
+        ticks(100);
+        assertThat(counter(sign)).isEqualTo("Q 1 : C 2");
+    }
+
+    @Test
+    void chunkUnloadForgetsNotShopFindings() {
+        Inventory inventory = chestAt(4, 64, 4);
+        refresh.markDirty(inventory);
+        ticks(100);
+        refresh.unloadChunk(world.getUID(), 0, 0);
+        refresh.loadChunk(world.getUID(), 0, 0);
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(blocks, times(2)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
+        refresh.unloadWorld(world.getUID());
+        refresh.markDirty(inventory);
+        ticks(100);
+        verify(blocks, times(3)).findConnectedShopSigns(any(InventoryHolder.class), eq(false));
     }
 
     @Test
@@ -232,7 +384,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         assertThat(enumerations).hasValue(0);
         refresh.loadChunk(world.getUID(), 0, 0); // restored once, not on every later load
         ticks(200);
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -271,8 +423,10 @@ class HopperStockRefreshServiceTest extends ServerTest {
         Block signBlock = signAt(5, 64, 4, BlockFace.EAST);
         refresh.markDirty(inventory);
         ticks(100);
-        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class));
-        verifyNoInteractions(counters);
+        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class), any(ItemStack.class));
+        // The item is still resolved for /find, but no counter is written.
+        verify(counters, never()).updateCounterForItem(any(), any(), any());
+        verify(counters, never()).updateCounterOnQuantityLine(any(), any());
         assertThat(counter(signBlock)).isEqualTo("1");
 
         Sign sign = (Sign) signBlock.getState();
@@ -280,7 +434,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         sign.update();
         refresh.markDirty(inventory);
         ticks(100);
-        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class));
+        verify(stock, times(1)).publish(any(Sign.class), any(Inventory.class), any(ItemStack.class));
     }
 
     @Test
@@ -370,7 +524,28 @@ class HopperStockRefreshServiceTest extends ServerTest {
         server.getPluginManager().callEvent(allowed);
         assertThat(allowed.isCancelled()).isFalse();
         ticks(200);
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
+    }
+
+    @Test
+    void blockedMinecartRetriesReuseTheShopFindingButOrdinaryChestsAreCheckedEveryTime() {
+        Inventory shop = chestAt(4, 64, 4);
+        signAt(5, 64, 4, BlockFace.EAST);
+        Inventory plain = chestAt(8, 64, 4);
+        Inventory cart = chest(27); // non-block destination, as with a minecart
+        var listener = new ItemMoveListener(refresh, config, blocks);
+        for (int i = 0; i < 5; i++) {
+            var pull = new InventoryMoveItemEvent(shop, item(Material.DIAMOND, 1), cart, false);
+            listener.onItemMove(pull);
+            assertThat(pull.isCancelled()).isTrue();
+        }
+        for (int i = 0; i < 5; i++) {
+            var pull = new InventoryMoveItemEvent(plain, item(Material.DIAMOND, 1), cart, false);
+            listener.onItemMove(pull);
+            assertThat(pull.isCancelled()).isFalse();
+        }
+        // One check for the shop's five retries; "not a shop" is never remembered.
+        verify(blocks, times(6)).isShopBlock(any(InventoryHolder.class));
     }
 
     @Test
@@ -398,13 +573,13 @@ class HopperStockRefreshServiceTest extends ServerTest {
         containers.add(shopSigns.getFirst().getState());
         refresh.reconcileChunk(world.getUID(), 0, 0);
         ticks(100);
-        verify(counters, times(32)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(32)).updateCounterForItem(any(), any(), any());
         assertThat(counter(shopSigns.get(32))).isEqualTo("1");
         ticks(1);
-        verify(counters, times(64)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(64)).updateCounterForItem(any(), any(), any());
         ticks(1);
         assertThat(counter(shopSigns.getLast())).isEqualTo("Q 1 : C 0");
-        verify(counters, times(65)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(65)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -441,7 +616,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         refresh.unloadWorld(world.getUID());
         ticks(200);
         assertThat(counter(shopSigns.getLast())).isEqualTo("1");
-        verify(counters, times(32)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(32)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -518,7 +693,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         assertThat(counter(sign)).isEqualTo("1");
         ticks(1);
         assertThat(counter(sign)).isEqualTo("Q 1 : C 0");
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test
@@ -551,7 +726,7 @@ class HopperStockRefreshServiceTest extends ServerTest {
         assertThat(counter(sign)).isEqualTo("1");
         ticks(1);
         assertThat(counter(sign)).isEqualTo("Q 1 : C 0");
-        verify(counters, times(1)).updateCounterOnQuantityLine(any(), any());
+        verify(counters, times(1)).updateCounterForItem(any(), any(), any());
     }
 
     @Test

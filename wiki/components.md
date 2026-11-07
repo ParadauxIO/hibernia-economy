@@ -194,7 +194,7 @@ This is a source and binary break: rebuild and deploy Business, ChestShop,
 TreasuryAPI, and external consumers together against API 4. Do not mix old and new
 API jars or shade a private API copy into a consumer. Database schema and storage
 formats are unchanged. Mutable rows now live only in the Business plugin's
-`io.paradaux.business.model.internal` package and are not a supported public API.
+`io.paradaux.business.internal.model` package and are not a supported public API.
 
 The API defaults to `4.0.0-SNAPSHOT`, independently of the plugin calendar version.
 Use `-PbusinessApiVersion=...` to select the API version; `-Pversion` still controls

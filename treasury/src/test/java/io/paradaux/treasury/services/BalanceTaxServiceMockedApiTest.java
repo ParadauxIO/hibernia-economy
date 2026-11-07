@@ -7,8 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.treasury.api.TaxApi;
+import io.paradaux.treasury.internal.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.mappers.AccountMapper;
-import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.tax.TaxCollection;
