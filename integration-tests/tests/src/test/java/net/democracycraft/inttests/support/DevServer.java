@@ -16,7 +16,7 @@ public final class DevServer {
     public static final String HOST = resolve("devserver.host", "DEVSERVER_HOST", "127.0.0.1");
     public static final int PORT = Integer.parseInt(resolve("devserver.port", "DEVSERVER_PORT", "25565"));
     public static final String DB_URL = resolve("devserver.db.url", "DEVSERVER_DB_URL",
-            "jdbc:mariadb://localhost:3306/economy");
+            "jdbc:mariadb://localhost:3306/economy?sslMode=disable");
     public static final String DB_USER = resolve("devserver.db.user", "DEVSERVER_DB_USER", "root");
     public static final String DB_PASSWORD = resolve("devserver.db.password", "DEVSERVER_DB_PASSWORD", "dev");
 

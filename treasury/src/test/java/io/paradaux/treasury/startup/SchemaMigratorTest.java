@@ -42,7 +42,8 @@ class SchemaMigratorTest {
         var config = SchemaMigrator.configure(db);
         assertThat(config.getUser()).isEqualTo("migrator");
         assertThat(config.getPassword()).isEqualTo("ddl-password");
-        assertThat(config.getUrl()).isEqualTo("jdbc:mariadb://localhost:3306/economy?connectTimeout=10000");
+        assertThat(config.getUrl())
+                .isEqualTo("jdbc:mariadb://localhost:3306/economy?connectTimeout=10000&sslMode=disable");
     }
 
     @Test

@@ -83,7 +83,7 @@ public final class EmbeddedMariaDb {
                 db = DB.newEmbeddedDB(cfg.build());
                 db.start();
                 db.createDB(DB_NAME);
-                url = cfg.getURL(DB_NAME);
+                url = cfg.getURL(DB_NAME) + "?sslMode=disable";
                 username = "root";
                 password = "";
             }

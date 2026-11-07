@@ -194,7 +194,7 @@ jobs:
           --health-timeout=2s
           --health-retries=20
     env:
-      TREASURY_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_test
+      TREASURY_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_test?sslMode=disable
       TREASURY_TEST_DB_USER: root
       TREASURY_TEST_DB_PASS: ci
     steps:

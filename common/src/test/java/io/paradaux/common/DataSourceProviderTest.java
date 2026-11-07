@@ -1,10 +1,10 @@
 package io.paradaux.common;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Exercises the pure JDBC-URL assembly of {@link DataSourceProvider} without a live
@@ -58,6 +58,6 @@ class DataSourceProviderTest {
         // The builder's default (statementCaching=false) must yield the plain URL —
         // guards against the default flipping to the heavier caching URL unnoticed.
         String defaultUrl = DataSourceProvider.buildJdbcUrl("h", 3306, "d", false);
-        assertEquals("jdbc:mariadb://h:3306/d?useUnicode=true&characterEncoding=utf8", defaultUrl);
+        assertEquals("jdbc:mariadb://h:3306/d?sslMode=disable&useUnicode=true&characterEncoding=utf8", defaultUrl);
     }
 }
