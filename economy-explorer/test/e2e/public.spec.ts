@@ -21,7 +21,9 @@ test.describe('linked visitor browsing', () => {
     await expect(summary).toContainText('Personal money supply');
     await expect(summary).toContainText('Daily active players');
     await expect(summary).toContainText('vs previous 30 days');
-    await expect(page.getByText(/^Updated \d{2}:\d{2} UTC$/).first()).toBeVisible();
+    // A run crossing UTC midnight can legitimately have partial rollup coverage.
+    // Its freshness note still ends with the last successful update time.
+    await expect(page.locator('.coverage-note').filter({ hasText: /Updated \d{2}:\d{2} UTC$/ }).first()).toBeVisible();
     await page.getByRole('link', { name: 'Wealth', exact: true }).first().click();
     await expect(page.getByRole('group', { name: 'Wealth concentration' }).locator('.metric', { hasText: 'Gini coefficient' }).locator('.metric-value')).toHaveText(/^0\.\d{3}$/);
     // Charts only mount client-side (useHydrated), so a rendered chart means the
