@@ -300,7 +300,7 @@ runs the tests and tears everything down. Work files and logs go to
 
 ## The web app (`economy-explorer`)
 
-Not part of the Gradle build — it has its own npm toolchain (Node **22**):
+Not part of the Gradle build — it has its own npm toolchain (Node **22.12+**):
 
 ```bash
 cd economy-explorer
@@ -310,6 +310,10 @@ npm run build      # production build
 npm run typecheck && npm run lint
 npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
+
+Keep Vitest and its V8 coverage provider on matching versions. See
+[Explorer coverage](explorer-coverage.md) for the Vitest 5 measurement change,
+coverage baselines, gates and comparison commands.
 
 Typed routes are enabled (ADT-151). Run `npm run typecheck` to generate Next's
 route declarations before checking navigation. Application navigation models use
