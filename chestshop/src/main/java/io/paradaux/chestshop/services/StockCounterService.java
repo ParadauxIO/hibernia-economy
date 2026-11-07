@@ -25,6 +25,13 @@ public interface StockCounterService {
     /** Recompute and (if changed) rewrite the counter on {@code sign} for {@code chestShopInventory}. */
     void updateCounterOnQuantityLine(Sign sign, Inventory chestShopInventory, ItemStack... extraItems);
 
+    /**
+     * As {@link #updateCounterOnQuantityLine} for a non-wildcard sign whose traded item the
+     * caller has already resolved with {@link #determineItemTradedByShop(String)}. The hopper
+     * refresh resolves each item once per batch (PAR-523).
+     */
+    void updateCounterForItem(Sign sign, Inventory chestShopInventory, ItemStack itemTradedByShop);
+
     /** Strip the {@code : C m} counter suffix back to a bare quantity on {@code sign}. */
     void removeCounterFromQuantityLine(Sign sign);
 

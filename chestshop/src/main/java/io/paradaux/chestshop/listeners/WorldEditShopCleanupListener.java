@@ -57,6 +57,7 @@ public final class WorldEditShopCleanupListener implements Listener {
     private final boolean fawe;
     private final MarketService marketService;
     private final MarketSyncService marketSync;
+    private final io.paradaux.chestshop.services.HopperStockRefreshService stockRefresh;
 
     private record ChunkKey(String world, int x, int z) {}
 
@@ -64,6 +65,16 @@ public final class WorldEditShopCleanupListener implements Listener {
     private final Queue<Pos> queue = new ConcurrentLinkedDeque<>();
 
     public WorldEditShopCleanupListener(JavaPlugin plugin, MarketService marketService, MarketSyncService marketSync) {
+        this(plugin, marketService, marketSync, null);
+    }
+
+    /** {@code stockRefresh}, when given, rediscovers containers near each edited sign (PAR-523). */
+    public WorldEditShopCleanupListener(
+            JavaPlugin plugin,
+            MarketService marketService,
+            MarketSyncService marketSync,
+            io.paradaux.chestshop.services.HopperStockRefreshService stockRefresh) {
+        this.stockRefresh = stockRefresh;
         this.marketService = marketService;
         this.marketSync = marketSync;
         this.plugin = plugin;
@@ -79,7 +90,7 @@ public final class WorldEditShopCleanupListener implements Listener {
     }
 
     void drain() {
-        if (!marketService.enabled() || queue.isEmpty()) {
+        if ((!marketService.enabled() && stockRefresh == null) || queue.isEmpty()) {
             return;
         }
         Set<Pos> batch = new HashSet<>();
@@ -93,7 +104,8 @@ public final class WorldEditShopCleanupListener implements Listener {
                 deferred.computeIfAbsent(new ChunkKey(p.world(), p.x() >> 4, p.z() >> 4), ignored -> new HashSet<>())
                         .add(p);
             } else {
-                marketSync.onBlockReplaced(p.world(), p.x(), p.y(), p.z());
+                if (marketService.enabled()) marketSync.onBlockReplaced(p.world(), p.x(), p.y(), p.z());
+                if (stockRefresh != null) stockRefresh.blockChanged(world.getUID(), p.x(), p.z());
             }
         }
     }
@@ -109,7 +121,7 @@ public final class WorldEditShopCleanupListener implements Listener {
 
     @Subscribe
     public void onEditSession(EditSessionEvent event) {
-        if (!marketService.enabled()
+        if ((!marketService.enabled() && stockRefresh == null)
                 || event.getWorld() == null
                 || event.getStage() != EditSession.Stage.BEFORE_CHANGE) {
             return;

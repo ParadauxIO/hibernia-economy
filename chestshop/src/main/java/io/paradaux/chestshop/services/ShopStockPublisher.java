@@ -54,6 +54,12 @@ public final class ShopStockPublisher {
         if (WildcardItems.isPattern(code)) return;
         ItemStack item = items.parse(code);
         if (item == null) return;
+        publish(sign, inventory, item);
+    }
+
+    /** As {@link #publish(Sign, Inventory)} with the sign's non-wildcard item already parsed. */
+    public void publish(Sign sign, Inventory inventory, ItemStack item) {
+        if (!enabled()) return;
         Key key = key(sign.getLocation());
         if (key == null) return;
         Stock value = new Stock(market.stockOf(item, inventory), market.capacityOf(item, inventory));

@@ -193,7 +193,8 @@ public class ChestShop extends JavaPlugin {
                 new io.paradaux.chestshop.listeners.WorldEditShopCleanupListener(
                                 this,
                                 injector.getInstance(io.paradaux.chestshop.services.MarketService.class),
-                                injector.getInstance(io.paradaux.chestshop.services.MarketSyncService.class))
+                                injector.getInstance(io.paradaux.chestshop.services.MarketSyncService.class),
+                                injector.getInstance(io.paradaux.chestshop.services.HopperStockRefreshService.class))
                         .register();
             } catch (Throwable t) {
                 log.warn("WorldEdit shop-cleanup adapter unavailable", t);
