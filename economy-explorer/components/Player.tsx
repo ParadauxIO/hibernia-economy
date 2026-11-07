@@ -1,6 +1,5 @@
-import Link from 'next/link';
-import type { Route } from 'next';
-import { shortenUuid, looksLikeUuid } from '@/lib/format';
+import { EntityLink } from '@democracycraft/design-system/next';
+import { playerHref, playerName, previewHref } from '@/lib/entityLinks';
 
 interface PlayerProps {
   name?: string | null | undefined;
@@ -10,33 +9,15 @@ interface PlayerProps {
 }
 
 /**
- * Render a player by name (UUID in the tooltip), clickable → /search?q=<name>
- * so you can hop to their accounts / firm memberships. Falls back to a short
- * UUID when only the UUID is known, and an em-dash when neither is.
+ * A player, shown with their head and linked to their profile (/players/<name>)
+ * with a hover preview. Never a raw UUID: a player the directory hasn't named
+ * yet shows a short UUID and links by UUID, which the profile resolves.
  */
 export function Player({ name, uuid, link = true }: PlayerProps) {
-  // A UUID-shaped name is junk (personal accounts default display_name to their
-  // UUID) — treat it as "no name" and fall through to the short-UUID branch.
-  const realName = name && !looksLikeUuid(name) ? name : null;
-  const realUuid = uuid ?? (name && looksLikeUuid(name) ? name : null);
-
-  if (!realUuid && !realName) return <span style={{ color: 'var(--fg-muted)' }}>—</span>;
-  if (realName) {
-    if (!link) return <span title={realUuid ?? undefined} style={{ color: 'var(--fg)' }}>{realName}</span>;
-    return (
-      <Link
-        href={`/search?q=${encodeURIComponent(realName)}` as Route}
-        title={realUuid ?? undefined}
-        className="player-link"
-        prefetch={false}
-      >
-        {realName}
-      </Link>
-    );
-  }
-  return (
-    <span className="mono" title={realUuid ?? undefined} style={{ color: 'var(--fg-soft)' }}>
-      {shortenUuid(realUuid)}
-    </span>
-  );
+  const realUuid = uuid ?? (name && /^[0-9a-f-]{36}$/i.test(name) ? name : null);
+  if (!realUuid && !name) return <span className="muted">—</span>;
+  const label = playerName(name, realUuid);
+  if (!link) return <span title={realUuid ?? undefined}>{label}</span>;
+  return <EntityLink kind="player" href={playerHref(name, realUuid)} name={label} uuid={realUuid}
+    preview={realUuid ? previewHref('player', realUuid) : undefined} />;
 }

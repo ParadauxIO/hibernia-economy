@@ -3,8 +3,8 @@ package io.paradaux.business.services.impl;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.config.BalanceTaxConfiguration;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.config.BalanceTaxConfiguration;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmBalanceTaxService;
 import io.paradaux.business.services.FirmPropertyService;
@@ -186,7 +186,9 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
 
         if (totalBalance.compareTo(BigDecimal.ZERO) <= 0) return List.of();
 
-        BigDecimal rate = config.getWeeklyRate(totalBalance);
+        var bracket = config.getBracket(totalBalance);
+        if (bracket == null) return List.of();
+        BigDecimal rate = bracket.rate();
         if (rate.compareTo(BigDecimal.ZERO) == 0) return List.of();
 
         BigDecimal totalTax = totalBalance.multiply(rate).setScale(2, RoundingMode.HALF_UP);
@@ -208,7 +210,7 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
                             destinationAccountId,
                             accountTax,
                             TAX_TYPE,
-                            "Weekly Corporate Balance Tax",
+                            "Weekly Corporate Balance Tax" + bracket.ledgerTag(),
                             SYSTEM_UUID,
                             PLUGIN_SYSTEM,
                             dedupKey)
@@ -216,7 +218,7 @@ public class FirmBalanceTaxServiceImpl implements FirmBalanceTaxService {
                             entry.getKey(),
                             accountTax,
                             TAX_TYPE,
-                            "Weekly Corporate Balance Tax",
+                            "Weekly Corporate Balance Tax" + bracket.ledgerTag(),
                             SYSTEM_UUID,
                             PLUGIN_SYSTEM,
                             dedupKey);

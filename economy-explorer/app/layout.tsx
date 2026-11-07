@@ -6,7 +6,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import Script from 'next/script';
 import { Suspense } from 'react';
-import { GeistSans } from 'geist/font/sans';
+import localFont from 'next/font/local';
 import { GeistMono } from 'geist/font/mono';
 import { Money } from '@democracycraft/design-system';
 import { serverIdentity } from '@/lib/serverIdentity';
@@ -18,12 +18,23 @@ import { HeaderSearch } from '@/components/HeaderSearch';
 import { HeaderNav, HeaderSectionNav } from '@/components/HeaderNav';
 import { HeaderMenu } from '@/components/HeaderMenu';
 import { HeaderAuth } from '@/components/HeaderAuth';
+import { HeaderAdmin } from '@/components/HeaderAdmin';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ModeToggle } from '@/components/ModeToggle';
 import { Footer } from '@/components/Footer';
+import { ItemIconProvider } from '@/components/market/ItemIcon';
+import { itemIconBase } from '@/lib/itemIcon';
 import { ViewerProvider } from '@/components/ViewerContext';
+import { ExplorerAnalytics } from '@/components/ExplorerAnalytics';
 import { FaroAnalytics } from '@/components/FaroAnalytics';
 import { brand, siteUrl } from '@/lib/metadata';
+
+const dmSans = localFont({
+  src: '../public/dm-sans.ttf',
+  variable: '--font-dm-sans',
+  display: 'swap',
+  weight: '100 1000',
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const id = await brand();
@@ -87,7 +98,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       lang="en"
       data-theme={theme}
       data-mode={mode}
-      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      className={`${dmSans.variable} ${GeistMono.variable}`}
       // The pre-paint script may rewrite data-mode (system → resolved OS pref);
       // suppress the resulting attribute mismatch on hydration.
       suppressHydrationWarning
@@ -104,31 +115,37 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }}
         />
         <a href="#main-content" className="skip-link">Skip to content</a>
-        <ViewerProvider viewer={chrome}>
-          <header className="shell-header">
-            <div className="shell-bar">
-              <Link href="/" className="shell-brand" prefetch={false}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={server.icon} alt="" width={24} height={24} />
-                <span className="shell-brand-name">{server.name}</span>
-                <span className="shell-brand-product">Economy</span>
-              </Link>
-              <HeaderNav />
-              <div className="shell-tools">
-                <HeaderSearch />
-                <ModeToggle className="shell-desktop-only" />
-                <HeaderAuth balance={balance} />
-                <HeaderMenu />
+        <ItemIconProvider origin={itemIconBase().origin}>
+          <ViewerProvider viewer={chrome}>
+            <header className="shell-header">
+              <div className="shell-bar">
+                <Link href="/" className="shell-brand" prefetch={false}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={server.icon} alt="" width={24} height={24} />
+                  <span className="shell-brand-name">{server.name}</span>
+                  <span className="shell-brand-product">Economy</span>
+                </Link>
+                <HeaderNav />
+                <div className="shell-tools">
+                  <HeaderSearch />
+                  <ModeToggle className="shell-desktop-only" />
+                  <HeaderAdmin />
+                  <HeaderAuth balance={balance} />
+                  <HeaderMenu />
+                </div>
               </div>
-            </div>
-            <HeaderSectionNav />
-          </header>
-          <main id="main-content" className="explorer-main" tabIndex={-1}>{children}</main>
-          <CommandPalette serverIp={server.ip} currency={CURRENCY_SYMBOL} />
-        </ViewerProvider>
+              <HeaderSectionNav />
+            </header>
+            <main id="main-content" className="explorer-main" tabIndex={-1}>{children}</main>
+            <CommandPalette serverIp={server.ip} currency={CURRENCY_SYMBOL} />
+          </ViewerProvider>
+        </ItemIconProvider>
         <Footer server={server} />
         {umamiSrc && umamiId && (
-          <Script src={umamiSrc} data-website-id={umamiId} strategy="afterInteractive" />
+          <>
+            <Script src={umamiSrc} data-website-id={umamiId} strategy="afterInteractive" />
+            <ExplorerAnalytics />
+          </>
         )}
         {faroUrl && <FaroAnalytics appName={`economy-explorer-${tenant}`} url={faroUrl} />}
       </body>

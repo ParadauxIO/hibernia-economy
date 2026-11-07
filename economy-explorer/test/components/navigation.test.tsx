@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HeaderNav, HeaderSectionNav } from '@/components/HeaderNav';
 import { AdminNav } from '@/components/AdminNav';
-import { SectionTabs } from '@/components/SectionTabs';
+import { HeaderAdmin } from '@/components/HeaderAdmin';
 import { navigation, resetNavigation } from './next-navigation';
 import { setViewer, viewerFor, viewerWithPermissions, type TestRole } from './viewer';
 import type { ViewerCtx } from '@/lib/viewerSnapshot';
@@ -51,7 +51,7 @@ describe('HeaderNav visibility', () => {
   it('links Government to the government workspace and Investigate to the ledger', () => {
     setViewer('admin');
     render(<HeaderNav />);
-    expect(within(primary()).getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/government');
+    expect(within(primary()).getByRole('link', { name: 'Government' })).toHaveAttribute('href', '/gov');
     expect(within(primary()).getByRole('link', { name: 'Investigate' })).toHaveAttribute('href', '/transactions');
     expect(within(primary()).getByRole('link', { name: 'Directory' })).toHaveAttribute('href', '/accounts');
   });
@@ -73,7 +73,8 @@ describe('HeaderNav active section', () => {
     ['/players/Alice', 'Directory', 'true'],
     ['/chestshop/shops', 'Market', 'true'],
     ['/market/activity', 'Market', 'true'],
-    ['/government', 'Government', 'page'],
+    ['/gov', 'Government', 'page'],
+    ['/government', 'Government', 'true'],
     ['/gov/revenue', 'Government', 'true'],
     ['/transactions/9', 'Investigate', 'true'],
     ['/docs/api', 'Docs', 'true'],
@@ -164,20 +165,12 @@ describe('HeaderSectionNav', () => {
   });
 });
 
-describe('SectionTabs', () => {
-  it('is a no-op now that the chrome owns section navigation', () => {
-    navigation.pathname = '/economy/wealth';
-    const { container } = render(<SectionTabs />);
-    expect(container).toBeEmptyDOMElement();
-  });
-});
-
 describe('AdminNav', () => {
   it.each<[TestRole, string[]]>([
-    ['anon', ['Overview']],
-    ['player', ['Overview']],
-    ['moderator', ['Overview', 'Players', 'Transactions']],
-    ['admin', ['Overview', 'Players', 'Accounts', 'Firms', 'Transactions', 'Groups', 'Roles', 'Role grants', 'API keys', 'Webhooks', 'Audit log']],
+    ['anon', ['Dashboard']],
+    ['player', ['Dashboard']],
+    ['moderator', ['Dashboard', 'Players', 'Transactions']],
+    ['admin', ['Dashboard', 'Feature flags', 'Players', 'Accounts', 'Firms', 'Transactions', 'Groups', 'Roles', 'Role grants', 'API keys', 'Webhooks', 'Audit log', 'Government units']],
   ])('lists only the tools the %s viewer holds', (role, expected) => {
     setViewer(role);
     navigation.pathname = '/admin';
@@ -189,12 +182,12 @@ describe('AdminNav', () => {
     setViewer(viewerWithPermissions(['webhooks.read.all']));
     render(<AdminNav />);
     const nav = screen.getByRole('navigation', { name: 'Admin' });
-    expect(linkNames(nav)).toEqual(['Overview', 'Webhooks']);
+    expect(linkNames(nav)).toEqual(['Dashboard', 'Webhooks']);
     expect(within(nav).getByRole('link', { name: 'Webhooks' })).toHaveAttribute('href', '/admin/webhooks');
   });
 
   it.each([
-    ['/admin', 'Overview'],
+    ['/admin', 'Dashboard'],
     ['/admin/groups/12', 'Groups'],
     ['/transactions/77', 'Transactions'],
   ])('marks only the active tool on %s', (path, active) => {
@@ -202,5 +195,28 @@ describe('AdminNav', () => {
     navigation.pathname = path;
     render(<AdminNav />);
     expect(currentLinks(screen.getByRole('navigation', { name: 'Admin' }))).toEqual([active]);
+  });
+});
+
+describe('HeaderAdmin', () => {
+  it.each<TestRole>(['anon', 'player'])('is absent for the %s viewer', (role) => {
+    setViewer(role);
+    render(<HeaderAdmin />);
+    expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();
+  });
+
+  it.each<[string, string | null]>([
+    ['/', null],
+    ['/admin', 'page'],
+    ['/admin/groups/12', 'true'],
+    ['/administration', null],
+  ])('links admins to /admin and marks it on %s', (path, current) => {
+    setViewer('admin');
+    navigation.pathname = path;
+    render(<HeaderAdmin />);
+    const link = screen.getByRole('link', { name: 'Admin' });
+    expect(link).toHaveAttribute('href', '/admin');
+    if (current) expect(link).toHaveAttribute('aria-current', current);
+    else expect(link).not.toHaveAttribute('aria-current');
   });
 });

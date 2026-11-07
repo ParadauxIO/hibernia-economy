@@ -1,20 +1,21 @@
 package io.paradaux.treasury.model.economy;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Value;
+import lombok.With;
 
 /**
  * Flattened view of a ledger posting joined with its parent transaction.
  * Used for paginated transaction history on an account.
  */
-@Data
+@Builder(toBuilder = true)
+@Value
+@With
 @AllArgsConstructor
-@NoArgsConstructor
 public class TransactionEntry {
     private long postingId;
     private long txnId;
@@ -26,4 +27,8 @@ public class TransactionEntry {
     private UUID initiatorUuid;
     private UUID authorizerUuid;
     private String pluginSystem;
+    /** Structured purpose from the originating operation; memos and account labels are ignored. */
+    public @org.jetbrains.annotations.Nullable PayoutCategory getPayoutCategory() {
+        return PayoutCategory.fromSource(pluginSystem);
+    }
 }

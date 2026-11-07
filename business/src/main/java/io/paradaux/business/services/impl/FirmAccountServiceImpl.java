@@ -2,6 +2,10 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmAccount;
+import io.paradaux.business.internal.model.FirmEmployee;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
@@ -369,6 +373,7 @@ public class FirmAccountServiceImpl implements FirmAccountService {
                         || !firmAccounts.isFirmAccount(firmId, accountId)) {
                     continue;
                 }
+                repairAccountOwner(accountId, UUID.fromString(firm.getProprietorUuid()));
                 reconcileAccountMembers(firmId, accountId);
             } catch (RuntimeException e) {
                 LOG.log(
@@ -384,15 +389,33 @@ public class FirmAccountServiceImpl implements FirmAccountService {
 
     @Override
     public void reassignAccountsToNewProprietor(Integer firmId, UUID newProprietorUuid) {
-        // Reassign the Treasury owner of every live firm account first: owner is
-        // granted access unconditionally by canAccessAccount, so without this the
-        // previous owner would keep access regardless of membership. The sync
-        // then makes the new proprietor a member + authorizer and removes the
-        // old owner if they are no longer a qualifying employee.
-        for (FirmAccount fa : firmAccounts.listAccountsByFirm(firmId)) {
-            treasury.reassignOwner(fa.getAccountId(), newProprietorUuid);
+        ReentrantLock lock = firmSyncLocks.computeIfAbsent(firmId, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            // Read current state under the same lock as recovery. A delayed retry
+            // must not restore the owner supplied by an earlier admin command.
+            Firm firm = firms.getFirmById(firmId);
+            if (firm == null || Boolean.TRUE.equals(firm.getArchived())) {
+                throw new BadCommandException("Firm not found");
+            }
+            UUID owner = UUID.fromString(firm.getProprietorUuid());
+            for (FirmAccount account : firmAccounts.listAccountsByFirm(firmId)) {
+                repairAccountOwner(account.getAccountId(), owner);
+                reconcileAccountMembers(firmId, account.getAccountId());
+            }
+        } finally {
+            lock.unlock();
         }
-        syncAllFirmAccounts(firmId);
+    }
+
+    private void repairAccountOwner(int accountId, UUID owner) {
+        Account account = treasury.getAccountById(accountId);
+        if (account == null) {
+            throw new BadCommandException("Linked Treasury account not found: " + accountId);
+        }
+        if (!owner.equals(account.getOwnerUuid())) {
+            treasury.reassignOwner(accountId, owner);
+        }
     }
 
     @Override

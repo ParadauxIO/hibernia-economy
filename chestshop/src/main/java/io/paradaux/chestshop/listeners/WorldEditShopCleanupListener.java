@@ -20,8 +20,10 @@ import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
 import io.paradaux.chestshop.services.MarketService;
 import io.paradaux.chestshop.services.MarketSyncService;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,10 +57,24 @@ public final class WorldEditShopCleanupListener implements Listener {
     private final boolean fawe;
     private final MarketService marketService;
     private final MarketSyncService marketSync;
-    private final Set<Pos> deferred = new HashSet<>();
+    private final io.paradaux.chestshop.services.HopperStockRefreshService stockRefresh;
+
+    private record ChunkKey(String world, int x, int z) {}
+
+    private final Map<ChunkKey, Set<Pos>> deferred = new HashMap<>();
     private final Queue<Pos> queue = new ConcurrentLinkedDeque<>();
 
     public WorldEditShopCleanupListener(JavaPlugin plugin, MarketService marketService, MarketSyncService marketSync) {
+        this(plugin, marketService, marketSync, null);
+    }
+
+    /** {@code stockRefresh}, when given, rediscovers containers near each edited sign (PAR-523). */
+    public WorldEditShopCleanupListener(
+            JavaPlugin plugin,
+            MarketService marketService,
+            MarketSyncService marketSync,
+            io.paradaux.chestshop.services.HopperStockRefreshService stockRefresh) {
+        this.stockRefresh = stockRefresh;
         this.marketService = marketService;
         this.marketSync = marketSync;
         this.plugin = plugin;
@@ -74,7 +90,7 @@ public final class WorldEditShopCleanupListener implements Listener {
     }
 
     void drain() {
-        if (!marketService.enabled() || queue.isEmpty()) {
+        if ((!marketService.enabled() && stockRefresh == null) || queue.isEmpty()) {
             return;
         }
         Set<Pos> batch = new HashSet<>();
@@ -85,29 +101,27 @@ public final class WorldEditShopCleanupListener implements Listener {
         for (Pos p : batch) {
             World world = plugin.getServer().getWorld(p.world());
             if (world == null || !world.isChunkLoaded(p.x() >> 4, p.z() >> 4)) {
-                deferred.add(p);
+                deferred.computeIfAbsent(new ChunkKey(p.world(), p.x() >> 4, p.z() >> 4), ignored -> new HashSet<>())
+                        .add(p);
             } else {
-                marketSync.onBlockReplaced(p.world(), p.x(), p.y(), p.z());
+                if (marketService.enabled()) marketSync.onBlockReplaced(p.world(), p.x(), p.y(), p.z());
+                if (stockRefresh != null) stockRefresh.blockChanged(world.getUID(), p.x(), p.z());
             }
         }
     }
 
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
-        deferred.removeIf(pos -> {
-            if (pos.world().equals(event.getWorld().getName())
-                    && (pos.x() >> 4) == event.getChunk().getX()
-                    && (pos.z() >> 4) == event.getChunk().getZ()) {
-                queue.add(pos);
-                return true;
-            }
-            return false;
-        });
+        Set<Pos> positions = deferred.remove(new ChunkKey(
+                event.getWorld().getName(),
+                event.getChunk().getX(),
+                event.getChunk().getZ()));
+        if (positions != null) queue.addAll(positions);
     }
 
     @Subscribe
     public void onEditSession(EditSessionEvent event) {
-        if (!marketService.enabled()
+        if ((!marketService.enabled() && stockRefresh == null)
                 || event.getWorld() == null
                 || event.getStage() != EditSession.Stage.BEFORE_CHANGE) {
             return;

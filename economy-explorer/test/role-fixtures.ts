@@ -9,7 +9,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
     "webhooks.manage"
   ],
   "government": [
-    "government.read"
+    "government.read",
+    "government.audit.read"
+  ],
+  "compliance": [
+    "firm.financials.read",
+    "firm.financials.read.all",
+    "transactions.read",
+    "market.sales.read"
   ],
   "moderator": [
     "player.read.all",

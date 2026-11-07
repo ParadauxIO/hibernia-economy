@@ -123,15 +123,16 @@ public class ShopServiceImpl implements ShopService {
             checkPriceRatio(ctx);
         }
         checkCreationPermission(ctx);
-        if (!ctx.isCancelled()) { // CreationFeeGetter ran @HIGH with ignoreCancelled=true
-            chargeCreationFeeStep(ctx);
-        }
         // StockCounterListener ran @HIGH with the default ignoreCancelled=false, so it
         // fires regardless: it normalises the quantity line and seeds the stock counter.
         stockCounter.onPreShopCreation(ctx);
         // HIGHEST — the name second pass (ignoreCancelled=true)
         if (!ctx.isCancelled()) {
             resolveName(ctx);
+        }
+        // Charge only after every validator, including stock/name normalization, accepts.
+        if (!ctx.isCancelled()) {
+            chargeCreationFeeStep(ctx);
         }
         // MONITOR — tell the player why it failed
         sendCreationError(ctx);
@@ -537,6 +538,23 @@ public class ShopServiceImpl implements ShopService {
         logCreation(event); // was @MONITOR ShopCreationLogger
         io.paradaux.chestshop.integration.LegacyCompatibility.created(event);
         market.onShopCreated(event); // genuine market-DB sync — stays
+    }
+
+    @Override
+    public void onEdited(CreatedShop replacement) {
+        Sign oldSign = replacement.getSign();
+        onDestroyed(new DestroyedShop(replacement.getPlayer(), oldSign, replacement.getContainer()));
+        Sign newSign = (Sign) oldSign.getBlock().getState();
+        for (int i = 0; i < 4; i++) SignText.setLine(newSign, i, replacement.getSignLines()[i]);
+        // The SignChangeEvent commits the world state; this snapshot supplies the replacement text to creation
+        // reactions.
+        CreatedShop edited = new CreatedShop(
+                replacement.getPlayer(),
+                newSign,
+                replacement.getContainer(),
+                replacement.getSignLines(),
+                replacement.getOwnerAccount());
+        onCreated(edited);
     }
 
     @Override

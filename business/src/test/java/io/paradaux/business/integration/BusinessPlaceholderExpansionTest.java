@@ -1,18 +1,17 @@
 package io.paradaux.business.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
 import io.paradaux.business.api.BusinessApi;
 import io.paradaux.business.api.FirmApi;
 import io.paradaux.business.model.Firm;
+import java.math.BigDecimal;
 import org.bukkit.OfflinePlayer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import java.math.BigDecimal;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
 
 class BusinessPlaceholderExpansionTest {
     private final BusinessApi api = mock(BusinessApi.class);
@@ -72,9 +71,6 @@ class BusinessPlaceholderExpansionTest {
     }
 
     private static Firm firm(boolean archived) {
-        Firm firm = new Firm();
-        firm.setFirmId(42);
-        firm.setArchived(archived);
-        return firm;
+        return new Firm(42, null, null, null, null, null, archived, null, null);
     }
 }

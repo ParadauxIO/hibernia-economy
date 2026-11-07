@@ -1,7 +1,9 @@
 import { activeGroupMembership } from '@/lib/sql/group-membership';
 import 'server-only';
-import { sql, type Kysely } from 'kysely';
-import { db, uuidToBin, type DB } from '@/lib/db';
+import { adminRoleMembersTable, type AdminRoleMembersState } from '@/lib/tables/admin';
+import { compileTableState, defineColumnMap, likeContains } from '@/lib/sql/tableState';
+import { sql, type SqlBool, type Kysely } from 'kysely';
+import { db, uuidToBin, binToUuid, type DB } from '@/lib/db';
 import { isPermission, type Permission } from '@/lib/auth/policy';
 export type ExplorerRole = string;
 export type RoleDefinition = { key: string; name: string; description: string | null; revision: number; permissions: Permission[] };
@@ -44,4 +46,30 @@ export async function listRoleDefinitions(executor: Executor = db): Promise<Role
     if (row.permission && isPermission(row.permission)) role.permissions.push(row.permission);
   }
   return [...roles.values()];
+}
+
+const directMemberColumns = defineColumnMap({
+  table: adminRoleMembersTable, filters: {}, sorts: { name: sql`p.current_name` },
+  tiebreak: { column: sql`r.player_uuid_bin`, dir: 'asc' },
+  search: (q) => sql<SqlBool>`(p.current_name LIKE ${likeContains(q)} OR HEX(r.player_uuid_bin) LIKE ${likeContains(q.replaceAll('-', ''))})`,
+});
+
+export async function countDirectRoleMembers(key: string, state: AdminRoleMembersState): Promise<number> {
+  const c = compileTableState(state, directMemberColumns);
+  const result = await sql<{ total: number | string }>`
+    SELECT COUNT(*) AS total FROM explorer_role r LEFT JOIN economy_players p ON p.player_uuid_bin = r.player_uuid_bin
+    WHERE r.role = ${key} ${c.conditions.length ? sql`AND ${sql.join(c.conditions, sql` AND `)}` : sql``}
+  `.execute(db);
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+export async function listDirectRoleMemberPage(key: string, state: AdminRoleMembersState) {
+  const c = compileTableState(state, directMemberColumns);
+  const result = await sql<{ player_uuid_bin: Buffer; name: string | null }>`
+    SELECT r.player_uuid_bin, p.current_name AS name FROM explorer_role r
+    LEFT JOIN economy_players p ON p.player_uuid_bin = r.player_uuid_bin
+    WHERE r.role = ${key} ${c.conditions.length ? sql`AND ${sql.join(c.conditions, sql` AND `)}` : sql``}
+    ${c.orderBy} LIMIT ${state.limit} OFFSET ${(state.page - 1) * state.limit}
+  `.execute(db);
+  return result.rows.map(row => ({ uuid: binToUuid(row.player_uuid_bin), name: row.name }));
 }

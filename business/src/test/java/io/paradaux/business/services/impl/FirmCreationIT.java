@@ -8,11 +8,11 @@ import static org.mockito.Mockito.*;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import io.paradaux.business.chat.FirmChatService;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
-import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmAreaShopService;
 import io.paradaux.business.services.FirmStaffService;
@@ -49,6 +49,7 @@ class FirmCreationIT extends IntegrationTestBase {
                                 environmentId("firm-creation-test");
                                 bindTransactionFactoryType(JdbcTransactionFactory.class);
                                 addMapperClass(FirmMapper.class);
+                                addMapperClass(io.paradaux.business.mappers.FirmStaffMapper.class);
                                 addMapperClass(FirmAccountsMapper.class);
                                 addMapperClass(FirmRoleMapper.class);
                                 addMapperClass(FirmRequestMapper.class);
@@ -68,8 +69,9 @@ class FirmCreationIT extends IntegrationTestBase {
                         })
                 .getInstance(FirmServiceImpl.class);
         when(treasury.createAccount(any(), any(), any())).thenAnswer(inv -> {
-            Account account = new Account();
-            account.setAccountId(insertStubAccount(inv.getArgument(2)));
+            Account account = Account.builder()
+                    .accountId(insertStubAccount(inv.getArgument(2)))
+                    .build();
             return account;
         });
     }

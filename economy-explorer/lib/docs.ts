@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 import 'server-only';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -16,7 +17,7 @@ import { rehypeLiveBlocks } from '@/lib/docsLive';
 
 // ── Player documentation: build-time Markdown → static HTML ──────────────────
 // Content lives in `docs/` at the repo root. Pages are statically generated
-// (see app/docs/[[...slug]]/page.tsx), so every fs read here happens at build
+// (see app/docs/[...slug]/page.tsx and app/docs/page.tsx), so every fs read here happens at build
 // time — nothing in this module runs in the deployed standalone server.
 
 const DOCS_DIR = path.join(process.cwd(), 'docs');
@@ -44,7 +45,7 @@ export interface DocPage {
 
 export interface DocLink {
   title: string;
-  href: string;
+  href: AppHref;
   order: number;
 }
 
@@ -52,7 +53,7 @@ export interface DocLink {
  *  Overview landing page); otherwise it's a folder section. */
 export interface DocsNavGroup {
   title: string | null;
-  href: string | null;
+  href: AppHref | null;
   order: number;
   items: DocLink[];
 }

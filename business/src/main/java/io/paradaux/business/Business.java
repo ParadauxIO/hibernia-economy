@@ -20,13 +20,13 @@ import io.paradaux.business.commands.resolvers.OnlineFirmNameResolver;
 import io.paradaux.business.guice.BusinessModule;
 import io.paradaux.business.guice.DatabaseModule;
 import io.paradaux.business.integration.BusinessPlaceholderHook;
+import io.paradaux.business.internal.model.config.DatabaseConfiguration;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
 import io.paradaux.business.jobs.ExpireRequestsJob;
 import io.paradaux.business.jobs.ReconcileAccountMembersJob;
 import io.paradaux.business.listeners.ChestShopSaleListener;
 import io.paradaux.business.listeners.FirmBalanceTaxListener;
 import io.paradaux.business.listeners.OnlineRosterListener;
-import io.paradaux.business.model.config.DatabaseConfiguration;
-import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmSalesNotificationService;
 import io.paradaux.hibernia.framework.commander.CommandManager;
 import io.paradaux.hibernia.framework.events.ListenerManager;
@@ -56,7 +56,7 @@ public class Business extends JavaPlugin {
         //    (DatabaseConfiguration), Message (eager), the command/resolver/listener
         //    multibinders, and the PAPI/dialog support.
         HiberniaModule hiberniaModule = HiberniaModule.forPlugin(this)
-                .scanConfiguration("io.paradaux.business.model.config")
+                .scanConfiguration("io.paradaux.business.internal.model.config")
                 .handlers(
                         AccountCommands.class,
                         io.paradaux.business.commands.MenuCommands.class,
@@ -69,7 +69,8 @@ public class Business extends JavaPlugin {
                         ReloadCommand.class,
                         TaxCommands.class,
                         SalesCommands.class,
-                        ChatCommands.class)
+                        ChatCommands.class,
+                        io.paradaux.business.commands.DirectDebitCommands.class)
                 .dialogs(io.paradaux.business.dialogs.FirmMenu.class)
                 .menus(io.paradaux.business.dialogs.FirmDashboard.class)
                 .resolvers(FirmPlayerResolver.class, FirmNameResolver.class, OnlineFirmNameResolver.class)
@@ -131,6 +132,7 @@ public class Business extends JavaPlugin {
         expireRequestsJob = injector.getInstance(ExpireRequestsJob.class);
         expireRequestsJob.schedule();
         injector.getInstance(ReconcileAccountMembersJob.class).schedule();
+        injector.getInstance(io.paradaux.business.jobs.DirectDebitJob.class).schedule();
 
         // 4) Register public API
         BusinessApi api = injector.getInstance(BusinessApi.class);

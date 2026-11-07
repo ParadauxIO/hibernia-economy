@@ -186,6 +186,24 @@ d('/me overview money rules', () => {
     expect(overview.groups.find((g) => g.kind === 'government')!.accounts.map((a) => a.id).sort()).toEqual([32, 5]);
   });
 
+  it('groups only readable government accounts by unit without changing personal money', async () => {
+    await sql`INSERT INTO explorer_gov_unit (unit_id, slug, name) VALUES (990, 'test-city', 'City department')`.execute(db);
+    await sql`INSERT INTO explorer_gov_unit_account (unit_id, account_id) VALUES (990, 5), (990, 6)`.execute(db);
+    resetCacheForTests();
+    try {
+      const o = await getMeOverview(alice, ALICE, { from: addDays(TODAY, -89), to: TODAY });
+      const city = o.groups.find((g) => g.key === 'government-990')!;
+      expect(city.title).toBe('City department');
+      expect(city.accounts.map((a) => a.id)).toEqual([5]);
+      expect(city.subtotal).toBe(city.accounts[0]!.balance);
+      expect(o.groups.find((g) => g.key === 'government')!.accounts.map((a) => a.id)).toEqual([32]);
+      expect(o.myBalance).toBe(toDbString(sum(await findPersonalBalances(ALICE))));
+    } finally {
+      await sql`DELETE FROM explorer_gov_unit WHERE unit_id = 990`.execute(db);
+      resetCacheForTests();
+    }
+  });
+
   it('income and spending exclude internal transfers and count personal↔firm money', async () => {
     const o = await getMeOverview(alice, ALICE, { from: addDays(TODAY, -89), to: TODAY });
     const cur = o.month.current;
@@ -243,6 +261,20 @@ d('/me overview money rules', () => {
 });
 
 d('category SQL matches lib/categories', () => {
+  it.each([
+    ['realty-auction', '10.00', '', 0, 'auction_proceeds'],
+    ['realty-auction', '-10.00', '', 0, 'property'],
+    ['realty', '10.00', '', 0, 'property'],
+    ['treasury-salary', '10.00', '', 0, 'wages'],
+    ['realty-auction', '10.00', 'income', 0, 'taxes'],
+    ['realty-auction', '10.00', '', 1, 'internal'],
+  ])('classifies %s %s from provenance with tax/internal precedence', async (plugin, amount, tax, internal, expected) => {
+    const expr = categoryCaseSql({ pluginKey: sql`${plugin}`, taxKind: sql`${tax}`,
+      amount: sql`CAST(${amount} AS DECIMAL(19,2))`, counterType: sql`'PERSONAL'`, internal: sql`${internal}` });
+    const result = await sql<{ category: string }>`SELECT ${expr} AS category`.execute(db);
+    expect(result.rows[0]?.category).toBe(expected);
+  });
+
   it('categoryCaseSql agrees with categorize on every plugin, direction and counterparty', async () => {
     const plugins = [...Object.keys(PLUGIN_CATEGORIES), 'TreAsury-Core', ' ChestShop ', 'unknown-plugin'];
     const cases: { plugin: string; tax: string; amount: string; type: AccountType | null; internal: number }[] = [];

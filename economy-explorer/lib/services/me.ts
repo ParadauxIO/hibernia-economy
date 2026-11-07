@@ -1,8 +1,10 @@
 import 'server-only';
+import { deriveBalances } from '@/lib/balances';
+export { deriveBalances } from '@/lib/balances';
 import { memo } from '@/lib/cache';
 import { hasPermission } from '@/lib/auth/policy';
 import type { Viewer } from '@/lib/auth/viewer';
-import { parseMoney, toDbString, type Cents } from '@/lib/money';
+import { parseMoney, toDbString } from '@/lib/money';
 import { addDays, utcDay, type DayRange } from '@/lib/rollup/days';
 import type { RollupJob } from '@/lib/rollup/steps';
 import { rollupCoverage, type CoverageMap, type RangeCoverage } from '@/lib/services/rollup';
@@ -10,6 +12,7 @@ import {
   selectAccountRelations, selectFirmRoles, selectMonthlyFlowGroups, selectPostings, selectTopCounterparties,
   type AccountRelationRow, type FirmRoleRow, type SubjectAccount, type TopCounterpartyRow,
 } from '@/lib/sql/me';
+import { govUnitsForAccounts } from '@/lib/sql/govUnits';
 import { selectAccountNetSince } from '@/lib/sql/rollup';
 import { groupAccounts, isMine, toAccounts, type AccountGroup, type MyAccount } from './meGroups';
 import {
@@ -104,23 +107,6 @@ export function coveredPart(c: RangeCoverage, range: DayRange): DayRange | null 
   return from <= to ? { from, to } : null;
 }
 
-/**
- * Closing balance per day for [range.from, range.to], derived like
- * lib/services/rollup balanceSeries: current balance minus the net of every
- * later day. `nets` must cover range.from + 1 through today.
- */
-export function deriveBalances(current: Cents, nets: readonly { day: string; net: string }[], range: DayRange): { day: string; balance: string }[] {
-  const netByDay = new Map(nets.map((n) => [n.day, parseMoney(n.net)]));
-  let balance = current;
-  for (const [day, net] of netByDay) if (day > range.to) balance -= net;
-  const out: { day: string; balance: string }[] = [];
-  for (let day = range.to; day >= range.from; day = addDays(day, -1)) {
-    out.push({ day, balance: toDbString(balance) });
-    balance -= netByDay.get(day) ?? 0n;
-  }
-  return out.reverse();
-}
-
 // ── Overview ──────────────────────────────────────────────────────────────
 
 export interface CounterpartyTotal {
@@ -169,7 +155,7 @@ export const RECENT_LIMIT = 10;
 
 /**
  * Everything the /me overview shows, cached per viewer for 30 s under
- * `me:<uuid>:<range>`. Cold cost: 7 queries (coverage, relationships, firm
+ * `me:<uuid>:<range>`. Cold cost: up to 8 queries (coverage, relationships, firm
  * roles, daily nets, monthly flows, counterparties, recent activity).
  */
 export async function getMeOverview(viewer: Viewer, uuid: string, range: DayRange, now: Date = new Date()): Promise<MeOverview> {
@@ -191,7 +177,7 @@ async function computeOverview(viewer: Viewer, uuid: string, range: DayRange, no
   const flowCoverage = coverageOf(map, 'account_day', monthRange);
   const flowPart = coveredPart(flowCoverage, monthRange);
   const pairCoverage = coverageOf(map, 'pair_month', { from: monthFirstDay(thisMonth), to: today });
-  const [nets, flows, top, recent] = await Promise.all([
+  const [nets, flows, top, recent, units] = await Promise.all([
     balanceCoverage.covered && ids.length ? selectAccountNetSince(ids, addDays(range.from, 1)) : Promise.resolve(null),
     flowPart ? selectMonthlyFlowGroups(ids, flowPart.from, flowPart.to) : Promise.resolve([]),
     pairCoverage.coveredTo ? selectTopCounterparties(ids, monthFirstDay(thisMonth), monthFirstDay(thisMonth), TOP_LIMIT) : Promise.resolve([]),
@@ -199,6 +185,7 @@ async function computeOverview(viewer: Viewer, uuid: string, range: DayRange, no
       accounts: personal.map(subjectOf), beforeTxnId: null, fromTxnId: null, conditions: [],
       categories: null, counterpartyIds: null, texts: [], order: 'recent', limit: RECENT_LIMIT,
     }),
+    govUnitsForAccounts(accounts.filter((a) => a.type === 'GOVERNMENT').map((a) => a.id)),
   ]);
 
   const points = nets ? deriveBalances(current, nets, range) : [];
@@ -208,7 +195,7 @@ async function computeOverview(viewer: Viewer, uuid: string, range: DayRange, no
     uuid,
     myBalance: toDbString(current),
     personalCount: personal.length,
-    groups: groupAccounts(accounts, uuid, roles),
+    groups: groupAccounts(accounts, uuid, roles, units),
     balance: {
       range,
       points,

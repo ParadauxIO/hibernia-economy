@@ -4,11 +4,11 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { formatNum } from '../format';
 
-interface PaginationProps {
+interface PaginationProps<T extends string> {
   page: number;
   totalPages: number;
   totalItems: number;
-  basePath: string;
+  basePath: Route<T>;
   searchParams: Record<string, string | undefined>;
   /** Noun for the summary ("accounts"). Default "results". */
   noun?: string | undefined;
@@ -29,16 +29,16 @@ export function pageWindow(page: number, total: number, around = 1): (number | n
   return out;
 }
 
-function hrefFor(basePath: string, searchParams: Record<string, string | undefined>, param: string, value: string | null): Route {
+function hrefFor<T extends string>(basePath: Route<T>, searchParams: Record<string, string | undefined>, param: string, value: string | null) {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(searchParams)) if (v !== undefined && v !== '' && k !== param) sp.set(k, v);
   if (value !== null) sp.set(param, value);
   const qs = sp.toString();
-  return `${basePath}${qs ? `?${qs}` : ''}` as Route;
+  return { pathname: basePath, search: qs ? `?${qs}` : '' };
 }
 
 /** Numbered pages for bounded result sets. `Pager` is the same component. */
-export function Pagination({ page, totalPages, totalItems, basePath, searchParams, noun = 'results' }: PaginationProps) {
+export function Pagination<T extends string>({ page, totalPages, totalItems, basePath, searchParams, noun = 'results' }: PaginationProps<T>) {
   const href = (p: number) => hrefFor(basePath, searchParams, 'page', String(p));
   const last = Math.max(1, totalPages);
   return <nav className="pagination" aria-label="Pagination">
@@ -59,19 +59,19 @@ export function Pagination({ page, totalPages, totalItems, basePath, searchParam
 
 export { Pagination as Pager };
 
-interface CursorPagerProps {
+interface CursorPagerProps<T extends string> {
   /** Link to newer rows, or null at the start of the feed. */
-  newerHref?: string | null | undefined;
+  newerHref?: Route<T> | null | undefined;
   /** Link to older rows, or null at the end of the feed. */
-  olderHref?: string | null | undefined;
+  olderHref?: Route<T> | null | undefined;
   /** A GET form jumping to a date: submits `param=YYYY-MM-DD` to `basePath`, keeping `searchParams`. */
-  jump?: { basePath: string; param: string; value?: string; searchParams?: Record<string, string | undefined>; min?: string; max?: string };
+  jump?: { basePath: Route<T>; param: string; value?: string; searchParams?: Record<string, string | undefined>; min?: string; max?: string };
   /** "1,000+ transactions" style summary for unbounded feeds. */
   summary?: string | undefined;
 }
 
 /** Newer / Older for keyset-paginated feeds, plus an optional jump-to-date. */
-export function CursorPager({ newerHref, olderHref, jump, summary }: CursorPagerProps) {
+export function CursorPager<T extends string>({ newerHref, olderHref, jump, summary }: CursorPagerProps<T>) {
   return <nav className="pagination" aria-label="Pagination">
     {summary ? <span className="pagination-summary">{summary}</span> : <span className="pagination-summary" />}
     <div className="pagination-controls">
@@ -80,8 +80,8 @@ export function CursorPager({ newerHref, olderHref, jump, summary }: CursorPager
         <label className="pagination-jump-label">Jump to <input type="date" name={jump.param} defaultValue={jump.value} min={jump.min} max={jump.max} /></label>
         <button type="submit" className="btn btn-quiet">Go</button>
       </form>}
-      {newerHref ? <Link href={newerHref as Route} prefetch={false} rel="prev">Newer</Link> : <span className="disabled" aria-disabled="true">Newer</span>}
-      {olderHref ? <Link href={olderHref as Route} prefetch={false} rel="next">Older</Link> : <span className="disabled" aria-disabled="true">Older</span>}
+      {newerHref ? <Link href={newerHref} prefetch={false} rel="prev">Newer</Link> : <span className="disabled" aria-disabled="true">Newer</span>}
+      {olderHref ? <Link href={olderHref} prefetch={false} rel="next">Older</Link> : <span className="disabled" aria-disabled="true">Older</span>}
     </div>
   </nav>;
 }

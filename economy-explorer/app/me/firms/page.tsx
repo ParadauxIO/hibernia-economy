@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { Money, PageHeader, Section, TableWrap, Tag, When } from '@democracycraft/design-system';
 import { getViewer } from '@/lib/auth/viewer';
 import { buildMetadata } from '@/lib/metadata';
@@ -37,7 +36,7 @@ export default async function MyFirmsPage() {
           </tr></thead>
           <tbody>{firms.map((f) => <tr key={f.firmId}>
             <th scope="row">
-              <Link href={`/firms/${encodeURIComponent(f.name)}` as Route} prefetch={false}>{f.name}</Link>
+              <Link href={`/firms/${encodeURIComponent(f.name)}`} prefetch={false}>{f.name}</Link>
               {f.archived && <span className="dt-sub"> · disbanded</span>}
             </th>
             <td>{f.isProprietor ? <>Proprietor{f.role ? <span className="dt-sub"> · {f.role}</span> : null}</> : f.role ?? '—'}</td>
@@ -62,7 +61,7 @@ export default async function MyFirmsPage() {
           </tr></thead>
           <tbody>{finance.map((f) => <tr key={f.firmId}>
             <th scope="row">
-              <Link href={`/firms/${encodeURIComponent(f.name)}?tab=financials` as Route} prefetch={false}>{f.name}</Link>
+              <Link href={`/firms/${encodeURIComponent(f.name)}?tab=financials`} prefetch={false}>{f.name}</Link>
               <span className="dt-sub"> · {f.finance!.accountCount} account{f.finance!.accountCount === 1 ? '' : 's'}</span>
             </th>
             <td className="amount"><Money value={f.finance!.balance} /></td>

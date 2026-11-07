@@ -47,7 +47,9 @@ public interface FirmApi {
 
     /**
      * Typed lookup by display name — the name-only counterpart of
-     * {@link #getFirmById(int)} (ADT-108).
+     * {@link #getFirmById(int)} (ADT-108). The built-in implementation treats
+     * numeric strings as names and includes archived firms. The default delegates
+     * to the legacy parser for compatibility with third-party implementations.
      *
      * @param name the firm display name
      * @return the firm, or {@code null} if not found

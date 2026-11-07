@@ -1,8 +1,7 @@
 package io.paradaux.business.services;
 
-import io.paradaux.business.model.FirmRole;
-import io.paradaux.business.model.FirmRolePermission;
-
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,8 +32,10 @@ public interface FirmRoleService {
     void removeRolePermission(int firmId, String roleName, String permission, UUID actorId);
 
     List<FirmRole> getFirmRoles(String firmName, UUID actorId);
+
     List<FirmRole> getFirmRoles(int firmId);
 
     List<FirmRolePermission> getFirmRolePermissions(String firmName, String roleName, UUID actorId);
+
     List<FirmRolePermission> getFirmRolePermissions(int firmId, String roleName);
 }

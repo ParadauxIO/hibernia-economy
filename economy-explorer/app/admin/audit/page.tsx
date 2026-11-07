@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { Route } from 'next';
 import { PageHeader, Tag, When } from '@democracycraft/design-system';
 import { CursorPager } from '@democracycraft/design-system/next';
 import { DataTable, columnOptions, type Column } from '@democracycraft/design-system/table';
@@ -13,11 +12,12 @@ import { exportHrefs } from '@/lib/export/href';
 import { buildMetadata } from '@/lib/metadata';
 import { getAuditLog } from '@/lib/services/audit';
 import type { AuditEntry } from '@/lib/sql/audit';
-import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES, auditTable } from '@/lib/tables/audit';
+import { auditTable } from '@/lib/tables/audit';
 import { parseTableState, tableHref, withCursor, withSort, type TableState } from '@/lib/tables/core';
 import { AdminGate } from '../_components/AdminGate';
 import { AdminTableEmpty, RouterLink } from '../_components/table';
 import { AuditDetailButton } from './audit-detail-button';
+import { ACTION_LABEL, targetHref, targetOf, targetText } from './targets';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,34 +27,6 @@ export async function generateMetadata() {
 
 const TABLE_ID = 'audit-table';
 const PATH = '/admin/audit';
-const ACTION_LABEL = new Map<string, string>(AUDIT_ACTIONS.map((a) => [a.action, a.label]));
-const TARGET_LABEL = new Map<string, string>(AUDIT_TARGET_TYPES.map((t) => [t.value, t.label]));
-
-/**
- * The target as a kind and value. Older rows stored groups, roles, keys and
- * webhooks as `global` + `group:12`; read those as the kind they name.
- */
-function targetOf(type: string | null, id: string | null): { kind: string | null; value: string | null } {
-  if (type === 'global' && id && /^[a-z_]+:./.test(id)) {
-    const [prefix = '', ...rest] = id.split(':');
-    return { kind: prefix === 'key' ? 'api_key' : prefix, value: rest.join(':') };
-  }
-  return { kind: type, value: id };
-}
-
-/** Where a target can be opened, if anywhere. */
-function targetHref(kind: string | null, value: string | null): string | null {
-  if (!kind || !value) return null;
-  switch (kind) {
-    case 'account': return /^\d+$/.test(value) ? `/accounts/${value}` : null;
-    case 'firm': return /^\d+$/.test(value) ? `/admin/firms/${value}` : null;
-    case 'player': return /^[0-9a-f-]{36}$/i.test(value) ? `/admin/players/${value.toLowerCase()}` : null;
-    case 'transaction': return /^\d+$/.test(value) ? `/transactions/${value}` : null;
-    case 'group': return /^\d+$/.test(value) ? `/admin/groups/${value}` : null;
-    case 'role': return `/admin/roles/${encodeURIComponent(value)}`;
-    default: return null;
-  }
-}
 
 const columns: Column<AuditEntry>[] = [
   { key: 'at', header: 'Time', sort: 'at', sortFirst: 'desc', cell: (e) => <When value={e.at} time /> },
@@ -64,7 +36,7 @@ const columns: Column<AuditEntry>[] = [
     cell: (e) => (
       <>
         {e.actor_uuid
-          ? <Link href={`/admin/players/${e.actor_uuid}` as Route} prefetch={false}>{e.actor_name ?? e.actor_uuid.slice(0, 8)}</Link>
+          ? <Link href={`/admin/players/${e.actor_uuid}`} prefetch={false}>{e.actor_name ?? e.actor_uuid.slice(0, 8)}</Link>
           : <span>{e.actor_name ?? e.actor_sub}</span>}
         {e.actor_role && <span className="dt-sub">{` · ${e.actor_role}`}</span>}
       </>
@@ -81,8 +53,8 @@ const columns: Column<AuditEntry>[] = [
     cell: (e) => {
       const { kind, value } = targetOf(e.target_type, e.target_id);
       const href = targetHref(kind, value);
-      const text = `${TARGET_LABEL.get(kind ?? '') ?? kind ?? '—'}${value ? ` ${value}` : ''}`;
-      return href ? <Link href={href as Route} prefetch={false}>{text}</Link> : <span>{text}</span>;
+      const text = targetText(kind, value);
+      return href ? <Link href={href} prefetch={false}>{text}</Link> : <span>{text}</span>;
     },
   },
   { key: 'path', header: 'Path', secondary: true, optional: true, cell: (e) => <span className="mono">{e.path}</span> },

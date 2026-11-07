@@ -68,10 +68,7 @@ class BusinessKeyHandlerTest {
 
     @Test
     void issueAccount_preservesSelectedSubaccountAndDisplaysScope() {
-        var firm = new io.paradaux.business.model.Firm();
-        firm.setFirmId(7);
-        firm.setDisplayName("Acme");
-        firm.setDefaultAccountId(40);
+        var firm = new io.paradaux.business.model.Firm(7, "Acme", null, null, null, 40, null, null, null);
         when(firms.getFirm("Acme")).thenReturn(firm);
         when(firms.isProprietor(7, proprietorId)).thenReturn(true);
         ApiKey key = businessKey(7, false);

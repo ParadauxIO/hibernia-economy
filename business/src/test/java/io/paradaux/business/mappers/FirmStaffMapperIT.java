@@ -3,9 +3,9 @@ package io.paradaux.business.mappers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmEmployee;
-import io.paradaux.business.model.FirmRole;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmEmployee;
+import io.paradaux.business.internal.model.FirmRole;
 import io.paradaux.business.testsupport.IntegrationTestBase;
 import java.util.List;
 import java.util.Locale;

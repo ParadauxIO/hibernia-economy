@@ -182,3 +182,39 @@ test('routes without charts never download recharts', async ({ page }) => {
   expect(scripts.length).toBeGreaterThan(0);
   expect(scripts.filter((s) => s.includes('recharts-wrapper'))).toEqual([]);
 });
+
+for (const path of ['/', '/accounts/3', '/chestshop/items/DIAMOND']) {
+  test(`chart loading preserves layout on ${path}`, async ({ page, context, baseURL }) => {
+    test.skip(!process.env.E2E_AUTH_SHIM, 'needs seeded chart data and the auth shim');
+    await context.addCookies([{ name: 'e2e_viewer', value: 'admin', url: baseURL! }]);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    await page.route('**/_next/static/chunks/*.js', async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      if (body.includes('recharts-wrapper')) await held;
+      await route.fulfill({ response, body });
+    });
+    try {
+      await page.goto(path, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('div[hidden][id^="S:"]')).toHaveCount(0);
+      const plots = page.locator('.chart-plot:has(.skeleton-chart)');
+      await expect(plots.first()).toBeVisible();
+      const before = await plots.evaluateAll((elements) => elements.map((el) => {
+        const b = el.getBoundingClientRect();
+        return { top: b.top, height: b.height };
+      }));
+      release();
+      await expect(page.locator('.chart-plot .skeleton-chart')).toHaveCount(0);
+      const after = await page.locator('.chart-plot').evaluateAll((elements) => elements.map((el) => {
+        const b = el.getBoundingClientRect();
+        return { top: b.top, height: b.height };
+      }));
+      expect(after).toHaveLength(before.length);
+      for (let i = 0; i < before.length; i++) {
+        expect(after[i]!.height).toBeCloseTo(before[i]!.height, 0);
+        expect(after[i]!.top).toBeCloseTo(before[i]!.top, 0);
+      }
+    } finally { release(); }
+  });
+}

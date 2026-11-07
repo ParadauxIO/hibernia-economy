@@ -1,11 +1,10 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.FirmRole;
-import io.paradaux.business.model.FirmRolePermission;
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
-import org.apache.ibatis.annotations.*;
-
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 /**
  * Roles and per-role permissions on a firm.
@@ -42,8 +41,7 @@ public interface FirmRoleMapper {
                AND name = #{roleName}
                AND deleted_at IS NULL
             """)
-    int deleteRole(@Param("firmId") int firmId,
-                   @Param("roleName") String roleName);
+    int deleteRole(@Param("firmId") int firmId, @Param("roleName") String roleName);
 
     /** Update only the rank order. */
     @Update("""
@@ -53,9 +51,7 @@ public interface FirmRoleMapper {
                AND name = #{roleName}
                AND deleted_at IS NULL
             """)
-    int updateRoleRank(@Param("firmId") int firmId,
-                       @Param("roleName") String roleName,
-                       @Param("newRank") int newRank);
+    int updateRoleRank(@Param("firmId") int firmId, @Param("roleName") String roleName, @Param("newRank") int newRank);
 
     /** Rename a role. */
     @Update("""
@@ -65,9 +61,7 @@ public interface FirmRoleMapper {
                AND name = #{oldName}
                AND deleted_at IS NULL
             """)
-    int renameRole(@Param("firmId") int firmId,
-                   @Param("oldName") String oldName,
-                   @Param("newName") String newName);
+    int renameRole(@Param("firmId") int firmId, @Param("oldName") String oldName, @Param("newName") String newName);
 
     /** Find the proprietor role name (lowest rank_order). */
     @Select("""
@@ -127,9 +121,10 @@ public interface FirmRoleMapper {
                AND rp.permission = #{permission}
                AND rp.deleted_at IS NULL
             """)
-    int deleteRolePermission(@Param("firmId") int firmId,
-                             @Param("roleName") String roleName,
-                             @Param("permission") RolePermission permission);
+    int deleteRolePermission(
+            @Param("firmId") int firmId,
+            @Param("roleName") String roleName,
+            @Param("permission") RolePermission permission);
 
     /** List all permissions for a role. */
     @Select("""
@@ -144,8 +139,7 @@ public interface FirmRoleMapper {
                AND rp.deleted_at IS NULL
              ORDER BY rp.permission ASC
             """)
-    List<FirmRolePermission> listPermissionsByRole(@Param("firmId") int firmId,
-                                                   @Param("roleName") String roleName);
+    List<FirmRolePermission> listPermissionsByRole(@Param("firmId") int firmId, @Param("roleName") String roleName);
 
     @Select("""
         SELECT rank_order
@@ -154,8 +148,7 @@ public interface FirmRoleMapper {
           AND name = #{roleName}
           AND deleted_at IS NULL
         """)
-    Integer getRank(@Param("firmId") int firmId,
-                    @Param("roleName") String roleName);
+    Integer getRank(@Param("firmId") int firmId, @Param("roleName") String roleName);
 
     /** Find the next role above, excluding the proprietor role (minimum rank_order). */
     @Select("""
@@ -169,8 +162,7 @@ public interface FirmRoleMapper {
         ORDER BY rank_order DESC
         LIMIT 1
         """)
-    String findRoleAbove(@Param("firmId") int firmId,
-                         @Param("currentRank") int currentRank);
+    String findRoleAbove(@Param("firmId") int firmId, @Param("currentRank") int currentRank);
 
     @Select("""
         SELECT name
@@ -181,8 +173,7 @@ public interface FirmRoleMapper {
         ORDER BY rank_order ASC
         LIMIT 1
         """)
-    String findRoleBelow(@Param("firmId") int firmId,
-                         @Param("currentRank") int currentRank);
+    String findRoleBelow(@Param("firmId") int firmId, @Param("currentRank") int currentRank);
 
     @Select("""
         SELECT 1
@@ -191,8 +182,7 @@ public interface FirmRoleMapper {
           AND name = #{roleName}
           AND deleted_at IS NULL
         """)
-    Integer roleExists(@Param("firmId") int firmId,
-                       @Param("roleName") String roleName);
+    Integer roleExists(@Param("firmId") int firmId, @Param("roleName") String roleName);
 
     @Select("""
         SELECT name
@@ -227,6 +217,5 @@ public interface FirmRoleMapper {
           AND rp.deleted_at IS NULL
         ORDER BY rp.permission ASC
         """)
-    List<FirmRolePermission> getFirmRolePermissions(@Param("firmId") int firmId,
-                                                    @Param("roleName") String roleName);
+    List<FirmRolePermission> getFirmRolePermissions(@Param("firmId") int firmId, @Param("roleName") String roleName);
 }

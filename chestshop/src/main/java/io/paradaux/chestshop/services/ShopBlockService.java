@@ -1,10 +1,11 @@
 package io.paradaux.chestshop.services;
 
+import java.util.List;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Sign;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-import java.util.List;
 
 /**
  * The stateful block↔shop-sign geometry split out of {@code ShopBlockUtil} (PAR-282):
@@ -29,6 +30,13 @@ public interface ShopBlockService {
 
     List<Sign> findConnectedShopSigns(InventoryHolder chestShopInventoryHolder);
 
+    /**
+     * As {@link #findConnectedShopSigns(InventoryHolder)}, optionally returning live sign states.
+     * Snapshots copy each sign's block entity; the hopper refresh only reads the lines and
+     * rewrites the counter, so it passes {@code false} (PAR-523).
+     */
+    List<Sign> findConnectedShopSigns(InventoryHolder chestShopInventoryHolder, boolean useSnapshot);
+
     List<Sign> findConnectedShopSigns(Block chestBlock);
 
     Sign findAnyNearbyShopSign(Block block);
@@ -36,6 +44,13 @@ public interface ShopBlockService {
     boolean couldBeShopContainer(Block block);
 
     boolean couldBeShopContainer(InventoryHolder holder);
+
+    /**
+     * A cheap pre-check from the inventory's type alone: {@code false} only when no configured
+     * shop container could own an inventory of this type (a hopper, say). Hopper paths call
+     * it before resolving the holder; {@link #couldBeShopContainer} still decides (PAR-523).
+     */
+    boolean couldBeShopInventory(Inventory inventory);
 
     boolean isShopBlock(Block block);
 

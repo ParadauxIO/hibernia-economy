@@ -76,7 +76,7 @@ public class TreasuryIntegration implements Integration {
             } else {
                 Account systemAccount = treasury.createAccount(
                         AccountType.SYSTEM, BusinessAccountUtil.CHESTSHOP_SYSTEM_UUID, "ChestShop System");
-                systemAccount.setAllowOverdraft(true);
+                systemAccount = systemAccount.withAllowOverdraft(true);
                 treasury.updateAccount(systemAccount);
                 systemAccountId = systemAccount.getAccountId();
             }

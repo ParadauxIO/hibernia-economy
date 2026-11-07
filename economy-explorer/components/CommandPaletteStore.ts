@@ -1,8 +1,10 @@
 'use client';
+import type { AppHref } from '@/lib/routes';
 // Open state and recent items for the command palette. The palette is mounted
 // once by the root layout; anything (the top-bar search button, ⌘K) opens it
 // through openPalette().
 import { useSyncExternalStore } from 'react';
+import { ACCOUNT_LINKS, NAV_SECTIONS } from '@/lib/nav';
 
 let open = false;
 const listeners = new Set<() => void>();
@@ -39,7 +41,7 @@ export function usePaletteOpen(): boolean {
 export interface RecentItem {
   kind: 'account' | 'firm' | 'player' | 'item' | 'page';
   label: string;
-  href: string;
+  href: AppHref;
   detail?: string | undefined;
 }
 
@@ -47,12 +49,25 @@ export const RECENT_KEY = 'explorer.palette.recent';
 const RECENT_MAX = 6;
 const KINDS = new Set<RecentItem['kind']>(['account', 'firm', 'player', 'item', 'page']);
 
+// Persisted strings are outside TypeScript's guarantees. Only restore destinations
+// that the palette can produce, including entity results from earlier sessions.
+const PAGE_HREFS = new Set<string>([
+  ...NAV_SECTIONS.flatMap((section) => [section.href, ...(section.items ?? []).map((item) => item.href)]),
+  ...ACCOUNT_LINKS.map((item) => item.href), '/admin',
+]);
+function isRecentHref(href: string): href is AppHref {
+  return PAGE_HREFS.has(href)
+    || /^\/(?:accounts|firms|players)\/[^/?#\\]+$/.test(href)
+    || /^\/chestshop\/items\/[^/?#\\]+$/.test(href)
+    || href.startsWith('/search?');
+}
+
 function isRecent(x: unknown): x is RecentItem {
   if (typeof x !== 'object' || x === null) return false;
   const r = x as Record<string, unknown>;
   return KINDS.has(r.kind as RecentItem['kind']) && typeof r.label === 'string' && typeof r.href === 'string'
     // Only same-origin paths: a tampered entry must never become an off-site link.
-    && r.href.startsWith('/') && !r.href.startsWith('//')
+    && isRecentHref(r.href)
     && (r.detail === undefined || typeof r.detail === 'string');
 }
 

@@ -42,10 +42,11 @@ class TransactionEntryRendererTest {
         when(accounts.formatAmount(new BigDecimal("15.00"))).thenReturn("$15.00");
         for (int sign : new int[] {1, -1}) {
             CommandSender recipient = mock(CommandSender.class);
-            TransactionEntry entry = new TransactionEntry();
-            entry.setTxnId(42);
-            entry.setAmount(new BigDecimal("15.00").multiply(BigDecimal.valueOf(sign)));
-            entry.setMemo("<red>memo</red> {amount}");
+            TransactionEntry entry = TransactionEntry.builder()
+                    .txnId(42)
+                    .amount(new BigDecimal("15.00").multiply(BigDecimal.valueOf(sign)))
+                    .memo("<red>memo</red> {amount}")
+                    .build();
             TransactionEntryRenderer.send(recipient, message, accounts, entry);
             ArgumentCaptor<Component> output = ArgumentCaptor.forClass(Component.class);
             verify(recipient).sendMessage(output.capture());
@@ -55,6 +56,34 @@ class TransactionEntryRendererTest {
             assertThat(hasColoredText(output.getValue(), signed, sign > 0 ? NamedTextColor.GREEN : NamedTextColor.RED))
                     .isTrue();
         }
+    }
+
+    @Test
+    void rendersCategoryWithoutChangingStoredMemo() {
+        Message message = mock(Message.class);
+        AccountService accounts = mock(AccountService.class);
+        CommandSender recipient = mock(CommandSender.class);
+        when(accounts.formatAmount(new BigDecimal("15.00"))).thenReturn("$15.00");
+        TransactionEntry entry = TransactionEntry.builder()
+                .txnId(42)
+                .amount(new BigDecimal("15.00"))
+                .memo("Lot 17")
+                .pluginSystem("realty-auction")
+                .build();
+        TransactionEntryRenderer.send(recipient, message, accounts, entry);
+        verify(message)
+                .send(
+                        recipient,
+                        "treasury.transactions.entry",
+                        "txn",
+                        "42",
+                        "amount",
+                        Component.text("+$15.00", NamedTextColor.GREEN),
+                        "memo",
+                        "[AUCTION_PROCEEDS] Lot 17",
+                        "time",
+                        "—");
+        assertThat(entry.getMemo()).isEqualTo("Lot 17");
     }
 
     private static boolean hasColoredText(Component component, String text, NamedTextColor color) {

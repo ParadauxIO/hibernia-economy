@@ -2,6 +2,9 @@ import 'server-only';
 import { sql, type RawBuilder, type SqlBool } from 'kysely';
 import { db, binToUuid, uuidToBin } from '@/lib/db';
 import { afterCursor, orderByTime, readDir, type KeysetPage } from '@/lib/sql/keyset';
+import { compileTableState, defineColumnMap, likeContains } from '@/lib/sql/tableState';
+import { itemsTable, type ItemsTableState } from '@/lib/tables/items';
+import { shopsTable, type ShopsTableState } from '@/lib/tables/shops';
 
 // Ports of MarketReadMapper (~290 LOC of @Select). All public unless the
 // query selects customer_uuid_bin — those callers gate access in the page.
@@ -896,4 +899,257 @@ function toShopRow(r: RawShop): MarketShopRow {
     last_seen: r.last_seen,
     active: r.active,
   };
+}
+
+// ── Rollup-backed market views (PAR-537) ─────────────────────────────────
+//
+// Read explorer_rollup_item_day through idx_erid_day (day) or its primary key
+// (item_key, day, direction): bounded by the day range, never by sale history.
+// Days are 'YYYY-MM-DD' UTC, inclusive. Callers check item_day coverage.
+
+export interface ItemWindowRow {
+  item_key: string;
+  trades: number;
+  qty: number;
+  volume: string;
+  /** Quantity-weighted average unit price over the window, DECIMAL(19,4) string; null without quantity. */
+  avg_price: string | null;
+}
+
+/** Window totals per item. */
+export async function selectItemWindow(from: string, to: string, limit: number, order: 'trades' | 'volume'): Promise<ItemWindowRow[]> {
+  const r = await sql<{ item_key: string; trades: number | string; qty: number | string; volume: string; avg_price: string | null }>`
+    SELECT item_key, SUM(trades) AS trades, SUM(qty) AS qty, SUM(volume) AS volume,
+           CAST(SUM(volume) / NULLIF(SUM(qty), 0) AS DECIMAL(19,4)) AS avg_price
+    FROM explorer_rollup_item_day
+    WHERE day BETWEEN ${from} AND ${to}
+    GROUP BY item_key
+    ORDER BY ${order === 'volume' ? sql`SUM(volume)` : sql`SUM(trades)`} DESC, item_key
+    LIMIT ${limit}
+  `.execute(db);
+  return r.rows.map((row) => ({ ...row, trades: Number(row.trades), qty: Number(row.qty) }));
+}
+
+export interface ItemMoverRow {
+  item_key: string;
+  trades: number;
+  volume: string;
+  /** Average unit price in the earlier and later window (DECIMAL(19,4) strings). */
+  before_price: string;
+  after_price: string;
+}
+
+/**
+ * Average unit price in [prevFrom, prevTo] against [from, to] for items traded
+ * at least `minTrades` times in each window. Ranked by the size of the move
+ * by the caller; the database only aggregates.
+ */
+export async function selectItemMovers(prevFrom: string, prevTo: string, from: string, to: string, minTrades: number): Promise<ItemMoverRow[]> {
+  const r = await sql<{ item_key: string; trades: number | string; volume: string; before_price: string; after_price: string }>`
+    SELECT item_key,
+           SUM(CASE WHEN day >= ${from} THEN trades ELSE 0 END) AS trades,
+           SUM(CASE WHEN day >= ${from} THEN volume ELSE 0 END) AS volume,
+           CAST(SUM(CASE WHEN day <= ${prevTo} THEN volume ELSE 0 END) / NULLIF(SUM(CASE WHEN day <= ${prevTo} THEN qty ELSE 0 END), 0) AS DECIMAL(19,4)) AS before_price,
+           CAST(SUM(CASE WHEN day >= ${from} THEN volume ELSE 0 END) / NULLIF(SUM(CASE WHEN day >= ${from} THEN qty ELSE 0 END), 0) AS DECIMAL(19,4)) AS after_price
+    FROM explorer_rollup_item_day
+    WHERE day BETWEEN ${prevFrom} AND ${to}
+    GROUP BY item_key
+    HAVING SUM(CASE WHEN day <= ${prevTo} THEN trades ELSE 0 END) >= ${minTrades}
+       AND SUM(CASE WHEN day >= ${from} THEN trades ELSE 0 END) >= ${minTrades}
+       AND before_price > 0 AND after_price IS NOT NULL
+  `.execute(db);
+  return r.rows.map((row) => ({ ...row, trades: Number(row.trades) }));
+}
+
+export interface MarketDayRow { day: string; trades: number; qty: number; volume: string; items: number }
+
+/** Market-wide totals per day (both directions). */
+export async function selectMarketDays(from: string, to: string): Promise<MarketDayRow[]> {
+  const r = await sql<{ day: string; trades: number | string; qty: number | string; volume: string; items: number | string }>`
+    SELECT DATE_FORMAT(day, '%Y-%m-%d') AS day, SUM(trades) AS trades, SUM(qty) AS qty, SUM(volume) AS volume,
+           COUNT(DISTINCT item_key) AS items
+    FROM explorer_rollup_item_day
+    WHERE day BETWEEN ${from} AND ${to}
+    GROUP BY day
+    ORDER BY day
+  `.execute(db);
+  return r.rows.map((row) => ({ day: row.day, trades: Number(row.trades), qty: Number(row.qty), volume: row.volume, items: Number(row.items) }));
+}
+
+/** Distinct items traded over a range. */
+export async function countItemsTraded(from: string, to: string): Promise<number> {
+  const r = await sql<{ c: number | string }>`
+    SELECT COUNT(DISTINCT item_key) AS c FROM explorer_rollup_item_day WHERE day BETWEEN ${from} AND ${to}
+  `.execute(db);
+  return Number(r.rows[0]?.c ?? 0);
+}
+
+export interface ItemIdentityRow { item_key: string; item_name: string | null; material: string | null; item_custom: number }
+
+/**
+ * Display identity (name, material, custom flag) for item keys, from each
+ * key's latest sale: one idx_cs_item (item_key, occurred_at) probe per key.
+ */
+export async function findItemIdentities(itemKeys: readonly string[]): Promise<ItemIdentityRow[]> {
+  if (itemKeys.length === 0) return [];
+  const r = await sql<ItemIdentityRow>`
+    SELECT k.item_key, s.item_name, s.material, s.item_custom
+    FROM (SELECT ${sql.join(itemKeys.map((key, i) => (i === 0 ? sql`${key} AS item_key` : sql`${key}`)), sql` UNION ALL SELECT `)}) k
+    LEFT JOIN chestshop_sale s ON s.sale_id = (
+      SELECT x.sale_id FROM chestshop_sale x WHERE x.item_key = k.item_key ORDER BY x.occurred_at DESC, x.sale_id DESC LIMIT 1
+    )
+  `.execute(db);
+  return r.rows;
+}
+
+/** Newest shop signs (shop_id is assigned when a sign is first seen). */
+export async function listNewestShops(limit: number): Promise<MarketShopRow[]> {
+  const r = await sql<RawShop>`
+    SELECT s.shop_id, s.world, s.sign_x, s.sign_y, s.sign_z, s.is_admin_shop AS admin_shop,
+      s.shop_account_type, s.shop_firm_id, s.shop_owner_uuid_bin,
+      COALESCE(f.display_name, fp.current_name, a.display_name) AS owner_name,
+      s.material, s.item_key, s.item_name, s.item_custom,
+      s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.estimated_capacity AS current_space, s.stock_at, s.last_seen, s.active
+    FROM chestshop_shop s
+    LEFT JOIN firm f ON f.firm_id = s.shop_firm_id
+    LEFT JOIN accounts a ON a.account_id = s.shop_account_id
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
+    WHERE s.active = 1 AND s.visible = 1
+    ORDER BY s.shop_id DESC
+    LIMIT ${limit}
+  `.execute(db);
+  return r.rows.map(toShopRow);
+}
+
+// ── Item catalogue (chip table over the item rollup) ──────────────────────
+
+/** One row per item traded in [from, to]: the catalogue's base, bounded by the window. */
+function catalogueWindow(from: string, to: string) {
+  return sql`(
+    SELECT item_key, SUM(trades) AS trades, SUM(qty) AS qty, SUM(volume) AS volume,
+           CAST(SUM(volume) / NULLIF(SUM(qty), 0) AS DECIMAL(19,4)) AS avg_price
+    FROM explorer_rollup_item_day
+    WHERE day BETWEEN ${from} AND ${to}
+    GROUP BY item_key
+  ) c`;
+}
+
+export const itemsColumnMap = defineColumnMap({
+  table: itemsTable,
+  filters: {
+    trades: { column: sql`c.trades` },
+    volume: { column: sql`c.volume` },
+    price: { column: sql`c.avg_price` },
+  },
+  sorts: { name: sql`c.item_key`, trades: sql`c.trades`, volume: sql`c.volume`, price: sql`c.avg_price` },
+  tiebreak: { column: sql`c.item_key`, dir: 'asc' },
+  search: (q) => {
+    // Item keys are the searchable identity ("oak log" finds OAK_LOG).
+    const t = q.trim().replace(/\s+/g, '_');
+    return t ? sql<SqlBool>`c.item_key LIKE ${likeContains(t)}` : null;
+  },
+});
+
+export async function listCatalogue(state: ItemsTableState, from: string, to: string, limit: number, offset: number): Promise<ItemWindowRow[]> {
+  const c = compileTableState(state, itemsColumnMap);
+  const r = await sql<{ item_key: string; trades: number | string; qty: number | string; volume: string; avg_price: string | null }>`
+    SELECT c.item_key, c.trades, c.qty, c.volume, c.avg_price FROM ${catalogueWindow(from, to)} ${c.where} ${c.orderBy} LIMIT ${limit} OFFSET ${offset}
+  `.execute(db);
+  return r.rows.map((row) => ({ ...row, trades: Number(row.trades), qty: Number(row.qty) }));
+}
+
+export async function countCatalogue(state: ItemsTableState, from: string, to: string): Promise<number> {
+  const c = compileTableState(state, itemsColumnMap);
+  const r = await sql<{ n: number | string }>`SELECT COUNT(*) AS n FROM ${catalogueWindow(from, to)} ${c.where}`.execute(db);
+  return Number(r.rows[0]?.n ?? 0);
+}
+
+// ── Shop finder (chip table over chestshop_shop) ──────────────────────────
+
+/** The compared side of the sign, per item. */
+function unitPrice(state: ShopsTableState) {
+  return sellSide(state) ? sql`(s.sell_price / GREATEST(s.batch_qty, 1))` : sql`(s.buy_price / GREATEST(s.batch_qty, 1))`;
+}
+function sellSide(state: ShopsTableState): boolean {
+  const d = state.filters.find((f) => f.field === 'direction');
+  return !!d && d.values.length === 1 && d.values[0] === 'sell';
+}
+
+/**
+ * chestshop_shop is about 51k rows. Item filters use idx_shop_item; the rest
+ * are evaluated over the active shops, which bounds every query by the shop
+ * table, never by sale history.
+ */
+function shopsColumnMap(state: ShopsTableState) {
+  return defineColumnMap({
+    table: shopsTable,
+    filters: {
+      item: { column: sql`s.item_key` },
+      // The side is applied separately (it decides the price column); here it
+      // only requires a price on that side.
+      direction: { compile: () => (sellSide(state) ? sql<SqlBool>`s.sell_price IS NOT NULL` : sql<SqlBool>`s.buy_price IS NOT NULL`) },
+      price: { column: unitPrice(state) },
+      inStock: { compile: (f) => (f.values[0] === 'true'
+        ? sql<SqlBool>`(s.is_admin_shop = 1 OR s.current_stock >= GREATEST(s.batch_qty, 1))`
+        : sql<SqlBool>`(s.is_admin_shop = 0 AND (s.current_stock IS NULL OR s.current_stock < GREATEST(s.batch_qty, 1)))`) },
+      owner: {
+        compile: (f) => {
+          const parts = f.values.map((v) => v === 'admin' ? sql<SqlBool>`s.is_admin_shop = 1`
+            : v === 'firm' ? sql<SqlBool>`(s.is_admin_shop = 0 AND s.shop_firm_id IS NOT NULL)`
+              : sql<SqlBool>`(s.is_admin_shop = 0 AND s.shop_firm_id IS NULL)`);
+          return parts.length ? sql<SqlBool>`(${sql.join(parts, sql` OR `)})` : null;
+        },
+      },
+      world: { column: sql`s.world` },
+    },
+    sorts: { price: unitPrice(state), stock: sql`s.current_stock`, seen: sql`s.last_seen` },
+    tiebreak: { column: sql`s.shop_id`, dir: 'asc' },
+    search: (q) => {
+      const like = likeContains(q.trim());
+      return sql<SqlBool>`(s.item_name LIKE ${like} OR s.material LIKE ${like})`;
+    },
+  });
+}
+
+function shopsWhere(state: ShopsTableState) {
+  const c = compileTableState(state, shopsColumnMap(state));
+  const conds = [sql<SqlBool>`s.active = 1`, sql<SqlBool>`s.visible = 1`, ...c.conditions];
+  if (!state.filters.some((f) => f.field === 'direction')) conds.push(sql<SqlBool>`s.buy_price IS NOT NULL`);
+  return { where: sql`WHERE ${sql.join(conds, sql` AND `)}`, orderBy: c.orderBy };
+}
+
+export async function listShopDirectory(state: ShopsTableState, limit: number, offset: number): Promise<MarketShopRow[]> {
+  const { where, orderBy } = shopsWhere(state);
+  const r = await sql<RawShop>`
+    SELECT s.shop_id, s.world, s.sign_x, s.sign_y, s.sign_z, s.is_admin_shop AS admin_shop,
+      s.shop_account_type, s.shop_firm_id, s.shop_owner_uuid_bin,
+      COALESCE(f.display_name, fp.current_name, a.display_name) AS owner_name,
+      s.material, s.item_key, s.item_name, s.item_custom,
+      s.buy_price, s.sell_price, s.batch_qty, s.current_stock, s.estimated_capacity AS current_space, s.stock_at, s.last_seen, s.active
+    FROM chestshop_shop s
+    LEFT JOIN firm f ON f.firm_id = s.shop_firm_id
+    LEFT JOIN accounts a ON a.account_id = s.shop_account_id
+    LEFT JOIN economy_players fp ON fp.player_uuid_bin = s.shop_owner_uuid_bin
+    ${where}
+    ${orderBy}
+    LIMIT ${limit} OFFSET ${offset}
+  `.execute(db);
+  return r.rows.map(toShopRow);
+}
+
+export async function countShopDirectory(state: ShopsTableState): Promise<number> {
+  const { where } = shopsWhere(state);
+  const r = await sql<{ c: number | string }>`SELECT COUNT(*) AS c FROM chestshop_shop s ${where}`.execute(db);
+  return Number(r.rows[0]?.c ?? 0);
+}
+
+/** Item keys starting with `prefix` among live shops (idx_shop_item range). */
+export async function findShopItemsByPrefix(prefix: string, limit: number): Promise<{ item_key: string; item_name: string }[]> {
+  const t = prefix.trim().replace(/\s+/g, '_');
+  const r = await sql<{ item_key: string; item_name: string }>`
+    SELECT s.item_key, MAX(s.item_name) AS item_name FROM chestshop_shop s
+    WHERE s.item_key LIKE ${`${t.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`} AND s.active = 1
+    GROUP BY s.item_key ORDER BY s.item_key LIMIT ${limit}
+  `.execute(db);
+  return r.rows;
 }

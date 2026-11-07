@@ -10,6 +10,7 @@ import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Inv;
 import net.democracycraft.inttests.support.Ledger;
 import net.democracycraft.inttests.support.Market;
+import net.democracycraft.inttests.support.Ops;
 import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -27,7 +28,11 @@ class HopperStockRefreshE2ETest {
         try (var owner = MockPlayer.connectLocal(Usernames.fresh("Hop"));
                 var shop = ChestShopFixture.create()) {
             Ledger.waitForPersonalBalance(owner.getUuid(), TIMEOUT);
-            shop.setupSellShop(owner.getUsername(), 1, 37, "dirt"); // twelve dirt
+            // The real creation path registers the /find row. A setblock sign is registered only if
+            // chunk discovery happens to scan after it is placed, which made the /find check flaky.
+            Ops.run(owner.getUsername(), () -> assertThat(
+                    shop.createSellShop(owner.getUsername(), owner.getUsername(), 1, 37, "dirt")) // twelve dirt
+                    .contains("cancelled=false"));
             var c = shop.chestPos();
             var s = shop.signPos();
             String secondHalf = (c.x() + 1) + " " + c.y() + " " + c.z();

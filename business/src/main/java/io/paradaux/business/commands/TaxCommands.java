@@ -3,13 +3,13 @@ package io.paradaux.business.commands;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.business.commands.resolvers.FirmName;
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.services.FirmBalanceTaxService;
 import io.paradaux.business.services.FirmPropertyService;
 import io.paradaux.business.services.FirmService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.api.TreasuryApi;
 import java.math.BigDecimal;
 import java.util.Locale;
@@ -25,7 +25,7 @@ public class TaxCommands implements CommandHandler {
     private final FirmPropertyService firmPropertyService;
     private final FirmBalanceTaxService balanceTaxService;
     private final TreasuryApi treasuryApi;
-    private final Message message;
+    private final BusinessMessages message;
 
     @Inject
     public TaxCommands(
@@ -33,7 +33,7 @@ public class TaxCommands implements CommandHandler {
             FirmPropertyService firmPropertyService,
             FirmBalanceTaxService balanceTaxService,
             TreasuryApi treasuryApi,
-            Message message) {
+            BusinessMessages message) {
         this.firmService = firmService;
         this.firmPropertyService = firmPropertyService;
         this.balanceTaxService = balanceTaxService;
@@ -101,7 +101,7 @@ public class TaxCommands implements CommandHandler {
                 "firm",
                 f.getDisplayName(),
                 "exempt",
-                Message.rich(exemptStatus),
+                io.paradaux.hibernia.framework.i18n.Message.rich(exemptStatus),
                 "balance",
                 balanceFmt,
                 "rate",

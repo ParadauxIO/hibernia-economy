@@ -1,28 +1,5 @@
 package io.paradaux.treasury.commands;
 
-import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.economy.GovernmentFine;
-import io.paradaux.treasury.services.AccountService;
-import io.paradaux.treasury.services.FineWebhookService;
-import io.paradaux.treasury.services.GovService;
-import io.paradaux.treasury.services.MembershipService;
-import io.paradaux.treasury.services.PlayerDirectoryService;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -31,7 +8,34 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.hibernia.framework.i18n.Message;
+import io.paradaux.treasury.model.economy.Account;
+import io.paradaux.treasury.model.economy.AccountType;
+import io.paradaux.treasury.model.economy.GovernmentFine;
+import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.FineWebhookService;
+import io.paradaux.treasury.services.GovService;
+import io.paradaux.treasury.services.MembershipService;
+import io.paradaux.treasury.services.PlayerDirectoryService;
+import java.math.BigDecimal;
+import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class FineCommandTest {
@@ -40,13 +44,26 @@ class FineCommandTest {
     private static final int FIRM_ACCOUNT_ID = 12;
     private static final BigDecimal AMOUNT = new BigDecimal("5.00");
 
-    @Mock AccountService accountService;
-    @Mock GovService govService;
-    @Mock MembershipService membershipService;
-    @Mock PlayerDirectoryService playerDirectory;
-    @Mock FineWebhookService fineWebhook;
-    @Mock Message message;
-    @Mock Player sender;
+    @Mock
+    AccountService accountService;
+
+    @Mock
+    GovService govService;
+
+    @Mock
+    MembershipService membershipService;
+
+    @Mock
+    PlayerDirectoryService playerDirectory;
+
+    @Mock
+    FineWebhookService fineWebhook;
+
+    @Mock
+    Message message;
+
+    @Mock
+    Player sender;
 
     private final UUID senderUuid = UUID.randomUUID();
     private FineCommand command;
@@ -57,9 +74,7 @@ class FineCommandTest {
         command = new FineCommand(accountService, govService, membershipService, playerDirectory, fineWebhook, message);
         bukkit = mockStatic(Bukkit.class);
 
-        Account gov = new Account();
-        gov.setAccountId(GOV_ID);
-        gov.setDisplayName("Police");
+        Account gov = Account.builder().accountId(GOV_ID).displayName("Police").build();
         lenient().when(accountService.getGovernmentAccountByName("Police")).thenReturn(gov);
         lenient().when(accountService.getAccountById(GOV_ID)).thenReturn(gov);
         lenient().when(sender.hasPermission("treasury.gov.admin")).thenReturn(true);
@@ -73,10 +88,114 @@ class FineCommandTest {
     }
 
     private static Account firmAccount() {
-        Account firm = new Account();
-        firm.setAccountId(FIRM_ACCOUNT_ID);
-        firm.setDisplayName("Acme Corporate Account");
+        Account firm = Account.builder()
+                .accountId(FIRM_ACCOUNT_ID)
+                .displayName("Acme Corporate Account")
+                .build();
         return firm;
+    }
+
+    @ParameterizedTest
+    @EnumSource(AccountType.class)
+    void fineAccount_supportsEveryAccountType(AccountType type) {
+        Account debtor = firmAccount();
+        debtor = debtor.withAccountType(type);
+        when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(debtor);
+        GovernmentFine fine = GovernmentFine.builder().fineId(7).amount(AMOUNT).build();
+        when(govService.issueFine(FIRM_ACCOUNT_ID, GOV_ID, AMOUNT, "breach", senderUuid))
+                .thenReturn(fine);
+
+        command.fineAccount(sender, "Police", FIRM_ACCOUNT_ID, AMOUNT, "breach");
+
+        verify(govService).issueFine(FIRM_ACCOUNT_ID, GOV_ID, AMOUNT, "breach", senderUuid);
+        verify(fineWebhook).sendFineIssued(fine);
+        verify(message)
+                .send(
+                        sender,
+                        "treasury.fine.account.issued",
+                        "account",
+                        debtor.getDisplayName(),
+                        "amount",
+                        "$5.00",
+                        "reason",
+                        "breach");
+    }
+
+    @Test
+    void fineAccount_notifiesPersonalDebtorBeforeWebhook(@Mock Player online) {
+        UUID owner = UUID.randomUUID();
+        when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(firmAccount());
+        GovernmentFine fine = GovernmentFine.builder()
+                .fineId(7)
+                .amount(AMOUNT)
+                .playerUuid(owner)
+                .build();
+        when(govService.issueFine(FIRM_ACCOUNT_ID, GOV_ID, AMOUNT, "breach", senderUuid))
+                .thenReturn(fine);
+        bukkit.when(() -> Bukkit.getPlayer(owner)).thenReturn(online);
+
+        command.fineAccount(sender, "Police", FIRM_ACCOUNT_ID, AMOUNT, "breach");
+
+        InOrder order = inOrder(message, fineWebhook);
+        order.verify(message).send(online, "treasury.fine.issued.notify", "amount", "$5.00", "reason", "breach");
+        order.verify(fineWebhook).sendFineIssued(fine);
+    }
+
+    @Test
+    void fineAccount_requiresGovernmentAccess() {
+        when(sender.hasPermission("treasury.gov.admin")).thenReturn(false);
+
+        command.fineAccount(sender, "Police", FIRM_ACCOUNT_ID, AMOUNT, "breach");
+
+        verify(message).send(sender, "treasury.gov.no-access");
+        verifyNoInteractions(govService, fineWebhook);
+        verify(accountService, never()).getAccountById(anyInt());
+    }
+
+    @Test
+    void fineAccount_departmentMemberCannotMintFromSystemAccount() {
+        when(sender.hasPermission("treasury.gov.admin")).thenReturn(false);
+        when(membershipService.canSpend(GOV_ID, senderUuid)).thenReturn(true);
+        Account debtor = firmAccount();
+        debtor = debtor.withAccountType(AccountType.SYSTEM);
+        when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(debtor);
+
+        command.fineAccount(sender, "Police", FIRM_ACCOUNT_ID, AMOUNT, "breach");
+
+        verify(message).send(sender, "treasury.gov.no-access");
+        verifyNoInteractions(govService, fineWebhook);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void fineAccount_rejectsMissingOrArchivedDebtors(boolean archived) {
+        if (archived) {
+            Account debtor = firmAccount();
+            debtor = debtor.withArchived(true);
+            when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(debtor);
+        }
+
+        command.fineAccount(sender, "Police", FIRM_ACCOUNT_ID, AMOUNT, "breach");
+
+        verify(message).send(sender, "treasury.account.target.not-found", "id", String.valueOf(FIRM_ACCOUNT_ID));
+        verifyNoInteractions(govService, fineWebhook);
+    }
+
+    @Test
+    void fineAccount_rejectsSameAccount() {
+        command.fineAccount(sender, "Police", GOV_ID, AMOUNT, "breach");
+
+        verify(message).send(sender, "treasury.gov.account.transfer.same-account", "name", "Police");
+        verifyNoInteractions(govService, fineWebhook);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "0.001"})
+    void fineAccount_rejectsInvalidAmounts(String amount) {
+        command.fineAccount(sender, "Police", FIRM_ACCOUNT_ID, new BigDecimal(amount), "breach");
+
+        verify(message).send(sender, "treasury.general.invalid-amount");
+        verifyNoInteractions(govService, fineWebhook);
     }
 
     // ---- /fine firm ----
@@ -89,12 +208,21 @@ class FineCommandTest {
         when(accountService.getBusinessAccountByName("Acme")).thenReturn(null);
         when(accountService.getBusinessAccountByName("Acme Corporate Account")).thenReturn(firmAccount());
         GovernmentFine fine = GovernmentFine.builder().fineId(3).amount(AMOUNT).build();
-        when(govService.issueFine(FIRM_ACCOUNT_ID, GOV_ID, AMOUNT, "dumping", senderUuid)).thenReturn(fine);
+        when(govService.issueFine(FIRM_ACCOUNT_ID, GOV_ID, AMOUNT, "dumping", senderUuid))
+                .thenReturn(fine);
 
         command.fineFirm(sender, "Police", "Acme", AMOUNT, "dumping");
 
-        verify(message).send(sender, "treasury.fine.firm.issued",
-                "firm", "Acme Corporate Account", "amount", "$5.00", "reason", "dumping");
+        verify(message)
+                .send(
+                        sender,
+                        "treasury.fine.firm.issued",
+                        "firm",
+                        "Acme Corporate Account",
+                        "amount",
+                        "$5.00",
+                        "reason",
+                        "dumping");
         verify(fineWebhook).sendFineIssued(fine);
     }
 
@@ -116,8 +244,13 @@ class FineCommandTest {
         when(target.hasPlayedBefore()).thenReturn(true);
         when(target.getUniqueId()).thenReturn(targetUuid);
         when(target.getName()).thenReturn("Offender");
-        GovernmentFine fine = GovernmentFine.builder().fineId(4).playerUuid(targetUuid).amount(AMOUNT).build();
-        when(govService.issueFine(targetUuid, GOV_ID, AMOUNT, "speeding", senderUuid)).thenReturn(fine);
+        GovernmentFine fine = GovernmentFine.builder()
+                .fineId(4)
+                .playerUuid(targetUuid)
+                .amount(AMOUNT)
+                .build();
+        when(govService.issueFine(targetUuid, GOV_ID, AMOUNT, "speeding", senderUuid))
+                .thenReturn(fine);
         bukkit.when(() -> Bukkit.getPlayer(targetUuid)).thenReturn(online);
 
         command.issue(sender, "Police", target, AMOUNT, "speeding");
@@ -135,16 +268,29 @@ class FineCommandTest {
         // A firm fine has no playerUuid; Bukkit.getPlayer(null) throws, and by then
         // the refund has already committed.
         GovernmentFine fine = GovernmentFine.builder()
-                .fineId(9).playerUuid(null).debtorAccountId(FIRM_ACCOUNT_ID).govAccountId(GOV_ID)
-                .amount(AMOUNT).reason("dumping").build();
+                .fineId(9)
+                .playerUuid(null)
+                .debtorAccountId(FIRM_ACCOUNT_ID)
+                .govAccountId(GOV_ID)
+                .amount(AMOUNT)
+                .reason("dumping")
+                .build();
         when(govService.getFine(9)).thenReturn(fine);
         when(govService.revokeFine(9, senderUuid)).thenReturn(fine);
         when(accountService.getAccountById(FIRM_ACCOUNT_ID)).thenReturn(firmAccount());
 
         command.revoke(sender, 9);
 
-        verify(message).send(sender, "treasury.fine.revoked",
-                "id", "9", "player", "Acme Corporate Account", "amount", "$5.00");
+        verify(message)
+                .send(
+                        sender,
+                        "treasury.fine.revoked",
+                        "id",
+                        "9",
+                        "player",
+                        "Acme Corporate Account",
+                        "amount",
+                        "$5.00");
         verify(fineWebhook).sendFineRevoked(fine);
         bukkit.verify(() -> Bukkit.getPlayer((UUID) null), never());
     }
@@ -154,8 +300,12 @@ class FineCommandTest {
         UUID playerUuid = UUID.randomUUID();
         bukkit.when(() -> Bukkit.getOfflinePlayer(playerUuid)).thenReturn(offline);
         GovernmentFine fine = GovernmentFine.builder()
-                .fineId(8).playerUuid(playerUuid).govAccountId(GOV_ID)
-                .amount(AMOUNT).reason("speeding").build();
+                .fineId(8)
+                .playerUuid(playerUuid)
+                .govAccountId(GOV_ID)
+                .amount(AMOUNT)
+                .reason("speeding")
+                .build();
         when(govService.getFine(8)).thenReturn(fine);
         when(govService.revokeFine(8, senderUuid)).thenReturn(fine);
         bukkit.when(() -> Bukkit.getPlayer(playerUuid)).thenReturn(online);

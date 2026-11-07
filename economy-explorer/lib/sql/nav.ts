@@ -1,23 +1,21 @@
 import 'server-only';
 import { sql } from 'kysely';
 import { db, uuidToBin } from '@/lib/db';
+import { governmentRelationship } from '@/lib/sql/government';
 
 /**
  * Whether the player can read at least one active GOVERNMENT account: the
- * same scope as getGovernmentAccounts (ownership or account_read_access_web),
- * stopped at the first match. Drives the top bar's Government entry (§10.1).
- * Walks the handful of GOVERNMENT accounts by idx_accounts_type and probes the
- * relationship view by (account_id, subject).
+ * /gov scope (governmentRelationship, one definition), stopped at the first
+ * match. Drives the top bar's Government entry (§10.1). Walks the handful of
+ * GOVERNMENT accounts by idx_accounts_type and probes the relationship view by
+ * (account_id, subject).
  */
 export async function hasGovernmentAccountInScope(playerUuid: string): Promise<boolean> {
-  const bin = uuidToBin(playerUuid);
   const r = await sql<{ in_scope: number }>`
     SELECT EXISTS (
       SELECT 1 FROM accounts a
        WHERE a.account_type = 'GOVERNMENT' AND a.is_archived = 0
-         AND (a.owner_uuid_bin = ${bin}
-           OR EXISTS (SELECT 1 FROM account_read_access_web ar
-                       WHERE ar.account_id = a.account_id AND ar.subject_uuid_bin = ${bin}))
+         AND ${governmentRelationship(playerUuid)}
     ) AS in_scope
   `.execute(db);
   return Number(r.rows[0]?.in_scope ?? 0) === 1;

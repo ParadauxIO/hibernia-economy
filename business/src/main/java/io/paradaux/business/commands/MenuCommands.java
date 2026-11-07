@@ -6,10 +6,11 @@ import io.paradaux.business.commands.resolvers.FirmName;
 import io.paradaux.business.dialogs.FirmDashboard;
 import io.paradaux.business.dialogs.FirmMenu;
 import io.paradaux.business.services.*;
+import io.paradaux.business.threading.BusinessMessages;
+import io.paradaux.business.threading.MainThreadAccess;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.curator.MenuManager;
-import io.paradaux.hibernia.framework.i18n.Message;
 import java.util.List;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,7 +26,8 @@ public final class MenuCommands implements CommandHandler {
     private final FirmPlayerService players;
     private final MenuManager menus;
     private final JavaPlugin plugin;
-    private final Message message;
+    private final BusinessMessages message;
+    private final MainThreadAccess mainThread;
 
     @Inject
     public MenuCommands(
@@ -36,7 +38,8 @@ public final class MenuCommands implements CommandHandler {
             FirmPlayerService players,
             MenuManager menus,
             JavaPlugin plugin,
-            Message message) {
+            BusinessMessages message,
+            MainThreadAccess mainThread) {
         this.firms = firms;
         this.transactions = transactions;
         this.accounts = accounts;
@@ -45,6 +48,7 @@ public final class MenuCommands implements CommandHandler {
         this.menus = menus;
         this.plugin = plugin;
         this.message = message;
+        this.mainThread = mainThread;
     }
 
     @Route("menu")
@@ -52,7 +56,7 @@ public final class MenuCommands implements CommandHandler {
     @Description("Choose one of your firms to manage")
     @Async
     public void menu(@Sender Player player) {
-        if (!player.hasPermission("business.list")) {
+        if (!mainThread.read(() -> player.hasPermission("business.list"))) {
             message.send(player, "business.general.no-permission");
             return;
         }
@@ -79,20 +83,20 @@ public final class MenuCommands implements CommandHandler {
             message.send(player, "business.firm.not-found", "firm", ref.value());
             return;
         }
-        if (!player.hasPermission("business.info")) {
+        if (!mainThread.read(() -> player.hasPermission("business.info"))) {
             message.send(player, "business.general.no-permission");
             return;
         }
-        String balance = player.hasPermission("business.finance")
+        String balance = mainThread.read(() -> player.hasPermission("business.finance"))
                 ? transactions.getFormattedAggregateBalance(firm.getFirmId())
                 : "—";
-        var accountLines = player.hasPermission("business.account.list")
+        var accountLines = mainThread.read(() -> player.hasPermission("business.account.list"))
                 ? accounts.listAccounts(firm.getFirmId()).stream()
                         .map(a -> a.getAccountId() + " · " + a.getDisplayName()
                                 + (a.getAccountId().equals(firm.getDefaultAccountId()) ? " ★" : ""))
                         .toList()
                 : List.<String>of();
-        var staffLines = player.hasPermission("business.staff.list")
+        var staffLines = mainThread.read(() -> player.hasPermission("business.staff.list"))
                 ? staff.getCurrentEmployees(firm.getFirmId()).stream()
                         .map(e -> players.findByUuid(e.getPlayerUuid())
                                         .map(p -> p.getCurrentName())

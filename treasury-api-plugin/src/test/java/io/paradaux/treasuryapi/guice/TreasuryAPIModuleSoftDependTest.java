@@ -33,6 +33,22 @@ class TreasuryAPIModuleSoftDependTest {
     // ---- LuckPerms API on the classpath, but no LuckPerms service registered ----
 
     @Test
+    void featureFlagBindingFailsClosedAndUsesCurrentProvider() {
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            ServicesManager services = mock(ServicesManager.class);
+            bukkit.when(Bukkit::getServicesManager).thenReturn(services);
+            var flags =
+                    SoftDependInjectorProbe.createInjector().getInstance(io.paradaux.treasury.api.FeatureFlagApi.class);
+            assertEquals(false, flags.isEnabled("treasury.government_api_keys"));
+            when(services.load(io.paradaux.treasury.api.FeatureFlagApi.class))
+                    .thenReturn(key -> key.equals("treasury.government_api_keys"));
+            assertEquals(true, flags.isEnabled("treasury.government_api_keys"));
+            when(services.load(io.paradaux.treasury.api.FeatureFlagApi.class)).thenReturn(null);
+            assertEquals(false, flags.isEnabled("treasury.government_api_keys"));
+        }
+    }
+
+    @Test
     void injectorBuilds_whenLuckPermsServiceIsNotRegistered() {
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
             ServicesManager services = mock(ServicesManager.class);

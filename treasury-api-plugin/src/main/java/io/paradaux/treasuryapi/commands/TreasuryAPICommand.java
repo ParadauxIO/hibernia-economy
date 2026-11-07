@@ -36,6 +36,9 @@ public class TreasuryAPICommand implements CommandHandler {
     @Inject
     private UiAccessHandler uiHandler;
 
+    @Inject
+    private GovernmentKeyHandler governmentHandler;
+
     // /treasuryapi — plugin info
     @Route("")
     @Description("Show TreasuryAPI plugin information")
@@ -136,6 +139,40 @@ public class TreasuryAPICommand implements CommandHandler {
     @Description("Permanently revoke a business API key")
     public void businessRevoke(@Sender Player sender, @Arg("keyId") int keyId) {
         businessHandler.doRevoke(sender, keyId);
+    }
+
+    // ---- Government ----
+
+    @Route("government issue <accountId>")
+    @Permission("treasuryapi.government.issue")
+    @Async
+    @Description("Issue an API key restricted to one government account")
+    public void governmentIssue(@Sender Player sender, @Arg("accountId") int accountId) {
+        governmentHandler.doIssue(sender, accountId);
+    }
+
+    @Route("government list")
+    @Permission("treasuryapi.government.list")
+    @Async
+    @Description("List government API keys you have issued")
+    public void governmentList(@Sender Player sender) {
+        governmentHandler.doList(sender);
+    }
+
+    @Route("government reissue <keyId>")
+    @Permission("treasuryapi.government.issue")
+    @Async
+    @Description("Rotate your government API key, preserving its account scope")
+    public void governmentReissue(@Sender Player sender, @Arg("keyId") int keyId) {
+        governmentHandler.doReissue(sender, keyId);
+    }
+
+    @Route("government revoke <keyId>")
+    @Permission("treasuryapi.government.revoke")
+    @Async
+    @Description("Permanently revoke your government API key")
+    public void governmentRevoke(@Sender Player sender, @Arg("keyId") int keyId) {
+        governmentHandler.doRevoke(sender, keyId);
     }
 
     // ---- Explorer UI access ----

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.sun.net.httpserver.HttpServer;
-import io.paradaux.treasury.model.config.FineWebhookConfiguration;
+import io.paradaux.treasury.internal.model.config.FineWebhookConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.GovernmentFine;
 import io.paradaux.treasury.services.AccountService;
@@ -124,9 +124,9 @@ class FineWebhookServiceImplTest {
     @Test
     void sendFineRevoked_postsGreenEmbedWithReverseTxn() {
         GovernmentFine fine = playerFine();
-        fine.setRevoked(true);
-        fine.setRevokedBy(ISSUER);
-        fine.setRevokeTxnId(55555L);
+        fine = fine.withRevoked(true);
+        fine = fine.withRevokedBy(ISSUER);
+        fine = fine.withRevokeTxnId(55555L);
 
         svc(true, hookUrl()).sendFineRevoked(fine);
 
@@ -162,7 +162,7 @@ class FineWebhookServiceImplTest {
     @Test
     void escapesQuotesAndBackslashesInReason() {
         GovernmentFine fine = playerFine();
-        fine.setReason("evil\"reason\\with\nnewline");
+        fine = fine.withReason("evil\"reason\\with\nnewline");
 
         svc(true, hookUrl()).sendFineIssued(fine);
 

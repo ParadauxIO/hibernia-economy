@@ -52,6 +52,7 @@ class BlockUtilTest {
     @Test
     void isSign_returnsTrueForStandingSign() {
         stubLoaded(true);
+        when(block.getType()).thenReturn(Material.OAK_SIGN);
         when(block.getBlockData()).thenReturn(mock(Sign.class));
 
         assertThat(BlockUtil.isSign(block)).isTrue();
@@ -60,6 +61,7 @@ class BlockUtilTest {
     @Test
     void isSign_returnsTrueForWallSign() {
         stubLoaded(true);
+        when(block.getType()).thenReturn(Material.OAK_WALL_SIGN);
         when(block.getBlockData()).thenReturn(mock(WallSign.class));
 
         assertThat(BlockUtil.isSign(block)).isTrue();
@@ -68,9 +70,20 @@ class BlockUtilTest {
     @Test
     void isSign_returnsFalseForNonSign() {
         stubLoaded(true);
-        when(block.getBlockData()).thenReturn(mock(BlockData.class));
+        when(block.getType()).thenReturn(Material.STONE);
 
         assertThat(BlockUtil.isSign(block)).isFalse();
+        // The type alone decides: no BlockData wrapper is allocated for ordinary neighbours.
+        verify(block, org.mockito.Mockito.never()).getBlockData();
+    }
+
+    @Test
+    void isSign_returnsFalseForHangingSignWithoutReadingBlockData() {
+        stubLoaded(true);
+        when(block.getType()).thenReturn(Material.OAK_HANGING_SIGN);
+
+        assertThat(BlockUtil.isSign(block)).isFalse();
+        verify(block, org.mockito.Mockito.never()).getBlockData();
     }
 
     @Test

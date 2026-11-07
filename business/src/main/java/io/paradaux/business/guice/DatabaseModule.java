@@ -5,7 +5,8 @@ import com.google.inject.Inject;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import com.google.inject.name.Names;
-import io.paradaux.common.DataSourceProvider;
+import io.paradaux.business.internal.model.config.DatabaseConfiguration;
+import io.paradaux.business.mappers.DirectDebitMapper;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmPlayerMapper;
@@ -13,12 +14,11 @@ import io.paradaux.business.mappers.FirmPropertyMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
-import io.paradaux.business.model.config.DatabaseConfiguration;
+import io.paradaux.common.DataSourceProvider;
+import javax.sql.DataSource;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.mybatis.guice.MyBatisModule;
 import org.mybatis.guice.datasource.helper.JdbcHelper;
-
-import javax.sql.DataSource;
 
 public final class DatabaseModule extends AbstractModule {
     private final DatabaseConfiguration databaseConfig;
@@ -47,10 +47,12 @@ public final class DatabaseModule extends AbstractModule {
                 addMapperClass(FirmStaffMapper.class);
                 addMapperClass(FirmPlayerMapper.class);
                 addMapperClass(FirmPropertyMapper.class);
+                addMapperClass(DirectDebitMapper.class);
 
                 // MyBatis settings (sane defaults)
                 environmentId("paper-mybatis");
-                bindConstant().annotatedWith(Names.named("mybatis.configuration.mapUnderscoreToCamelCase"))
+                bindConstant()
+                        .annotatedWith(Names.named("mybatis.configuration.mapUnderscoreToCamelCase"))
                         .to(true);
             }
         });
@@ -68,8 +70,7 @@ public final class DatabaseModule extends AbstractModule {
         // documented default password — the guard treasury-api-plugin already has,
         // back-ported here so all writers to the shared DB behave the same (ADT-187).
         if ("password".equals(pass)) {
-            throw new IllegalStateException(
-                    "Refusing to start: the database password is still the insecure default. "
+            throw new IllegalStateException("Refusing to start: the database password is still the insecure default. "
                     + "Set database.password in config.yml.");
         }
         // READ COMMITTED (MariaDB default is REPEATABLE READ). Firm-account creation

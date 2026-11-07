@@ -3,9 +3,9 @@ package io.paradaux.treasuryapi.tasks;
 import com.google.inject.Inject;
 import io.paradaux.treasuryapi.TreasuryAPI;
 import io.paradaux.treasuryapi.services.DerivedGroupReconciliation;
-import org.bukkit.scheduler.BukkitRunnable;
+import java.util.concurrent.TimeUnit;
 
-public class DerivedGroupReconciliationTask extends BukkitRunnable {
+public class DerivedGroupReconciliationTask implements Runnable {
     private final TreasuryAPI plugin;
     private final DerivedGroupReconciliation reconciliation;
 
@@ -25,6 +25,10 @@ public class DerivedGroupReconciliationTask extends BukkitRunnable {
     }
 
     public void schedule(long intervalSeconds) {
-        runTaskTimerAsynchronously(plugin, 1L, Math.max(1L, Math.min(intervalSeconds, 1800L)) * 20L);
+        // Match the real-time DB lease even while Minecraft ticks are delayed.
+        long periodSeconds = Math.max(1L, Math.min(intervalSeconds, 1800L));
+        plugin.getServer()
+                .getAsyncScheduler()
+                .runAtFixedRate(plugin, task -> run(), 1L, periodSeconds, TimeUnit.SECONDS);
     }
 }

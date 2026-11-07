@@ -1,12 +1,34 @@
 package io.paradaux.business.chat;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.mappers.FirmStaffMapper;
-import io.paradaux.business.model.Firm;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
 import io.paradaux.business.services.impl.FirmStaffServiceImpl;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Logger;
 import net.draycia.carbon.api.CarbonChat;
 import net.draycia.carbon.api.CarbonChatProvider;
 import net.draycia.carbon.api.channels.ChannelRegistry;
@@ -22,29 +44,6 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Logger;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 /**
  * Tests for {@link FirmChatService} (business/testing/0001): the spy-registry
  * toggles, the active-firm pointer, membership resolution and session cleanup,
@@ -55,9 +54,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class FirmChatServiceTest {
 
-    @Mock FirmService firms;
-    @Mock FirmStaffService staff;
-    @Mock ChatChannel defaultChannel;
+    @Mock
+    FirmService firms;
+
+    @Mock
+    FirmStaffService staff;
+
+    @Mock
+    ChatChannel defaultChannel;
 
     private final AtomicLong now = new AtomicLong(1_000_000L);
     private final Set<UUID> spyPermissionRevoked = new HashSet<>();
@@ -71,8 +75,13 @@ class FirmChatServiceTest {
     }
 
     private FirmChatServiceImpl newService(FirmStaffService staffService) {
-        return new FirmChatServiceImpl(firms, staffService, Logger.getLogger("test"), now::get,
-                uuid -> !spyPermissionRevoked.contains(uuid));
+        return new FirmChatServiceImpl(
+                firms,
+                staffService,
+                Logger.getLogger("test"),
+                now::get,
+                uuid -> !spyPermissionRevoked.contains(uuid),
+                new io.paradaux.business.threading.MainThreadAccess(null));
     }
 
     private static Firm firm(int id, String displayName) {
@@ -112,7 +121,8 @@ class FirmChatServiceTest {
         lenient().when(carbon.channelRegistry()).thenReturn(registry);
         lenient().doReturn(users).when(carbon).userManager();
         lenient().when(registry.defaultChannel()).thenReturn(defaultChannel);
-        lenient().when(users.user(any(UUID.class)))
+        lenient()
+                .when(users.user(any(UUID.class)))
                 .thenAnswer(inv -> CompletableFuture.completedFuture(carbonPlayer(inv.getArgument(0))));
         try (MockedStatic<CarbonChatProvider> provider = mockStatic(CarbonChatProvider.class)) {
             provider.when(CarbonChatProvider::carbonChat).thenReturn(carbon);
@@ -149,13 +159,19 @@ class FirmChatServiceTest {
         FirmStaffMapper staffMapper = mock(FirmStaffMapper.class);
         AtomicBoolean employed = new AtomicBoolean(true);
         when(staffMapper.isEmployedBy(7, employee.toString())).thenAnswer(inv -> employed.get());
-        when(staffMapper.endCurrentEmployment(7, employee.toString(), boss.toString())).thenAnswer(inv -> {
-            employed.set(false);
-            return 1;
-        });
+        when(staffMapper.endCurrentEmployment(7, employee.toString(), boss.toString()))
+                .thenAnswer(inv -> {
+                    employed.set(false);
+                    return 1;
+                });
         FirmChatServiceImpl[] chat = new FirmChatServiceImpl[1];
-        FirmStaffService realStaff = new FirmStaffServiceImpl(firms, mock(FirmRoleMapper.class), staffMapper,
-                mock(FirmAccountService.class), () -> chat[0]);
+        FirmStaffService realStaff = new FirmStaffServiceImpl(
+                firms,
+                mock(FirmRoleMapper.class),
+                staffMapper,
+                mock(FirmAccountService.class),
+                () -> chat[0],
+                new io.paradaux.business.threading.MainThreadAccess(null));
         chat[0] = newService(realStaff);
         FirmChatChannel channel = registerWithCarbon(chat[0]);
 

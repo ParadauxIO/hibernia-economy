@@ -6,6 +6,7 @@ import { defineTable, type TableState } from './core';
  * lib/sql/audit.ts maps it back.
  */
 export const AUDIT_ACTIONS = [
+  { action: 'feature_flag.update', label: 'Feature flag: enable or disable' },
   { action: 'view', label: 'Viewed' },
   { action: 'relationship.read', label: 'Read through a relationship' },
   { action: 'account.transfer', label: 'Account: transfer' },
@@ -13,6 +14,10 @@ export const AUDIT_ACTIONS = [
   { action: 'account.owner.change', label: 'Account: change owner' },
   { action: 'account.archive', label: 'Account: archive' },
   { action: 'account.unarchive', label: 'Account: unarchive' },
+  { action: 'firm.owner.change', label: 'Firm: change proprietor' },
+  { action: 'firm.name.release', label: 'Firm: release name' },
+  { action: 'firm.tax.update', label: 'Firm: change tax exemption' },
+  { action: 'firm.accounts.sync', label: 'Firm: sync account access' },
   { action: 'firm.rename', label: 'Firm: rename' },
   { action: 'firm.details.update', label: 'Firm: update details' },
   { action: 'firm.disband', label: 'Firm: disband' },
@@ -24,6 +29,7 @@ export const AUDIT_ACTIONS = [
   { action: 'webhook.url', label: 'Webhook: change URL' },
   { action: 'webhook.secret.rotate', label: 'Webhook: rotate secret' },
   { action: 'webhook.delete', label: 'Webhook: delete' },
+  { action: 'group.update', label: 'Group: edit details' },
   { action: 'group.create', label: 'Group: create' },
   { action: 'group.delete', label: 'Group: delete' },
   { action: 'group.roles.update', label: 'Group: change roles' },
@@ -45,6 +51,7 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number]['action'];
 export const actionValue = (action: string): string => action.replaceAll('.', '-');
 
 export const AUDIT_TARGET_TYPES = [
+  { value: 'feature_flag', label: 'Feature flag' },
   { value: 'account', label: 'Account' },
   { value: 'firm', label: 'Firm' },
   { value: 'player', label: 'Player' },
@@ -73,7 +80,7 @@ export const auditTable = defineTable({
   defaultSort: '-at',
   quick: [
     { label: 'Admin changes', f: ['action:in:account-transfer,account-rename,account-owner-change,account-archive,account-unarchive,firm-rename,firm-details-update,firm-disband,api_key-revoke,api_key-rotate,rate_limit-update'] },
-    { label: 'Access changes', f: ['action:in:group-create,group-delete,group-roles-update,group-sync-update,group-source-update,group-member-add,group-member-remove,role-create,role-update,role-delete,role-assign,role-unassign'] },
+    { label: 'Access changes', f: ['action:in:group-create,group-update,group-delete,group-roles-update,group-sync-update,group-source-update,group-member-add,group-member-remove,role-create,role-update,role-delete,role-assign,role-unassign'] },
     { label: 'Relationship reads', f: ['action:in:relationship-read'] },
     { label: 'Last 24 hours', f: ['at:gte:-1d'] },
   ],

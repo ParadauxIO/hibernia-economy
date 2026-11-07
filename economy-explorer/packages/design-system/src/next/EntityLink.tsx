@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import type { Route } from 'next';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { cx } from '../cx';
 import { EntityPreview } from '../EntityPreview';
@@ -7,9 +7,9 @@ import { PlayerHead } from '../PlayerHead';
 
 export type EntityKind = 'player' | 'account' | 'firm' | 'item';
 
-export interface EntityLinkProps {
+export interface EntityLinkProps<T extends string = string> {
   kind: EntityKind;
-  href: string;
+  href: Route<T>;
   name: ReactNode;
   /** Player: their head is shown before the name. */
   uuid?: string | null | undefined;
@@ -28,8 +28,8 @@ export interface EntityLinkProps {
 }
 
 /** A link to a player, account, firm or item, with one optional lazy hover card per entity type. */
-export function EntityLink({ kind, href, name, uuid, accountType, id, icon, preview, className }: EntityLinkProps) {
-  const link = <Link href={href as Route} prefetch={false} className={cx('entity-link', `entity-${kind}`, className)}>
+export function EntityLink<T extends string>({ kind, href, name, uuid, accountType, id, icon, preview, className }: EntityLinkProps<T>) {
+  const link = <Link href={href} prefetch={false} className={cx('entity-link', `entity-${kind}`, className)}>
     {kind === 'player' && <PlayerHead uuid={uuid} name={typeof name === 'string' ? name : undefined} size={18} />}
     {kind === 'account' && accountType && <span className="entity-dot" data-type={accountType} aria-hidden="true" />}
     {/* eslint-disable-next-line @next/next/no-img-element -- item textures are tiny pixel art */}

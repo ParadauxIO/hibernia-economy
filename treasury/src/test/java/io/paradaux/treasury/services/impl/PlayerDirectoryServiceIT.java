@@ -25,7 +25,7 @@ class PlayerDirectoryServiceIT extends IntegrationTestBase {
     void publicApiUsesTransactionalDirectoryOnCallerAndWorkerThreads() throws Exception {
         UUID uuid = UUID.randomUUID();
         directory.recordLogin(uuid, ".Known", 1000L);
-        var api = injector.getInstance(io.paradaux.treasury.api.impl.TreasuryApiImpl.class);
+        var api = injector.getInstance(io.paradaux.treasury.internal.api.TreasuryApiImpl.class);
         assertThat(api.resolveKnownPlayerUuid(".KNOWN")).isEqualTo(uuid);
         try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
             var resolved = executor.submit(() -> api.resolveKnownPlayerUuid(" .known "));

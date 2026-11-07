@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.paradaux.hibernia.testsupport.db.LedgerInvariants;
 import io.paradaux.hibernia.testsupport.db.SkipLedgerInvariants;
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;

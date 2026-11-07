@@ -6,8 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.mappers.FirmRequestMapper;
-import io.paradaux.business.model.Firm;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;

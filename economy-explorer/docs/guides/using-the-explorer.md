@@ -105,7 +105,7 @@ section list on the left (a menu at the top on a phone):
   who pays you most and whom you pay most; and your latest activity.
 - **Accounts you can access**, grouped by whose money it is: **Mine**, accounts
   **shared with you** by other players, each **firm** you can see (with your
-  role there and the firm's own total), and **government** accounts. Each row
+  role there and the firm's own total), and **government** accounts grouped by unit (or Unassigned). Each row
   says why you can see it: owner, member, authorizer, viewer, firm finance
   (with your role) or a group. Firm and government money is never added to
   yours. A firm's money belongs to the firm, and the biggest firms are banks
@@ -181,7 +181,7 @@ the positive-net-balance chart excludes types whose total is zero or negative.
 Market items traded counts every distinct item traded in the selected window,
 not just the featured cards. Government fine totals cover all non-revoked fines
 in the selected window and your permitted accounts; the fines list is paginated.
-The item catalogue is ordered by item key for predictable browsing.
+The item catalogue is ordered by trades in the last 30 days; sort by any column instead.
 
 ## Economy pages
 
@@ -216,8 +216,8 @@ balances by design, so it can be negative. Nothing is hidden or netted off.
 government, system), how much each type gained or lost over the range, and the
 plugins behind those changes. Transfers between someone's own accounts are left
 out. The ledger is shown as it is: a payment routed through a system bridge
-account appears as money into and out of System. Money flow covers up to 90 days
-at a time.
+account appears as money into and out of System. Money flow covers up to 92 days
+at a time. Comparison with a previous period is not currently available.
 
 [Taxation](/economy/taxation) is public and shows collections, fine refunds,
 net revenue by type, revenue by day and the receiving government accounts for
@@ -234,44 +234,120 @@ brackets and per-source income-tax overrides. If live rates cannot be read, it s
 unavailable; it never substitutes shipped defaults. Corporate and ChestShop rates
 are not published in this panel.
 
-The Government tab appears only if your role includes government access.
-Government opens with accounts you may view. Its Fines tab supports reason search,
-active/revoked filtering and pagination. Summary totals always cover the whole
-selected period for your permitted accounts, independent of the list filter.
+## Government workspace
+
+The [Government workspace](/gov) opens only for people with government access.
+It starts with the accounts you are permitted to read. Choose a government unit
+and date range to narrow the overview, revenue, spending, payroll and fines.
+A **Partial** unit means you can read some of its accounts; the totals include
+only those accounts. Unit membership never grants access by itself.
+
+**Accounts** lists balances and recent activity. **Revenue** separates tax, fines
+and other income; **Spending** separates wages and other expenses. Top payment
+lists cover at most the last 31 days of the selected range. **Payroll** shows
+payments and unusual changes for review; a flag is not proof of wrongdoing.
+Its top 50 recipients follow the selected 7d, 30d, 90d, YTD or 1y range,
+ranked by wages received. Historical recipients show “Preparing history” while
+the worker backfills them. Run history remains limited to the last 31 days.
+
+**Fines** supports reason search, active/revoked filters and pagination. Summary
+totals cover the selected period and permitted accounts, independently of the
+list filter. **Reports** provides monthly statements that can be printed or
+exported as CSV. **Audit** and **Manage units** appear only with their separate
+permissions.
+
+Compliance officers with the required firm-finance and transaction permissions
+can use the **Watchlist** and firm investigations. This permission is separate
+from government account access. A watchlist is personal to its viewer.
+
+If a chart says **Preparing history**, its summary data is still being built.
+The page does not substitute incomplete totals for a completed historical period.
+
+## Account pages
+
+Every account has a page at `/accounts/<number>`, which is where links from the
+game lead. Anyone can see:
+
+- **Who holds it.** A personal account shows its owner. A business account shows
+  the **firm** that holds it, and its proprietor as the firm's proprietor: a
+  firm's money belongs to the firm, not to the person who runs it.
+- **Its balance**, when the account was opened, and what kind of account it is.
+- For **business and government accounts**, money in, money out and the number of
+  transactions over the last 30 days, with a 12-month trend. Individual
+  transactions stay private.
+- **Related** links: the owner or firm, the firm's other accounts, and other
+  accounts of the same owner.
+
+Use **Copy link** to share the page, or **Copy /pay command** to get the in-game
+command that pays this account.
+
+If you can read the account's history (it is yours, it is shared with you, or
+you run its firm's finances), you also get a balance chart, money in and out by
+category, a year-long activity calendar, the top counterparties and the full
+transaction list. Pick a period with the range buttons at the top. The
+transaction list has the same filter chips as the directories: **Category**,
+**Direction**, **Counterparty**, **Amount**, **Date** and **Message**. Use
+**Older** and **Newer** to page through it; **Balance after** shows the balance
+right after each transaction.
+
+Filters look at 5,000 transactions at a time, so a busy account stays fast. If
+nothing matches in that stretch, the table says how far back it looked; press
+**Older** to keep looking. Searching message text without a Date filter covers
+the last 30 days.
+
+Charts and totals come from summaries that update every few minutes. While the
+explorer is still building older history after an update, a section says
+**Preparing history** and how far back it is covered.
+
+## Player profiles
+
+Each player has a profile at `/players/<name>` (any capitalisation works). It
+shows when they first and last played, their personal account and balance, the
+firms they run or work for with their role, and their own shops. It never shows a
+firm's money or adds up a player's accounts. The **[Players](/players)**
+directory lists everyone, newest activity first, with filters for first seen,
+last seen and firm membership.
+
+## Firm pages
+
+A firm's page shows its proprietor, staff count, headquarters, its accounts and
+their balances, 30 days of money in and out across those accounts (moves between
+the firm's own accounts are left out) and the items its shops sell most.
+**Members** lists staff and roles, for the firm's own people. **Financials**
+shows revenue and costs by category, payroll, shop performance by item and a
+printable monthly statement with CSV export, for the people who run the firm's
+money.
 
 ## Finding items
 
-Market starts with a search across the full catalogue and popular items for 7 or
-30 days. Browse Items includes the complete alphabetical catalogue; Find Shops
-lists observed shops; Activity contains market-wide totals and charts. Item cards
-show historical daily average prices per item, not guaranteed shop offers.
+**Market** opens with a search box, this week's price movers, the most traded
+items and the newest shops. **Items** lists everything traded in the last 30 days
+with its average price, trades and volume; search by name and filter or sort by
+any of them. Average prices come from real trades, not shop quotes.
+
+An item's page shows daily price candles, trades per day, the average price
+shops charge and pay with the spread between them, and where to buy or sell it
+now. Pick a period with the range buttons. Under **Compare**, add up to three
+other items to plot their average prices together.
 
 ## Comparing shops
 
-Choose **I want to buy** to buy from shops at the lowest unit price, or **I want to
-sell** to sell your items to the highest bidder. Prices on signs are for a batch;
-the Explorer divides by that batch quantity for a fair per-item comparison. The
-optional 64-item view is an estimate, not a promise that the item stacks to 64.
-Check the sign batch, stock observation time and shop observation time before
-travelling. Copy location copies the world and coordinates; the map link opens
-the server map. Offers show both observed stock and space available: the number
-of additional items of that type the container can accept. Zero space means the
-container is full for that item. Admin shops show unlimited stock and space;
-unknown observations stay unknown. Stock and space share the observation time
-and may have changed since the last check.
-
-Item pages show observed offers before historical averages. The simple daily
-price chart is followed by an optional advanced candlestick view. Historical
-sellers do not necessarily still have an active shop. Private sales figures retain
-their existing permission requirements.
+**Find shops** lists shop signs, cheapest first. Add **I want to: Sell** to see
+shops that buy from you, best price first. Prices on signs are for a batch; the
+explorer shows the price per item. **Stock** (or **Space**, when selling) shows
+the last observation: **Below one batch** or **Recheck** means check before you
+travel, and admin shops are unlimited. The location opens the server map.
 
 ## Search and directories on a phone
 
 Use **Search** in the header to find accounts, firms and players. Escape closes
 search and returns focus to its button. Account and firm directories keep names
 and balances together on narrow screens; expand **Details** for other columns.
-The firms directory has sort presets (Richest, Newest, Name A–Z, Largest employers).
-The selected sort is shown above the table and stays in the URL with your filters.
+When space is limited, transaction history uses compact rows: names on the left,
+complete amounts on the right, and running balances underneath. Select a
+transaction to read its full name, message and other details.
+The players, firms, items and shops directories use the same search and filter chips
+as the accounts directory below, and keep them in the page address.
 
 ## Filter the accounts directory
 
@@ -300,8 +376,6 @@ Click a column heading to sort by it, and click it again to reverse the order.
   choice on this device.
 - Filters are part of the page address, so you can bookmark or share a filtered
   view.
-Account details show a single current balance; owner UUIDs are expandable.
-Authorised viewers can follow a business account back to its firm.
 
 ## Recover your website password
 

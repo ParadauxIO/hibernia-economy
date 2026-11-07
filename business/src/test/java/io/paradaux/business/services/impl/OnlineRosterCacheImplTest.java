@@ -1,18 +1,17 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.business.model.Firm;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.services.FirmService;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
 
 /**
  * Pins the lock-free online-roster cache that backs {@code OnlineFirmNameResolver}
@@ -22,7 +21,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OnlineRosterCacheImplTest {
 
-    @Mock FirmService firms;
+    @Mock
+    FirmService firms;
 
     private static Firm firm(String displayName) {
         Firm f = new Firm();
@@ -69,14 +69,14 @@ class OnlineRosterCacheImplTest {
         when(firms.listOwnedOrMemberFirms(a)).thenReturn(List.of(firm("Acme"), firm("Shared")));
         when(firms.listOwnedOrMemberFirms(b)).thenReturn(List.of(firm("Globex"), firm("Shared")));
 
-        assertThat(roster.onlineFirmNames(suggestionCache()))
-                .containsExactlyInAnyOrder("Acme", "Globex", "Shared");
+        assertThat(roster.onlineFirmNames(suggestionCache())).containsExactlyInAnyOrder("Acme", "Globex", "Shared");
     }
 
     @Test
     void onlineFirmNames_emptyWhenNobodyOnline() {
         OnlineRosterCacheImpl roster = new OnlineRosterCacheImpl();
-        lenient().when(firms.listOwnedOrMemberFirms(org.mockito.ArgumentMatchers.any()))
+        lenient()
+                .when(firms.listOwnedOrMemberFirms(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of(firm("Unreachable")));
 
         assertThat(roster.onlineFirmNames(suggestionCache())).isEmpty();

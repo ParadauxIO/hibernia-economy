@@ -1,7 +1,8 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { randomBytes } from 'node:crypto';
-import { getViewer, type Viewer } from '@/lib/auth/viewer';
+import type { Viewer } from '@/lib/auth/viewer';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 import { ForbiddenError } from '@/lib/errors';
 import { requirePermission } from '@/lib/auth/access';
 import { auditMutation, auditView } from '@/lib/audit';
@@ -45,7 +46,7 @@ export async function createWebhookAction(args: {
   firmId?: number;
   url: string;
 }): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   const uuid = requireLinkedUuid(viewer);
   try {
     await assertPublicHttpsUrl(args.url);
@@ -89,7 +90,7 @@ export async function createWebhookAction(args: {
 }
 
 export async function setWebhookActiveAction(id: number, active: boolean): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   const uuid = requireLinkedUuid(viewer);
   try {
     const { affected: n } = await setWebhookActive(id, active, uuid);
@@ -104,7 +105,7 @@ export async function setWebhookActiveAction(id: number, active: boolean): Promi
 }
 
 export async function setWebhookUrlAction(id: number, url: string): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   const uuid = requireLinkedUuid(viewer);
   try {
     await assertPublicHttpsUrl(url);
@@ -120,7 +121,7 @@ export async function setWebhookUrlAction(id: number, url: string): Promise<Webh
 }
 
 export async function rotateWebhookSecretAction(id: number): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   const uuid = requireLinkedUuid(viewer);
   try {
     const secret = newSecret();
@@ -135,7 +136,7 @@ export async function rotateWebhookSecretAction(id: number): Promise<WebhookActi
 }
 
 export async function deleteWebhookAction(id: number): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   const uuid = requireLinkedUuid(viewer);
   try {
     const { affected: n } = await deleteWebhook(id, uuid);
@@ -169,7 +170,7 @@ function keyTypeForAccount(accountType: string): 'PERSONAL' | 'BUSINESS' | 'GOVE
  * /me/developer/webhooks too); falls back to the admin if the account has no owner.
  */
 export async function adminCreateWebhookAction(args: { accountId: number; url: string }): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'webhooks.create.all');
   try {
     await assertPublicHttpsUrl(args.url);
@@ -199,7 +200,7 @@ export async function adminCreateWebhookAction(args: { accountId: number; url: s
 }
 
 export async function adminSetWebhookActiveAction(id: number, active: boolean): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'webhooks.update.all');
   try {
     const before = webhookSnapshot(await findAdminWebhook(id));
@@ -217,7 +218,7 @@ export async function adminSetWebhookActiveAction(id: number, active: boolean): 
 }
 
 export async function adminDeleteWebhookAction(id: number): Promise<WebhookActionResult> {
-  const viewer = await getViewer();
+  const viewer = await requireLinkedViewer();
   requirePermission(viewer, 'webhooks.delete.all');
   try {
     const before = webhookSnapshot(await findAdminWebhook(id));
@@ -229,4 +230,38 @@ export async function adminDeleteWebhookAction(id: number): Promise<WebhookActio
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export async function adminSetWebhookUrlAction(id: number, url: string): Promise<WebhookActionResult> {
+  const viewer = await requireLinkedViewer();
+  requirePermission(viewer, 'webhooks.update.all');
+  try {
+    await assertPublicHttpsUrl(url);
+    const before = webhookSnapshot(await findAdminWebhook(id));
+    const { affected } = await setWebhookUrl(id, url.trim());
+    if (!affected) return { ok: false, error: 'Webhook not found.' };
+    await auditMutation(viewer, {
+      action: 'webhook.url', path: `/admin/webhooks/${id}`, targetType: 'webhook', targetId: id,
+      before, after: webhookSnapshot(await findAdminWebhook(id)),
+    });
+    revalidatePath('/admin/webhooks');
+    revalidatePath(`/admin/webhooks/${id}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+export async function adminRotateWebhookSecretAction(id: number): Promise<WebhookActionResult> {
+  const viewer = await requireLinkedViewer();
+  requirePermission(viewer, 'webhooks.update.all');
+  try {
+    const secret = newSecret();
+    const { affected } = await setWebhookSecret(id, secret);
+    if (!affected) return { ok: false, error: 'Webhook not found.' };
+    await auditMutation(viewer, {
+      action: 'webhook.secret.rotate', path: `/admin/webhooks/${id}`, targetType: 'webhook', targetId: id,
+      before: { secret: '[redacted]' }, after: { secret: '[rotated]' },
+    });
+    revalidatePath(`/admin/webhooks/${id}`);
+    return { ok: true, secret };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

@@ -27,6 +27,7 @@ public record ShopResult(
         int signZ,
         boolean adminShop,
         // owner
+        Integer shopAccountId, // Treasury account that pays for SELL trades
         String shopAccountType,
         Integer shopFirmId,
         UUID shopOwnerUuid,

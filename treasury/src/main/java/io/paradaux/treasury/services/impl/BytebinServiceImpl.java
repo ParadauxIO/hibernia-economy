@@ -1,10 +1,8 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
-import io.paradaux.treasury.model.config.BytebinConfiguration;
+import io.paradaux.treasury.internal.model.config.BytebinConfiguration;
 import io.paradaux.treasury.services.BytebinService;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -13,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.GZIPOutputStream;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class BytebinServiceImpl implements BytebinService {

@@ -2,25 +2,25 @@ package io.paradaux.business.commands;
 
 import com.google.inject.Inject;
 import io.paradaux.business.Business;
-import io.paradaux.business.model.config.BalanceTaxConfiguration;
-import io.paradaux.business.model.config.FirmConfiguration;
+import io.paradaux.business.internal.model.config.BalanceTaxConfiguration;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
 import org.bukkit.command.CommandSender;
 
 @Command({"db", "democracybusiness", "business", "firm", "company"})
 public class ReloadCommand implements CommandHandler {
 
     private final Business business;
-    private final Message message;
+    private final BusinessMessages message;
     private final FirmConfiguration firmConfig;
     private final BalanceTaxConfiguration balanceTaxConfig;
 
     @Inject
     public ReloadCommand(
             Business business,
-            Message message,
+            BusinessMessages message,
             FirmConfiguration firmConfig,
             BalanceTaxConfiguration balanceTaxConfig) {
         this.business = business;

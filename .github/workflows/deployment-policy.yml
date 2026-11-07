@@ -1,0 +1,28 @@
+name: Deployment policy
+
+on:
+  workflow_call:
+    inputs:
+      allow-production:
+        type: boolean
+        default: false
+    outputs:
+      allowed:
+        description: Whether this event may deploy
+        value: ${{ jobs.policy.outputs.allowed }}
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      allowed: ${{ steps.policy.outputs.allowed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: policy
+        env:
+          ALLOW_PRODUCTION: ${{ inputs.allow-production }}
+        run: node .github/scripts/deployment-policy.mjs

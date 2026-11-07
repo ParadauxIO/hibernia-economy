@@ -1,14 +1,43 @@
 package io.paradaux.chestshop.utils;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
+
 class SimpleCacheTest {
+
+    @Test
+    void slowLoaderDoesNotBlockOtherKeysOrOverwritePublishedValue() throws Exception {
+        SimpleCache<String, Integer> cache = new SimpleCache<>(8);
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var slow = executor.submit(() -> cache.get("slow", () -> {
+                entered.countDown();
+                assertThat(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                        .isTrue();
+                return 1;
+            }));
+            assertThat(entered.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var other = executor.submit(() -> {
+                cache.put("slow", 2);
+                return cache.get("other", () -> 3);
+            });
+            assertThat(other.get(2, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(3);
+            release.countDown();
+            assertThat(slow.get(2, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(2);
+            assertThat(cache.get("slow")).isEqualTo(2);
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS))
+                    .isTrue();
+        }
+    }
 
     @Test
     void putAndGet_storeAndRetrieve() {
@@ -48,7 +77,10 @@ class SimpleCacheTest {
         cache.put("k", 99);
 
         AtomicInteger calls = new AtomicInteger(0);
-        Integer v = cache.get("k", () -> { calls.incrementAndGet(); return 1234; });
+        Integer v = cache.get("k", () -> {
+            calls.incrementAndGet();
+            return 1234;
+        });
 
         assertThat(v).isEqualTo(99);
         assertThat(calls.get()).isEqualTo(0);
@@ -59,12 +91,18 @@ class SimpleCacheTest {
         SimpleCache<String, Integer> cache = new SimpleCache<>(8);
         AtomicInteger calls = new AtomicInteger(0);
 
-        Integer first = cache.get("k", () -> { calls.incrementAndGet(); return 42; });
-        Integer second = cache.get("k", () -> { calls.incrementAndGet(); return 999; });
+        Integer first = cache.get("k", () -> {
+            calls.incrementAndGet();
+            return 42;
+        });
+        Integer second = cache.get("k", () -> {
+            calls.incrementAndGet();
+            return 999;
+        });
 
         assertThat(first).isEqualTo(42);
-        assertThat(second).isEqualTo(42);              // cached, not 999
-        assertThat(calls.get()).isEqualTo(1);          // loader ran once
+        assertThat(second).isEqualTo(42); // cached, not 999
+        assertThat(calls.get()).isEqualTo(1); // loader ran once
     }
 
     @Test
@@ -78,7 +116,9 @@ class SimpleCacheTest {
     @Test
     void getWithLoader_wrapsLoaderExceptionInExecutionException() {
         SimpleCache<String, Integer> cache = new SimpleCache<>(8);
-        assertThatThrownBy(() -> cache.get("k", () -> { throw new IllegalStateException("boom"); }))
+        assertThatThrownBy(() -> cache.get("k", () -> {
+                    throw new IllegalStateException("boom");
+                }))
                 .isInstanceOf(ExecutionException.class)
                 .hasCauseInstanceOf(IllegalStateException.class);
     }

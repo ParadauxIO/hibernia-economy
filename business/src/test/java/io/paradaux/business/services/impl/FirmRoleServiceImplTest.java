@@ -1,17 +1,27 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.ConflictException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
-import io.paradaux.hibernia.framework.exceptions.NotFoundException;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import io.paradaux.business.mappers.FirmRoleMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmRole;
-import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
+import java.util.List;
+import java.util.UUID;
 import org.apache.ibatis.exceptions.PersistenceException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,26 +30,20 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FirmRoleServiceImplTest {
 
-    @Mock FirmService firms;
-    @Mock FirmStaffService staffService;
-    @Mock FirmRoleMapper roles;
-    @Mock FirmAccountService accounts;
+    @Mock
+    FirmService firms;
+
+    @Mock
+    FirmStaffService staffService;
+
+    @Mock
+    FirmRoleMapper roles;
+
+    @Mock
+    FirmAccountService accounts;
 
     private FirmRoleServiceImpl svc;
     private final UUID actor = UUID.randomUUID();
@@ -61,16 +65,14 @@ class FirmRoleServiceImplTest {
     @Test
     void createRole_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.createRole("Ghost", "X", 5, actor))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> svc.createRole("Ghost", "X", 5, actor)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void createRole_requiresAdminPermission() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> svc.createRole("Acme", "X", 5, actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.createRole("Acme", "X", 5, actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -78,10 +80,8 @@ class FirmRoleServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.findMinRankOrder(1)).thenReturn(2);
-        assertThatThrownBy(() -> svc.createRole("Acme", "Boss", 2, actor))
-                .isInstanceOf(BadCommandException.class);
-        assertThatThrownBy(() -> svc.createRole("Acme", "Boss", 1, actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.createRole("Acme", "Boss", 2, actor)).isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.createRole("Acme", "Boss", 1, actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -114,8 +114,7 @@ class FirmRoleServiceImplTest {
         when(roles.listRolesByFirm(1)).thenReturn(List.of(new FirmRole(1, "Lead", 3)));
 
         // insertRole is an upsert: reaching it would re-rank the existing role.
-        assertThatThrownBy(() -> svc.createRole("Acme", "lead", 7, actor))
-                .isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> svc.createRole("Acme", "lead", 7, actor)).isInstanceOf(ConflictException.class);
         verify(roles, never()).insertRole(any());
     }
 
@@ -137,8 +136,7 @@ class FirmRoleServiceImplTest {
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.findMinRankOrder(1)).thenReturn(1);
         when(roles.insertRole(any())).thenThrow(new PersistenceException("dup"));
-        assertThatThrownBy(() -> svc.createRole("Acme", "Lead", 3, actor))
-                .isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> svc.createRole("Acme", "Lead", 3, actor)).isInstanceOf(ConflictException.class);
     }
 
     @Test
@@ -147,8 +145,7 @@ class FirmRoleServiceImplTest {
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.findMinRankOrder(1)).thenReturn(1);
         when(roles.insertRole(any())).thenReturn(0);
-        assertThatThrownBy(() -> svc.createRole("Acme", "Lead", 3, actor))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> svc.createRole("Acme", "Lead", 3, actor)).isInstanceOf(IllegalStateException.class);
     }
 
     // ---------- deleteRole ----------
@@ -156,8 +153,7 @@ class FirmRoleServiceImplTest {
     @Test
     void deleteRole_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.deleteRole("Ghost", "X", actor))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> svc.deleteRole("Ghost", "X", actor)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -165,8 +161,7 @@ class FirmRoleServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.findProprietorRoleName(1)).thenReturn("Proprietor");
-        assertThatThrownBy(() -> svc.deleteRole("Acme", "proprietor", actor))
-                .isInstanceOf(BadCommandException.class);
+        assertThatThrownBy(() -> svc.deleteRole("Acme", "proprietor", actor)).isInstanceOf(BadCommandException.class);
     }
 
     @Test
@@ -175,8 +170,7 @@ class FirmRoleServiceImplTest {
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.findProprietorRoleName(1)).thenReturn("Proprietor");
         when(roles.deleteRole(1, "Lead")).thenReturn(0);
-        assertThatThrownBy(() -> svc.deleteRole("Acme", "Lead", actor))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> svc.deleteRole("Acme", "Lead", actor)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -194,8 +188,7 @@ class FirmRoleServiceImplTest {
     void deleteRole_requiresAdminPermission() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> svc.deleteRole("Acme", "Lead", actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.deleteRole("Acme", "Lead", actor)).isInstanceOf(NoPermissionException.class);
     }
 
     // ---------- renameRole ----------
@@ -205,8 +198,7 @@ class FirmRoleServiceImplTest {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.listRolesByFirm(1)).thenReturn(List.of());
-        assertThatThrownBy(() -> svc.renameRole("Acme", "Lead", "Boss", actor))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> svc.renameRole("Acme", "Lead", "Boss", actor)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -226,8 +218,7 @@ class FirmRoleServiceImplTest {
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.listRolesByFirm(1)).thenReturn(List.of(new FirmRole(1, "Lead", 3)));
         when(roles.renameRole(1, "Lead", "Boss")).thenThrow(new PersistenceException("dup"));
-        assertThatThrownBy(() -> svc.renameRole("Acme", "Lead", "Boss", actor))
-                .isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> svc.renameRole("Acme", "Lead", "Boss", actor)).isInstanceOf(ConflictException.class);
     }
 
     @Test
@@ -336,16 +327,14 @@ class FirmRoleServiceImplTest {
     @Test
     void getFirmRoles_byName_unknownFirm_throws() {
         when(firms.getFirmByNameOrId("Ghost")).thenReturn(null);
-        assertThatThrownBy(() -> svc.getFirmRoles("Ghost", actor))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> svc.getFirmRoles("Ghost", actor)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
     void getFirmRoles_byName_requiresAdmin() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(false);
-        assertThatThrownBy(() -> svc.getFirmRoles("Acme", actor))
-                .isInstanceOf(NoPermissionException.class);
+        assertThatThrownBy(() -> svc.getFirmRoles("Acme", actor)).isInstanceOf(NoPermissionException.class);
     }
 
     @Test
@@ -374,9 +363,8 @@ class FirmRoleServiceImplTest {
     void getFirmRolePermissions_byName_returnsList() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
-        when(roles.getFirmRolePermissions(1, "Lead")).thenReturn(List.of(
-                new FirmRolePermission(1, "Lead", RolePermission.ADMIN)
-        ));
+        when(roles.getFirmRolePermissions(1, "Lead"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Lead", RolePermission.ADMIN)));
         assertThat(svc.getFirmRolePermissions("Acme", "Lead", actor)).hasSize(1);
     }
 

@@ -196,25 +196,25 @@
     {
       "kind": "permission",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 256,
+      "line": 331,
       "value": "\"treasury.gov.fine.view\""
     },
     {
       "kind": "permission",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 264,
+      "line": 339,
       "value": "\"treasury.gov.fine.view\""
     },
     {
       "kind": "permission",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 276,
+      "line": 351,
       "value": "\"treasury.gov.fine.view\""
     },
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 59,
+      "line": 60,
       "roots": [
         "fine"
       ],
@@ -223,7 +223,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 65,
+      "line": 66,
       "roots": [
         "fine"
       ],
@@ -232,7 +232,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 71,
+      "line": 72,
       "roots": [
         "fine"
       ],
@@ -241,7 +241,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 151,
+      "line": 148,
       "roots": [
         "fine"
       ],
@@ -250,7 +250,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 200,
+      "line": 271,
       "roots": [
         "fine"
       ],
@@ -259,7 +259,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 255,
+      "line": 330,
       "roots": [
         "fine"
       ],
@@ -268,7 +268,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 263,
+      "line": 338,
       "roots": [
         "fine"
       ],
@@ -277,7 +277,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/FineCommand.java",
-      "line": 275,
+      "line": 350,
       "roots": [
         "fine"
       ],
@@ -442,7 +442,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 267,
+      "line": 290,
       "roots": [
         "government",
         "gov"
@@ -452,7 +452,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 291,
+      "line": 314,
       "roots": [
         "government",
         "gov"
@@ -462,7 +462,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 315,
+      "line": 338,
       "roots": [
         "government",
         "gov"
@@ -472,7 +472,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 335,
+      "line": 358,
       "roots": [
         "government",
         "gov"
@@ -482,7 +482,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 354,
+      "line": 377,
       "roots": [
         "government",
         "gov"
@@ -492,7 +492,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 391,
+      "line": 414,
       "roots": [
         "government",
         "gov"
@@ -502,7 +502,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 415,
+      "line": 438,
       "roots": [
         "government",
         "gov"
@@ -512,7 +512,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 439,
+      "line": 462,
       "roots": [
         "government",
         "gov"
@@ -522,7 +522,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 459,
+      "line": 482,
       "roots": [
         "government",
         "gov"
@@ -532,7 +532,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 478,
+      "line": 501,
       "roots": [
         "government",
         "gov"
@@ -542,7 +542,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 515,
+      "line": 538,
       "roots": [
         "government",
         "gov"
@@ -552,7 +552,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 551,
+      "line": 574,
       "roots": [
         "government",
         "gov"
@@ -562,7 +562,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 571,
+      "line": 594,
       "roots": [
         "government",
         "gov"
@@ -572,7 +572,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 602,
+      "line": 625,
       "roots": [
         "government",
         "gov"
@@ -582,7 +582,7 @@
     {
       "kind": "command",
       "source": "treasury/src/main/java/io/paradaux/treasury/commands/GovCommand.java",
-      "line": 617,
+      "line": 640,
       "roots": [
         "government",
         "gov"
@@ -1054,193 +1054,193 @@
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/BytebinConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/BytebinConfiguration.java",
       "line": 13,
       "value": "bytebin.post-url"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/BytebinConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/BytebinConfiguration.java",
       "line": 16,
       "value": "bytebin.base-url"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
       "line": 13,
       "value": "database.host"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
       "line": 16,
       "value": "database.port"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
       "line": 19,
       "value": "database.database"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
       "line": 22,
       "value": "database.username"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
       "line": 27,
       "value": "database.password"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
-      "line": 34,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
+      "line": 41,
       "value": "database.pool.maximum-size"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
-      "line": 37,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
+      "line": 44,
       "value": "database.pool.minimum-idle"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
-      "line": 40,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
+      "line": 47,
       "value": "database.pool.connection-timeout-ms"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
-      "line": 43,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
+      "line": 50,
       "value": "database.pool.max-lifetime-ms"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DatabaseConfiguration.java",
-      "line": 46,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DatabaseConfiguration.java",
+      "line": 53,
       "value": "database.pool.keepalive-ms"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DiscordWebhookConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DiscordWebhookConfiguration.java",
       "line": 13,
       "value": "tax.webhook.enabled"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/DiscordWebhookConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/DiscordWebhookConfiguration.java",
       "line": 17,
       "value": "tax.webhook.url"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
-      "line": 15,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/EconomyConfiguration.java",
+      "line": 14,
       "value": "economy.format"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
-      "line": 18,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/EconomyConfiguration.java",
+      "line": 17,
       "value": "economy.currency-name.singular"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
-      "line": 21,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/EconomyConfiguration.java",
+      "line": 20,
       "value": "economy.currency-name.plural"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/EconomyConfiguration.java",
-      "line": 24,
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/EconomyConfiguration.java",
+      "line": 23,
       "value": "economy.starting-balance"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/FineWebhookConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/FineWebhookConfiguration.java",
       "line": 13,
       "value": "fines.webhook.enabled"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/FineWebhookConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/FineWebhookConfiguration.java",
       "line": 17,
       "value": "fines.webhook.url"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/GovernmentConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/GovernmentConfiguration.java",
       "line": 13,
       "value": "government.starting-balances-account"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/GovernmentConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/GovernmentConfiguration.java",
       "line": 16,
       "value": "government.tax-income-account"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/GovernmentConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/GovernmentConfiguration.java",
       "line": 19,
       "value": "government.fines-account"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/LoggingConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/LoggingConfiguration.java",
       "line": 13,
       "value": "logging.level"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 25,
       "value": "tax.cycles.daily.enabled"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 29,
       "value": "tax.cycles.daily.hour"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 34,
       "value": "tax.cycles.weekly.enabled"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 38,
       "value": "tax.cycles.weekly.hour"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 45,
       "value": "tax.cycles.weekly.day-of-week"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 50,
       "value": "tax.cycles.monthly.enabled"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 54,
       "value": "tax.cycles.monthly.hour"
     },
     {
       "kind": "configuration",
-      "source": "treasury/src/main/java/io/paradaux/treasury/model/config/TaxCycleConfiguration.java",
+      "source": "treasury/src/main/java/io/paradaux/treasury/internal/model/config/TaxCycleConfiguration.java",
       "line": 58,
       "value": "tax.cycles.monthly.day-of-month"
     },
@@ -1253,139 +1253,151 @@
     {
       "kind": "scheduled",
       "source": "business/src/main/java/io/paradaux/business/Business.java",
-      "line": 162,
+      "line": 164,
       "trigger": "runTaskTimerAsynchronously("
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 78,
+      "line": 77,
       "value": "\"business.account.create\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 102,
+      "line": 101,
       "value": "\"business.account.alias\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 114,
+      "line": 113,
       "value": "\"business.account.alias\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 137,
+      "line": 136,
       "value": "\"business.account.list\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 184,
+      "line": 183,
       "value": "\"business.account.setdefault\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 202,
+      "line": 201,
       "value": "\"business.account.archive\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 219,
+      "line": 218,
       "value": "\"business.account.sync\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 235,
+      "line": 234,
       "value": "\"business.account.addmember\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 263,
+      "line": 262,
       "value": "\"business.account.removemember\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 291,
+      "line": 290,
       "value": "\"business.account.addauthorizer\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 319,
+      "line": 318,
       "value": "\"business.account.removeauthorizer\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 347,
+      "line": 346,
       "value": "\"business.account.members\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 384,
+      "line": 383,
       "value": "\"business.account.authorizers\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 434,
+      "line": 433,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 466,
+      "line": 457,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 504,
+      "line": 487,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 540,
+      "line": 513,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 526,
+      "value": "\"business.account.finance\""
+    },
+    {
+      "kind": "permission",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 566,
       "value": "\"business.pay\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 571,
+      "line": 597,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 610,
+      "line": 628,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 671,
+      "line": 686,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 680,
+      "line": 695,
       "value": "\"business.account.finance\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 77,
+      "line": 76,
       "roots": [
         "db",
         "democracybusiness",
@@ -1398,7 +1410,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 101,
+      "line": 100,
       "roots": [
         "db",
         "democracybusiness",
@@ -1411,7 +1423,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 113,
+      "line": 112,
       "roots": [
         "db",
         "democracybusiness",
@@ -1424,7 +1436,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 136,
+      "line": 135,
       "roots": [
         "db",
         "democracybusiness",
@@ -1437,7 +1449,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 183,
+      "line": 182,
       "roots": [
         "db",
         "democracybusiness",
@@ -1450,7 +1462,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 201,
+      "line": 200,
       "roots": [
         "db",
         "democracybusiness",
@@ -1463,7 +1475,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 218,
+      "line": 217,
       "roots": [
         "db",
         "democracybusiness",
@@ -1476,7 +1488,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 234,
+      "line": 233,
       "roots": [
         "db",
         "democracybusiness",
@@ -1489,7 +1501,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 262,
+      "line": 261,
       "roots": [
         "db",
         "democracybusiness",
@@ -1502,7 +1514,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 290,
+      "line": 289,
       "roots": [
         "db",
         "democracybusiness",
@@ -1515,7 +1527,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 318,
+      "line": 317,
       "roots": [
         "db",
         "democracybusiness",
@@ -1528,7 +1540,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 346,
+      "line": 345,
       "roots": [
         "db",
         "democracybusiness",
@@ -1541,7 +1553,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 383,
+      "line": 382,
       "roots": [
         "db",
         "democracybusiness",
@@ -1554,7 +1566,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 433,
+      "line": 432,
       "roots": [
         "db",
         "democracybusiness",
@@ -1567,7 +1579,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 465,
+      "line": 456,
       "roots": [
         "db",
         "democracybusiness",
@@ -1580,7 +1592,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 503,
+      "line": 486,
       "roots": [
         "db",
         "democracybusiness",
@@ -1593,7 +1605,33 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 539,
+      "line": 512,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account transfer <firm> <fromAccountId> <toAccountId> <amount>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 525,
+      "roots": [
+        "db",
+        "democracybusiness",
+        "business",
+        "firm",
+        "company"
+      ],
+      "route": "account transfer <firm> <fromAccountId> <toAccountId> <amount> <memo>"
+    },
+    {
+      "kind": "command",
+      "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
+      "line": 565,
       "roots": [
         "db",
         "democracybusiness",
@@ -1606,7 +1644,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 570,
+      "line": 596,
       "roots": [
         "db",
         "democracybusiness",
@@ -1619,7 +1657,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 609,
+      "line": 627,
       "roots": [
         "db",
         "democracybusiness",
@@ -1632,7 +1670,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 670,
+      "line": 685,
       "roots": [
         "db",
         "democracybusiness",
@@ -1645,7 +1683,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/AccountCommands.java",
-      "line": 679,
+      "line": 694,
       "roots": [
         "db",
         "democracybusiness",
@@ -1658,25 +1696,25 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
-      "line": 39,
+      "line": 38,
       "value": "\"business.chat\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
-      "line": 47,
+      "line": 46,
       "value": "\"business.chat\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
-      "line": 56,
+      "line": 55,
       "value": "\"business.chat\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
-      "line": 38,
+      "line": 37,
       "roots": [
         "db",
         "democracybusiness",
@@ -1689,7 +1727,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
-      "line": 46,
+      "line": 45,
       "roots": [
         "db",
         "democracybusiness",
@@ -1702,7 +1740,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/ChatCommands.java",
-      "line": 55,
+      "line": 54,
       "roots": [
         "db",
         "democracybusiness",
@@ -1715,127 +1753,127 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 64,
+      "line": 68,
       "value": "\"business.create\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 75,
+      "line": 79,
       "value": "\"business.disband\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 104,
+      "line": 108,
       "value": "\"business.disband\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 182,
+      "line": 186,
       "value": "\"business.list\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 190,
+      "line": 194,
       "value": "\"business.list.other\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 205,
+      "line": 209,
       "value": "\"business.list.all\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 213,
+      "line": 217,
       "value": "\"business.list.all\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 229,
+      "line": 233,
       "value": "\"business.baltop\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 237,
+      "line": 241,
       "value": "\"business.baltop\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 272,
+      "line": 276,
       "value": "\"business.info\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 315,
+      "line": 319,
       "value": "\"business.attribute.hq\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 335,
+      "line": 339,
       "value": "\"business.attribute.discord\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 371,
+      "line": 375,
       "value": "\"business.admin.disband\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 392,
+      "line": 396,
       "value": "\"business.admin.releasename\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 401,
+      "line": 405,
       "value": "\"business.admin.rename\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 418,
+      "line": 422,
       "value": "\"business.admin.attribute\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 433,
+      "line": 437,
       "value": "\"business.admin.attribute\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 458,
+      "line": 462,
       "value": "\"business.admin.proprietor\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 484,
+      "line": 489,
       "value": "\"business.admin.chatspy\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 497,
+      "line": 502,
       "value": "\"business.admin.chatspy\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 63,
+      "line": 67,
       "roots": [
         "db",
         "democracybusiness",
@@ -1848,7 +1886,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 74,
+      "line": 78,
       "roots": [
         "db",
         "democracybusiness",
@@ -1861,7 +1899,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 103,
+      "line": 107,
       "roots": [
         "db",
         "democracybusiness",
@@ -1874,7 +1912,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 181,
+      "line": 185,
       "roots": [
         "db",
         "democracybusiness",
@@ -1887,7 +1925,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 189,
+      "line": 193,
       "roots": [
         "db",
         "democracybusiness",
@@ -1900,7 +1938,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 204,
+      "line": 208,
       "roots": [
         "db",
         "democracybusiness",
@@ -1913,7 +1951,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 212,
+      "line": 216,
       "roots": [
         "db",
         "democracybusiness",
@@ -1926,7 +1964,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 228,
+      "line": 232,
       "roots": [
         "db",
         "democracybusiness",
@@ -1939,7 +1977,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 236,
+      "line": 240,
       "roots": [
         "db",
         "democracybusiness",
@@ -1952,7 +1990,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 271,
+      "line": 275,
       "roots": [
         "db",
         "democracybusiness",
@@ -1965,7 +2003,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 314,
+      "line": 318,
       "roots": [
         "db",
         "democracybusiness",
@@ -1978,7 +2016,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 334,
+      "line": 338,
       "roots": [
         "db",
         "democracybusiness",
@@ -1991,7 +2029,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 370,
+      "line": 374,
       "roots": [
         "db",
         "democracybusiness",
@@ -2004,7 +2042,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 391,
+      "line": 395,
       "roots": [
         "db",
         "democracybusiness",
@@ -2017,7 +2055,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 400,
+      "line": 404,
       "roots": [
         "db",
         "democracybusiness",
@@ -2030,7 +2068,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 417,
+      "line": 421,
       "roots": [
         "db",
         "democracybusiness",
@@ -2043,7 +2081,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 432,
+      "line": 436,
       "roots": [
         "db",
         "democracybusiness",
@@ -2056,7 +2094,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 457,
+      "line": 461,
       "roots": [
         "db",
         "democracybusiness",
@@ -2069,7 +2107,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 483,
+      "line": 488,
       "roots": [
         "db",
         "democracybusiness",
@@ -2082,7 +2120,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/FirmCommands.java",
-      "line": 496,
+      "line": 501,
       "roots": [
         "db",
         "democracybusiness",
@@ -2202,49 +2240,49 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 77,
+      "line": 128,
       "value": "\"business.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 113,
+      "line": 156,
       "value": "\"business.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 137,
+      "line": 86,
       "value": "\"business.pay\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 166,
+      "line": 211,
       "value": "\"business.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 202,
+      "line": 229,
       "value": "\"business.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 260,
+      "line": 241,
       "value": "\"business.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 278,
+      "line": 299,
       "value": "\"business.finance\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 290,
+      "line": 307,
       "value": "\"business.finance\""
     },
     {
@@ -2275,7 +2313,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 68,
+      "line": 84,
       "roots": [
         "db",
         "democracybusiness",
@@ -2288,7 +2326,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 76,
+      "line": 93,
       "roots": [
         "db",
         "democracybusiness",
@@ -2301,7 +2339,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 112,
+      "line": 68,
       "roots": [
         "db",
         "democracybusiness",
@@ -2314,7 +2352,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 136,
+      "line": 85,
       "roots": [
         "db",
         "democracybusiness",
@@ -2327,7 +2365,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 165,
+      "line": 127,
       "roots": [
         "db",
         "democracybusiness",
@@ -2340,7 +2378,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 201,
+      "line": 155,
       "roots": [
         "db",
         "democracybusiness",
@@ -2353,7 +2391,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 259,
+      "line": 210,
       "roots": [
         "db",
         "democracybusiness",
@@ -2366,7 +2404,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 277,
+      "line": 228,
       "roots": [
         "db",
         "democracybusiness",
@@ -2379,7 +2417,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 289,
+      "line": 240,
       "roots": [
         "db",
         "democracybusiness",
@@ -2392,7 +2430,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 350,
+      "line": 298,
       "roots": [
         "db",
         "democracybusiness",
@@ -2405,7 +2443,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/MiscCommands.java",
-      "line": 358,
+      "line": 306,
       "roots": [
         "db",
         "democracybusiness",
@@ -2437,61 +2475,61 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 42,
+      "line": 48,
       "value": "\"business.staff.offer\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 58,
+      "line": 73,
       "value": "\"business.staff.offer.rescind\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 82,
+      "line": 110,
       "value": "\"business.staff.offer.accept\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 99,
+      "line": 133,
       "value": "\"business.staff.offer.reject\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 112,
+      "line": 152,
       "value": "\"business.transfer.begin\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 122,
+      "line": 162,
       "value": "\"business.transfer.confirm\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 140,
+      "line": 201,
       "value": "\"business.transfer.cancel\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 154,
+      "line": 224,
       "value": "\"business.transfer.complete\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 166,
+      "line": 243,
       "value": "\"business.transfer.reject\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 40,
+      "line": 46,
       "roots": [
         "db",
         "democracybusiness",
@@ -2504,7 +2542,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 41,
+      "line": 47,
       "roots": [
         "db",
         "democracybusiness",
@@ -2517,7 +2555,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 57,
+      "line": 72,
       "roots": [
         "db",
         "democracybusiness",
@@ -2530,7 +2568,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 81,
+      "line": 109,
       "roots": [
         "db",
         "democracybusiness",
@@ -2543,7 +2581,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 98,
+      "line": 132,
       "roots": [
         "db",
         "democracybusiness",
@@ -2556,7 +2594,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 111,
+      "line": 151,
       "roots": [
         "db",
         "democracybusiness",
@@ -2569,7 +2607,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 121,
+      "line": 161,
       "roots": [
         "db",
         "democracybusiness",
@@ -2582,7 +2620,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 139,
+      "line": 200,
       "roots": [
         "db",
         "democracybusiness",
@@ -2595,7 +2633,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 153,
+      "line": 223,
       "roots": [
         "db",
         "democracybusiness",
@@ -2608,7 +2646,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RequestCommands.java",
-      "line": 165,
+      "line": 242,
       "roots": [
         "db",
         "democracybusiness",
@@ -2621,49 +2659,49 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 32,
+      "line": 30,
       "value": "\"business.staff.role.create\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 44,
+      "line": 46,
       "value": "\"business.staff.role.rename\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 55,
+      "line": 61,
       "value": "\"business.staff.role.delete\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 66,
+      "line": 72,
       "value": "\"business.staff.role.permission.add\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 77,
+      "line": 95,
       "value": "\"business.staff.role.permission.remove\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 88,
+      "line": 118,
       "value": "\"business.staff.role.list\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 101,
+      "line": 139,
       "value": "\"business.staff.role.permission.list\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 31,
+      "line": 29,
       "roots": [
         "db",
         "democracybusiness",
@@ -2676,7 +2714,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 43,
+      "line": 45,
       "roots": [
         "db",
         "democracybusiness",
@@ -2689,7 +2727,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 54,
+      "line": 60,
       "roots": [
         "db",
         "democracybusiness",
@@ -2702,7 +2740,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 65,
+      "line": 71,
       "roots": [
         "db",
         "democracybusiness",
@@ -2715,7 +2753,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 76,
+      "line": 94,
       "roots": [
         "db",
         "democracybusiness",
@@ -2728,7 +2766,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 87,
+      "line": 117,
       "roots": [
         "db",
         "democracybusiness",
@@ -2741,7 +2779,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/RoleCommands.java",
-      "line": 100,
+      "line": 138,
       "roots": [
         "db",
         "democracybusiness",
@@ -2754,43 +2792,43 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 70,
+      "line": 75,
       "value": "\"business.sales\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 78,
+      "line": 83,
       "value": "\"business.sales\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 88,
+      "line": 93,
       "value": "\"business.sales\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 96,
+      "line": 101,
       "value": "\"business.sales\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 106,
+      "line": 111,
       "value": "\"business.sales.export\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 135,
+      "line": 140,
       "value": "\"business.sales.toggle\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 69,
+      "line": 74,
       "roots": [
         "db",
         "democracybusiness",
@@ -2803,7 +2841,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 77,
+      "line": 82,
       "roots": [
         "db",
         "democracybusiness",
@@ -2816,7 +2854,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 87,
+      "line": 92,
       "roots": [
         "db",
         "democracybusiness",
@@ -2829,7 +2867,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 95,
+      "line": 100,
       "roots": [
         "db",
         "democracybusiness",
@@ -2842,7 +2880,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 105,
+      "line": 110,
       "roots": [
         "db",
         "democracybusiness",
@@ -2855,7 +2893,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/SalesCommands.java",
-      "line": 134,
+      "line": 139,
       "roots": [
         "db",
         "democracybusiness",
@@ -2868,37 +2906,37 @@
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 45,
+      "line": 48,
       "value": "\"business.staff.fire\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 65,
+      "line": 74,
       "value": "\"business.staff.resign\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 81,
+      "line": 95,
       "value": "\"business.staff.promote\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 103,
+      "line": 141,
       "value": "\"business.staff.demote\""
     },
     {
       "kind": "permission",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 124,
+      "line": 179,
       "value": "\"business.staff.list\""
     },
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 44,
+      "line": 47,
       "roots": [
         "db",
         "democracybusiness",
@@ -2911,7 +2949,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 64,
+      "line": 73,
       "roots": [
         "db",
         "democracybusiness",
@@ -2924,7 +2962,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 80,
+      "line": 94,
       "roots": [
         "db",
         "democracybusiness",
@@ -2937,7 +2975,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 102,
+      "line": 140,
       "roots": [
         "db",
         "democracybusiness",
@@ -2950,7 +2988,7 @@
     {
       "kind": "command",
       "source": "business/src/main/java/io/paradaux/business/commands/StaffCommands.java",
-      "line": 123,
+      "line": 178,
       "roots": [
         "db",
         "democracybusiness",
@@ -3040,32 +3078,32 @@
     },
     {
       "kind": "configuration",
-      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
-      "line": 12,
+      "source": "business/src/main/java/io/paradaux/business/internal/model/config/DatabaseConfiguration.java",
+      "line": 11,
       "value": "database.host"
     },
     {
       "kind": "configuration",
-      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
-      "line": 15,
+      "source": "business/src/main/java/io/paradaux/business/internal/model/config/DatabaseConfiguration.java",
+      "line": 14,
       "value": "database.port"
     },
     {
       "kind": "configuration",
-      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
-      "line": 18,
+      "source": "business/src/main/java/io/paradaux/business/internal/model/config/DatabaseConfiguration.java",
+      "line": 17,
       "value": "database.database"
     },
     {
       "kind": "configuration",
-      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
-      "line": 21,
+      "source": "business/src/main/java/io/paradaux/business/internal/model/config/DatabaseConfiguration.java",
+      "line": 20,
       "value": "database.username"
     },
     {
       "kind": "configuration",
-      "source": "business/src/main/java/io/paradaux/business/model/config/DatabaseConfiguration.java",
-      "line": 26,
+      "source": "business/src/main/java/io/paradaux/business/internal/model/config/DatabaseConfiguration.java",
+      "line": 25,
       "value": "database.password"
     },
     {

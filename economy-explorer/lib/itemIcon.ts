@@ -6,12 +6,24 @@
 // sprite mirror); defaults to the public minecraftitemids 64px renders, which
 // cover both items and isometric block renders. Custom/unmapped items return
 // null and the UI shows a neutral fallback.
-const DEFAULT_BASE = 'https://static.minecraftitemids.com/64/';
+export const DEFAULT_BASE = 'https://static.minecraftitemids.com/64/';
+
+/** Only HTTPS, credential-free mirrors are trusted; bad config uses the default. */
+export function itemIconBase(): URL {
+  try {
+    const base = new URL(process.env.ITEM_ICON_BASE || DEFAULT_BASE);
+    if (base.protocol === 'https:' && !base.username && !base.password && !base.search && !base.hash) {
+      base.pathname = base.pathname.replace(/\/?$/, '/');
+      return base;
+    }
+  } catch { /* Fall back to the public mirror. */ }
+  return new URL(DEFAULT_BASE);
+}
 
 export function itemIconUrl(material: string | null | undefined, itemCustom?: number): string | null {
   if (!material || itemCustom) return null;
   const id = material.toLowerCase().trim();
   if (!/^[a-z0-9_]+$/.test(id)) return null;
-  const base = (process.env.ITEM_ICON_BASE || DEFAULT_BASE).replace(/\/?$/, '/');
+  const base = itemIconBase().href;
   return `${base}${id}.png`;
 }

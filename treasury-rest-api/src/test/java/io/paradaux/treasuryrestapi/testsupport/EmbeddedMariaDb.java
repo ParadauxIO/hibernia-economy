@@ -133,7 +133,11 @@ public final class EmbeddedMariaDb {
                 Statement st = c.createStatement()) {
             st.execute("SET FOREIGN_KEY_CHECKS = 0");
             for (String t : dataTables) {
-                st.execute("TRUNCATE TABLE `" + t + "`");
+                try {
+                    st.execute("TRUNCATE TABLE `" + t + "`");
+                } catch (java.sql.SQLException failure) {
+                    throw new java.sql.SQLException("Could not truncate test table " + t, failure);
+                }
             }
             // Re-seed the single-row dispatcher watermark (V13 inserts it; the
             // dispatcher's ingest() reads/advances it and assumes it exists).

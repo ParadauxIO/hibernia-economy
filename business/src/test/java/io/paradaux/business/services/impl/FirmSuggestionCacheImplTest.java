@@ -1,26 +1,26 @@
 package io.paradaux.business.services.impl;
 
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.services.FirmService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.LongSupplier;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.services.FirmService;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 @ExtendWith(MockitoExtension.class)
 class FirmSuggestionCacheImplTest {
 
-    @Mock FirmService firms;
+    @Mock
+    FirmService firms;
 
     private final AtomicLong now = new AtomicLong(0L);
     private final LongSupplier clock = now::get;

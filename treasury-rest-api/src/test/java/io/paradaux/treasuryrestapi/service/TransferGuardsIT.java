@@ -65,6 +65,23 @@ class TransferGuardsIT extends EmbeddedDbIT {
         assertThat(matBalance(2)).isEqualByComparingTo("150.00");
     }
 
+    @Test
+    void governmentTransferCannotOverrideScopedSource() {
+        insertAccount(1, "GOVERNMENT", OWNER, "Scoped");
+        insertAccount(2, "PERSONAL", null, "Recipient");
+        insertAccount(3, "GOVERNMENT", OWNER, "Other");
+        seedBalance(1, "1000.00");
+        seedBalance(2, "0.00");
+        seedBalance(3, "500.00");
+        var government = new VerifiedToken(7, OWNER, "GOVERNMENT", 1L, null);
+        var result = transferService.transfer(government, new TransferRequest(3L, 2L, "150.00", "pay"), null);
+        assertThat(result.fromAccountId()).isEqualTo(1);
+        assertThat(matBalance(1)).isEqualByComparingTo("850.00");
+        assertThat(matBalance(2)).isEqualByComparingTo("150.00");
+        assertThat(matBalance(3)).isEqualByComparingTo("500.00");
+        assertThat(rowCount("ledger_postings")).isEqualTo(2);
+    }
+
     // ── SELF_TRANSFER ─────────────────────────────────────────────────────────────
 
     @Test

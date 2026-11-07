@@ -6,7 +6,6 @@
 // component never sees or formats money itself.
 
 import Link from 'next/link';
-import type { Route } from 'next';
 import { useTransition, type ReactNode } from 'react';
 import { PlayerHead } from '@democracycraft/design-system';
 import { Popover } from '@democracycraft/design-system/popover';
@@ -62,18 +61,11 @@ export function HeaderAuth({ balance }: { balance?: ReactNode }) {
       )}
       <div className="shell-menu-group" role="group" aria-label="Your pages">
         {ACCOUNT_LINKS.map((link) => (
-          <Link key={link.href} role="menuitem" tabIndex={-1} href={link.href as Route} prefetch={false} className="menu-item">
+          <Link key={link.href} role="menuitem" tabIndex={-1} href={link.href} prefetch={false} className="menu-item">
             <span className="menu-item-label">{link.label}</span>
           </Link>
         ))}
       </div>
-      {v.isAdmin && (
-        <div className="shell-menu-group" role="group" aria-label="Administration">
-          <Link role="menuitem" tabIndex={-1} href="/admin" prefetch={false} className="menu-item">
-            <span className="menu-item-label">Admin</span>
-          </Link>
-        </div>
-      )}
       <div className="shell-menu-group" role="group" aria-label="Session">
         <button
           type="button"

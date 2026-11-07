@@ -2,26 +2,24 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-
-import io.paradaux.hibernia.framework.exceptions.BadCommandException;
-import io.paradaux.hibernia.framework.exceptions.ConflictException;
-import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
-import io.paradaux.hibernia.framework.exceptions.NotFoundException;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import io.paradaux.business.mappers.FirmRoleMapper;
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmRole;
-import io.paradaux.business.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmRoleService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
-import org.apache.ibatis.exceptions.PersistenceException;
-import org.mybatis.guice.transactional.Transactional;
-
+import io.paradaux.hibernia.framework.exceptions.BadCommandException;
+import io.paradaux.hibernia.framework.exceptions.ConflictException;
+import io.paradaux.hibernia.framework.exceptions.NoPermissionException;
+import io.paradaux.hibernia.framework.exceptions.NotFoundException;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.apache.ibatis.exceptions.PersistenceException;
+import org.mybatis.guice.transactional.Transactional;
 
 @Singleton
 public class FirmRoleServiceImpl implements FirmRoleService {
@@ -32,8 +30,8 @@ public class FirmRoleServiceImpl implements FirmRoleService {
     private final FirmAccountService accounts;
 
     @Inject
-    public FirmRoleServiceImpl(FirmService firms, FirmStaffService staff, FirmRoleMapper roles,
-                               FirmAccountService accounts) {
+    public FirmRoleServiceImpl(
+            FirmService firms, FirmStaffService staff, FirmRoleMapper roles, FirmAccountService accounts) {
         this.firms = firms;
         this.staff = staff;
         this.roles = roles;
@@ -65,8 +63,10 @@ public class FirmRoleServiceImpl implements FirmRoleService {
             return RolePermission.fromString(permission);
         } catch (IllegalArgumentException e) {
             throw new BadCommandException("Unknown permission '" + permission + "'. Valid permissions: "
-                    + java.util.Arrays.stream(RolePermission.values()).map(Enum::name)
-                            .collect(java.util.stream.Collectors.joining(", ")) + ".");
+                    + java.util.Arrays.stream(RolePermission.values())
+                            .map(Enum::name)
+                            .collect(java.util.stream.Collectors.joining(", "))
+                    + ".");
         }
     }
 
@@ -76,7 +76,8 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don't have permission to manage roles for " + firm.getDisplayName() + ".");
+            throw new NoPermissionException(
+                    "You don't have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
         // Prevent creating a role at or above the proprietor role's rank
@@ -125,7 +126,8 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don't have permission to manage roles for " + firm.getDisplayName() + ".");
+            throw new NoPermissionException(
+                    "You don't have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
         // Prevent deleting the proprietor role (the role with the lowest rank_order)
@@ -187,10 +189,12 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don’t have permission to manage roles for " + firm.getDisplayName() + ".");
+            throw new NoPermissionException(
+                    "You don’t have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
-        boolean roleExists = roles.listRolesByFirm(firm.getFirmId()).stream().anyMatch(r -> r.getRoleName().equalsIgnoreCase(roleName));
+        boolean roleExists = roles.listRolesByFirm(firm.getFirmId()).stream()
+                .anyMatch(r -> r.getRoleName().equalsIgnoreCase(roleName));
         if (!roleExists) {
             throw new NotFoundException("Role not found: " + roleName);
         }
@@ -226,7 +230,8 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         }
 
         if (!staff.hasPermission(firm.getFirmId(), actorId, RolePermission.ADMIN)) {
-            throw new NoPermissionException("You don’t have permission to manage roles for " + firm.getDisplayName() + ".");
+            throw new NoPermissionException(
+                    "You don’t have permission to manage roles for " + firm.getDisplayName() + ".");
         }
 
         RolePermission rolePermission = parsePermission(permission);

@@ -31,8 +31,16 @@ setup('build the rollups for the seeded ledger', async () => {
   const db = new Kysely<any>({ dialect: new MysqlDialect({ pool: pool as never }) });
   try {
     const today = utcDay();
-    for (const day of [addDays(today, -1), today]) for (const job of ROLLUP_JOBS) await recomputeDay(db, job, day);
-    // seed.sql settles everything today, so history is complete from here.
+    // Every day from the oldest settlement to today, newest first like the
+    // worker's backfill. seed.sql settles today; the government workspace
+    // fixtures (gov-fixtures.ts) go back about six weeks.
+    const first = await db.selectFrom('ledger_txns').select((eb) => eb.fn.min<string>('settlement_time').as('first')).executeTakeFirst();
+    const oldest = first?.first ? String(first.first).slice(0, 10) : today;
+    for (let day = today; day >= oldest; day = addDays(day, -1)) {
+      for (const job of ROLLUP_JOBS) await recomputeDay(db, job, day);
+    }
+    if (oldest === today) for (const job of ROLLUP_JOBS) await recomputeDay(db, job, addDays(today, -1));
+    // Nothing settled before the oldest day, so history is complete from here.
     for (const job of ROLLUP_JOBS) await markHistoryComplete(db, job);
     await snapshotWealth(db, today);
   } finally {

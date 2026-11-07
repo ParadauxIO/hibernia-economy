@@ -66,13 +66,13 @@ export async function adminHeaders(): Promise<Record<string, string>> {
 }
 
 /** One admin request. Throws with the API's `message` (or `error`) on a non-2xx. */
-async function request(path: string, method: string, body?: unknown): Promise<Response> {
+async function request(path: string, method: string, body?: unknown, headers: Record<string, string> = {}): Promise<Response> {
   if (!BASE || !TOKEN) {
     throw new Error('Treasury admin API is not configured (TREASURY_API_BASE_URL / TREASURY_ADMIN_TOKEN).');
   }
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: await adminHeaders(),
+    headers: { ...await adminHeaders(), ...headers },
     ...(body !== undefined && { body: JSON.stringify(body) }),
     cache: 'no-store',
   });
@@ -92,8 +92,8 @@ async function request(path: string, method: string, body?: unknown): Promise<Re
   return res;
 }
 
-async function call<T>(path: string, method: string, body?: unknown): Promise<T> {
-  return (await (await request(path, method, body)).json()) as T;
+async function call<T>(path: string, method: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+  return (await (await request(path, method, body, headers)).json()) as T;
 }
 
 /** Like {@link call} but for 204 No Content responses (no body to parse). */
@@ -129,8 +129,8 @@ export const updateFirmDetails = (firmId: number, body: { discordUrl?: string | 
   call<FirmResult>(`/api/v1/admin/firms/${firmId}`, 'PATCH', body);
 
 /** Move money between two arbitrary accounts with a memo. */
-export const adminTransfer = (body: { fromAccountId: number; toAccountId: number; amount: string; memo: string }) =>
-  call<TransferResult>(`/api/v1/admin/transfers`, 'POST', body);
+export const adminTransfer = (body: { fromAccountId: number; toAccountId: number; amount: string; memo: string }, idempotencyKey: string) =>
+  call<TransferResult>(`/api/v1/admin/transfers`, 'POST', body, { 'Idempotency-Key': idempotencyKey });
 
 /** Rename any account. */
 export const renameAccount = (accountId: number, displayName: string) =>
@@ -188,3 +188,15 @@ export const setWebhookSecret = (id: number, secret: string, ownerUuid?: string)
 
 export const deleteWebhook = (id: number, ownerUuid?: string) =>
   call<{ affected: number }>(`/api/v1/admin/webhooks/${id}${ownerQ(ownerUuid)}`, 'DELETE');
+
+export interface FirmOperationResult {
+  firmId: number; proprietorUuid: string; nameReleased: boolean; taxExempt: boolean; accountIds: number[];
+}
+export const changeFirmProprietor = (id: number, owner: string) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/proprietor`, 'PATCH', { owner });
+export const releaseFirmName = (id: number) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/release-name`, 'POST');
+export const setFirmTaxExempt = (id: number, exempt: boolean) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/tax-exemption`, 'PATCH', { exempt });
+export const syncFirmAccounts = (id: number) =>
+  call<FirmOperationResult>(`/api/v1/admin/firms/${id}/sync-accounts`, 'POST');

@@ -1,9 +1,8 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.FirmAccount;
-import org.apache.ibatis.annotations.*;
-
+import io.paradaux.business.internal.model.FirmAccount;
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 /**
  * Firm-↔-Treasury-account links.
@@ -24,7 +23,6 @@ public interface FirmAccountsMapper {
     @Select("SELECT account_id FROM firm_shop_alias_reservations WHERE alias = #{alias}")
     Integer getShopAliasReservation(@Param("alias") String alias);
 
-
     @Select("""
         SELECT fa.account_id FROM firm_accounts fa
         JOIN firm f ON f.firm_id = fa.firm_id
@@ -44,8 +42,7 @@ public interface FirmAccountsMapper {
         WHERE fa.firm_id = #{firmId} AND fa.account_id = #{accountId}
           AND fa.removed_at IS NULL AND f.is_archived = 0
         """)
-    int setShopAlias(@Param("firmId") int firmId, @Param("accountId") int accountId,
-                     @Param("alias") String alias);
+    int setShopAlias(@Param("firmId") int firmId, @Param("accountId") int accountId, @Param("alias") String alias);
 
     @Insert("""
         INSERT INTO firm_accounts (firm_id, account_id)

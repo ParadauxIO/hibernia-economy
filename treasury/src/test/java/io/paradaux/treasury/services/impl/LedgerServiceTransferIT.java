@@ -3,6 +3,7 @@ package io.paradaux.treasury.services.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.LedgerMapper;
 import io.paradaux.treasury.model.economy.Account;
@@ -10,13 +11,13 @@ import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.LedgerPosting;
 import io.paradaux.treasury.model.economy.LedgerTxn;
+import io.paradaux.treasury.model.economy.PayoutCategory;
 import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
 import io.paradaux.treasury.utils.Idempotency;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -46,6 +47,56 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         ledgerMapper = injector.getInstance(LedgerMapper.class);
 
         ledgerService.bootstrapGovernmentAccounts();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"treasury-salary,EMPLOYEE", "realty-auction,AUCTION_PROCEEDS"})
+    void payoutCategory_survivesLedgerAndAllHistoryQueries(String sourcePlugin, PayoutCategory category) {
+        Account source = createPersonalAccount(100);
+        Account target = createPersonalAccount(0);
+        byte[] key = io.paradaux.treasury.utils.Idempotency.sha256("category:" + UUID.randomUUID());
+        TransferRequest request = new TransferRequest(
+                source.getAccountId(),
+                target.getAccountId(),
+                new BigDecimal("12.50"),
+                "same memo",
+                UUID.randomUUID(),
+                null,
+                sourcePlugin,
+                key);
+        long id = ledgerService.transfer(request);
+        assertThat(ledgerService.transfer(request)).isEqualTo(id);
+        assertThat(balanceOf(source)).isEqualByComparingTo("87.50");
+        assertThat(balanceOf(target)).isEqualByComparingTo("12.50");
+        assertThat(ledgerMapper.findTxnById(id).getPayoutCategory()).isEqualTo(category);
+        assertThat(ledgerMapper.findByDedupKey(key).getPayoutCategory()).isEqualTo(category);
+        assertThat(ledgerMapper.findByDedupKeyLocking(key).getPayoutCategory()).isEqualTo(category);
+        assertThat(ledgerMapper.findTransactionsByAccount(target.getAccountId(), 10, 0))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.getPayoutCategory()).isEqualTo(category));
+        assertThat(ledgerMapper.findAllTransactionsByAccount(target.getAccountId(), 10))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.getPayoutCategory()).isEqualTo(category));
+        assertThat(ledgerMapper.findTransactionsByAccounts(List.of(target.getAccountId()), 10, 0))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.getPayoutCategory()).isEqualTo(category));
+    }
+
+    @Test
+    void legacyTransfer_doesNotInferCategoryFromMemo() {
+        Account source = createPersonalAccount(100);
+        Account target = createPersonalAccount(0);
+        TransferRequest request = new TransferRequest(
+                source.getAccountId(),
+                target.getAccountId(),
+                new BigDecimal("12.50"),
+                "Employee salary and auction proceeds",
+                UUID.randomUUID(),
+                null,
+                "test",
+                null);
+        assertThat(ledgerMapper.findTxnById(ledgerService.transfer(request)).getPayoutCategory())
+                .isNull();
     }
 
     // ---------- transfer: amount validation ----------
@@ -298,6 +349,86 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     }
 
     @Test
+    void concurrentDuplicateRecovery_doesNotUpgradeSharedLocks() throws Exception {
+        Account source = accountService.getGovernmentAccountByName("starting-balances");
+        Account target = createPersonalAccount(0);
+        byte[] key = Idempotency.sha256("shared-dedup-recovery");
+        TransferRequest request = new TransferRequest(
+                source.getAccountId(),
+                target.getAccountId(),
+                new BigDecimal("100.00"),
+                "duplicate recovery",
+                TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
+                null,
+                "test",
+                key);
+        var barrier = new DuplicateRecoveryBarrier();
+        injector.getInstance(org.apache.ibatis.session.SqlSessionFactory.class)
+                .getConfiguration()
+                .addInterceptor(barrier);
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> ledgerService.adminTransfer(request));
+            var second = pool.submit(() -> ledgerService.adminTransfer(request));
+            assertThat(barrier.snapshots.await(10, TimeUnit.SECONDS)).isTrue();
+            barrier.winnerThread = Thread.currentThread();
+            long winner = ledgerService.adminTransfer(request);
+            barrier.committed.countDown();
+            assertThat(first.get(20, TimeUnit.SECONDS)).isEqualTo(winner);
+            assertThat(second.get(20, TimeUnit.SECONDS)).isEqualTo(winner);
+            assertThat(balanceOf(target)).isEqualByComparingTo("100.00");
+            assertThat(countRows("SELECT COUNT(*) FROM ledger_postings WHERE txn_id = ?", winner))
+                    .isEqualTo(2);
+        } finally {
+            barrier.committed.countDown();
+            pool.shutdownNow();
+            assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @org.apache.ibatis.plugin.Intercepts({
+        @org.apache.ibatis.plugin.Signature(
+                type = org.apache.ibatis.executor.Executor.class,
+                method = "query",
+                args = {
+                    org.apache.ibatis.mapping.MappedStatement.class, Object.class,
+                    org.apache.ibatis.session.RowBounds.class, org.apache.ibatis.session.ResultHandler.class
+                }),
+        @org.apache.ibatis.plugin.Signature(
+                type = org.apache.ibatis.executor.Executor.class,
+                method = "update",
+                args = {org.apache.ibatis.mapping.MappedStatement.class, Object.class})
+    })
+    static final class DuplicateRecoveryBarrier implements org.apache.ibatis.plugin.Interceptor {
+        final CountDownLatch snapshots = new CountDownLatch(2);
+        final CountDownLatch committed = new CountDownLatch(1);
+        final CountDownLatch duplicates = new CountDownLatch(2);
+        volatile Thread winnerThread;
+
+        @Override
+        public Object intercept(org.apache.ibatis.plugin.Invocation invocation) throws Throwable {
+            String id = ((org.apache.ibatis.mapping.MappedStatement) invocation.getArgs()[0]).getId();
+            if (Thread.currentThread() == winnerThread) return invocation.proceed();
+            if (id.endsWith(".findByDedupKey")) {
+                Object result = invocation.proceed();
+                snapshots.countDown();
+                if (!committed.await(10, TimeUnit.SECONDS)) throw new AssertionError("Winner must commit");
+                return result;
+            }
+            try {
+                return invocation.proceed();
+            } catch (java.lang.reflect.InvocationTargetException failure) {
+                if (id.endsWith(".insertTxnEntityRow")) {
+                    // Both failed INSERTs now hold shared locks on the winner's unique key.
+                    duplicates.countDown();
+                    if (!duplicates.await(10, TimeUnit.SECONDS)) throw new AssertionError("Both inserts must conflict");
+                }
+                throw failure;
+            }
+        }
+    }
+
+    @Test
     void transfer_missingAccount_throws() {
         Account a = createPersonalAccount(100);
 
@@ -385,13 +516,14 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
         // the real faucets: ops/money-invariants.sql (run after every IT) only accepts a
         // negative balance on GOVERNMENT/SYSTEM accounts, whereas OverdraftPolicy honours
         // the sentinel on any type — a PERSONAL "faucet" would be flagged as illegal.
-        Account faucet = new Account();
-        faucet.setAccountType(AccountType.GOVERNMENT);
-        faucet.setOwnerUuid(UUID.randomUUID());
-        faucet.setDisplayName("test-faucet");
-        faucet.setAllowOverdraft(true);
-        faucet.setCreditLimit(new BigDecimal("-1"));
-        accountMapper.insertAccount(faucet);
+        Account faucet = Account.builder()
+                .accountType(AccountType.GOVERNMENT)
+                .ownerUuid(UUID.randomUUID())
+                .displayName("test-faucet")
+                .allowOverdraft(true)
+                .creditLimit(new BigDecimal("-1"))
+                .build();
+        faucet = faucet.withAccountId(accountMapper.insertAccount(faucet));
         accountMapper.seedBalance(faucet.getAccountId());
         Account b = createPersonalAccount(0);
 
@@ -663,7 +795,7 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     void bootstrap_migratesLegacyCreditLimitToMinusOne() {
         // Roll a primitive back to a legacy credit_limit then re-bootstrap.
         Account starting = accountService.getGovernmentAccountByName("starting-balances");
-        starting.setCreditLimit(BigDecimal.ZERO);
+        starting = starting.withCreditLimit(BigDecimal.ZERO);
         accountService.updateAccount(starting);
 
         ledgerService.bootstrapGovernmentAccounts();
@@ -790,14 +922,15 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
     void resolveOrCreatePersonal_existingAccountWithMissingBalanceRow_reSeedsAndFunds() throws Exception {
         UUID player = UUID.randomUUID();
         // Insert PERSONAL account without seeding balance (simulates a partial install).
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(player);
-        a.setDisplayName(player.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(player)
+                .displayName(player.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
         accountMapper.insertAccount(a);
         // Note: NOT calling seedBalance — the ledger should detect this and re-seed.
 
@@ -1009,15 +1142,16 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private Account createPersonalAccount(double startingBalance) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(owner);
-        a.setDisplayName(owner.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
-        accountMapper.insertAccount(a);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(owner)
+                .displayName(owner.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             seedBalance(a, BigDecimal.valueOf(startingBalance).setScale(2, java.math.RoundingMode.HALF_EVEN));
@@ -1027,15 +1161,16 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private Account createOverdraftAccount(double startingBalance, BigDecimal creditLimit) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(owner);
-        a.setDisplayName(owner.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(true);
-        a.setCreditLimit(creditLimit);
-        accountMapper.insertAccount(a);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(owner)
+                .displayName(owner.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(true)
+                .creditLimit(creditLimit)
+                .build();
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             seedBalance(a, BigDecimal.valueOf(startingBalance).setScale(2, java.math.RoundingMode.HALF_EVEN));
@@ -1045,22 +1180,23 @@ class LedgerServiceTransferIT extends IntegrationTestBase {
 
     private Account createAuthorizationRequiredAccount(double startingBalance) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.BUSINESS);
-        a.setOwnerUuid(owner);
-        a.setDisplayName("biz-" + owner);
+        Account a = Account.builder()
+                .accountType(AccountType.BUSINESS)
+                .ownerUuid(owner)
+                .displayName("biz-" + owner)
+                .build();
         // Insert with requires_authorization=false so the seed transfer can complete,
         // then flip the flag once the account is funded.
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
-        accountMapper.insertAccount(a);
+        a = a.withRequiresAuthorization(false);
+        a = a.withArchived(false);
+        a = a.withAllowOverdraft(false);
+        a = a.withCreditLimit(BigDecimal.ZERO);
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             seedBalance(a, BigDecimal.valueOf(startingBalance).setScale(2, java.math.RoundingMode.HALF_EVEN));
         }
-        a.setRequiresAuthorization(true);
+        a = a.withRequiresAuthorization(true);
         accountMapper.updateAccount(a);
         return a;
     }

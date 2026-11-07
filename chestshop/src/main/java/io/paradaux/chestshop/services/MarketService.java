@@ -6,12 +6,11 @@ import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.api.market.ChestShopSaleRecord;
 import io.paradaux.treasury.api.market.ChestShopShopRecord;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.bukkit.block.Sign;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-
-import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * ChestShop's market-analytics boundary: holds the optional Treasury {@link MarketApi} (writes the
@@ -33,7 +32,18 @@ public interface MarketService {
     /** True when the ShopQueryApi (the {@code /find} read side) is available. */
     boolean searchEnabled();
 
+    /**
+     * Registry mutations enqueue immutable snapshots in FIFO order. Sale event dispatch remains
+     * synchronous; explicit imports wait for persistence and propagate errors. Async readers that
+     * need read-after-write consistency must call {@link #awaitWrites()} first.
+     */
     MarketApi market();
+
+    /** Wait for preceding registry mutations, from an asynchronous reader only. */
+    void awaitWrites();
+
+    /** Drain registry mutations at plugin shutdown. */
+    void close();
 
     ShopQueryApi shopQuery();
 
@@ -54,18 +64,31 @@ public interface MarketService {
     Integer capacityOf(ItemStack item, Inventory inventory);
 
     /** Build a sale record DTO for the markets DB. */
-    ChestShopSaleRecord sale(Sign sign, ItemStack item, int quantity, UUID customer,
-                             Owner owner, BigDecimal total, BigDecimal tax,
-                             String direction, Integer shopStock, Long txnId);
+    ChestShopSaleRecord sale(
+            Sign sign,
+            ItemStack item,
+            int quantity,
+            UUID customer,
+            Owner owner,
+            BigDecimal total,
+            BigDecimal tax,
+            String direction,
+            Integer shopStock,
+            Long txnId);
 
     /** Build a shop record DTO for the live shop registry. */
-    ChestShopShopRecord shop(Sign sign, ItemStack item, Owner owner,
-                             Integer currentStock, Integer estimatedCapacity);
+    ChestShopShopRecord shop(Sign sign, ItemStack item, Owner owner, Integer currentStock, Integer estimatedCapacity);
 
     /** Build a snapshot without loading its chunk (legacy registry import). */
-    ChestShopShopRecord shop(org.bukkit.Location location, ItemStack item, Owner owner,
-                             BigDecimal buyPrice, BigDecimal sellPrice, int batch,
-                             Integer currentStock, Integer estimatedCapacity);
+    ChestShopShopRecord shop(
+            org.bukkit.Location location,
+            ItemStack item,
+            Owner owner,
+            BigDecimal buyPrice,
+            BigDecimal sellPrice,
+            int batch,
+            Integer currentStock,
+            Integer estimatedCapacity);
 
     /** Total item count across a stock array (nulls skipped). */
     int totalAmount(ItemStack[] stock);

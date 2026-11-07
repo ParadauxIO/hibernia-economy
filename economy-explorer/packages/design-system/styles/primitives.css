@@ -249,7 +249,7 @@
 /* ───────────── RangePicker ───────────── */
 .range-picker { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
 .range-picker[aria-busy="true"] { opacity: 0.7; }
-.range-form { display: grid; gap: var(--space-3); min-width: 240px; padding: var(--space-2); }
+.range-form { display: grid; gap: var(--space-4); width: min(320px, 100%); min-width: 240px; padding: var(--space-2); }
 .range-form-note { margin: 0; color: var(--fg-muted); font-size: var(--text-xs); }
 .range-compare-box {
     position: relative;
@@ -311,3 +311,6 @@
     .tab, .sidebar-link, .menu-item { min-height: 44px; }
 }
 .hover-card-anchor { display: inline-flex; max-width: 100%; min-width: 0; }
+
+.range-form-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.range-form input[type="date"] { min-height: 44px; font-size: 16px; }

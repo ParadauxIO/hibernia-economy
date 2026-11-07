@@ -1,4 +1,5 @@
 'use server';
+import { requireLinkedViewer } from '@/lib/auth/linked';
 // Server actions behind every search box: the header typeahead and ⌘K palette
 // (searchPreview, searchSuggest) and the entity filter chips on /transactions
 // and /chestshop/sales. All return public names only (what /search shows) and
@@ -14,6 +15,7 @@ import type { EntityOption } from '@/lib/tables/core';
  * result may now also carry `href` and `match`.
  */
 export async function searchPreview(q: string, limit = 4): Promise<SearchResult[]> {
+  await requireLinkedViewer();
   return suggestEntities(q, typeof limit === 'number' ? limit : 4);
 }
 
@@ -22,6 +24,7 @@ export async function searchPreview(q: string, limit = 4): Promise<SearchResult[
  * the ⌘K palette. Same rules and cache as searchPreview.
  */
 export async function searchSuggest(q: string, options: { limit?: number; kinds?: SearchHitKind[] } = {}): Promise<SearchHit[]> {
+  await requireLinkedViewer();
   const kinds = Array.isArray(options.kinds) ? options.kinds : undefined;
   return suggest(q, { ...(typeof options.limit === 'number' ? { limit: options.limit } : {}), ...(kinds ? { kinds } : {}) });
 }
@@ -40,6 +43,7 @@ function itemOption(r: ItemSearchResult): EntityOption {
 
 /** Entity chips on /transactions: `account` (accounts, and players' personal accounts) and `player`. */
 export async function searchTransactionEntity(field: string, text: string): Promise<EntityOption[]> {
+  await requireLinkedViewer();
   if (typeof text !== 'string') return [];
   if (field === 'player') {
     return (await suggest(text, { limit: 8, kinds: ['player'] })).filter((h): h is SearchResult => h.kind === 'player').map(playerOption);
@@ -59,6 +63,7 @@ export async function searchTransactionEntity(field: string, text: string): Prom
 
 /** Entity chips on /chestshop/sales: item, customer, shop owner and firm. */
 export async function searchSalesEntity(field: string, text: string): Promise<EntityOption[]> {
+  await requireLinkedViewer();
   if (typeof text !== 'string') return [];
   if (field === 'item') {
     return (await suggest(text, { limit: 8, kinds: ['item'] })).filter((h): h is ItemSearchResult => h.kind === 'item').map(itemOption);

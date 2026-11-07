@@ -1,6 +1,7 @@
 name: Economy Flyway · Migrate
 
-# Production source of truth for schema deploys. Manual-only, single job.
+# Administrative migration tool for rehearsal/recovery. Normal releases migrate
+# from Treasury on server startup using the SQL bundled in that release.
 #
 # NOTE — Free plan + private repo: GitHub Environment *required-reviewer*
 # protection rules are NOT available on this plan, so there is no in-run

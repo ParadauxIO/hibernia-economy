@@ -3,7 +3,7 @@ package io.paradaux.treasury.events;
 import com.google.inject.Inject;
 import io.paradaux.common.NameReservationErrors;
 import io.paradaux.treasury.Treasury;
-import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
+import io.paradaux.treasury.internal.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.services.BalanceTaxService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
 import java.time.Instant;

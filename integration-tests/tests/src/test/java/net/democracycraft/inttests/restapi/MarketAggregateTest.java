@@ -9,7 +9,7 @@ import java.sql.DriverManager;
 import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class MarketAggregateTest {
+class MarketAggregateTest extends MarketApiTestSupport {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
     @Test
     void realTradesPopulateItemTotalsPriceSeriesCheapestShopsAndGlobalStats() throws Exception {
@@ -76,7 +76,7 @@ class MarketAggregateTest {
             JsonNode stats = get("/chestshop/stats");
             long deadline = System.nanoTime() + Duration.ofSeconds(75).toNanos();
             while (stats.path("totalSales").asLong() != sales && System.nanoTime() < deadline) {
-                Thread.sleep(1000); // Respect the 120/min anonymous route budget while awaiting cache expiry.
+                Thread.sleep(1000); // Respect the 120/min authenticated route budget while awaiting cache expiry.
                 stats = get("/chestshop/stats");
             }
             assertThat(stats.path("totalSales").asLong()).isEqualTo(sales);
@@ -90,17 +90,17 @@ class MarketAggregateTest {
             assertThat(Market.saleCountForCustomer(buyer.getUuid())).isEqualTo(2);
         }
     }
-    private static void totals(JsonNode node, int trades, int quantity, String volume) {
+    private void totals(JsonNode node, int trades, int quantity, String volume) {
         assertThat(node.path("tradeCount").asInt()).isEqualTo(trades);
         assertThat(node.path("totalQuantity").asInt()).isEqualTo(quantity);
         assertThat(new BigDecimal(node.path("totalVolume").asText())).isEqualByComparingTo(volume);
     }
-    private static JsonNode get(String path) {
-        var r = RestApi.call("GET", path, null, null);
+    private JsonNode get(String path) {
+        var r = RestApi.call("GET", path, marketToken(), null);
         assertThat(r.status()).as("%s: %s", path, r.body()).isEqualTo(200);
         return r.json();
     }
-    private static String sql(String query) throws Exception {
+    private String sql(String query) throws Exception {
         try (var c = DriverManager.getConnection(DevServer.DB_URL, DevServer.DB_USER, DevServer.DB_PASSWORD);
              var s = c.createStatement(); var r = s.executeQuery(query)) {
             assertThat(r.next()).isTrue();

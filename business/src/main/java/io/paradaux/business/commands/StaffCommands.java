@@ -2,23 +2,22 @@ package io.paradaux.business.commands;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.hibernia.framework.commander.annotations.*;
-import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
-import io.paradaux.hibernia.framework.i18n.Message;
-import lombok.extern.slf4j.Slf4j;
-// Every staff command hits the DB and is annotated @Async to avoid main-thread blocking.
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmEmployee;
-import io.paradaux.business.model.FirmPlayer;
+import io.paradaux.business.commands.resolvers.FirmName;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmEmployee;
+import io.paradaux.business.internal.model.FirmPlayer;
 import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmStaffService;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.business.utils.DateUtils;
-import io.paradaux.business.commands.resolvers.FirmName;
-import org.bukkit.entity.Player;
-
+import io.paradaux.hibernia.framework.commander.annotations.*;
+import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+// Every staff command hits the DB and is annotated @Async to avoid main-thread blocking.
+import org.bukkit.entity.Player;
 
 @Slf4j
 @Singleton
@@ -29,11 +28,15 @@ public class StaffCommands implements CommandHandler {
     private final FirmStaffService staff;
     private final FirmService firms;
     private final FirmNotificationService notifications;
-    private final Message message;
+    private final BusinessMessages message;
 
     @Inject
-    public StaffCommands(FirmPlayerService players, FirmStaffService staff, FirmService firms,
-                         FirmNotificationService notifications, Message message) {
+    public StaffCommands(
+            FirmPlayerService players,
+            FirmStaffService staff,
+            FirmService firms,
+            FirmNotificationService notifications,
+            BusinessMessages message) {
         this.players = players;
         this.staff = staff;
         this.firms = firms;
@@ -56,8 +59,14 @@ public class StaffCommands implements CommandHandler {
         // Tell the rest of the firm; the fired player already got the direct message above.
         Firm f = firms.getFirmByNameOrId(firm);
         if (f != null) {
-            notifications.notifyFirmExcept(f.getFirmId(), target.getUniqueId(), "business.staff.fire.staff-broadcast",
-                    "target", target.getCurrentName(), "firm", f.getDisplayName());
+            notifications.notifyFirmExcept(
+                    f.getFirmId(),
+                    target.getUniqueId(),
+                    "business.staff.fire.staff-broadcast",
+                    "target",
+                    target.getCurrentName(),
+                    "firm",
+                    f.getDisplayName());
         }
     }
 
@@ -72,8 +81,13 @@ public class StaffCommands implements CommandHandler {
         // The resigner has already left the firm, so they're no longer a recipient.
         Firm f = firms.getFirmByNameOrId(firm);
         if (f != null) {
-            notifications.notifyFirm(f.getFirmId(), "business.staff.resign.staff-broadcast",
-                    "target", sender.getName(), "firm", f.getDisplayName());
+            notifications.notifyFirm(
+                    f.getFirmId(),
+                    "business.staff.resign.staff-broadcast",
+                    "target",
+                    sender.getName(),
+                    "firm",
+                    f.getDisplayName());
         }
     }
 
@@ -85,17 +99,41 @@ public class StaffCommands implements CommandHandler {
         String firm = firmRef.value();
         log.debug("promote: firm={} target={}", firm, target.getCurrentName());
         String nextRole = staff.promoteEmployee(firm, target.getUniqueId(), sender.getUniqueId());
-        message.send(sender, "business.staff.promote.sender", "target", target.getCurrentName(), "firm", firm, "role", nextRole);
+        message.send(
+                sender,
+                "business.staff.promote.sender",
+                "target",
+                target.getCurrentName(),
+                "firm",
+                firm,
+                "role",
+                nextRole);
 
         if (players.isOnline(target)) {
-            message.send(target, "business.staff.promote.target", "role", nextRole, "sender", sender.getName(), "firm", firm);
+            message.send(
+                    target,
+                    "business.staff.promote.target",
+                    "role",
+                    nextRole,
+                    "sender",
+                    sender.getName(),
+                    "firm",
+                    firm);
         }
 
         // Firm-wide visibility; the promoted player already got the direct message above.
         Firm f = firms.getFirmByNameOrId(firm);
         if (f != null) {
-            notifications.notifyFirmExcept(f.getFirmId(), target.getUniqueId(), "business.staff.promote.staff-broadcast",
-                    "target", target.getCurrentName(), "role", nextRole, "firm", f.getDisplayName());
+            notifications.notifyFirmExcept(
+                    f.getFirmId(),
+                    target.getUniqueId(),
+                    "business.staff.promote.staff-broadcast",
+                    "target",
+                    target.getCurrentName(),
+                    "role",
+                    nextRole,
+                    "firm",
+                    f.getDisplayName());
         }
     }
 
@@ -107,16 +145,33 @@ public class StaffCommands implements CommandHandler {
         String firm = firmRef.value();
         log.debug("demote: firm={} target={}", firm, target.getCurrentName());
         String nextRole = staff.demoteEmployee(firm, target.getUniqueId(), sender.getUniqueId());
-        message.send(sender, "business.staff.demote.sender", "target", target.getCurrentName(), "firm", firm, "role", nextRole);
+        message.send(
+                sender,
+                "business.staff.demote.sender",
+                "target",
+                target.getCurrentName(),
+                "firm",
+                firm,
+                "role",
+                nextRole);
 
         if (players.isOnline(target)) {
-            message.send(target, "business.staff.demote.target", "role", nextRole, "sender", sender.getName(), "firm", firm);
+            message.send(
+                    target, "business.staff.demote.target", "role", nextRole, "sender", sender.getName(), "firm", firm);
         }
         // Firm-wide visibility; the demoted player already got the direct message above.
         Firm f = firms.getFirmByNameOrId(firm);
         if (f != null) {
-            notifications.notifyFirmExcept(f.getFirmId(), target.getUniqueId(), "business.staff.demote.staff-broadcast",
-                    "target", target.getCurrentName(), "role", nextRole, "firm", f.getDisplayName());
+            notifications.notifyFirmExcept(
+                    f.getFirmId(),
+                    target.getUniqueId(),
+                    "business.staff.demote.staff-broadcast",
+                    "target",
+                    target.getCurrentName(),
+                    "role",
+                    nextRole,
+                    "firm",
+                    f.getDisplayName());
         }
     }
 
@@ -138,7 +193,17 @@ public class StaffCommands implements CommandHandler {
                     .map(FirmPlayer::getCurrentName)
                     .orElse(e.getPlayerUuid());
             String date = DateUtils.localDateToAmericanDateString(e.getJoinedAt());
-            message.send(sender, "business.staff.list.line", "ordinal", i + 1, "role", e.getRoleName(), "date", date, "name", employeeName);
+            message.send(
+                    sender,
+                    "business.staff.list.line",
+                    "ordinal",
+                    i + 1,
+                    "role",
+                    e.getRoleName(),
+                    "date",
+                    date,
+                    "name",
+                    employeeName);
         }
     }
 }

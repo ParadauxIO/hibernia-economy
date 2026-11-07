@@ -39,9 +39,34 @@ The stable surface downstream code compiles against: `TreasuryApi`, `TaxApi`, th
 `AccountType`, `Page<T>`, …). Published as `io.paradaux:treasury-api`. **New public
 types go here, never in the plugin root.**
 
+Fine issuance/revocation and department-account administration remain internal
+`GovService` operations (ADT-84). There is no published `GovApi`; adding one
+requires a concrete consumer and an explicit contract for authorization and
+transaction ownership. The five government/fine exceptions
+(`FineNotFoundException`, `FineAlreadyRevokedException`,
+`InsufficientFineFundsException`, `PrimitiveAccountException`, and
+`GovAccountNotFoundException`) and their `TreasuryException` base now live in the
+plugin's `io.paradaux.treasury.services.exceptions` package, outside the published
+API jar. Their messages, payloads, causes, and command handling are unchanged.
+
+This removes the old `io.paradaux.treasury.api.exceptions` classes and is a source
+and binary compatibility break for consumers that imported them, even though no
+published operation declared them. Such consumers must remove those imports and
+rebuild; depending on the internal replacement package is not a supported API.
+`TreasuryApi.getGovernmentAccountByName` continues to return `null` for a missing
+account. The existing public models, including `GovernmentFine`, are unchanged.
+
 ---
 
 ## `business/` — companies (Paper plugin)
+
+Finance command handlers share the injected `FirmGate` (ADT-103). It resolves
+active firms, checks proprietor/ADMIN/FINANCIAL access, and sends the existing
+missing-firm or permission-denied response before returning an empty `Optional`.
+Cross-firm transfers use its resolved-firm check after destination validation to
+preserve error precedence. Public deposits, public aggregate balances, and
+owner/admin-only sales settings keep their separate access rules. Service-layer
+authorization remains in place.
 
 Firms/companies: creation, staff with custom roles and permissions, firm accounts,
 sales, and per-firm tax — all money via `TreasuryApi`.
@@ -106,11 +131,75 @@ Recovery is eventual: stale access can persist until a successful pass, longer
 during an outage. Immediate command-triggered sync still reports failures to the
 caller. No Treasury API or schema upgrade is required for this repair.
 
+Direct debits (PAR-557, default-off flag `business.direct_debits`, V54) let a
+customer accept a mandate that a firm may debit their PERSONAL account into the
+firm's default account. A mandate is either RECURRING (a fixed amount every
+day, week or month) or ON_DEMAND (any charges while the period total stays within
+the cap). Periods are UTC calendar periods, and all times come from the plugin
+clock, never the database `NOW()`.
+
+A collection happens in three steps:
+
+1. `DirectDebitStore` locks the mandate row, checks its status and the cap, and
+   commits a RESERVED `direct_debit_collection`. Concurrent charges therefore
+   can't exceed the cap.
+2. The service calls `TreasuryApi.transfer` with the customer recorded as
+   authorizer, `plugin_system = business-direct-debit`, and a dedup key derived
+   from the collection id. The customer's account authorization requirement is
+   not bypassed.
+3. The collection is settled as COLLECTED or FAILED.
+
+`DirectDebitJob` runs every minute and does three things:
+
+- It expires lapsed proposals.
+- It re-drives reservations left RESERVED for more than 5 minutes. The dedup key
+  collapses a transfer that already happened, so a crash never debits twice.
+- It collects due recurring mandates from the database's `next_due_at`. Failed
+  periods retry hourly, up to 3 attempts, and a mandate is suspended after 3
+  consecutive missed periods. Missed periods are never backfilled.
+
+Charging is in-game only. A REST charging endpoint would need the same
+reservation step, because `treasury-rest-api` has its own transfer engine.
+
 ### `business/business-api/` — public Business API (library jar)
 
 `FirmApi`, `StaffApi`, `RolePermission`, and firm model types. Published as
 `io.paradaux:business-api`. Consumed by ChestShop (and anything else that needs to
 route money to a firm or check a staff permission).
+
+#### Migrating to Business API 4 (ADT-106 / ADT-69)
+
+Version 4 replaces the mutable public models with final, immutable value classes:
+`Firm`, `FirmAccount`, `FirmEmployee`, `FirmPlayer`, `FirmRole`, and
+`FirmRolePermission`. `FirmBalanceEntry` remains an immutable record. Existing
+getter names are retained, but no-argument constructors and setters are removed.
+Use the all-argument constructor when constructing a model (for example in a test);
+use API operations for changes to stored business state.
+
+`Firm.getProprietorUuid()`, `FirmEmployee.getPlayerUuid()`, `getAddedBy()`,
+`getRemovedBy()`, and `FirmPlayer.getPlayerUuid()` now return `UUID`, not `String`.
+Remove `UUID.fromString(...)` around these getters; call `toString()` explicitly
+where text is needed. Nullable audit fields remain nullable. `FirmPlayer.getUniqueId()`
+and `getPlayerUuid()` return null for missing or malformed directory UUIDs, preserving
+the old tolerant player lookup contract. Invalid non-null firm/employee UUIDs fail
+conversion instead of returning an invalid identifier.
+
+The provider copies mutable internal MyBatis rows into snapshots. Later service
+updates cannot change a previously returned model or list. Returned lists are
+unmodifiable; copy them into an `ArrayList` if local list editing is needed. Fetch
+again to observe new state. The `Player` elements of `getOnlineEmployees()` remain
+live Bukkit objects; immutable result lists do not make Bukkit access thread-safe.
+
+This is a source and binary break: rebuild and deploy Business, ChestShop,
+TreasuryAPI, and external consumers together against API 4. Do not mix old and new
+API jars or shade a private API copy into a consumer. Database schema and storage
+formats are unchanged. Mutable rows now live only in the Business plugin's
+`io.paradaux.business.internal.model` package and are not a supported public API.
+
+The API defaults to `4.0.0-SNAPSHOT`, independently of the plugin calendar version.
+Use `-PbusinessApiVersion=...` to select the API version; `-Pversion` still controls
+the plugin bundle. Release CI publishes `4.0.0-<bundle-version>` so each API artifact
+is tied to its corresponding plugin bundle. Snapshot CI publishes `4.0.0-SNAPSHOT`.
 
 Account resolution (PAR-14) stays with the API that owns the relationship:
 
@@ -130,8 +219,8 @@ These are relationship reads, not permission or Treasury account-status checks.
 A proprietor can own several firms, so filtering Treasury accounts by owner is not
 a substitute for firm lookup. None of these reads creates an account; use
 `resolveOrCreatePersonal` only when creation and starting-balance funding are intended.
-Upgrade the Business provider with the API: older implementations remain compatible,
-but the default `getAccountIds` implementation throws `UnsupportedOperationException`
+Within a compatible API major version, the default `getAccountIds` implementation
+throws `UnsupportedOperationException`
 rather than silently reporting an incomplete list. No migration is needed.
 
 `FirmApi.resolveShopAlias(alias)` returns the Treasury account ID for a live firm's
@@ -331,7 +420,8 @@ into the browser's zone. Daily charts label this distinction.
   reads it. `/api/viewer` returns the same snapshot and is used only by
   `refreshViewer()` (back/forward-cache restores). The Government entry needs
   `government.read.all`, or `government.read` plus a GOVERNMENT account in the
-  viewer's ReBAC scope (`lib/sql/nav.ts`, memoised per player for 60 s). The
+  viewer's ReBAC scope (`lib/sql/nav.ts`, using `/gov`'s own
+  `governmentRelationship` predicate, memoised per player for 60 s). The
   account chip's balance is the sum of the PERSONAL accounts the player owns,
   memoised for 30 s and streamed behind Suspense. Both are presentation only.
 - **Breadcrumbs.** `components/Breadcrumbs.tsx` is a server component. Put it
@@ -458,3 +548,80 @@ and current firm linkage. Firm-wide management requires a key without an account
 restriction. Account-scoped webhooks store only the selected account as their
 subscription scope so they cannot match sibling accounts. No schema migration is
 required; the existing nullable columns support both scopes.
+
+### Structured payout categories (PAR-554)
+
+Payout purpose comes from the originating operation's `plugin_system`, not a memo,
+recipient name, account label or manually chosen command argument. The public
+`PayoutCategory` enum maps `treasury-salary` to `EMPLOYEE` and `realty-auction` to
+`AUCTION_PROCEEDS`, case-insensitively. Unknown and mixed-purpose sources remain
+null. A generic `realty` payment is not necessarily an auction; a payment from
+`BusinessPlugin` is not necessarily employee pay.
+
+Realty uses `realty-auction` for partial and final auction bid settlements. Rentals,
+purchases and refunds retain `realty`. This uses the existing eight-argument
+`TransferRequest` API and works with older Treasury versions; install the matching
+Realty change to identify new auctions. No historical Realty transactions are
+reclassified by parsing their descriptions.
+
+`LedgerTxn` and `TransactionEntry` derive the category on read. REST history,
+cursor feeds and webhooks expose its name as `payoutCategory`; CSV appends
+`payout_category`. Existing salary history is classified immediately without a
+migration or data rewrite. Explorer maps incoming `realty-auction` flows to Auction
+proceeds and outgoing flows to Property, retaining its internal-transfer and tax
+precedence. Its source-key rollups need no rebuild.
+
+SYSTEM wallets preserve plugin identity through `system_plugin_key`, but production
+wallets serve both receipts and payments. Their type or editable display name does
+not prove employee pay or auction proceeds; no new routing wallets are created.
+
+### Treasury API immutable snapshots (ADT-87)
+
+Treasury's account, balance, membership, transaction, fine and sales result models
+are immutable value objects. Their existing `get…` and `is…` accessors and
+all-argument constructors remain available. Public setters and no-argument
+constructors have been removed. Use a builder for new values, or `toBuilder()` /
+`with…` to create a replacement:
+
+```java
+Account updated = account.toBuilder().displayName("New name").build();
+treasury.updateAccount(updated);
+```
+
+Creating a replacement does not update Treasury; submit it through the existing
+API operation. Previously returned snapshots stay unchanged. `LedgerTxn` copies
+its deduplication key on construction and access; `SalesSummary` copies both
+leaderboard lists and exposes unmodifiable lists (null lists become empty).
+These guarantees also apply to builders and `with…` methods.
+
+This is a **breaking Java API change**, scheduled for the **3.0 major release**.
+Recompile integrations that construct or modify these models; replace no-arg plus
+setter initialization with builders, and retain the returned value from `with…`.
+Consumers that only read existing getters keep the same source interface. Do not
+publish this change as a 2.x release or mix old setter-based plugins with the new
+API. Database schema and HTTP payloads are unchanged.
+
+MyBatis uses constructor mappings for immutable query results. Insert parameters
+hold generated IDs in the internal `GeneratedKey` class; mapper insert helpers
+return the ID, and services construct a new snapshot with it. Sales totals use an
+internal eight-column record before the service adds the leaderboards.
+
+### Government API keys (PAR-521)
+
+The default-off `treasury.government_api_keys` release flag (V53) gates issuance,
+rotation, REST authentication and government webhook delivery. Missing providers
+or keys fail closed. Listing/revocation and admin invalidation remain available;
+queued webhooks pause without consuming attempts and resume when enabled.
+
+The API-key plugin issues `GOVERNMENT` keys with a required `account_id` and no
+`firm_id`, using the existing schema. Issuance validates an active government
+account through `TreasuryApi`; command authorization uses the dedicated
+`treasuryapi.government.issue` node (default false, including operators), also
+required for in-game reissue. No production role grants are added. The issuer
+owns key management; list/revoke do not need issuance permission.
+
+REST verification requires an exact positive integer account claim matching the
+persisted scope. Transfers and webhooks use that account; transaction reads must
+not fall back to issuer membership. Public reads retain their existing policy.
+Rotation retains scope and revocation is terminal. Per-key transfer limits remain
+future work; existing transfer guards still apply.

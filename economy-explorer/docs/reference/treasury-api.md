@@ -31,6 +31,40 @@ and never stored for retrieval. Personal/account and business/firm or business/a
 apply even if the issuer has website staff permissions. Follow
 [Using the economy API](/docs/guides/api) for requests and safe retries.
 
+## Government keys
+
+| Command | Purpose |
+|---|---|
+| `/treasuryapi government issue <accountId>` | Issue a key for exactly one active government account. |
+| `/treasuryapi government list` | List government keys you issued. |
+| `/treasuryapi government reissue <keyId>` | Rotate your key while preserving its account scope. |
+| `/treasuryapi government revoke <keyId>` | Permanently revoke your key. |
+
+The release flag `treasury.government_api_keys` is **off by default**. Deploying
+V53 only registers it; enable it explicitly in **Admin → Feature flags** after
+compatible plugins and REST API deployments. Missing flags/providers fail closed.
+
+While off, issuance, in-game reissue and government-token REST authentication are
+unavailable (`404 FEATURE_DISABLED` for valid government tokens). Issuer listing
+and in-game revocation remain available, as do admin revocation/invalidation.
+Deliveries to webhooks created through a government API key stay pending
+without consuming attempts; they resume from the queue when enabled again.
+Government webhooks set up in the Explorer are not affected. Other key types keep working. Changes
+propagate through the shared flag cache; already-admitted work may finish.
+
+Issuance and in-game reissue also require `treasuryapi.government.issue`, default
+`false` even for operators. Keep this permission ungranted to production government
+roles. This is a privileged issuance capability for any active government account;
+account membership alone does not grant it. List and revoke use
+`treasuryapi.government.list` and `.revoke` (default `true`), limited to your own keys.
+
+Government keys debit only their designated account, read only its private
+transaction history/feed, and subscribe only to its webhooks. Membership in other
+accounts cannot expand this scope. Public reads such as balance lookups remain
+available. Tokens last 180 days; REST rotation preserves scope. Revocation is
+terminal. Existing transfer authorization and balance checks still apply;
+per-key transfer limits are not implemented yet.
+
 ## Website identity
 
 | Command | Purpose |

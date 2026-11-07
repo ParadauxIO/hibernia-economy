@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { buildMetadata } from '@/lib/metadata';
 import { getViewer } from '@/lib/auth/viewer';
 import { PrivacyGate } from '@/components/PrivacyGate';
@@ -9,7 +10,9 @@ export async function generateMetadata() {
   return buildMetadata({ title: "Link your account", description: "Link your in-game {server} identity to view your private economy data.", path: "/link" });
 }
 
-export default async function LinkPage() {
+export default async function LinkPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const { callbackUrl } = await searchParams;
+  const returnTo = typeof callbackUrl === 'string' && callbackUrl.startsWith('/') && !callbackUrl.startsWith('//') && !/[\\\u0000-\u001f\u007f]/.test(callbackUrl) ? callbackUrl : '/';
   const viewer = await getViewer();
   if (viewer.anon) {
     return (
@@ -32,6 +35,7 @@ export default async function LinkPage() {
             Your Keycloak identity is linked to Minecraft UUID{' '}
             <span className="mono">{viewer.minecraftUuid ?? '(unknown)'}</span>.
           </p>
+          <Link href={returnTo as '/'} className="btn btn-primary">Continue to explorer</Link>
         </div>
       </>
     );

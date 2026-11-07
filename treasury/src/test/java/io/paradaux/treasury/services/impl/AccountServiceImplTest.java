@@ -8,9 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.treasury.internal.model.config.EconomyConfiguration;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.MembershipMapper;
-import io.paradaux.treasury.model.config.EconomyConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
@@ -61,8 +61,8 @@ class AccountServiceImplTest {
 
     @Test
     void getBalanceReadOnly_returnsBalance() {
-        AccountBalance b = new AccountBalance();
-        b.setBalance(new BigDecimal("123.45"));
+        AccountBalance b =
+                AccountBalance.builder().balance(new BigDecimal("123.45")).build();
         when(accountMapper.readBalance(7)).thenReturn(b);
         assertThat(svc.getBalanceReadOnly(7)).isEqualByComparingTo("123.45");
     }
@@ -86,10 +86,8 @@ class AccountServiceImplTest {
 
     @Test
     void getAccountsByIds_mapsAccountsByAccountId() {
-        Account a1 = new Account();
-        a1.setAccountId(10);
-        Account a2 = new Account();
-        a2.setAccountId(11);
+        Account a1 = Account.builder().accountId(10).build();
+        Account a2 = Account.builder().accountId(11).build();
         when(accountMapper.findByIds(List.of(10, 11))).thenReturn(List.of(a1, a2));
 
         Map<Integer, Account> result = svc.getAccountsByIds(List.of(10, 11));
@@ -114,8 +112,8 @@ class AccountServiceImplTest {
     @Test
     void getBalanceByOwnerUuid_returnsBalance() {
         UUID u = UUID.randomUUID();
-        AccountBalance b = new AccountBalance();
-        b.setBalance(new BigDecimal("99.99"));
+        AccountBalance b =
+                AccountBalance.builder().balance(new BigDecimal("99.99")).build();
         when(accountMapper.findPersonalAccountId(u)).thenReturn(42);
         when(accountMapper.readBalance(42)).thenReturn(b);
         assertThat(svc.getBalanceByOwnerUuid(u)).isEqualByComparingTo("99.99");
@@ -129,16 +127,15 @@ class AccountServiceImplTest {
 
     @Test
     void hasFunds_belowAmount_returnsFalse() {
-        AccountBalance b = new AccountBalance();
-        b.setBalance(new BigDecimal("5"));
+        AccountBalance b = AccountBalance.builder().balance(new BigDecimal("5")).build();
         when(accountMapper.readBalance(1)).thenReturn(b);
         assertThat(svc.hasFunds(1, BigDecimal.TEN)).isFalse();
     }
 
     @Test
     void hasFunds_atOrAboveAmount_returnsTrue() {
-        AccountBalance b = new AccountBalance();
-        b.setBalance(new BigDecimal("10"));
+        AccountBalance b =
+                AccountBalance.builder().balance(new BigDecimal("10")).build();
         when(accountMapper.readBalance(1)).thenReturn(b);
         assertThat(svc.hasFunds(1, BigDecimal.TEN)).isTrue();
     }
@@ -167,7 +164,7 @@ class AccountServiceImplTest {
     @Test
     void getAccountByUUID_present_returnsAccount() {
         UUID u = UUID.randomUUID();
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountMapper.findPersonalAccountId(u)).thenReturn(5);
         when(accountMapper.findById(5)).thenReturn(a);
         assertThat(svc.getAccountByUUID(u)).isSameAs(a);
@@ -175,7 +172,7 @@ class AccountServiceImplTest {
 
     @Test
     void getAccountById_delegatesToMapper() {
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountMapper.findById(3)).thenReturn(a);
         assertThat(svc.getAccountById(3)).isSameAs(a);
     }
@@ -183,7 +180,8 @@ class AccountServiceImplTest {
     @Test
     void getAccountsByOwner_delegates() {
         UUID u = UUID.randomUUID();
-        when(accountMapper.findAccountsByOwner(u)).thenReturn(List.of(new Account()));
+        when(accountMapper.findAccountsByOwner(u))
+                .thenReturn(List.of(Account.builder().build()));
         assertThat(svc.getAccountsByOwner(u)).hasSize(1);
     }
 
@@ -198,13 +196,14 @@ class AccountServiceImplTest {
     @Test
     void getAccountsByMember_delegates() {
         UUID u = UUID.randomUUID();
-        when(accountMapper.findAccountsByMember(u)).thenReturn(List.of(new Account()));
+        when(accountMapper.findAccountsByMember(u))
+                .thenReturn(List.of(Account.builder().build()));
         assertThat(svc.getAccountsByMember(u)).hasSize(1);
     }
 
     @Test
     void hasAccountByAccountId_truthy() {
-        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
         assertThat(svc.hasAccountByAccountId(1)).isTrue();
     }
 
@@ -249,8 +248,7 @@ class AccountServiceImplTest {
         // Not the owner, not an authorizer, not a member: no access. This gate fronts
         // business withdrawals/deposits, so a false positive hands out a firm's money.
         UUID stranger = UUID.randomUUID();
-        Account a = new Account();
-        a.setOwnerUuid(UUID.randomUUID());
+        Account a = Account.builder().ownerUuid(UUID.randomUUID()).build();
         when(accountMapper.findById(1)).thenReturn(a);
         when(membershipMapper.isAuthorizer(1, stranger)).thenReturn(0);
         when(membershipMapper.isMember(1, stranger)).thenReturn(0);
@@ -260,7 +258,7 @@ class AccountServiceImplTest {
     @Test
     void canAccessAccount_plainMember_isAllowed() {
         UUID member = UUID.randomUUID();
-        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
         when(membershipMapper.isAuthorizer(1, member)).thenReturn(0);
         when(membershipMapper.isMember(1, member)).thenReturn(1);
         assertThat(svc.canAccessAccount(member, 1)).isTrue();
@@ -275,8 +273,7 @@ class AccountServiceImplTest {
     @Test
     void isOwnerForAccountId_matchingOwnerReturnsTrue() {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setOwnerUuid(owner);
+        Account a = Account.builder().ownerUuid(owner).build();
         when(accountMapper.findById(1)).thenReturn(a);
         assertThat(svc.isOwnerForAccountId(owner, 1)).isTrue();
     }
@@ -284,8 +281,7 @@ class AccountServiceImplTest {
     @Test
     void canAccessAccount_ownerWins() {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setOwnerUuid(owner);
+        Account a = Account.builder().ownerUuid(owner).build();
         when(accountMapper.findById(1)).thenReturn(a);
         assertThat(svc.canAccessAccount(owner, 1)).isTrue();
         verify(membershipMapper, never()).isAuthorizer(eq(1), any());
@@ -294,7 +290,7 @@ class AccountServiceImplTest {
     @Test
     void canAccessAccount_authorizerOrMember() {
         UUID u = UUID.randomUUID();
-        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
         when(membershipMapper.isAuthorizer(1, u)).thenReturn(1);
         assertThat(svc.canAccessAccount(u, 1)).isTrue();
     }
@@ -302,7 +298,7 @@ class AccountServiceImplTest {
     @Test
     void accountHasBalance_noAccess_returnsFalse() {
         UUID u = UUID.randomUUID();
-        when(accountMapper.findById(1)).thenReturn(new Account());
+        when(accountMapper.findById(1)).thenReturn(Account.builder().build());
         when(membershipMapper.isAuthorizer(1, u)).thenReturn(0);
         when(membershipMapper.isMember(1, u)).thenReturn(0);
         assertThat(svc.accountHasBalance(u, 1)).isFalse();
@@ -311,11 +307,9 @@ class AccountServiceImplTest {
     @Test
     void accountHasBalance_zeroBalance_returnsFalse() {
         UUID u = UUID.randomUUID();
-        Account a = new Account();
-        a.setOwnerUuid(u);
+        Account a = Account.builder().ownerUuid(u).build();
         when(accountMapper.findById(1)).thenReturn(a);
-        AccountBalance b = new AccountBalance();
-        b.setBalance(BigDecimal.ZERO);
+        AccountBalance b = AccountBalance.builder().balance(BigDecimal.ZERO).build();
         when(accountMapper.readBalance(1)).thenReturn(b);
         assertThat(svc.accountHasBalance(u, 1)).isFalse();
     }
@@ -323,11 +317,10 @@ class AccountServiceImplTest {
     @Test
     void accountHasBalance_positiveBalance_returnsTrue() {
         UUID u = UUID.randomUUID();
-        Account a = new Account();
-        a.setOwnerUuid(u);
+        Account a = Account.builder().ownerUuid(u).build();
         when(accountMapper.findById(1)).thenReturn(a);
-        AccountBalance b = new AccountBalance();
-        b.setBalance(new BigDecimal("0.01"));
+        AccountBalance b =
+                AccountBalance.builder().balance(new BigDecimal("0.01")).build();
         when(accountMapper.readBalance(1)).thenReturn(b);
         assertThat(svc.accountHasBalance(u, 1)).isTrue();
     }
@@ -352,8 +345,7 @@ class AccountServiceImplTest {
 
     @Test
     void updateAccount_unknownAccount_throws() {
-        Account a = new Account();
-        a.setAccountId(99);
+        Account a = Account.builder().accountId(99).build();
         when(accountMapper.findById(99)).thenReturn(null);
         assertThatThrownBy(() -> svc.updateAccount(a)).isInstanceOf(IllegalArgumentException.class);
     }
@@ -379,7 +371,7 @@ class AccountServiceImplTest {
     @Test
     void reassignOwner_updatesOwner() {
         UUID newOwner = UUID.randomUUID();
-        when(accountMapper.findById(5)).thenReturn(new Account());
+        when(accountMapper.findById(5)).thenReturn(Account.builder().build());
         svc.reassignOwner(5, newOwner);
         verify(accountMapper).updateOwner(5, newOwner);
     }
@@ -388,7 +380,7 @@ class AccountServiceImplTest {
 
     @Test
     void getGovernmentAccountByName_delegates() {
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountMapper.findGovernmentAccountByName("X")).thenReturn(a);
         assertThat(svc.getGovernmentAccountByName("X")).isSameAs(a);
     }
@@ -401,15 +393,14 @@ class AccountServiceImplTest {
 
     @Test
     void getBusinessAccountByName_delegates() {
-        Account a = new Account();
+        Account a = Account.builder().build();
         when(accountMapper.findBusinessAccountByName("X")).thenReturn(a);
         assertThat(svc.getBusinessAccountByName("X")).isSameAs(a);
     }
 
     @Test
     void getOrCreateSystemAccountId_existingReturnedDirectly() {
-        Account existing = new Account();
-        existing.setAccountId(11);
+        Account existing = Account.builder().accountId(11).build();
         when(accountMapper.findSystemAccountForPlugin("MyPlugin")).thenReturn(existing);
         assertThat(svc.getOrCreateSystemAccountId("MyPlugin", UUID.randomUUID()))
                 .isEqualTo(11);
@@ -422,11 +413,9 @@ class AccountServiceImplTest {
         when(accountMapper.findSystemAccountForPlugin("NewPlugin")).thenReturn(null);
 
         org.mockito.ArgumentCaptor<Account> captor = org.mockito.ArgumentCaptor.forClass(Account.class);
-        // Simulate the @Options keyProperty assignment that MyBatis would do
+        // The mapper returns the generated database ID without mutating its input.
         org.mockito.Mockito.doAnswer(inv -> {
-                    Account a = inv.getArgument(0);
-                    a.setAccountId(99);
-                    return 1;
+                    return 99;
                 })
                 .when(accountMapper)
                 .insertAccount(captor.capture());
@@ -471,8 +460,7 @@ class AccountServiceImplTest {
 
     @Test
     void updateAccount_known_callsMapperUpdate() {
-        Account a = new Account();
-        a.setAccountId(7);
+        Account a = Account.builder().accountId(7).build();
         when(accountMapper.findById(7)).thenReturn(a);
         svc.updateAccount(a);
         verify(accountMapper).updateAccount(a);
@@ -480,23 +468,20 @@ class AccountServiceImplTest {
 
     @Test
     void archiveAccount_known_setsArchivedAndCallsUpdate() {
-        Account a = new Account();
-        a.setAccountId(8);
+        Account a = Account.builder().accountId(8).build();
         when(accountMapper.findById(8)).thenReturn(a);
         svc.archiveAccount(8);
-        assertThat(a.isArchived()).isTrue();
-        verify(accountMapper).updateAccount(a);
+        assertThat(a.isArchived()).isFalse();
+        verify(accountMapper).updateAccount(a.withArchived(true));
     }
 
     @Test
     void unarchiveAccount_known_clearsArchivedAndCallsUpdate() {
-        Account a = new Account();
-        a.setAccountId(9);
-        a.setArchived(true);
+        Account a = Account.builder().accountId(9).isArchived(true).build();
         when(accountMapper.findById(9)).thenReturn(a);
         svc.unarchiveAccount(9);
-        assertThat(a.isArchived()).isFalse();
-        verify(accountMapper).updateAccount(a);
+        assertThat(a.isArchived()).isTrue();
+        verify(accountMapper).updateAccount(a.withArchived(false));
     }
 
     @Test
@@ -504,9 +489,7 @@ class AccountServiceImplTest {
         UUID owner = UUID.randomUUID();
         org.mockito.ArgumentCaptor<Account> captor = org.mockito.ArgumentCaptor.forClass(Account.class);
         org.mockito.Mockito.doAnswer(inv -> {
-                    Account a = inv.getArgument(0);
-                    a.setAccountId(51);
-                    return 1;
+                    return 51;
                 })
                 .when(accountMapper)
                 .insertAccount(captor.capture());
@@ -520,7 +503,8 @@ class AccountServiceImplTest {
 
     @Test
     void getTopBalances_returnsPagedResult() {
-        io.paradaux.treasury.model.economy.BalanceEntry entry = new io.paradaux.treasury.model.economy.BalanceEntry();
+        io.paradaux.treasury.model.economy.BalanceEntry entry =
+                io.paradaux.treasury.model.economy.BalanceEntry.builder().build();
         when(accountMapper.getTopBalances(eq(10), eq(0))).thenReturn(List.of(entry));
         when(accountMapper.countPersonalAccounts()).thenReturn(42);
 
@@ -556,9 +540,7 @@ class AccountServiceImplTest {
         UUID u = UUID.randomUUID();
         when(accountMapper.findPersonalAccountId(u)).thenReturn(null);
         org.mockito.Mockito.doAnswer(inv -> {
-                    Account a = inv.getArgument(0);
-                    a.setAccountId(77);
-                    return 1;
+                    return 77;
                 })
                 .when(accountMapper)
                 .insertAccount(any(Account.class));
@@ -569,7 +551,8 @@ class AccountServiceImplTest {
 
     @Test
     void listGovernmentAccounts_delegates() {
-        when(accountMapper.findAllGovernmentAccounts()).thenReturn(List.of(new Account(), new Account()));
+        when(accountMapper.findAllGovernmentAccounts())
+                .thenReturn(List.of(Account.builder().build(), Account.builder().build()));
         assertThat(svc.listGovernmentAccounts()).hasSize(2);
     }
 

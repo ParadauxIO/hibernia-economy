@@ -90,7 +90,8 @@ export function Popover({ trigger, children, label, role = 'dialog', placement =
     place();
     setPlaced(true);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [open, place]);
+  // Remeasure after switching between sheet and floating-panel geometry.
+  }, [open, place, asSheet]);
 
   // Move focus in only once the panel is positioned. Until then it is
   // `visibility: hidden`, and browsers ignore focus() on hidden elements (jsdom

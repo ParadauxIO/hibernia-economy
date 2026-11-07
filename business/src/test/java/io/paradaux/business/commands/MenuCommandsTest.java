@@ -5,10 +5,10 @@ import static org.mockito.Mockito.*;
 
 import io.paradaux.business.dialogs.FirmDashboard;
 import io.paradaux.business.dialogs.FirmMenu;
-import io.paradaux.business.model.Firm;
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.services.*;
+import io.paradaux.business.threading.BusinessMessages;
 import io.paradaux.hibernia.framework.curator.MenuManager;
-import io.paradaux.hibernia.framework.i18n.Message;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -38,13 +38,14 @@ class MenuCommandsTest {
                     players,
                     menus,
                     plugin,
-                    mock(Message.class));
+                    mock(BusinessMessages.class),
+                    new io.paradaux.business.threading.MainThreadAccess(null));
             command.menu(player);
             server.getScheduler().performOneTick();
             var state = ArgumentCaptor.forClass(FirmMenu.State.class);
             verify(menus).open(eq(player), eq(FirmDashboard.class), state.capture());
             var flow = mock(io.paradaux.hibernia.framework.curator.MenuFlow.class);
-            var message = mock(Message.class);
+            var message = mock(io.paradaux.hibernia.framework.i18n.Message.class);
             when(message.component(anyString())).thenReturn(net.kyori.adventure.text.Component.empty());
             when(message.component(anyString(), any(), any())).thenReturn(net.kyori.adventure.text.Component.empty());
             var view = new FirmDashboard(message, null).main(state.getValue(), flow);

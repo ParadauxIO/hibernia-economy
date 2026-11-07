@@ -6,21 +6,19 @@ import io.paradaux.treasuryapi.TreasuryAPI;
 import io.paradaux.treasuryapi.mappers.ExplorerGroupMapper;
 import io.paradaux.treasuryapi.model.SyncedGroup;
 import io.paradaux.treasuryapi.services.PlayerGroupSync;
-import net.luckperms.api.LuckPerms;
-import net.luckperms.api.model.user.User;
-import net.luckperms.api.query.QueryOptions;
-import org.bukkit.scheduler.BukkitRunnable;
-
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.model.user.User;
+import net.luckperms.api.query.QueryOptions;
 
 /** Synchronizes effective LP roles and account relationships, including offline users.
  * Both entry points share a lock; failures never publish a partially resolved snapshot.
  * Stored LP grants expire after one hour if reconciliation cannot refresh them.
  */
 @Singleton
-public class GroupReconciliationTask extends BukkitRunnable implements PlayerGroupSync {
+public class GroupReconciliationTask implements Runnable, PlayerGroupSync {
     private final TreasuryAPI plugin;
     private final ExplorerGroupMapper mapper;
     private final LuckPerms luckPerms;
@@ -42,7 +40,8 @@ public class GroupReconciliationTask extends BukkitRunnable implements PlayerGro
             if (groups.isEmpty() && accountGroups.isEmpty()) return;
             luckPerms.getGroupManager().loadAllGroups().get(15, TimeUnit.SECONDS);
             luckPerms.getGroupManager().getLoadedGroups().forEach(g -> g.auditTemporaryNodes());
-            Set<UUID> players = new HashSet<>(luckPerms.getUserManager().getUniqueUsers().get(15, TimeUnit.SECONDS));
+            Set<UUID> players =
+                    new HashSet<>(luckPerms.getUserManager().getUniqueUsers().get(15, TimeUnit.SECONDS));
             // Include former users so removing their final stored node revokes web access.
             players.addAll(mapper.listSyncedPlayers());
             luckPerms.getUserManager().getLoadedUsers().forEach(u -> players.add(u.getUniqueId()));
@@ -57,10 +56,12 @@ public class GroupReconciliationTask extends BukkitRunnable implements PlayerGro
                 User user = loadUser(id);
                 try {
                     for (SyncedGroup group : groups) {
-                        if (matches(user, group.getLuckpermsNode(), options)) desired.get(group.getGroupId()).add(id);
+                        if (matches(user, group.getLuckpermsNode(), options))
+                            desired.get(group.getGroupId()).add(id);
                     }
                     for (String group : accountGroups) {
-                        if (matches(user, "group." + group, options)) accountDesired.get(group).add(id);
+                        if (matches(user, "group." + group, options))
+                            accountDesired.get(group).add(id);
                     }
                 } finally {
                     luckPerms.getUserManager().cleanupUser(user);
@@ -71,7 +72,8 @@ public class GroupReconciliationTask extends BukkitRunnable implements PlayerGro
                     mapper.refreshLuckpermsMember(group.getGroupId(), id, group.getLuckpermsNode());
                 }
                 for (UUID id : mapper.listLuckpermsMemberUuids(group.getGroupId())) {
-                    if (!desired.get(group.getGroupId()).contains(id)) mapper.removeLuckpermsMember(group.getGroupId(), id);
+                    if (!desired.get(group.getGroupId()).contains(id))
+                        mapper.removeLuckpermsMember(group.getGroupId(), id);
                 }
             }
             for (String group : accountGroups) {
@@ -138,9 +140,13 @@ public class GroupReconciliationTask extends BukkitRunnable implements PlayerGro
         String key = nodeKey(node);
         if (key.startsWith("group.")) {
             String name = key.substring(6);
-            return user.getInheritedGroups(options).stream().anyMatch(g -> g.getName().equalsIgnoreCase(name));
+            return user.getInheritedGroups(options).stream()
+                    .anyMatch(g -> g.getName().equalsIgnoreCase(name));
         }
-        return user.getCachedData().getPermissionData(options).checkPermission(key).asBoolean();
+        return user.getCachedData()
+                .getPermissionData(options)
+                .checkPermission(key)
+                .asBoolean();
     }
 
     static String nodeKey(String node) {
@@ -150,8 +156,10 @@ public class GroupReconciliationTask extends BukkitRunnable implements PlayerGro
     }
 
     public void schedule(long intervalSeconds) {
-        // Keep refresh within the one-hour DB lease even with old configuration.
-        long periodTicks = Math.max(1L, Math.min(intervalSeconds, 1800L)) * 20L;
-        runTaskTimerAsynchronously(plugin, 1L, periodTicks);
+        // DB leases use real time. Bukkit's tick-based async timer slows down with TPS.
+        long periodSeconds = Math.max(1L, Math.min(intervalSeconds, 1800L));
+        plugin.getServer()
+                .getAsyncScheduler()
+                .runAtFixedRate(plugin, task -> run(), 1L, periodSeconds, TimeUnit.SECONDS);
     }
 }

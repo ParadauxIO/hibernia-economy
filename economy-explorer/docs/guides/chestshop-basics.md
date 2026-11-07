@@ -173,3 +173,8 @@ The `/find` results dialog shows each shop's item preview above the selection
 buttons, including stored names, enchantments and other item details. Older or
 incomplete shop records fall back to the basic material icon; an unreadable icon
 does not prevent selecting the shop. Searches remain scoped to your current world.
+
+SELL offers are hidden from `/find` when the paying account cannot afford the
+advertised batch. A shop offering both BUY and SELL still appears as BUY if it
+cannot afford SELL. Admin shops without a server economy account have unlimited
+funds; those with one use that account’s balance. A new search checks funds again.

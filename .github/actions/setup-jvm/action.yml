@@ -7,8 +7,8 @@ description: >-
 # from an already checked-out repository. The wrapper is invoked as
 # `sh ./gradlew` everywhere because gradlew is committed without the exec bit.
 #
-# setup-gradle writes its cache only from the default branch (develop) and reads
-# it everywhere else, so PR runs reuse develop's build cache but never pollute it.
+# setup-gradle writes its cache only from the default branch (main) and reads
+# it everywhere else, so PR runs reuse main's build cache but never pollute it.
 
 runs:
   using: composite
@@ -25,4 +25,4 @@ runs:
         java-version: '25'
 
     - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1

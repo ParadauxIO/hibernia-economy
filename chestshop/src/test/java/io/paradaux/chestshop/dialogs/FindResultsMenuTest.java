@@ -89,7 +89,9 @@ class FindResultsMenuTest extends ServerTest {
                 0,
                 64,
                 0,
-                0)));
+                0,
+                null,
+                false)));
         menu.open(player, FindResultsMenu.class, new FindResultsMenu.State(state));
         menu.onClick(new InventoryClickEvent(
                 player.getOpenInventory(),
@@ -153,7 +155,9 @@ class FindResultsMenuTest extends ServerTest {
                         i,
                         64,
                         1,
-                        10))
+                        10,
+                        null,
+                        false))
                 .toList());
         var player = server.addPlayer();
         menu.open(player, FindResultsMenu.class, new FindResultsMenu.State(state));
@@ -363,7 +367,9 @@ class FindResultsMenuTest extends ServerTest {
                 1,
                 64,
                 1,
-                10)));
+                10,
+                null,
+                false)));
         return state;
     }
 }

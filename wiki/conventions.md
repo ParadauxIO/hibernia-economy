@@ -11,7 +11,9 @@ review; the load-bearing ones hold even if you skip everything else.
 2. **`AccountType` is an enum, not a string.** Use `PERSONAL` / `BUSINESS` /
    `GOVERNMENT` / `SYSTEM`, never raw strings.
 3. **Public API goes in `*-api` subprojects** (`treasury-api`, `business-api`).
-   Never expose plugin internals as API.
+   Treasury and Business keep plugin-only models and API implementations under
+   `io.paradaux.<plugin>.internal.*`. Never add implementation classes to a package
+   owned by a published API jar or expose plugin internals as API.
 4. **Schema changes are Flyway migrations** in `economy-flyway/` — a new
    `V<n>__*.sql`. Don't hand-edit live schema or treat the in-project `schema.sql`
    snapshots as authoritative.
@@ -20,9 +22,11 @@ review; the load-bearing ones hold even if you skip everything else.
 
 ## Branch model & issue tracking
 
-- **`develop`** is the integration branch — all work targets it.
-- **`main`** is for **release tagging** only. The single recurring PR is
-  `develop` → `main`, whose body lists every `PAR-…` in the release.
+- **`main`** is the integration and release branch. Branch from main and target
+  main in pull requests.
+- **Migration-dependent features require default-off release flags.** Preserve
+  existing behavior until an operator enables the feature after migrations and
+  compatible deployments complete; see [the rollout guide](feature-flags.md).
 - **Issues live in Tesks, not GitHub Issues.** Raise bugs/ideas in the
   [Discord](https://discord.gg/b88K3ETeHS); a `PAR-…` issue is created and linked.
   No untracked work.

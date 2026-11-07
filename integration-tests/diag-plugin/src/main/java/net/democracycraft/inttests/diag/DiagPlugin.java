@@ -67,9 +67,12 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
      */
     private static final long ASYNC_IDLE_HORIZON_TICKS = 40;
 
+    private final HopperBench bench = new HopperBench(this);
+
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(bench, this);
         getLogger().info("DcDiag enabled — logging interactions at MONITOR priority.");
     }
 
@@ -374,6 +377,8 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
                 return doAsyncIdle(sender, args);
             case "ingeststub":
                 return doIngestStub(sender, args);
+            case "bench":
+                return bench.command(sender, args);
             default:
                 sender.sendMessage("unknown subcommand: " + args[0]);
                 return true;
@@ -864,11 +869,8 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
         org.bukkit.block.BlockState state = block.getState();
         if (!(state instanceof org.bukkit.block.Sign)) { sender.sendMessage("not a sign at that pos: " + block.getType()); return true; }
 
-        // Seed the sign text so getLines() reflects the shop lines, then fire the create event.
-        org.bukkit.block.Sign pre = (org.bukkit.block.Sign) state;
-        for (int i = 0; i < 4; i++) { pre.setLine(i, lines[i]); }
-        pre.update(true, false);
-
+        // Bukkit fires SignChangeEvent before committing the proposed text. Keep the
+        // existing block state intact so creation and edits take their real paths.
         SignChangeEvent event = new SignChangeEvent(block, p, lines.clone());
         Bukkit.getPluginManager().callEvent(event);
         boolean created = !event.isCancelled();

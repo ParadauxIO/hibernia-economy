@@ -53,11 +53,11 @@ describe('account menu', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Link status' })).toHaveAttribute('href', '/link');
   });
 
-  it('adds Admin when the viewer holds an admin tool', async () => {
+  it('leaves Admin to the top bar, even for admins', async () => {
     setViewer('admin');
     render(<HeaderAuth />);
     const { menu } = await openMenu();
-    expect(within(menu).getByRole('menuitem', { name: 'Admin' })).toHaveAttribute('href', '/admin');
+    expect(within(menu).queryByRole('menuitem', { name: 'Admin' })).toBeNull();
   });
 
   it('leads with linking for a signed-in player with no Minecraft link, and hides the balance', async () => {

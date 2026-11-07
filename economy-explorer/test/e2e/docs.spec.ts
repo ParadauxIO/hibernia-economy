@@ -29,6 +29,7 @@ for (const role of ['anon', 'player', 'moderator', 'admin']) {
   test(`operator runbook access for ${role}`, async ({ page, context, baseURL }) => {
     test.skip(role !== 'anon' && !process.env.E2E_AUTH_SHIM, 'requires test auth shim');
     const errors = trackErrors(page);
+    await context.clearCookies();
     if (role !== 'anon') await context.addCookies([{ name: 'e2e_viewer', value: role, url: baseURL! }]);
     await visit(page, '/docs/admin/operator-runbook');
     if (role !== 'admin') {
@@ -50,3 +51,11 @@ for (const role of ['anon', 'player', 'moderator', 'admin']) {
     expect(errors).toEqual([]);
   });
 }
+
+test('documentation stays public without share-caching the personalized explorer shell', async ({ context }) => {
+  await context.clearCookies();
+  const response = await context.request.get('/docs');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['cache-control']).toContain('no-store');
+  expect(response.headers()['cache-control']).not.toContain('public');
+});

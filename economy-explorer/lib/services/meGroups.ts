@@ -121,7 +121,7 @@ function roleAt(firmId: number, roles: readonly FirmRoleRow[]): { role: string |
  * Group accounts by whose money they are. Groups are never added together:
  * each has its own subtotal, and only "Mine" is the player's money.
  */
-export function groupAccounts(accounts: readonly MyAccount[], playerUuid: string, roles: readonly FirmRoleRow[]): AccountGroup[] {
+export function groupAccounts(accounts: readonly MyAccount[], playerUuid: string, roles: readonly FirmRoleRow[], units: ReadonlyMap<number, { id: number; name: string }> = new Map()): AccountGroup[] {
   const mine = accounts.filter((a) => isMine(a, playerUuid));
   const shared = accounts.filter((a) => a.type === 'PERSONAL' && !isMine(a, playerUuid));
   const business = accounts.filter((a) => a.type === 'BUSINESS');
@@ -164,11 +164,18 @@ export function groupAccounts(accounts: readonly MyAccount[], playerUuid: string
   }).sort((a, b) => (a.firmId === null ? 1 : 0) - (b.firmId === null ? 1 : 0) || a.title.localeCompare(b.title));
   groups.push(...firmGroups);
 
-  // TODO(GOV, PAR-539): group by explorer_gov_unit once GOV's units table lands.
-  if (government.length) {
+  const departments = new Map<string, { name: string; accounts: MyAccount[] }>();
+  for (const account of government) {
+    const unit = units.get(account.id);
+    const key = unit ? `government-${unit.id}` : 'government';
+    const group = departments.get(key) ?? { name: unit?.name ?? 'Unassigned government accounts', accounts: [] };
+    group.accounts.push(account);
+    departments.set(key, group);
+  }
+  for (const [key, group] of [...departments].sort((a, b) => a[1].name.localeCompare(b[1].name))) {
     groups.push({
-      key: 'government', kind: 'government', title: 'Government', subtitle: 'Public money you can see through your role. Not yours.',
-      subtotal: total(government), subtotalLabel: 'Held by these government accounts', firmId: null, role: null, note: null, accounts: sortAccounts(government),
+      key, kind: 'government', title: group.name, subtitle: 'Public money you can see through your role. Not yours.',
+      subtotal: total(group.accounts), subtotalLabel: 'Held by these government accounts', firmId: null, role: null, note: null, accounts: sortAccounts(group.accounts),
     });
   }
   if (other.length) {

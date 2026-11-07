@@ -218,7 +218,7 @@ public final class ChestShopFixture implements AutoCloseable {
         RconClient.send(String.format(
                 "item replace block %d %d %d container.0 with minecraft:%s %d",
                 chestPos.x(), chestPos.y(), chestPos.z(), materialLower, stock));
-        // Blank sign — createshop seeds the lines and fires the create event.
+        // Blank sign — createshop fires the event before applying the accepted lines.
         RconClient.send(String.format("setblock %d %d %d minecraft:oak_sign",
                 signPos.x(), signPos.y(), signPos.z()));
 

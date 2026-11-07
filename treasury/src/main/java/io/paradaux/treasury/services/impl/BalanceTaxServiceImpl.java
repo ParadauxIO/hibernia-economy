@@ -1,24 +1,23 @@
 package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
 import io.paradaux.treasury.api.TaxApi;
+import io.paradaux.treasury.internal.model.config.BalanceTaxConfiguration;
+import io.paradaux.treasury.internal.utils.Money;
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.mappers.AccountMapper;
-import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.tax.TaxCollection;
 import io.paradaux.treasury.model.tax.TaxResult;
 import io.paradaux.treasury.services.BalanceTaxService;
 import io.paradaux.treasury.utils.Idempotency;
-import io.paradaux.treasury.utils.Money;
-import io.paradaux.treasury.utils.TreasuryConstants;
-import org.jetbrains.annotations.NotNull;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.mybatis.guice.transactional.Transactional;
 
 /**
  * Default {@link BalanceTaxService}: computes and collects the prorated personal
@@ -41,11 +40,9 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
     private record Destination(String name, int id) {}
 
     @Inject
-    public BalanceTaxServiceImpl(BalanceTaxConfiguration config,
-                                 TaxApi taxApi,
-                                 AccountMapper accountMapper) {
-        this.config        = config;
-        this.taxApi        = taxApi;
+    public BalanceTaxServiceImpl(BalanceTaxConfiguration config, TaxApi taxApi, AccountMapper accountMapper) {
+        this.config = config;
+        this.taxApi = taxApi;
         this.accountMapper = accountMapper;
     }
 
@@ -83,19 +80,17 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
         }
 
         // 5. Determine bracket rate.
-        BigDecimal weeklyRate = config.getWeeklyRate(balance);
+        var bracket = config.getBrackets().bracketAt(balance);
+        if (bracket == null) return;
+        BigDecimal weeklyRate = bracket.rate();
         if (weeklyRate.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
 
         // 6. Prorate over the elapsed period.
-        BigDecimal proration = BigDecimal.valueOf(secondsElapsed)
-                .divide(SECONDS_PER_WEEK, 10, RoundingMode.HALF_EVEN);
+        BigDecimal proration = BigDecimal.valueOf(secondsElapsed).divide(SECONDS_PER_WEEK, 10, RoundingMode.HALF_EVEN);
 
-        BigDecimal taxAmount = balance
-                .multiply(weeklyRate)
-                .multiply(proration)
-                .setScale(2, RoundingMode.HALF_EVEN);
+        BigDecimal taxAmount = balance.multiply(weeklyRate).multiply(proration).setScale(2, RoundingMode.HALF_EVEN);
 
         if (taxAmount.compareTo(Money.MINIMUM_AMOUNT) < 0) {
             return;
@@ -111,23 +106,36 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
                 taxAmount,
                 "personal-balance-tax",
                 "Personal balance tax (" + formatPeriod(secondsElapsed) + " @ "
-                        + weeklyRate.multiply(BigDecimal.valueOf(100)).stripTrailingZeros().toPlainString() + "%/wk)",
+                        + weeklyRate
+                                .multiply(BigDecimal.valueOf(100))
+                                .stripTrailingZeros()
+                                .toPlainString() + "%/wk)" + bracket.ledgerTag(),
                 TreasuryConstants.VIRTUAL_TREASURY_INITIATOR,
                 "treasury",
-                dedupKey
-        );
+                dedupKey);
 
         TaxResult result = taxApi.collectTax(collection);
 
         if (result instanceof TaxResult.Collected c) {
-            log.debug("Personal balance tax ${} collected from {} (txn {}, period {})",
-                    c.amountCharged(), playerUuid, c.txnId(), formatPeriod(secondsElapsed));
+            log.debug(
+                    "Personal balance tax ${} collected from {} (txn {}, period {})",
+                    c.amountCharged(),
+                    playerUuid,
+                    c.txnId(),
+                    formatPeriod(secondsElapsed));
         } else if (result instanceof TaxResult.Skipped s) {
-            log.debug("Personal balance tax skipped for {} (period {}): {}",
-                    playerUuid, formatPeriod(secondsElapsed), s.reason());
+            log.debug(
+                    "Personal balance tax skipped for {} (period {}): {}",
+                    playerUuid,
+                    formatPeriod(secondsElapsed),
+                    s.reason());
         } else if (result instanceof TaxResult.Failed f) {
-            log.warn("Personal balance tax collection failed for {} (amount=${}, period={}): {}",
-                    playerUuid, taxAmount, formatPeriod(secondsElapsed), f.errorMessage());
+            log.warn(
+                    "Personal balance tax collection failed for {} (amount=${}, period={}): {}",
+                    playerUuid,
+                    taxAmount,
+                    formatPeriod(secondsElapsed),
+                    f.errorMessage());
         }
     }
 
@@ -148,7 +156,7 @@ public class BalanceTaxServiceImpl implements BalanceTaxService {
 
     /** Formats an elapsed-seconds value as "Xd Yh" for ledger descriptions. */
     private static String formatPeriod(long seconds) {
-        long days  = seconds / 86400;
+        long days = seconds / 86400;
         long hours = (seconds % 86400) / 3600;
         if (days > 0) {
             return days + "d " + hours + "h";

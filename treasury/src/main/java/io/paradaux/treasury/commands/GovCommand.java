@@ -8,8 +8,8 @@ import io.paradaux.hibernia.framework.commander.HelpGenerator;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.treasury.api.exceptions.GovAccountNotFoundException;
-import io.paradaux.treasury.api.exceptions.PrimitiveAccountException;
+import io.paradaux.treasury.internal.utils.GovDedupKeys;
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.*;
 import io.paradaux.treasury.services.AccountService;
@@ -17,8 +17,8 @@ import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
-import io.paradaux.treasury.utils.GovDedupKeys;
-import io.paradaux.treasury.utils.TreasuryConstants;
+import io.paradaux.treasury.services.exceptions.GovAccountNotFoundException;
+import io.paradaux.treasury.services.exceptions.PrimitiveAccountException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -258,6 +258,29 @@ public class GovCommand implements CommandHandler {
             @Arg("amount") BigDecimal amount,
             @GreedyArg("reason") String reason) {
         doExternalPayout(sender, fromName, toName, amount, reason);
+    }
+
+    @Route("payout-account <from> <id> <amount>")
+    @Async
+    @Description("Pay an account by number from a government account")
+    public void payoutAccount(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("id") int accountId,
+            @Arg("amount") BigDecimal amount) {
+        doExternalPayout(sender, fromName, null, amount, null, accountId);
+    }
+
+    @Route("payout-account <from> <id> <amount> <reason>")
+    @Async
+    @Description("Pay an account by number from a government account with a reason")
+    public void payoutAccountReason(
+            @Sender CommandSender sender,
+            @Arg("from") String fromName,
+            @Arg("id") int accountId,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
+        doExternalPayout(sender, fromName, null, amount, reason, accountId);
     }
 
     // =====================================================================
@@ -696,25 +719,15 @@ public class GovCommand implements CommandHandler {
         // authorizer / global node / admin) once the account is resolved below.
         // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
         // (not rounded) — see AmountInput.
-        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
-        if (normalized == null) {
-            message.send(sender, "treasury.general.invalid-amount");
-            return;
-        }
+        BigDecimal normalized = normalizeTransferAmount(sender, amount);
+        if (normalized == null) return;
 
         Account from = resolveGovAccount(fromName, sender);
         if (from == null) return;
         Account to = resolveGovAccount(toName, sender);
         if (to == null) return;
 
-        // Reject self-transfer outright — net-zero balance change but still
-        // pollutes the ledger. Account.getAccountId() returns boxed Integer;
-        // comparing with `==` is reference equality and silently misfires for
-        // IDs outside the JVM's -128..127 cache.
-        if (from.getAccountId().intValue() == to.getAccountId().intValue()) {
-            message.send(sender, "treasury.gov.account.transfer.same-account", "name", from.getDisplayName());
-            return;
-        }
+        if (rejectSameAccount(sender, from.getAccountId(), to.getAccountId(), from.getDisplayName())) return;
 
         if (!canTransferFrom(sender, from)) {
             message.send(sender, "treasury.gov.no-access");
@@ -737,57 +750,35 @@ public class GovCommand implements CommandHandler {
         byte[] dedupKey = GovDedupKeys.transfer(
                 actorOf(sender), from.getAccountId(), to.getAccountId(), normalized, Instant.now());
 
-        try {
-            TransferRequest req = new TransferRequest(
-                    from.getAccountId(),
-                    to.getAccountId(),
-                    normalized,
-                    memo,
-                    actorOf(sender),
-                    null,
-                    TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey);
-            // Console bypasses the requires_authorization gate as well (it already
-            // skipped the membership check above); players go through the normal path.
-            if (sender instanceof Player) {
-                ledgerService.transfer(req);
-            } else {
-                ledgerService.adminTransfer(req);
-            }
-        } catch (IllegalStateException e) {
-            BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
-            message.send(
-                    sender,
-                    "treasury.gov.account.transfer.insufficient",
-                    "from",
-                    from.getDisplayName(),
-                    "balance",
-                    accountService.formatAmount(balance));
-            return;
-        }
-
-        message.send(
+        executeGovernmentTransfer(
                 sender,
-                "treasury.gov.account.transfer.success",
-                "from",
-                from.getDisplayName(),
-                "to",
+                from,
+                to.getAccountId(),
                 to.getDisplayName(),
-                "amount",
-                accountService.formatAmount(normalized));
+                normalized,
+                memo,
+                "treasury.gov.account.transfer.success",
+                dedupKey);
     }
 
     private void doExternalPayout(
             CommandSender sender, String fromName, String toName, BigDecimal amount, String reason) {
+        doExternalPayout(sender, fromName, toName, amount, reason, null);
+    }
+
+    private void doExternalPayout(
+            CommandSender sender,
+            String fromName,
+            String toName,
+            BigDecimal amount,
+            String reason,
+            Integer explicitAccountId) {
         // Access is decided per-source-account by canTransferFrom (member /
         // authorizer / global node / admin) once the account is resolved below.
         // Sub-cent, non-positive and out-of-ledger-range amounts are rejected
         // (not rounded) — see AmountInput.
-        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
-        if (normalized == null) {
-            message.send(sender, "treasury.general.invalid-amount");
-            return;
-        }
+        BigDecimal normalized = normalizeTransferAmount(sender, amount);
+        if (normalized == null) return;
 
         Account from = resolveGovAccount(fromName, sender);
         if (from == null) return;
@@ -801,57 +792,64 @@ public class GovCommand implements CommandHandler {
         String toDisplayName;
         OfflinePlayer onlineTarget = null;
 
-        OfflinePlayer targetPlayer = Bukkit.getOfflinePlayerIfCached(toName);
-        boolean knownPlayer = targetPlayer != null && (targetPlayer.hasPlayedBefore() || targetPlayer.isOnline());
-
-        java.util.Optional<java.util.UUID> directoryUuid =
-                knownPlayer ? java.util.Optional.empty() : playerDirectory.resolveUuidByName(toName);
-
-        // PAR-144: a name that is both a known player and a non-archived GOVERNMENT
-        // account is ambiguous. Don't silently pay the personal account (which is
-        // what the player branches below would do) — refuse so the operator types
-        // the recipient explicitly rather than relying on cache/lookup order.
-        if ((knownPlayer || directoryUuid.isPresent()) && accountService.governmentAccountExists(toName)) {
-            message.send(sender, "treasury.gov.payout.ambiguous", "name", toName);
-            return;
-        }
-
-        if (knownPlayer) {
-            toAccountId = accountService.getOrCreatePersonalAccountId(targetPlayer.getUniqueId());
-            toDisplayName = targetPlayer.getName();
-            onlineTarget = targetPlayer;
-        } else if (directoryUuid.isPresent()) {
-            // Player not in the usercache but known to the directory — pay them by
-            // name regardless of cache state (PAR-150). The directory only holds
-            // real players who have logged in, so creating their account is safe.
-            java.util.UUID uuid = directoryUuid.get();
-            toAccountId = accountService.getOrCreatePersonalAccountId(uuid);
-            toDisplayName = playerDirectory.resolveNameByUuid(uuid).orElse(toName);
-            onlineTarget = Bukkit.getPlayer(uuid);
-        } else {
-            // BUSINESS account display names follow the convention
-            // "<FirmName> Corporate Account" (FirmServiceImpl line 109). The
-            // <to> arg type is word()-tokenised, so a user typing the full
-            // multi-word display name would split across two args. Try the
-            // bare token first, then fall back to the canonical suffix —
-            // letting `/gov payout DCGov Acme 100 …` resolve to Acme's
-            // corporate account without users having to know the convention.
-            Account businessAccount = accountService.resolveBusinessAccountByToken(toName);
-            if (businessAccount == null) {
-                message.send(sender, "treasury.gov.payout.unknown-recipient", "name", toName);
+        if (explicitAccountId != null) {
+            Account target = accountService.getAccountById(explicitAccountId);
+            if (target == null || target.isArchived()) {
+                message.send(sender, "treasury.account.target.not-found", "id", String.valueOf(explicitAccountId));
                 return;
             }
-            toAccountId = businessAccount.getAccountId();
-            toDisplayName = businessAccount.getDisplayName();
+            toAccountId = target.getAccountId();
+            toDisplayName = target.getDisplayName();
+            if (target.getAccountType() == AccountType.PERSONAL && target.getOwnerUuid() != null) {
+                onlineTarget = Bukkit.getPlayer(target.getOwnerUuid());
+            }
+        } else {
+            OfflinePlayer targetPlayer = Bukkit.getOfflinePlayerIfCached(toName);
+            boolean knownPlayer = targetPlayer != null && (targetPlayer.hasPlayedBefore() || targetPlayer.isOnline());
+
+            java.util.Optional<java.util.UUID> directoryUuid =
+                    knownPlayer ? java.util.Optional.empty() : playerDirectory.resolveUuidByName(toName);
+
+            // PAR-144: a name that is both a known player and a non-archived GOVERNMENT
+            // account is ambiguous. Don't silently pay the personal account (which is
+            // what the player branches below would do) — refuse so the operator types
+            // the recipient explicitly rather than relying on cache/lookup order.
+            if ((knownPlayer || directoryUuid.isPresent()) && accountService.governmentAccountExists(toName)) {
+                message.send(sender, "treasury.gov.payout.ambiguous", "name", toName);
+                return;
+            }
+
+            if (knownPlayer) {
+                toAccountId = accountService.getOrCreatePersonalAccountId(targetPlayer.getUniqueId());
+                toDisplayName = targetPlayer.getName();
+                onlineTarget = targetPlayer;
+            } else if (directoryUuid.isPresent()) {
+                // Player not in the usercache but known to the directory — pay them by
+                // name regardless of cache state (PAR-150). The directory only holds
+                // real players who have logged in, so creating their account is safe.
+                java.util.UUID uuid = directoryUuid.get();
+                toAccountId = accountService.getOrCreatePersonalAccountId(uuid);
+                toDisplayName = playerDirectory.resolveNameByUuid(uuid).orElse(toName);
+                onlineTarget = Bukkit.getPlayer(uuid);
+            } else {
+                // BUSINESS account display names follow the convention
+                // "<FirmName> Corporate Account" (FirmServiceImpl line 109). The
+                // <to> arg type is word()-tokenised, so a user typing the full
+                // multi-word display name would split across two args. Try the
+                // bare token first, then fall back to the canonical suffix —
+                // letting `/gov payout DCGov Acme 100 …` resolve to Acme's
+                // corporate account without users having to know the convention.
+                Account businessAccount = accountService.resolveBusinessAccountByToken(toName);
+                if (businessAccount == null) {
+                    message.send(sender, "treasury.gov.payout.unknown-recipient", "name", toName);
+                    return;
+                }
+                toAccountId = businessAccount.getAccountId();
+                toDisplayName = businessAccount.getDisplayName();
+            }
         }
 
-        // Reject a payout that resolves to the source account itself up front, with a
-        // clear message — the ledger now rejects a same-account transfer outright
-        // (ADT-33), so without this guard it would surface as an uncaught error (ADT-55).
-        if (from.getAccountId() == toAccountId) {
-            message.send(sender, "treasury.gov.account.transfer.same-account", "name", toDisplayName);
-            return;
-        }
+        if (rejectSameAccount(sender, from.getAccountId(), toAccountId, toDisplayName)) return;
 
         String memo = reason != null
                 ? "Gov payout: " + reason
@@ -861,42 +859,19 @@ public class GovCommand implements CommandHandler {
                 GovDedupKeys.payout(actorOf(sender), from.getAccountId(), toAccountId, normalized, Instant.now());
 
         try {
-            TransferRequest req = new TransferRequest(
-                    from.getAccountId(),
+            if (!executeGovernmentTransfer(
+                    sender,
+                    from,
                     toAccountId,
+                    toDisplayName,
                     normalized,
                     memo,
-                    actorOf(sender),
-                    null,
-                    TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey);
-            // Console bypasses requires_authorization too; players use the normal path.
-            if (sender instanceof Player) {
-                ledgerService.transfer(req);
-            } else {
-                ledgerService.adminTransfer(req);
-            }
-        } catch (IllegalStateException e) {
-            BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
-            message.send(
-                    sender,
-                    "treasury.gov.account.transfer.insufficient",
-                    "from",
-                    from.getDisplayName(),
-                    "balance",
-                    accountService.formatAmount(balance));
+                    "treasury.gov.payout.success",
+                    dedupKey)) return;
+        } catch (SecurityException e) {
+            message.send(sender, "treasury.gov.no-access");
             return;
         }
-
-        message.send(
-                sender,
-                "treasury.gov.payout.success",
-                "from",
-                from.getDisplayName(),
-                "to",
-                toDisplayName,
-                "amount",
-                accountService.formatAmount(normalized));
 
         if (onlineTarget != null) {
             Player onlinePlayer = onlineTarget.getPlayer();
@@ -910,6 +885,68 @@ public class GovCommand implements CommandHandler {
                         from.getDisplayName());
             }
         }
+    }
+
+    private BigDecimal normalizeTransferAmount(CommandSender sender, BigDecimal amount) {
+        BigDecimal normalized = AmountInput.positive(amount).orElse(null);
+        if (normalized == null) message.send(sender, "treasury.general.invalid-amount");
+        return normalized;
+    }
+
+    private boolean rejectSameAccount(CommandSender sender, int fromId, int toId, String name) {
+        // Primitive IDs avoid reference equality for boxed IDs outside the Integer cache.
+        if (fromId != toId) return false;
+        message.send(sender, "treasury.gov.account.transfer.same-account", "name", name);
+        return true;
+    }
+
+    /** Returns true only after settlement, so callers can safely notify the recipient. */
+    private boolean executeGovernmentTransfer(
+            CommandSender sender,
+            Account from,
+            int toAccountId,
+            String toDisplayName,
+            BigDecimal normalized,
+            String memo,
+            String successKey,
+            byte[] dedupKey) {
+        try {
+            TransferRequest request = new TransferRequest(
+                    from.getAccountId(),
+                    toAccountId,
+                    normalized,
+                    memo,
+                    actorOf(sender),
+                    null,
+                    TreasuryConstants.TREASURY_PLUGIN_NAME,
+                    dedupKey);
+            // Console/RCON bypasses requires_authorization; players retain the normal ledger gate.
+            if (sender instanceof Player) {
+                ledgerService.transfer(request);
+            } else {
+                ledgerService.adminTransfer(request);
+            }
+        } catch (IllegalStateException e) {
+            BigDecimal balance = accountService.getBalanceReadOnly(from.getAccountId());
+            message.send(
+                    sender,
+                    "treasury.gov.account.transfer.insufficient",
+                    "from",
+                    from.getDisplayName(),
+                    "balance",
+                    accountService.formatAmount(balance));
+            return false;
+        }
+        message.send(
+                sender,
+                successKey,
+                "from",
+                from.getDisplayName(),
+                "to",
+                toDisplayName,
+                "amount",
+                accountService.formatAmount(normalized));
+        return true;
     }
 
     private Account resolveGovAccount(String name, CommandSender sender) {

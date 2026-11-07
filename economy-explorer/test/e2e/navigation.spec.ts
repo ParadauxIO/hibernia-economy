@@ -25,7 +25,7 @@ test.describe('desktop chrome', () => {
     await visit(page, '/');
     await page.waitForLoadState('networkidle');
     expect(viewerCalls).toEqual([]);
-    await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Visitor/ })).toBeVisible();
   });
 
   test('marks the section and page, and the section nav follows the path', async ({ page }) => {
@@ -96,13 +96,19 @@ test.describe('account menu', () => {
     await expect(chip).toBeFocused();
   });
 
-  test('admins get Admin in the menu, not in the primary nav', async ({ page, context }) => {
+  test('admins get an Admin button in the top bar, not in the primary nav or account menu', async ({ page, context }) => {
     await loginAs(context, 'admin');
     await visit(page, '/');
     await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Admin' })).toHaveCount(0);
     await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Investigate' })).toBeVisible();
+    const admin = page.locator('.shell-tools').getByRole('link', { name: 'Admin', exact: true });
+    await expect(admin).toHaveAttribute('href', '/admin');
     await page.getByRole('button', { name: /Alice/ }).click();
-    await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Admin' })).toHaveAttribute('href', '/admin');
+    await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Admin' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await admin.click();
+    await expect(page).toHaveURL(/\/admin$/);
+    await expect(admin).toHaveAttribute('aria-current', 'page');
   });
 
   test('log out clears the session and goes to the identity provider’s end-session endpoint', async ({ page, context }) => {

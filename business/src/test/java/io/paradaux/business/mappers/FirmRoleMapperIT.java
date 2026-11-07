@@ -1,17 +1,16 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.Firm;
-import io.paradaux.business.model.FirmRole;
-import io.paradaux.business.model.FirmRolePermission;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class FirmRoleMapperIT extends IntegrationTestBase {
 
@@ -52,7 +51,9 @@ class FirmRoleMapperIT extends IntegrationTestBase {
     void renameRole_persistsNewName() {
         mapper.insertRole(new FirmRole(firmId, "Lead", 2));
         assertThat(mapper.renameRole(firmId, "Lead", "Leader")).isEqualTo(1);
-        assertThat(mapper.listRolesByFirm(firmId)).extracting(FirmRole::getRoleName).containsExactly("Leader");
+        assertThat(mapper.listRolesByFirm(firmId))
+                .extracting(FirmRole::getRoleName)
+                .containsExactly("Leader");
     }
 
     @Test
@@ -107,7 +108,8 @@ class FirmRoleMapperIT extends IntegrationTestBase {
         mapper.addRolePermission(new FirmRolePermission(firmId, "Lead", RolePermission.FINANCIAL));
 
         List<FirmRolePermission> perms = mapper.listPermissionsByRole(firmId, "Lead");
-        assertThat(perms).extracting(FirmRolePermission::getPermission)
+        assertThat(perms)
+                .extracting(FirmRolePermission::getPermission)
                 .containsExactlyInAnyOrder(RolePermission.ADMIN, RolePermission.FINANCIAL);
     }
 
@@ -116,8 +118,10 @@ class FirmRoleMapperIT extends IntegrationTestBase {
         mapper.insertRole(new FirmRole(firmId, "Lead", 2));
         mapper.addRolePermission(new FirmRolePermission(firmId, "Lead", RolePermission.ADMIN));
 
-        assertThat(mapper.deleteRolePermission(firmId, "Lead", RolePermission.ADMIN)).isEqualTo(1);
-        assertThat(mapper.deleteRolePermission(firmId, "Lead", RolePermission.ADMIN)).isZero();
+        assertThat(mapper.deleteRolePermission(firmId, "Lead", RolePermission.ADMIN))
+                .isEqualTo(1);
+        assertThat(mapper.deleteRolePermission(firmId, "Lead", RolePermission.ADMIN))
+                .isZero();
     }
 
     @Test

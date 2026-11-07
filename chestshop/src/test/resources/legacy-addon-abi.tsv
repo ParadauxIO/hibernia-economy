@@ -62,3 +62,5 @@
 10	com/Acrobot/ChestShop/Utils/uBlock	findConnectedShopSigns	(Lorg/bukkit/block/Block;)Ljava/util/List;
 10	com/Acrobot/ChestShop/Utils/uBlock	findConnectedShopSigns	(Lorg/bukkit/inventory/InventoryHolder;)Ljava/util/List;
 10	com/Acrobot/ChestShop/Events/ChestShopReloadEvent	<init>	()V
+10	com/Acrobot/Breeze/Utils/PriceUtil	getExactBuyPrice	(Ljava/lang/String;)Ljava/math/BigDecimal;
+10	com/Acrobot/Breeze/Utils/PriceUtil	getExactSellPrice	(Ljava/lang/String;)Ljava/math/BigDecimal;

@@ -21,6 +21,16 @@ account**. The simple money commands act on whichever account is the **default**
 /business withdraw Acme 1000    # take money back out
 ```
 
+### Paying into a firm
+
+`/firm deposit <firm> <amount> [memo]` is an alias for
+`/firm pay into <firm> <amount> [memo]`. Anyone with the normal payment
+permission can pay from their personal balance into a firm's default account;
+you do not need to work for that firm. Tab completion suggests only firms you
+own or work for. Type another firm's name manually to pay it. An optional memo
+is recorded in the ledger. Withdrawals and account-specific deposits retain
+their existing finance permissions.
+
 ## List and create accounts
 
 See all of the firm's accounts:
@@ -54,6 +64,21 @@ so old signs cannot be redirected to someone else's wallet.
 /business account deposit Acme <accountId> 2000
 /business account withdraw Acme <accountId> 500
 ```
+
+## Move money between your firm’s accounts
+
+Use the account IDs from `/business account list <firm>`:
+
+```text
+/business account transfer Acme 42 51 1000
+/business account transfer Acme 42 51 1000 July reserve funding
+```
+
+This transfers directly from account #42 to #51 without passing through your personal
+balance. Both accounts must be live and linked to Acme, including any subaccounts.
+You need the same finance permission and source-account spending authority as for a
+withdrawal. The optional memo is saved in the transaction history. Transfers to the
+same account, to another firm's account, or for more than the source balance are rejected.
 
 ## Pay people and other firms
 

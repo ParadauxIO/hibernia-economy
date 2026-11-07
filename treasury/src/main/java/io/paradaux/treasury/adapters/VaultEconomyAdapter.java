@@ -2,13 +2,13 @@ package io.paradaux.treasury.adapters;
 
 import com.google.inject.Inject;
 import io.paradaux.treasury.api.TaxApi;
-import io.paradaux.treasury.model.config.EconomyConfiguration;
+import io.paradaux.treasury.internal.model.config.EconomyConfiguration;
+import io.paradaux.treasury.internal.utils.CallingPluginDetector;
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.model.tax.TaxResult;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
-import io.paradaux.treasury.utils.CallingPluginDetector;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;

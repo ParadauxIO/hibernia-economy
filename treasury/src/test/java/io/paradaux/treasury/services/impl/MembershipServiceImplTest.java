@@ -1,33 +1,34 @@
 package io.paradaux.treasury.services.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import io.paradaux.treasury.mappers.GroupMembershipMapper;
 import io.paradaux.treasury.mappers.MembershipMapper;
 import io.paradaux.treasury.model.economy.AccountMember;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class MembershipServiceImplTest {
 
-    @Mock MembershipMapper membershipMapper;
-    @Mock GroupMembershipMapper groupMappers;
+    @Mock
+    MembershipMapper membershipMapper;
+
+    @Mock
+    GroupMembershipMapper groupMappers;
 
     private MembershipServiceImpl svc;
 
@@ -116,7 +117,8 @@ class MembershipServiceImplTest {
 
     @Test
     void getMembers_delegates() {
-        when(membershipMapper.getMembers(1)).thenReturn(List.of(new AccountMember()));
+        when(membershipMapper.getMembers(1))
+                .thenReturn(List.of(AccountMember.builder().build()));
         assertThat(svc.getMembers(1)).hasSize(1);
     }
 
@@ -148,7 +150,8 @@ class MembershipServiceImplTest {
 
     @Test
     void getAuthorizers_delegates() {
-        when(membershipMapper.getAuthorizers(1)).thenReturn(List.of(new AccountMember()));
+        when(membershipMapper.getAuthorizers(1))
+                .thenReturn(List.of(AccountMember.builder().build()));
         assertThat(svc.getAuthorizers(1)).hasSize(1);
     }
 
@@ -262,7 +265,8 @@ class MembershipServiceImplTest {
 
     @Test
     void getViewers_delegates() {
-        when(membershipMapper.getViewers(1)).thenReturn(List.of(new AccountMember()));
+        when(membershipMapper.getViewers(1))
+                .thenReturn(List.of(AccountMember.builder().build()));
         assertThat(svc.getViewers(1)).hasSize(1);
     }
 
@@ -296,11 +300,20 @@ class MembershipServiceImplTest {
     @org.junit.jupiter.api.Nested
     @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
     class WithLuckPerms {
-        @Mock net.luckperms.api.LuckPerms luckPerms;
-        @Mock net.luckperms.api.model.user.UserManager userManager;
-        @Mock net.luckperms.api.model.user.User user;
-        @Mock net.luckperms.api.query.QueryOptions queryOptions;
-        @Mock net.luckperms.api.model.group.Group groupVip;
+        @Mock
+        net.luckperms.api.LuckPerms luckPerms;
+
+        @Mock
+        net.luckperms.api.model.user.UserManager userManager;
+
+        @Mock
+        net.luckperms.api.model.user.User user;
+
+        @Mock
+        net.luckperms.api.query.QueryOptions queryOptions;
+
+        @Mock
+        net.luckperms.api.model.group.Group groupVip;
 
         @org.junit.jupiter.api.BeforeEach
         void wireLuckPerms() {
@@ -330,8 +343,8 @@ class MembershipServiceImplTest {
             org.mockito.Mockito.when(userManager.getUser(u)).thenReturn(user);
             org.mockito.Mockito.when(user.getInheritedGroups(queryOptions)).thenReturn(Set.of(groupVip));
             org.mockito.Mockito.when(groupMappers.isAnyGroupMember(
-                    org.mockito.ArgumentMatchers.eq(1),
-                    org.mockito.ArgumentMatchers.anySet())).thenReturn(1);
+                            org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anySet()))
+                    .thenReturn(1);
 
             assertThat(svc.isMember(1, u)).isTrue();
         }
@@ -352,8 +365,8 @@ class MembershipServiceImplTest {
             org.mockito.Mockito.when(userManager.getUser(u)).thenReturn(user);
             org.mockito.Mockito.when(user.getInheritedGroups(queryOptions)).thenReturn(Set.of(groupVip));
             org.mockito.Mockito.when(groupMappers.isAnyGroupAuthorizer(
-                    org.mockito.ArgumentMatchers.eq(1),
-                    org.mockito.ArgumentMatchers.anySet())).thenReturn(1);
+                            org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anySet()))
+                    .thenReturn(1);
 
             assertThat(svc.isAuthorizer(1, u)).isTrue();
         }
@@ -365,8 +378,8 @@ class MembershipServiceImplTest {
             org.mockito.Mockito.when(userManager.getUser(u)).thenReturn(user);
             org.mockito.Mockito.when(user.getInheritedGroups(queryOptions)).thenReturn(Set.of(groupVip));
             org.mockito.Mockito.when(groupMappers.isAnyGroupViewer(
-                    org.mockito.ArgumentMatchers.eq(1),
-                    org.mockito.ArgumentMatchers.anySet())).thenReturn(1);
+                            org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anySet()))
+                    .thenReturn(1);
 
             assertThat(svc.isViewer(1, u)).isTrue();
         }
@@ -378,8 +391,8 @@ class MembershipServiceImplTest {
             org.mockito.Mockito.when(userManager.getUser(u)).thenReturn(user);
             org.mockito.Mockito.when(user.getInheritedGroups(queryOptions)).thenReturn(Set.of(groupVip));
             org.mockito.Mockito.when(groupMappers.isAnyGroupMember(
-                    org.mockito.ArgumentMatchers.eq(1),
-                    org.mockito.ArgumentMatchers.anySet())).thenReturn(0);
+                            org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.anySet()))
+                    .thenReturn(0);
 
             assertThat(svc.isMember(1, u)).isFalse();
         }

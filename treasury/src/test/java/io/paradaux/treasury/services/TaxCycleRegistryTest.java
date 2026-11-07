@@ -1,25 +1,25 @@
 package io.paradaux.treasury.services;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.tax.TaxCycleReport;
 import io.paradaux.treasury.model.tax.TaxCycleType;
+import java.math.BigDecimal;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
-
 @ExtendWith(MockitoExtension.class)
 class TaxCycleRegistryTest {
 
-    @Mock AccountMapper accountMapper;
+    @Mock
+    AccountMapper accountMapper;
 
     private TaxCycleRegistry registry;
 
@@ -48,10 +48,8 @@ class TaxCycleRegistryTest {
         registry.registerCycleParticipant("Realty", TaxCycleType.DAILY, TaxCycleType.WEEKLY);
         registry.registerCycleParticipant("Business", TaxCycleType.WEEKLY);
 
-        assertThat(registry.getCycleParticipants(TaxCycleType.DAILY))
-                .containsExactly("Realty");
-        assertThat(registry.getCycleParticipants(TaxCycleType.WEEKLY))
-                .containsExactlyInAnyOrder("Realty", "Business");
+        assertThat(registry.getCycleParticipants(TaxCycleType.DAILY)).containsExactly("Realty");
+        assertThat(registry.getCycleParticipants(TaxCycleType.WEEKLY)).containsExactlyInAnyOrder("Realty", "Business");
         assertThat(registry.getCycleParticipants(TaxCycleType.MONTHLY)).isEmpty();
     }
 
@@ -82,9 +80,9 @@ class TaxCycleRegistryTest {
     void endSession_aggregatesCollectionsByAccountAndTaxType() {
         Instant start = Instant.parse("2026-01-01T00:00:00Z");
         registry.startSession(TaxCycleType.WEEKLY, start, true, "admin");
-        registry.recordCollected(101, "balance-tax",       new BigDecimal("100.00"));
-        registry.recordCollected(101, "balance-tax",       new BigDecimal("50.00"));
-        registry.recordCollected(202, "fine-tax",          new BigDecimal("25.00"));
+        registry.recordCollected(101, "balance-tax", new BigDecimal("100.00"));
+        registry.recordCollected(101, "balance-tax", new BigDecimal("50.00"));
+        registry.recordCollected(202, "fine-tax", new BigDecimal("25.00"));
         registry.recordSkipped();
         registry.recordSkipped();
         registry.recordFailed();
@@ -98,11 +96,11 @@ class TaxCycleRegistryTest {
         assertThat(report.triggeredBy()).isEqualTo("admin");
         assertThat(report.totalCollected()).isEqualByComparingTo("175.00");
         assertThat(report.byDestinationAccount())
-                .containsEntry("DCGovernment",     new BigDecimal("150.00"))
-                .containsEntry("GovernmentFines",  new BigDecimal("25.00"));
+                .containsEntry("DCGovernment", new BigDecimal("150.00"))
+                .containsEntry("GovernmentFines", new BigDecimal("25.00"));
         assertThat(report.byTaxType())
                 .containsEntry("balance-tax", new BigDecimal("150.00"))
-                .containsEntry("fine-tax",    new BigDecimal("25.00"));
+                .containsEntry("fine-tax", new BigDecimal("25.00"));
         assertThat(report.collectedCount()).isEqualTo(3);
         assertThat(report.skippedCount()).isEqualTo(2);
         assertThat(report.failedCount()).isEqualTo(1);
@@ -134,8 +132,7 @@ class TaxCycleRegistryTest {
     }
 
     private static Account account(String name) {
-        Account a = new Account();
-        a.setDisplayName(name);
+        Account a = Account.builder().displayName(name).build();
         return a;
     }
 }

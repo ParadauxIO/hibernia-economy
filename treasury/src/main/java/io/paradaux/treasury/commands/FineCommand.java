@@ -4,28 +4,28 @@ import com.google.inject.Inject;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.treasury.api.exceptions.FineAlreadyRevokedException;
-import io.paradaux.treasury.api.exceptions.FineNotFoundException;
-import io.paradaux.treasury.api.exceptions.GovAccountNotFoundException;
-import io.paradaux.treasury.api.exceptions.InsufficientFineFundsException;
+import io.paradaux.treasury.internal.utils.MiniMessageText;
+import io.paradaux.treasury.internal.utils.Money;
 import io.paradaux.treasury.model.economy.Account;
+import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.GovernmentFine;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.FineWebhookService;
 import io.paradaux.treasury.services.GovService;
 import io.paradaux.treasury.services.MembershipService;
 import io.paradaux.treasury.services.PlayerDirectoryService;
-import io.paradaux.treasury.utils.MiniMessageText;
-import io.paradaux.treasury.utils.Money;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.entity.Player;
-
+import io.paradaux.treasury.services.exceptions.FineAlreadyRevokedException;
+import io.paradaux.treasury.services.exceptions.FineNotFoundException;
+import io.paradaux.treasury.services.exceptions.GovAccountNotFoundException;
+import io.paradaux.treasury.services.exceptions.InsufficientFineFundsException;
 import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 
 @Command({"fine"})
 @Permission("treasury.gov.fine")
@@ -42,18 +42,19 @@ public class FineCommand implements CommandHandler {
     private final Message message;
 
     @Inject
-    public FineCommand(AccountService accountService,
-                       GovService govService,
-                       MembershipService membershipService,
-                       PlayerDirectoryService playerDirectory,
-                       FineWebhookService fineWebhook,
-                       Message message) {
-        this.accountService    = accountService;
-        this.govService        = govService;
+    public FineCommand(
+            AccountService accountService,
+            GovService govService,
+            MembershipService membershipService,
+            PlayerDirectoryService playerDirectory,
+            FineWebhookService fineWebhook,
+            Message message) {
+        this.accountService = accountService;
+        this.govService = govService;
         this.membershipService = membershipService;
-        this.playerDirectory   = playerDirectory;
-        this.fineWebhook       = fineWebhook;
-        this.message           = message;
+        this.playerDirectory = playerDirectory;
+        this.fineWebhook = fineWebhook;
+        this.message = message;
     }
 
     @Route("")
@@ -71,11 +72,12 @@ public class FineCommand implements CommandHandler {
     @Route("issue <account> <player> <amount> <reason>")
     @Async
     @Description("Issue a fine paid into a government account")
-    public void issue(@Sender Player sender,
-                      @Arg("account") String accountName,
-                      @Arg("player") OfflinePlayer target,
-                      @Arg("amount") BigDecimal amount,
-                      @GreedyArg("reason") String reason) {
+    public void issue(
+            @Sender Player sender,
+            @Arg("account") String accountName,
+            @Arg("player") OfflinePlayer target,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
         // Access is decided per-account: a member or authorizer of the account
         // (or an admin) may fine into it — the same gate as /government pay.
         Account account = resolveGovAccount(accountName, sender);
@@ -132,18 +134,13 @@ public class FineCommand implements CommandHandler {
         }
 
         String formattedAmount = accountService.formatAmount(fine.getAmount());
-        message.send(sender, "treasury.fine.issued",
-                "player", targetName,
-                "amount", formattedAmount,
-                "reason", reason);
+        message.send(sender, "treasury.fine.issued", "player", targetName, "amount", formattedAmount, "reason", reason);
 
         // Notify the fined player before the webhook: the Discord POST is a blocking
         // network call and must not delay (or, if it fails, lose) the in-game notice.
         Player online = Bukkit.getPlayer(targetUuid);
         if (online != null) {
-            message.send(online, "treasury.fine.issued.notify",
-                    "amount", formattedAmount,
-                    "reason", reason);
+            message.send(online, "treasury.fine.issued.notify", "amount", formattedAmount, "reason", reason);
         }
         fineWebhook.sendFineIssued(fine);
     }
@@ -151,11 +148,12 @@ public class FineCommand implements CommandHandler {
     @Route("firm <account> <firm> <amount> <reason>")
     @Async
     @Description("Fine a firm's business account, paid into a government account")
-    public void fineFirm(@Sender Player sender,
-                         @Arg("account") String accountName,
-                         @Arg("firm") String firmAccountName,
-                         @Arg("amount") BigDecimal amount,
-                         @GreedyArg("reason") String reason) {
+    public void fineFirm(
+            @Sender Player sender,
+            @Arg("account") String accountName,
+            @Arg("firm") String firmAccountName,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
         Account govAccount = resolveGovAccount(accountName, sender);
         if (govAccount == null) return;
         if (!canFineFrom(sender, govAccount)) {
@@ -180,7 +178,8 @@ public class FineCommand implements CommandHandler {
 
         GovernmentFine fine;
         try {
-            fine = govService.issueFine(business.getAccountId(), govAccount.getAccountId(), amount, reason, sender.getUniqueId());
+            fine = govService.issueFine(
+                    business.getAccountId(), govAccount.getAccountId(), amount, reason, sender.getUniqueId());
         } catch (InsufficientFineFundsException e) {
             message.send(sender, "treasury.fine.firm.insufficient", "firm", business.getDisplayName());
             return;
@@ -190,10 +189,82 @@ public class FineCommand implements CommandHandler {
         }
 
         String formattedAmount = accountService.formatAmount(fine.getAmount());
-        message.send(sender, "treasury.fine.firm.issued",
-                "firm", business.getDisplayName(),
-                "amount", formattedAmount,
-                "reason", reason);
+        message.send(
+                sender,
+                "treasury.fine.firm.issued",
+                "firm",
+                business.getDisplayName(),
+                "amount",
+                formattedAmount,
+                "reason",
+                reason);
+        fineWebhook.sendFineIssued(fine);
+    }
+
+    @Route("account <account> <id> <amount> <reason>")
+    @Async
+    @Description("Fine an account by number, paid into a government account")
+    public void fineAccount(
+            @Sender Player sender,
+            @Arg("account") String accountName,
+            @Arg("id") int debtorAccountId,
+            @Arg("amount") BigDecimal amount,
+            @GreedyArg("reason") String reason) {
+        Account government = resolveGovAccount(accountName, sender);
+        if (government == null) return;
+        if (!canFineFrom(sender, government)) {
+            message.send(sender, "treasury.gov.no-access");
+            return;
+        }
+        try {
+            Money.requirePositive(amount, "fine amount > 0");
+        } catch (IllegalArgumentException e) {
+            message.send(sender, "treasury.general.invalid-amount");
+            return;
+        }
+        Account debtor = accountService.getAccountById(debtorAccountId);
+        if (debtor == null || debtor.isArchived()) {
+            message.send(sender, "treasury.account.target.not-found", "id", String.valueOf(debtorAccountId));
+            return;
+        }
+        // SYSTEM sources can mint money. Department membership must not grant
+        // the equivalent of /eco give through an involuntary fine.
+        if (debtor.getAccountType() == AccountType.SYSTEM && !sender.hasPermission("treasury.gov.admin")) {
+            message.send(sender, "treasury.gov.no-access");
+            return;
+        }
+        if (debtorAccountId == government.getAccountId()) {
+            message.send(sender, "treasury.gov.account.transfer.same-account", "name", debtor.getDisplayName());
+            return;
+        }
+
+        GovernmentFine fine;
+        try {
+            fine = govService.issueFine(
+                    debtorAccountId, government.getAccountId(), amount, reason, sender.getUniqueId());
+        } catch (InsufficientFineFundsException e) {
+            message.send(sender, "treasury.fine.account.insufficient", "account", debtor.getDisplayName());
+            return;
+        } catch (GovAccountNotFoundException e) {
+            message.send(sender, "treasury.gov.not-found", "account", e.getIdentifier());
+            return;
+        }
+        String formattedAmount = accountService.formatAmount(fine.getAmount());
+        message.send(
+                sender,
+                "treasury.fine.account.issued",
+                "account",
+                debtor.getDisplayName(),
+                "amount",
+                formattedAmount,
+                "reason",
+                reason);
+        if (fine.getPlayerUuid() != null) {
+            Player online = Bukkit.getPlayer(fine.getPlayerUuid());
+            if (online != null) {
+                message.send(online, "treasury.fine.issued.notify", "amount", formattedAmount, "reason", reason);
+            }
+        }
         fineWebhook.sendFineIssued(fine);
     }
 
@@ -234,19 +305,23 @@ public class FineCommand implements CommandHandler {
 
         String playerName = resolveDebtorLabel(fine);
         String formattedAmount = accountService.formatAmount(fine.getAmount());
-        message.send(sender, "treasury.fine.revoked",
-                "id", String.valueOf(fineId),
-                "player", playerName,
-                "amount", formattedAmount);
+        message.send(
+                sender,
+                "treasury.fine.revoked",
+                "id",
+                String.valueOf(fineId),
+                "player",
+                playerName,
+                "amount",
+                formattedAmount);
 
         // Firm fines have no player to notify (null playerUuid — Bukkit.getPlayer
         // rejects a null id, and by now the refund has already committed).
         if (fine.getPlayerUuid() != null) {
             Player online = Bukkit.getPlayer(fine.getPlayerUuid());
             if (online != null) {
-                message.send(online, "treasury.fine.revoked.notify",
-                        "amount", formattedAmount,
-                        "reason", fine.getReason());
+                message.send(
+                        online, "treasury.fine.revoked.notify", "amount", formattedAmount, "reason", fine.getReason());
             }
         }
         fineWebhook.sendFineRevoked(fine);
@@ -288,21 +363,29 @@ public class FineCommand implements CommandHandler {
         String formattedAmount = accountService.formatAmount(fine.getAmount());
         String issuedDate = fine.getIssuedAt() != null ? DATE_FMT.format(fine.getIssuedAt()) : "—";
 
-        message.send(sender, "treasury.fine.info",
-                "id", String.valueOf(fineId),
-                "player", playerName,
-                "amount", formattedAmount);
-        message.send(sender, "treasury.fine.info.detail",
-                "reason", MiniMessageText.sanitize(fine.getReason()),
-                "issuer", issuerName,
-                "date", issuedDate);
+        message.send(
+                sender,
+                "treasury.fine.info",
+                "id",
+                String.valueOf(fineId),
+                "player",
+                playerName,
+                "amount",
+                formattedAmount);
+        message.send(
+                sender,
+                "treasury.fine.info.detail",
+                "reason",
+                MiniMessageText.sanitize(fine.getReason()),
+                "issuer",
+                issuerName,
+                "date",
+                issuedDate);
 
         if (fine.isRevoked()) {
             String revokerName = fine.getRevokedBy() != null ? resolvePlayerName(fine.getRevokedBy()) : "—";
             String revokeDate = fine.getRevokedAt() != null ? DATE_FMT.format(fine.getRevokedAt()) : "—";
-            message.send(sender, "treasury.fine.info.revoked",
-                    "revoker", revokerName,
-                    "revoke_date", revokeDate);
+            message.send(sender, "treasury.fine.info.revoked", "revoker", revokerName, "revoke_date", revokeDate);
         }
     }
 
@@ -342,12 +425,19 @@ public class FineCommand implements CommandHandler {
             String formattedAmount = accountService.formatAmount(fine.getAmount());
             String date = fine.getIssuedAt() != null ? DATE_FMT.format(fine.getIssuedAt()) : "—";
             String revokedTag = fine.isRevoked() ? " <gray>[REVOKED]</gray>" : "";
-            message.send(sender, "treasury.fine.list.entry",
-                    "id", String.valueOf(fine.getFineId()),
-                    "amount", formattedAmount,
-                    "reason", MiniMessageText.sanitize(fine.getReason()),
-                    "date", date,
-                    "revoked_tag", revokedTag);
+            message.send(
+                    sender,
+                    "treasury.fine.list.entry",
+                    "id",
+                    String.valueOf(fine.getFineId()),
+                    "amount",
+                    formattedAmount,
+                    "reason",
+                    MiniMessageText.sanitize(fine.getReason()),
+                    "date",
+                    date,
+                    "revoked_tag",
+                    revokedTag);
         }
     }
 

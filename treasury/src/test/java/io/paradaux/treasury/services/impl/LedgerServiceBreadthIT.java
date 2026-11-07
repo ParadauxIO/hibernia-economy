@@ -2,6 +2,7 @@ package io.paradaux.treasury.services.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.mappers.LedgerMapper;
 import io.paradaux.treasury.model.Page;
@@ -13,7 +14,6 @@ import io.paradaux.treasury.model.economy.TransferRequest;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.testsupport.IntegrationTestBase;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -292,15 +292,16 @@ class LedgerServiceBreadthIT extends IntegrationTestBase {
 
     private Account createPersonalAccount(double startingBalance) {
         UUID owner = UUID.randomUUID();
-        Account a = new Account();
-        a.setAccountType(AccountType.PERSONAL);
-        a.setOwnerUuid(owner);
-        a.setDisplayName(owner.toString());
-        a.setRequiresAuthorization(false);
-        a.setArchived(false);
-        a.setAllowOverdraft(false);
-        a.setCreditLimit(BigDecimal.ZERO);
-        accountMapper.insertAccount(a);
+        Account a = Account.builder()
+                .accountType(AccountType.PERSONAL)
+                .ownerUuid(owner)
+                .displayName(owner.toString())
+                .requiresAuthorization(false)
+                .isArchived(false)
+                .allowOverdraft(false)
+                .creditLimit(BigDecimal.ZERO)
+                .build();
+        a = a.withAccountId(accountMapper.insertAccount(a));
         accountMapper.seedBalance(a.getAccountId());
         if (startingBalance > 0) {
             Account gov = accountService.getGovernmentAccountByName("starting-balances");

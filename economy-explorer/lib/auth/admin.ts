@@ -1,8 +1,9 @@
+import type { AppHref } from '@/lib/routes';
 import type { Viewer } from './viewer';
 import { hasPermission, type Permission } from './policy';
 
 export interface AdminTool {
-  href: string;
+  href: AppHref;
   title: string;
   /** The permission that opens the tool. */
   permission: Permission;
@@ -14,6 +15,7 @@ export interface AdminTool {
 }
 
 export const ADMIN_TOOLS: AdminTool[] = [
+  { href: '/admin/feature-flags', title: 'Feature flags', permission: 'feature_flags.read', desc: 'Enable or disable release features across this economy.', group: 'Oversight' },
   { href: '/admin/players', title: 'Players', permission: 'player.read.all', desc: 'Look up a player and open their personal dashboard.', group: 'Economy' },
   { href: '/admin/accounts', title: 'Accounts', permission: 'account.admin.read', desc: 'Move money, rename, change owner, archive. Each change needs its own permission.', group: 'Economy' },
   { href: '/admin/firms', title: 'Firms', permission: 'firm.admin.read', desc: 'Rename, update details or disband a firm.', group: 'Economy' },
@@ -24,6 +26,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
   { href: '/admin/api-keys', title: 'API keys', permission: 'api_keys.read', desc: 'API keys and issuer rate limits.', group: 'Integrations' },
   { href: '/admin/webhooks', title: 'Webhooks', permission: 'webhooks.read.all', desc: 'Every transaction-feed webhook.', group: 'Integrations' },
   { href: '/admin/audit', title: 'Audit log', permission: 'audit.read', desc: 'Who viewed or changed what, with the values before and after.', group: 'Oversight' },
+  { href: '/admin/gov-units', title: 'Government units', permission: 'gov_units.manage', desc: 'Group government accounts into units for the government workspace.', group: 'Oversight' },
 ];
 
 /** True when the viewer holds every permission the tool's page checks. */

@@ -7,19 +7,18 @@ import io.paradaux.treasuryrestapi.exception.ApiException;
 import io.paradaux.treasuryrestapi.mapper.ApiKeyMapper;
 import io.paradaux.treasuryrestapi.model.ApiKey;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.UUID;
+import javax.crypto.SecretKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -29,10 +28,12 @@ public class AuthService {
 
     private final ApiKeyMapper apiKeyMapper;
     private final SecretKey signingKey;
+    private final FeatureFlagService flags;
 
-    public AuthService(ApiKeyMapper apiKeyMapper, SecretKey signingKey) {
+    public AuthService(ApiKeyMapper apiKeyMapper, SecretKey signingKey, FeatureFlagService flags) {
         this.apiKeyMapper = apiKeyMapper;
         this.signingKey = signingKey;
+        this.flags = flags;
     }
 
     /**
@@ -42,6 +43,7 @@ public class AuthService {
      */
     @Transactional
     public RotateResponse rotateToken(VerifiedToken verified) {
+        if ("GOVERNMENT".equals(verified.keyType())) flags.requireEnabled("treasury.government_api_keys");
         log.debug("Beginning token rotation for keyId={}", verified.keyId());
 
         // Re-confirm revoked = 0 under a SELECT FOR UPDATE lock
@@ -63,15 +65,15 @@ public class AuthService {
                 verified.keyId(),
                 newJti.toString(),
                 LocalDateTime.ofInstant(now, ZoneOffset.UTC),
-                LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC)
-        );
+                LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
         if (rows != 1) {
             // The UPDATE has WHERE revoked = 0; a 0-row result means the key
             // was revoked between the FOR UPDATE check above and the UPDATE.
-            log.warn("Token rotation no-op: keyId={} rotation UPDATE affected 0 rows " +
-                    "(key likely revoked concurrently)", verified.keyId());
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "TOKEN_REVOKED",
-                    "Token has been revoked.");
+            log.warn(
+                    "Token rotation no-op: keyId={} rotation UPDATE affected 0 rows "
+                            + "(key likely revoked concurrently)",
+                    verified.keyId());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "TOKEN_REVOKED", "Token has been revoked.");
         }
 
         log.info("Token rotated for keyId={}, newJti={}, expiresAt={}", verified.keyId(), newJti, expiresAt);
@@ -92,20 +94,21 @@ public class AuthService {
             throw new ApiException(HttpStatus.NOT_FOUND, "KEY_NOT_FOUND", "API key not found.");
         }
         if (locked.isRevoked()) {
-            throw new ApiException(HttpStatus.CONFLICT, "TOKEN_REVOKED",
-                    "Key is revoked; revoked keys cannot be rotated.");
+            throw new ApiException(
+                    HttpStatus.CONFLICT, "TOKEN_REVOKED", "Key is revoked; revoked keys cannot be rotated.");
         }
 
         UUID newJti = UUID.randomUUID();
         Instant now = Instant.now();
         Instant expiresAt = now.plus(TOKEN_LIFETIME_DAYS, ChronoUnit.DAYS);
 
-        int rows = apiKeyMapper.rotateKey(keyId, newJti.toString(),
+        int rows = apiKeyMapper.rotateKey(
+                keyId,
+                newJti.toString(),
                 LocalDateTime.ofInstant(now, ZoneOffset.UTC),
                 LocalDateTime.ofInstant(expiresAt, ZoneOffset.UTC));
         if (rows != 1) {
-            throw new ApiException(HttpStatus.CONFLICT, "ROTATE_FAILED",
-                    "Rotation failed (key revoked concurrently).");
+            throw new ApiException(HttpStatus.CONFLICT, "ROTATE_FAILED", "Rotation failed (key revoked concurrently).");
         }
         log.info("Admin force-rotated keyId={} newJti={} expiresAt={}", keyId, newJti, expiresAt);
         return expiresAt;
@@ -114,8 +117,8 @@ public class AuthService {
     private String buildJwt(VerifiedToken verified, UUID jti, Instant issuedAt, Instant expiresAt) {
         JwtBuilder builder = Jwts.builder()
                 .header()
-                    .add("kid", String.valueOf(verified.keyId()))
-                    .and()
+                .add("kid", String.valueOf(verified.keyId()))
+                .and()
                 .subject(verified.ownerUuid().toString())
                 .claim("type", verified.keyType())
                 .id(jti.toString())
@@ -123,7 +126,7 @@ public class AuthService {
                 .expiration(Date.from(expiresAt));
 
         if (verified.accountId() != null) builder.claim("acc", verified.accountId());
-        if (verified.firmId() != null)    builder.claim("firm", verified.firmId());
+        if (verified.firmId() != null) builder.claim("firm", verified.firmId());
 
         // Pin HS256 explicitly. JJWT picks HS256 from the SecretKey's algorithm
         // today, but a future major version could change the default. The

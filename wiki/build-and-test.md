@@ -194,11 +194,11 @@ ratcheted **Spotless** check in `check`. Config lives in
 
 - Java: **palantir-java-format**. Build scripts: **ktlint** (`intellij_idea`
   style). `*.md`/`*.yml`/`*.sql`: no trailing whitespace, newline at EOF.
-- **Ratcheted from `origin/develop`**: only files that differ from it are checked
+- **Ratcheted from `origin/main`**: only files that differ from it are checked
   or formatted, so the tree is converted one touched file at a time instead of
   in one reformat that would conflict with every open branch. Touch a file, and
   the *whole* file must be formatted — run `spotlessApply` before committing.
-- The ref must exist locally (`git fetch origin develop`; in CI, check out with
+- The ref must exist locally (`git fetch origin main`; in CI, check out with
   `fetch-depth: 0`). If it's missing, Spotless is skipped with a warning — and
   `check` fails when `CI=true`, so a shallow CI checkout can't pass silently.
   Ratchet from something else with `-PspotlessRatchetFrom=<ref>`.
@@ -311,6 +311,22 @@ npm run typecheck && npm run lint
 npm run coverage   # tests (uses a MariaDB service container in CI)
 ```
 
+Typed routes are enabled (ADT-151). Run `npm run typecheck` to generate Next's
+route declarations before checking navigation. Application navigation models use
+`AppHref` from `lib/routes.ts`; shared Next adapters preserve `Route<T>` and
+framework-neutral tables carry their caller's href type. Keep literal path types
+in URL builders rather than asserting `as Route`. Compile-only negative cases in
+`test/types/routes.tsx` ensure misspelled destinations fail the check. The docs
+index has an explicit page alongside its catch-all so `/docs` appears in Next's
+generated route union.
+
+`npm run typecheck` uses the native TypeScript 7 `tsc` executable, installed as
+the `@typescript/native` npm alias. The `typescript` package name aliases
+`@typescript/typescript6` so ESLint, Next.js, and code generation can still use
+the compiler API that TypeScript 7 does not provide. Keep both aliases when
+updating dependencies; `tsc --version` reports 7.x while
+`node -p 'require("typescript").version'` reports 6.x.
+
 The SQL integration suite and the Playwright end-to-end suite both need a
 **disposable** MariaDB — every table in it is dropped, rebuilt by applying the
 real `economy-flyway` migrations in version order (from Node; no JVM needed), and
@@ -342,6 +358,21 @@ seeded or started in that mode. CI runs both suites in the `Explorer` job of `ci
 4. For new plugins that shade, add `tasks.jar { enabled = false }` — with Shadow 9
    both `:jar` and `:shadowJar` target `build/libs/<name>.jar` and `:jar` would
    otherwise overwrite the fat jar.
+
+### ChestShop account lookup concurrency
+
+AccountServiceImpl performs SQLite lookups outside its cache-publication monitor
+(ADT-132). Cache updates across UUID, full-name and short-name indexes remain
+atomic with respect to service lookups. A revision counter makes in-flight reads
+retry after a username write, including when the new cache entry has been evicted.
+Concurrent cache misses may issue duplicate reads; misses are not cached.
+
+Username writers share a separate lock across short-name allocation and save,
+because the mapper upserts by short name. This prevents two writers from assigning
+the same sign name while allowing unrelated lookups to proceed. Database calls
+remain synchronous for the caller; this does not make main-thread misses async.
+The account-service and SimpleCache tests use latches to exercise blocked I/O,
+concurrent publication, rename freshness, and short-name collisions.
 
 ### ChestShop recovery audit
 

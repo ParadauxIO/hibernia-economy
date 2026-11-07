@@ -1,16 +1,16 @@
 'use client';
-// The phone menu: every section and its pages in one sheet, plus the theme
-// switch. A native modal <dialog>, so the browser provides the focus trap,
+// The phone menu: every section and its pages in one sheet, Admin for admins,
+// plus the theme switch. A native modal <dialog>, so the browser provides the focus trap,
 // inert page and Escape; focus returns to the Menu button on close.
 
 import Link from 'next/link';
-import type { Route } from 'next';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useViewer } from '@/components/ViewerContext';
 import { ModeToggle } from '@/components/ModeToggle';
 import { CloseIcon, MenuIcon } from '@/components/HeaderIcons';
 import { itemMatches, sectionForPath, visibleSections } from '@/lib/nav';
+import { isAdminPath } from '@/components/HeaderAdmin';
 
 export function HeaderMenu() {
   const path = usePathname();
@@ -61,7 +61,7 @@ export function HeaderMenu() {
                     <ul>
                       {items.map((item) => (
                         <li key={item.href}>
-                          <Link href={item.href as Route} prefetch={false} className="shell-menu-link" aria-current={itemMatches(item, path) ? 'page' : undefined} onClick={() => setOpen(false)}>
+                          <Link href={item.href} prefetch={false} className="shell-menu-link" aria-current={itemMatches(item, path) ? 'page' : undefined} onClick={() => setOpen(false)}>
                             {item.label}
                           </Link>
                         </li>
@@ -69,13 +69,20 @@ export function HeaderMenu() {
                     </ul>
                   </>
                 ) : (
-                  <Link href={section.href as Route} prefetch={false} className="shell-menu-link is-section" aria-current={active?.id === section.id ? 'page' : undefined} onClick={() => setOpen(false)}>
+                  <Link href={section.href} prefetch={false} className="shell-menu-link is-section" aria-current={active?.id === section.id ? 'page' : undefined} onClick={() => setOpen(false)}>
                     {section.label}
                   </Link>
                 )}
               </div>
             );
           })}
+          {viewer.isAdmin && (
+            <div className="shell-menu-section">
+              <Link href="/admin" prefetch={false} className="shell-menu-link is-section" aria-current={isAdminPath(path) ? 'page' : undefined} onClick={() => setOpen(false)}>
+                Admin
+              </Link>
+            </div>
+          )}
         </nav>
         <div className="shell-menu-foot">
           <span>Appearance</span>

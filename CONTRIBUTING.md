@@ -20,12 +20,14 @@ across GitHub. No work should land without a tracked issue behind it.
 
 ## Branching model
 
-- **`develop`** is the integration branch — all work targets it.
-- **`main`** is reserved for **release tagging**. The only pull request that
-  normally exists is the `develop` → `main` **release** PR, whose description
-  enumerates every `PAR-…` shipping in that release.
+Branch from **`main`** and open pull requests against **`main`**. Work now lands
+on main directly; there is no develop integration branch or develop-to-main
+release PR.
 
-Please branch from `develop` and open your PR against `develop`.
+Keep incomplete features disabled behind [release flags](wiki/feature-flags.md).
+Features requiring a database migration must preserve existing behavior while
+disabled: Explorer may deploy up to 12 hours before the plugins apply migrations.
+An operator enables the feature only after the schema and consumers are ready.
 
 ## Before you start
 

@@ -20,9 +20,10 @@ These are the initial role settings; administrators can change their permissions
 | Role | Initial access |
 |---|---|
 | **player** | Default for signed-in users. Own information, owned accounts, directly shared accounts and accounts shared with an LP group they belong to. Firm members see the roster; proprietors and active FINANCIAL/ADMIN staff see firm financials. |
-| **government** | Player access plus the government dashboard and fines for government accounts they own or have direct/group read access to. |
+| **government** | Player access plus the government workspace (`/gov`) for government accounts they own or have direct/group read access to, including its Audit page (`government.audit.read`). |
+| **compliance** | Not given to anyone by default. Every firm's financials, the global ledger and sales attribution, for the compliance tools. Link it to a group to use it ([Government account access](/docs/admin/government-accounts#compliance-tools)). |
 | **moderator** | Read-only investigation of all accounts, firms, transactions and sales, with privileged reads audited. No administrative controls or writes. |
-| **admin** | Every permission, including administration of access, accounts, firms, API keys and webhooks. |
+| **admin** | Every permission, including administration of access, accounts, firms, API keys, webhooks and government units (`gov_units.manage`). |
 
 Roles combine. Government is not a rank above player or below moderator: someone
 may hold both government and moderator. Public balances and aggregate market data
@@ -66,6 +67,31 @@ a privileged group. Concurrent edits are checked, and stale role edits must be
 refreshed. Changes take effect on the next request without signing in again.
 An admin role name is not a bypass: its stored permissions are authoritative.
 Keep an independent administrator for recovery before changing your own access.
+
+## Government access for every signed-in user
+
+To make government records available to everyone who signs in, open
+**Admin → Roles → Player** and add `government.read.all`, keeping the existing
+permissions. The Player role is the authenticated baseline, including users who
+have not linked Minecraft. The Government tab appears on the next request and
+opens all active government accounts. Anonymous visitors remain excluded.
+`government.read` alone requires a linked player with a government account in
+scope. Audit pages still require `government.audit.read`; compliance uses its
+own permissions.
+
+A LuckPerms `default` group is unnecessary for this policy: it syncs offline
+players as well as current users, potentially creating hundreds of thousands of
+memberships. A group with no roles grants no access, regardless of its size.
+After configuring and verifying the Player baseline, clear the redundant Default
+group's LuckPerms source in **Admin → Groups**. This removes only its synced
+memberships; manual memberships remain. Check that the group serves no other
+purpose first. To reverse the government-access change, remove only the added
+permission from Player.
+
+Group and role directories have page controls. Group members and direct role
+assignments show 50 rows per page by default, with name/UUID search across all
+pages. Group members can also be filtered by source. The total counts matching
+memberships, including expired syncs and separate sources for the same player.
 
 ## Direct roles
 
@@ -135,3 +161,12 @@ They also expire after one hour without a successful refresh. Changing or removi
 a mapping invalidates its old grants immediately. The `/treasuryapi ui sync`
 command refreshes LuckPerms only; allow the next scheduled pass for firm/property
 changes. Operators must apply database migration V37 before deploying this feature.
+
+## Correct a group's name or description
+
+Open the group under **Admin → Groups** and edit **Group details**. This requires
+`groups.update`, plus authority to grant every role the group currently grants.
+Names must be unique and 1–64 characters; descriptions may be cleared and are
+limited to 255 characters. Saving preserves the group ID, memberships, sync
+sources and role grants. Reload to verify the change; the audit log records
+**Group: edit details** with the previous and new values.

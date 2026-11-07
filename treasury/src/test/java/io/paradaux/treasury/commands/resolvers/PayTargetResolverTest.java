@@ -1,17 +1,16 @@
 package io.paradaux.treasury.commands.resolvers;
 
-import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.services.AccountService;
-import io.paradaux.treasury.services.cache.OnlinePlayerRoster;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.treasury.model.economy.Account;
+import io.paradaux.treasury.services.AccountService;
+import io.paradaux.treasury.services.cache.OnlinePlayerRoster;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link PayTargetResolver}. After PAR-0003 the resolver reads online
@@ -25,9 +24,7 @@ class PayTargetResolverTest {
     private PayTargetResolver resolver;
 
     private static Account gov(String name, boolean archived) {
-        Account a = new Account();
-        a.setDisplayName(name);
-        a.setArchived(archived);
+        Account a = Account.builder().displayName(name).isArchived(archived).build();
         return a;
     }
 
@@ -42,10 +39,7 @@ class PayTargetResolverTest {
     @Test
     void resolve_wrapsTokenVerbatim_neverEmpty() {
         // The framework must not short-circuit; PayCommand owns validity.
-        assertThat(resolver.resolve("Anybody", null))
-                .isPresent()
-                .get()
-                .isEqualTo(new PayTarget("Anybody"));
+        assertThat(resolver.resolve("Anybody", null)).isPresent().get().isEqualTo(new PayTarget("Anybody"));
     }
 
     @Test
@@ -66,8 +60,7 @@ class PayTargetResolverTest {
     @Test
     void suggestions_mergePlayersAndGovernmentNames() {
         roster.add(UUID.randomUUID(), "GovBanker");
-        when(accountService.listGovernmentAccounts())
-                .thenReturn(List.of(gov("GovReserve", false)));
+        when(accountService.listGovernmentAccounts()).thenReturn(List.of(gov("GovReserve", false)));
 
         List<String> hits = resolver.suggestions("Gov", null);
 
@@ -95,10 +88,8 @@ class PayTargetResolverTest {
     @Test
     void suggestions_emptyPrefix_matchesEverything() {
         roster.add(UUID.randomUUID(), "Steve");
-        when(accountService.listGovernmentAccounts())
-                .thenReturn(List.of(gov("GovReserve", false)));
+        when(accountService.listGovernmentAccounts()).thenReturn(List.of(gov("GovReserve", false)));
 
-        assertThat(resolver.suggestions("", null))
-                .containsExactlyInAnyOrder("Steve", "GovReserve");
+        assertThat(resolver.suggestions("", null)).containsExactlyInAnyOrder("Steve", "GovReserve");
     }
 }

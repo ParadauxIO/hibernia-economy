@@ -62,11 +62,7 @@ public class SecurityConfig {
                         // status instead of masking it as 401.
                         .dispatcherTypeMatchers(DispatcherType.ERROR)
                         .permitAll()
-                        // Public, read-only ChestShop market data — no JWT (JwtAuthFilter
-                        // skips this prefix; throttled by IP via anonymousPerMinute).
-                        .requestMatchers("/api/v1/chestshop/**")
-                        .permitAll()
-                        // Public published server config (tax rates) — same treatment.
+                        // Public published server config (tax rates).
                         .requestMatchers("/api/v1/config/**")
                         .permitAll()
                         // Liveness/readiness probes, info and the Prometheus scrape. In

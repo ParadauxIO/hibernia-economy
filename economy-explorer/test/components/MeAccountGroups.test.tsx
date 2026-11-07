@@ -90,7 +90,7 @@ describe('<AccountGroups>', () => {
     const bakery = screen.getByRole('region', { name: /^Bakery ?· your role/ });
     expect(within(bakery).getByRole('note')).toHaveTextContent('no finance role at Bakery');
 
-    const gov = screen.getByRole('region', { name: 'Government' });
+    const gov = screen.getByRole('region', { name: 'Unassigned government accounts' });
     expect(within(gov).getByText('Group · parks')).toBeInTheDocument();
     expect(within(gov).getByText('−$50.00', { selector: '.me-group-total .num' })).toBeInTheDocument();
 

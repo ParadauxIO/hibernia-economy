@@ -6,8 +6,18 @@ description: Operate player investigations, account and firm controls, and audit
 
 # Explorer administration
 
-Open [Admin](/admin). Tools appear according to individual permissions; a role
-name alone does not authorize an action. See [roles](/docs/admin/roles).
+Open [Admin](/admin) from the top bar (on a phone, from the menu). Tools appear
+in the sidebar according to individual permissions; a role name alone does not
+authorize an action. See [roles](/docs/admin/roles).
+
+The admin dashboard shows what needs attention: failing and auto-disabled
+webhooks, overdue webhook deliveries (deliveries to webhooks created through a
+government API key, held while government API keys are switched off, are
+counted separately), API keys expiring within 14 days, and
+requests refused in the last 24 hours. Below that are the latest admin changes
+from the audit log, each plugin's latest ledger transaction, and the state of
+every feature flag. Each panel needs the permission of the tool it summarises,
+and its figures refresh about once a minute.
 Financial mutations require the [configured Treasury admin API](/docs/admin/config-services).
 
 ## Players, transactions and investigations
@@ -56,8 +66,10 @@ firm links, aliases, payroll, tax destinations, API keys and shops first. Use fi
 disband for retiring a whole firm. Keep the primitive `Eco`, starting-balance,
 tax and fines accounts available.
 
-If a transfer times out, inspect the ledger before retrying: the form has no
-stable retry key. For an incorrect completed transfer, make one documented
+If a transfer times out, retry with identical details in the same browser tab.
+The form retains its retry key across reloads until success; Treasury returns
+the original result instead of moving money twice. Changing the details starts a
+new transfer. If you close the tab, inspect the ledger before submitting again. For an incorrect completed transfer, make one documented
 compensating transfer and verify both records. Do not delete the original.
 
 ## Firm changes
@@ -74,16 +86,35 @@ page and confirm its ID, proprietor and linked accounts before changing it.
 Before disbanding, capture all linked IDs and balances and confirm the proprietor's
 personal account exists. If positive funds have no destination, REST refuses with
 `PROPRIETOR_NO_PERSONAL_ACCOUNT`. Resolve the ownership/account problem first.
+The firm report retains former account links with their removal times after disband.
+Its balances and archive states show current values, not historical snapshots.
 After success, inspect the returned per-account sweep amounts, destination,
 transactions and archive states. Investigate negative balances separately; a
 positive-balance sweep does not settle debt. There is no Explorer undo-disband
 button: restoring the business involves more than unarchiving its accounts.
 
-In-game staff overrides also support proprietor changes, account recovery and
-releasing a disbanded firm's reserved name. Follow the
-[Business reference](/docs/reference/business), using the old firm's numeric ID
-when its name has been reused. For an ownership transfer, verify staff/account
-access and API keys afterward, not just the displayed proprietor.
+The firm report's **Operator controls** provides:
+
+- **Change proprietor** (`firm.owner.change`): retype the firm name and enter the
+  incoming player name or UUID. Treasury updates the firm and every live linked
+  account, ends both proprietors' employee memberships, cancels pending
+  transfers, reconciles member/authorizer access, and revokes the outgoing
+  proprietor's business keys for this firm in one transaction. Independent
+  viewer and LuckPerms group grants remain; inspect those separately.
+- **Reconcile account access** (`firm.accounts.sync`): repair linked account
+  ownership and role-derived access. Proprietor/ADMIN gets AUTHORIZER; FINANCIAL
+  gets MEMBER. Stale member/authorizer grants are removed; independent viewer
+  and group grants remain.
+- **Balance-tax exemption** (`firm.tax.update`): set or clear the same exemption
+  used by `/business tax exempt`. The current state appears above the controls.
+- **Release reserved name** (`firm.name.release`): available for a disbanded firm.
+  Retype its name. Treasury refuses while any live account links remain. The
+  historical firm keeps its ID and name; a new firm can reserve that name.
+
+Reload the report and inspect account ownership/access and the audit log after
+an intervention. Use the firm's numeric ID once its name has been reused.
+These controls do not restore a disbanded business or change in-game chat state;
+see the [Business reference](/docs/reference/business) for in-game administration.
 
 ## Audit evidence
 

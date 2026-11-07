@@ -37,8 +37,9 @@ coverage/
 /test-results
 /.playwright
 audit/
-# Except the explorer's /admin/audit route.
+# Except the explorer's /admin/audit and /gov/audit routes.
 !economy-explorer/app/admin/audit/
+!economy-explorer/app/gov/audit/
 .env
 .env*.local
 run/

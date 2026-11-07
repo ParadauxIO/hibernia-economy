@@ -88,6 +88,10 @@ public class ItemServiceImpl implements ItemService {
     /** Parse a sign item string into an {@link ItemStack} (custom / alias / vanilla material), or {@code null}. */
     @Override
     public ItemStack parse(String itemString) {
+        // A bare database code is an exact escape from custom names and alias collisions.
+        if (itemString != null && itemString.matches("#[0-9a-zA-Z]+")) {
+            return itemCodes.decode(itemString);
+        }
         CustomItemResolver resolver = customItems;
         ItemStack item = resolver != null ? resolver.parseItem(itemString) : null;
         com.Acrobot.ChestShop.Events.ItemParseEvent event = new com.Acrobot.ChestShop.Events.ItemParseEvent(itemString);
@@ -186,6 +190,13 @@ public class ItemServiceImpl implements ItemService {
 
             ItemStack codeItem = parse(code);
             if (!materialService.equals(itemStack, codeItem)) {
+                String stored = itemCodes.getItemCode(itemStack);
+                String exact = stored == null ? null : "#" + stored;
+                if (exact != null
+                        && (maxWidth <= 0 || getMinecraftStringWidth(exact) <= maxWidth)
+                        && materialService.equals(itemStack, parse(exact))) {
+                    return exact;
+                }
                 throw new IllegalArgumentException("Cannot generate code for item " + itemStack
                         + " with maximum length of " + maxWidth
                         + " (code " + code + " results in item " + codeItem + ")");
@@ -234,22 +245,26 @@ public class ItemServiceImpl implements ItemService {
     }
 
     /** Resolve a configured alias for {@code itemString} to an {@link ItemStack}, or {@code null}. */
+    // Compiled once: parse runs for every hopper refresh, and String.replaceAll/split with these
+    // patterns compiled them on each call (PAR-523).
+    private static final java.util.regex.Pattern WORD_BREAK = java.util.regex.Pattern.compile("(?<!^)([A-Z1-9])");
+
+    private static final java.util.regex.Pattern NAME_SEPARATORS = java.util.regex.Pattern.compile("[ _\\-]");
+
     private ItemStack resolveAlias(String itemString) {
         String code = aliases.inverse().get(itemString);
-        if (code == null) {
-            String[] typeParts = itemString
-                    .replaceAll("(?<!^)([A-Z1-9])", "_$1")
-                    .toUpperCase(Locale.ROOT)
-                    .split("[ _\\-]");
+        if (code == null && !aliases.isEmpty()) {
+            String[] typeParts = NAME_SEPARATORS.split(
+                    WORD_BREAK.matcher(itemString).replaceAll("_$1").toUpperCase(Locale.ROOT));
             int length = Short.MAX_VALUE;
+            String upper = itemString.toUpperCase(Locale.ROOT);
             for (Map.Entry<String, String> entry : aliases.entrySet()) {
                 if (entry.getValue().length() < length
-                        && entry.getValue().toUpperCase(Locale.ROOT).startsWith(itemString.toUpperCase(Locale.ROOT))) {
+                        && entry.getValue().toUpperCase(Locale.ROOT).startsWith(upper)) {
                     length = (short) entry.getValue().length();
                     code = entry.getKey();
                 } else if (typeParts.length > 1) {
-                    String[] nameParts =
-                            entry.getValue().toUpperCase(Locale.ROOT).split("[ _\\-]");
+                    String[] nameParts = NAME_SEPARATORS.split(entry.getValue().toUpperCase(Locale.ROOT));
                     if (typeParts.length == nameParts.length) {
                         boolean matched = true;
                         for (int i = 0; i < nameParts.length; i++) {

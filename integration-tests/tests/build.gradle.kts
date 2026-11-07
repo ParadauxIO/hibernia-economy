@@ -20,11 +20,13 @@ dependencies {
     // JSON for Treasury REST API tests — parse response bodies into JsonNode.
     testImplementation("com.fasterxml.jackson.core:jackson-databind:2.22.4")
 
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.5")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.6")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.test {
+    // Exercise mock-client synchronization regressions before the live suite.
+    dependsOn(":mock-client:test")
     useJUnitPlatform()
     // External server/database state is not a Gradle input. A fresh disposable stack
     // must never inherit an UP-TO-DATE result from a previous acceptance run.

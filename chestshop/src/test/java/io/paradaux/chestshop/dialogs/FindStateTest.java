@@ -26,7 +26,7 @@ class FindStateTest {
             BigDecimal buy, BigDecimal sell, Integer stock, Integer capacity, int x, int y, int z) {
         return new FoundShop(
                 "DIAMOND", "Diamond", "DIAMOND", false, null, "Steve", buy, sell, 1, stock, capacity, "world", x, y, z,
-                0);
+                0, null, false);
     }
 
     private static BigDecimal money(String s) {
@@ -114,9 +114,28 @@ class FindStateTest {
                 100,
                 0,
                 0,
-                100 * 100);
+                100 * 100,
+                null,
+                false);
         FoundShop b = new FoundShop(
-                "DIAMOND", "Diamond", "DIAMOND", false, null, "B", money("5.00"), null, 1, 10, 10, "world", 1, 0, 0, 1);
+                "DIAMOND",
+                "Diamond",
+                "DIAMOND",
+                false,
+                null,
+                "B",
+                money("5.00"),
+                null,
+                1,
+                10,
+                10,
+                "world",
+                1,
+                0,
+                0,
+                1,
+                null,
+                false);
 
         // Distance is the primary key (higher weight) → nearer B first.
         state.select(ShopAttribute.DISTANCE, SortDirection.ASCENDING, 100);
@@ -158,14 +177,48 @@ class FindStateTest {
     @Test
     void foundShop_derivesTypeUnitPriceAndDistance() {
         FoundShop both = new FoundShop(
-                "k", "n", "m", false, null, "o", money("10.00"), money("6.00"), 4, 100, 50, "world", 3, 4, 0, 25);
+                "k",
+                "n",
+                "m",
+                false,
+                null,
+                "o",
+                money("10.00"),
+                money("6.00"),
+                4,
+                100,
+                50,
+                "world",
+                3,
+                4,
+                0,
+                25,
+                null,
+                false);
         assertThat(both.shopType()).isEqualTo(ShopType.BOTH);
         assertThat(both.unitBuyPrice()).isEqualTo(2.5); // 10 / 4
         assertThat(both.unitSellPrice()).isEqualTo(1.5); // 6 / 4
         assertThat(both.distanceBlocks()).isEqualTo(5); // sqrt(25)
 
         FoundShop crossWorld = new FoundShop(
-                "k", "n", "m", false, null, "o", money("1.00"), null, 1, null, null, "world", 0, 0, 0, Long.MAX_VALUE);
+                "k",
+                "n",
+                "m",
+                false,
+                null,
+                "o",
+                money("1.00"),
+                null,
+                1,
+                null,
+                null,
+                "world",
+                0,
+                0,
+                0,
+                Long.MAX_VALUE,
+                null,
+                false);
         assertThat(crossWorld.distanceBlocks()).isEqualTo(-1);
         assertThat(crossWorld.stockForSort()).isEqualTo(Long.MAX_VALUE);
         assertThat(crossWorld.shopType()).isEqualTo(ShopType.BUY);

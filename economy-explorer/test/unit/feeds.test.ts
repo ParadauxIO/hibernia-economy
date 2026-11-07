@@ -106,6 +106,10 @@ describe('transactions and sales tables', () => {
   it('maps categories to the plugins whose untaxed transactions they cover', () => {
     expect(pluginCategory('ChestShop')).toBe('shop_sales');
     expect(pluginCategory('treasury-salary')).toBe('wages');
+    expect(pluginCategory('realty-auction')).toBe('auction_proceeds');
+    expect(categoryPlugins(['auction_proceeds'], ['realty', 'realty-auction', 'treasury-salary']))
+      .toEqual({ plugins: ['realty-auction'], taxes: false });
+    expect(CATEGORY_OPTIONS.find((o) => o.value === 'auction_proceeds')?.label).toBe('Auction proceeds');
     expect(pluginCategory('Treasury-Core')).toBe('transfers');
     expect(pluginCategory(null)).toBe('transfers');
     const ledger = ['ChestShop', 'treasury-salary', 'treasury', null, 'realty', 'GriefPrevention'];

@@ -1,3 +1,4 @@
+import type { AppHref } from '@/lib/routes';
 // The explorer's information architecture (spec §6.1), as data. Pure and
 // isomorphic: the top bar, the section nav, the mobile menu, the command
 // palette and Breadcrumbs all read this one model, and the chrome infers the
@@ -15,7 +16,7 @@ export interface NavViewer {
 
 export interface NavItem {
   label: string;
-  href: string;
+  href: AppHref;
   /** Inclusive path match. Default: exact match on href. */
   match?: (path: string) => boolean;
   visible?: (viewer: NavViewer) => boolean;
@@ -27,7 +28,7 @@ export interface NavSection {
   id: SectionId;
   label: string;
   /** Where the top-bar entry goes. */
-  href: string;
+  href: AppHref;
   match: (path: string) => boolean;
   visible?: (viewer: NavViewer) => boolean;
   /** Section pages shown in the secondary nav under the top bar. Omitted when the section is one page or has its own navigation. */
@@ -37,8 +38,8 @@ export interface NavSection {
 const under = (prefix: string) => (p: string) => p === prefix || p.startsWith(`${prefix}/`);
 const has = (permission: Permission) => (v: NavViewer) => v.permissions.includes(permission);
 
-/** /gov is built by the GOV workstream; until it lands the section links to the current page. */
-export const GOVERNMENT_HREF = '/government';
+/** The government workspace (spec §10). /government redirects here. */
+export const GOVERNMENT_HREF = '/gov';
 
 export const NAV_SECTIONS: readonly NavSection[] = [
   {
@@ -121,7 +122,7 @@ export function sectionItems(path: string, viewer: NavViewer): { section: NavSec
 
 export interface Crumb {
   label: string;
-  href?: string | undefined;
+  href?: AppHref | undefined;
 }
 
 /**
@@ -141,7 +142,7 @@ export function sectionCrumbs(path: string): Crumb[] {
 /** The account-menu destinations (§6.1). Shared with the command palette. */
 export interface AccountLink {
   label: string;
-  href: string;
+  href: AppHref;
 }
 
 export const ACCOUNT_LINKS: readonly AccountLink[] = [

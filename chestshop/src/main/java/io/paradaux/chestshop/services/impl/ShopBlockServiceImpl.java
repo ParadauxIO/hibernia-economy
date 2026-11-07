@@ -1,13 +1,22 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.utils.InventoryUtil;
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.services.ShopBlockService;
+import static io.paradaux.chestshop.utils.BlockUtil.getState;
+import static io.paradaux.chestshop.utils.InventoryUtil.getLeftSide;
+import static io.paradaux.chestshop.utils.InventoryUtil.getRightSide;
+
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.ShopBlockService;
+import io.paradaux.chestshop.services.SignService;
 import io.paradaux.chestshop.utils.BlockUtil;
+import io.paradaux.chestshop.utils.InventoryUtil;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -16,14 +25,9 @@ import org.bukkit.block.DoubleChest;
 import org.bukkit.block.Sign;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.type.WallSign;
+import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static io.paradaux.chestshop.utils.InventoryUtil.getLeftSide;
-import static io.paradaux.chestshop.utils.InventoryUtil.getRightSide;
-import static io.paradaux.chestshop.utils.BlockUtil.getState;
 
 /**
  * The stateful block↔shop-sign geometry split out of {@code ShopBlockUtil} (PAR-282):
@@ -93,18 +97,24 @@ public class ShopBlockServiceImpl implements ShopBlockService {
     }
 
     private Container findConnectedContainer(Location location, BlockFace signFace) {
+        Block container = findConnectedContainerBlock(location.getBlock(), signFace);
+        return container == null ? null : (Container) container.getState();
+    }
+
+    /** The container block a sign at {@code signBlock} belongs to, without taking a state snapshot. */
+    private Block findConnectedContainerBlock(Block signBlock, BlockFace signFace) {
         if (signFace != null) {
-            Block faceBlock = location.clone().add(signFace.getModX(), signFace.getModY(), signFace.getModZ()).getBlock();
+            Block faceBlock = signBlock.getRelative(signFace);
             if (couldBeShopContainer(faceBlock)) {
-                return (Container) faceBlock.getState();
+                return faceBlock;
             }
         }
 
         for (BlockFace bf : BlockUtil.SHOP_FACES) {
             if (bf != signFace) {
-                Block faceBlock = location.clone().add(bf.getModX(), bf.getModY(), bf.getModZ()).getBlock();
+                Block faceBlock = signBlock.getRelative(bf);
                 if (couldBeShopContainer(faceBlock)) {
-                    return (Container) faceBlock.getState();
+                    return faceBlock;
                 }
             }
         }
@@ -113,6 +123,11 @@ public class ShopBlockServiceImpl implements ShopBlockService {
 
     @Override
     public List<Sign> findConnectedShopSigns(InventoryHolder chestShopInventoryHolder) {
+        return findConnectedShopSigns(chestShopInventoryHolder, true);
+    }
+
+    @Override
+    public List<Sign> findConnectedShopSigns(InventoryHolder chestShopInventoryHolder, boolean useSnapshot) {
         List<Sign> result = new ArrayList<>();
 
         if (chestShopInventoryHolder instanceof DoubleChest) {
@@ -126,28 +141,40 @@ public class ShopBlockServiceImpl implements ShopBlockService {
             Block leftChest = ((BlockState) leftChestSide).getBlock();
             Block rightChest = ((BlockState) rightChestSide).getBlock();
 
-            if (isShopBlock(leftChest)) {
-                result.addAll(findConnectedShopSigns(leftChest));
+            if (attachedSignsPossible(leftChest, useSnapshot)) {
+                result.addAll(findConnectedShopSigns(leftChest, useSnapshot));
             }
 
-            if (isShopBlock(rightChest)) {
-                result.addAll(findConnectedShopSigns(rightChest));
+            if (attachedSignsPossible(rightChest, useSnapshot)) {
+                result.addAll(findConnectedShopSigns(rightChest, useSnapshot));
             }
-        }
-
-        else if (chestShopInventoryHolder instanceof BlockState) {
+        } else if (chestShopInventoryHolder instanceof BlockState) {
             Block chestBlock = ((BlockState) chestShopInventoryHolder).getBlock();
 
-            if (isShopBlock(chestBlock)) {
-                result.addAll(findConnectedShopSigns(chestBlock));
+            if (attachedSignsPossible(chestBlock, useSnapshot)) {
+                result.addAll(findConnectedShopSigns(chestBlock, useSnapshot));
             }
         }
 
         return result;
     }
 
+    /**
+     * The live (hopper refresh) path skips the {@link #isShopBlock} gate: it validates every
+     * nearby sign, then the per-block search validates the attached ones again. Without the
+     * gate the result is the same, because that search returns only valid signs attached to
+     * this block. The snapshot path keeps its historical order (PAR-523).
+     */
+    private boolean attachedSignsPossible(Block chest, boolean useSnapshot) {
+        return useSnapshot ? isShopBlock(chest) : couldBeShopContainer(chest);
+    }
+
     @Override
     public List<Sign> findConnectedShopSigns(Block chestBlock) {
+        return findConnectedShopSigns(chestBlock, true);
+    }
+
+    private List<Sign> findConnectedShopSigns(Block chestBlock, boolean useSnapshot) {
         List<Sign> result = new ArrayList<>();
 
         for (BlockFace bf : BlockUtil.SHOP_FACES) {
@@ -157,13 +184,15 @@ public class ShopBlockServiceImpl implements ShopBlockService {
                 continue;
             }
 
-            Sign sign = (Sign) faceBlock.getState();
-
-            Container signContainer = findConnectedContainer(sign);
-            if (signContainer == null || !chestBlock.equals(signContainer.getBlock())) {
+            // Resolve the sign's container from block data first: only this chest's signs need a state.
+            BlockFace signFace = faceBlock.getBlockData() instanceof WallSign wallSign
+                    ? wallSign.getFacing().getOppositeFace()
+                    : null;
+            if (!chestBlock.equals(findConnectedContainerBlock(faceBlock, signFace))) {
                 continue;
             }
 
+            Sign sign = (Sign) getState(faceBlock, useSnapshot);
             if (signService.isValid(sign)) {
                 result.add(sign);
             }
@@ -176,14 +205,15 @@ public class ShopBlockServiceImpl implements ShopBlockService {
     public Sign findAnyNearbyShopSign(Block block) {
         for (BlockFace bf : BlockUtil.SHOP_FACES) {
             Block faceBlock = block.getRelative(bf);
-            if (!BlockUtil.isLoaded(faceBlock)) {
+            if (!BlockUtil.isLoaded(faceBlock) || !BlockUtil.isSignType(faceBlock.getType())) {
                 continue;
             }
 
             BlockData data = faceBlock.getBlockData();
             if (data instanceof WallSign) {
                 if (((WallSign) data).getFacing() != bf
-                        && couldBeShopContainer(faceBlock.getRelative(((WallSign) data).getFacing().getOppositeFace()))) {
+                        && couldBeShopContainer(faceBlock.getRelative(
+                                ((WallSign) data).getFacing().getOppositeFace()))) {
                     continue;
                 }
             } else if (!(data instanceof org.bukkit.block.data.type.Sign)) {
@@ -201,13 +231,52 @@ public class ShopBlockServiceImpl implements ShopBlockService {
 
     @Override
     public boolean couldBeShopContainer(Block block) {
-        return block != null && BlockUtil.isLoaded(block) && config.getShopContainers().contains(block.getType());
+        return block != null
+                && BlockUtil.isLoaded(block)
+                && config.getShopContainers().contains(block.getType());
+    }
+
+    // Inventory types the configured containers hold, derived once per parsed SHOP_CONTAINERS
+    // set; null when some container's type is unknown, which disables the pre-check.
+    private Set<Material> inventoryTypesFor;
+    private Set<InventoryType> shopInventoryTypes;
+
+    @Override
+    public boolean couldBeShopInventory(Inventory inventory) {
+        InventoryType type = inventory.getType();
+        if (type == null) {
+            return true; // unknown: leave the decision to couldBeShopContainer
+        }
+        Set<Material> containers = config.getShopContainers();
+        if (containers != inventoryTypesFor) {
+            Set<InventoryType> types = EnumSet.noneOf(InventoryType.class);
+            for (Material container : containers) {
+                InventoryType expected = inventoryType(container);
+                if (expected == null) {
+                    types = null;
+                    break;
+                }
+                types.add(expected);
+            }
+            shopInventoryTypes = types;
+            inventoryTypesFor = containers;
+        }
+        return shopInventoryTypes == null || shopInventoryTypes.contains(type);
+    }
+
+    /** The inventory type a container material holds, or {@code null} when unknown (no filtering). */
+    static InventoryType inventoryType(Material container) {
+        return switch (container) {
+            case CHEST, TRAPPED_CHEST -> InventoryType.CHEST;
+            case BARREL -> InventoryType.BARREL;
+            default -> container.name().endsWith("SHULKER_BOX") ? InventoryType.SHULKER_BOX : null;
+        };
     }
 
     @Override
     public boolean couldBeShopContainer(InventoryHolder holder) {
         return (holder instanceof Container && couldBeShopContainer(((Container) holder).getBlock()))
-                    || (holder instanceof DoubleChest && couldBeShopContainer(getLeftSide((DoubleChest) holder, false)));
+                || (holder instanceof DoubleChest && couldBeShopContainer(getLeftSide((DoubleChest) holder, false)));
     }
 
     @Override

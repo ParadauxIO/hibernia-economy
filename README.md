@@ -78,7 +78,7 @@ internals.
 | **`business/business-api/`** | Library jar | The public Business API (`FirmApi`, `StaffApi`, `RolePermission`, …). Published as `io.paradaux:business-api`. |
 | **`treasury-api-plugin/`** | Paper plugin | Issues and manages **JWT API keys** that authenticate callers of the REST API. (Not the same as the `treasury-api` jar.) |
 | **`treasury-rest-api/`** | Spring Boot service | A REST/HTTP surface over the ledger for tooling and integrations, with API-key auth and rate limiting. Ships as a Docker image. |
-| **`economy-flyway/`** | Flyway migrations | The **authoritative shared database schema**. All schema changes are versioned migrations here; deploys run through gated workflows. |
+| **`economy-flyway/`** | Flyway migrations | The **authoritative shared database schema**. All schema changes are versioned migrations here; Treasury bundles and applies them before economy startup. |
 | **`common/`** | Library jar | Framework-free shared kernel used by the MariaDB-writing modules: `UuidBin` (UUID↔BINARY(16)), `JwtKeys` (the single source of the mint/verify HMAC key derivation), `DataSourceProvider`, `BalanceTaxBrackets`. |
 | **`chestshop/`** | Paper plugin (fork) | Sign-based automated shops, integrated with Treasury and Business. A vendored fork of ChestShop-3, built as a single Gradle module against the Paper 26.3 API (the old per-server-version adapter modules were folded into the core). |
 | **`economy-explorer/`** | Next.js app | The public, read-side web explorer (balances, prices, money flow) **and** the player/admin documentation site served at `/docs`. |
@@ -187,8 +187,10 @@ and notes on running the test suites.
 
 ## Project conventions
 
-- **Branches:** work happens on **`develop`** (the integration branch). **`main`**
-  is reserved for release tagging.
+- **Branches:** branch from **`main`** and target **`main`** with pull requests.
+  Ship incomplete and migration-dependent features behind default-off
+  [release flags](wiki/feature-flags.md), preserving existing behavior until an
+  operator enables them after migrations and compatible deployments complete.
 - **Namespace:** all JVM code is under `io.paradaux.*`; build coordinates are
   `io.paradaux:<artifact>`.
 - **The ledger is authoritative:** never store balances or move money outside

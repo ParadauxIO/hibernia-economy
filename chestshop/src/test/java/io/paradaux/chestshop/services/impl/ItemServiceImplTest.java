@@ -1,7 +1,6 @@
 package io.paradaux.chestshop.services.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
@@ -112,6 +111,50 @@ class ItemServiceImplTest extends ServerTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"abc"})
+    void getName_rejectsFallbackWhenStorageFailsOrReturnsTheWrongItem(String storedCode) {
+        var codes = mock(io.paradaux.chestshop.services.ItemCodeService.class);
+        when(codes.encode(any(), anyInt())).thenReturn("Stone");
+        when(codes.getItemCode(any())).thenReturn(storedCode);
+        when(codes.decode(any())).thenReturn(new ItemStack(Material.STONE));
+        var material = new MaterialServiceImpl(config);
+        var service = new ItemServiceImpl(codes, material, new InventoryServiceImpl(config, material), dataFolder);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getSignName(new ItemStack(Material.DIAMOND)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Cannot generate code");
+    }
+
+    @Test
+    void configuredAliasCannotReplaceTheExactFallbackItem() {
+        writeAliases("Splash_Potion: Potion\n");
+        var service = newService();
+        var potion = new ItemStack(Material.POTION);
+        var resolver = mock(CustomItemResolver.class);
+        when(resolver.queryString(any(), anyInt())).thenReturn("Potion");
+        service.registerCustomItemResolver(resolver);
+        String code = service.getName(potion);
+        assertThat(code).startsWith("#");
+        assertThat(io.paradaux.chestshop.services.SignService.SHOP_SIGN_PATTERN[2])
+                .anyMatch(pattern -> pattern.matcher(code).matches());
+        assertThat(service.parse(code).isSimilar(potion)).isTrue();
+    }
+
+    @Test
+    void ambiguousCustomName_fallsBackToExactStoredItem() {
+        var service = newService();
+        var crown = new ItemStack(Material.QUARTZ, 6);
+        var resolver = mock(CustomItemResolver.class);
+        when(resolver.queryString(any(), anyInt())).thenReturn("crown");
+        when(resolver.parseItem("crown")).thenReturn(new ItemStack(Material.POTION));
+        service.registerCustomItemResolver(resolver);
+        String code = service.getSignName(crown);
+        assertThat(service.parse(code).isSimilar(crown)).isTrue();
+        assertThat(io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth(code))
+                .isLessThanOrEqualTo(90);
     }
 
     @Test
@@ -316,11 +359,11 @@ class ItemServiceImplTest extends ServerTest {
     }
 
     @Test
-    void getName_throwsWhenShortenedCodeNoLongerRoundTrips() {
+    void getName_usesExactCodeWhenShortenedMaterialIsAmbiguous() {
         // Netherite_Sword at width 20 shortens the material to "N", which resolves to NAME_TAG.
         ItemServiceImpl svc = newService();
-        assertThatThrownBy(() -> svc.getName(item(Material.NETHERITE_SWORD, 1), 20))
-                .isInstanceOf(IllegalArgumentException.class);
+        ItemStack sword = item(Material.NETHERITE_SWORD, 1);
+        assertThat(svc.parse(svc.getName(sword, 20)).isSimilar(sword)).isTrue();
     }
 
     // ---- reloadAliases ----------------------------------------------------------
@@ -361,39 +404,42 @@ class ItemServiceImplTest extends ServerTest {
 
     // ---- getName shortening block (driven via a resolver returning wide codes) ---
 
-    /** getName shortens a resolver-supplied wide code; here it no longer round-trips -> throws. */
-    private void assertShorteningThrows(String resolverCode, int maxWidth) {
+    /** getName shortens a resolver-supplied wide code; falling back to an exact code if the shortened name is ambiguous. */
+    private void assertShorteningRoundTrips(String resolverCode, int maxWidth) {
         ItemServiceImpl svc = newService();
         CustomItemResolver resolver = mock(CustomItemResolver.class);
         when(resolver.queryString(any(), anyInt())).thenReturn(resolverCode);
         svc.registerCustomItemResolver(resolver);
-        assertThatThrownBy(() -> svc.getName(item(Material.DIAMOND, 1), maxWidth))
-                .isInstanceOf(IllegalArgumentException.class);
+        ItemStack diamond = item(Material.DIAMOND, 1);
+        String code = svc.getName(diamond, maxWidth);
+        assertThat(svc.parse(code).isSimilar(diamond)).isTrue();
+        assertThat(io.paradaux.chestshop.utils.StringUtil.getMinecraftStringWidth(code))
+                .isLessThanOrEqualTo(maxWidth);
     }
 
     @Test
     void getName_shortens_poundOnlyCode() {
-        assertShorteningThrows("Netherite Sword Extra#1", 20); // pound, no colon
+        assertShorteningRoundTrips("Netherite Sword Extra#1", 20); // pound, no colon
     }
 
     @Test
     void getName_shortens_colonOnlyCode() {
-        assertShorteningThrows("Netherite Sword Extra:5", 20); // colon, no pound
+        assertShorteningRoundTrips("Netherite Sword Extra:5", 20); // colon, no pound
     }
 
     @Test
     void getName_shortens_plainCode_noPoundNoColon() {
-        assertShorteningThrows("Netherite Sword Extra Long", 20); // neither
+        assertShorteningRoundTrips("Netherite Sword Extra Long", 20); // neither
     }
 
     @Test
     void getName_shortens_poundBeforeColon() {
-        assertShorteningThrows("Netherite Sword#1:2", 20); // '#' before ':'
+        assertShorteningRoundTrips("Netherite Sword#1:2", 20); // '#' before ':'
     }
 
     @Test
     void getName_shortens_colonBeforePound() {
-        assertShorteningThrows("Netherite Sword:1#2", 20); // ':' before '#'
+        assertShorteningRoundTrips("Netherite Sword:1#2", 20); // ':' before '#'
     }
 
     @Test
@@ -435,7 +481,7 @@ class ItemServiceImplTest extends ServerTest {
     void getName_shortens_hashAtIndexZero() {
         // A resolver code whose '#' is at index 0: poundIndex==0 so the 152 guard (pound>0) is
         // false, and 155's (pound<0 || colon<pound) is also false -> material stays the whole code.
-        assertShorteningThrows("#NetheriteSwordExtraLong:5", 20);
+        assertShorteningRoundTrips("#NetheriteSwordExtraLong:5", 20);
     }
 
     @Test

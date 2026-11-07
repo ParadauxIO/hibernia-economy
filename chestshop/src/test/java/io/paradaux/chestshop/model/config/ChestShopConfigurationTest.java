@@ -1,13 +1,13 @@
 package io.paradaux.chestshop.model.config;
 
-import io.paradaux.chestshop.support.TestConfigs;
-import org.bukkit.Material;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.paradaux.chestshop.support.TestConfigs;
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.bukkit.Material;
+import org.junit.jupiter.api.Test;
 
 /**
  * Exercises the hand-written adapter getters on {@link ChestShopConfiguration} (the types the
@@ -31,9 +31,22 @@ class ChestShopConfigurationTest {
     }
 
     @Test
+    void getShopContainers_reusesTheParsedSetUntilTheListChanges() {
+        ChestShopConfiguration cfg = TestConfigs.with(TestConfigs.defaults(), "shopContainersRaw", List.of("chest"));
+        var first = cfg.getShopContainers();
+        assertThat(cfg.getShopContainers()).isSameAs(first);
+        TestConfigs.with(cfg, "shopContainersRaw", new java.util.ArrayList<>(List.of("chest"))); // equal, new list
+        assertThat(cfg.getShopContainers()).isSameAs(first);
+        assertThatThrownBy(() -> first.add(Material.STONE)).isInstanceOf(UnsupportedOperationException.class);
+
+        TestConfigs.with(cfg, "shopContainersRaw", List.of("chest", "barrel"));
+        assertThat(cfg.getShopContainers()).containsExactlyInAnyOrder(Material.CHEST, Material.BARREL);
+    }
+
+    @Test
     void getShopContainers_parsesValidMaterials_andSkipsInvalidOnes() {
-        ChestShopConfiguration cfg = TestConfigs.with(TestConfigs.defaults(), "shopContainersRaw",
-                List.of("chest", "not_a_real_material", "barrel"));
+        ChestShopConfiguration cfg = TestConfigs.with(
+                TestConfigs.defaults(), "shopContainersRaw", List.of("chest", "not_a_real_material", "barrel"));
 
         assertThat(cfg.getShopContainers()).containsExactlyInAnyOrder(Material.CHEST, Material.BARREL);
     }
@@ -48,8 +61,8 @@ class ChestShopConfigurationTest {
 
     @Test
     void getRemoveEmptyWorlds_copiesRawList() {
-        ChestShopConfiguration cfg = TestConfigs.with(TestConfigs.defaults(), "removeEmptyWorldsRaw",
-                List.of("world", "world_nether"));
+        ChestShopConfiguration cfg =
+                TestConfigs.with(TestConfigs.defaults(), "removeEmptyWorldsRaw", List.of("world", "world_nether"));
         assertThat(cfg.getRemoveEmptyWorlds()).containsExactlyInAnyOrder("world", "world_nether");
     }
 
@@ -65,8 +78,8 @@ class ChestShopConfigurationTest {
     @Test
     void getServerEconomyAccountUuid_parsesConfiguredValue() {
         UUID id = UUID.randomUUID();
-        ChestShopConfiguration cfg = TestConfigs.with(TestConfigs.defaults(),
-                "serverEconomyAccountUuidRaw", id.toString());
+        ChestShopConfiguration cfg =
+                TestConfigs.with(TestConfigs.defaults(), "serverEconomyAccountUuidRaw", id.toString());
         assertThat(cfg.getServerEconomyAccountUuid()).isEqualTo(id);
     }
 
@@ -80,8 +93,8 @@ class ChestShopConfigurationTest {
 
     @Test
     void getExcludedItemAttributes_copiesRawList() {
-        ChestShopConfiguration cfg = TestConfigs.with(TestConfigs.defaults(), "excludedItemAttributesRaw",
-                List.of("Damage", "Enchantments"));
+        ChestShopConfiguration cfg = TestConfigs.with(
+                TestConfigs.defaults(), "excludedItemAttributesRaw", List.of("Damage", "Enchantments"));
         assertThat(cfg.getExcludedItemAttributes()).containsExactlyInAnyOrder("Damage", "Enchantments");
     }
 }

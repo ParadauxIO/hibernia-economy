@@ -144,9 +144,37 @@ them; nothing else does.
   counterparty type and an internal-transfer flag), and `lib/categories.ts`
   maps them at read time. Changing the taxonomy never needs a backfill.
 
+## Government workspace tables (V45, PAR-539)
+
+- `explorer_gov_unit` / `explorer_gov_unit_account` group GOVERNMENT accounts
+  into units for `/gov`. A presentation grouping only: scope stays RBAC
+  (`government.read[.all]`) plus ReBAC (`account_read_access_web`), decided in
+  one place, `lib/services/governmentScope.ts` (the relationship predicate is
+  `governmentRelationship` in `lib/sql/government.ts`, which the top bar's
+  Government entry also uses). An account is in at most one unit
+  (`uq_gov_unit_account`); deleting a parent unit sets its children's parent to
+  NULL.
+- `explorer_watchlist(viewer_uuid_bin, account_id)` is the compliance
+  watchlist, per player.
+- V45 also seeds `government.audit.read` (government, admin),
+  `gov_units.manage` (admin) and a `compliance` role attached to nobody.
+- `/gov` aggregates read the rollups. Its top-N lists (largest movements, tax
+  payers, officials, payroll runs and recipients, the audit feed) read the
+  ledger inside a txn_id window of at most 31 days: `txnIdAt()` finds the first
+  transaction settled at a time on `idx_ledger_settle_time`, and postings are
+  then walked on `idx_postings_account_txn_amount`. This relies on txn ids being
+  assigned in settlement order.
+
 ## Deploying a schema change
 
-Schema deploys are **manual and gated** — there is no automatic "migrate on push".
+Normal plugin releases are staged on `main` merges and **migrated by Treasury on
+next server startup**, before economy services are published. SQL remains in
+`economy-flyway`; Treasury bundles it unchanged and preserves the existing history.
+See [production staging](ci-cd.md#production-plugin-staging-on-merge) for target
+configuration, migration credentials, startup failures and shared-service ordering.
+
+The following manual workflows remain administrative tools for rehearsals and
+explicit recovery; they are not part of the normal release path.
 The workflows live at the repo root under `.github/workflows/` (see
 [ci-cd.md](ci-cd.md)):
 
@@ -156,7 +184,7 @@ The workflows live at the repo root under `.github/workflows/` (see
 | `economy-flyway-migrate` | Applies migrations to a target. Requires typing the target name to confirm; supports a `baseline` flag for a pre-existing DB. |
 | `economy-flyway-staging-clean` | Wipes the **staging** schema for reproducible dry runs. Cannot target production. |
 
-The intended flow:
+For a deliberate administrative migration:
 
 1. Run **Info** against the target and read the plan.
 2. Run **Migrate** against the same target to apply it.
@@ -168,12 +196,12 @@ workflows offer are `democracycraft` and `statecraft`. The migrate workflow runs
 audit trail.
 
 A manual run uses the migrations of the branch picked under *Use workflow from*
-(the repository default is `develop`) — pick the ref you are actually deploying.
+(the repository default is `main`) — pick the ref you are actually deploying.
 
 > [!IMPORTANT]
 > Applying the schema and deploying the code are **separate, unsynchronised**
 > steps: images roll out on merge to `main`, plugins on a server restart, and
-> migrations only when someone runs the workflow. A migration that drops or
+> migrations on the next server startup (or through an explicit administrative run). A migration that drops or
 > renames something the running code still uses therefore needs a planned
 > stop — see the **[release runbook](release-runbook.md)** for the full order
 > of operations (backup → stop → migrate → deploy → verify → rollback).

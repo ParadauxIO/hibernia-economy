@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 import { db, uuidToBin } from '@/lib/db';
 import { getViewer } from '@/lib/auth/viewer';
 import { createRole, updateRole, deleteRole, setDirectRoleMember, type RoleInput } from '@/lib/services/role';
-import { setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, removeManualMember } from '@/lib/services/group';
+import { updateGroupMetadata, getGroup, setGroupCapabilities, addManualMember, setLuckpermsNode, deleteGroup, removeManualMember } from '@/lib/services/group';
 import { resolveAuthorization, listRoleDefinitions, permissionsForRoles } from '@/lib/sql/role';
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: vi.fn() }));
 import { permissionsFor } from '../role-fixtures';
@@ -27,6 +27,8 @@ import { parseTaxRates } from '@/lib/taxRates';
 import { accountsTableSuite } from './accountsTable';
 import { adminSuite } from './adminSuite';
 import { powerSuite } from './power';
+import { parseTableState } from '@/lib/tables/core';
+import { finesTable } from '@/lib/tables/fines';
 
 // Real queries against a real MariaDB (no mocking). Skipped unless RUN_INTEGRATION=1.
 const d = HAS_DB ? describe : describe.skip;
@@ -55,6 +57,13 @@ async function issueFine(fine: { reason: string; amount: number; payer?: string;
   const row = await sql`INSERT INTO government_fines (player_uuid_bin, gov_account_id, amount, reason, txn_id, issued_by_uuid_bin, revoked)
     VALUES (${uuidToBin(fine.payer ?? BOB)}, ${fine.govAccountId ?? 5}, ${fine.amount}, ${fine.reason}, ${txn.insertId}, ${uuidToBin(ALICE)}, ${fine.revoked ? 1 : 0})`.execute(db);
   return Number(row.insertId);
+}
+
+/** A /gov fines query over the last 30 days with the given table params. */
+function finesQuery(accountIds: number[], qs: string) {
+  const now = Date.now();
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return { accountIds, fromTs: `${day(now - 29 * 86_400_000)} 00:00:00`, toTs: `${day(now + 86_400_000)} 00:00:00`, state: parseTableState(new URLSearchParams(qs), finesTable) };
 }
 
 /** Remove fines issued by issueFine, then their debit txns (fk_fines_txn is RESTRICT). */
@@ -401,15 +410,15 @@ d('RBAC relationship snapshots', () => {
     }
   });
   it('government queries filter both details and aggregate totals', async () => {
-    const { getGovernmentAccounts, getRecentFines, getFineTotals } = await import('@/lib/sql/government');
+    const { getGovernmentAccounts, listFines, summariseFines } = await import('@/lib/sql/government');
     expect((await getGovernmentAccounts({ playerUuid: SECRETARY })).map(a => a.account_id)).toEqual([5]);
     expect(await getGovernmentAccounts({ playerUuid: DAVE })).toEqual([]);
     try {
       await issueFine({ reason: 'rbac-test', amount: 100 });
-      expect(await getRecentFines(30, 100, [])).toEqual([]);
-      expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
-      expect((await getRecentFines(30, 100, [5])).some(f => f.reason === 'rbac-test')).toBe(true);
-      expect((await getFineTotals(30, [5])).activeAmount).toBe('100.00');
+      expect(await listFines(finesQuery([], 'q=rbac-test'), 100, 0)).toEqual([]);
+      expect(await summariseFines(finesQuery([], 'q=rbac-test'))).toEqual({ count: 0, total: '0.00', revoked: 0, revoked_total: '0.00' });
+      expect((await listFines(finesQuery([5], 'q=rbac-test'), 100, 0)).some(f => f.reason === 'rbac-test')).toBe(true);
+      expect((await summariseFines(finesQuery([5], 'q=rbac-test&f=status:in:active'))).total).toBe('100.00');
     } finally {
       await deleteFines('rbac-test');
     }
@@ -421,6 +430,21 @@ d('configurable authorization policy', () => {
     await resetDb();
     await sql`INSERT INTO explorer_role (player_uuid_bin, role) VALUES (${uuidToBin(ALICE)}, 'admin')`.execute(db);
     vi.mocked(getViewer).mockResolvedValue({ anon: false, keycloakSub: 'test-policy-admin', minecraftUuid: ALICE, minecraftName: 'Alice', linked: true, role: 'admin', capabilities: ['player', 'admin'], permissions: permissionsFor('admin') });
+  });
+  it('renames a group in place without changing membership, grants or sources', async () => {
+    const before = await getGroup(1);
+    expect(before).not.toBeNull();
+    await updateGroupMetadata(1, { name: 'Renamed operators', description: 'Updated description' });
+    expect(await getGroup(1)).toEqual({ ...before, name: 'Renamed operators', description: 'Updated description' });
+    await updateGroupMetadata(1, { name: 'Renamed operators', description: '' });
+    expect((await getGroup(1))?.description).toBeNull();
+    await expect(updateGroupMetadata(1, { name: ' ', description: null })).rejects.toThrow();
+    await expect(updateGroupMetadata(1, { name: 'x'.repeat(65), description: null })).rejects.toThrow();
+    await sql`INSERT INTO explorer_group (group_id, name) VALUES (2, 'Other group')`.execute(db);
+    const other = await getGroup(2);
+    expect(other).not.toBeNull();
+    await expect(updateGroupMetadata(1, { name: other!.name, description: null })).rejects.toThrow('already exists');
+    expect((await getGroup(1))?.name).toBe('Renamed operators');
   });
   const custom: RoleInput = { key: 'auditor', name: 'Account auditor', description: 'Scoped custom role', permissions: ['account.read.all'] };
   it('seeds exactly the permission catalogue for admin and the documented defaults', async () => {
@@ -463,6 +487,21 @@ d('configurable authorization policy', () => {
     await createRole(custom);
     expect((await resolveAuthorization(BOB)).roles).not.toContain('auditor');
     expect((await resolveAuthorization(CAROL)).roles).not.toContain('auditor');
+  });
+  it('opens government for linked and unlinked logins through the player baseline without synced memberships (PAR-546)', async () => {
+    const { canSeeGovernment } = await import('@/lib/viewerSnapshot');
+    const role = (await listRoleDefinitions()).find(r => r.key === 'player')!;
+    await updateRole({ ...role, permissions: [...role.permissions, 'government.read.all'] }, role.revision);
+    for (const uuid of [null, DAVE]) {
+      const authorization = await resolveAuthorization(uuid);
+      expect(authorization.roles).toEqual(['player']);
+      expect(authorization.permissions).toContain('government.read.all');
+      expect(canSeeGovernment({ anon: false, keycloakSub: 'baseline-test', minecraftUuid: uuid,
+        minecraftName: null, linked: uuid !== null, role: 'player', capabilities: authorization.roles,
+        permissions: authorization.permissions }, false)).toBe(true);
+    }
+    await updateRole(role, role.revision + 1);
+    expect((await resolveAuthorization(null)).permissions).not.toContain('government.read.all');
   });
   it('edits the authenticated baseline without any implicit permission fallback', async () => {
     await updateRole({ key: 'player', name: 'Player', description: null, permissions: [] }, 1);
@@ -557,6 +596,13 @@ d('configurable authorization policy', () => {
     await expect(createRole({ ...custom, permissions: ['invented'] })).rejects.toThrow('Unknown permission');
     await expect(setDirectRoleMember('missing', BOB, true)).rejects.toThrow('Unknown role');
   });
+  it('rejects malformed player identifiers without granting a role', async () => {
+    await createRole(custom);
+    for (const uuid of ['not-a-uuid', BOB.replaceAll('-', ''), `${BOB}extra`]) {
+      await expect(setDirectRoleMember('auditor', uuid, true)).rejects.toThrow();
+    }
+    expect((await sql`SELECT 1 FROM explorer_role WHERE role = 'auditor'`.execute(db)).rows).toHaveLength(0);
+  });
 });
 
 d('published config (economy_config)', () => {
@@ -597,28 +643,29 @@ d('explorer summary regressions', () => {
   });
 
   it('fine totals include more than the recent-list cap and respect scope', async () => {
-    const { getFineTotals, getRecentFines } = await import('@/lib/sql/government');
-    const before = await getFineTotals(30, [5]);
+    const { summariseFines, listFines } = await import('@/lib/sql/government');
+    const before = await summariseFines(finesQuery([5], 'f=status:in:active'));
     try {
       for (let i = 0; i < 105; i++) await issueFine({ reason: 'audit-total', amount: 2.5 });
-      const total = await getFineTotals(30, [5]);
-      expect(total.activeCount).toBe(before.activeCount + 105);
-      expect(Number(total.activeAmount)).toBe(Number(before.activeAmount) + 262.5);
-      expect(await getRecentFines(30, 100, [5])).toHaveLength(100);
-      expect(await getFineTotals(30, [])).toEqual({ activeCount: 0, activeAmount: '0.00' });
+      const total = await summariseFines(finesQuery([5], 'f=status:in:active'));
+      expect(total.count).toBe(before.count + 105);
+      expect(total.total).toBe((Number(before.total) + 262.5).toFixed(2));
+      expect(await listFines(finesQuery([5], ''), 100, 0)).toHaveLength(100);
+      expect((await summariseFines(finesQuery([], ''))).count).toBe(0);
     } finally { await deleteFines('audit-total'); }
   });
 });
 
 d('government fine browsing', () => {
   it('filters and paginates within the permitted account set', async () => {
-    const { getRecentFines, countFines } = await import('@/lib/sql/government');
+    const { listFines, summariseFines } = await import('@/lib/sql/government');
     try {
       for (let i = 0; i < 3; i++) await issueFine({ reason: 'audit-page', amount: 1, revoked: i === 2 });
-      expect(await countFines(30, [5], { q: 'audit-page', status: 'active' })).toBe(2);
-      expect(await countFines(30, [], { q: 'audit-page' })).toBe(0);
-      const first = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active' });
-      const second = await getRecentFines(30, 1, [5], { q: 'audit-page', status: 'active', offset: 1 });
+      expect((await summariseFines(finesQuery([5], 'q=audit-page&f=status:in:active'))).count).toBe(2);
+      expect((await summariseFines(finesQuery([5], 'q=audit-page'))).revoked).toBe(1);
+      expect((await summariseFines(finesQuery([], 'q=audit-page'))).count).toBe(0);
+      const first = await listFines(finesQuery([5], 'q=audit-page&f=status:in:active'), 1, 0);
+      const second = await listFines(finesQuery([5], 'q=audit-page&f=status:in:active'), 1, 1);
       expect(first).toHaveLength(1);
       expect(second).toHaveLength(1);
       expect(first[0]?.fine_id).not.toBe(second[0]?.fine_id);

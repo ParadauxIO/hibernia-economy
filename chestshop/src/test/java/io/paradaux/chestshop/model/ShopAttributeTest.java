@@ -16,12 +16,30 @@ import org.junit.jupiter.params.provider.EnumSource;
 class ShopAttributeTest {
 
     private static FoundShop withBuyPrice(BigDecimal buy) {
-        return new FoundShop("k", "n", "STONE", false, null, "Steve", buy, null, 1, 1, 1, "world", 0, 0, 0, 0);
+        return new FoundShop(
+                "k", "n", "STONE", false, null, "Steve", buy, null, 1, 1, 1, "world", 0, 0, 0, 0, null, false);
     }
 
     private static FoundShop withDistance(long distSq) {
         return new FoundShop(
-                "k", "n", "STONE", false, null, "Steve", BigDecimal.ONE, null, 1, 1, 1, "world", 0, 0, 0, distSq);
+                "k",
+                "n",
+                "STONE",
+                false,
+                null,
+                "Steve",
+                BigDecimal.ONE,
+                null,
+                1,
+                1,
+                1,
+                "world",
+                0,
+                0,
+                0,
+                distSq,
+                null,
+                false);
     }
 
     @Test
@@ -42,7 +60,24 @@ class ShopAttributeTest {
         // "low" is strictly smaller than "high" on every attribute (prices, unit prices, stock,
         // capacity, batch quantity and distance).
         FoundShop low = new FoundShop(
-                "k", "n", "STONE", false, null, "Steve", BigDecimal.ONE, BigDecimal.ONE, 1, 1, 1, "world", 0, 0, 0, 1);
+                "k",
+                "n",
+                "STONE",
+                false,
+                null,
+                "Steve",
+                BigDecimal.ONE,
+                BigDecimal.ONE,
+                1,
+                1,
+                1,
+                "world",
+                0,
+                0,
+                0,
+                1,
+                null,
+                false);
         FoundShop high = new FoundShop(
                 "k",
                 "n",
@@ -59,7 +94,9 @@ class ShopAttributeTest {
                 0,
                 0,
                 0,
-                4);
+                4,
+                null,
+                false);
 
         assertThat(attr.comparator().compare(low, high)).isNegative();
         assertThat(attr.comparator().compare(high, low)).isPositive();

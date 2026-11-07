@@ -3,17 +3,18 @@ package io.paradaux.business.guice;
 import com.google.inject.AbstractModule;
 import com.google.inject.Singleton;
 import io.paradaux.business.Business;
-
 import io.paradaux.business.api.BusinessApi;
-import io.paradaux.business.api.impl.BusinessApiImpl;
 import io.paradaux.business.chat.FirmChatService;
 import io.paradaux.business.chat.FirmChatServiceImpl;
 import io.paradaux.business.integration.RealtyRegionValidator;
+import io.paradaux.business.internal.api.BusinessApiImpl;
+import io.paradaux.business.internal.model.config.BalanceTaxConfiguration;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
+import io.paradaux.business.jobs.DirectDebitJob;
 import io.paradaux.business.jobs.ExpireRequestsJob;
-import io.paradaux.business.model.config.BalanceTaxConfiguration;
-import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.*;
 import io.paradaux.business.services.impl.*;
+import io.paradaux.treasury.api.FeatureFlagApi;
 import io.paradaux.treasury.api.SalesQueryApi;
 import io.paradaux.treasury.api.TreasuryApi;
 
@@ -57,9 +58,15 @@ public class BusinessModule extends AbstractModule {
         bind(FirmService.class).to(FirmServiceImpl.class).in(Singleton.class);
         bind(FirmStaffService.class).to(FirmStaffServiceImpl.class).in(Singleton.class);
         bind(FirmTransactionService.class).to(FirmTransactionServiceImpl.class).in(Singleton.class);
-        bind(FirmNotificationService.class).to(FirmNotificationServiceImpl.class).in(Singleton.class);
-        bind(FirmSalesNotificationService.class).to(FirmSalesNotificationServiceImpl.class).in(Singleton.class);
-        bind(FirmDisbandConfirmationService.class).to(FirmDisbandConfirmationServiceImpl.class).in(Singleton.class);
+        bind(FirmNotificationService.class)
+                .to(FirmNotificationServiceImpl.class)
+                .in(Singleton.class);
+        bind(FirmSalesNotificationService.class)
+                .to(FirmSalesNotificationServiceImpl.class)
+                .in(Singleton.class);
+        bind(FirmDisbandConfirmationService.class)
+                .to(FirmDisbandConfirmationServiceImpl.class)
+                .in(Singleton.class);
         bind(FirmRequestService.class).to(FirmRequestServiceImpl.class).in(Singleton.class);
         bind(FirmPlayerService.class).to(FirmPlayerServiceImpl.class).in(Singleton.class);
         bind(FirmPropertyService.class).to(FirmPropertyServiceImpl.class).in(Singleton.class);
@@ -67,6 +74,15 @@ public class BusinessModule extends AbstractModule {
         bind(FirmSuggestionCache.class).to(FirmSuggestionCacheImpl.class).in(Singleton.class);
         bind(OnlineRosterCache.class).to(OnlineRosterCacheImpl.class).in(Singleton.class);
         bind(FirmChatService.class).to(FirmChatServiceImpl.class).in(Singleton.class);
+        bind(DirectDebitService.class).to(DirectDebitServiceImpl.class).in(Singleton.class);
+        bind(DirectDebitStore.class).in(Singleton.class);
+
+        // Release flags: resolve the current Treasury provider on each check; a
+        // missing provider fails closed (same binding as treasury-api-plugin).
+        bind(FeatureFlagApi.class).toInstance(key -> {
+            var flags = org.bukkit.Bukkit.getServicesManager().load(FeatureFlagApi.class);
+            return flags != null && flags.isEnabled(key);
+        });
 
         // Configuration (reads from plugin config directly, not the framework
         // configurator — they own their own reload-safe snapshots; do NOT migrate
@@ -79,5 +95,6 @@ public class BusinessModule extends AbstractModule {
 
         // Bind Jobs
         bind(ExpireRequestsJob.class).in(Singleton.class);
+        bind(DirectDebitJob.class).in(Singleton.class);
     }
 }

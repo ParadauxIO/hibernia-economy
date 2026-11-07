@@ -1,0 +1,5 @@
+{
+  "compression": "brotli",
+  "maxInitialKiB": 170,
+  "routes": ["/", "/accounts", "/players", "/search", "/docs"]
+}

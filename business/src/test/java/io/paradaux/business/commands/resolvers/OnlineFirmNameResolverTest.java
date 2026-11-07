@@ -1,22 +1,20 @@
 package io.paradaux.business.commands.resolvers;
 
-import io.paradaux.business.model.Firm;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.business.services.FirmSuggestionCache;
 import io.paradaux.business.services.OnlineRosterCache;
 import io.paradaux.business.services.impl.FirmSuggestionCacheImpl;
 import io.paradaux.business.services.impl.OnlineRosterCacheImpl;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
 /**
  * Pins that {@code OnlineFirmNameResolver.suggestions()} is fed purely by the
@@ -27,7 +25,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OnlineFirmNameResolverTest {
 
-    @Mock FirmService firms;
+    @Mock
+    FirmService firms;
 
     private static Firm firm(String displayName) {
         Firm f = new Firm();
@@ -66,8 +65,7 @@ class OnlineFirmNameResolverTest {
         when(firms.listOwnedOrMemberFirms(a)).thenReturn(List.of(firm("Acme")));
         when(firms.listOwnedOrMemberFirms(b)).thenReturn(List.of(firm("Globex")));
 
-        assertThat(resolver(roster).suggestions("", null))
-                .containsExactlyInAnyOrder("Acme", "Globex");
+        assertThat(resolver(roster).suggestions("", null)).containsExactlyInAnyOrder("Acme", "Globex");
     }
 
     @Test

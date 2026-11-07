@@ -6,12 +6,15 @@ import io.paradaux.treasuryrestapi.dto.FirmEmployeeResponse;
 import io.paradaux.treasuryrestapi.dto.FirmResponse;
 import io.paradaux.treasuryrestapi.dto.FirmRoleResponse;
 import io.paradaux.treasuryrestapi.dto.FirmUpdateRequest;
+import io.paradaux.treasuryrestapi.dto.PublicFirmAccountResponse;
 import io.paradaux.treasuryrestapi.dto.PublicFirmResponse;
 import io.paradaux.treasuryrestapi.dto.UpdateDisplayNameRequest;
 import io.paradaux.treasuryrestapi.ratelimit.RateLimit;
 import io.paradaux.treasuryrestapi.security.VerifiedToken;
 import io.paradaux.treasuryrestapi.service.FirmService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +25,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/firms")
@@ -37,6 +38,27 @@ public class FirmController {
         this.firmService = firmService;
     }
 
+    @Operation(
+            summary = "List a firm's accounts by name",
+            description = "Any authenticated caller may list current account links, ordered by account ID. "
+                    + "Returns accountId, displayName and defaultAccount. Removed links are excluded; "
+                    + "archived accounts with a current link are included. Unknown firms return 404 FIRM_NOT_FOUND.")
+    @GetMapping("/{firmName}/accounts")
+    @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
+    public ResponseEntity<List<PublicFirmAccountResponse>> listPublicAccounts(@PathVariable String firmName) {
+        return ResponseEntity.ok(firmService.listPublicAccounts(firmName));
+    }
+
+    @Operation(
+            summary = "List a firm's accounts by ID",
+            description = "Same response and access as the name lookup. Uses an explicit ID route to distinguish "
+                    + "numeric firm names. Unknown firms return 404 FIRM_NOT_FOUND.")
+    @GetMapping("/by-id/{firmId}/accounts")
+    @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
+    public ResponseEntity<List<PublicFirmAccountResponse>> listPublicAccountsById(@PathVariable long firmId) {
+        return ResponseEntity.ok(firmService.listPublicAccountsById(firmId));
+    }
+
     /**
      * GET /api/v1/firms/{firmName}
      * Returns public profile for the named firm, including its default account ID.
@@ -45,8 +67,7 @@ public class FirmController {
     @GetMapping("/{firmName}")
     @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
     public ResponseEntity<PublicFirmResponse> getPublicFirm(
-            @AuthenticationPrincipal VerifiedToken verified,
-            @PathVariable String firmName) {
+            @AuthenticationPrincipal VerifiedToken verified, @PathVariable String firmName) {
 
         log.info("GET /firms/{} requested by keyId={}", firmName, verified.keyId());
 
@@ -64,8 +85,7 @@ public class FirmController {
     @GetMapping("/{firmName}/balance")
     @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
     public ResponseEntity<FirmBalanceResponse> getFirmBalance(
-            @AuthenticationPrincipal VerifiedToken verified,
-            @PathVariable String firmName) {
+            @AuthenticationPrincipal VerifiedToken verified, @PathVariable String firmName) {
 
         log.info("GET /firms/{}/balance requested by keyId={}", firmName, verified.keyId());
 
@@ -98,8 +118,7 @@ public class FirmController {
     @PatchMapping("/me")
     @RateLimit(personalPerMinute = 15, businessPerMinute = 60)
     public ResponseEntity<FirmResponse> updateFirm(
-            @AuthenticationPrincipal VerifiedToken verified,
-            @RequestBody FirmUpdateRequest request) {
+            @AuthenticationPrincipal VerifiedToken verified, @RequestBody FirmUpdateRequest request) {
 
         log.info("PATCH /firms/me requested by keyId={} firmId={}", verified.keyId(), verified.firmId());
 
@@ -132,8 +151,7 @@ public class FirmController {
      */
     @GetMapping("/me/employees")
     @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
-    public ResponseEntity<List<FirmEmployeeResponse>> listEmployees(
-            @AuthenticationPrincipal VerifiedToken verified) {
+    public ResponseEntity<List<FirmEmployeeResponse>> listEmployees(@AuthenticationPrincipal VerifiedToken verified) {
 
         log.info("GET /firms/me/employees requested by keyId={} firmId={}", verified.keyId(), verified.firmId());
 
@@ -149,8 +167,7 @@ public class FirmController {
      */
     @GetMapping("/me/roles")
     @RateLimit(personalPerMinute = 60, businessPerMinute = 300)
-    public ResponseEntity<List<FirmRoleResponse>> listRoles(
-            @AuthenticationPrincipal VerifiedToken verified) {
+    public ResponseEntity<List<FirmRoleResponse>> listRoles(@AuthenticationPrincipal VerifiedToken verified) {
 
         log.info("GET /firms/me/roles requested by keyId={} firmId={}", verified.keyId(), verified.firmId());
 
@@ -171,11 +188,14 @@ public class FirmController {
             @PathVariable long accountId,
             @Valid @RequestBody UpdateDisplayNameRequest request) {
 
-        log.info("PATCH /firms/me/accounts/{}/display-name requested by keyId={} firmId={}",
-                accountId, verified.keyId(), verified.firmId());
+        log.info(
+                "PATCH /firms/me/accounts/{}/display-name requested by keyId={} firmId={}",
+                accountId,
+                verified.keyId(),
+                verified.firmId());
 
-        FirmAccountSummaryResponse response = firmService.updateAccountDisplayName(
-                verified, accountId, request.displayName());
+        FirmAccountSummaryResponse response =
+                firmService.updateAccountDisplayName(verified, accountId, request.displayName());
 
         log.info("Account display name updated: accountId={} displayName={}", accountId, response.displayName());
         return ResponseEntity.ok(response);

@@ -371,19 +371,24 @@ public final class MockPlayer implements AutoCloseable {
         Objects.requireNonNull(matcher, "matcher");
         Objects.requireNonNull(timeout, "timeout");
 
-        Position now = currentPosition;
-        if (now != null && matcher.test(now)) return now;
-
-        ClientboundPlayerPositionPacket p = awaitClientbound(
+        PendingAwait<ClientboundPlayerPositionPacket> pending = new PendingAwait<>(
                 ClientboundPlayerPositionPacket.class,
                 pkt -> {
                     Vector3d v = pkt.getPosition();
-                    Position candidate = new Position(v.getX(), v.getY(), v.getZ(), pkt.getYRot(), pkt.getXRot());
-                    return matcher.test(candidate);
-                },
-                timeout);
-        Vector3d v = p.getPosition();
-        return new Position(v.getX(), v.getY(), v.getZ(), p.getYRot(), p.getXRot());
+                    return matcher.test(new Position(v.getX(), v.getY(), v.getZ(), pkt.getYRot(), pkt.getXRot()));
+                });
+        // Subscribe before reading state: a teleport arriving during the snapshot
+        // check must either be visible in that snapshot or complete this waiter.
+        awaiting.add(pending);
+        try {
+            Position now = currentPosition;
+            if (now != null && matcher.test(now)) return now;
+            ClientboundPlayerPositionPacket packet = awaitPending(pending, timeout);
+            Vector3d v = packet.getPosition();
+            return new Position(v.getX(), v.getY(), v.getZ(), packet.getYRot(), packet.getXRot());
+        } finally {
+            awaiting.remove(pending);
+        }
     }
 
     /** Convenience: wait for the player to be within {@code radius} blocks of {@code target}. */
@@ -588,17 +593,23 @@ public final class MockPlayer implements AutoCloseable {
         PendingAwait<P> pending = new PendingAwait<>(packetType, matcher);
         awaiting.add(pending);
         try {
+            return awaitPending(pending, timeout);
+        } finally {
+            awaiting.remove(pending);
+        }
+    }
+
+    private <P extends Packet> P awaitPending(PendingAwait<P> pending, Duration timeout) {
+        try {
             return pending.future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             throw new AssertionError(
-                    "Timed out after " + timeout + " waiting for " + packetType.getSimpleName(), e);
+                    "Timed out after " + timeout + " waiting for " + pending.type.getSimpleName(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new AssertionError("Interrupted while waiting for " + packetType.getSimpleName(), e);
+            throw new AssertionError("Interrupted while waiting for " + pending.type.getSimpleName(), e);
         } catch (ExecutionException e) {
             throw new RuntimeException(e.getCause());
-        } finally {
-            awaiting.remove(pending);
         }
     }
 

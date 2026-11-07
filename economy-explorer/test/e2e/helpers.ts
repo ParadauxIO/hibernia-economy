@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Navigate and wait for streamed content to settle. Pages stream behind Suspense
@@ -27,4 +27,16 @@ export function dataTable(page: Page): Locator {
 export async function submitReload(page: Page, button: Locator): Promise<void> {
   await Promise.all([page.waitForEvent('load'), button.click()]);
   await expect(page.locator('[aria-busy="true"], div[hidden][id^="S:"]')).toHaveCount(0);
+}
+
+/**
+ * Private-content gates: the design system's AccessGate and the legacy
+ * PrivacyGate, while pages move from one to the other.
+ */
+export const GATE = '.access-gate, .privacy-gate:not(:has(.access-gate))';
+
+/** Seeded signed-in access for market content tests. */
+export async function loginMarketPlayer(page: Page) {
+  test.skip(!process.env.E2E_AUTH_SHIM, 'requires the disposable test auth shim');
+  await page.context().addCookies([{ name: 'e2e_viewer', value: 'player', url: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100' }]);
 }
