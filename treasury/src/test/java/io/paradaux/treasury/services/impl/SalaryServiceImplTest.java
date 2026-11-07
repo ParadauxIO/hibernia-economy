@@ -9,15 +9,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.paradaux.treasury.model.config.SalaryConfiguration;
+import io.paradaux.treasury.internal.model.config.SalaryConfiguration;
+import io.paradaux.treasury.internal.model.salary.SalaryPayment;
+import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.TransferRequest;
-import io.paradaux.treasury.model.salary.SalaryPayment;
 import io.paradaux.treasury.services.AccountService;
 import io.paradaux.treasury.services.EconomyNotifier;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.utils.Idempotency;
-import io.paradaux.treasury.utils.TreasuryConstants;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;

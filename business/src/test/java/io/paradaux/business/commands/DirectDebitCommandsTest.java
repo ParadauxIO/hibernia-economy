@@ -13,12 +13,12 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.business.commands.resolvers.FirmName;
-import io.paradaux.business.model.directdebit.DirectDebitKind;
-import io.paradaux.business.model.directdebit.DirectDebitMandate;
-import io.paradaux.business.model.directdebit.DirectDebitPeriod;
-import io.paradaux.business.model.directdebit.DirectDebitStatus;
-import io.paradaux.business.model.internal.Firm;
-import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmPlayer;
+import io.paradaux.business.internal.model.directdebit.DirectDebitKind;
+import io.paradaux.business.internal.model.directdebit.DirectDebitMandate;
+import io.paradaux.business.internal.model.directdebit.DirectDebitPeriod;
+import io.paradaux.business.internal.model.directdebit.DirectDebitStatus;
 import io.paradaux.business.services.DirectDebitService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmService;

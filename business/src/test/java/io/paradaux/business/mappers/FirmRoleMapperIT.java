@@ -2,10 +2,10 @@ package io.paradaux.business.mappers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmRole;
+import io.paradaux.business.internal.model.FirmRolePermission;
 import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.model.internal.Firm;
-import io.paradaux.business.model.internal.FirmRole;
-import io.paradaux.business.model.internal.FirmRolePermission;
 import io.paradaux.business.testsupport.IntegrationTestBase;
 import java.util.List;
 import java.util.UUID;

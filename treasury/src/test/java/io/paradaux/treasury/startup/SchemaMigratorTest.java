@@ -3,7 +3,7 @@ package io.paradaux.treasury.startup;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import io.paradaux.treasury.model.config.DatabaseConfiguration;
+import io.paradaux.treasury.internal.model.config.DatabaseConfiguration;
 import org.junit.jupiter.api.Test;
 
 class SchemaMigratorTest {

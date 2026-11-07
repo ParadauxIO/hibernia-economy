@@ -1,6 +1,6 @@
 package io.paradaux.business.services;
 
-import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.internal.model.FirmPlayer;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

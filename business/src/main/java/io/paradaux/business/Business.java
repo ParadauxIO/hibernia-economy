@@ -20,13 +20,13 @@ import io.paradaux.business.commands.resolvers.OnlineFirmNameResolver;
 import io.paradaux.business.guice.BusinessModule;
 import io.paradaux.business.guice.DatabaseModule;
 import io.paradaux.business.integration.BusinessPlaceholderHook;
+import io.paradaux.business.internal.model.config.DatabaseConfiguration;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
 import io.paradaux.business.jobs.ExpireRequestsJob;
 import io.paradaux.business.jobs.ReconcileAccountMembersJob;
 import io.paradaux.business.listeners.ChestShopSaleListener;
 import io.paradaux.business.listeners.FirmBalanceTaxListener;
 import io.paradaux.business.listeners.OnlineRosterListener;
-import io.paradaux.business.model.config.DatabaseConfiguration;
-import io.paradaux.business.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmSalesNotificationService;
 import io.paradaux.hibernia.framework.commander.CommandManager;
 import io.paradaux.hibernia.framework.events.ListenerManager;
@@ -56,7 +56,7 @@ public class Business extends JavaPlugin {
         //    (DatabaseConfiguration), Message (eager), the command/resolver/listener
         //    multibinders, and the PAPI/dialog support.
         HiberniaModule hiberniaModule = HiberniaModule.forPlugin(this)
-                .scanConfiguration("io.paradaux.business.model.config")
+                .scanConfiguration("io.paradaux.business.internal.model.config")
                 .handlers(
                         AccountCommands.class,
                         io.paradaux.business.commands.MenuCommands.class,

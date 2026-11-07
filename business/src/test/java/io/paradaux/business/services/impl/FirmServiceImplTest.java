@@ -14,14 +14,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.paradaux.business.chat.FirmChatService;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmAccount;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
 import io.paradaux.business.mappers.FirmAccountsMapper;
 import io.paradaux.business.mappers.FirmMapper;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.mappers.FirmRoleMapper;
 import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.model.config.FirmConfiguration;
-import io.paradaux.business.model.internal.Firm;
-import io.paradaux.business.model.internal.FirmAccount;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmAreaShopService;
 import io.paradaux.business.services.FirmService;

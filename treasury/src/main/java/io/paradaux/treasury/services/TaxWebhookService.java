@@ -1,6 +1,6 @@
 package io.paradaux.treasury.services;
 
-import io.paradaux.treasury.model.tax.TaxCycleReport;
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
 
 public interface TaxWebhookService {
     /**

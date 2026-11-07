@@ -15,22 +15,23 @@ import io.paradaux.treasury.api.SalesQueryApi;
 import io.paradaux.treasury.api.ShopQueryApi;
 import io.paradaux.treasury.api.TaxApi;
 import io.paradaux.treasury.api.TreasuryApi;
-import io.paradaux.treasury.api.impl.MarketApiImpl;
-import io.paradaux.treasury.api.impl.SalesQueryApiImpl;
-import io.paradaux.treasury.api.impl.ShopQueryApiImpl;
-import io.paradaux.treasury.api.impl.TaxApiImpl;
-import io.paradaux.treasury.api.impl.TreasuryApiImpl;
 import io.paradaux.treasury.commands.*;
 import io.paradaux.treasury.commands.resolvers.PayTargetResolver;
 import io.paradaux.treasury.events.FirstPlayerJoinEvent;
 import io.paradaux.treasury.events.OnlinePlayerRosterListener;
 import io.paradaux.treasury.events.PlayerLoginListener;
 import io.paradaux.treasury.guice.*;
-import io.paradaux.treasury.model.config.DatabaseConfiguration;
-import io.paradaux.treasury.model.config.GovernmentConfiguration;
-import io.paradaux.treasury.model.config.LoggingConfiguration;
-import io.paradaux.treasury.model.config.SalaryConfiguration;
-import io.paradaux.treasury.model.config.TaxCycleConfiguration;
+import io.paradaux.treasury.internal.api.MarketApiImpl;
+import io.paradaux.treasury.internal.api.SalesQueryApiImpl;
+import io.paradaux.treasury.internal.api.ShopQueryApiImpl;
+import io.paradaux.treasury.internal.api.TaxApiImpl;
+import io.paradaux.treasury.internal.api.TreasuryApiImpl;
+import io.paradaux.treasury.internal.model.config.DatabaseConfiguration;
+import io.paradaux.treasury.internal.model.config.GovernmentConfiguration;
+import io.paradaux.treasury.internal.model.config.LoggingConfiguration;
+import io.paradaux.treasury.internal.model.config.SalaryConfiguration;
+import io.paradaux.treasury.internal.model.config.TaxCycleConfiguration;
+import io.paradaux.treasury.internal.utils.LoggingConfigurer;
 import io.paradaux.treasury.services.ConfigPublishService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.SalaryService;
@@ -38,7 +39,6 @@ import io.paradaux.treasury.services.TaxCycleRegistry;
 import io.paradaux.treasury.services.TaxWebhookService;
 import io.paradaux.treasury.tasks.SalaryTask;
 import io.paradaux.treasury.tasks.TaxCycleTask;
-import io.paradaux.treasury.utils.LoggingConfigurer;
 import java.util.ArrayList;
 import java.util.List;
 import javax.sql.DataSource;
@@ -90,7 +90,7 @@ public class Treasury extends JavaPlugin {
         //    dialog renderer. We fetch the configs needed for early bootstrap (log
         //    level, DataSource) off the module before the injector exists.
         HiberniaModule hiberniaModule = HiberniaModule.forPlugin(this)
-                .scanConfiguration("io.paradaux.treasury.model.config")
+                .scanConfiguration("io.paradaux.treasury.internal.model.config")
                 .handlers(
                         TreasuryCommand.class,
                         PayCommand.class,

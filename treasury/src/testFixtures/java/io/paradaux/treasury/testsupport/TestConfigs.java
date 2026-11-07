@@ -1,11 +1,11 @@
 package io.paradaux.treasury.testsupport;
 
-import io.paradaux.treasury.model.config.BytebinConfiguration;
-import io.paradaux.treasury.model.config.DiscordWebhookConfiguration;
-import io.paradaux.treasury.model.config.EconomyConfiguration;
-import io.paradaux.treasury.model.config.FineWebhookConfiguration;
-import io.paradaux.treasury.model.config.GovernmentConfiguration;
-import io.paradaux.treasury.model.config.TaxCycleConfiguration;
+import io.paradaux.treasury.internal.model.config.BytebinConfiguration;
+import io.paradaux.treasury.internal.model.config.DiscordWebhookConfiguration;
+import io.paradaux.treasury.internal.model.config.EconomyConfiguration;
+import io.paradaux.treasury.internal.model.config.FineWebhookConfiguration;
+import io.paradaux.treasury.internal.model.config.GovernmentConfiguration;
+import io.paradaux.treasury.internal.model.config.TaxCycleConfiguration;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 

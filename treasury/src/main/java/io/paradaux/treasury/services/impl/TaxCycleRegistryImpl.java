@@ -2,19 +2,18 @@ package io.paradaux.treasury.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import lombok.extern.slf4j.Slf4j;
+import io.paradaux.treasury.internal.model.tax.TaxCycleReport;
 import io.paradaux.treasury.mappers.AccountMapper;
 import io.paradaux.treasury.model.economy.Account;
-import io.paradaux.treasury.model.tax.TaxCycleReport;
 import io.paradaux.treasury.model.tax.TaxCycleType;
 import io.paradaux.treasury.services.TaxCycleRegistry;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Default {@link TaxCycleRegistry}: owns the mutable next-fire schedule,
@@ -79,8 +78,8 @@ public class TaxCycleRegistryImpl implements TaxCycleRegistry {
     // ---- Cycle session ----
 
     @Override
-    public void startSession(TaxCycleType cycleType, Instant periodStart,
-                             boolean manual, @Nullable String triggeredBy) {
+    public void startSession(
+            TaxCycleType cycleType, Instant periodStart, boolean manual, @Nullable String triggeredBy) {
         activeSession.set(new CycleSession(cycleType, periodStart, manual, triggeredBy));
     }
 
@@ -133,10 +132,16 @@ public class TaxCycleRegistryImpl implements TaxCycleRegistry {
         }
 
         return new TaxCycleReport(
-                session.cycleType, session.periodStart, session.manual, session.triggeredBy,
-                total, byAccount, byTaxType,
-                session.collectedCount.get(), session.skippedCount.get(), session.failedCount.get()
-        );
+                session.cycleType,
+                session.periodStart,
+                session.manual,
+                session.triggeredBy,
+                total,
+                byAccount,
+                byTaxType,
+                session.collectedCount.get(),
+                session.skippedCount.get(),
+                session.failedCount.get());
     }
 
     // ---- Inner ----
@@ -155,9 +160,9 @@ public class TaxCycleRegistryImpl implements TaxCycleRegistry {
         final AtomicInteger failedCount = new AtomicInteger();
 
         CycleSession(TaxCycleType cycleType, Instant periodStart, boolean manual, String triggeredBy) {
-            this.cycleType   = cycleType;
+            this.cycleType = cycleType;
             this.periodStart = periodStart;
-            this.manual      = manual;
+            this.manual = manual;
             this.triggeredBy = triggeredBy;
         }
 
@@ -166,8 +171,13 @@ public class TaxCycleRegistryImpl implements TaxCycleRegistry {
             collectedCount.incrementAndGet();
         }
 
-        void recordSkipped() { skippedCount.incrementAndGet(); }
-        void recordFailed()  { failedCount.incrementAndGet(); }
+        void recordSkipped() {
+            skippedCount.incrementAndGet();
+        }
+
+        void recordFailed() {
+            failedCount.incrementAndGet();
+        }
 
         record Entry(int destinationAccountId, String taxType, BigDecimal amount) {}
     }

@@ -9,9 +9,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.FirmAccount;
 import io.paradaux.business.mappers.FirmAccountsMapper;
-import io.paradaux.business.model.internal.Firm;
-import io.paradaux.business.model.internal.FirmAccount;
 import io.paradaux.business.services.FirmService;
 import io.paradaux.hibernia.framework.exceptions.BadCommandException;
 import io.paradaux.hibernia.framework.exceptions.ConflictException;
@@ -1369,7 +1369,7 @@ class FirmTransactionServiceImplTest {
         when(treasury.hasFunds(100, BigDecimal.ONE)).thenReturn(true);
         when(treasury.transfer(any())).thenReturn(1L, 2L);
 
-        io.paradaux.business.model.internal.FirmPlayer steve = new io.paradaux.business.model.internal.FirmPlayer();
+        io.paradaux.business.internal.model.FirmPlayer steve = new io.paradaux.business.internal.model.FirmPlayer();
         steve.setCurrentName("Steve");
         when(players.findByUuid(target)).thenReturn(java.util.Optional.of(steve), java.util.Optional.empty());
 

@@ -3,17 +3,16 @@ package io.paradaux.treasury.services.impl;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.inject.Inject;
+import io.paradaux.treasury.internal.model.config.BalanceTaxConfiguration;
+import io.paradaux.treasury.internal.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.mappers.EconomyConfigMapper;
-import io.paradaux.treasury.model.config.BalanceTaxConfiguration;
-import io.paradaux.treasury.model.config.SourceIncomeTaxConfiguration;
 import io.paradaux.treasury.services.ConfigPublishService;
-import lombok.extern.slf4j.Slf4j;
-import org.mybatis.guice.transactional.Transactional;
-
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import lombok.extern.slf4j.Slf4j;
+import org.mybatis.guice.transactional.Transactional;
 
 @Slf4j
 public class ConfigPublishServiceImpl implements ConfigPublishService {
@@ -31,9 +30,8 @@ public class ConfigPublishServiceImpl implements ConfigPublishService {
     private final SourceIncomeTaxConfiguration incomeTax;
 
     @Inject
-    public ConfigPublishServiceImpl(EconomyConfigMapper mapper,
-                                    BalanceTaxConfiguration balanceTax,
-                                    SourceIncomeTaxConfiguration incomeTax) {
+    public ConfigPublishServiceImpl(
+            EconomyConfigMapper mapper, BalanceTaxConfiguration balanceTax, SourceIncomeTaxConfiguration incomeTax) {
         this.mapper = mapper;
         this.balanceTax = balanceTax;
         this.incomeTax = incomeTax;
@@ -78,8 +76,16 @@ public class ConfigPublishServiceImpl implements ConfigPublishService {
 
     /** One row's {@code value_type} and {@code config_value}. */
     record Published(String type, String value) {
-        static Published bool(boolean b) { return new Published("BOOLEAN", Boolean.toString(b)); }
-        static Published decimal(BigDecimal d) { return new Published("DECIMAL", d.toPlainString()); }
-        static Published json(String json) { return new Published("JSON", json); }
+        static Published bool(boolean b) {
+            return new Published("BOOLEAN", Boolean.toString(b));
+        }
+
+        static Published decimal(BigDecimal d) {
+            return new Published("DECIMAL", d.toPlainString());
+        }
+
+        static Published json(String json) {
+            return new Published("JSON", json);
+        }
     }
 }

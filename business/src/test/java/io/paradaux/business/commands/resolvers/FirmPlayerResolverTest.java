@@ -7,7 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.paradaux.business.model.internal.FirmPlayer;
+import io.paradaux.business.internal.model.FirmPlayer;
 import io.paradaux.business.services.FirmPlayerService;
 import java.util.List;
 import java.util.Optional;

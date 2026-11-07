@@ -8,8 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.paradaux.treasury.internal.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.mappers.GovernmentFineMapper;
-import io.paradaux.treasury.model.config.GovernmentConfiguration;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountType;
 import io.paradaux.treasury.model.economy.GovernmentFine;

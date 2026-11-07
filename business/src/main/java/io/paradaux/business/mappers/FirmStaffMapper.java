@@ -1,6 +1,6 @@
 package io.paradaux.business.mappers;
 
-import io.paradaux.business.model.internal.FirmEmployee;
+import io.paradaux.business.internal.model.FirmEmployee;
 import java.util.List;
 import org.apache.ibatis.annotations.*;
 

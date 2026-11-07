@@ -2,8 +2,8 @@ package io.paradaux.business.services.impl;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import io.paradaux.business.model.config.FirmConfiguration;
-import io.paradaux.business.model.internal.Firm;
+import io.paradaux.business.internal.model.Firm;
+import io.paradaux.business.internal.model.config.FirmConfiguration;
 import io.paradaux.business.services.FirmNotificationService;
 import io.paradaux.business.services.FirmPlayerService;
 import io.paradaux.business.services.FirmPropertyService;

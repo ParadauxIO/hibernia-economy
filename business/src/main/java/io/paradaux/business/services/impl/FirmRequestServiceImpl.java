@@ -4,9 +4,9 @@ import static io.paradaux.hibernia.framework.utils.StringUtils.random32;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.mappers.FirmRequestMapper;
 import io.paradaux.business.model.RolePermission;
-import io.paradaux.business.model.internal.Firm;
 import io.paradaux.business.services.FirmAccountService;
 import io.paradaux.business.services.FirmRequestService;
 import io.paradaux.business.services.FirmService;

@@ -66,6 +66,15 @@ each other's database:
 - **`business-api`** (`io.paradaux:business-api`) — `FirmApi`, `StaffApi`,
   `RolePermission`, and firm model types.
 
+Treasury and Business reserve `io.paradaux.<plugin>.api.*` and
+`io.paradaux.<plugin>.model.*` for their published API jars. Plugin-only models
+live under `io.paradaux.<plugin>.internal.model.*`, and API implementations under
+`io.paradaux.<plugin>.internal.api`. Treasury's plugin utilities live under
+`io.paradaux.treasury.internal.utils`; the published `Idempotency` helper retains
+its `io.paradaux.treasury.utils` package. Internal classes are not supported
+integration points. Each plugin's `ArchitectureTest` checks that its compiled
+packages never overlap those of its published API (ADT-177).
+
 ChestShop, for example, compiles against both and resolves them at runtime as
 Bukkit services — so it can route a shop sale into a firm's account without knowing
 anything about Business's internals.

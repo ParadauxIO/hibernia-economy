@@ -1,10 +1,9 @@
 package io.paradaux.treasury.mappers;
 
-import io.paradaux.treasury.model.economy.ExplorerAuditEntry;
-import org.apache.ibatis.annotations.*;
-
+import io.paradaux.treasury.internal.model.economy.ExplorerAuditEntry;
 import java.time.Instant;
 import java.util.List;
+import org.apache.ibatis.annotations.*;
 
 /**
  * Writer for the shared {@code explorer_audit} access log (economy-flyway V3).
@@ -32,20 +31,21 @@ public interface ExplorerAuditMapper {
              WHERE target_type = #{targetType} AND target_id = #{targetId}
              ORDER BY at DESC, audit_id DESC
             """)
-    @Results(id = "explorerAuditMap", value = {
-            @Result(column = "audit_id", property = "auditId", id = true),
-            @Result(column = "at", property = "at", javaType = Instant.class),
-            @Result(column = "actor_sub", property = "actorSub"),
-            @Result(column = "actor_uuid_bin", property = "actorUuid"),
-            @Result(column = "actor_name", property = "actorName"),
-            @Result(column = "actor_role", property = "actorRole"),
-            @Result(column = "method", property = "method"),
-            @Result(column = "path", property = "path"),
-            @Result(column = "target_type", property = "targetType"),
-            @Result(column = "target_id", property = "targetId"),
-            @Result(column = "outcome", property = "outcome"),
-            @Result(column = "source_ip", property = "sourceIp")
-    })
-    List<ExplorerAuditEntry> findByTarget(@Param("targetType") String targetType,
-                                          @Param("targetId") String targetId);
+    @Results(
+            id = "explorerAuditMap",
+            value = {
+                @Result(column = "audit_id", property = "auditId", id = true),
+                @Result(column = "at", property = "at", javaType = Instant.class),
+                @Result(column = "actor_sub", property = "actorSub"),
+                @Result(column = "actor_uuid_bin", property = "actorUuid"),
+                @Result(column = "actor_name", property = "actorName"),
+                @Result(column = "actor_role", property = "actorRole"),
+                @Result(column = "method", property = "method"),
+                @Result(column = "path", property = "path"),
+                @Result(column = "target_type", property = "targetType"),
+                @Result(column = "target_id", property = "targetId"),
+                @Result(column = "outcome", property = "outcome"),
+                @Result(column = "source_ip", property = "sourceIp")
+            })
+    List<ExplorerAuditEntry> findByTarget(@Param("targetType") String targetType, @Param("targetId") String targetId);
 }
