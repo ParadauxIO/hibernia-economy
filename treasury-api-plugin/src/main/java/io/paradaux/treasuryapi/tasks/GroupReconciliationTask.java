@@ -10,6 +10,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import net.luckperms.api.LuckPerms;
+import net.luckperms.api.cacheddata.CachedPermissionData;
 import net.luckperms.api.model.user.User;
 import net.luckperms.api.query.QueryOptions;
 
@@ -52,15 +53,17 @@ public class GroupReconciliationTask implements Runnable, PlayerGroupSync {
             // Resolve first, publish only after every user loaded successfully.
             // Unlike searchAll(node), this honours negations, wildcards and inheritance.
             QueryOptions options = webOptions();
+            Map<String, String> rules = normalizedRules(groups, accountGroups);
             for (UUID id : players) {
                 User user = loadUser(id);
                 try {
+                    UserMembership membership = new UserMembership(user, options);
                     for (SyncedGroup group : groups) {
-                        if (matches(user, group.getLuckpermsNode(), options))
+                        if (membership.matches(rules.get(group.getLuckpermsNode())))
                             desired.get(group.getGroupId()).add(id);
                     }
                     for (String group : accountGroups) {
-                        if (matches(user, "group." + group, options))
+                        if (membership.matches(rules.get("group." + group)))
                             accountDesired.get(group).add(id);
                     }
                 } finally {
@@ -98,14 +101,16 @@ public class GroupReconciliationTask implements Runnable, PlayerGroupSync {
             QueryOptions options = webOptions();
             var groups = mapper.listSyncedGroups();
             var accountGroups = mapper.listAccountGroups();
+            Map<String, String> rules = normalizedRules(groups, accountGroups);
+            UserMembership membership = new UserMembership(user, options);
             Set<Integer> desired = new HashSet<>();
             Set<String> accountDesired = new HashSet<>();
             // Self-sync must also finish resolution before publishing any changes.
             for (SyncedGroup group : groups) {
-                if (matches(user, group.getLuckpermsNode(), options)) desired.add(group.getGroupId());
+                if (membership.matches(rules.get(group.getLuckpermsNode()))) desired.add(group.getGroupId());
             }
             for (String group : accountGroups) {
-                if (matches(user, "group." + group, options)) accountDesired.add(group);
+                if (membership.matches(rules.get("group." + group))) accountDesired.add(group);
             }
             for (SyncedGroup group : groups) {
                 if (desired.contains(group.getGroupId())) {
@@ -136,17 +141,47 @@ public class GroupReconciliationTask implements Runnable, PlayerGroupSync {
         return luckPerms.getContextManager().getStaticQueryOptions();
     }
 
-    static boolean matches(User user, String node, QueryOptions options) {
-        String key = nodeKey(node);
-        if (key.startsWith("group.")) {
-            String name = key.substring(6);
-            return user.getInheritedGroups(options).stream()
-                    .anyMatch(g -> g.getName().equalsIgnoreCase(name));
+    private static Map<String, String> normalizedRules(List<SyncedGroup> groups, List<String> accountGroups) {
+        Map<String, String> rules = new HashMap<>();
+        for (SyncedGroup group : groups) {
+            rules.computeIfAbsent(group.getLuckpermsNode(), GroupReconciliationTask::nodeKey);
         }
-        return user.getCachedData()
-                .getPermissionData(options)
-                .checkPermission(key)
-                .asBoolean();
+        for (String group : accountGroups) {
+            rules.computeIfAbsent("group." + group, GroupReconciliationTask::nodeKey);
+        }
+        return rules;
+    }
+
+    static boolean matches(User user, String node, QueryOptions options) {
+        return new UserMembership(user, options).matches(nodeKey(node));
+    }
+
+    /** One user's resolution for one pass only: never retain grants across runs or users. */
+    private static final class UserMembership {
+        private final User user;
+        private final QueryOptions options;
+        private Set<String> inheritedGroups;
+        private CachedPermissionData permissions;
+
+        private UserMembership(User user, QueryOptions options) {
+            this.user = user;
+            this.options = options;
+        }
+
+        private boolean matches(String key) {
+            if (key.startsWith("group.")) {
+                if (inheritedGroups == null) {
+                    inheritedGroups = new HashSet<>();
+                    for (var group : user.getInheritedGroups(options)) {
+                        inheritedGroups.add(group.getName().toLowerCase(Locale.ROOT));
+                    }
+                }
+                return inheritedGroups.contains(key.substring(6));
+            }
+            // Group-only bindings must not trigger full permission-cache construction.
+            if (permissions == null) permissions = user.getCachedData().getPermissionData(options);
+            return permissions.checkPermission(key).asBoolean();
+        }
     }
 
     static String nodeKey(String node) {

@@ -147,11 +147,11 @@ public class ShopServiceImpl implements ShopService {
         String itemCode = SignService.getItem(ctx.getSignLines());
         if (WildcardItems.isPattern(itemCode)) {
             Container container = shopBlockService.findConnectedContainer(ctx.getSign());
-            var variants =
-                    new WildcardItems(items).variants(itemCode, container == null ? null : container.getInventory());
+            boolean hasStock =
+                    new WildcardItems(items).hasMatch(itemCode, container == null ? null : container.getInventory());
             if (StringUtil.getMinecraftStringWidth(itemCode) > MaterialUtil.MAXIMUM_SIGN_WIDTH) {
                 ctx.setOutcome(CreationOutcome.INVALID_ITEM);
-            } else if (variants.isEmpty()) {
+            } else if (!hasStock) {
                 ctx.setOutcome(CreationOutcome.NO_MATCHING_WILDCARD_STOCK);
             }
             return; // Preserve the pattern rather than normalising it to one arbitrary item.

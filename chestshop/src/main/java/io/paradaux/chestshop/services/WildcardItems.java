@@ -23,19 +23,36 @@ public final class WildcardItems {
         return code != null && PATTERN.matcher(code).matches();
     }
 
+    private static String prefix(String pattern) {
+        return isPattern(pattern) ? pattern.substring(0, pattern.length() - 1).toLowerCase(Locale.ROOT) : null;
+    }
+
     public boolean matches(String pattern, ItemStack item) {
-        if (!isPattern(pattern) || item == null || item.getType().isAir() || item.getAmount() < 1) return false;
+        return matchesPrefix(prefix(pattern), item);
+    }
+
+    private boolean matchesPrefix(String prefix, ItemStack item) {
+        if (prefix == null || item == null || item.getType().isAir() || item.getAmount() < 1) return false;
         String name = items.wildcardName(item);
-        return name != null
-                && name.toLowerCase(Locale.ROOT)
-                        .startsWith(pattern.substring(0, pattern.length() - 1).toLowerCase(Locale.ROOT));
+        return name != null && name.toLowerCase(Locale.ROOT).startsWith(prefix);
+    }
+
+    /** Existence checks need no clones, metadata deduplication or complete scan. */
+    public boolean hasMatch(String pattern, Inventory inventory) {
+        String prefix = prefix(pattern);
+        if (inventory == null || prefix == null) return false;
+        for (ItemStack stack : inventory.getStorageContents()) {
+            if (matchesPrefix(prefix, stack)) return true;
+        }
+        return false;
     }
 
     public int count(String pattern, Inventory inventory) {
-        if (inventory == null) return 0;
+        String prefix = prefix(pattern);
+        if (inventory == null || prefix == null) return 0;
         int count = 0;
         for (ItemStack stack : inventory.getStorageContents()) {
-            if (matches(pattern, stack)) count += stack.getAmount();
+            if (matchesPrefix(prefix, stack)) count += stack.getAmount();
         }
         return count;
     }
@@ -53,10 +70,11 @@ public final class WildcardItems {
 
     /** One unmodified sample of each distinct metadata variant, in inventory order. */
     public List<ItemStack> variants(String pattern, Inventory inventory) {
-        if (inventory == null) return List.of();
+        String prefix = prefix(pattern);
+        if (inventory == null || prefix == null) return List.of();
         List<ItemStack> variants = new ArrayList<>();
         for (ItemStack stack : inventory.getStorageContents()) {
-            if (matches(pattern, stack) && variants.stream().noneMatch(item -> item.isSimilar(stack))) {
+            if (matchesPrefix(prefix, stack) && variants.stream().noneMatch(item -> item.isSimilar(stack))) {
                 ItemStack sample = stack.clone();
                 sample.setAmount(1);
                 variants.add(sample);

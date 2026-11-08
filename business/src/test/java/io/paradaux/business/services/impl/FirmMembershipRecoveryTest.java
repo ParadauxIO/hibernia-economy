@@ -109,6 +109,24 @@ class FirmMembershipRecoveryTest {
                 .removeAuthorizer(eq(99), any());
     }
 
+    @Test
+    void resolvesSharedRolesOncePerAccountSyncAndSeesLaterRevocations() {
+        UUID colleague = UUID.randomUUID();
+        when(staff.listCurrentEmployeesByFirm(1))
+                .thenReturn(List.of(employee(hired, "Admin"), employee(colleague, "Admin")));
+        FirmAccountServiceImpl svc = service();
+        svc.syncAccountMembers(1, 99);
+        assertThat(members).containsExactlyInAnyOrder(owner, hired, colleague);
+        assertThat(authorizers).containsExactlyInAnyOrder(owner, hired, colleague);
+        verify(roles, times(1)).getFirmRolePermissions(1, "Admin");
+
+        when(roles.getFirmRolePermissions(1, "Admin")).thenReturn(List.of());
+        svc.syncAccountMembers(1, 99);
+        assertThat(members).containsExactly(owner);
+        assertThat(authorizers).containsExactly(owner);
+        verify(roles, times(2)).getFirmRolePermissions(1, "Admin");
+    }
+
     private void afterWrite(String operation) {
         writes++;
         if (operation.equals(failedOperation) && failOnce.getAndSet(false)) {

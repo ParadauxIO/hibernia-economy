@@ -63,7 +63,8 @@ public class PreviewServiceImpl implements PreviewService {
     private final LinkedHashSet<TrackedPreview> validationQueue = new LinkedHashSet<>();
     private long validationCredit;
 
-    private record TrackedPreview(ItemDisplay display, World world, int x, int y, int z, List<String> lines) {
+    private record TrackedPreview(
+            ItemDisplay display, World world, int x, int y, int z, List<String> lines, String name) {
         boolean current() {
             if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
             return world.getBlockAt(x, y, z).getState(false) instanceof org.bukkit.block.Sign sign
@@ -122,23 +123,35 @@ public class PreviewServiceImpl implements PreviewService {
                 || (shop.worldUuid() != null && !shop.worldUuid().equals(world.getUID()))) {
             return;
         }
-        ItemStack item = itemCache.decode(shop.material(), shop.itemData());
-        if (item != null) {
-            render(shop.world(), shop.signX(), shop.signY(), shop.signZ(), item);
-        }
+        render(
+                shop.world(),
+                shop.signX(),
+                shop.signY(),
+                shop.signZ(),
+                () -> itemCache.decode(shop.material(), shop.itemData()));
     }
 
     @Override
     public void render(String worldName, int x, int y, int z, ItemStack item) {
+        render(worldName, x, y, z, () -> item);
+    }
+
+    private void render(String worldName, int x, int y, int z, java.util.function.Supplier<ItemStack> itemSupplier) {
         World world = plugin.getServer().getWorld(worldName);
-        if (world == null) {
-            return;
-        }
-        destroy(worldName, x, y, z); // replace any existing
+        if (world == null) return;
         if (!world.isChunkLoaded(x >> 4, z >> 4)
                 || !(world.getBlockAt(x, y, z).getState(false) instanceof org.bukkit.block.Sign sign)
                 || io.paradaux.chestshop.services.WildcardItems.isPattern(
-                        io.paradaux.chestshop.services.SignService.getItem(sign))) return;
+                        io.paradaux.chestshop.services.SignService.getItem(sign))) {
+            destroy(worldName, x, y, z);
+            return;
+        }
+        // Validate the live sign before decoding registry YAML (including stale wildcard rows).
+        ItemStack item = itemSupplier.get();
+        if (item == null) {
+            destroy(worldName, x, y, z);
+            return;
+        }
         List<String> lines = List.copyOf(java.util.Arrays.asList(sign.getLines()));
         if (cleanupTask == null) {
             cleanupTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::pruneInvalid, 1L, 1L);
@@ -146,7 +159,21 @@ public class PreviewServiceImpl implements PreviewService {
 
         Location loc = new Location(world, x + 0.5, y + 1, z + 0.5);
         String name = displays.previewName(worldName, x, y, z);
-        ItemDisplay display = world.spawn(loc, ItemDisplay.class, d -> {
+        String chunkId = chunkKey(worldName, x >> 4, z >> 4);
+        String position = posKey(x, y, z);
+        TrackedPreview existing = byChunk.getOrDefault(chunkId, Map.of()).get(position);
+        if (existing != null
+                && (existing.world() != world || !existing.display().isValid())) {
+            destroy(worldName, x, y, z);
+            existing = null;
+        }
+        if (existing != null
+                && existing.lines().equals(lines)
+                && item.equals(existing.display().getItemStack())
+                && existing.name().equals(name)) {
+            return;
+        }
+        java.util.function.Consumer<ItemDisplay> configure = d -> {
             d.setItemStack(item);
             d.customName(net.kyori.adventure.text.Component.text(name));
             d.setCustomNameVisible(!name.isEmpty());
@@ -160,7 +187,15 @@ public class PreviewServiceImpl implements PreviewService {
                     tr.getRightRotation()));
             d.setPersistent(false);
             d.setVisibleByDefault(true);
-        });
+        };
+        ItemDisplay display;
+        if (existing == null) {
+            display = world.spawn(loc, ItemDisplay.class, configure);
+        } else {
+            display = existing.display();
+            configure.accept(display);
+            validationQueue.remove(existing);
+        }
 
         // Honour players who have previews turned off.
         for (UUID id : previewHidden) {
@@ -169,7 +204,7 @@ public class PreviewServiceImpl implements PreviewService {
                 p.hideEntity(plugin, display);
             }
         }
-        TrackedPreview preview = new TrackedPreview(display, world, x, y, z, lines);
+        TrackedPreview preview = new TrackedPreview(display, world, x, y, z, lines, name);
         byChunk.computeIfAbsent(chunkKey(worldName, x >> 4, z >> 4), k -> new ConcurrentHashMap<>())
                 .put(posKey(x, y, z), preview);
         validationQueue.add(preview);
@@ -256,11 +291,19 @@ public class PreviewServiceImpl implements PreviewService {
         scheduler.runTaskAsynchronously(plugin, () -> {
             Map<Lookup, List<ShopResult>> found = new LinkedHashMap<>();
             marketService.awaitWrites();
+            Map<Lookup, List<ShopResult>> chunks = new LinkedHashMap<>();
+            Set<Lookup> attempted = new LinkedHashSet<>();
             for (Lookup lookup : batch) {
+                Lookup chunk = new Lookup(lookup.world(), lookup.worldUuid(), lookup.chunkX(), lookup.chunkZ(), null);
                 try {
-                    found.put(
-                            lookup,
-                            marketService.shopQuery().shopsInChunk(lookup.world(), lookup.chunkX(), lookup.chunkZ()));
+                    if (attempted.add(chunk)) {
+                        chunks.put(
+                                chunk,
+                                marketService
+                                        .shopQuery()
+                                        .shopsInChunk(lookup.world(), lookup.chunkX(), lookup.chunkZ()));
+                    }
+                    if (chunks.containsKey(chunk)) found.put(lookup, chunks.get(chunk));
                 } catch (RuntimeException e) {
                     // registry unreachable — leave this chunk's holograms as they are
                 }
@@ -283,8 +326,12 @@ public class PreviewServiceImpl implements PreviewService {
             return; // unloaded again before we got back
         }
         String chunkKey = chunkKey(lookup.world(), lookup.chunkX(), lookup.chunkZ());
-        if (lookup.pos() != null) {
-            remove(chunkKey, lookup.pos()); // re-rendered below if still registered with its hologram on
+        if (lookup.pos() != null
+                && shops.stream()
+                        .noneMatch(shop -> lookup.pos().equals(posKey(shop.signX(), shop.signY(), shop.signZ()))
+                                && shop.hologram()
+                                && (shop.worldUuid() == null || shop.worldUuid().equals(world.getUID())))) {
+            remove(chunkKey, lookup.pos());
         }
         Map<String, TrackedPreview> tracked = byChunk.getOrDefault(chunkKey, Map.of());
         for (ShopResult shop : shops) {
