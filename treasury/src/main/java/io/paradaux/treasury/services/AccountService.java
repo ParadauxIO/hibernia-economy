@@ -115,6 +115,9 @@ public interface AccountService {
      */
     boolean governmentAccountExists(String name);
 
+    /** Whether the current player name also identifies an active GOVERNMENT account. */
+    boolean hasGovernmentNameCollision(UUID playerUuid);
+
     /** Returns the non-archived BUSINESS account with the given display name, or null if not found. */
     Account getBusinessAccountByName(String name);
 

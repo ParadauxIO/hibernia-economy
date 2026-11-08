@@ -799,11 +799,11 @@ class EconomyServiceImplTest extends ServerTest {
     }
 
     @Test
-    void getBalance_governmentLookupThrows_fallsBackToOwnerUuid() {
+    void getBalance_governmentLookupThrows_refusesPersonalFallback() {
         UUID owner = UUID.randomUUID();
         when(treasury.getAccountsByTypeAndOwner(AccountType.GOVERNMENT, owner)).thenThrow(new RuntimeException("db"));
-        when(treasury.getBalanceByOwnerUuid(owner)).thenReturn(new BigDecimal("8"));
-        assertThat(service.getBalance(owner)).isEqualByComparingTo("8");
+        assertThat(service.getBalance(owner)).isEqualByComparingTo("0");
+        verify(treasury, never()).getBalanceByOwnerUuid(owner);
     }
 
     @Test
@@ -1007,6 +1007,47 @@ class EconomyServiceImplTest extends ServerTest {
         when(treasury.getAccountsByTypeAndOwner(AccountType.GOVERNMENT, target)).thenReturn(List.of(govAccount(41)));
         service.deposit(target, new BigDecimal("5"), world);
         assertThat(captureTransfer().toAccountId()).isEqualTo(41);
+    }
+
+    @Test
+    void archivedGovernmentIsNotASecondActiveCandidate() {
+        UUID target = UUID.randomUUID();
+        when(treasury.getAccountsByTypeAndOwner(AccountType.GOVERNMENT, target))
+                .thenReturn(List.of(govAccount(42).withArchived(true), govAccount(41)));
+        service.deposit(target, new BigDecimal("5"), world);
+        assertThat(captureTransfer().toAccountId()).isEqualTo(41);
+    }
+
+    @Test
+    void multipleGovernmentAccountsRefuseMoneyMovement() {
+        UUID target = UUID.randomUUID();
+        when(treasury.getAccountsByTypeAndOwner(AccountType.GOVERNMENT, target))
+                .thenReturn(List.of(govAccount(41), govAccount(42)));
+        assertThat(service.deposit(target, new BigDecimal("5"), world)).isFalse();
+        verify(treasury, never()).transfer(any());
+        verify(treasury, never()).resolveOrCreatePersonal(any());
+    }
+
+    @Test
+    void nameCollisionWithoutOwnedGovernmentRefusesPersonalFallback() {
+        UUID target = UUID.randomUUID();
+        when(treasury.hasGovernmentNameCollision(target)).thenReturn(true);
+        assertThat(service.deposit(target, new BigDecimal("5"), world)).isFalse();
+        assertThat(service.hasAccount(target)).isFalse();
+        assertThat(service.getBalance(target)).isEqualByComparingTo("0");
+        verify(treasury, never()).transfer(any());
+        verify(treasury, never()).resolveOrCreatePersonal(any());
+        verify(treasury, never()).getBalanceByOwnerUuid(any());
+    }
+
+    @Test
+    void governmentLookupFailureRefusesMoneyMovement() {
+        UUID target = UUID.randomUUID();
+        when(treasury.getAccountsByTypeAndOwner(AccountType.GOVERNMENT, target))
+                .thenThrow(new IllegalStateException("unavailable"));
+        assertThat(service.deposit(target, new BigDecimal("5"), world)).isFalse();
+        verify(treasury, never()).transfer(any());
+        verify(treasury, never()).resolveOrCreatePersonal(any());
     }
 
     // ---- defensive-guard coverage (private methods, unreachable via the public API but

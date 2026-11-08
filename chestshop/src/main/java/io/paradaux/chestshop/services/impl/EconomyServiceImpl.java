@@ -446,14 +446,21 @@ public class EconomyServiceImpl implements EconomyService {
     }
 
     private Integer resolveGovernmentAccountId(UUID uuid) {
-        try {
-            List<io.paradaux.treasury.model.economy.Account> governmentAccounts =
-                    treasury.getAccountsByTypeAndOwner(AccountType.GOVERNMENT, uuid);
-            if (governmentAccounts != null && !governmentAccounts.isEmpty()) {
-                return governmentAccounts.get(0).getAccountId();
-            }
-        } catch (Exception e) {
-            log.warn("Treasury: government account lookup failed for " + uuid, e);
+        List<io.paradaux.treasury.model.economy.Account> governmentAccounts =
+                treasury.getAccountsByTypeAndOwner(AccountType.GOVERNMENT, uuid);
+        var active = governmentAccounts == null
+                ? List.<io.paradaux.treasury.model.economy.Account>of()
+                : governmentAccounts.stream()
+                        .filter(account -> !account.isArchived())
+                        .toList();
+        if (active.size() > 1) {
+            throw new IllegalArgumentException("Multiple government accounts for owner " + uuid);
+        }
+        if (active.size() == 1) {
+            return active.getFirst().getAccountId();
+        }
+        if (treasury.hasGovernmentNameCollision(uuid)) {
+            throw new IllegalArgumentException("Ambiguous player/government account for " + uuid);
         }
         return null;
     }

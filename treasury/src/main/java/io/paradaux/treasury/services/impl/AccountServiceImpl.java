@@ -395,6 +395,12 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
+    public boolean hasGovernmentNameCollision(UUID playerUuid) {
+        return accountMapper.hasGovernmentNameCollision(playerUuid);
+    }
+
+    @Override
+    @Transactional
     public boolean governmentAccountExists(String name) {
         return accountMapper.existsGovernmentAccountByName(name);
     }

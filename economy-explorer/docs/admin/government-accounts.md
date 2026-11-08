@@ -188,3 +188,23 @@ department or server.
 - [Government accounts](/docs/guides/government-accounts) — the player-facing guide.
 - [Operator commands](/docs/admin/operator-commands) — `/eco`, `/tax`, and salaries.
 - [Treasury reference → Permission nodes](/docs/reference/treasury#permission-nodes).
+
+## Government names that also belong to players
+
+A government operator's personal wallet and a same-named government account are
+separate accounts. Use the government account ID when configuring payments.
+`/pay`, `/gov payout` and REST player-name lookups refuse ambiguous names. Explicit
+REST player UUIDs and personal-account operations still address the personal wallet.
+
+Vault integrations honor configured UUID redirects. Redirected deposits do not
+charge source-income tax to the operator's separate personal wallet. Without a redirect, a
+player/government name collision refuses payments and reports no usable personal
+balance. ChestShop retains its single active government-account owner rule, but
+refuses multiple government wallets or a name collision without that owner match.
+A database lookup failure does not select a different wallet.
+
+Treasury logs an account-resolution collision report at startup and daily. Ask an
+operator to review the IDs and intended receiving account. A reported collision
+never automatically renames accounts or transfers balances. Government creation
+already rejects known player names; later player renames can still create a
+collision that requires review.

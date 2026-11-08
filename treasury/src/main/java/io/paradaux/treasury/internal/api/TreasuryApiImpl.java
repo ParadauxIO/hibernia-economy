@@ -43,6 +43,11 @@ public class TreasuryApiImpl implements TreasuryApi {
         this.playerDirectory = playerDirectory;
     }
 
+    @Override
+    public boolean hasGovernmentNameCollision(UUID playerUuid) {
+        return accountService.hasGovernmentNameCollision(playerUuid);
+    }
+
     // ---- Balance ----
 
     @Override

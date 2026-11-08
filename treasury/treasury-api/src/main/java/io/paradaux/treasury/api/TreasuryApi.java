@@ -49,6 +49,13 @@ public interface TreasuryApi {
     @Nullable
     UUID resolveKnownPlayerUuid(String name);
 
+    /**
+     * True when the player's current directory name also identifies an active
+     * GOVERNMENT account. Untyped integrations must refuse personal fallback in
+     * this case; explicit account IDs and PERSONAL operations remain available.
+     */
+    boolean hasGovernmentNameCollision(UUID playerUuid);
+
     // ---- Account lookups ----
 
     /** @return the owner's PERSONAL account, or {@code null} if they have none. */
