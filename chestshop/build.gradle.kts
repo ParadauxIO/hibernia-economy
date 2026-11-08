@@ -93,7 +93,7 @@ dependencies {
     // Keep compile/test APIs aligned with the 26.3-compatible harness releases.
     compileOnly("com.sk89q.worldedit:worldedit-core:7.4.6") { isTransitive = false }
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.6") { isTransitive = false }
-    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.16.1") { isTransitive = false }
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.16.2") { isTransitive = false }
     // WorldGuard soft-depend: pull only its own API jars, non-transitively, so
     // none of its server-provided transitives (bukkit/gson/fastutil/guava) fight
     // paper-api. They carry the classes we touch (WorldGuard, StateFlag, Flags,
@@ -359,8 +359,8 @@ tasks.shadowJar { finalizedBy(copyPlugin) }
 // Exercise each optional editing API on its own runtime: FAWE replaces WorldEdit.
 val faweTestLibraries = configurations.create("faweTestLibraries")
 dependencies {
-    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.16.1") { isTransitive = false }
-    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Libs-Core:2.16.1") { isTransitive = false }
+    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.16.2") { isTransitive = false }
+    faweTestLibraries("com.fastasyncworldedit:FastAsyncWorldEdit-Libs-Core:2.16.2") { isTransitive = false }
 }
 tasks.test { exclude("**/FaweShopCleanupTest*") }
 val faweTest = tasks.register<Test>("faweTest") {
