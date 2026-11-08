@@ -75,6 +75,15 @@ class PreviewServiceImplTest {
         server = mock(Server.class);
         world = mock(World.class);
         display = mock(ItemDisplay.class);
+        when(display.isValid()).thenReturn(true);
+        var displayedItem = new java.util.concurrent.atomic.AtomicReference<ItemStack>();
+        org.mockito.Mockito.doAnswer(inv -> {
+                    displayedItem.set(((ItemStack) inv.getArgument(0)).clone());
+                    return null;
+                })
+                .when(display)
+                .setItemStack(any());
+        when(display.getItemStack()).thenAnswer(inv -> displayedItem.get().clone());
         when(plugin.getServer()).thenReturn(server);
         lenient().when(server.getWorld("world")).thenReturn(world);
         lenient().when(server.getWorld("nope")).thenReturn(null);
@@ -304,11 +313,12 @@ class PreviewServiceImplTest {
     }
 
     @Test
-    void render_replacesExistingDisplayAtSamePosition() {
+    void render_updatesExistingDisplayAtSamePosition() {
         preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
-        preview.render("world", 16, 64, 32, new ItemStack(Material.STONE)); // destroy old, spawn new
-        verify(display, times(1)).remove(); // the first display was destroyed
-        verify(world, times(2)).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
+        preview.render("world", 16, 64, 32, new ItemStack(Material.STONE));
+        verify(display, never()).remove();
+        verifySpawns(1);
+        verify(display).setItemStack(new ItemStack(Material.STONE));
     }
 
     @Test
@@ -579,8 +589,9 @@ class PreviewServiceImplTest {
         preview.refresh("world", 16, 64, 32);
         completeLookup();
 
-        verify(display).remove(); // the stale display went
-        verifySpawns(2); // and the current item was rendered in its place
+        verify(display, never()).remove();
+        verifySpawns(1);
+        verify(display).setItemStack(new ItemStack(Material.DIAMOND));
     }
 
     @Test
@@ -598,6 +609,106 @@ class PreviewServiceImplTest {
         completeLookup();
         verify(display, times(2)).remove();
         verifySpawns(2);
+    }
+
+    @Test
+    void unchangedRefreshKeepsEntityAndAvoidsMetadataUpdates() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        registry("world", 1, 2, shopAt(16, 64, 32, true));
+        preview.refresh("world", 16, 64, 32);
+        completeLookup();
+        verifySpawns(1);
+        verify(display, never()).remove();
+        verify(display, times(1)).setItemStack(any());
+    }
+
+    @Test
+    void wildcardRegistryRowNeverDecodesItemData() {
+        var sign = (org.bukkit.block.Sign) world.getBlockAt(16, 64, 32).getState(false);
+        when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 5", "amethyst*"});
+        try (var decoder = org.mockito.Mockito.mockStatic(io.paradaux.chestshop.model.ShopItem.class)) {
+            preview.render(shopAt(16, 64, 32, true));
+            decoder.verifyNoInteractions();
+        }
+        verifySpawns(0);
+    }
+
+    @Test
+    void queuedSignRefreshesShareOneChunkQueryButKeepTheirTargets() {
+        registry("world", 3, 3);
+        registry("world", 1, 2, shopAt(16, 64, 32, true), shopAt(17, 64, 33, true), shopAt(18, 64, 34, true));
+        preview.loadChunk("world", 3, 3); // hold the query slot while refreshes accumulate
+        preview.refresh("world", 16, 64, 32);
+        preview.refresh("world", 17, 64, 33);
+        completeLookup();
+        completeLookup();
+        verify(shopQuery, times(1)).shopsInChunk("world", 1, 2);
+        verifySpawns(2); // the unrequested third sign remains untouched
+    }
+
+    @Test
+    void externallyRemovedDisplayIsRecreated() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        when(display.isValid()).thenReturn(false);
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        verifySpawns(2);
+    }
+
+    @Test
+    void editedSignUpdatesValidationSnapshotWithoutRespawning() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        var sign = (org.bukkit.block.Sign) world.getBlockAt(16, 64, 32).getState(false);
+        when(sign.getLines()).thenReturn(new String[] {"Seller", "1", "B 10", "Diamond"});
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        advanceCleanup(500);
+        verify(display, never()).remove();
+        verifySpawns(1);
+    }
+
+    @Test
+    void invalidRegistryItemRemovesPreviousPreview() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        var shop = shopAt(16, 64, 32, true);
+        when(shop.material()).thenReturn("NOT_A_MATERIAL");
+        preview.render(shop);
+        verify(display).remove();
+        verifySpawns(1);
+    }
+
+    @Test
+    void failedSharedQueryPreservesPreviewsAndCanBeRetried() {
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        registry("world", 3, 3);
+        when(shopQuery.shopsInChunk("world", 1, 2)).thenThrow(new IllegalStateException("offline"));
+        preview.loadChunk("world", 3, 3);
+        preview.refresh("world", 16, 64, 32);
+        preview.refresh("world", 17, 64, 33);
+        completeLookup();
+        completeLookup();
+        verify(shopQuery, times(1)).shopsInChunk("world", 1, 2);
+        verify(display, never()).remove();
+        org.mockito.Mockito.doReturn(List.of()).when(shopQuery).shopsInChunk("world", 1, 2);
+        preview.refresh("world", 16, 64, 32);
+        completeLookup();
+        verify(display).remove();
+    }
+
+    @Test
+    void targetedRefreshChecksRegistryWorldIdentity() {
+        UUID worldId = UUID.randomUUID();
+        when(world.getUID()).thenReturn(worldId);
+        var shop = shopAt(16, 64, 32, true);
+        when(shop.worldUuid()).thenReturn(worldId);
+        registry("world", 1, 2, shop);
+        preview.render("world", 16, 64, 32, new ItemStack(Material.DIAMOND));
+        preview.refresh("world", 16, 64, 32);
+        completeLookup();
+        verify(display, never()).remove();
+        when(shop.worldUuid()).thenReturn(UUID.randomUUID());
+        preview.refresh("world", 16, 64, 32);
+        completeLookup();
+        verify(display).remove();
+        verifySpawns(1);
     }
 
     // ── toItemStack (static, all branches) ────────────────────────────────────

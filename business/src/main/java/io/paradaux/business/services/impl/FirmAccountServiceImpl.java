@@ -21,6 +21,8 @@ import io.paradaux.treasury.api.TreasuryApi;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountMember;
 import io.paradaux.treasury.model.economy.AccountType;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -296,13 +298,22 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         expectedMembers.add(ownerUuid);
         expectedAuthorizers.add(ownerUuid);
 
+        // Resolve each role once for this account sync, not once per employee.
+        // Keep this local so subsequent syncs observe role changes and revocations.
+        Map<String, EnumSet<RolePermission>> permissionsByRole = new HashMap<>();
         // Determine expected access for each employee
         for (FirmEmployee employee : staff.listCurrentEmployeesByFirm(firmId)) {
             UUID employeeUuid = UUID.fromString(employee.getPlayerUuid());
-            List<FirmRolePermission> permissions = roles.getFirmRolePermissions(firmId, employee.getRoleName());
+            EnumSet<RolePermission> permissions = permissionsByRole.computeIfAbsent(employee.getRoleName(), role -> {
+                EnumSet<RolePermission> resolved = EnumSet.noneOf(RolePermission.class);
+                for (FirmRolePermission permission : roles.getFirmRolePermissions(firmId, role)) {
+                    if (permission.getPermission() != null) resolved.add(permission.getPermission());
+                }
+                return resolved;
+            });
 
-            boolean hasAdmin = permissions.stream().anyMatch(p -> p.getPermission() == RolePermission.ADMIN);
-            boolean hasFinancial = permissions.stream().anyMatch(p -> p.getPermission() == RolePermission.FINANCIAL);
+            boolean hasAdmin = permissions.contains(RolePermission.ADMIN);
+            boolean hasFinancial = permissions.contains(RolePermission.FINANCIAL);
 
             if (hasAdmin) {
                 expectedMembers.add(employeeUuid);

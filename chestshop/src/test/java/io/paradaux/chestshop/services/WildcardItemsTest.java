@@ -10,6 +10,24 @@ import org.junit.jupiter.api.Test;
 
 class WildcardItemsTest extends ServerTest {
     @Test
+    void existenceCheckStopsAtFirstMatchWithoutCloningOrInspectingLaterStacks() {
+        var items = mock(ItemService.class);
+        var matcher = new WildcardItems(items);
+        var first = mock(ItemStack.class);
+        var later = mock(ItemStack.class);
+        when(first.getType()).thenReturn(Material.PAPER);
+        when(first.getAmount()).thenReturn(2);
+        when(items.wildcardName(first)).thenReturn("Drink.Bottle");
+        var inventory = mock(org.bukkit.inventory.Inventory.class);
+        when(inventory.getStorageContents()).thenReturn(new ItemStack[] {first, later});
+        assertThat(matcher.hasMatch("DRINK.*", inventory)).isTrue();
+        verify(first, never()).clone();
+        verifyNoInteractions(later);
+        assertThat(matcher.hasMatch("*", inventory)).isFalse();
+        assertThat(matcher.hasMatch("drink*", null)).isFalse();
+    }
+
+    @Test
     void chooserGroupsUnstackableCustomItemsButRetainsTheExactFirstInstance() {
         var items = mock(ItemService.class);
         var matcher = new WildcardItems(items);
@@ -93,6 +111,10 @@ class WildcardItemsTest extends ServerTest {
         assertThat(WildcardItems.isPattern(null)).isFalse();
         assertThat(matcher.variants("carlton_dry*", null)).isEmpty();
         assertThat(matcher.count("carlton_dry*", null)).isZero();
+        var inventory = chestWith(9, item(Material.PAPER, 1));
+        assertThat(matcher.count("*", inventory)).isZero();
+        assertThat(matcher.variants("*", inventory)).isEmpty();
+        assertThat(matcher.hasMatch("absent*", inventory)).isFalse();
         assertThat(matcher.matches("carlton_dry*", null)).isFalse();
         assertThat(matcher.matches("carlton_dry*", item(Material.AIR, 1))).isFalse();
         assertThat(matcher.matches("*", item(Material.PAPER, 1))).isFalse();

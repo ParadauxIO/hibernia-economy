@@ -89,8 +89,7 @@ public class PostTradeReactionsImpl implements PostTradeReactions {
         }
         Inventory ownerInventory = event.getOwnerInventory();
         String pattern = SignService.getItem(sign);
-        if (WildcardItems.isPattern(pattern)
-                && !new WildcardItems(items).variants(pattern, ownerInventory).isEmpty()) return;
+        if (WildcardItems.isPattern(pattern) && new WildcardItems(items).hasMatch(pattern, ownerInventory)) return;
         if (!shopShouldBeRemoved(ownerInventory, event.getStock()) || !isInRemoveWorld(sign)) {
             return;
         }
