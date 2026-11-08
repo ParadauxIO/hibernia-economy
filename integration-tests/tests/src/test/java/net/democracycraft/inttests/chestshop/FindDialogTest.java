@@ -76,10 +76,14 @@ class FindDialogTest {
     private static void prepare(MockPlayer owner, ChestShopFixture shop, int price, boolean visible) {
         shop.setupSellShop(owner.getUsername(), 3, price, "prismarine_shard");
         shop.positionClicker(owner, owner.getUsername());
-        owner.chatCommand("/cs toggle visibility " + visible);
-        owner.awaitMessageContaining("now", TIMEOUT);
+        owner.awaitMessageAfter(() -> owner.chatCommand("/cs toggle visibility " + visible),
+                line -> line.contains("Shop is now " + (visible ? "shown" : "hidden")), TIMEOUT);
         Barrier.settle();
         var pos = shop.signPos();
-        assertThat(Market.waitForShopAt("world", pos.x(), pos.y(), pos.z(), TIMEOUT).visible()).isEqualTo(visible);
+        // The command acknowledges enqueueing; the registry executor commits independently.
+        Market.Shop persisted = Await.until("shop visibility=" + visible + " at " + pos,
+                () -> Market.shopAt("world", pos.x(), pos.y(), pos.z()).orElse(null),
+                state -> state != null && state.visible() == visible, TIMEOUT);
+        assertThat(persisted.visible()).isEqualTo(visible);
     }
 }
