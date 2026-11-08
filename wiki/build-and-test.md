@@ -403,3 +403,16 @@ All optional APIs are compile-only and remain outside the shaded jar.
 WorldGuard's region-name provider is isolated behind `ShopDisplayService` and a
 nested integration class so absent plugins do not prevent startup. It supplies
 plain-text location and optional preview-name templates; see the admin guide.
+
+### MariaDB Connector/J 4 connections
+
+Connector/J 4 defaults to verified TLS. The production MariaDB 10.11 server
+has TLS disabled, so plugin pools, startup migrations, and the REST Hikari
+datasource explicitly use `sslMode=disable` to preserve existing connections.
+REST sets this as a datasource property so deployment-provided `DB_URL` values
+are covered too. Enabling TLS later requires coordinating these settings with
+the server certificates and trust configuration.
+
+Disposable databases also use `sslMode=disable`. When supplying an external
+`*_TEST_JDBC_URL` or `devserver.db.url`, include `?sslMode=disable` (or
+`&sslMode=disable` if the URL already has options) for a server without TLS.

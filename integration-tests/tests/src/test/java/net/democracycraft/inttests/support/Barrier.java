@@ -45,9 +45,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * non-op players; {@code ops/integration/run.sh} lists {@code /dcsync} in Spigot's
  * {@code commands.spam-exclusions}. A server set up some other way needs the same entry.
  *
- * <p>Not covered: work on threads a plugin manages itself (the economy plugins have none for
- * commands — checked with a grep for {@code Executors.} / {@code CompletableFuture.*Async}),
- * and the REST API process, which tests observe through the database instead.
+ * <p>Not covered: work on threads a plugin manages itself, including ChestShop's ordered
+ * registry writer, and the REST API process. Observe their committed database state with
+ * {@link Await} before asserting the result of a mutation.
  */
 public final class Barrier {
 

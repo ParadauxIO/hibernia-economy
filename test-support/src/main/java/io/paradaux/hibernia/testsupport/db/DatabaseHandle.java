@@ -89,7 +89,7 @@ final class DatabaseHandle implements AutoCloseable {
                 embedded = DB.newEmbeddedDB(dbConfig);
                 embedded.start();
                 embedded.createDB(spec.databaseName());
-                ds = pool(cfg.getURL(spec.databaseName()), "root", "", spec.databaseName());
+                ds = pool(cfg.getURL(spec.databaseName()) + "?sslMode=disable", "root", "", spec.databaseName());
             } catch (Exception e) {
                 throw new IllegalStateException("Failed to start embedded MariaDB", e);
             }

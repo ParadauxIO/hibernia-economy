@@ -15,7 +15,7 @@ dependencies {
     // Direct MariaDB access for state assertions — read balances, ledger
     // postings, firm rows, etc. Faster and more deterministic than scraping
     // chat output.
-    testImplementation("org.mariadb.jdbc:mariadb-java-client:3.5.10")
+    testImplementation("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
     // JSON for Treasury REST API tests — parse response bodies into JsonNode.
     testImplementation("com.fasterxml.jackson.core:jackson-databind:2.22.4")

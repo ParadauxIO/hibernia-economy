@@ -19,7 +19,7 @@ public final class SchemaMigrator {
             password = database.getPassword();
         }
         String url = "jdbc:mariadb://" + database.getHost() + ":" + Integer.parseInt(database.getPort()) + "/"
-                + database.getDatabase() + "?connectTimeout=10000";
+                + database.getDatabase() + "?connectTimeout=10000&sslMode=disable";
         return Flyway.configure(SchemaMigrator.class.getClassLoader())
                 .dataSource(url, user, password)
                 .schemas(database.getDatabase())

@@ -52,16 +52,16 @@ jobs:
           --health-retries=20
 
     env:
-      TREASURY_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_test
+      TREASURY_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_test?sslMode=disable
       TREASURY_TEST_DB_USER: root
       TREASURY_TEST_DB_PASS: ci
-      BUSINESS_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/business_test
+      BUSINESS_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/business_test?sslMode=disable
       BUSINESS_TEST_DB_USER: root
       BUSINESS_TEST_DB_PASS: ci
-      TREASURYAPI_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasuryapi_test
+      TREASURYAPI_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasuryapi_test?sslMode=disable
       TREASURYAPI_TEST_DB_USER: root
       TREASURYAPI_TEST_DB_PASS: ci
-      TREASURY_REST_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_rest_test
+      TREASURY_REST_TEST_JDBC_URL: jdbc:mariadb://127.0.0.1:3306/treasury_rest_test?sslMode=disable
       TREASURY_REST_TEST_DB_USER: root
       TREASURY_REST_TEST_DB_PASS: ci
 

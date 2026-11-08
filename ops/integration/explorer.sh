@@ -40,7 +40,7 @@ log "Running same-stack browser assertions"
     E2E_BASE_URL="$EXPLORER_URL" E2E_AUTH_SECRET="$EXPLORER_SECRET" \
     IT_KEYCLOAK_PROFILE="$([ "$PROFILE" = explorer-keycloak ] && echo true || echo false)" \
     IT_KEYCLOAK_CREDENTIALS="${IT_KEYCLOAK_CREDENTIALS:-}" IT_REPO_ROOT="$ROOT" \
-    DEVSERVER_DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DEVSERVER_DB_USER="$DB_USER" DEVSERVER_DB_PASSWORD="$DB_PASSWORD" \
+    DEVSERVER_DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME?sslMode=disable" DEVSERVER_DB_USER="$DB_USER" DEVSERVER_DB_PASSWORD="$DB_PASSWORD" \
     DEVSERVER_PORT="$MC_PORT" RCON_PORT="$RCON_PORT" RCON_PASSWORD="$RCON_PASSWORD" \
     IT_EXPLORER_FIXTURE="$WORK/explorer-fixture.json" \
     ./node_modules/.bin/playwright test --config playwright.live-server.config.ts "${BROWSER_TEST_ARGS[@]}")

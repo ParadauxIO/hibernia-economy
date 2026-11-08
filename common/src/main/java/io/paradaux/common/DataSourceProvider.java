@@ -37,6 +37,7 @@ public final class DataSourceProvider implements AutoCloseable {
      * utf8 is always set for display names/memos.
      */
     static String buildJdbcUrl(String host, int port, String db, boolean statementCaching) {
+        // Production MariaDB has TLS disabled; Connector/J 4 otherwise requires it.
         StringBuilder url = new StringBuilder()
                 .append("jdbc:mariadb://")
                 .append(host)
@@ -44,7 +45,7 @@ public final class DataSourceProvider implements AutoCloseable {
                 .append(port)
                 .append('/')
                 .append(db)
-                .append("?useUnicode=true&characterEncoding=utf8");
+                .append("?sslMode=disable&useUnicode=true&characterEncoding=utf8");
         if (statementCaching) {
             url.append("&useServerPrepStmts=true&cachePrepStmts=true")
                     .append("&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048")

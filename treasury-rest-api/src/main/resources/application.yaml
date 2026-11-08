@@ -7,6 +7,10 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:password}
     driver-class-name: org.mariadb.jdbc.Driver
+    hikari:
+      # Production MariaDB has TLS disabled; retain the pre-4.0 connection mode.
+      data-source-properties:
+        sslMode: disable
 
   jackson:
     date-format: com.fasterxml.jackson.databind.util.StdDateFormat

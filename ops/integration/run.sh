@@ -562,7 +562,7 @@ for plugin in Treasury Business TreasuryAPI ChestShop LuckPerms DcDiag; do
 done
 
 log "Starting the REST API on :$REST_PORT"
-DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \
+DB_URL="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME?sslMode=disable" DB_USERNAME="$DB_USER" DB_PASSWORD="$DB_PASSWORD" \
     "$JAVA_BIN" -jar "${REST_JARS[0]}" \
     --server.port="$REST_PORT" --api.jwt-secret="$JWT_SECRET" "${REST_PROFILE_ARGS[@]}" \
     --treasury.webhook.insecure-test-targets="127.0.0.1:$WEBHOOK_PORT" >"$WORK/rest-api.log" 2>&1 &
@@ -582,7 +582,7 @@ log "Running the integration tests"
     -PgriefPreventionJar="$CACHE/$GP_JAR" \
     -Dmockclient.host=127.0.0.1 -Dmockclient.port="$MC_PORT" \
     -Ddevserver.host=127.0.0.1 -Ddevserver.port="$MC_PORT" \
-    -Ddevserver.db.url="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME" \
+    -Ddevserver.db.url="jdbc:mariadb://$DB_HOST:$DB_PORT/$DB_NAME?sslMode=disable" \
     -Ddevserver.db.user="$DB_USER" -Ddevserver.db.password="$DB_PASSWORD" \
     -Drcon.host=127.0.0.1 -Drcon.port="$RCON_PORT" -Drcon.password="$RCON_PASSWORD" \
     "${PROFILE_ARGS[@]}" \
