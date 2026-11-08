@@ -67,6 +67,32 @@ class VaultEconomyAdapterTest {
     }
 
     @Test
+    void collisionRefusesNameAndUuidOperationsWithoutTouchingLedger() {
+        when(playerDirectory.resolveUuidByName("DCGovernmentOR")).thenReturn(Optional.of(uuid));
+        when(accountService.hasGovernmentNameCollision(uuid)).thenReturn(true);
+        assertThat(adapter.getBalance("DCGovernmentOR")).isZero();
+        assertThat(adapter.hasAccount(player)).isFalse();
+        assertThat(adapter.has(player, 0)).isFalse();
+        assertThat(adapter.createPlayerAccount(player)).isFalse();
+        assertThat(adapter.depositPlayer("DCGovernmentOR", 1).type).isEqualTo(EconomyResponse.ResponseType.FAILURE);
+        assertThat(adapter.withdrawPlayer(player, 1).type).isEqualTo(EconomyResponse.ResponseType.FAILURE);
+        verifyNoInteractions(ledgerService, taxApi);
+        verify(accountService, never()).findPersonalAccountId(any());
+    }
+
+    @Test
+    void explicitRedirectStillAllowsCollidingPlayer() {
+        when(accountService.hasGovernmentNameCollision(uuid)).thenReturn(true);
+        when(accountService.findRedirectedAccount(uuid)).thenReturn(Optional.of(42));
+        when(accountService.getBalanceReadOnly(42)).thenReturn(new BigDecimal("12"));
+        assertThat(adapter.depositPlayer(player, 1).type).isEqualTo(EconomyResponse.ResponseType.SUCCESS);
+        assertThat(adapter.getBalance(player)).isEqualTo(12);
+        verify(ledgerService).vaultDeposit(any(), eq(uuid), any(), any(), any(), isNull(), isNull());
+        verify(accountService, never()).findPersonalAccountId(any());
+        verifyNoInteractions(taxApi);
+    }
+
+    @Test
     void unknownNameReadNeverCallsBukkit() {
         try (var bukkit = org.mockito.Mockito.mockStatic(org.bukkit.Bukkit.class)) {
             assertThat(adapter.hasAccount("Unknown")).isFalse();

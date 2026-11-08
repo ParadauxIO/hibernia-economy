@@ -32,11 +32,13 @@ import io.paradaux.treasury.internal.model.config.LoggingConfiguration;
 import io.paradaux.treasury.internal.model.config.SalaryConfiguration;
 import io.paradaux.treasury.internal.model.config.TaxCycleConfiguration;
 import io.paradaux.treasury.internal.utils.LoggingConfigurer;
+import io.paradaux.treasury.services.AccountResolutionAuditService;
 import io.paradaux.treasury.services.ConfigPublishService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.SalaryService;
 import io.paradaux.treasury.services.TaxCycleRegistry;
 import io.paradaux.treasury.services.TaxWebhookService;
+import io.paradaux.treasury.tasks.AccountResolutionAuditTask;
 import io.paradaux.treasury.tasks.SalaryTask;
 import io.paradaux.treasury.tasks.TaxCycleTask;
 import java.util.ArrayList;
@@ -208,6 +210,7 @@ public class Treasury extends JavaPlugin {
         registerSalesQueryApi();
         registerShopQueryApi();
         scheduleSalaries();
+        new AccountResolutionAuditTask(injector.getInstance(AccountResolutionAuditService.class)).schedule(this);
 
         log.info("Treasury enabled.");
         io.paradaux.treasury.deployment.TasklieDeploymentListener.register(this);

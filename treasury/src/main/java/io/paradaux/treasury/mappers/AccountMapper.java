@@ -1,5 +1,6 @@
 package io.paradaux.treasury.mappers;
 
+import io.paradaux.treasury.internal.model.economy.AccountNameCollision;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.AccountBalance;
 import io.paradaux.treasury.model.economy.AccountType;
@@ -11,6 +12,33 @@ import org.apache.ibatis.annotations.*;
 
 @Mapper
 public interface AccountMapper {
+
+    /** Live directory check: never cache across externally controlled player renames. */
+    @Select("""
+            SELECT EXISTS (
+                SELECT 1 FROM economy_players p JOIN accounts g
+                  ON g.display_name = p.current_name
+                 AND g.account_type = 'GOVERNMENT' AND g.is_archived = 0
+                WHERE p.player_uuid_bin = #{playerUuid}
+                  AND p.current_name <> HEX(p.player_uuid_bin)
+            )
+            """)
+    boolean hasGovernmentNameCollision(@Param("playerUuid") UUID playerUuid);
+
+    @Select("""
+            SELECT g.account_id AS government_id, g.display_name AS government_name,
+                   p.player_uuid_bin AS player_uuid, pa.account_id AS personal_id,
+                   r.account_id AS redirect_id
+              FROM accounts g
+              JOIN economy_players p ON p.current_name = g.display_name
+                AND p.current_name <> HEX(p.player_uuid_bin)
+              LEFT JOIN accounts pa ON pa.owner_uuid_bin = p.player_uuid_bin
+                AND pa.account_type = 'PERSONAL' AND pa.is_archived = 0
+              LEFT JOIN account_redirects r ON r.redirect_uuid_bin = p.player_uuid_bin
+             WHERE g.account_type = 'GOVERNMENT' AND g.is_archived = 0
+             ORDER BY g.account_id, pa.account_id
+            """)
+    List<AccountNameCollision> findGovernmentNameCollisions();
 
     // ---- lookups ----
     @Select("""

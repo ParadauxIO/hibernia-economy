@@ -36,6 +36,8 @@ the code.
 
 - **[Documentation coverage](documentation-coverage.md)** — PAR-498 audit baseline, feature map and maintenance checks.
 
+- **[Account resolution audit](account-resolution-audit.md)** — collision policy, recurring checks and historical remediation (PAR-144).
+
 ## Quick links
 
 - [Business async Bukkit audit (ADT-70)](business-async-bukkit-audit.md) — call sites and thread-boundary verification.

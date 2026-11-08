@@ -30,8 +30,9 @@ import org.jetbrains.annotations.Nullable;
  * Vault calls are attributed to the actual plugin calling Vault
  * via CallingPluginDetector – so each plugin can get its own SYSTEM account.
  *
- * After every successful deposit, source income tax is applied automatically
- * via {@link TaxApi#applySourceIncomeTax} if the feature is enabled in config.
+ * After a successful personal-wallet deposit, source income tax is applied
+ * via {@link TaxApi#applySourceIncomeTax} if enabled. Redirected deposits skip
+ * that PERSONAL-only tax path because the player wallet did not receive the income.
  */
 @Slf4j
 public class VaultEconomyAdapter implements Economy {
@@ -139,6 +140,7 @@ public class VaultEconomyAdapter implements Economy {
         // — the redirect points at the GOVERNMENT account that fields their
         // Vault calls.
         if (accountService.findRedirectedAccount(uuid).isPresent()) return true;
+        if (accountService.hasGovernmentNameCollision(uuid)) return false;
         return accountService.hasPersonalAccount(uuid);
     }
 
@@ -167,11 +169,12 @@ public class VaultEconomyAdapter implements Economy {
     private double getBalance(@Nullable UUID uuid) {
         if (uuid == null) return 0.0D;
         // Redirected UUIDs read from the GOVERNMENT account they point at,
-        // not from a PERSONAL account they don't have. Both lookups are
-        // cache-backed, so for a known player this runs with a single DB read
-        // (the balance) on the caller's (often main) thread.
+        // not from a PERSONAL account they don't have. Redirect and personal IDs
+        // are cached; the collision check reads the live directory so player
+        // renames cannot leave a cached permission to fall back to PERSONAL.
         Integer accountId = accountService.findRedirectedAccount(uuid).orElse(null);
         if (accountId == null) {
+            if (accountService.hasGovernmentNameCollision(uuid)) return 0D;
             accountId = accountService.findPersonalAccountId(uuid);
             if (accountId == null) return 0.0D;
         }
@@ -205,6 +208,7 @@ public class VaultEconomyAdapter implements Economy {
 
     private boolean has(@Nullable UUID uuid, double amount) {
         if (uuid == null || !Double.isFinite(amount)) return false;
+        if (isAmbiguous(uuid)) return false;
         BigDecimal need = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
         return BigDecimal.valueOf(getBalance(uuid)).compareTo(need) >= 0;
     }
@@ -239,6 +243,8 @@ public class VaultEconomyAdapter implements Economy {
         String pluginKey = resolveCallingPluginKey();
         try {
             BigDecimal bd = BigDecimal.valueOf(amount).setScale(FRACTIONAL_DIGITS, RoundingMode.HALF_EVEN);
+            if (isAmbiguous(playerUuid))
+                return failure(amount, 0D, "Ambiguous player/government account; configure a Vault redirect");
             ledgerService.vaultWithdraw(
                     pluginKey,
                     playerUuid,
@@ -292,6 +298,8 @@ public class VaultEconomyAdapter implements Economy {
         // committed deposit must never return FAILURE, or an at-least-once Vault
         // caller will retry and double-credit (money creation, ADT-8).
         try {
+            if (isAmbiguous(playerUuid))
+                return failure(amount, 0D, "Ambiguous player/government account; configure a Vault redirect");
             ledgerService.vaultDeposit(
                     pluginKey,
                     playerUuid,
@@ -310,7 +318,12 @@ public class VaultEconomyAdapter implements Economy {
         // turn a successful deposit into a FAILURE (which previously triggered the
         // double-credit retry above).
         try {
-            TaxResult taxResult = taxApi.applySourceIncomeTax(playerUuid, bd, pluginKey);
+            // This API taxes a PERSONAL wallet. Redirected deposits went to an
+            // explicitly configured wallet, so never charge the operator's personal account.
+            TaxResult taxResult =
+                    accountService.findRedirectedAccount(playerUuid).isPresent()
+                            ? new TaxResult.Skipped("Vault deposit used an explicit account redirect")
+                            : taxApi.applySourceIncomeTax(playerUuid, bd, pluginKey);
             if (taxResult instanceof TaxResult.Failed f) {
                 log.warn(
                         "Source income tax failed for player {} (plugin={}, amount={}): {}",
@@ -444,6 +457,7 @@ public class VaultEconomyAdapter implements Economy {
         if (accountService.findRedirectedAccount(uuid).isPresent()) {
             return false;
         }
+        if (accountService.hasGovernmentNameCollision(uuid)) return false;
         boolean existed = accountService.hasPersonalAccount(uuid);
         ledgerService.resolveOrCreatePersonal(uuid);
         return !existed;
@@ -454,6 +468,11 @@ public class VaultEconomyAdapter implements Economy {
     private @Nullable UUID resolveUuid(@NotNull String playerName) {
         // The directory lookup is also the existence guard: never ask Mojang about names.
         return playerDirectory.resolveUuidByName(playerName).orElse(null);
+    }
+
+    private boolean isAmbiguous(UUID uuid) {
+        return accountService.hasGovernmentNameCollision(uuid)
+                && accountService.findRedirectedAccount(uuid).isEmpty();
     }
 
     /**

@@ -402,7 +402,8 @@ public class LedgerServiceImpl implements LedgerService {
      * an {@code account_redirects} entry takes precedence (used to
      * route legacy "player" UUIDs like DCGovernment / GovReserve onto
      * their canonical GOVERNMENT accounts), falling through to the
-     * usual PERSONAL resolve-or-create path otherwise.
+     * usual PERSONAL resolve-or-create path otherwise, unless the current player
+     * name also identifies an active GOVERNMENT account (which must be refused).
      *
      * <p>Native callers don't go through this — they target accounts
      * by ID directly via {@link #transfer(TransferRequest)}.
@@ -410,6 +411,10 @@ public class LedgerServiceImpl implements LedgerService {
     private int resolveVaultAccountId(UUID playerUuid) {
         Optional<Integer> redirected = accountService.findRedirectedAccount(playerUuid);
         if (redirected.isPresent()) return redirected.get();
+        if (accountService.hasGovernmentNameCollision(playerUuid)) {
+            throw new IllegalArgumentException(
+                    "Ambiguous player/government account; configure an explicit Vault redirect");
+        }
         Integer cached = personalAccountCache.get(playerUuid);
         if (cached != null) return cached;
         // Miss: resolve (creating + seeding starting balance if needed).
