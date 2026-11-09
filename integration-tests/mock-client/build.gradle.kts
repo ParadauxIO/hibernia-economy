@@ -21,7 +21,7 @@ dependencies {
     // log4j2, etc.). The tests submodule wires logback for its runs.
     implementation("org.slf4j:slf4j-api:2.0.20")
 
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testImplementation("org.assertj:assertj-core:3.27.7")
     testRuntimeOnly("ch.qos.logback:logback-classic:1.6.6")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
