@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.3.build.206-stable")
+    compileOnly("io.papermc.paper:paper-api:26.3.build.243-stable")
     // WorldGuard/WorldEdit API from EngineHub (proper compile jars); GriefPrevention
     // from its server plugin jar (its API compiles cleanly). Used by the diag commands
     // that create regions/claims for the protection-integration tests.
