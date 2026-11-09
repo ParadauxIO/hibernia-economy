@@ -15,7 +15,7 @@ dependencies {
     // ClientboundSystemChatPacket exposes content as Adventure Component;
     // the plain-text serializer turns it into something we can match on.
     // adventure-api is already on the classpath transitively from MCProtocolLib.
-    implementation("net.kyori:adventure-text-serializer-plain:4.17.0")
+    implementation("net.kyori:adventure-text-serializer-plain:5.2.0")
 
     // Logging facade only — consumers bring their own backend (logback,
     // log4j2, etc.). The tests submodule wires logback for its runs.
