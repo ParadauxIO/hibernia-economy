@@ -36,9 +36,9 @@ shadow = "9.6.1"
 # build-logic classpath deps (like shadow); the analysers themselves are resolved
 # into each project's errorprone / spotless configurations at build time.
 errorprone-plugin = "5.1.1"
-errorprone = "2.51.0"
+errorprone = "2.52.0"
 nullaway = "0.14.3"
-spotless = "8.10.4"
+spotless = "8.11.0"
 palantir-java-format = "2.102.0"
 ktlint = "1.8.0"
 
@@ -51,7 +51,7 @@ mariadb4j = "3.3.1"
 # against Platform 1.14 but resolves to the BOM's 6.x without API breaks — see
 # MoneyProperties et al.).
 jqwik = "1.10.2"
-flyway = "13.12.0"
+flyway = "13.12.1"
 jacoco = "0.8.15"
 # Mutation testing (io.paradaux.mutation-testing-conventions). The Gradle plugin
 # is a build-logic classpath dep; PIT itself and its JUnit Platform test plugin
