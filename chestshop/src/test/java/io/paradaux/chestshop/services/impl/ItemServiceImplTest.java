@@ -102,7 +102,7 @@ class ItemServiceImplTest extends ServerTest {
                 new ItemCodeServiceImpl(new FakeMapper(), new MaterialServiceImpl(config), dataFolder);
         MaterialServiceImpl material = new MaterialServiceImpl(config);
         InventoryServiceImpl inventory = new InventoryServiceImpl(config, material);
-        return new ItemServiceImpl(codes, material, inventory, dataFolder);
+        return new ItemServiceImpl(codes, material, inventory, new ShorthandItemCodec(material), dataFolder);
     }
 
     private void writeAliases(String yaml) {
@@ -122,7 +122,12 @@ class ItemServiceImplTest extends ServerTest {
         when(codes.getItemCode(any())).thenReturn(storedCode);
         when(codes.decode(any())).thenReturn(new ItemStack(Material.STONE));
         var material = new MaterialServiceImpl(config);
-        var service = new ItemServiceImpl(codes, material, new InventoryServiceImpl(config, material), dataFolder);
+        var service = new ItemServiceImpl(
+                codes,
+                material,
+                new InventoryServiceImpl(config, material),
+                new ShorthandItemCodec(material),
+                dataFolder);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getSignName(new ItemStack(Material.DIAMOND)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Cannot generate code");
@@ -462,6 +467,59 @@ class ItemServiceImplTest extends ServerTest {
         assertThat(svc.parse("Gem").getType()).isEqualTo(Material.DIAMOND);
     }
 
+    // ---- shorthand names for potions and enchanted books -------------------------
+
+    private static ItemStack sharpnessBook(int repairCost) {
+        ItemStack item = new ItemStack(Material.ENCHANTED_BOOK);
+        var meta = (org.bukkit.inventory.meta.EnchantmentStorageMeta) item.getItemMeta();
+        meta.addStoredEnchant(org.bukkit.enchantments.Enchantment.SHARPNESS, 5, true);
+        ((org.bukkit.inventory.meta.Repairable) meta).setRepairCost(repairCost);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    @Test
+    void getSignName_usesTheShorthandForAPlainEnchantedBook() {
+        assertThat(newService().getSignName(sharpnessBook(0))).isEqualTo("Bk Sharpness V");
+    }
+
+    @Test
+    void parse_resolvesAShorthandBackToThePlainItem() {
+        assertThat(newService().parse("Bk Sharpness V").isSimilar(sharpnessBook(0)))
+                .isTrue();
+    }
+
+    @Test
+    void getName_withoutAWidthLimit_keepsTheStoredCode_soMarketKeysAndWildcardsAreUnchanged() {
+        assertThat(newService().getName(sharpnessBook(0))).startsWith("Enchanted Book#");
+    }
+
+    @Test
+    void getSignName_keepsTheStoredCodeForAnAnvilMergedBook() {
+        assertThat(newService().getSignName(sharpnessBook(1))).contains("#");
+    }
+
+    @Test
+    void getSignName_usesTheShorthandForAnAnvilMergedBook_whenRepairCostIsExcluded() {
+        config = TestConfigs.with(config, "excludedItemAttributesRaw", List.of("repair-cost"));
+        assertThat(newService().getSignName(sharpnessBook(1))).isEqualTo("Bk Sharpness V");
+    }
+
+    @Test
+    void queryString_skipsAShorthandThatIsWiderThanTheRequestedWidth() {
+        assertThat(newService().queryString(sharpnessBook(0), 20)).doesNotStartWith("Bk");
+    }
+
+    @Test
+    void getSignName_prefersACustomItemResolverOverTheShorthand() {
+        ItemServiceImpl service = newService();
+        CustomItemResolver resolver = mock(CustomItemResolver.class);
+        when(resolver.queryString(any(), anyInt())).thenReturn("nexo_book");
+        when(resolver.parseItem("nexo_book")).thenReturn(sharpnessBook(0));
+        service.registerCustomItemResolver(resolver);
+        assertThat(service.getSignName(sharpnessBook(0))).isEqualTo("nexo_book");
+    }
+
     // ---- residual branches ------------------------------------------------------
 
     @Test
@@ -473,7 +531,8 @@ class ItemServiceImplTest extends ServerTest {
         when(codes.encode(any(), anyInt())).thenReturn(null);
         MaterialServiceImpl material = new MaterialServiceImpl(config);
         InventoryServiceImpl inventory = new InventoryServiceImpl(config, material);
-        ItemServiceImpl svc = new ItemServiceImpl(codes, material, inventory, dataFolder);
+        ItemServiceImpl svc =
+                new ItemServiceImpl(codes, material, inventory, new ShorthandItemCodec(material), dataFolder);
         assertThat(svc.getName(item(Material.DIAMOND, 1), 0)).isNull();
     }
 
@@ -494,7 +553,8 @@ class ItemServiceImplTest extends ServerTest {
                 new ItemCodeServiceImpl(new FakeMapper(), new MaterialServiceImpl(config), dataFolder);
         MaterialServiceImpl material = new MaterialServiceImpl(config);
         InventoryServiceImpl inventory = new InventoryServiceImpl(config, material);
-        ItemServiceImpl svc = new ItemServiceImpl(codes, material, inventory, blocker);
+        ItemServiceImpl svc =
+                new ItemServiceImpl(codes, material, inventory, new ShorthandItemCodec(material), blocker);
         // Construction did not throw; the alias map is simply empty.
         assertThat(svc.parse("Diamond").getType()).isEqualTo(Material.DIAMOND);
     }

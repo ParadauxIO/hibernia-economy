@@ -9,9 +9,11 @@ import org.bukkit.inventory.ItemStack;
  * {@code SignValidationEvent} carriers and their resolver "listeners" with direct,
  * ordered service methods (PAR-282). The resolution order is unchanged:
  * <ul>
- *   <li>{@link #parse}: custom-item resolver (if registered) → configured alias → vanilla
- *       material (the alias step overrides a custom-item match, as before);</li>
- *   <li>{@link #queryString}: custom-item key (if registered) → vanilla name → alias override;</li>
+ *   <li>{@link #parse}: potion/enchanted-book shorthand → custom-item resolver (if registered)
+ *       → configured alias → vanilla material (the alias step overrides a custom-item match,
+ *       as before);</li>
+ *   <li>{@link #queryString}: custom-item key (if registered) → potion/enchanted-book shorthand
+ *       (sign-width requests only) → vanilla name → alias override;</li>
  *   <li>{@link #parseMaterial}: a single resolver.</li>
  * </ul>
  *

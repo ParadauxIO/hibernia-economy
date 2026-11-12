@@ -30,9 +30,11 @@ import org.bukkit.inventory.ItemStack;
  * {@code SignValidationEvent} carriers and their resolver "listeners" with direct,
  * ordered service methods (PAR-282). The resolution order is unchanged:
  * <ul>
- *   <li>{@link #parse}: custom-item resolver (if registered) → configured alias → vanilla
- *       material (the alias step overrides a custom-item match, as before);</li>
- *   <li>{@link #queryString}: custom-item key (if registered) → vanilla name → alias override;</li>
+ *   <li>{@link #parse}: potion/enchanted-book shorthand → custom-item resolver (if registered)
+ *       → configured alias → vanilla material (the alias step overrides a custom-item match,
+ *       as before);</li>
+ *   <li>{@link #queryString}: custom-item key (if registered) → potion/enchanted-book shorthand
+ *       (sign-width requests only) → vanilla name → alias override;</li>
  *   <li>{@link #parseMaterial}: a single resolver.</li>
  * </ul>
  *
@@ -49,6 +51,7 @@ public class ItemServiceImpl implements ItemService {
     private final ItemCodeService itemCodes;
     private final MaterialService materialService;
     private final InventoryService inventoryService;
+    private final ShorthandItemCodec shorthands;
     private volatile CustomItemResolver customItems;
     private final java.io.File dataFolder;
 
@@ -61,10 +64,12 @@ public class ItemServiceImpl implements ItemService {
             ItemCodeService itemCodes,
             MaterialService materialService,
             InventoryService inventoryService,
+            ShorthandItemCodec shorthands,
             @com.google.inject.name.Named("dataFolder") java.io.File dataFolder) {
         this.itemCodes = itemCodes;
         this.materialService = materialService;
         this.inventoryService = inventoryService;
+        this.shorthands = shorthands;
         this.dataFolder = dataFolder;
         loadAliases();
     }
@@ -92,6 +97,10 @@ public class ItemServiceImpl implements ItemService {
         if (itemString != null && itemString.matches("#[0-9a-zA-Z]+")) {
             return itemCodes.decode(itemString);
         }
+        ItemStack shorthand = shorthands.decode(itemString);
+        if (shorthand != null) {
+            return shorthand;
+        }
         CustomItemResolver resolver = customItems;
         ItemStack item = resolver != null ? resolver.parseItem(itemString) : null;
         com.Acrobot.ChestShop.Events.ItemParseEvent event = new com.Acrobot.ChestShop.Events.ItemParseEvent(itemString);
@@ -113,6 +122,9 @@ public class ItemServiceImpl implements ItemService {
         CustomItemResolver resolver = customItems;
         String result = resolver != null ? resolver.queryString(item, maxWidth) : null;
         if (result == null) {
+            result = signShorthand(item, maxWidth);
+        }
+        if (result == null) {
             result = itemCodes.encode(item, maxWidth); // vanilla name
         }
         com.Acrobot.ChestShop.Events.ItemStringQueryEvent event =
@@ -122,6 +134,19 @@ public class ItemServiceImpl implements ItemService {
                 && (maxWidth <= 0 || getMinecraftStringWidth(event.getItemString()) <= maxWidth))
             result = event.getItemString();
         return applyAlias(result, maxWidth); // configured alias override
+    }
+
+    /**
+     * The potion/enchanted-book shorthand, for sign-width requests only. An unlimited-width name
+     * stays the stored code: it is the market item key and what wildcard signs and per-item
+     * permissions match against, so it must not change for shops that already exist.
+     */
+    private String signShorthand(ItemStack item, int maxWidth) {
+        if (maxWidth <= 0) {
+            return null;
+        }
+        String shorthand = shorthands.encode(item);
+        return shorthand != null && getMinecraftStringWidth(shorthand) <= maxWidth ? shorthand : null;
     }
 
     @Override
