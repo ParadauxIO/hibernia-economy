@@ -63,6 +63,13 @@ line (line 4), or run `/iteminfo` while holding it to see the name to type. Stoc
 chest with the real custom item. See
 [Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
 
+### How do I sell potions or enchanted books?
+
+Hold the item and put `?` on the item line (line 4). Plain potions and single-enchantment
+books get a short name such as `Spl Healing II` or `Bk Sharpness V`; anything else gets a
+`Name#code`. See
+[Selling potions and enchanted books](/docs/guides/chestshop-basics#selling-potions-and-enchanted-books).
+
 ### How do I make a shop pay my company instead of me?
 
 Put the firm account's **shop code** (like `B:16`, from `/business account list`) on the

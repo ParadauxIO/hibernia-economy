@@ -82,6 +82,43 @@ shows the exact text otherwise. Custom items trade identically to vanilla ones. 
 appear *bare*, without a `nexo:` prefix, because a colon isn't allowed on the item line.)
 See [Selling custom items](/docs/guides/chestshop-basics#selling-custom-items).
 
+#### Potions and enchanted books
+
+A plain potion or an enchanted book with a single enchantment has a short name of the
+form `<kind> <name> [<tier>]`. `?` writes it for you, `/iteminfo` shows it, and you can
+type it in any letter case.
+
+| Item | Kind | Tier | Examples |
+|---|---|---|---|
+| Potion | `Pot` | `Ext` for the longer-lasting version, `II` for the stronger one | `Pot Swiftness`, `Pot Swiftness Ext`, `Pot Swiftness II` |
+| Splash potion | `Spl` | as above | `Spl Healing II` |
+| Lingering potion | `Lin` | as above | `Lin Regen Ext` |
+| Tipped arrow | `Arr` | as above | `Arr Poison` |
+| Enchanted book | `Bk` | the level as a roman numeral; none when the enchantment has only one level | `Bk Sharpness V`, `Bk Mending` |
+
+`II` always means "the stronger version", whatever level the game shows for that potion.
+
+**Potion names:** `Water`, `Mundane`, `Thick`, `Awkward`, `NightVis`, `Invis`, `Leaping`,
+`FireRes`, `Swiftness`, `Slowness`, `Turtle`, `WaterBr`, `Healing`, `Harming`, `Poison`,
+`Regen`, `Strength`, `Weakness`, `Luck`, `SlowFall`, `WindChg`, `Weaving`, `Oozing`,
+`Infested`.
+
+**Enchantment names:** `AquaAffinity`, `Bane`, `Binding`, `BlastProt`, `Breach`,
+`Channeling`, `Density`, `DepthStr`, `Efficiency`, `FeatherFall`, `FireAspect`,
+`FireProt`, `Flame`, `Fortune`, `FrostWalker`, `Impaling`, `Infinity`, `Knockback`,
+`Looting`, `Loyalty`, `LuckOfSea`, `Lunge`, `Lure`, `Mending`, `Multishot`, `Piercing`,
+`Power`, `ProjProt`, `Protection`, `Punch`, `QuickChg`, `Respiration`, `Riptide`,
+`Sharpness`, `SilkTouch`, `Smite`, `SoulSpeed`, `Sweeping`, `SwiftSneak`, `Thorns`,
+`Unbreaking`, `Vanishing`, `WindBurst`.
+
+Anything else keeps a `Name#code` form: books with several enchantments, renamed or
+custom-brewed potions, books above the normal maximum level, and books combined on an
+anvil (they carry a repair cost, so they are a different item from a plain book). Signs
+made before these names existed keep working unchanged.
+
+The short name is only what the sign shows. Chat messages, `/find` and wildcard signs
+(such as `Potion*`) still use the full `Name#code` form.
+
 > [!TIP]
 > Not sure what an item is called? Hold it and run `/iteminfo`. You can also look one up
 > by name — e.g. `/iteminfo log`.
