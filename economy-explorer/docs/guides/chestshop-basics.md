@@ -159,6 +159,31 @@ ruby_gem       ← a custom item's id, or just use ? while holding it
 > and firm ownership all work the same for custom items. Stock the chest with the real
 > custom item (not a plain lookalike); the shop only trades exact matches.
 
+## Selling potions and enchanted books
+
+Potions and enchanted books get a short, readable name on the sign. Hold one and put `?`
+on **line 4**, and the sign fills in a name like these:
+
+```text
+Bk Sharpness V     ← an enchanted book with Sharpness V
+Bk Mending         ← an enchantment with only one level has no numeral
+Pot Swiftness      ← a drinkable potion
+Spl Healing II     ← a splash potion, stronger version
+Lin Regen Ext      ← a lingering potion, longer-lasting version
+Arr Poison         ← a tipped arrow
+```
+
+You can also type the name yourself; capital letters don't matter. `/iteminfo` shows the
+name for whatever you're holding, and the
+[ChestShop reference](/docs/reference/chestshop#potions-and-enchanted-books) lists every
+name.
+
+> [!NOTE]
+> Only plain items get a short name. A book with **more than one enchantment**, a renamed
+> or custom-brewed potion, or a book you **combined on an anvil** shows a code such as
+> `Enchanted Book#Eg` instead, and trades as a separate item from the plain one. Use `?`
+> for those.
+
 ## Want the shop to pay your company?
 
 A shop normally pays the player who built it. To send the money to a **firm account**

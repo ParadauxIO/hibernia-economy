@@ -692,7 +692,8 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
      * Set any ChestShopConfiguration field live: {@code /diag config <fieldName> <value>}.
      * The field is the camelCase Java name (e.g. {@code allowFreeShops},
      * {@code forceUnlimitedAdminShop}, {@code allowPartialTransactions}), not the
-     * UPPER_SNAKE config key. Type is inferred from the field (boolean/int/double/String).
+     * UPPER_SNAKE config key. Type is inferred from the field (boolean/int/double/String, or
+     * a comma-separated string list, with {@code []} for an empty one).
      */
     private boolean doConfig(CommandSender sender, String[] args) {
         if (args.length != 3) {
@@ -712,6 +713,7 @@ public final class DiagPlugin extends JavaPlugin implements Listener {
             else if (t == int.class || t == Integer.class) f.setInt(cfg, Integer.parseInt(v));
             else if (t == long.class || t == Long.class) f.setLong(cfg, Long.parseLong(v));
             else if (t == String.class) f.set(cfg, v);
+            else if (t == java.util.List.class) f.set(cfg, "[]".equals(v) ? java.util.List.of() : java.util.List.of(v.split(",")));
             else { sender.sendMessage("unsupported field type: " + t); return true; }
             sender.sendMessage("ChestShopConfiguration." + args[1] + " = " + v);
         } catch (Throwable ex) {
