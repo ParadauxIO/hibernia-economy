@@ -48,6 +48,9 @@ public interface ExplorerUiService {
     /** Resets only the calling player's uniquely linked account; returns a temporary secret. */
     String resetPassword(UUID playerUuid);
 
+    /** Approves a browser recovery request for the authenticated player only. */
+    void approveRecovery(UUID playerUuid, String code);
+
     /** Result of a link-code redemption. */
     enum LinkOutcome {
         LINKED,

@@ -237,4 +237,12 @@ class UiAccessHandlerTest {
         verify(service).resetPassword(playerId);
         verify(message).send(sender, "treasuryapi.ui.reset.success", "password", "temporary-secret");
     }
+
+    @Test
+    void browserRecovery_requiresConfirmation_andUsesSenderIdentity() {
+        handler.doRecover(sender, "ABCDEFGHJK", false);
+        verify(service, never()).approveRecovery(any(), anyString());
+        handler.doRecover(sender, "ABCDEFGHJK", true);
+        verify(service).approveRecovery(playerId, "ABCDEFGHJK");
+    }
 }

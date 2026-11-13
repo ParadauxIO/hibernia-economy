@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 import { getViewer } from '@/lib/auth/viewer';
 import { loginReturningTo } from '@/lib/actions/entity';
 import { isPublicExplorerPath } from '@/lib/auth/routeAccess';
@@ -12,6 +13,7 @@ export default async function AccessPage({ searchParams }: {
   const returnTo = typeof callbackUrl === 'string' && callbackUrl.startsWith('/')
     && !callbackUrl.startsWith('//') && !/[\\\u0000-\u001f\u007f]/.test(callbackUrl) ? callbackUrl : '/';
   const viewer = await getViewer();
+  const recovery = viewer.anon && await isFeatureEnabled('explorer.browser_recovery');
   const destination = new URL(returnTo, 'http://localhost');
   const directoryPagination = isPublicExplorerPath(destination.pathname)
     && !isPublicExplorerPath(destination.pathname, destination.searchParams);
@@ -38,6 +40,7 @@ export default async function AccessPage({ searchParams }: {
         : directoryPagination
           ? <Link className="btn btn-primary" href={returnTo as '/accounts'}>Continue browsing</Link>
           : <Link className="btn btn-primary" href={link as '/link'}>Verify your account in game</Link>}
+      {recovery && <Link className="btn" href="/recover">Forgot your password?</Link>}
       <Link className="btn" href="/docs">Read the docs</Link>
     </div>
   </section>;

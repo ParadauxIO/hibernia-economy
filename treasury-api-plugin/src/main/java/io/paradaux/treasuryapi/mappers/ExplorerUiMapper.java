@@ -1,13 +1,13 @@
 package io.paradaux.treasuryapi.mappers;
 
+import java.util.List;
+import java.util.UUID;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-
-import java.util.List;
-import java.util.UUID;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * Writes the explorer auth tables from in-game commands: role grants, the
@@ -20,9 +20,8 @@ public interface ExplorerUiMapper {
     @Select("SELECT EXISTS(SELECT 1 FROM explorer_role_definition WHERE role_key = #{role})")
     boolean roleExists(@Param("role") String role);
 
-
-    @Insert("INSERT INTO explorer_role (player_uuid_bin, role, granted_by_uuid_bin) " +
-            "VALUES (#{uuid}, #{role}, #{grantedBy}) ON DUPLICATE KEY UPDATE role = VALUES(role)")
+    @Insert("INSERT INTO explorer_role (player_uuid_bin, role, granted_by_uuid_bin) "
+            + "VALUES (#{uuid}, #{role}, #{grantedBy}) ON DUPLICATE KEY UPDATE role = VALUES(role)")
     void addRole(@Param("uuid") UUID uuid, @Param("role") String role, @Param("grantedBy") UUID grantedBy);
 
     @Delete("DELETE FROM explorer_role WHERE player_uuid_bin = #{uuid} AND role = #{role}")
@@ -34,6 +33,11 @@ public interface ExplorerUiMapper {
     /** Up to two matches: recovery must reject ambiguous identity links. */
     @Select("SELECT keycloak_sub FROM explorer_identity WHERE player_uuid_bin = #{uuid} LIMIT 2")
     List<String> findLinkedSubjects(@Param("uuid") UUID uuid);
+
+    /** A pending request can be approved once, while still unexpired. */
+    @Update("UPDATE explorer_password_recovery SET keycloak_sub = #{sub}, player_uuid_bin = #{uuid} "
+            + "WHERE code_hash = #{hash} AND expires_at > NOW() AND keycloak_sub IS NULL")
+    int approveRecovery(@Param("hash") String hash, @Param("sub") String sub, @Param("uuid") UUID uuid);
 
     /** Returns the keycloak_sub for a valid (unexpired) code, or null. */
     @Select("SELECT keycloak_sub FROM explorer_link_code WHERE code = #{code} AND expires_at > NOW()")
@@ -50,9 +54,13 @@ public interface ExplorerUiMapper {
     @Delete("DELETE FROM explorer_link_code WHERE code = #{code} AND expires_at > NOW()")
     int claimLinkCode(@Param("code") String code);
 
-    @Insert("INSERT INTO explorer_identity (keycloak_sub, player_uuid_bin, minecraft_name, linked_by) " +
-            "VALUES (#{sub}, #{uuid}, #{name}, #{linkedBy}) " +
-            "ON DUPLICATE KEY UPDATE player_uuid_bin = VALUES(player_uuid_bin), minecraft_name = VALUES(minecraft_name)")
-    void upsertIdentity(@Param("sub") String sub, @Param("uuid") UUID uuid,
-                        @Param("name") String name, @Param("linkedBy") String linkedBy);
+    @Insert(
+            "INSERT INTO explorer_identity (keycloak_sub, player_uuid_bin, minecraft_name, linked_by) "
+                    + "VALUES (#{sub}, #{uuid}, #{name}, #{linkedBy}) "
+                    + "ON DUPLICATE KEY UPDATE player_uuid_bin = VALUES(player_uuid_bin), minecraft_name = VALUES(minecraft_name)")
+    void upsertIdentity(
+            @Param("sub") String sub,
+            @Param("uuid") UUID uuid,
+            @Param("name") String name,
+            @Param("linkedBy") String linkedBy);
 }
