@@ -1,15 +1,13 @@
 package io.paradaux.treasuryapi.mappers;
 
-import io.paradaux.treasuryapi.testsupport.IntegrationTestBase;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.paradaux.treasuryapi.testsupport.IntegrationTestBase;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Exercises {@link ExplorerUiMapper} against real MariaDB: role add/remove/list
@@ -49,7 +47,7 @@ class ExplorerUiMapperIT extends IntegrationTestBase {
 
         assertThat(mapper.listRoles(player)).containsExactly("admin");
         assertThat(mapper.removeRole(player, "admin")).isEqualTo(1); // removed
-        assertThat(mapper.removeRole(player, "admin")).isZero();     // already gone
+        assertThat(mapper.removeRole(player, "admin")).isZero(); // already gone
         assertThat(mapper.listRoles(player)).isEmpty();
     }
 
@@ -57,9 +55,9 @@ class ExplorerUiMapperIT extends IntegrationTestBase {
 
     private void insertLinkCode(String code, String sub, int expiresInSeconds) throws Exception {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO explorer_link_code (code, keycloak_sub, expires_at) "
-                             + "VALUES (?, ?, NOW() + INTERVAL ? SECOND)")) {
+                PreparedStatement ps =
+                        c.prepareStatement("INSERT INTO explorer_link_code (code, keycloak_sub, expires_at) "
+                                + "VALUES (?, ?, NOW() + INTERVAL ? SECOND)")) {
             ps.setString(1, code);
             ps.setString(2, sub);
             ps.setInt(3, expiresInSeconds);
@@ -127,19 +125,66 @@ class ExplorerUiMapperIT extends IntegrationTestBase {
 
     private UUID identityPlayer(String sub) throws Exception {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT bin_to_uuid(player_uuid_bin) FROM explorer_identity WHERE keycloak_sub = ?")) {
+                PreparedStatement ps = c.prepareStatement(
+                        "SELECT bin_to_uuid(player_uuid_bin) FROM explorer_identity WHERE keycloak_sub = ?")) {
             ps.setString(1, sub);
-            try (var rs = ps.executeQuery()) { rs.next(); return UUID.fromString(rs.getString(1)); }
+            try (var rs = ps.executeQuery()) {
+                rs.next();
+                return UUID.fromString(rs.getString(1));
+            }
         }
     }
 
     private String identityName(String sub) throws Exception {
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT minecraft_name FROM explorer_identity WHERE keycloak_sub = ?")) {
+                PreparedStatement ps =
+                        c.prepareStatement("SELECT minecraft_name FROM explorer_identity WHERE keycloak_sub = ?")) {
             ps.setString(1, sub);
-            try (var rs = ps.executeQuery()) { rs.next(); return rs.getString(1); }
+            try (var rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    @Test
+    void recoveryApproval_isSingleUse_expiring_andUniquePerAccount() throws Exception {
+        String hash = "a".repeat(64);
+        String otherHash = "b".repeat(64);
+        try (Connection c = dataSource.getConnection();
+                var ps = c.prepareStatement(
+                        "INSERT INTO explorer_password_recovery (browser_hash, code_hash, expires_at) "
+                                + "VALUES (?, ?, NOW() + INTERVAL 5 MINUTE), (?, ?, NOW() + INTERVAL 5 MINUTE)")) {
+            ps.setString(1, hash);
+            ps.setString(2, hash);
+            ps.setString(3, otherHash);
+            ps.setString(4, otherHash);
+            ps.executeUpdate();
+        }
+        UUID player = UUID.randomUUID();
+        assertThat(mapper.approveRecovery(hash, "own-sub", player)).isEqualTo(1);
+        assertThat(mapper.approveRecovery(hash, "attacker-sub", UUID.randomUUID()))
+                .isZero();
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.apache.ibatis.exceptions.PersistenceException.class,
+                () -> mapper.approveRecovery(otherHash, "own-sub", player));
+        try (Connection c = dataSource.getConnection();
+                var ps = c.prepareStatement(
+                        "UPDATE explorer_password_recovery SET expires_at = NOW() - INTERVAL 1 SECOND WHERE code_hash = ?")) {
+            ps.setString(1, otherHash);
+            ps.executeUpdate();
+        }
+        assertThat(mapper.approveRecovery(otherHash, "other-sub", player)).isZero();
+        try (Connection c = dataSource.getConnection();
+                var ps = c.prepareStatement(
+                        "SELECT keycloak_sub, HEX(player_uuid_bin) FROM explorer_password_recovery WHERE code_hash = ?")) {
+            ps.setString(1, hash);
+            try (var rows = ps.executeQuery()) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("own-sub");
+                assertThat(rows.getString(2))
+                        .isEqualToIgnoringCase(player.toString().replace("-", ""));
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ export function isPublicExplorerPath(path: string, searchParams?: URLSearchParam
   // Noncanonical/invalid pages also require sign-in; omitted page means page 1.
   if (['/players', '/firms', '/accounts'].includes(path)
     && searchParams?.getAll('page').some(page => page !== '1')) return false;
-  return ['/', '/players', '/firms', '/accounts', '/access', '/api/viewer', '/api/docs/tax-rates', '/api/docs/notes'].includes(path) || path === '/link' || path === '/docs' || path.startsWith('/docs/')
+  return ['/', '/players', '/firms', '/accounts', '/access', '/api/viewer', '/api/docs/tax-rates', '/api/docs/notes'].includes(path) || path === '/recover' || path === '/link' || path === '/docs' || path.startsWith('/docs/')
     || path.startsWith('/api/auth/') || path.startsWith('/api/avatar/')
     || path === '/robots.txt' || path === '/sitemap.xml' || path === '/favicon.ico'
     || path === '/dm-sans.ttf' || path === '/dm-sans-LICENSE.txt'

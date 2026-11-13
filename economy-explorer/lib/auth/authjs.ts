@@ -12,7 +12,8 @@ import { withoutUndefined } from '@/lib/util/withoutUndefined';
  * - The `minecraft_uuid` / `minecraft_name` user attributes are exposed on the ID
  *   token via a protocol mapper; we lift them onto the stateless session JWT.
  * - We deliberately DO NOT store the Keycloak access/refresh tokens in the session.
- *   The explorer never calls Keycloak APIs (it reads the economy DB directly), and
+ *   Normal explorer requests read the economy DB directly. Password recovery uses
+ *   separate server-side service credentials, never user tokens. Previously,
  *   stashing two full JWTs bloated the session cookie past the ~4 KB browser limit,
  *   so Auth.js chunked it — and mobile browsers / Safari (ITP, stricter cookie caps)
  *   drop or truncate the chunks. That left users effectively logged out on some

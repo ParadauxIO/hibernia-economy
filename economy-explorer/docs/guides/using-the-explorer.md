@@ -397,3 +397,26 @@ links or a disabled integration need staff assistance; you cannot select another
 person's username. Confirmed attempts are limited to one per minute. Resetting
 the password does not explicitly sign out existing sessions or revoke API keys;
 report a suspected compromise to staff as well.
+
+## Recovering a forgotten password
+
+When enabled by staff, select **Forgot your password?** on the sign-in prompt,
+or open `/recover` on this Explorer website. This works on Java and Bedrock
+without copying a password from Minecraft chat.
+
+1. Select **Start recovery** and keep that browser open.
+2. In Minecraft, run `/treasuryapi ui recover <code>` with the code shown on your page.
+3. Read the warning, then run `/treasuryapi ui recover confirm <code>`.
+4. Return to the same browser and select **I confirmed in-game**.
+5. Enter your new password twice and select **Change password**. The page shows
+   the username to use when you log in; keep any leading dot.
+
+Finish all steps within five minutes of generating the code. Each request works
+once. Starting again cancels your previous request in that browser. Only approve
+a code you generated yourself: approving someone else's code would let their
+browser change your password. Never send your code or password to another player.
+
+You must already have a web account linked to your Minecraft player. If no link
+exists, or multiple web accounts are linked, contact staff. If the page is
+unavailable, staff have not enabled browser recovery or it is temporarily offline.
+The existing `/treasuryapi ui resetpassword confirm` command remains available.

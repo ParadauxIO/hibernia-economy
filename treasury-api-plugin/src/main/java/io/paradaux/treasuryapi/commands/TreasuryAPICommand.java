@@ -224,6 +224,21 @@ public class TreasuryAPICommand implements CommandHandler {
         uiHandler.doResetPassword(sender, true);
     }
 
+    @Route("ui recover <code>")
+    @Permission("treasuryapi.ui.resetpassword")
+    @Description("Confirm a password recovery code from your own browser")
+    public void uiRecover(@Sender Player sender, @Arg("code") String code) {
+        uiHandler.doRecover(sender, code, false);
+    }
+
+    @Route("ui recover confirm <code>")
+    @Permission("treasuryapi.ui.resetpassword")
+    @Async
+    @Description("Allow your browser to replace your linked web account password")
+    public void uiRecoverConfirm(@Sender Player sender, @Arg("code") String code) {
+        uiHandler.doRecover(sender, code, true);
+    }
+
     @Route("ui sync")
     @Permission("treasuryapi.ui.sync")
     @Async

@@ -34,6 +34,15 @@ public class UiAccessHandler {
         this.treasury = treasury;
     }
 
+    public void doRecover(Player player, String code, boolean confirmed) {
+        if (!confirmed) {
+            message.send(player, "treasuryapi.ui.recover.confirm");
+            return;
+        }
+        service.approveRecovery(player.getUniqueId(), code);
+        message.send(player, "treasuryapi.ui.recover.success");
+    }
+
     public void doResetPassword(Player player, boolean confirmed) {
         if (!confirmed) {
             message.send(player, "treasuryapi.ui.reset.confirm");
