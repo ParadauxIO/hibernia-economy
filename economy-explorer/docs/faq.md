@@ -73,8 +73,9 @@ top line of the sign. Full steps:
 
 ### Why can't I withdraw or pay from my firm's account?
 
-Spending a firm's money needs the **FINANCIAL** or **ADMIN** role **and** being an
-**authorizer** on that account. Being a member only lets you *view* it. See
+Spending a firm's money needs a role with the **FINANCIAL** or **ADMIN** permission
+(or being the owner). Account access follows your role automatically, so ask the
+owner to promote you or add the permission to your role. See
 [Business accounts](/docs/guides/business-accounts) and
 [Permissions & roles](/docs/concepts/permissions-and-roles).
 

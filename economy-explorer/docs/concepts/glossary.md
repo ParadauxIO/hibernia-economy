@@ -30,10 +30,11 @@ A shared account has three access tiers: **Viewer** < **Member** < **Authorizer*
 
 - **Viewer** — read-only access to a shared account: can see its balance and transactions
   but cannot spend or manage it. (Used on government accounts.)
-- **Member** — can view the account; on a **government** account, members can also spend.
-- **Authorizer** — can spend from the account; on a **government** account, authorizers
-  can manage viewers/members with additional command permissions (authorizer grants
-  remain admin-only; on a firm account the owner manages access). See
+- **Member** — can view the account and spend from it.
+- **Authorizer** — can also spend from an account set to require authorization; on a
+  **government** account, authorizers can manage viewers/members with additional
+  command permissions (authorizer grants remain admin-only). On a firm account both
+  tiers follow staff roles automatically. See
   [Permissions & roles](/docs/concepts/permissions-and-roles).
 
 > **Two "viewers".** This per-account *Viewer* tier is separate from the site-wide

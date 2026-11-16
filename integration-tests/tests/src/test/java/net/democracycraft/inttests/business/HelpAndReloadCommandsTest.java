@@ -115,7 +115,7 @@ class HelpAndReloadCommandsTest {
     void helpAccountsShowsAccountsHelp() {
         assertHelpLists("Ha", "/db account create <firm> <name>",
                 "/db account setdefault <firm> <accountId>",
-                "/db account addmember <firm> <accountId> <player>");
+                "/db account members <firm> <accountId>");
     }
 
     @Test

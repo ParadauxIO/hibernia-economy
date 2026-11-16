@@ -12,26 +12,54 @@ import org.apache.ibatis.annotations.*;
  * <p><b>Soft-delete semantics.</b> Deleting a role or revoking a permission
  * sets {@code deleted_at} instead of removing the row. All reads filter on
  * {@code deleted_at IS NULL}. Re-creating a role with the same name (after
- * deletion) uses {@code INSERT … ON DUPLICATE KEY UPDATE} to clear
- * {@code deleted_at} and reuse the existing {@code role_id} so historical
- * permissions and employee assignments tied to that id remain consistent.
+ * deletion) goes through {@link #reviveRole} to clear {@code deleted_at} and
+ * reuse the existing {@code role_id} so historical permissions and employee
+ * assignments tied to that id remain consistent.
+ *
+ * <p>Both unique keys ({@code (firm_id, name)} and {@code (firm_id, rank_order)})
+ * span soft-deleted rows, so a deleted role keeps its rank until
+ * {@link #releaseDeletedRank} moves it out of the way.
  */
 public interface FirmRoleMapper {
 
     /**
-     * Insert a role. If a role with the same {@code (firm_id, name)} exists
-     * (active or soft-deleted), revives the existing row instead of creating
-     * a duplicate — keeps {@code role_id} stable so historical
-     * {@code firm_employee.role_id} references stay valid.
+     * Insert a new role. Deliberately a plain insert: an upsert here fires on
+     * the rank key as well as the name key, so a rank clash would silently
+     * touch some other role instead of failing.
      */
     @Insert("""
             INSERT INTO firm_role (firm_id, name, rank_order)
             VALUES (#{firmId}, #{roleName}, #{roleRankOrder})
-            ON DUPLICATE KEY UPDATE
-                rank_order = VALUES(rank_order),
-                deleted_at = NULL
             """)
     int insertRole(FirmRole role);
+
+    /**
+     * Revive a soft-deleted role of the same name at the given rank, keeping
+     * its {@code role_id} so historical {@code firm_employee.role_id}
+     * references stay valid. Returns 0 when there is no such deleted role.
+     */
+    @Update("""
+            UPDATE firm_role
+               SET rank_order = #{roleRankOrder},
+                   deleted_at = NULL
+             WHERE firm_id = #{firmId}
+               AND name = #{roleName}
+               AND deleted_at IS NOT NULL
+            """)
+    int reviveRole(FirmRole role);
+
+    /**
+     * Free a rank still held by a soft-deleted role by parking that role on
+     * {@code -role_id}, which no live role can use and no other parked role shares.
+     */
+    @Update("""
+            UPDATE firm_role
+               SET rank_order = -role_id
+             WHERE firm_id = #{firmId}
+               AND rank_order = #{rankOrder}
+               AND deleted_at IS NOT NULL
+            """)
+    int releaseDeletedRank(@Param("firmId") int firmId, @Param("rankOrder") int rankOrder);
 
     /** Soft-delete a role by composite firmId + roleName. */
     @Update("""

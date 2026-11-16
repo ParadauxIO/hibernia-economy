@@ -1,6 +1,7 @@
 package io.paradaux.business.mappers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.paradaux.business.internal.model.Firm;
 import io.paradaux.business.internal.model.FirmRole;
@@ -9,6 +10,7 @@ import io.paradaux.business.model.RolePermission;
 import io.paradaux.business.testsupport.IntegrationTestBase;
 import java.util.List;
 import java.util.UUID;
+import org.apache.ibatis.exceptions.PersistenceException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -92,6 +94,45 @@ class FirmRoleMapperIT extends IntegrationTestBase {
         assertThat(mapper.findRoleAbove(firmId, 5)).isEqualTo("Manager");
         // findRoleAbove excludes the proprietor role (lowest rank), so from rank 3 it's null:
         assertThat(mapper.findRoleAbove(firmId, 3)).isNull();
+    }
+
+    @Test
+    void insertRole_rankClash_failsInsteadOfTouchingTheOtherRole() {
+        mapper.insertRole(new FirmRole(firmId, "Manager", 3));
+
+        assertThatThrownBy(() -> mapper.insertRole(new FirmRole(firmId, "ConstructionSec", 3)))
+                .isInstanceOf(PersistenceException.class);
+        assertThat(mapper.listRolesByFirm(firmId))
+                .extracting(FirmRole::getRoleName)
+                .containsExactly("Manager");
+    }
+
+    @Test
+    void reviveRole_restoresOnlyADeletedRoleOfThatName() {
+        mapper.insertRole(new FirmRole(firmId, "HealthSec", 6));
+        assertThat(mapper.reviveRole(new FirmRole(firmId, "HealthSec", 7))).isZero();
+
+        mapper.deleteRole(firmId, "HealthSec");
+        assertThat(mapper.reviveRole(new FirmRole(firmId, "HealthSec", 7))).isEqualTo(1);
+        assertThat(mapper.getRank(firmId, "HealthSec")).isEqualTo(7);
+    }
+
+    @Test
+    void releaseDeletedRank_letsANewRoleTakeADeletedRolesRank() {
+        mapper.insertRole(new FirmRole(firmId, "HealthSec", 6));
+        mapper.insertRole(new FirmRole(firmId, "Live", 7));
+        mapper.deleteRole(firmId, "HealthSec");
+
+        assertThat(mapper.releaseDeletedRank(firmId, 6)).isEqualTo(1);
+        // A live role's rank is never released.
+        assertThat(mapper.releaseDeletedRank(firmId, 7)).isZero();
+
+        mapper.insertRole(new FirmRole(firmId, "ConstructionSec", 6));
+        assertThat(mapper.listRolesByFirm(firmId))
+                .extracting(FirmRole::getRoleName)
+                .containsExactly("ConstructionSec", "Live");
+        // The parked role can still come back under its own name.
+        assertThat(mapper.reviveRole(new FirmRole(firmId, "HealthSec", 8))).isEqualTo(1);
     }
 
     @Test

@@ -180,18 +180,6 @@ permissions:
     business.account.sync:
         description: Sync firm staff to a Treasury account based on their roles.
         default: true
-    business.account.addmember:
-        description: Add a member to a firm's Treasury account.
-        default: true
-    business.account.removemember:
-        description: Remove a member from a firm's Treasury account.
-        default: true
-    business.account.addauthorizer:
-        description: Add an authorizer to a firm's Treasury account.
-        default: true
-    business.account.removeauthorizer:
-        description: Remove an authorizer from a firm's Treasury account.
-        default: true
     business.account.members:
         description: List members of a firm's Treasury account.
         default: true
