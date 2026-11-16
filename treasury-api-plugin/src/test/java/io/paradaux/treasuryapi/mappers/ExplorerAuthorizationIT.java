@@ -49,8 +49,7 @@ class ExplorerAuthorizationIT extends IntegrationTestBase {
         when(lp.getUserManager().loadUser(player)).thenReturn(CompletableFuture.completedFuture(user));
         when(lp.getContextManager().getStaticQueryOptions()).thenReturn(options);
         sync = new GroupReconciliationTask(plugin, groups, lp);
-        service = new ExplorerUiServiceImpl(
-                roles, mock(KeycloakAdminClient.class), plugin, Optional.of(sync), key -> false);
+        service = new ExplorerUiServiceImpl(roles, mock(KeycloakAdminClient.class), plugin, Optional.of(sync));
         execute("INSERT INTO explorer_role_definition (role_key, name) VALUES ('auditor', 'Auditor')");
         execute("INSERT INTO explorer_role_permission VALUES ('auditor', 'transactions.read')");
     }

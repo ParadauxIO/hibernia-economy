@@ -224,18 +224,11 @@ class UiAccessHandlerTest {
     }
 
     @Test
-    void resetPassword_requiresExplicitConfirmation() {
+    void resetPassword_bothLegacyCommandsDirectToBrowserWithoutChangingCredentials() {
         handler.doResetPassword(sender, false);
-        verify(service, never()).resetPassword(any());
-        verify(message).send(sender, "treasuryapi.ui.reset.confirm");
-    }
-
-    @Test
-    void resetPassword_onlyUsesSenderIdentity_andSendsSecretToSender() {
-        when(service.resetPassword(playerId)).thenReturn("temporary-secret");
         handler.doResetPassword(sender, true);
-        verify(service).resetPassword(playerId);
-        verify(message).send(sender, "treasuryapi.ui.reset.success", "password", "temporary-secret");
+        verify(message, org.mockito.Mockito.times(2)).send(sender, "treasuryapi.ui.reset.browser");
+        org.mockito.Mockito.verifyNoInteractions(service);
     }
 
     @Test

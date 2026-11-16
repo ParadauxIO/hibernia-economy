@@ -94,10 +94,10 @@ in-game within 5 minutes. See [Using the Explorer](/docs/guides/using-the-explor
 
 ### I forgot my website password.
 
-If already linked, run `/treasuryapi ui resetpassword` then
-`/treasuryapi ui resetpassword confirm` yourself in-game. Use the temporary
-password privately and change it at sign-in. If recovery is unavailable or the
-link is missing, contact staff. See [password recovery](/docs/guides/using-the-explorer#recover-your-website-password).
+If already linked, open [Recover your account](/recover), generate a code, and
+confirm it yourself in-game. Return to the same browser to choose your new
+password. If recovery is unavailable or the link is missing, contact staff.
+See [password recovery](/docs/guides/using-the-explorer#recover-your-website-password).
 
 ### My link code didn't work.
 

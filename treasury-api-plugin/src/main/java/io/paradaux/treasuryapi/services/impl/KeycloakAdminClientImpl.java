@@ -8,7 +8,6 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import io.paradaux.treasuryapi.model.config.KeycloakConfiguration;
 import io.paradaux.treasuryapi.services.KeycloakAdminClient;
-
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -29,9 +28,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class KeycloakAdminClientImpl implements KeycloakAdminClient {
 
     private final KeycloakConfiguration cfg;
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+    private final HttpClient http =
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     // setMinecraftAttributes is a GET-merge-PUT of the whole Keycloak user
     // representation, so two concurrent links for the SAME user can interleave and
@@ -81,7 +79,8 @@ public class KeycloakAdminClientImpl implements KeycloakAdminClient {
                 HttpRequest.newBuilder(URI.create(userUrl))
                         .timeout(Duration.ofSeconds(15))
                         .header("Authorization", "Bearer " + token)
-                        .GET().build(),
+                        .GET()
+                        .build(),
                 HttpResponse.BodyHandlers.ofString());
         if (get.statusCode() / 100 != 2) {
             throw new IllegalStateException("Keycloak GET user " + sub + " failed: HTTP " + get.statusCode());
@@ -107,27 +106,6 @@ public class KeycloakAdminClientImpl implements KeycloakAdminClient {
         }
     }
 
-    @Override
-    public void resetPassword(String sub, String password) throws Exception {
-        String token = serviceAccountToken();
-        JsonObject credential = new JsonObject();
-        credential.addProperty("type", "password");
-        credential.addProperty("value", password);
-        credential.addProperty("temporary", true);
-        HttpResponse<Void> response = http.send(
-                HttpRequest.newBuilder(URI.create(cfg.getBaseUrl() + "/admin/realms/"
-                        + enc(cfg.getRealm()) + "/users/" + enc(sub) + "/reset-password"))
-                        .timeout(Duration.ofSeconds(15))
-                        .header("Authorization", "Bearer " + token)
-                        .header("Content-Type", "application/json")
-                        .PUT(HttpRequest.BodyPublishers.ofString(credential.toString())).build(),
-                HttpResponse.BodyHandlers.discarding());
-        if (response.statusCode() != 204) {
-            // Never include the credential or response body in an exception/log.
-            throw new IllegalStateException("Keycloak password reset failed: HTTP " + response.statusCode());
-        }
-    }
-
     private String serviceAccountToken() throws Exception {
         String tokenUrl = cfg.getBaseUrl() + "/realms/" + cfg.getRealm() + "/protocol/openid-connect/token";
         // Env var takes precedence so the service-account secret can be injected
@@ -147,7 +125,10 @@ public class KeycloakAdminClientImpl implements KeycloakAdminClient {
         if (res.statusCode() / 100 != 2) {
             throw new IllegalStateException("Keycloak token request failed: HTTP " + res.statusCode());
         }
-        return JsonParser.parseString(res.body()).getAsJsonObject().get("access_token").getAsString();
+        return JsonParser.parseString(res.body())
+                .getAsJsonObject()
+                .get("access_token")
+                .getAsString();
     }
 
     private static JsonArray single(String value) {

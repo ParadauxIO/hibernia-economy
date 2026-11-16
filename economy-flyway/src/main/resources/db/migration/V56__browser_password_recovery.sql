@@ -9,7 +9,3 @@ CREATE TABLE explorer_password_recovery (
     UNIQUE KEY uq_password_recovery_subject (keycloak_sub),
     KEY idx_password_recovery_expiry (expires_at)
 );
-
-INSERT INTO feature_flags (name, description)
-VALUES ('explorer.browser_recovery', 'Recover a linked web account through browser-bound in-game confirmation')
-ON DUPLICATE KEY UPDATE name = VALUES(name);

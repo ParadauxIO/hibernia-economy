@@ -379,28 +379,7 @@ Click a column heading to sort by it, and click it again to reverse the order.
 
 ## Recover your website password
 
-If you already linked your Minecraft account, the server can let you reset the
-website password without email:
-
-```text
-/treasuryapi ui resetpassword
-/treasuryapi ui resetpassword confirm
-```
-
-Run both yourself in-game. Copy the temporary password from the private response,
-sign in with your existing website username, then choose a permanent password
-when prompted. The temporary password must be replaced at login; it has no
-separate timed expiry. Keep it private, including your client chat log.
-
-This requires server support and an existing, unambiguous link. Missing/multiple
-links or a disabled integration need staff assistance; you cannot select another
-person's username. Confirmed attempts are limited to one per minute. Resetting
-the password does not explicitly sign out existing sessions or revoke API keys;
-report a suspected compromise to staff as well.
-
-## Recovering a forgotten password
-
-When enabled by staff, select **Forgot your password?** on the sign-in prompt,
+Select **Forgot your password?** on the sign-in prompt,
 or open `/recover` on this Explorer website. This works on Java and Bedrock
 without copying a password from Minecraft chat.
 
@@ -418,5 +397,7 @@ browser change your password. Never send your code or password to another player
 
 You must already have a web account linked to your Minecraft player. If no link
 exists, or multiple web accounts are linked, contact staff. If the page is
-unavailable, staff have not enabled browser recovery or it is temporarily offline.
-The existing `/treasuryapi ui resetpassword confirm` command remains available.
+unavailable, contact staff. The legacy `/treasuryapi ui resetpassword` and
+`/treasuryapi ui resetpassword confirm` commands now direct you here; they no
+longer generate passwords. Confirmed attempts are limited to one per minute.
+Resetting does not sign out existing sessions or revoke API keys.

@@ -211,7 +211,7 @@ public class TreasuryAPICommand implements CommandHandler {
 
     @Route("ui resetpassword")
     @Permission("treasuryapi.ui.resetpassword")
-    @Description("Reset your linked web account password without email")
+    @Description("Open browser recovery for your linked web account")
     public void uiResetPassword(@Sender Player sender) {
         uiHandler.doResetPassword(sender, false);
     }
@@ -219,7 +219,7 @@ public class TreasuryAPICommand implements CommandHandler {
     @Route("ui resetpassword confirm")
     @Permission("treasuryapi.ui.resetpassword")
     @Async
-    @Description("Confirm replacing your linked web account password")
+    @Description("Show browser recovery instructions (legacy alias)")
     public void uiResetPasswordConfirm(@Sender Player sender) {
         uiHandler.doResetPassword(sender, true);
     }

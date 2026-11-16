@@ -306,6 +306,14 @@ export interface ExplorerLpGroupMember {
   syncedAt: Generated<Date>;
 }
 
+export interface ExplorerPasswordRecovery {
+  browserHash: string;
+  codeHash: string;
+  expiresAt: Date;
+  keycloakSub: Generated<string | null>;
+  playerUuidBin: Generated<Buffer | null>;
+}
+
 export interface ExplorerRole {
   grantedAt: Generated<Date>;
   grantedByUuidBin: Generated<Buffer | null>;
@@ -691,6 +699,7 @@ export interface DB {
   explorerIdentity: ExplorerIdentity;
   explorerLinkCode: ExplorerLinkCode;
   explorerLpGroupMember: ExplorerLpGroupMember;
+  explorerPasswordRecovery: ExplorerPasswordRecovery;
   explorerRole: ExplorerRole;
   explorerRoleDefinition: ExplorerRoleDefinition;
   explorerRolePermission: ExplorerRolePermission;

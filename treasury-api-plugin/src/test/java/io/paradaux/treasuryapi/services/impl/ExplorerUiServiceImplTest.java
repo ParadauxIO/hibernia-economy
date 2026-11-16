@@ -48,7 +48,7 @@ class ExplorerUiServiceImplTest {
         plugin = mock(TreasuryAPI.class);
         when(plugin.getLogger()).thenReturn(Logger.getLogger("test"));
         task = mock(PlayerGroupSync.class);
-        service = new ExplorerUiServiceImpl(mapper, keycloak, plugin, Optional.of(task), key -> true);
+        service = new ExplorerUiServiceImpl(mapper, keycloak, plugin, Optional.of(task));
     }
 
     // ---- Role grants ----
@@ -158,8 +158,7 @@ class ExplorerUiServiceImplTest {
 
     @Test
     void selfSync_luckPermsAbsent_throwsConflictUnavailable() {
-        ExplorerUiServiceImpl withoutLuckPerms =
-                new ExplorerUiServiceImpl(mapper, keycloak, plugin, Optional.empty(), key -> false);
+        ExplorerUiServiceImpl withoutLuckPerms = new ExplorerUiServiceImpl(mapper, keycloak, plugin, Optional.empty());
 
         ConflictException ex = assertThrows(ConflictException.class, () -> withoutLuckPerms.selfSync(playerId));
         assertEquals("treasuryapi.ui.sync.unavailable", ex.getMessage());
@@ -180,62 +179,6 @@ class ExplorerUiServiceImplTest {
     }
 
     @Test
-    void resetPassword_disabled_neverCallsKeycloak() throws Exception {
-        assertThrows(ConflictException.class, () -> service.resetPassword(playerId));
-        verify(keycloak, never()).resetPassword(anyString(), anyString());
-    }
-
-    @Test
-    void resetPassword_missingOrAmbiguousLink_neverCallsKeycloak() throws Exception {
-        when(keycloak.isEnabled()).thenReturn(true);
-        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of());
-        assertThrows(NotFoundException.class, () -> service.resetPassword(playerId));
-        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of("one", "two"));
-        assertThrows(ConflictException.class, () -> service.resetPassword(playerId));
-        verify(keycloak, never()).resetPassword(anyString(), anyString());
-    }
-
-    @Test
-    void resetPassword_usesLinkedSubject_returnsSecret_andLimitsRepeatedAttempts() throws Exception {
-        when(keycloak.isEnabled()).thenReturn(true);
-        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of("own-sub"));
-        String password = service.resetPassword(playerId);
-        org.junit.jupiter.api.Assertions.assertTrue(password.matches("Aa1![A-Za-z0-9_-]{32}"));
-        verify(keycloak).resetPassword("own-sub", password);
-        assertEquals(
-                "treasuryapi.ui.reset.cooldown",
-                assertThrows(ConflictException.class, () -> service.resetPassword(playerId))
-                        .getMessage());
-        UUID other = UUID.randomUUID();
-        when(mapper.findLinkedSubjects(other)).thenReturn(java.util.List.of("other-sub"));
-        org.junit.jupiter.api.Assertions.assertNotEquals(password, service.resetPassword(other));
-    }
-
-    @Test
-    void resetPassword_upstreamFailure_isSanitized_andStillRateLimited() throws Exception {
-        when(keycloak.isEnabled()).thenReturn(true);
-        when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of("own-sub"));
-        org.mockito.Mockito.doThrow(new IllegalStateException("sensitive upstream response"))
-                .when(keycloak)
-                .resetPassword(anyString(), anyString());
-        ConflictException error = assertThrows(ConflictException.class, () -> service.resetPassword(playerId));
-        assertEquals("treasuryapi.ui.reset.failed", error.getMessage());
-        org.junit.jupiter.api.Assertions.assertNull(error.getCause());
-        assertEquals(
-                "treasuryapi.ui.reset.cooldown",
-                assertThrows(ConflictException.class, () -> service.resetPassword(playerId))
-                        .getMessage());
-    }
-
-    @Test
-    void browserRecovery_disabledDoesNotReadOrApprove() {
-        var disabled = new ExplorerUiServiceImpl(mapper, keycloak, plugin, Optional.empty(), key -> false);
-        assertThrows(ConflictException.class, () -> disabled.approveRecovery(playerId, "ABCDEFGHJK"));
-        verify(mapper, never()).findLinkedSubjects(any());
-        verify(mapper, never()).approveRecovery(anyString(), anyString(), any());
-    }
-
-    @Test
     void browserRecovery_bindsSenderToLinkedSubject_hashesCode_andNeverResetsPassword() throws Exception {
         when(mapper.findLinkedSubjects(playerId)).thenReturn(java.util.List.of("own-sub"));
         when(mapper.approveRecovery(anyString(), anyString(), any())).thenReturn(1);
@@ -243,7 +186,7 @@ class ExplorerUiServiceImplTest {
         verify(mapper)
                 .approveRecovery(
                         "f57cbf1e3e471b25db4b8ad0844df41b2dae9c7d1944944d128e49294d412f66", "own-sub", playerId);
-        verify(keycloak, never()).resetPassword(anyString(), anyString());
+        org.mockito.Mockito.verifyNoInteractions(keycloak);
         assertThrows(ConflictException.class, () -> service.approveRecovery(playerId, "ABCDEFGHJK"));
     }
 

@@ -28,10 +28,6 @@ suite('browser recovery against migrated MariaDB', () => {
     await sql`UPDATE explorer_password_recovery SET keycloak_sub = 'recovery-sub', player_uuid_bin = ${uuid}
       WHERE code_hash = ${hash(code)} AND keycloak_sub IS NULL AND expires_at > NOW()`.execute(db);
   }
-  it('has a disabled release flag after migration', async () => {
-    const { rows } = await sql<{ enabled: number }>`SELECT enabled FROM feature_flags WHERE name = 'explorer.browser_recovery'`.execute(db);
-    expect(rows).toEqual([{ enabled: 0 }]);
-  });
   it('requires approval and the originating browser, then consumes exactly once under concurrency', async () => {
     await startRecovery(hash('browser'), hash('code'));
     expect(await recoveryStatus(hash('browser'))).toBe('pending');

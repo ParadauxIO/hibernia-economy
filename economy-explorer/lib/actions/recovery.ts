@@ -1,7 +1,6 @@
 'use server';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
-import { requireFeatureEnabled } from '@/lib/featureFlags';
 import { waitForRedisReady } from '@/lib/redis';
 import { checkAccountRateLimit } from '@/lib/requestRateLimit';
 import { createRequestBlocker } from '@/lib/requestBlocking';
@@ -20,7 +19,6 @@ export type RecoveryResult = {
 };
 
 async function guard(operation: 'start' | 'status' | 'finish') {
-  await requireFeatureEnabled('explorer.browser_recovery');
   recoveryKeycloakConfig();
   // Trust only the same ingress identity used by the request blocker. Without
   // trusted ingress, all clients share one conservative bucket; never trust XFF.

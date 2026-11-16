@@ -27,17 +27,18 @@ an expired token, and resetting a password does not revoke API keys.
    requesting player's LP relationships. Check reconciliation errors before
    bypassing access with a global role.
 
-For password reset, enable TreasuryAPI's Keycloak integration and a service
-account permitted to manage/reset the target users. The realm must allow local
-passwords and the update-password required action without requiring email.
-Minecraft authentication is the recovery credential: use authenticated online
-mode or a securely authenticated proxy. The command is player-only, takes no
-username argument, and limits confirmed attempts to one per minute per plugin
-instance. The temporary password requires replacement at login; it has no separate
-time-based expiry and may remain in the player's private client log.
+For password recovery, apply V56, configure Explorer's dedicated recovery Keycloak
+service-account credentials and shared Redis, then deploy Explorer and TreasuryAPI.
+There is no recovery feature flag. The realm must permit local passwords; the
+service account needs user lookup and password-reset access. Minecraft authentication
+is the recovery credential: use online mode or a securely authenticated proxy.
+Only the authenticated player can approve their uniquely linked account, at most
+once per minute per plugin instance. The browser request expires after five minutes;
+passwords never enter Minecraft chat.
 
-Verify rollout with a disposable linked account: reset, reject the old password,
-complete the required password change, then reject the temporary password.
+Verify rollout with a disposable linked account on Java and Bedrock: approve the
+browser code in-game, choose a password, reject the old password, and sign in with
+the new password. Also check expiry and replay rejection.
 Reset does not explicitly revoke Keycloak or Explorer sessions. For a compromised
 identity, also revoke sessions in the appropriate identity/session system and
 revoke affected API keys. See the detailed

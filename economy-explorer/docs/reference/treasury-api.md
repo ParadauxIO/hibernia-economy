@@ -71,7 +71,9 @@ per-key transfer limits are not implemented yet.
 |---|---|
 | `/treasuryapi ui link <code>` | Link your Minecraft UUID to the website identity that generated the five-minute code. |
 | `/treasuryapi ui resetpassword` | Show instructions for resetting your already-linked website password. |
-| `/treasuryapi ui resetpassword confirm` | Replace it with a temporary password, then change it at web sign-in. |
+| `/treasuryapi ui resetpassword confirm` | Show the browser recovery instructions (legacy alias). |
+| `/treasuryapi ui recover <code>` | Read the browser recovery confirmation warning. |
+| `/treasuryapi ui recover confirm <code>` | Approve your browser request, then choose a password on the website. |
 | `/treasuryapi ui sync` | Reconcile your LP-derived web access immediately. |
 
 These are player-only and operate on the authenticated sender, not a supplied

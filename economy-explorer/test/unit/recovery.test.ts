@@ -2,14 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 const mocks = vi.hoisted(() => ({
   cookies: new Map<string, string>(), setCookie: vi.fn(),
-  guard: vi.fn(), limit: vi.fn(), start: vi.fn(), status: vi.fn(), claim: vi.fn(), reset: vi.fn(), config: vi.fn(),
+  limit: vi.fn(), start: vi.fn(), status: vi.fn(), claim: vi.fn(), reset: vi.fn(), config: vi.fn(),
 }));
 vi.mock('next/headers', () => ({
   cookies: async () => ({ get: (key: string) => ({ value: mocks.cookies.get(key) }), set: mocks.setCookie }),
   headers: async () => new Headers({ 'x-forwarded-for': 'untrusted-address' }),
 }));
 vi.mock('@/lib/redis', () => ({ waitForRedisReady: async () => {} }));
-vi.mock('@/lib/featureFlags', () => ({ requireFeatureEnabled: mocks.guard }));
 vi.mock('@/lib/requestRateLimit', () => ({ checkAccountRateLimit: mocks.limit }));
 vi.mock('@/lib/sql/recovery', () => ({ startRecovery: mocks.start, recoveryStatus: mocks.status, claimRecovery: mocks.claim }));
 vi.mock('@/lib/auth/recoveryKeycloak', () => ({ replaceRecoveredPassword: mocks.reset, recoveryKeycloakConfig: mocks.config }));
@@ -60,9 +59,7 @@ describe('browser-bound password recovery', () => {
     for (const form of [mismatch, passwordForm('short'), passwordForm('a'.repeat(129))]) expect((await finishRecovery(form)).state).toBe('error');
     expect(mocks.claim).not.toHaveBeenCalled(); expect(mocks.reset).not.toHaveBeenCalled();
   });
-  it('fails closed before DB work when disabled, unconfigured or rate limited', async () => {
-    mocks.guard.mockRejectedValueOnce(new Error('disabled'));
-    expect((await beginRecovery()).state).toBe('error');
+  it('fails closed before DB work when unconfigured or rate limited', async () => {
     mocks.config.mockImplementationOnce(() => { throw new Error('unconfigured'); });
     expect((await beginRecovery()).state).toBe('error');
     mocks.limit.mockResolvedValue({ status: 503 });

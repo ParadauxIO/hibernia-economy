@@ -44,12 +44,7 @@ public class UiAccessHandler {
     }
 
     public void doResetPassword(Player player, boolean confirmed) {
-        if (!confirmed) {
-            message.send(player, "treasuryapi.ui.reset.confirm");
-            return;
-        }
-        String password = service.resetPassword(player.getUniqueId());
-        message.send(player, "treasuryapi.ui.reset.success", "password", password);
+        message.send(player, "treasuryapi.ui.reset.browser");
     }
 
     /**
