@@ -108,8 +108,8 @@ firm starts with five roles, from most senior (rank 1) to most junior (rank 5):
 
 | Role | Rank | Default permission | Can do |
 |---|---|---|---|
-| **Proprietor** | 1 | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
-| **Co-Proprietor** | 2 | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
+| **Proprietor** | 1 | `ADMIN` | Staff/role management and spending; account administration stays proprietor-only |
+| **Co-Proprietor** | 2 | `ADMIN` | Staff/role management and spending; account administration stays proprietor-only |
 | **Manager** | 3 | `FINANCIAL` | Read finances; spending also needs account authorization |
 | **Supervisor** | 4 | `CHESTSHOP` | Run the firm's ChestShops |
 | **Employee** | 5 | `DEFAULT` | Basic membership — no special powers |
@@ -122,7 +122,7 @@ The four permissions a role can hold:
 
 | Permission | What it lets the holder do |
 |---|---|
-| `ADMIN` | Manage staff/roles and authorized spending; not proprietor-only account controls |
+| `ADMIN` | Manage staff/roles and spend the firm's money; not proprietor-only account controls |
 | `FINANCIAL` | Move the firm's money — deposit, withdraw, and pay |
 | `CHESTSHOP` | Create and use ChestShops that belong to the firm |
 | `DEFAULT` | Basic membership only |
@@ -142,8 +142,9 @@ Create it with a rank number, then give it the `FINANCIAL` permission:
 /business staff role permission add Acme Treasurer FINANCIAL
 ```
 
-The number (`3`) is the role's rank, used by promote/demote. List your roles and their
-permissions any time:
+The number (`3`) is the role's rank, used by promote/demote. Each rank can belong to only one role, so pick a number no other role is using; the
+command tells you which role holds a rank that's taken. Deleting a role frees its rank.
+List your roles and their permissions any time:
 
 ```text
 /business staff role list Acme
@@ -158,10 +159,9 @@ Pay a wage straight from a firm account to a player:
 ```
 
 Find the `<accountId>` with `/business account list Acme` (see next section). Paying
-out requires the **FINANCIAL** or **ADMIN** permission (or being the proprietor),
-and account authorization. ADMIN staff are synchronized as authorizers; FINANCIAL
-staff need the proprietor to grant authorization. Account creation, default-account
-selection and access management are proprietor-only.
+out requires the **FINANCIAL** or **ADMIN** permission (or being the proprietor).
+Staff with either permission are added to every firm account automatically. Account
+creation and default-account selection are proprietor-only.
 
 ## Using more than one account
 
@@ -190,10 +190,10 @@ Move money in and out of a specific account:
 ```
 
 > [!NOTE]
-> **Members vs. authorizers.** Anyone who can *see* an account is a **member**; anyone
-> who can *take money out* is an **authorizer**. Your staff are kept in sync with the
-> account automatically based on their role: `ADMIN` staff are members and
-> authorizers, `FINANCIAL` staff are members. Promote or demote someone to change it.
+> **Who has access.** Your staff are kept in sync with every account automatically
+> based on their role: `FINANCIAL` staff are **members**, `ADMIN` staff are members
+> and **authorizers**, and both can see and spend. Nobody is added by hand — promote
+> or demote someone, or change their role's permissions, to change it.
 
 ## Connect a ChestShop to your firm
 

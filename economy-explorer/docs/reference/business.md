@@ -111,9 +111,9 @@ roles, each seeded with a permission:
 New hires join as **Employee**, and a **lower** rank number is more senior. The four
 permissions are:
 
-- **`ADMIN`** — manage staff/roles and authorized spending. Creating/archiving
-  accounts, selecting the default and changing account access remain proprietor-only.
-- **`FINANCIAL`** — spend from accounts they're an authorizer on (withdraw and pay out).
+- **`ADMIN`** — manage staff/roles and spend from the firm's accounts. Creating/archiving
+  accounts and selecting the default remain proprietor-only.
+- **`FINANCIAL`** — see the firm's accounts and spend from them (withdraw and pay out).
 - **`CHESTSHOP`** — create and manage the firm's ChestShops (enforced by the ChestShop
   plugin).
 - **`DEFAULT`** — a baseline marker that grants nothing on its own. It's auto-attached to
@@ -125,7 +125,7 @@ breakdown.
 | Command | What it does |
 |---|---|
 | `/business staff role list <firm>` | List the firm's roles and their ranks. |
-| `/business staff role create <firm> <role> <order>` | Create a role at rank `<order>` (lower number = more senior). |
+| `/business staff role create <firm> <role> <order>` | Create a role at rank `<order>` (lower number = more senior). The name and the rank must each be unused by the firm's other roles. |
 | `/business staff role rename <firm> <role> <newname>` | Rename a role. |
 | `/business staff role delete <firm> <role>` | Delete a role. |
 | `/business staff role permission add <firm> <role> <permission>` | Grant a permission to a role. |
@@ -141,8 +141,9 @@ Managing roles needs the **ADMIN** permission.
 
 ## Accounts
 
-A firm can hold several accounts. **Members** can view an account; **authorizers** can
-spend from it.
+A firm can hold several accounts. Who can use them comes from firm roles, not from
+per-account lists you edit: `FINANCIAL` staff are **members** and `ADMIN` staff are
+members and **authorizers**, on every account.
 
 | Command | What it does |
 |---|---|
@@ -163,7 +164,7 @@ spend from it.
 | Command | What it does |
 |---|---|
 | `/business account deposit <firm> <accountId> <amount>` | Put your money into the account. |
-| `/business account withdraw <firm> <accountId> <amount>` | Take money out (authorizer only). |
+| `/business account withdraw <firm> <accountId> <amount>` | Take money out (`FINANCIAL` or `ADMIN`). |
 | `/business account transfer <firm> <fromAccountId> <toAccountId> <amount> [memo]` | Move money directly between two live accounts of the same firm; requires spending authority on the source. |
 | `/business account pay into <firm> <accountId> <amount>` | Pay your own money into the account. |
 | `/business account pay player <firm> <accountId> <player> <amount>` | Pay a player from the account. |
@@ -177,10 +178,11 @@ spend from it.
 > [!NOTE]
 > Paying money **into** an account (`pay into`/`deposit`) is open to anyone. **Spending**
 > — `withdraw` and any `pay` *out* of the firm — needs the **FINANCIAL** or **ADMIN**
-> permission **and** being an authorizer on that account. Role sync makes `ADMIN`-role
-> staff both members and authorizers automatically, while `FINANCIAL`-role staff are added
-> as members (view) only. Account access can't be edited by hand; give the player a role
-> with the right permission instead.
+> permission. Role sync adds `FINANCIAL`-role staff to every firm account as members and
+> `ADMIN`-role staff as members and authorizers; authorizer status only matters on an
+> account set to require authorization, which firm accounts aren't unless server staff
+> change it. Account access can't be edited by hand; give the player a role with the
+> right permission instead.
 
 See the **[Business accounts guide](/docs/guides/business-accounts)** to put this
 together, and **[ChestShops for your firm](/docs/guides/chestshop-business)** to route

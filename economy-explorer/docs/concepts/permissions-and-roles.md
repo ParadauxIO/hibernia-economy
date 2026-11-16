@@ -17,8 +17,8 @@ Inside a **[firm](/docs/guides/setting-up-a-business)**, every employee has one
 
 | Permission | Lets the holder… |
 |---|---|
-| `ADMIN` | Manage staff/roles and authorized spending; not proprietor-only account controls |
-| `FINANCIAL` | Use financial commands; spending also requires authorization on the source account |
+| `ADMIN` | Manage staff/roles and spend the firm's money; not proprietor-only account controls |
+| `FINANCIAL` | See the firm's accounts and spend from them — withdraw and pay |
 | `CHESTSHOP` | Create and use ChestShops that belong to the firm |
 | `DEFAULT` | Nothing special — just be a member |
 
@@ -40,10 +40,13 @@ little by the kind of account:
 
 - A **viewer** is always read-only: they can see the account's balance and transactions
   but never spend or manage it. (The read-only tier is used on government accounts.)
-- On a **firm** account, **members** can *see* the books and **authorizers** can *spend*.
-  Staff are kept in step with their roles automatically — `ADMIN`-role staff become
-  authorizers (view *and* spend), `FINANCIAL`-role staff become members (view only) — and
-  the firm **owner** is the one who adjusts members and authorizers.
+- On a **firm** account, access comes entirely from firm roles and is kept in step
+  automatically on every one of the firm's accounts: `FINANCIAL`-role staff become
+  **members**, `ADMIN`-role staff become members *and* **authorizers**, and everyone
+  else has no access. Members can see the books and spend. Being an authorizer only
+  adds something on an account set to require authorization, which firm accounts
+  aren't unless server staff change it. Nobody edits these lists by hand — change the
+  person's role, or the permissions on that role, instead.
 - On a **government** account, **members** can view *and* spend, and **authorizers** can
   manage viewers/members only with `treasury.gov.account.manage`. Managing
   authorizers requires `treasury.gov.admin`; both need the base `treasury.gov` node.

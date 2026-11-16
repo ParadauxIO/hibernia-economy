@@ -21,10 +21,12 @@ can move its funds.
 
 Money owned by a **[firm](/docs/guides/setting-up-a-business)**, not a person. A firm
 can have several accounts — for example separate pots for wages, supplies, and profit.
-Two kinds of access decide who can do what:
+Access comes from each person's role in the firm and applies to all of its accounts:
 
-- **Members** can *see* the account and its history.
-- **Authorizers** can also *spend* from it.
+- Staff with the `FINANCIAL` permission are **members**: they can see the account
+  and its history, and spend from it.
+- Staff with `ADMIN` are members and **authorizers**, which only adds something on
+  an account set to require authorization.
 
 A firm account can also be the owner of a
 **[ChestShop](/docs/guides/chestshop-business)**, so shop sales pay the company
