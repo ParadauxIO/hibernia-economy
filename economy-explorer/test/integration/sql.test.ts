@@ -19,7 +19,7 @@ import { activeGroupMembership } from '@/lib/sql/group-membership';
 import { findAccountsForPlayer } from '@/lib/sql/me';
 import { findIdentityBySub } from '@/lib/sql/identity';
 import { getDailyVolume, getActivityComparison } from './reference/liveBridgeVolume';
-import { listItemSales, getMarketFirm, listFirmMarketItems } from '@/lib/sql/market';
+import { listItemSales, getMarketFirm, listFirmMarketItems, listMarketFirms, countMarketFirms } from '@/lib/sql/market';
 import mysql from 'mysql2/promise';
 import { gini } from '@/lib/derived';
 import { findConfigByPrefix } from '@/lib/sql/economyConfig';
@@ -256,6 +256,27 @@ d('firm market drilldown honours the ?days window', () => {
     expect(Number(firm!.total_volume)).toBe(150);
     const items = await listFirmMarketItems(1, 50, 0);
     expect(items.map((i) => i.item_key).sort()).toEqual(['DIAMOND', 'GOLD_INGOT', 'IRON_INGOT']);
+  });
+
+  it('ranks all-time firm totals before pagination and excludes non-firm sales', async () => {
+    expect(await listMarketFirms(10, 0)).toEqual([
+      { firm_id: 1, display_name: 'Acme Corp', sale_count: 3, total_quantity: 29, total_volume: '150.00' },
+      { firm_id: 2, display_name: 'TaxFree Co', sale_count: 1, total_quantity: 1, total_volume: '25.00' },
+    ]);
+    expect(await countMarketFirms()).toBe(2);
+    expect((await listMarketFirms(1, 0)).map((f) => f.firm_id)).toEqual([1]);
+    expect((await listMarketFirms(1, 1)).map((f) => f.firm_id)).toEqual([2]);
+    expect(await listMarketFirms(1, 2)).toEqual([]);
+  });
+
+  it('breaks equal-volume ties by firm ID for stable pagination', async () => {
+    await sql`UPDATE chestshop_sale SET total_price = 150.00 WHERE shop_firm_id = 2`.execute(db);
+    try {
+      expect((await listMarketFirms(1, 0)).map((f) => f.firm_id)).toEqual([1]);
+      expect((await listMarketFirms(1, 1)).map((f) => f.firm_id)).toEqual([2]);
+    } finally {
+      await sql`UPDATE chestshop_sale SET total_price = 25.00 WHERE shop_firm_id = 2`.execute(db);
+    }
   });
 
   it('a 30-day window excludes the 40-day-old sale from totals and items', async () => {
