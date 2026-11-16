@@ -2,8 +2,11 @@
 
 V56 adds the `explorer_password_recovery` table. Browser recovery replaces the
 chat temporary-password flow and is available without a feature flag.
-The legacy `/treasuryapi ui resetpassword` and `resetpassword confirm` commands
-now only direct players to `/recover` on the Explorer website. The `/recover` page creates a ten-character
+The legacy `/treasuryapi ui resetpassword` and
+`/treasuryapi ui resetpassword confirm` commands now only show browser recovery
+instructions. `/recover` is a website path, not an in-game command.
+
+The `/recover` page creates a ten-character
 code and a separate 256-bit browser secret in an HttpOnly, SameSite=Strict cookie
 (Secure in production). Only SHA-256 hashes reach the database. The five-minute
 expiry is computed and enforced by MariaDB. No password is sent through chat or
@@ -28,7 +31,7 @@ the page's 12–128-character bounds. Disabled accounts cannot be recovered. The
 success page shows the actual Keycloak username. Existing sessions are not revoked,
 and API keys are unchanged.
 
-### Rollout
+## Rollout
 
 1. Apply V56 before deploying either consumer. Coordinate the plugin and Explorer
    deployments: recovery is available immediately once configured.
@@ -38,6 +41,8 @@ and API keys are unchanged.
    `RECOVERY_KEYCLOAK_CLIENT_ID` and `RECOVERY_KEYCLOAK_CLIENT_SECRET` in the
    Explorer deployment's secret management and restart the consumers. Do not
    change the public `AUTH_KEYCLOAK_ID` client or give its browser a secret.
+   The plugin's `keycloak.enabled` setting and service credentials only control
+   account-link attribute updates; browser recovery does not use them.
 3. Configure shared Redis. Recovery fails closed without it. Start/finish are
    each limited to five requests per minute per trusted ingress IP; status checks
    to thirty. `BLOCK_TRUST_ENVOY=1` uses the existing authenticated ingress address

@@ -379,25 +379,33 @@ Click a column heading to sort by it, and click it again to reverse the order.
 
 ## Recover your website password
 
-Select **Forgot your password?** on the sign-in prompt,
-or open `/recover` on this Explorer website. This works on Java and Bedrock
-without copying a password from Minecraft chat.
+You need an existing web account linked to your Minecraft player. If no account
+is linked, or multiple accounts are linked, contact staff.
+
+Select **Forgot your password?** on the Explorer sign-in prompt,
+or open [Recover your account](/recover). `/recover` is a website path, not an
+in-game command. The flow supports Java and Bedrock without copying passwords
+from Minecraft chat.
+
+Only approve a code you generated yourself. Approving someone else's code lets
+their browser change your password. Never send your code or password to another player.
 
 1. Select **Start recovery** and keep that browser open.
 2. In Minecraft, run `/treasuryapi ui recover <code>` with the code shown on your page.
 3. Read the warning, then run `/treasuryapi ui recover confirm <code>`.
 4. Return to the same browser and select **I confirmed in-game**.
-5. Enter your new password twice and select **Change password**. The page shows
-   the username to use when you log in; keep any leading dot.
+5. Choose a password of 12–128 characters that meets the account password rules.
+   Enter it twice and select **Change password**. The page shows the username
+   to use when you log in; keep any leading dot.
 
 Finish all steps within five minutes of generating the code. Each request works
-once. Starting again cancels your previous request in that browser. Only approve
-a code you generated yourself: approving someone else's code would let their
-browser change your password. Never send your code or password to another player.
+once. Starting again cancels your previous request in that browser. If the code
+expires or you lose the original browser session, start recovery again.
 
-You must already have a web account linked to your Minecraft player. If no link
-exists, or multiple web accounts are linked, contact staff. If the page is
-unavailable, contact staff. The legacy `/treasuryapi ui resetpassword` and
+If a password change cannot be confirmed, try signing in with your new password
+before starting again. If recovery remains unavailable, contact staff.
+
+The legacy `/treasuryapi ui resetpassword` and
 `/treasuryapi ui resetpassword confirm` commands now direct you here; they no
 longer generate passwords. Confirmed attempts are limited to one per minute.
 Resetting does not sign out existing sessions or revoke API keys.

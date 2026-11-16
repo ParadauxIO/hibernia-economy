@@ -66,7 +66,9 @@ The [Explorer guide](/docs/guides/using-the-explorer) covers:
   filtered tables (up to 100,000 rows).
 - For staff, a filterable transaction explorer with a postings panel and
   "follow the money", and a filterable ChestShop sales feed.
-- In-game password recovery for an existing linked account, where enabled.
+- [Browser password recovery](/docs/guides/using-the-explorer#recover-your-website-password)
+  for linked Java and Bedrock accounts: confirm a short code in-game, then choose
+  a new password in your browser. Legacy reset commands now show these instructions.
 
 For daily play, `/economy` shows statistics and `/sales` shows personal shop sales.
 See the [Treasury reference](/docs/reference/treasury),

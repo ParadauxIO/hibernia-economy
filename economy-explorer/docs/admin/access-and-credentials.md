@@ -29,7 +29,11 @@ an expired token, and resetting a password does not revoke API keys.
 
 For password recovery, apply V56, configure Explorer's dedicated recovery Keycloak
 service-account credentials and shared Redis, then deploy Explorer and TreasuryAPI.
-There is no recovery feature flag. The realm must permit local passwords; the
+Recovery uses `RECOVERY_KEYCLOAK_CLIENT_ID` and `RECOVERY_KEYCLOAK_CLIENT_SECRET`
+in the realm selected by `AUTH_KEYCLOAK_ISSUER`. These are separate from the
+plugin's `keycloak.enabled` configuration, which only controls account-link
+attribute updates. There is no recovery feature flag. The realm must permit
+local passwords; the
 service account needs user lookup and password-reset access. Minecraft authentication
 is the recovery credential: use online mode or a securely authenticated proxy.
 Only the authenticated player can approve their uniquely linked account, at most
@@ -42,7 +46,7 @@ the new password. Also check expiry and replay rejection.
 Reset does not explicitly revoke Keycloak or Explorer sessions. For a compromised
 identity, also revoke sessions in the appropriate identity/session system and
 revoke affected API keys. See the detailed
-[password-recovery implementation notes](https://github.com/ParadauxIO/hibernia-economy/blob/develop/wiki/password-recovery.md).
+[password-recovery implementation notes](https://github.com/ParadauxIO/hibernia-economy/blob/main/wiki/password-recovery.md).
 
 ## Recovering staff access
 
