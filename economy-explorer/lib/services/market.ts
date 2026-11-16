@@ -191,8 +191,9 @@ export async function getRecentItemSales(itemKey: string, limit: number): Promis
 
 /**
  * Firms ranked by all-time ChestShop volume. One grouped pass over
- * chestshop_sale by shop_firm_id (idx_cs_firm); the rollups have no firm
- * dimension, so it is cached for ten minutes and served stale while it refreshes.
+ * chestshop_sale by shop_firm_id using the covering idx_cs_firm_totals index.
+ * The rollups have no firm dimension, so it is cached for ten minutes and served
+ * stale while it refreshes. Pagination limits results, not the aggregation work.
  */
 export async function getMarketFirms(limit: number, offset: number): Promise<{ firms: MarketFirmRow[]; total: number }> {
   await requireLinkedViewer();
