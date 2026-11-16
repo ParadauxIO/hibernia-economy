@@ -77,6 +77,27 @@ class FindCommandTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"#", ":", "##", "::", ":#:"})
+    void malformedItemCodeIsRejectedAndValidSearchStillOpens(String code) throws Exception {
+        try (MockPlayer p = MockPlayer.connectLocal(Usernames.fresh("BadF"))) {
+            Perms.grant(p.getUsername(), "chestshop.find");
+            var balance = net.democracycraft.inttests.support.Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
+            int account = net.democracycraft.inttests.support.Ledger.personalAccountId(p.getUuid()).orElseThrow();
+            int postings = net.democracycraft.inttests.support.Ledger.postingsCountForAccount(account);
+            p.drainMessages();
+            p.chatCommand("/find " + code);
+            assertThat(p.awaitMessageContaining("Unknown item:", TIMEOUT)).contains(code);
+            net.democracycraft.inttests.support.Barrier.settle(p);
+            assertThat(net.democracycraft.inttests.support.Ledger.personalBalance(p.getUuid()).orElseThrow())
+                    .isEqualByComparingTo(balance);
+            assertThat(net.democracycraft.inttests.support.Ledger.postingsCountForAccount(account)).isEqualTo(postings);
+            assertThat(p.awaitClientboundAfter(() -> p.chatCommand("/find diamond"),
+                    org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundShowDialogGamePacket.class,
+                    packet -> true, TIMEOUT)).isNotNull();
+        }
+    }
+
     @Test
     void togglePreviewPersistsPerPlayerPreference() throws Exception {
         String user = Usernames.fresh("Prv");

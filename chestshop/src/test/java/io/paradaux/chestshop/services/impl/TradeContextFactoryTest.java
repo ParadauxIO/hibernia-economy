@@ -232,6 +232,33 @@ class TradeContextFactoryTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void prepare_shiftBuyWithoutContainer_defersToInvalidShopValidation(boolean reverseButtons) {
+        try (MockedStatic<SignService> ss = mockStatic(SignService.class)) {
+            Sign s = prepSign();
+            prepBasics(ss, s, "Alice", "b5:s3", false);
+            ItemStack parsed = item(Material.STONE, 1);
+            when(items.parse("STONE")).thenReturn(parsed);
+            when(config.isReverseButtons()).thenReturn(reverseButtons);
+            when(config.isShiftSellsInStacks()).thenReturn(true);
+            when(config.getShiftAllows()).thenReturn("ALL");
+            Player p = player("Notch", UUID.randomUUID());
+            when(p.isSneaking()).thenReturn(true);
+            when(inventoryService.getItemsStacked(parsed)).thenReturn(new ItemStack[] {parsed});
+
+            PendingTransaction ctx =
+                    factory.prepare(s, p, reverseButtons ? Action.LEFT_CLICK_BLOCK : Action.RIGHT_CLICK_BLOCK);
+
+            assertThat(ctx.getOwnerInventory()).isNull();
+            assertThat(ctx.isUnlimitedOwner()).isFalse();
+            assertThat(ctx.getTransactionType()).isEqualTo(BUY);
+            assertThat(ctx.getExactPrice()).isEqualByComparingTo("5");
+            assertThat(ctx.getStock()).hasSize(1);
+            assertThat(ctx.getStock()[0].getAmount()).isEqualTo(1);
+        }
+    }
+
     @Test
     void prepare_normalBuy_buildsContext() {
         try (MockedStatic<SignService> ss = mockStatic(SignService.class)) {
