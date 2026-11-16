@@ -78,6 +78,14 @@ class FirmAccountServiceImplTest {
         return f;
     }
 
+    /** Makes {@code player} a current employee whose role carries {@code permission}. */
+    private void employ(UUID player, RolePermission permission) {
+        when(staff.listCurrentEmployeesByFirm(1))
+                .thenReturn(List.of(new FirmEmployee(1, player.toString(), "Role", null, null, null, null, true)));
+        when(roles.getFirmRolePermissions(1, "Role"))
+                .thenReturn(List.of(new FirmRolePermission(1, "Role", permission)));
+    }
+
     // ---------- createAccount ----------
 
     @Test
@@ -438,11 +446,25 @@ class FirmAccountServiceImplTest {
     }
 
     @Test
+    void addMemberToAccount_playerWithoutAnEntitlingRole_isReportedAsNotAdded() {
+        UUID member = UUID.randomUUID();
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
+
+        // The reconcile undoes the add, so "success" would be a lie.
+        assertThatThrownBy(() -> svc.addMemberToAccount(1, 10, member, actor))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("not added");
+    }
+
+    @Test
     void addMemberToAccount_succeeds() {
         UUID member = UUID.randomUUID();
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
+        employ(member, RolePermission.FINANCIAL);
 
         svc.addMemberToAccount(1, 10, member, actor);
         verify(treasury).addMember(10, member, actor);
@@ -458,6 +480,19 @@ class FirmAccountServiceImplTest {
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
         assertThatThrownBy(() -> svc.removeMemberFromAccount(1, 10, owner, actor))
                 .isInstanceOf(BadCommandException.class);
+    }
+
+    @Test
+    void removeMemberFromAccount_playerWhoseRoleGrantsAccess_isReportedAsNotRemoved() {
+        UUID member = UUID.randomUUID();
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
+        employ(member, RolePermission.FINANCIAL);
+
+        assertThatThrownBy(() -> svc.removeMemberFromAccount(1, 10, member, actor))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("not removed");
     }
 
     @Test
@@ -489,11 +524,38 @@ class FirmAccountServiceImplTest {
     }
 
     @Test
+    void addAuthorizerToAccount_memberWithoutAdmin_isReportedAsNotPromoted() {
+        UUID auth = UUID.randomUUID();
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
+        employ(auth, RolePermission.FINANCIAL);
+
+        assertThatThrownBy(() -> svc.addAuthorizerToAccount(1, 10, auth, actor))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("not made an authorizer");
+    }
+
+    @Test
+    void removeAuthorizerFromAccount_playerWhoseRoleHasAdmin_isReportedAsStillAuthorizer() {
+        UUID auth = UUID.randomUUID();
+        when(firms.getFirmById(1)).thenReturn(firm(1));
+        when(firmService.isProprietor(1, actor)).thenReturn(true);
+        when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
+        employ(auth, RolePermission.ADMIN);
+
+        assertThatThrownBy(() -> svc.removeAuthorizerFromAccount(1, 10, auth, actor))
+                .isInstanceOf(BadCommandException.class)
+                .hasMessageContaining("still an authorizer");
+    }
+
+    @Test
     void addAuthorizerToAccount_succeeds() {
         UUID auth = UUID.randomUUID();
         when(firms.getFirmById(1)).thenReturn(firm(1));
         when(firmService.isProprietor(1, actor)).thenReturn(true);
         when(firmAccounts.isFirmAccount(1, 10)).thenReturn(true);
+        employ(auth, RolePermission.ADMIN);
 
         svc.addAuthorizerToAccount(1, 10, auth, actor);
         verify(treasury).addAuthorizer(10, auth, actor);

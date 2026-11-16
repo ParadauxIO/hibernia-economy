@@ -113,20 +113,39 @@ class FirmRoleServiceImplTest {
         when(roles.findMinRankOrder(1)).thenReturn(1);
         when(roles.listRolesByFirm(1)).thenReturn(List.of(new FirmRole(1, "Lead", 3)));
 
-        // insertRole is an upsert: reaching it would re-rank the existing role.
-        assertThatThrownBy(() -> svc.createRole("Acme", "lead", 7, actor)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> svc.createRole("Acme", "lead", 7, actor))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("name Lead is already used");
         verify(roles, never()).insertRole(any());
+        verify(roles, never()).reviveRole(any());
     }
 
     @Test
-    void createRole_revivingASoftDeletedRole_reportsTwoRowsAndSucceeds() {
+    void createRole_rankHeldByAnotherLiveRole_isRefusedNamingThatRole() {
         when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
         when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
         when(roles.findMinRankOrder(1)).thenReturn(1);
-        when(roles.insertRole(any())).thenReturn(2); // ON DUPLICATE KEY UPDATE
+        when(roles.listRolesByFirm(1)).thenReturn(List.of(new FirmRole(1, "Manager", 3)));
+
+        assertThatThrownBy(() -> svc.createRole("Acme", "ConstructionSec", 3, actor))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("rank 3 is already used by the Manager role");
+        verify(roles, never()).insertRole(any());
+        verify(roles, never()).reviveRole(any());
+        verify(roles, never()).addRolePermission(any());
+    }
+
+    @Test
+    void createRole_revivesASoftDeletedRoleOfThatNameInsteadOfInserting() {
+        when(firms.getFirmByNameOrId("Acme")).thenReturn(firm(1));
+        when(staffService.hasPermission(1, actor, RolePermission.ADMIN)).thenReturn(true);
+        when(roles.findMinRankOrder(1)).thenReturn(1);
+        when(roles.reviveRole(any())).thenReturn(1);
 
         svc.createRole("Acme", "Lead", 3, actor);
 
+        verify(roles).releaseDeletedRank(1, 3);
+        verify(roles, never()).insertRole(any());
         verify(roles).addRolePermission(any());
     }
 

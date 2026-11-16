@@ -267,18 +267,25 @@ public class FirmAccountServiceImpl implements FirmAccountService {
 
     @Override
     public void syncAccountMembers(Integer firmId, Integer accountId) {
+        reconcileLocked(firmId, accountId);
+    }
+
+    /** Role-derived access an account was just reconciled to. */
+    private record RoleAccess(java.util.Set<UUID> members, java.util.Set<UUID> authorizers) {}
+
+    private RoleAccess reconcileLocked(Integer firmId, Integer accountId) {
         // Serialise reconciliation per firm so concurrent staff/role mutations
         // can't interleave their read-diff-mutate against Treasury (ADT-12).
         ReentrantLock lock = firmSyncLocks.computeIfAbsent(firmId, k -> new ReentrantLock());
         lock.lock();
         try {
-            reconcileAccountMembers(firmId, accountId);
+            return reconcileAccountMembers(firmId, accountId);
         } finally {
             lock.unlock();
         }
     }
 
-    private void reconcileAccountMembers(Integer firmId, Integer accountId) {
+    private RoleAccess reconcileAccountMembers(Integer firmId, Integer accountId) {
         Firm firm = firms.getFirmById(firmId);
         if (firm == null) {
             throw new BadCommandException("Firm not found");
@@ -355,6 +362,7 @@ public class FirmAccountServiceImpl implements FirmAccountService {
                 treasury.removeAuthorizer(accountId, toRemove);
             }
         }
+        return new RoleAccess(expectedMembers, expectedAuthorizers);
     }
 
     @Override
@@ -435,7 +443,12 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         treasury.addMember(accountId, memberUuid, actorId);
         // Access is role-derived (PAR-77): reconcile immediately so the account
         // always reflects firm roles and never drifts until a manual resync.
-        syncAccountMembers(firmId, accountId);
+        RoleAccess access = reconcileLocked(firmId, accountId);
+        // The reconcile just took the add back out: report that, not success.
+        if (!access.members().contains(memberUuid)) {
+            throw new BadCommandException("That player was not added: account access follows firm roles."
+                    + " Give them a role with the FINANCIAL or ADMIN permission instead.");
+        }
     }
 
     @Override
@@ -451,7 +464,11 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         }
 
         treasury.removeMember(accountId, memberUuid);
-        syncAccountMembers(firmId, accountId);
+        RoleAccess access = reconcileLocked(firmId, accountId);
+        if (access.members().contains(memberUuid)) {
+            throw new BadCommandException("That player was not removed: their firm role grants access to this"
+                    + " account. Demote them or remove FINANCIAL/ADMIN from their role instead.");
+        }
     }
 
     @Override
@@ -466,7 +483,11 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         }
         // Access is role-derived (PAR-77): reconcile immediately so the account
         // always reflects firm roles and never drifts until a manual resync.
-        syncAccountMembers(firmId, accountId);
+        RoleAccess access = reconcileLocked(firmId, accountId);
+        if (!access.authorizers().contains(authorizerUuid)) {
+            throw new BadCommandException("That player was not made an authorizer: account access follows firm"
+                    + " roles. Give them a role with the ADMIN permission instead.");
+        }
     }
 
     @Override
@@ -482,7 +503,11 @@ public class FirmAccountServiceImpl implements FirmAccountService {
         }
 
         treasury.removeAuthorizer(accountId, authorizerUuid);
-        syncAccountMembers(firmId, accountId);
+        RoleAccess access = reconcileLocked(firmId, accountId);
+        if (access.authorizers().contains(authorizerUuid)) {
+            throw new BadCommandException("That player is still an authorizer: their firm role has the ADMIN"
+                    + " permission. Demote them or remove ADMIN from their role instead.");
+        }
     }
 
     @Override

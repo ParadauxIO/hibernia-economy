@@ -87,20 +87,28 @@ public class FirmRoleServiceImpl implements FirmRoleService {
         }
 
         String normalizedName = normalizeRoleName(roleName);
-        // insertRole is an upsert so it can revive a soft-deleted role under its old
-        // role_id. A LIVE role of that name must be refused here, or "create" would
-        // quietly re-rank it.
-        boolean nameTaken = roles.listRolesByFirm(firm.getFirmId()).stream()
-                .anyMatch(r -> r.getRoleName().equalsIgnoreCase(normalizedName));
-        if (nameTaken) {
-            throw new ConflictException("Could not create role (name or rank already used in this firm).");
+        // Say which of the two is taken, and by what: the player can only fix a
+        // clash they can see.
+        for (FirmRole existing : roles.listRolesByFirm(firm.getFirmId())) {
+            if (existing.getRoleName().equalsIgnoreCase(normalizedName)) {
+                throw new ConflictException(
+                        "Could not create role: the name " + existing.getRoleName() + " is already used in this firm.");
+            }
+            if (Objects.equals(existing.getRoleRankOrder(), rankOrder)) {
+                throw new ConflictException("Could not create role: rank " + rankOrder + " is already used by the "
+                        + existing.getRoleName() + " role. Pick a rank no other role has.");
+            }
         }
         FirmRole role = new FirmRole(firm.getFirmId(), normalizedName, rankOrder);
 
         try {
-            // 1 row = inserted, 2 = a soft-deleted role revived (ON DUPLICATE KEY UPDATE).
-            int inserted = roles.insertRole(role);
-            if (inserted < 1) throw new IllegalStateException("Insert failed for role: " + roleName);
+            // A deleted role still holds its rank in uq_role_rank; move it aside so
+            // deleting a role really does free the rank.
+            roles.releaseDeletedRank(firm.getFirmId(), rankOrder);
+            // Revive a deleted role of this name under its old role_id, else insert.
+            if (roles.reviveRole(role) < 1 && roles.insertRole(role) < 1) {
+                throw new IllegalStateException("Insert failed for role: " + roleName);
+            }
             // Grant the baseline DEFAULT permission in the same transaction so a
             // role is never persisted without it.
             roles.addRolePermission(new FirmRolePermission(firm.getFirmId(), normalizedName, RolePermission.DEFAULT));
