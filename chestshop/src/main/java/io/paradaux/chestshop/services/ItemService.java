@@ -7,11 +7,14 @@ import org.bukkit.inventory.ItemStack;
  * Resolves the item/sign strings ChestShop puts on signs. Replaces the
  * {@code ItemParseEvent} / {@code ItemStringQueryEvent} / {@code MaterialParseEvent} /
  * {@code SignValidationEvent} carriers and their resolver "listeners" with direct,
- * ordered service methods (PAR-282). The resolution order is unchanged:
+ * ordered service methods (PAR-282). The resolution order is:
  * <ul>
- *   <li>{@link #parse}: custom-item resolver (if registered) → configured alias → vanilla
- *       material (the alias step overrides a custom-item match, as before);</li>
- *   <li>{@link #queryString}: custom-item key (if registered) → vanilla name → alias override;</li>
+ *   <li>{@link #parse}: custom-item resolver (if registered) → configured alias
+ *       → potion/enchanted-book shorthand → vanilla material (the alias step overrides a custom-item match,
+ *       as before);</li>
+ *   <li>{@link #queryString}: custom-item key (if registered) → configured vanilla-code alias
+ *       → potion/enchanted-book shorthand (sign-width requests only) → vanilla name,
+ *       followed by the legacy event and alias override;</li>
  *   <li>{@link #parseMaterial}: a single resolver.</li>
  * </ul>
  *

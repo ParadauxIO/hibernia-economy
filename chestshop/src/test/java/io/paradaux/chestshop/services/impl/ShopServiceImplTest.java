@@ -20,6 +20,7 @@ import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.AdminBypassService;
 import io.paradaux.chestshop.services.EconomyService;
+import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.ProtectionService;
@@ -56,6 +57,7 @@ class ShopServiceImplTest extends ServerTest {
     private AccountService accounts;
     private EconomyService economy;
     private ItemService items;
+    private ItemCodeService itemCodes;
     private ProtectionService protection;
     private StockCounterService stockCounter;
     private Message message;
@@ -82,6 +84,8 @@ class ShopServiceImplTest extends ServerTest {
         accounts = mock(AccountService.class);
         economy = mock(EconomyService.class);
         items = mock(ItemService.class);
+        itemCodes = mock(ItemCodeService.class);
+        when(itemCodes.encode(any(), eq(0))).thenReturn("Diamond");
         protection = mock(ProtectionService.class);
         stockCounter = mock(StockCounterService.class);
         message = mock(Message.class);
@@ -144,7 +148,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 signService,
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
     }
 
     private ShopCreation create(String[] lines) {
@@ -384,7 +389,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(items.parse("?")).thenReturn(null);
         ShopCreation ctx = svc.create(player, sign, new String[] {"Notch", "64", "B 5", "?"});
         assertThat(ctx.isCancelled()).isTrue();
@@ -512,7 +518,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 signService,
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(economy.hasFunds(any(UUID.class), any(BigDecimal.class))).thenReturn(false);
         ShopCreation ctx = service.create(player, sign, VALID);
         assertThat(ctx.getOutcome()).isEqualTo(CreationOutcome.NOT_ENOUGH_MONEY);
@@ -566,7 +573,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(adminBypass.has(any(Player.class), eq(Permissions.SHOP_CREATION_SELL_ID + "diamond")))
                 .thenReturn(true);
         ShopCreation ctx = svc.create(player, sign, new String[] {"Notch", "64", "B 1:S 5", "Diamond"});
@@ -618,7 +626,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(economy.hasFunds(any(UUID.class), any(BigDecimal.class))).thenReturn(true); // pass funds check
         when(economy.withdraw(any(UUID.class), any(BigDecimal.class), any())).thenReturn(false); // fee charge fails
         ShopCreation ctx = svc.create(player, sign, VALID);
@@ -795,7 +804,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
 
         // A standing sign with a shop container to its EAST.
         Block signBlock = world.getBlockAt(20, 64, 0);
@@ -828,7 +838,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         CreatedShop event = mock(CreatedShop.class);
         when(event.getPlayer()).thenReturn(player);
         when(event.getSign()).thenReturn(sign);
@@ -854,7 +865,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
 
         Sign shopSign = placeShopSign("Notch", "Diamond");
         when(accounts.resolveAccount("Notch")).thenReturn(notchAccount);
@@ -881,7 +893,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         Sign shopSign = placeShopSign("Notch", "Diamond");
         DestroyedShop event = new DestroyedShop(player, shopSign, container);
         svc.onDestroyed(event);
@@ -918,7 +931,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         assertThat(svc.chargeCreationFee(player, new String[] {"Admin Shop", "64", "B 5", "Diamond"}))
                 .isTrue();
     }
@@ -938,7 +952,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(adminBypass.has(player, Permissions.NOFEE)).thenReturn(true);
         assertThat(svc.chargeCreationFee(player, VALID)).isTrue();
     }
@@ -958,7 +973,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(economy.withdraw(any(UUID.class), any(BigDecimal.class), any())).thenReturn(false);
         assertThat(svc.chargeCreationFee(player, VALID)).isFalse();
     }
@@ -978,7 +994,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(economy.withdraw(any(UUID.class), any(BigDecimal.class), any())).thenReturn(true);
         Account serverAcc = new Account("Server", "Server", UUID.randomUUID());
         when(accounts.getServerEconomyAccount()).thenReturn(serverAcc);
@@ -1009,7 +1026,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         Account serverAcc = new Account("Server", "Server", UUID.randomUUID());
         when(accounts.getServerEconomyAccount()).thenReturn(serverAcc);
         when(economy.withdraw(eq(player.getUniqueId()), any(BigDecimal.class), any()))
@@ -1040,7 +1058,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         when(economy.withdraw(any(UUID.class), any(BigDecimal.class), any())).thenReturn(true);
         when(accounts.getServerEconomyAccount()).thenReturn(null);
         when(economy.format(any(BigDecimal.class))).thenReturn("$10");
@@ -1062,7 +1081,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
     }
 
     @Test
@@ -1217,7 +1237,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         ShopCreation ctx = price(svc, "B 5.99");
         assertThat(ctx.isCancelled()).isFalse();
         assertThat(SignService.getPrice(ctx.getSignLines())).doesNotContain(".");
@@ -1303,6 +1324,7 @@ class ShopServiceImplTest extends ServerTest {
         // itemLine "Diamond#3" -> the ID-specific permission node is set false on the player.
         when(items.parse("Diamond#3")).thenReturn(diamond);
         when(items.getSignName(diamond)).thenReturn("Diamond#3");
+        when(itemCodes.encode(diamond, 0)).thenReturn("Diamond#3");
         var plugin = org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin("PermPlugin");
         player.addAttachment(plugin, Permissions.SHOP_CREATION_ID + "diamond#3", false);
         ShopCreation ctx = create(new String[] {"Notch", "64", "B 5", "Diamond#3"});
@@ -1344,7 +1366,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         Sign shopSign = placeShopSign("Notch", "Diamond");
         DestroyedShop event = new DestroyedShop(null, shopSign, container);
         svc.onDestroyed(event); // destroyer null -> the log guard's second condition is false
@@ -1365,7 +1388,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         Block wall = world.getBlockAt(30, 64, 0);
         wall.setType(Material.OAK_WALL_SIGN); // WallSign data, not a standing Sign
         Sign wallSign = (Sign) wall.getState();
@@ -1392,7 +1416,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
         Block signBlock = world.getBlockAt(32, 64, 0);
         signBlock.setType(Material.OAK_SIGN);
         Sign standing = (Sign) signBlock.getState();
@@ -1427,7 +1452,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
     }
 
     @Test
@@ -1478,6 +1504,7 @@ class ShopServiceImplTest extends ServerTest {
         // itemLine carries a '#' (parts.length == 2) but no explicit false permission (334 false).
         when(items.parse("Diamond#3")).thenReturn(diamond);
         when(items.getSignName(diamond)).thenReturn("Diamond#3");
+        when(itemCodes.encode(diamond, 0)).thenReturn("Diamond#3");
         when(adminBypass.has(any(Player.class), anyString())).thenReturn(true);
         ShopCreation ctx = create(new String[] {"Notch", "64", "B 5", "Diamond#3"});
         assertThat(ctx.isCancelled()).isFalse();
@@ -1537,7 +1564,8 @@ class ShopServiceImplTest extends ServerTest {
                 cfg,
                 new SignService(cfg),
                 shopBlockService,
-                adminBypass);
+                adminBypass,
+                itemCodes);
 
         Block signBlock = mock(Block.class);
         when(signBlock.getBlockData()).thenReturn(mock(org.bukkit.block.data.type.Sign.class));
@@ -1608,5 +1636,23 @@ class ShopServiceImplTest extends ServerTest {
         loadTreasuryPlugin();
         create(new String[] {"A:Acme1", "64", "B 5", "Diamond"});
         verify(message).send(player, "chestshop.BUSINESS_ACCOUNT_NOT_FOUND");
+    }
+
+    @Test
+    void create_shorthandPreservesExplicitItemDenial() {
+        var book = new ItemStack(Material.ENCHANTED_BOOK);
+        var meta = (org.bukkit.inventory.meta.EnchantmentStorageMeta) book.getItemMeta();
+        meta.addStoredEnchant(org.bukkit.enchantments.Enchantment.SHARPNESS, 5, true);
+        book.setItemMeta(meta);
+        when(items.parse("Enchanted Book#3")).thenReturn(book);
+        when(items.parse("Bk Sharpness V")).thenReturn(book);
+        when(items.getSignName(book)).thenReturn("Bk Sharpness V");
+        when(itemCodes.encode(book, 0)).thenReturn("Enchanted Book#3");
+        when(adminBypass.has(player, Permissions.SHOP_CREATION_BUY_ID + "enchanted_book"))
+                .thenReturn(true);
+        var plugin = org.mockbukkit.mockbukkit.MockBukkit.createMockPlugin("PermPlugin");
+        player.addAttachment(plugin, Permissions.SHOP_CREATION_ID + "enchanted_book#3", false);
+        ShopCreation ctx = create(new String[] {"Notch", "1", "B 5", "Enchanted Book#3"});
+        assertThat(ctx.getOutcome()).isEqualTo(CreationOutcome.NO_PERMISSION);
     }
 }

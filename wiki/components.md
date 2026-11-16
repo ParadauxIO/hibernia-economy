@@ -291,6 +291,19 @@ Treasury and Business so a sale can pay a player or a firm.
   any public repository (committed to the repo).
 - Compiles against `treasury-api` and `business-api` (resolved as local projects in
   the build). See [build-and-test.md](build-and-test.md) for the shading details.
+- **Sign shorthands:** `ShorthandItemCodec` gives plain potions and single-enchant books
+  a readable sign name (`Bk Sharpness V`, `Spl Healing II`) in place of a `#code`.
+  `ItemServiceImpl` consults it after custom resolvers and configured aliases in `parse`,
+  and in `queryString` only for sign-width requests. Configured code aliases still take
+  precedence over shorthands. The unlimited-width name remains the market `item_key` and
+  wildcard match target. Creation permissions use `ItemCodeService` directly so aliases
+  and shorthands cannot hide item-specific denials. Names are in code, not config,
+  because a name is persisted on every sign that uses it;
+  renaming one strands those signs. An item gets a shorthand only if
+  `MaterialService.equals` matches it to the plain item the name parses back to, which
+  is how `EXCLUDED_ITEM_ATTRIBUTES` (e.g. `repair-cost`) widens it. A new game version's
+  potion or enchantment needs a table entry; until then it falls back to its `#code`,
+  and `ShorthandItemCodecTest` fails on the missing name.
 
 ---
 

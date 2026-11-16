@@ -61,6 +61,7 @@ buy and sell after changing these settings.
 | `USE_STOCK_COUNTER` | `false` | Show stock counts on shop signs. Hopper transfers also keep `/find` stock current whether or not this is on. |
 | `HOPPER_STOCK_REFRESH_INTERVAL_TICKS` | `100` | Wait from the first hopper change before recounting stock for the sign and `/find` (about five seconds at 20 TPS). Batches drain across ticks, with at most 32 normal and 32 recovery containers per tick and separate 0.5 ms soft budgets. Values below 1 use 1; reload applies the interval to pending work. |
 | `ALLOW_AUTO_ITEM_FILL` | `true` | Allows `?` on the item line to fill from the held item. |
+| `EXCLUDED_ITEM_ATTRIBUTES` | `[]` | Item-data attributes ignored when deciding whether two items are the same. It applies to **every** item, not just one kind. `[repair-cost]` makes anvil-combined items trade as their plain equivalents, so a combined enchanted book also gets the plain book's [short sign name](/docs/reference/chestshop#potions-and-enchanted-books); buyers can then receive a book that costs more levels to apply. While a container holds both versions, the purchase preview is refused rather than show one and hand over the other. |
 
 ## Admin shops & naming
 

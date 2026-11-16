@@ -28,11 +28,14 @@ import org.bukkit.inventory.ItemStack;
  * Resolves the item/sign strings ChestShop puts on signs. Replaces the
  * {@code ItemParseEvent} / {@code ItemStringQueryEvent} / {@code MaterialParseEvent} /
  * {@code SignValidationEvent} carriers and their resolver "listeners" with direct,
- * ordered service methods (PAR-282). The resolution order is unchanged:
+ * ordered service methods (PAR-282). The resolution order is:
  * <ul>
- *   <li>{@link #parse}: custom-item resolver (if registered) → configured alias → vanilla
- *       material (the alias step overrides a custom-item match, as before);</li>
- *   <li>{@link #queryString}: custom-item key (if registered) → vanilla name → alias override;</li>
+ *   <li>{@link #parse}: custom-item resolver (if registered) → configured alias
+ *       → potion/enchanted-book shorthand → vanilla material (the alias step overrides a custom-item match,
+ *       as before);</li>
+ *   <li>{@link #queryString}: custom-item key (if registered) → configured vanilla-code alias
+ *       → potion/enchanted-book shorthand (sign-width requests only) → vanilla name,
+ *       followed by the legacy event and alias override;</li>
  *   <li>{@link #parseMaterial}: a single resolver.</li>
  * </ul>
  *
@@ -49,6 +52,7 @@ public class ItemServiceImpl implements ItemService {
     private final ItemCodeService itemCodes;
     private final MaterialService materialService;
     private final InventoryService inventoryService;
+    private final ShorthandItemCodec shorthands;
     private volatile CustomItemResolver customItems;
     private final java.io.File dataFolder;
 
@@ -61,10 +65,12 @@ public class ItemServiceImpl implements ItemService {
             ItemCodeService itemCodes,
             MaterialService materialService,
             InventoryService inventoryService,
+            ShorthandItemCodec shorthands,
             @com.google.inject.name.Named("dataFolder") java.io.File dataFolder) {
         this.itemCodes = itemCodes;
         this.materialService = materialService;
         this.inventoryService = inventoryService;
+        this.shorthands = shorthands;
         this.dataFolder = dataFolder;
         loadAliases();
     }
@@ -102,6 +108,9 @@ public class ItemServiceImpl implements ItemService {
             item = alias;
         }
         if (item == null) {
+            item = shorthands.decode(itemString);
+        }
+        if (item == null) {
             item = itemCodes.decode(itemString); // vanilla fallback
         }
         return item;
@@ -113,7 +122,16 @@ public class ItemServiceImpl implements ItemService {
         CustomItemResolver resolver = customItems;
         String result = resolver != null ? resolver.queryString(item, maxWidth) : null;
         if (result == null) {
-            result = itemCodes.encode(item, maxWidth); // vanilla name
+            result = itemCodes.encode(item, maxWidth);
+            if (findAlias(result, maxWidth) == null) {
+                String shorthand = signShorthand(item, maxWidth);
+                if (shorthand != null) {
+                    // Aliases are configured using /iteminfo's full code, which may be
+                    // wider than the sign. Keep that key until the final alias override.
+                    String fullCode = itemCodes.encode(item, 0);
+                    result = findAlias(fullCode, maxWidth) != null ? fullCode : shorthand;
+                }
+            }
         }
         com.Acrobot.ChestShop.Events.ItemStringQueryEvent event =
                 new com.Acrobot.ChestShop.Events.ItemStringQueryEvent(item);
@@ -122,6 +140,20 @@ public class ItemServiceImpl implements ItemService {
                 && (maxWidth <= 0 || getMinecraftStringWidth(event.getItemString()) <= maxWidth))
             result = event.getItemString();
         return applyAlias(result, maxWidth); // configured alias override
+    }
+
+    /**
+     * The potion/enchanted-book shorthand, for sign-width requests only. An unlimited-width name
+     * stays the stored code: it is the market item key and what wildcard signs match against,
+     * so it must not change for shops that already exist. Creation permissions use ItemCodeService
+     * directly to avoid display aliases hiding the stored identity.
+     */
+    private String signShorthand(ItemStack item, int maxWidth) {
+        if (maxWidth <= 0) {
+            return null;
+        }
+        String shorthand = shorthands.encode(item);
+        return shorthand != null && getMinecraftStringWidth(shorthand) <= maxWidth ? shorthand : null;
     }
 
     @Override
@@ -286,6 +318,12 @@ public class ItemServiceImpl implements ItemService {
 
     /** Apply a configured alias to {@code itemString} if one fits {@code maxWidth}, else the input. */
     private String applyAlias(String itemString, int maxWidth) {
+        String alias = findAlias(itemString, maxWidth);
+        return alias != null ? alias : itemString;
+    }
+
+    /** A configured alias that fits the requested width, or null. */
+    private String findAlias(String itemString, int maxWidth) {
         if (itemString == null) {
             return null;
         }
@@ -301,14 +339,14 @@ public class ItemServiceImpl implements ItemService {
         }
 
         if (newCode == null) {
-            return itemString;
+            return null;
         }
         if (maxWidth > 0) {
             int width = getMinecraftStringWidth(newCode);
             if (width > maxWidth) {
                 log.warn("Can't use configured alias " + newCode + " as its width (" + width
                         + ") was wider than the allowed max width of " + maxWidth);
-                return itemString;
+                return null;
             }
         }
         return newCode;

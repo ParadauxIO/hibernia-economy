@@ -1,20 +1,19 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.services.SignService;
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.model.ShopCreation;
-import io.paradaux.chestshop.utils.PriceUtil;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
-import java.math.BigDecimal;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.chestshop.model.ShopCreation;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import io.paradaux.chestshop.services.SignService;
+import io.paradaux.chestshop.utils.PriceUtil;
+import java.math.BigDecimal;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Exercises {@link ShopServiceImpl#checkPrice} — the shop-sign price-line parser/normaliser
@@ -28,11 +27,11 @@ class ShopPriceCheckTest {
     private static ShopServiceImpl newShopService() {
         ChestShopConfiguration config = mock(ChestShopConfiguration.class);
         when(config.getPricePrecision()).thenReturn(2);
-        return new ShopServiceImpl(null, null, null, null, null, null, null, config, null, null, null);
+        return new ShopServiceImpl(null, null, null, null, null, null, null, config, null, null, null, null);
     }
 
     static String[] getPriceString(String prices) {
-        return new String[]{null, null, prices, null};
+        return new String[] {null, null, prices, null};
     }
 
     @Test
@@ -118,12 +117,7 @@ class ShopPriceCheckTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "1 B:S -1M",
-            "S 1MK",
-            "B -1K : S10K",
-            "B1Z"
-    })
+    @ValueSource(strings = {"1 B:S -1M", "S 1MK", "B -1K : S10K", "B1Z"})
     public void testIllegalBuyAndSellPricesWithMultipliers(String line) {
         assertTrue(createEventFromString(line).isCancelled());
     }

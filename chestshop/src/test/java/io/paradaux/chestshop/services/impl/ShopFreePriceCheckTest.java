@@ -1,15 +1,15 @@
 package io.paradaux.chestshop.services.impl;
 
-import io.paradaux.chestshop.model.config.ChestShopConfiguration;
-import io.paradaux.chestshop.model.ShopCreation;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import io.paradaux.chestshop.model.ShopCreation;
+import io.paradaux.chestshop.model.config.ChestShopConfiguration;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Free ($0) shops are rejected at creation by default, and permitted when
@@ -21,7 +21,8 @@ import static org.mockito.Mockito.when;
 class ShopFreePriceCheckTest {
 
     private final ChestShopConfiguration config = mock(ChestShopConfiguration.class);
-    private final ShopServiceImpl shops = new ShopServiceImpl(null, null, null, null, null, null, null, config, null, null, null);
+    private final ShopServiceImpl shops =
+            new ShopServiceImpl(null, null, null, null, null, null, null, config, null, null, null, null);
 
     {
         when(config.getPricePrecision()).thenReturn(2);
@@ -34,9 +35,9 @@ class ShopFreePriceCheckTest {
     }
 
     private ShopCreation run(String priceLine) {
-        ShopCreation event = new ShopCreation(null, null, new String[]{null, null, priceLine, null});
-        shops.checkPrice(event);      // normalise the price line first (LOWEST)
-        shops.rejectFreeShop(event);  // then the free-shop gate (NORMAL)
+        ShopCreation event = new ShopCreation(null, null, new String[] {null, null, priceLine, null});
+        shops.checkPrice(event); // normalise the price line first (LOWEST)
+        shops.rejectFreeShop(event); // then the free-shop gate (NORMAL)
         return event;
     }
 

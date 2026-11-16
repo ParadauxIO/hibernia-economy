@@ -103,6 +103,7 @@ class LegacyCompatibilityTest extends ServerTest {
                 codes,
                 mock(io.paradaux.chestshop.services.MaterialService.class),
                 mock(io.paradaux.chestshop.services.InventoryService.class),
+                mock(io.paradaux.chestshop.services.impl.ShorthandItemCodec.class),
                 folder.toFile());
         assertThat(items.parse("chosen").getType()).isEqualTo(Material.STONE);
     }

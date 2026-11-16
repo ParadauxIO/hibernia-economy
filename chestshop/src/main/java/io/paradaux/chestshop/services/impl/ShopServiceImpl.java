@@ -15,6 +15,7 @@ import io.paradaux.chestshop.model.config.ChestShopConfiguration;
 import io.paradaux.chestshop.services.AccountService;
 import io.paradaux.chestshop.services.AdminBypassService;
 import io.paradaux.chestshop.services.EconomyService;
+import io.paradaux.chestshop.services.ItemCodeService;
 import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.chestshop.services.MarketSyncService;
 import io.paradaux.chestshop.services.ProtectionService;
@@ -67,6 +68,7 @@ public class ShopServiceImpl implements ShopService {
     private final AccountService accounts;
     private final EconomyService economy;
     private final ItemService items;
+    private final ItemCodeService itemCodes;
     private final ProtectionService protection;
     private final StockCounterService stockCounter;
     private final Message message;
@@ -89,7 +91,9 @@ public class ShopServiceImpl implements ShopService {
             ChestShopConfiguration config,
             SignService signService,
             ShopBlockService shopBlockService,
-            AdminBypassService adminBypass) {
+            AdminBypassService adminBypass,
+            ItemCodeService itemCodes) {
+        this.itemCodes = itemCodes;
         this.adminBypass = adminBypass;
         this.accounts = accounts;
         this.economy = economy;
@@ -358,7 +362,7 @@ public class ShopServiceImpl implements ShopService {
                 ctx.setOutcome(CreationOutcome.NO_PERMISSION);
             }
             for (ItemStack variant : variants) {
-                checkItemPermission(ctx, priceLine, items.getName(variant), variant);
+                checkItemPermission(ctx, priceLine, variant);
             }
             return;
         }
@@ -373,13 +377,15 @@ public class ShopServiceImpl implements ShopService {
             return;
         }
 
-        checkItemPermission(ctx, priceLine, itemLine, item);
+        checkItemPermission(ctx, priceLine, item);
     }
 
-    private void checkItemPermission(ShopCreation ctx, String priceLine, String itemLine, ItemStack item) {
+    private void checkItemPermission(ShopCreation ctx, String priceLine, ItemStack item) {
         Player player = ctx.getPlayer();
         String matID = item.getType().toString().toLowerCase(Locale.ROOT);
-        String[] parts = itemLine.split("#", 2);
+        // Display text can be a shorthand, alias or custom name. Permissions must
+        // use the stored identity even when none of those names contains a #code.
+        String[] parts = itemCodes.encode(item, 0).split("#", 2);
         if (parts.length == 2
                 && Permissions.hasPermissionSetFalse(player, Permissions.SHOP_CREATION_ID + matID + "#" + parts[1])) {
             ctx.setOutcome(CreationOutcome.NO_PERMISSION);
