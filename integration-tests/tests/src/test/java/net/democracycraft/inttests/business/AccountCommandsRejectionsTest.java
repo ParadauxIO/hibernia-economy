@@ -227,25 +227,4 @@ class AccountCommandsRejectionsTest {
         }
     }
 
-    @Test
-    void accountAddMemberRejectsUnknownAccountId() {
-        String owner = Usernames.fresh("AmaU");
-        String tgt = Usernames.fresh("AmaT");
-        String firm = freshFirmName("AmaU");
-        try (MockPlayer p = MockPlayer.connectLocal(owner);
-             MockPlayer t = MockPlayer.connectLocal(tgt)) {
-            Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ledger.waitForPersonalBalance(t.getUuid(), TIMEOUT);
-            Ops.run(owner, () -> {
-                p.chatCommand("/business create " + firm);
-                p.awaitMessageContaining("Successfully created", TIMEOUT);
-                BusinessLedger.waitForFirm(firm, TIMEOUT);
-                Barrier.settle();
-                p.drainMessages();
-                p.chatCommand("/business account addmember " + firm + " 99999999 " + tgt);
-                p.awaitMessage(m -> !m.isBlank(), TIMEOUT);
-                Barrier.settle();
-            });
-        }
-    }
 }

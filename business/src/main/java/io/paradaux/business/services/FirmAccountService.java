@@ -82,26 +82,6 @@ public interface FirmAccountService {
     void reassignAccountsToNewProprietor(Integer firmId, UUID newProprietorUuid);
 
     /**
-     * Adds a player as a member to the specified account.
-     */
-    void addMemberToAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId);
-
-    /**
-     * Removes a player as a member from the specified account.
-     */
-    void removeMemberFromAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId);
-
-    /**
-     * Adds a player as an authorizer to the specified account.
-     */
-    void addAuthorizerToAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId);
-
-    /**
-     * Removes a player as an authorizer from the specified account.
-     */
-    void removeAuthorizerFromAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId);
-
-    /**
      * Gets all members for an account.
      */
     List<AccountMember> getAccountMembers(Integer firmId, Integer accountId);

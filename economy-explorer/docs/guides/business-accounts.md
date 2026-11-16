@@ -108,14 +108,14 @@ Each account has two kinds of access:
 
 Your staff are kept in sync with each account automatically based on their roles:
 `ADMIN`-role staff become **members and authorizers** (view *and* spend), while
-`FINANCIAL`-role staff become **members only**. To let a FINANCIAL employee actually
-spend, add them as an authorizer by hand. Only the firm's **owner** can change an
-account's members or authorizers:
+`FINANCIAL`-role staff become **members only**. This applies to every account the
+firm has. There is no way to add or remove someone on a single account by hand: to
+change what a person can do, change their role (or the permissions on that role).
+You can check who currently has access:
 
 ```text
 /business account members Acme <accountId>
-/business account addauthorizer Acme <accountId> Steve
-/business account removeauthorizer Acme <accountId> Steve
+/business account authorizers Acme <accountId>
 ```
 
 > [!TIP]

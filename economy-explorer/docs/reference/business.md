@@ -156,10 +156,6 @@ spend from it.
 | `/business account transactions <firm> <accountId> [page]` | One account's history. |
 | `/business account members <firm> <accountId>` | List an account's members. |
 | `/business account authorizers <firm> <accountId>` | List an account's authorizers. |
-| `/business account addmember <firm> <accountId> <player>` | Let a player view the account. |
-| `/business account removemember <firm> <accountId> <player>` | Remove a member. |
-| `/business account addauthorizer <firm> <accountId> <player>` | Let a player spend from the account. |
-| `/business account removeauthorizer <firm> <accountId> <player>` | Remove an authorizer. |
 | `/business account sync <firm> <accountId>` | Re-sync members/authorizers to match staff roles. |
 
 ### Moving money (specific account)
@@ -182,8 +178,9 @@ spend from it.
 > Paying money **into** an account (`pay into`/`deposit`) is open to anyone. **Spending**
 > — `withdraw` and any `pay` *out* of the firm — needs the **FINANCIAL** or **ADMIN**
 > permission **and** being an authorizer on that account. Role sync makes `ADMIN`-role
-> staff both members and authorizers automatically, but `FINANCIAL`-role staff are added
-> as members (view) only — the proprietor must `addauthorizer` them before they can spend.
+> staff both members and authorizers automatically, while `FINANCIAL`-role staff are added
+> as members (view) only. Account access can't be edited by hand; give the player a role
+> with the right permission instead.
 
 See the **[Business accounts guide](/docs/guides/business-accounts)** to put this
 together, and **[ChestShops for your firm](/docs/guides/chestshop-business)** to route
@@ -298,7 +295,6 @@ in-firm role.
 | `/business staff role list` | `business.staff.role.list` | — |
 | `/business account create` · `setdefault` · `archive` | `business.account.create` · `.setdefault` · `.archive` | **owner only** |
 | `/business account sync` | `business.account.sync` | — (operator) |
-| `/business account addmember` · `removemember` · `addauthorizer` · `removeauthorizer` | `business.account.addmember` · `.removemember` · `.addauthorizer` · `.removeauthorizer` | **owner only** |
 | `/business account list` · `members` · `authorizers` | `business.account.list` · `.members` · `.authorizers` | — |
 | `/business account pay into` | `business.pay` | — |
 | `/business account deposit` · `withdraw` · `transfer` · `pay player` · `pay business` · `balance` · `transactions` | `business.account.finance` | `ADMIN` or `FINANCIAL` |

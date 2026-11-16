@@ -192,10 +192,8 @@ Move money in and out of a specific account:
 > [!NOTE]
 > **Members vs. authorizers.** Anyone who can *see* an account is a **member**; anyone
 > who can *take money out* is an **authorizer**. Your staff are kept in sync with the
-> account automatically based on their role, but you can adjust it by hand:
-> ```text
-> /business account addauthorizer Acme <accountId> Steve
-> ```
+> account automatically based on their role: `ADMIN` staff are members and
+> authorizers, `FINANCIAL` staff are members. Promote or demote someone to change it.
 
 ## Connect a ChestShop to your firm
 

@@ -267,25 +267,18 @@ public class FirmAccountServiceImpl implements FirmAccountService {
 
     @Override
     public void syncAccountMembers(Integer firmId, Integer accountId) {
-        reconcileLocked(firmId, accountId);
-    }
-
-    /** Role-derived access an account was just reconciled to. */
-    private record RoleAccess(java.util.Set<UUID> members, java.util.Set<UUID> authorizers) {}
-
-    private RoleAccess reconcileLocked(Integer firmId, Integer accountId) {
         // Serialise reconciliation per firm so concurrent staff/role mutations
         // can't interleave their read-diff-mutate against Treasury (ADT-12).
         ReentrantLock lock = firmSyncLocks.computeIfAbsent(firmId, k -> new ReentrantLock());
         lock.lock();
         try {
-            return reconcileAccountMembers(firmId, accountId);
+            reconcileAccountMembers(firmId, accountId);
         } finally {
             lock.unlock();
         }
     }
 
-    private RoleAccess reconcileAccountMembers(Integer firmId, Integer accountId) {
+    private void reconcileAccountMembers(Integer firmId, Integer accountId) {
         Firm firm = firms.getFirmById(firmId);
         if (firm == null) {
             throw new BadCommandException("Firm not found");
@@ -362,7 +355,6 @@ public class FirmAccountServiceImpl implements FirmAccountService {
                 treasury.removeAuthorizer(accountId, toRemove);
             }
         }
-        return new RoleAccess(expectedMembers, expectedAuthorizers);
     }
 
     @Override
@@ -438,79 +430,6 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     }
 
     @Override
-    public void addMemberToAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        treasury.addMember(accountId, memberUuid, actorId);
-        // Access is role-derived (PAR-77): reconcile immediately so the account
-        // always reflects firm roles and never drifts until a manual resync.
-        RoleAccess access = reconcileLocked(firmId, accountId);
-        // The reconcile just took the add back out: report that, not success.
-        if (!access.members().contains(memberUuid)) {
-            throw new BadCommandException("That player was not added: account access follows firm roles."
-                    + " Give them a role with the FINANCIAL or ADMIN permission instead.");
-        }
-    }
-
-    @Override
-    public void removeMemberFromAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        Firm firm = firms.getFirmById(firmId);
-        if (firm == null) { // ADT-95: firm could vanish between the access check and this re-fetch
-            throw new BadCommandException("Firm not found");
-        }
-
-        if (firm.getProprietorUuid().equals(memberUuid.toString())) {
-            throw new BadCommandException("Cannot remove the proprietor from account membership");
-        }
-
-        treasury.removeMember(accountId, memberUuid);
-        RoleAccess access = reconcileLocked(firmId, accountId);
-        if (access.members().contains(memberUuid)) {
-            throw new BadCommandException("That player was not removed: their firm role grants access to this"
-                    + " account. Demote them or remove FINANCIAL/ADMIN from their role instead.");
-        }
-    }
-
-    @Override
-    public void addAuthorizerToAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        try {
-            treasury.addAuthorizer(accountId, authorizerUuid, actorId);
-        } catch (IllegalStateException e) {
-            // Treasury only promotes existing members; say so instead of an internal error.
-            throw new BadCommandException(
-                    "That player must be a member of the account before they can be made an authorizer.");
-        }
-        // Access is role-derived (PAR-77): reconcile immediately so the account
-        // always reflects firm roles and never drifts until a manual resync.
-        RoleAccess access = reconcileLocked(firmId, accountId);
-        if (!access.authorizers().contains(authorizerUuid)) {
-            throw new BadCommandException("That player was not made an authorizer: account access follows firm"
-                    + " roles. Give them a role with the ADMIN permission instead.");
-        }
-    }
-
-    @Override
-    public void removeAuthorizerFromAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        Firm firm = firms.getFirmById(firmId);
-        if (firm == null) { // ADT-95: firm could vanish between the access check and this re-fetch
-            throw new BadCommandException("Firm not found");
-        }
-
-        if (firm.getProprietorUuid().equals(authorizerUuid.toString())) {
-            throw new BadCommandException("Cannot remove the proprietor from account authorization");
-        }
-
-        treasury.removeAuthorizer(accountId, authorizerUuid);
-        RoleAccess access = reconcileLocked(firmId, accountId);
-        if (access.authorizers().contains(authorizerUuid)) {
-            throw new BadCommandException("That player is still an authorizer: their firm role has the ADMIN"
-                    + " permission. Demote them or remove ADMIN from their role instead.");
-        }
-    }
-
-    @Override
     public List<AccountMember> getAccountMembers(Integer firmId, Integer accountId) {
         if (!firmAccounts.isFirmAccount(firmId, accountId)) {
             throw new BadCommandException("This account does not belong to the firm");
@@ -529,20 +448,5 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     @Override
     public Integer getFirmIdByAccountId(Integer accountId) {
         return firmAccounts.getFirmIdByAccountId(accountId);
-    }
-
-    private void validateAccountAccess(Integer firmId, Integer accountId, UUID actorId) {
-        Firm firm = firms.getFirmById(firmId);
-        if (firm == null) {
-            throw new BadCommandException("Firm not found");
-        }
-
-        if (!firmService.isProprietor(firmId, actorId)) {
-            throw new NoPermissionException("Only the proprietor can modify account access");
-        }
-
-        if (!firmAccounts.isFirmAccount(firmId, accountId)) {
-            throw new BadCommandException("This account does not belong to the firm");
-        }
     }
 }
