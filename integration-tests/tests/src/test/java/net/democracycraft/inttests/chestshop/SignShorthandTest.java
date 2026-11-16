@@ -1,13 +1,18 @@
 package net.democracycraft.inttests.chestshop;
 
+import io.paradaux.mockclient.BlockFace;
 import io.paradaux.mockclient.MockPlayer;
+import net.democracycraft.inttests.support.Await;
 import net.democracycraft.inttests.support.Barrier;
 import net.democracycraft.inttests.support.ChestShopFixture;
 import net.democracycraft.inttests.support.Inv;
 import net.democracycraft.inttests.support.Ledger;
+import net.democracycraft.inttests.support.Perms;
 import net.democracycraft.inttests.support.RconClient;
 import net.democracycraft.inttests.support.Usernames;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -52,8 +57,17 @@ class SignShorthandTest {
         }
     }
 
-    @Test
-    void aShopCreatedFromATypedShorthandSellsThatBook() {
+    @ParameterizedTest
+    @CsvSource({
+            "ENCHANTED_BOOK, minecraft:enchanted_book[stored_enchantments={sharpness:5}], bk sharpness v, Bk Sharpness V, minecraft:enchanted_book[stored_enchantments={mending:1}]",
+            "POTION, minecraft:potion[potion_contents={potion:'minecraft:long_swiftness'}], pot swiftness ext, Pot Swiftness Ext, minecraft:potion[potion_contents={potion:'minecraft:swiftness'}]",
+            "SPLASH_POTION, minecraft:splash_potion[potion_contents={potion:'minecraft:strong_healing'}], spl healing ii, Spl Healing II, minecraft:splash_potion[potion_contents={potion:'minecraft:healing'}]",
+            "LINGERING_POTION, minecraft:lingering_potion[potion_contents={potion:'minecraft:regeneration'}], lin regen, Lin Regen, minecraft:lingering_potion[potion_contents={potion:'minecraft:poison'}]",
+            "TIPPED_ARROW, minecraft:tipped_arrow[potion_contents={potion:'minecraft:poison'}], arr poison, Arr Poison, minecraft:tipped_arrow[potion_contents={potion:'minecraft:weakness'}]",
+            "ENCHANTED_BOOK, minecraft:enchanted_book[stored_enchantments={sharpness:5}], ?, Bk Sharpness V, minecraft:enchanted_book[stored_enchantments={mending:1}]",
+            "ENCHANTED_BOOK, minecraft:enchanted_book[stored_enchantments={sharpness:5}], legacy, Bk Sharpness V, minecraft:enchanted_book[stored_enchantments={mending:1}]"
+    })
+    void aShopSellsTheExactVariant(String material, String item, String input, String canonical, String decoy) {
         String seller = Usernames.fresh("Shs");
         String buyer = Usernames.fresh("Shb");
 
@@ -64,15 +78,26 @@ class SignShorthandTest {
             Ledger.waitForPersonalBalance(s.getUuid(), STARTING, TIMEOUT);
             Ledger.waitForPersonalBalance(b.getUuid(), STARTING, TIMEOUT);
 
-            // Typed in lower case, as a player might; creation rewrites it to the canonical name.
-            assertThat(shop.createSellShopRaw(seller, seller, 1, PRICE, "bk sharpness v"))
+            signNameWhileHolding(s, item);
+            if (input.equals("legacy")) {
+                input = fullName(s);
+                assertThat(input).contains("#");
+            }
+            assertThat(shop.createSellShopRaw(seller, seller, 1, PRICE, input))
                     .contains("cancelled=false");
+            if (input.equals("?")) {
+                shop.positionClicker(s, seller);
+                s.useBlock(shop.signPos(), BlockFace.SOUTH);
+                s.sync(TIMEOUT);
+            }
             assertThat(RconClient.send("diag checksign world "
                     + shop.signPos().x() + " " + shop.signPos().y() + " " + shop.signPos().z()))
-                    .contains("front line 3 = 'Bk Sharpness V'");
+                    .contains("front line 3 = '" + canonical + "'");
 
             RconClient.send(String.format("item replace block %d %d %d container.0 with %s",
-                    shop.chestPos().x(), shop.chestPos().y(), shop.chestPos().z(), SHARPNESS_BOOK));
+                    shop.chestPos().x(), shop.chestPos().y(), shop.chestPos().z(), decoy));
+            RconClient.send(String.format("item replace block %d %d %d container.1 with %s",
+                    shop.chestPos().x(), shop.chestPos().y(), shop.chestPos().z(), item));
             Inv.clear(buyer);
             RconClient.send("diag warmname " + seller);
 
@@ -82,22 +107,64 @@ class SignShorthandTest {
                     STARTING.subtract(BigDecimal.valueOf(PRICE)), TIMEOUT);
             Ledger.waitForPersonalBalance(s.getUuid(),
                     STARTING.add(BigDecimal.valueOf(PRICE)), TIMEOUT);
-            Inv.waitForPlayerCount(buyer, "ENCHANTED_BOOK", 1, TIMEOUT);
-            Inv.waitForChestCount(shop.chestPos(), "ENCHANTED_BOOK", 0, TIMEOUT);
+            Inv.waitForPlayerCount(buyer, material, 1, TIMEOUT);
+            Inv.waitForChestCount(shop.chestPos(), material, 1, TIMEOUT);
+            assertThat(RconClient.send("execute if items entity " + buyer + " hotbar.0 " + item
+                    + " run data get entity " + buyer + " Inventory[{Slot:0b}].id"))
+                    .contains("minecraft:" + material.toLowerCase(java.util.Locale.ROOT));
+            assertThat(RconClient.send(String.format(
+                    "execute if items block %d %d %d container.0 %s run data get block %d %d %d Items[{Slot:0b}].id",
+                    shop.chestPos().x(), shop.chestPos().y(), shop.chestPos().z(), decoy,
+                    shop.chestPos().x(), shop.chestPos().y(), shop.chestPos().z())))
+                    .contains("minecraft:" + material.toLowerCase(java.util.Locale.ROOT));
         }
+    }
+
+    @Test
+    void explicitStoredItemDenialStillRejectsShorthandCreation() {
+        try (MockPlayer seller = MockPlayer.connectLocal(Usernames.fresh("Shd"));
+             ChestShopFixture shop = ChestShopFixture.create()) {
+            String name = seller.getUsername();
+            Ledger.waitForPersonalBalance(seller.getUuid(), STARTING, TIMEOUT);
+            signNameWhileHolding(seller, SHARPNESS_BOOK);
+            String code = fullName(seller);
+            assertThat(code).contains("#");
+            String node = "chestshop.shop.create.enchanted_book#" + code.split("#", 2)[1];
+            Perms.grant(name, "chestshop.shop.create.buy.enchanted_book");
+            RconClient.send("lp user " + name + " permission set " + node + " false");
+            Await.until("explicit item denial applied", () -> Perms.check(name, node),
+                    "has=false set=true"::equals, TIMEOUT);
+            assertThat(shop.createSellShopRaw(name, name, 1, PRICE, "bk sharpness v"))
+                    .contains("cancelled=true");
+            Barrier.settle();
+            Ledger.waitForPersonalBalance(seller.getUuid(), STARTING, TIMEOUT);
+            assertThat(RconClient.send("diag checksign world " + shop.signPos().x() + " "
+                    + shop.signPos().y() + " " + shop.signPos().z()))
+                    .doesNotContain("front line 3 = 'Bk Sharpness V'");
+        }
+    }
+
+    private static String fullName(MockPlayer player) {
+        String reply = player.awaitMessageContaining("Full Name:", TIMEOUT);
+        return reply.substring(reply.indexOf("Full Name:") + "Full Name:".length()).strip();
     }
 
     @Test
     void anAnvilMergedBookSharesTheShorthandOnlyWhenRepairCostIsExcluded() {
         try (MockPlayer player = MockPlayer.connectLocal(Usernames.fresh("Shm"))) {
+            String before = RconClient.send("diag configget excludedItemAttributesRaw");
+            assertThat(before).contains(" = [").contains("] cfgHash=");
+            String previous = before.substring(before.indexOf(" = [") + 4, before.indexOf("] cfgHash="))
+                    .replace(", ", ",");
             try {
+                RconClient.send("diag config excludedItemAttributesRaw []");
                 assertThat(signNameWhileHolding(player, MERGED_SHARPNESS_BOOK)).contains("#");
 
                 RconClient.send("diag config excludedItemAttributesRaw repair-cost");
 
                 assertThat(signNameWhileHolding(player, MERGED_SHARPNESS_BOOK)).endsWith("Bk Sharpness V");
             } finally {
-                RconClient.send("diag config excludedItemAttributesRaw []");
+                RconClient.send("diag config excludedItemAttributesRaw " + (previous.isEmpty() ? "[]" : previous));
             }
         }
     }

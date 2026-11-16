@@ -558,4 +558,56 @@ class ItemServiceImplTest extends ServerTest {
         // Construction did not throw; the alias map is simply empty.
         assertThat(svc.parse("Diamond").getType()).isEqualTo(Material.DIAMOND);
     }
+
+    @Test
+    void parse_preservesExistingAliasThatCollidesWithShorthand() {
+        writeAliases("Diamond: Bk Sharpness V\n");
+        assertThat(newService().parse("Bk Sharpness V").getType()).isEqualTo(Material.DIAMOND);
+    }
+
+    @Test
+    void getSignName_preservesConfiguredPotionAlias() {
+        var svc = newService();
+        var potion = new ItemStack(Material.POTION);
+        var meta = (org.bukkit.inventory.meta.PotionMeta) potion.getItemMeta();
+        meta.setBasePotionType(org.bukkit.potion.PotionType.SWIFTNESS);
+        potion.setItemMeta(meta);
+        String stored = svc.getName(potion);
+        writeAliases(stored + ": Speed Juice\n");
+        svc.reloadAliases();
+        assertThat(svc.getSignName(potion)).isEqualTo("Speed Juice");
+    }
+
+    @Test
+    void getSignName_fallsBackToExactCodeWhenAnAliasOwnsTheShorthand() {
+        writeAliases("Diamond: Bk Sharpness V\n");
+        var service = newService();
+        var book = sharpnessBook(0);
+        String name = service.getSignName(book);
+        assertThat(name).startsWith("#");
+        assertThat(service.parse(name).isSimilar(book)).isTrue();
+    }
+
+    @Test
+    void parse_preservesCustomResolverWhenItsNameCollidesWithShorthand() {
+        var service = newService();
+        var resolver = mock(CustomItemResolver.class);
+        var customBook = sharpnessBook(1);
+        when(resolver.parseItem("Bk Sharpness V")).thenReturn(customBook);
+        service.registerCustomItemResolver(resolver);
+        assertThat(service.parse("Bk Sharpness V").isSimilar(customBook)).isTrue();
+        String plainName = service.getSignName(sharpnessBook(0));
+        assertThat(plainName).startsWith("#");
+        assertThat(service.parse(plainName).isSimilar(sharpnessBook(0))).isTrue();
+    }
+
+    @Test
+    void getSignName_usesShorthandWhenConfiguredAliasExceedsSignWidth() {
+        var service = newService();
+        var book = sharpnessBook(0);
+        String code = service.getName(book);
+        writeAliases(code + ": This configured book alias is far too long for a sign\n");
+        service.reloadAliases();
+        assertThat(service.getSignName(book)).isEqualTo("Bk Sharpness V");
+    }
 }
