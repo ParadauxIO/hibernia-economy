@@ -217,6 +217,11 @@ public class TradeContextFactoryImpl implements TradeContextFactory {
         Action buy = config.isReverseButtons() ? LEFT_CLICK_BLOCK : RIGHT_CLICK_BLOCK;
         Inventory checkedInventory = (action == buy ? inventory : player.getInventory());
 
+        // Leave missing containers to the normal invalid-shop validation before settlement.
+        if (checkedInventory == null) {
+            return 0;
+        }
+
         if (checkedInventory.containsAtLeast(item, inventoryService.getMaxStackSize(item))) {
             return inventoryService.getMaxStackSize(item);
         } else {

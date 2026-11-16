@@ -175,6 +175,13 @@ class ItemCodeServiceImplTest extends ServerTest {
         assertThat(service.decode(material.name())).isNull();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"#", ":", "##", "::", ":#:", "", " "})
+    void decode_rejectsMissingMaterial(String input) {
+        assertThat(service.decode(input)).isNull();
+        assertThat(mapper.rows).isEmpty();
+    }
+
     // ---- encode / decode (canonical sign codes) --------------------------------
 
     @Test

@@ -195,6 +195,9 @@ public class ItemCodeServiceImpl implements ItemCodeService {
             return getFromCode(itemName.substring(1));
         }
         String[] split = itemName.split("[:#]");
+        if (split.length == 0 || split[0].isBlank()) {
+            return null;
+        }
         for (int i = 0; i < split.length; i++) {
             split[i] = split[i].trim();
         }
