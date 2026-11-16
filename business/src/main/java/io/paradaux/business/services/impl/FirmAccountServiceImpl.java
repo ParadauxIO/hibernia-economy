@@ -430,62 +430,6 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     }
 
     @Override
-    public void addMemberToAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        treasury.addMember(accountId, memberUuid, actorId);
-        // Access is role-derived (PAR-77): reconcile immediately so the account
-        // always reflects firm roles and never drifts until a manual resync.
-        syncAccountMembers(firmId, accountId);
-    }
-
-    @Override
-    public void removeMemberFromAccount(Integer firmId, Integer accountId, UUID memberUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        Firm firm = firms.getFirmById(firmId);
-        if (firm == null) { // ADT-95: firm could vanish between the access check and this re-fetch
-            throw new BadCommandException("Firm not found");
-        }
-
-        if (firm.getProprietorUuid().equals(memberUuid.toString())) {
-            throw new BadCommandException("Cannot remove the proprietor from account membership");
-        }
-
-        treasury.removeMember(accountId, memberUuid);
-        syncAccountMembers(firmId, accountId);
-    }
-
-    @Override
-    public void addAuthorizerToAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        try {
-            treasury.addAuthorizer(accountId, authorizerUuid, actorId);
-        } catch (IllegalStateException e) {
-            // Treasury only promotes existing members; say so instead of an internal error.
-            throw new BadCommandException(
-                    "That player must be a member of the account before they can be made an authorizer.");
-        }
-        // Access is role-derived (PAR-77): reconcile immediately so the account
-        // always reflects firm roles and never drifts until a manual resync.
-        syncAccountMembers(firmId, accountId);
-    }
-
-    @Override
-    public void removeAuthorizerFromAccount(Integer firmId, Integer accountId, UUID authorizerUuid, UUID actorId) {
-        validateAccountAccess(firmId, accountId, actorId);
-        Firm firm = firms.getFirmById(firmId);
-        if (firm == null) { // ADT-95: firm could vanish between the access check and this re-fetch
-            throw new BadCommandException("Firm not found");
-        }
-
-        if (firm.getProprietorUuid().equals(authorizerUuid.toString())) {
-            throw new BadCommandException("Cannot remove the proprietor from account authorization");
-        }
-
-        treasury.removeAuthorizer(accountId, authorizerUuid);
-        syncAccountMembers(firmId, accountId);
-    }
-
-    @Override
     public List<AccountMember> getAccountMembers(Integer firmId, Integer accountId) {
         if (!firmAccounts.isFirmAccount(firmId, accountId)) {
             throw new BadCommandException("This account does not belong to the firm");
@@ -504,20 +448,5 @@ public class FirmAccountServiceImpl implements FirmAccountService {
     @Override
     public Integer getFirmIdByAccountId(Integer accountId) {
         return firmAccounts.getFirmIdByAccountId(accountId);
-    }
-
-    private void validateAccountAccess(Integer firmId, Integer accountId, UUID actorId) {
-        Firm firm = firms.getFirmById(firmId);
-        if (firm == null) {
-            throw new BadCommandException("Firm not found");
-        }
-
-        if (!firmService.isProprietor(firmId, actorId)) {
-            throw new NoPermissionException("Only the proprietor can modify account access");
-        }
-
-        if (!firmAccounts.isFirmAccount(firmId, accountId)) {
-            throw new BadCommandException("This account does not belong to the firm");
-        }
     }
 }

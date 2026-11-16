@@ -118,8 +118,9 @@ implementation take precedence over that stale release text.
 | Java 25/Paper 26.3, versioned bundles and coordinated V42 cutover | Updated release page with runtime, manifest, migration range, rehearsal and credential requirements |
 | Dependency/build/test changes and runtime secret loading | Existing repository build/CI/staging procedures remain authoritative; no separate player workflow |
 
-The public `/docs/whats-new` page is linked from the docs landing page and is
-automatically included in the public navigation tree. Admin-only procedures remain
+The public `/docs/whats-new` page this pass added was removed on 2026-11-16
+(PAR-567) once it had gone stale; the guides and references it linked to remain
+the source of truth. Admin-only procedures remain
 behind the existing permission gate. This pass changes documentation only and
 does not deploy the site or execute migration/recovery procedures.
 

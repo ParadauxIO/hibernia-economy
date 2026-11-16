@@ -45,9 +45,9 @@ firm came with five roles ready to go, from most senior (rank 1) to most junior 
 
 | Role | Rank | Default permission | What it can do |
 |---|---|---|---|
-| **Proprietor** | 1 (top) | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
-| **Co-Proprietor** | 2 | `ADMIN` | Staff/role management and authorized spending; account administration stays proprietor-only |
-| **Manager** | 3 | `FINANCIAL` | Read finances; spending also needs account authorization |
+| **Proprietor** | 1 (top) | `ADMIN` | Staff/role management and spending; account administration stays proprietor-only |
+| **Co-Proprietor** | 2 | `ADMIN` | Staff/role management and spending; account administration stays proprietor-only |
+| **Manager** | 3 | `FINANCIAL` | See the firm's accounts and spend from them |
 | **Supervisor** | 4 | `CHESTSHOP` | Run the firm's ChestShops |
 | **Employee** | 5 (lowest) | `DEFAULT` | Basic membership — no special powers |
 
@@ -58,7 +58,7 @@ The four permissions any role can hold:
 
 | Permission | Lets the holder… |
 |---|---|
-| `ADMIN` | Manage staff/roles and authorized spending; not proprietor-only account controls |
+| `ADMIN` | Manage staff/roles and spend the firm's money; not proprietor-only account controls |
 | `FINANCIAL` | Move the firm's money — deposit, withdraw, and pay |
 | `CHESTSHOP` | Create and use ChestShops that belong to the firm |
 | `DEFAULT` | Nothing special — just be a member |
@@ -83,8 +83,9 @@ number, then grant it a permission:
 /business staff role permission add Acme Treasurer FINANCIAL
 ```
 
-The number is the role's rank, used by promote/demote (lower number = more senior). Review
-your roles and what each can do:
+The number is the role's rank, used by promote/demote (lower number = more senior).
+Each rank can belong to only one role, so pick a number no other role is using; the
+command tells you which role holds a rank that's taken. Deleting a role frees its rank. Review your roles and what each can do:
 
 ```text
 /business staff role list Acme

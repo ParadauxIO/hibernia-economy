@@ -96,31 +96,34 @@ Pay another business:
 
 > [!NOTE]
 > Spending the firm's money — withdrawing or paying out — needs the **FINANCIAL** or
-> **ADMIN** permission (or being the owner), **and** being an authorizer on the
-> account (see below).
+> **ADMIN** permission (or being the owner). See below for how that reaches each
+> account.
 
-## Who can see vs. who can spend
+## Who can see and spend
 
-Each account has two kinds of access:
+Access to an account comes from firm roles, and it is the same on every account the
+firm has:
 
-- **Members** can *see* the account and its history.
-- **Authorizers** can also *take money out* of it.
+- Staff whose role has **`FINANCIAL`** become **members**: they can see the account
+  and its history, and spend from it.
+- Staff whose role has **`ADMIN`** become members and **authorizers**. Being an
+  authorizer only adds something on an account set to require authorization, which
+  firm accounts aren't unless server staff change it.
+- Everyone else, including `CHESTSHOP` and `DEFAULT` staff, has no access.
 
-Your staff are kept in sync with each account automatically based on their roles:
-`ADMIN`-role staff become **members and authorizers** (view *and* spend), while
-`FINANCIAL`-role staff become **members only**. To let a FINANCIAL employee actually
-spend, add them as an authorizer by hand. Only the firm's **owner** can change an
-account's members or authorizers:
+This is kept in sync automatically whenever someone is hired, promoted, demoted or
+fired, or a role's permissions change. There is no way to add or remove someone on a
+single account by hand: to change what a person can do, change their role (or the
+permissions on that role). You can check who currently has access:
 
 ```text
 /business account members Acme <accountId>
-/business account addauthorizer Acme <accountId> Steve
-/business account removeauthorizer Acme <accountId> Steve
+/business account authorizers Acme <accountId>
 ```
 
 > [!TIP]
-> A good pattern: keep most staff as plain members so they can see the books, and make
-> only a trusted few authorizers who can actually spend.
+> Anyone with `FINANCIAL` or `ADMIN` can spend from all of the firm's accounts, so
+> give those permissions only to roles you trust with the firm's money.
 
 ## Review the firm's spending
 

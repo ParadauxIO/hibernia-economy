@@ -14,17 +14,16 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Explicit per-route coverage for the Business account member / authorizer
- * management subroutes, asserted against Treasury's {@code account_access}
+ * Coverage for who holds member / authorizer access on a firm's Treasury
+ * account, asserted against Treasury's {@code account_access}
  * table (V18: one row per subject, level VIEWER/MEMBER/AUTHORIZER, soft-removed
  * via {@code removed_at}) through {@link BusinessLedger}.
  *
  * <p>Firm-account access is <b>role-derived</b> (PAR-77 / PAR-141): the owner plus
  * every employee whose role carries ADMIN is a member + authorizer, every
  * employee whose role carries FINANCIAL is a member, and nobody else has access.
- * Every manual {@code account addmember|removemember|addauthorizer|removeauthorizer}
- * is followed by a reconcile to that role truth, so a manual write can never make
- * the account drift from the firm's roles. The default roles are Employee
+ * There are no commands to edit an account's access by hand (PAR-567): changing a
+ * player's role is the only way to change it. The default roles are Employee
  * (DEFAULT) → Supervisor (CHESTSHOP) → Manager (FINANCIAL) → Co-Proprietor
  * (ADMIN), which is what the promotions below walk through.
  */
@@ -67,50 +66,8 @@ class AccountMembershipTest {
         BusinessLedger.waitForEmployeeRole(firmId, h.getUuid(), role, TIMEOUT);
     }
 
-    /** Runs an account-access command and returns the (first non-blank) reply. */
-    private static String accountCommand(MockPlayer o, String command) {
-        Barrier.settle();
-        o.drainMessages();
-        o.chatCommand(command);
-        String reply = o.awaitMessage(m -> !m.isBlank(), TIMEOUT);
-        Barrier.settle();
-        // Let the write + the reconcile that follows it commit before asserting.
-        Barrier.settle();
-        return reply;
-    }
-
     @Test
-    void manualAddMemberCannotGrantAccessOutsideFirmRoles() {
-        String owner = Usernames.fresh("AnA");
-        String outsider = Usernames.fresh("AnE");
-        String firm = freshFirmName("AnF");
-
-        try (MockPlayer p = MockPlayer.connectLocal(owner);
-             MockPlayer e = MockPlayer.connectLocal(outsider)) {
-            Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ledger.waitForPersonalBalance(e.getUuid(), TIMEOUT);
-
-            Ops.run(owner, () -> {
-                p.chatCommand("/business create " + firm);
-                p.awaitMessageContaining("Successfully created", TIMEOUT);
-                int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
-                int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-
-                // A fresh firm account has exactly one member + authorizer: the proprietor.
-                BusinessLedger.waitForAccountMemberCount(defaultId, 1, TIMEOUT);
-                assertThat(BusinessLedger.isAccountAuthorizer(defaultId, p.getUuid())).isTrue();
-
-                // The outsider holds no role in the firm, so the reconcile that follows
-                // the manual add takes the access straight back out.
-                accountCommand(p, "/business account addmember " + firm + " " + defaultId + " " + outsider);
-                BusinessLedger.waitForAccountMemberCount(defaultId, 1, TIMEOUT);
-                assertThat(BusinessLedger.isAccountMember(defaultId, e.getUuid())).isFalse();
-            });
-        }
-    }
-
-    @Test
-    void accountAddAndRemoveMemberAdjustsCount() {
+    void financialRoleGrantsAndRevokesMembership() {
         String owner = Usernames.fresh("AmA");
         String employee = Usernames.fresh("AmE");
         String firm = freshFirmName("AmF");
@@ -139,15 +96,6 @@ class AccountMembershipTest {
                 assertThat(BusinessLedger.isAccountMember(defaultId, e.getUuid())).isTrue();
                 assertThat(BusinessLedger.isAccountAuthorizer(defaultId, e.getUuid())).isFalse();
 
-                // addmember on someone already entitled is idempotent.
-                accountCommand(p, "/business account addmember " + firm + " " + defaultId + " " + employee);
-                BusinessLedger.waitForAccountMemberCount(defaultId, baseline + 1, TIMEOUT);
-
-                // removemember cannot strip role-derived access: the reconcile restores it.
-                accountCommand(p, "/business account removemember " + firm + " " + defaultId + " " + employee);
-                BusinessLedger.waitForAccountMemberCount(defaultId, baseline + 1, TIMEOUT);
-                assertThat(BusinessLedger.isAccountMember(defaultId, e.getUuid())).isTrue();
-
                 // Losing the FINANCIAL role is what removes the membership.
                 demoteTo(p, e, employee, firm, firmId, "Supervisor");
                 BusinessLedger.waitForAccountMemberCount(defaultId, baseline, TIMEOUT);
@@ -157,7 +105,7 @@ class AccountMembershipTest {
     }
 
     @Test
-    void accountAddAndRemoveAuthorizerAdjustsCount() {
+    void adminRoleGrantsAndRevokesAuthorizer() {
         String owner = Usernames.fresh("AaA");
         String employee = Usernames.fresh("AaE");
         String firm = freshFirmName("AaF");
@@ -180,67 +128,18 @@ class AccountMembershipTest {
                 promoteTo(p, e, employee, firm, firmId, "Manager");
                 BusinessLedger.waitForAccountMemberCount(defaultId, baselineMembers + 1, TIMEOUT);
 
-                // A Manager is a member, so addauthorizer is accepted — but FINANCIAL
-                // alone doesn't entitle them to it, so the reconcile demotes them again.
-                String reply = accountCommand(p,
-                        "/business account addauthorizer " + firm + " " + defaultId + " " + employee);
-                assertThat(reply).doesNotContain("internal error");
-                BusinessLedger.waitForAccountAuthorizerCount(defaultId, baselineAuth, TIMEOUT);
+                // FINANCIAL alone makes a member, not an authorizer.
                 assertThat(BusinessLedger.isAccountAuthorizer(defaultId, e.getUuid())).isFalse();
-                assertThat(BusinessLedger.isAccountMember(defaultId, e.getUuid())).isTrue();
 
                 // Co-Proprietor carries ADMIN → becomes an authorizer.
                 promoteTo(p, e, employee, firm, firmId, "Co-Proprietor");
                 BusinessLedger.waitForAccountAuthorizerCount(defaultId, baselineAuth + 1, TIMEOUT);
                 assertThat(BusinessLedger.isAccountAuthorizer(defaultId, e.getUuid())).isTrue();
 
-                // removeauthorizer cannot strip role-derived access either.
-                accountCommand(p,
-                        "/business account removeauthorizer " + firm + " " + defaultId + " " + employee);
-                BusinessLedger.waitForAccountAuthorizerCount(defaultId, baselineAuth + 1, TIMEOUT);
-
                 // Losing ADMIN drops them back to a plain member.
                 demoteTo(p, e, employee, firm, firmId, "Manager");
                 BusinessLedger.waitForAccountAuthorizerCount(defaultId, baselineAuth, TIMEOUT);
                 assertThat(BusinessLedger.isAccountMember(defaultId, e.getUuid())).isTrue();
-            });
-        }
-    }
-
-    /**
-     * Promoting someone who is not a member of the account is a user error and must
-     * be answered as one. (Exposes a product bug at the time of writing: Treasury's
-     * MembershipServiceImpl.addAuthorizer throws a bare IllegalStateException, which
-     * the command framework renders as "An internal error occurred" and logs as an
-     * unhandled exception.)
-     */
-    @Test
-    void addAuthorizerForNonMemberIsRejectedCleanly() {
-        String owner = Usernames.fresh("AxA");
-        String outsider = Usernames.fresh("AxE");
-        String firm = freshFirmName("AxF");
-
-        try (MockPlayer p = MockPlayer.connectLocal(owner);
-             MockPlayer e = MockPlayer.connectLocal(outsider)) {
-            Ledger.waitForPersonalBalance(p.getUuid(), TIMEOUT);
-            Ledger.waitForPersonalBalance(e.getUuid(), TIMEOUT);
-
-            Ops.run(owner, () -> {
-                p.chatCommand("/business create " + firm);
-                p.awaitMessageContaining("Successfully created", TIMEOUT);
-                int firmId = BusinessLedger.waitForFirm(firm, TIMEOUT);
-                int defaultId = BusinessLedger.firmDefaultAccountId(firmId).orElseThrow();
-                int baselineAuth = BusinessLedger.accountAuthorizerCount(defaultId);
-
-                String reply = accountCommand(p,
-                        "/business account addauthorizer " + firm + " " + defaultId + " " + outsider);
-
-                assertThat(BusinessLedger.accountAuthorizerCount(defaultId)).isEqualTo(baselineAuth);
-                assertThat(BusinessLedger.isAccountMember(defaultId, e.getUuid())).isFalse();
-                assertThat(reply)
-                        .as("a non-member must be refused with an explanation, not an internal error")
-                        .doesNotContain("internal error")
-                        .containsIgnoringCase("member");
             });
         }
     }
