@@ -10,10 +10,11 @@ import io.paradaux.treasuryapi.mappers.ExplorerUiMapper;
 import io.paradaux.treasuryapi.services.ExplorerUiService;
 import io.paradaux.treasuryapi.services.KeycloakAdminClient;
 import io.paradaux.treasuryapi.services.PlayerGroupSync;
-
-import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -30,10 +31,7 @@ import java.util.logging.Level;
 @Singleton
 public class ExplorerUiServiceImpl implements ExplorerUiService {
 
-
-    private final SecureRandom passwordRandom = new SecureRandom();
-    private final ConcurrentHashMap<UUID, Long> resetAttempts =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Long> resetAttempts = new ConcurrentHashMap<>();
     private static final long RESET_COOLDOWN_NANOS = Duration.ofMinutes(1).toNanos();
 
     private final ExplorerUiMapper mapper;
@@ -48,10 +46,11 @@ public class ExplorerUiServiceImpl implements ExplorerUiService {
     private final Optional<PlayerGroupSync> groupSync;
 
     @Inject
-    public ExplorerUiServiceImpl(ExplorerUiMapper mapper,
-                                 KeycloakAdminClient keycloak,
-                                 TreasuryAPI plugin,
-                                 Optional<PlayerGroupSync> groupSync) {
+    public ExplorerUiServiceImpl(
+            ExplorerUiMapper mapper,
+            KeycloakAdminClient keycloak,
+            TreasuryAPI plugin,
+            Optional<PlayerGroupSync> groupSync) {
         this.mapper = mapper;
         this.keycloak = keycloak;
         this.plugin = plugin;
@@ -66,8 +65,9 @@ public class ExplorerUiServiceImpl implements ExplorerUiService {
         }
         mapper.addRole(targetUuid, r, grantedBy);
         // Audit trail: privileged role grants are security-relevant.
-        plugin.getLogger().info("UI role grant: '" + r + "' -> " + targetUuid
-                + " by " + (grantedBy != null ? grantedBy.toString() : "CONSOLE"));
+        plugin.getLogger()
+                .info("UI role grant: '" + r + "' -> " + targetUuid + " by "
+                        + (grantedBy != null ? grantedBy.toString() : "CONSOLE"));
         return r;
     }
 
@@ -117,32 +117,37 @@ public class ExplorerUiServiceImpl implements ExplorerUiService {
     }
 
     @Override
-    public String resetPassword(UUID playerUuid) {
-        if (!keycloak.isEnabled()) {
-            throw new ConflictException("treasuryapi.ui.reset.unavailable");
-        }
-        List<String> subjects = mapper.findLinkedSubjects(playerUuid);
-        if (subjects.isEmpty()) throw new NotFoundException("treasuryapi.ui.reset.unlinked");
-        if (subjects.size() != 1) throw new ConflictException("treasuryapi.ui.reset.ambiguous");
+    public void approveRecovery(UUID playerUuid, String code) {
+        // Guessed codes consume attempts too.
         long now = System.nanoTime();
         resetAttempts.entrySet().removeIf(entry -> now - entry.getValue() >= RESET_COOLDOWN_NANOS);
         if (resetAttempts.putIfAbsent(playerUuid, now) != null) {
             throw new ConflictException("treasuryapi.ui.reset.cooldown");
         }
-        // 192 random bits plus fixed character classes for typical realm policies.
-        byte[] bytes = new byte[24];
-        passwordRandom.nextBytes(bytes);
-        String password = "Aa1!" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        try {
-            keycloak.resetPassword(subjects.getFirst(), password);
-        } catch (Exception e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            // Do not attach arbitrary upstream exceptions: credentials must never reach logs.
-            plugin.getLogger().warning("Keycloak password reset failed for player " + playerUuid);
-            throw new ConflictException("treasuryapi.ui.reset.failed");
+        String normalized = code.toUpperCase(Locale.ROOT);
+        if (!normalized.matches("[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{10}")) {
+            throw new NotFoundException("treasuryapi.ui.recover.invalid");
         }
-        plugin.getLogger().info("Keycloak password reset by player " + playerUuid);
-        return password;
+        List<String> subjects = mapper.findLinkedSubjects(playerUuid);
+        if (subjects.isEmpty()) throw new NotFoundException("treasuryapi.ui.reset.unlinked");
+        if (subjects.size() != 1) throw new ConflictException("treasuryapi.ui.reset.ambiguous");
+        String hash;
+        try {
+            hash = HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(normalized.getBytes(StandardCharsets.US_ASCII)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+        try {
+            if (mapper.approveRecovery(hash, subjects.getFirst(), playerUuid) != 1) {
+                throw new NotFoundException("treasuryapi.ui.recover.invalid");
+            }
+        } catch (org.apache.ibatis.exceptions.PersistenceException e) {
+            // Includes an already approved request for this account. No codes in logs.
+            throw new ConflictException("treasuryapi.ui.recover.failed");
+        }
+        plugin.getLogger().info("Browser password recovery approved by player " + playerUuid);
     }
 
     @Override

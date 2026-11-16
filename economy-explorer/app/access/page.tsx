@@ -38,6 +38,7 @@ export default async function AccessPage({ searchParams }: {
         : directoryPagination
           ? <Link className="btn btn-primary" href={returnTo as '/accounts'}>Continue browsing</Link>
           : <Link className="btn btn-primary" href={link as '/link'}>Verify your account in game</Link>}
+      {viewer.anon && <Link className="btn" href="/recover">Forgot your password?</Link>}
       <Link className="btn" href="/docs">Read the docs</Link>
     </div>
   </section>;

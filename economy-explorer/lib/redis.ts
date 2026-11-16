@@ -39,3 +39,18 @@ const PREFIX = `ee:${(process.env.TENANT ?? 'default').trim().toLowerCase()}:`;
 export function tenantKey(suffix: string): string {
   return PREFIX + suffix;
 }
+
+/** Wait for connection readiness without issuing or retrying a command. */
+export async function waitForRedisReady(): Promise<void> {
+  const store = redis();
+  if (!store) throw new Error('Redis unavailable');
+  if (store.status === 'ready') return;
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timer); store.off('ready', ready); store.off('error', failed); };
+    const ready = () => { cleanup(); resolve(); };
+    const failed = () => { cleanup(); reject(new Error('Redis unavailable')); };
+    const timer = setTimeout(failed, 2000);
+    store.once('ready', ready);
+    store.once('error', failed);
+  });
+}

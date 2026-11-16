@@ -379,21 +379,33 @@ Click a column heading to sort by it, and click it again to reverse the order.
 
 ## Recover your website password
 
-If you already linked your Minecraft account, the server can let you reset the
-website password without email:
+You need an existing web account linked to your Minecraft player. If no account
+is linked, or multiple accounts are linked, contact staff.
 
-```text
-/treasuryapi ui resetpassword
-/treasuryapi ui resetpassword confirm
-```
+Select **Forgot your password?** on the Explorer sign-in prompt,
+or open [Recover your account](/recover). `/recover` is a website path, not an
+in-game command. The flow supports Java and Bedrock without copying passwords
+from Minecraft chat.
 
-Run both yourself in-game. Copy the temporary password from the private response,
-sign in with your existing website username, then choose a permanent password
-when prompted. The temporary password must be replaced at login; it has no
-separate timed expiry. Keep it private, including your client chat log.
+Only approve a code you generated yourself. Approving someone else's code lets
+their browser change your password. Never send your code or password to another player.
 
-This requires server support and an existing, unambiguous link. Missing/multiple
-links or a disabled integration need staff assistance; you cannot select another
-person's username. Confirmed attempts are limited to one per minute. Resetting
-the password does not explicitly sign out existing sessions or revoke API keys;
-report a suspected compromise to staff as well.
+1. Select **Start recovery** and keep that browser open.
+2. In Minecraft, run `/treasuryapi ui recover <code>` with the code shown on your page.
+3. Read the warning, then run `/treasuryapi ui recover confirm <code>`.
+4. Return to the same browser and select **I confirmed in-game**.
+5. Choose a password of 12–128 characters that meets the account password rules.
+   Enter it twice and select **Change password**. The page shows the username
+   to use when you log in; keep any leading dot.
+
+Finish all steps within five minutes of generating the code. Each request works
+once. Starting again cancels your previous request in that browser. If the code
+expires or you lose the original browser session, start recovery again.
+
+If a password change cannot be confirmed, try signing in with your new password
+before starting again. If recovery remains unavailable, contact staff.
+
+The legacy `/treasuryapi ui resetpassword` and
+`/treasuryapi ui resetpassword confirm` commands now direct you here; they no
+longer generate passwords. Confirmed attempts are limited to one per minute.
+Resetting does not sign out existing sessions or revoke API keys.
