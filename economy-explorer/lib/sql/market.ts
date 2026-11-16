@@ -395,7 +395,7 @@ export async function listMarketFirms(limit: number, offset: number): Promise<Ma
            COALESCE(SUM(cs.quantity),0) AS total_quantity, COALESCE(SUM(cs.total_price),0.00) AS total_volume
     FROM chestshop_sale cs JOIN firm f ON f.firm_id = cs.shop_firm_id
     WHERE cs.shop_firm_id IS NOT NULL GROUP BY cs.shop_firm_id
-    ORDER BY total_volume DESC LIMIT ${limit} OFFSET ${offset}
+    ORDER BY total_volume DESC, cs.shop_firm_id ASC LIMIT ${limit} OFFSET ${offset}
   `.execute(db);
   return r.rows.map((row) => ({
     firm_id: row.firm_id,
