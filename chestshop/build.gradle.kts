@@ -153,7 +153,7 @@ dependencies {
     testImplementation(libs.assertj.core)
     // MockBukkit — a real in-memory server so Bukkit-coupled services are exercised for
     // real (ItemStacks, inventories, signs) rather than mock-verified.
-    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.119.0")
+    testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.3:4.120.0")
 
     // Shared startup + message-key test-kit (the startup + messages.properties audit).
     // Brings JUnit, Guice, the framework and MockBukkit transitively (declared `api`
