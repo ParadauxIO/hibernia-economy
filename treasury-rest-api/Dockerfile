@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Runtime-only image.
 #
 # In the single root Gradle build, treasury-rest-api can't build standalone, so the
@@ -8,7 +9,20 @@
 #   docker build treasury-rest-api
 #
 # This image just packages that prebuilt app.jar.
+# Java4Shell (CVE-2026-114938): eclipse-temurin:25-jre still ships the affected 25.0.5+8.
+# Swap in Adoptium's patched 25.0.5.1+2 JRE (checksum-pinned, amd64 — CI only
+# builds linux/amd64) until the official image catches up, then drop this stage.
+FROM eclipse-temurin:25-jre AS patched-jre
+ADD --checksum=sha256:2edef9e4f81ec5ee426d023336d4cfbd7b4644e99884e7a73a6a867b70b17acf \
+    https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5.1%2B2/OpenJDK25U-jre_x64_linux_hotspot_25.0.5.1_2.tar.gz /tmp/jre.tar.gz
+RUN mkdir /jre && tar -xzf /tmp/jre.tar.gz -C /jre --strip-components=1 \
+    && /jre/bin/java -version 2>&1 | grep -q '25.0.5.1+2'
+
 FROM eclipse-temurin:25-jre
+
+# Patched JRE from the stage above (Java4Shell).
+RUN rm -rf /opt/java/openjdk
+COPY --from=patched-jre /jre /opt/java/openjdk
 
 # Security: run as non-root
 RUN groupadd --system appgroup && useradd --system --gid appgroup appuser
