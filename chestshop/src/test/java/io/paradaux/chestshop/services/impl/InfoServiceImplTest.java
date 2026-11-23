@@ -92,6 +92,7 @@ class InfoServiceImplTest extends ServerTest {
         sender = mock(CommandSender.class);
         lenient().when(message.component(anyString(), any(Map.class))).thenReturn(Component.text("x"));
         lenient().when(items.getName(any())).thenReturn("Name");
+        lenient().when(items.getDisplayName(any())).thenReturn("Name");
         info = new InfoServiceImpl(accounts, economy, items, message, signService, shopBlockService, inventoryService);
     }
 

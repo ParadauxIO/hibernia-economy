@@ -209,6 +209,10 @@ public class MarketServiceImpl implements MarketService {
                 }
             }
         }
+        String readable = readableName(item);
+        if (readable != null && !readable.equals(canonical)) {
+            return readable; // potion/enchanted-book shorthand, as on the sign (PAR-569)
+        }
         if (custom) {
             String code = canonical;
             if (code != null && !code.isBlank()) {
@@ -216,6 +220,14 @@ public class MarketServiceImpl implements MarketService {
             }
         }
         return pretty(item.getType().name());
+    }
+
+    private String readableName(ItemStack item) {
+        try {
+            return items.getDisplayName(item);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** "DIAMOND_SWORD" / "nexo:ruby_sword#02" -> "Diamond Sword" / "Ruby Sword". */

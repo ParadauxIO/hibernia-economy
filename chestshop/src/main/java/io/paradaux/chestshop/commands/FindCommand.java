@@ -81,7 +81,7 @@ public final class FindCommand implements CommandHandler {
             message.send(player, "find.unknown-item", "code", code);
             return;
         }
-        openFind(player, item, canonicalKey(item), code);
+        openFind(player, item, canonicalKey(item), displayName(item));
     }
 
     @Route("toggle visibility <visible>")
@@ -146,6 +146,14 @@ public final class FindCommand implements CommandHandler {
             if (!name.isBlank()) {
                 return name.trim();
             }
+        }
+        try {
+            String readable = items.getDisplayName(item);
+            if (readable != null && !readable.isBlank()) {
+                return readable;
+            }
+        } catch (RuntimeException ignored) {
+            // No round-tripping name; fall back to the search key.
         }
         return canonicalKey(item);
     }

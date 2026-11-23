@@ -502,6 +502,17 @@ class MarketServiceImplTest extends ServerTest {
     }
 
     @Test
+    void identity_shorthandItem_namesWithTheReadableShorthand_butKeepsTheStoredKey() {
+        ItemStack book = item(Material.ENCHANTED_BOOK, 1);
+        when(items.getName(book, 0)).thenReturn("Enchanted Book#Eg");
+        when(items.getDisplayName(book)).thenReturn("Bk Sharpness V");
+        when(itemCodes.encode(book, 0)).thenReturn("Enchanted Book#Eg");
+        ChestShopSaleRecord rec = saleOf(book);
+        assertThat(rec.itemName()).isEqualTo("Bk Sharpness V");
+        assertThat(rec.itemKey()).isEqualTo("Enchanted Book#Eg");
+    }
+
+    @Test
     void identity_vanilla_prettyFromType_noData() {
         ItemStack stone = noMetaItem(Material.STONE);
         when(items.getName(stone, 0)).thenReturn("STONE");

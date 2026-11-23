@@ -520,6 +520,55 @@ class ItemServiceImplTest extends ServerTest {
         assertThat(service.getSignName(sharpnessBook(0))).isEqualTo("nexo_book");
     }
 
+    // ---- display names (PAR-569) ------------------------------------------------
+
+    @Test
+    void getDisplayName_usesTheShorthandForAPlainEnchantedBook() {
+        assertThat(newService().getDisplayName(sharpnessBook(0))).isEqualTo("Bk Sharpness V");
+    }
+
+    @Test
+    void getDisplayName_keepsTheStoredCodeWhenTheSignDoes() {
+        ItemServiceImpl service = newService();
+        ItemStack merged = sharpnessBook(1);
+        assertThat(service.getDisplayName(merged))
+                .isEqualTo(service.getName(merged))
+                .contains("#");
+    }
+
+    @Test
+    void getDisplayName_isTheFullNameForOrdinaryItems() {
+        ItemServiceImpl service = newService();
+        ItemStack pane = item(Material.LIGHT_BLUE_STAINED_GLASS_PANE, 1);
+        assertThat(service.getDisplayName(pane))
+                .isEqualTo(service.getName(pane))
+                .startsWith("Light Blue Stained Glass Pane");
+    }
+
+    @Test
+    void getDisplayName_prefersAConfiguredAliasOverTheShorthand() {
+        String code = newService().getName(sharpnessBook(0));
+        writeAliases(code + ": SharpBook\n");
+        assertThat(newService().getDisplayName(sharpnessBook(0))).isEqualTo("SharpBook");
+    }
+
+    @Test
+    void getDisplayName_prefersACustomItemResolverOverTheShorthand() {
+        ItemServiceImpl service = newService();
+        CustomItemResolver resolver = mock(CustomItemResolver.class);
+        when(resolver.queryString(any(), anyInt())).thenReturn("nexo_book");
+        when(resolver.parseItem("nexo_book")).thenReturn(sharpnessBook(0));
+        service.registerCustomItemResolver(resolver);
+        assertThat(service.getDisplayName(sharpnessBook(0))).isEqualTo("nexo_book");
+    }
+
+    @Test
+    void getItemList_usesReadableNames() {
+        ItemStack book = sharpnessBook(0);
+        assertThat(newService().getItemList(new ItemStack[] {book, book.clone()}))
+                .isEqualTo("2 Bk Sharpness V");
+    }
+
     // ---- residual branches ------------------------------------------------------
 
     @Test

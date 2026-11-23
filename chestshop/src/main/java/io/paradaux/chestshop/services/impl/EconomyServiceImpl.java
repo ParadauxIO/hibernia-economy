@@ -383,9 +383,9 @@ public class EconomyServiceImpl implements EconomyService {
         ItemStack[] stock = txn.getStock();
         if (stock != null && stock.length > 0 && stock[0] != null) {
             try {
-                String code = items.getName(stock[0], 0);
-                if (code != null && !code.isBlank()) {
-                    return code;
+                String name = items.getDisplayName(stock[0]);
+                if (name != null && !name.isBlank()) {
+                    return name;
                 }
             } catch (RuntimeException ignored) {
                 // Code didn't round-trip — fall back to the sign line below.

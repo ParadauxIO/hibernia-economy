@@ -125,7 +125,7 @@ class EconomyServiceImplTest extends ServerTest {
     /** A single-diamond stock whose display name resolves (via ItemService) to {@code name}. */
     private ItemStack[] stockNamed(String name) {
         ItemStack[] stock = {new ItemStack(Material.DIAMOND, 3)};
-        when(items.getName(stock[0], 0)).thenReturn(name);
+        when(items.getDisplayName(stock[0])).thenReturn(name);
         return stock;
     }
 
@@ -545,7 +545,7 @@ class EconomyServiceImplTest extends ServerTest {
         when(treasury.transfer(any())).thenReturn(1L);
         Sign sign = placeSign("Seller", "SignDiamond");
         ItemStack[] stock = {new ItemStack(Material.DIAMOND, 3)};
-        when(items.getName(stock[0], 0)).thenReturn("   "); // blank code → fall back to sign
+        when(items.getDisplayName(stock[0])).thenReturn("   "); // blank code → fall back to sign
 
         Transaction t = txn(BUY, stock, "Seller", buyer, sign, UUID.randomUUID());
         service.settle(new BigDecimal("5"), buyer, seller, t);
@@ -562,7 +562,7 @@ class EconomyServiceImplTest extends ServerTest {
         when(treasury.transfer(any())).thenReturn(1L);
         Sign sign = placeSign("Seller", "SignEmerald");
         ItemStack[] stock = {new ItemStack(Material.DIAMOND, 3)};
-        when(items.getName(stock[0], 0)).thenThrow(new RuntimeException("bad code"));
+        when(items.getDisplayName(stock[0])).thenThrow(new RuntimeException("bad code"));
 
         Transaction t = txn(BUY, stock, "Seller", buyer, sign, UUID.randomUUID());
         service.settle(new BigDecimal("5"), buyer, seller, t);
@@ -596,7 +596,7 @@ class EconomyServiceImplTest extends ServerTest {
         when(treasury.transfer(any())).thenReturn(1L);
         String hugeOwner = "O".repeat(300);
         ItemStack[] stock = {new ItemStack(Material.DIAMOND, 3)};
-        when(items.getName(stock[0], 0)).thenReturn("Diamond");
+        when(items.getDisplayName(stock[0])).thenReturn("Diamond");
 
         Transaction t = txn(BUY, stock, hugeOwner, buyer, null, UUID.randomUUID());
         service.settle(new BigDecimal("5"), buyer, seller, t);
@@ -612,7 +612,7 @@ class EconomyServiceImplTest extends ServerTest {
         when(treasury.resolveOrCreatePersonal(seller)).thenReturn(tAccount(2));
         when(treasury.transfer(any())).thenReturn(1L);
         ItemStack[] stock = {new ItemStack(Material.DIAMOND, 3)};
-        when(items.getName(stock[0], 0)).thenReturn("I".repeat(400)); // item name overflows budget
+        when(items.getDisplayName(stock[0])).thenReturn("I".repeat(400)); // item name overflows budget
 
         Transaction t = txn(BUY, stock, "Seller", buyer, null, UUID.randomUUID());
         service.settle(new BigDecimal("5"), buyer, seller, t);
@@ -969,7 +969,7 @@ class EconomyServiceImplTest extends ServerTest {
         when(treasury.transfer(any())).thenReturn(1L);
         Sign sign = placeSign("Seller", "SignRuby");
         ItemStack[] stock = {new ItemStack(Material.DIAMOND, 3)};
-        when(items.getName(stock[0], 0)).thenReturn(null); // no code → fall back to sign
+        when(items.getDisplayName(stock[0])).thenReturn(null); // no code → fall back to sign
 
         Transaction t = txn(BUY, stock, "Seller", buyer, sign, UUID.randomUUID());
         service.settle(new BigDecimal("5"), buyer, seller, t);

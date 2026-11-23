@@ -143,7 +143,7 @@ public class InfoServiceImpl implements InfoService {
                 : "∞"; // Infinity symbol
 
         Map<String, String> replacementMap = ImmutableMap.of(
-                "item", wildcard ? itemCode : items.getName(item),
+                "item", wildcard ? itemCode : items.getDisplayName(item),
                 "stock", stock,
                 "owner", ownerName,
                 "prices", pricesLine,

@@ -66,4 +66,11 @@ public interface ItemService {
 
     /** The item's name as it appears on a sign (constrained to the sign width). */
     String getSignName(ItemStack itemStack);
+
+    /**
+     * The name to show players in chat, dialogs and the registry: the potion/enchanted-book
+     * shorthand when the item's sign shows one, otherwise the full name/code. Never use it as an
+     * identity: stored keys, wildcard matching and permissions keep {@link #getName(ItemStack)}.
+     */
+    String getDisplayName(ItemStack itemStack);
 }
