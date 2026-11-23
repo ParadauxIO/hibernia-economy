@@ -266,7 +266,7 @@ jobs:
 
       - name: Fail on breaking API changes
         if: steps.base.outputs.present == 'true' && !contains(github.event.pull_request.labels.*.name, 'api-breaking-change')
-        uses: oasdiff/oasdiff-action/breaking@9e56cf8b3aff7edb326d5767d3d23f96127e20c3 # v0.1.21
+        uses: oasdiff/oasdiff-action/breaking@14ca7009a63c417dfe27b7c44359c4bcccaf8eee # v0.2.1
         with:
           base: build/oasdiff/base.json
           revision: treasury-rest-api/openapi/openapi.json
