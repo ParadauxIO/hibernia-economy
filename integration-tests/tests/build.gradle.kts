@@ -18,9 +18,9 @@ dependencies {
     testImplementation("org.mariadb.jdbc:mariadb-java-client:4.0.0")
 
     // JSON for Treasury REST API tests — parse response bodies into JsonNode.
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.22.4")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.23.0")
 
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.6")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.6.8")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

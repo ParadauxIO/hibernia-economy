@@ -44,10 +44,10 @@ dependencies {
     // Rate limiting — Bucket4j core + Caffeine (in-memory) and Lettuce
     // (Redis). Caffeine is the default; Redis kicks in when the
     // rate-limit.redis-host property is set (see RateLimitConfig).
-    implementation("com.bucket4j:bucket4j_jdk17-core:8.21.0")
-    implementation("com.bucket4j:bucket4j_jdk17-caffeine:8.21.0")
-    implementation("com.bucket4j:bucket4j_jdk17-redis-common:8.21.0")
-    implementation("com.bucket4j:bucket4j_jdk17-lettuce:8.21.0")
+    implementation("com.bucket4j:bucket4j_jdk17-core:8.22.0")
+    implementation("com.bucket4j:bucket4j_jdk17-caffeine:8.22.0")
+    implementation("com.bucket4j:bucket4j_jdk17-redis-common:8.22.0")
+    implementation("com.bucket4j:bucket4j_jdk17-lettuce:8.22.0")
     // Lettuce and Caffeine versions are both left to the Spring Boot BOM
     // (lettuce 7.x, caffeine 3.2.x). bucket4j_jdk17-lettuce declares lettuce 6.x
     // as a `provided` compile floor, but every lettuce symbol it actually calls
