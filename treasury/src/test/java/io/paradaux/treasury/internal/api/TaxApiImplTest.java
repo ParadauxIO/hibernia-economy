@@ -73,9 +73,13 @@ class TaxApiImplTest {
         return a;
     }
 
+    private static LedgerService.TransferResult created(long txnId) {
+        return new LedgerService.TransferResult(txnId, true);
+    }
+
     private TransferRequest capturedTransfer() {
         ArgumentCaptor<TransferRequest> req = ArgumentCaptor.forClass(TransferRequest.class);
-        verify(ledger).transfer(req.capture());
+        verify(ledger).transferChecked(req.capture());
         return req.getValue();
     }
 
@@ -83,7 +87,7 @@ class TaxApiImplTest {
 
     @Test
     void collectTax_exactlyOneCent_isCollected_countedAndNotified() {
-        when(ledger.transfer(any())).thenReturn(900L);
+        when(ledger.transferChecked(any())).thenReturn(created(900L));
         TaxApiImpl api = api();
 
         TaxResult result = api.collectTax(
@@ -104,6 +108,25 @@ class TaxApiImplTest {
     }
 
     @Test
+    void collectTax_replayOfAnAlreadyCollectedTax_reportsTheOriginalTxn_withoutCountingOrNotifyingAgain() {
+        // Same dedup key as a collection that already committed: the ledger collapses it
+        // (created=false). The caller still learns the txn, but the cycle totals and the
+        // payer's notification must reflect the one real debit, not two (PAR-325).
+        when(ledger.transferChecked(any())).thenReturn(new LedgerService.TransferResult(900L, false));
+        byte[] key = new byte[] {1, 2, 3};
+
+        TaxResult result = api().collectTax(
+                        TaxCollection.toAccount(5, 6, new BigDecimal("4.00"), "income", "desc", SYSTEM, "plugin", key));
+
+        assertThat(result).isEqualTo(new TaxResult.Collected(900L, new BigDecimal("4.00"), 6));
+        assertThat(capturedTransfer().dedupKey()).isEqualTo(key);
+        verify(registry, never()).recordCollected(org.mockito.ArgumentMatchers.anyInt(), anyString(), any());
+        verify(registry, never()).recordSkipped();
+        verify(registry, never()).recordFailed();
+        verifyNoInteractions(notifier);
+    }
+
+    @Test
     void collectTax_belowOneCent_isSkippedAndCounted_withoutTouchingTheLedger() {
         TaxResult result = api().collectTax(
                         TaxCollection.toAccount(5, 6, new BigDecimal("0.009"), "income", "desc", SYSTEM, null, null));
@@ -117,7 +140,7 @@ class TaxApiImplTest {
     @Test
     void collectTax_withoutDestination_goesToTheDefaultTaxAccount_resolvedOnce() {
         when(accounts.findGovernmentAccountByName("DCGovernment")).thenReturn(account(DEFAULT_TAX_ACCOUNT));
-        when(ledger.transfer(any())).thenReturn(1L, 2L);
+        when(ledger.transferChecked(any())).thenReturn(created(1L), created(2L));
         TaxApiImpl api = api();
 
         api.collectTax(TaxCollection.toDefaultAccount(5, new BigDecimal("1.00"), "t", "d", SYSTEM, null, null));
@@ -144,7 +167,7 @@ class TaxApiImplTest {
 
     @Test
     void collectTax_ledgerFailure_isReportedAsFailed_andCounted_notCollected() {
-        when(ledger.transfer(any()))
+        when(ledger.transferChecked(any()))
                 .thenThrow(new IllegalStateException("Insufficient funds"))
                 .thenThrow(new IllegalStateException());
         TaxApiImpl api = api();
@@ -171,7 +194,7 @@ class TaxApiImplTest {
     void collectRateTax_roundsHalfEven_andAppliesTheOneCentFloorInclusively(String base, String rate, String expected) {
         TaxApiImpl api = api();
         boolean skipped = expected.equals("skip");
-        if (!skipped) when(ledger.transfer(any())).thenReturn(1L);
+        if (!skipped) when(ledger.transferChecked(any())).thenReturn(created(1L));
 
         TaxResult result =
                 api.collectRateTax(5, 6, new BigDecimal(base), new BigDecimal(rate), "sales", "d", SYSTEM, null, null);
@@ -221,7 +244,7 @@ class TaxApiImplTest {
         UUID player = UUID.randomUUID();
         when(accounts.findPersonalAccountId(player)).thenReturn(12);
         when(accounts.findGovernmentAccountByName("IncomeTax")).thenReturn(account(55));
-        when(ledger.transfer(any())).thenReturn(1L);
+        when(ledger.transferChecked(any())).thenReturn(created(1L));
         TaxApiImpl api = api(
                 SourceIncomeTaxConfiguration.forTesting(
                         true, new BigDecimal("0.10"), "IncomeTax", Map.of("Realty", new BigDecimal("0.0001"))),
@@ -241,7 +264,7 @@ class TaxApiImplTest {
         UUID player = UUID.randomUUID();
         when(accounts.findPersonalAccountId(player)).thenReturn(12);
         when(accounts.findGovernmentAccountByName("IncomeTax")).thenReturn(account(55));
-        when(ledger.transfer(any())).thenReturn(1L);
+        when(ledger.transferChecked(any())).thenReturn(created(1L));
         TaxApiImpl api = api(
                 SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.01"), "IncomeTax", Map.of()),
                 TestConfigs.taxCyclesAllDisabled());
@@ -250,7 +273,7 @@ class TaxApiImplTest {
                 .isInstanceOf(TaxResult.Skipped.class); // 0.0049 -> 0.00
         assertThat(api.applySourceIncomeTax(player, new BigDecimal("1.00"), "Jobs"))
                 .isInstanceOf(TaxResult.Collected.class); // exactly 0.01
-        verify(ledger, times(1)).transfer(any());
+        verify(ledger, times(1)).transferChecked(any());
     }
 
     @Test
@@ -271,7 +294,7 @@ class TaxApiImplTest {
         when(accounts.findPersonalAccountId(player)).thenReturn(12);
         when(accounts.findGovernmentAccountByName("Nope")).thenReturn(null);
         when(accounts.findGovernmentAccountByName("DCGovernment")).thenReturn(account(DEFAULT_TAX_ACCOUNT));
-        when(ledger.transfer(any())).thenReturn(1L);
+        when(ledger.transferChecked(any())).thenReturn(created(1L));
 
         TaxResult r = api(
                         SourceIncomeTaxConfiguration.forTesting(true, new BigDecimal("0.10"), "Nope", Map.of()),

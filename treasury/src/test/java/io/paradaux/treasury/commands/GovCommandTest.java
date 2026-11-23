@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -309,6 +310,29 @@ class GovCommandTest {
     }
 
     @Test
+    void payoutAccount_identicalConsolePayoutsInOneTick_eachMoveMoneyAndEachReportSuccess() {
+        // PAR-570: a vote crate opened in bulk runs the same /gov payout several times in
+        // one tick. Each reward is a real payment; none may collapse onto another while
+        // still telling the sender it succeeded.
+        sourceAccount();
+        when(accounts.getAccountById(TARGET_ID)).thenReturn(account(TARGET_ID, "Recipient", false));
+
+        command.payoutAccount(console, "Police", TARGET_ID, AMOUNT);
+        command.payoutAccount(console, "Police", TARGET_ID, AMOUNT);
+        command.payoutAccount(console, "Police", TARGET_ID, AMOUNT);
+
+        ArgumentCaptor<TransferRequest> requests = ArgumentCaptor.forClass(TransferRequest.class);
+        verify(ledger, times(3)).adminTransfer(requests.capture());
+        assertThat(requests.getAllValues()).allSatisfy(r -> {
+            assertThat(r.toAccountId()).isEqualTo(TARGET_ID);
+            assertThat(r.amount()).isEqualByComparingTo(AMOUNT);
+            assertThat(r.dedupKey()).isNull();
+        });
+        verify(message, times(3))
+                .send(eq(console), eq("treasury.gov.payout.success"), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void payoutAccount_requiresSourceAccess() {
         sourceAccount();
         when(player.getUniqueId()).thenReturn(PLAYER_ID);
@@ -377,7 +401,8 @@ class GovCommandTest {
         assertThat(actual.message()).isEqualTo(payout ? "Gov payout: approved grant" : "Gov transfer: approved grant");
         assertThat(actual.initiator()).isEqualTo(asPlayer ? PLAYER_ID : TreasuryConstants.VIRTUAL_TREASURY_INITIATOR);
         assertThat(actual.pluginSystem()).isEqualTo(TreasuryConstants.TREASURY_PLUGIN_NAME);
-        assertThat(actual.dedupKey()).isNotEmpty();
+        // Commands send no dedup key: identical invocations are separate payments (PAR-570).
+        assertThat(actual.dedupKey()).isNull();
         verify(message)
                 .send(
                         sender,

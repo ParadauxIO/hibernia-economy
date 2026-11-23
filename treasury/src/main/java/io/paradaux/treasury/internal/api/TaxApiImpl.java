@@ -84,7 +84,7 @@ public class TaxApiImpl implements TaxApi {
 
         TaxResult result;
         try {
-            long txnId = ledgerService.transfer(new TransferRequest(
+            LedgerService.TransferResult transfer = ledgerService.transferChecked(new TransferRequest(
                     collection.sourceAccountId(),
                     destinationId,
                     amount,
@@ -93,7 +93,14 @@ public class TaxApiImpl implements TaxApi {
                     null,
                     collection.pluginSystem(),
                     collection.dedupKey()));
+            long txnId = transfer.txnId();
             result = new TaxResult.Collected(txnId, amount, destinationId);
+            if (!transfer.created()) {
+                // A replay of an already-collected tax (same dedup key): report the
+                // original txn, but don't count or notify it a second time (PAR-325).
+                log.debug("Tax collection deduplicated onto existing txn={}", txnId);
+                return result;
+            }
             cycleRegistry.recordCollected(destinationId, collection.taxType(), amount);
             notifier.notifyTaxCollected(collection.sourceAccountId(), collection.taxType(), amount);
             log.debug(

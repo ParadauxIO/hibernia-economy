@@ -46,7 +46,11 @@ Consequences that shape everything else:
   `TreasuryApi`. A firm "having money" means a Treasury account of type `BUSINESS`.
 - Idempotency keys on transactions make a re-submitted transfer a no-op rather than
   a double-spend — important because the same logical action can arrive from the
-  plugin or over HTTP.
+  plugin or over HTTP. A key names one retryable operation (a trade, a tax
+  collection, a direct-debit collection, a salary run entry). In-plugin callers
+  that count or notify per transfer check `TransferResult.created`, so a replay
+  isn't reported as a second payment. Commands
+  send no key: two identical `/gov payout` runs are two payments (PAR-570).
 
 ### Account types
 
