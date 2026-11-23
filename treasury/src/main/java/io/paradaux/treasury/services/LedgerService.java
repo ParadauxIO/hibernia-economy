@@ -2,13 +2,12 @@ package io.paradaux.treasury.services;
 
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.*;
-import org.jetbrains.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
 
 public interface LedgerService {
 
@@ -48,7 +47,12 @@ public interface LedgerService {
      * new txn or deduplicated onto an existing one. Use when the caller must act only on
      * a real money movement (notifications, counters); it is race-safe where a pre-check
      * via a separate read is not, because the collapse is detected inside the same
-     * transactional insert (e.g. salary payouts).
+     * transactional insert (e.g. salary payouts, tax collection).
+     *
+     * <p>A dedup key must name one logical operation that may be retried (a salary run
+     * entry, a tax collection, a trade). Don't derive one from the wall clock for an
+     * operation that has no retry path, such as a command invocation: two identical
+     * invocations are two operations and must both move money (PAR-570).
      */
     TransferResult transferChecked(TransferRequest req);
 
@@ -61,7 +65,8 @@ public interface LedgerService {
      * sole balance writer. Returns the sweep's txn id, or empty if the locked balance was
      * not positive (nothing to move). See {@code TreasuryApi.sweepAll}.
      */
-    java.util.OptionalLong sweepAll(int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin);
+    java.util.OptionalLong sweepAll(
+            int fromAccountId, int toAccountId, String memo, UUID initiator, String sourcePlugin);
 
     /**
      * Admin override transfer: identical to {@link #transfer(TransferRequest)} but
@@ -72,20 +77,25 @@ public interface LedgerService {
      */
     long adminTransfer(TransferRequest req);
 
-    /**
-     * {@link #adminTransfer(TransferRequest)} that also reports whether it created a
-     * new txn or deduplicated onto an existing one — for callers that record a row
-     * per debit (fines) and must not record a second one for a collapsed double-submit.
-     */
-    TransferResult adminTransferChecked(TransferRequest req);
-
     /** Vault-style: withdraw from player's account into plugin SYSTEM (burn). */
-    long vaultWithdraw(String pluginName, UUID playerUuid, BigDecimal amount, String memo,
-                       UUID initiator, @Nullable UUID authorizer, @Nullable String idempotencyKey);
+    long vaultWithdraw(
+            String pluginName,
+            UUID playerUuid,
+            BigDecimal amount,
+            String memo,
+            UUID initiator,
+            @Nullable UUID authorizer,
+            @Nullable String idempotencyKey);
 
     /** Vault-style: deposit from plugin SYSTEM (mint) into player's account. */
-    long vaultDeposit(String pluginName, UUID playerUuid, BigDecimal amount, String memo,
-                      UUID initiator, @Nullable UUID authorizer, @Nullable String idempotencyKey);
+    long vaultDeposit(
+            String pluginName,
+            UUID playerUuid,
+            BigDecimal amount,
+            String memo,
+            UUID initiator,
+            @Nullable UUID authorizer,
+            @Nullable String idempotencyKey);
 
     // ---- Admin economy operations ----
 
@@ -115,7 +125,6 @@ public interface LedgerService {
 
     /** Single transaction lookup by ID. */
     LedgerTxn getTransaction(long txnId);
-
 
     /** All postings belonging to a transaction. */
     List<LedgerPosting> getPostingsForTransaction(long txnId);

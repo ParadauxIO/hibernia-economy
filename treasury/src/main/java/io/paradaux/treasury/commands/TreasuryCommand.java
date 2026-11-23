@@ -11,7 +11,6 @@ import io.paradaux.hibernia.framework.i18n.Message;
 import io.paradaux.treasury.Treasury;
 import io.paradaux.treasury.api.ingest.IngestApi;
 import io.paradaux.treasury.api.ingest.IngestReport;
-import io.paradaux.treasury.internal.utils.GovDedupKeys;
 import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.model.economy.Account;
 import io.paradaux.treasury.model.economy.TransferRequest;
@@ -20,7 +19,6 @@ import io.paradaux.treasury.services.ConfigReloadService;
 import io.paradaux.treasury.services.LedgerService;
 import io.paradaux.treasury.services.MembershipService;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -280,9 +278,7 @@ public class TreasuryCommand implements CommandHandler {
         UUID initiator = CommandSenders.actorOf(sender);
         String memo =
                 reason != null ? "Admin transfer: " + reason : "Admin transfer " + from.label() + " -> " + to.label();
-        byte[] dedupKey =
-                GovDedupKeys.adminTransfer(initiator, from.accountId(), to.accountId(), normalized, Instant.now());
-
+        // No dedup key: identical admin transfers are separate operations (PAR-570).
         try {
             ledgerService.adminTransfer(new TransferRequest(
                     from.accountId(),
@@ -292,7 +288,7 @@ public class TreasuryCommand implements CommandHandler {
                     initiator,
                     null,
                     TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey));
+                    null));
         } catch (IllegalStateException e) {
             BigDecimal balance = accountService.getBalanceReadOnly(from.accountId());
             message.send(

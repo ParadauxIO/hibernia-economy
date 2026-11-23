@@ -156,12 +156,6 @@ public class LedgerServiceImpl implements LedgerService {
 
     @Override
     @Transactional
-    public TransferResult adminTransferChecked(TransferRequest req) {
-        return transferInternal(req, true);
-    }
-
-    @Override
-    @Transactional
     public TransferResult transferChecked(TransferRequest req) {
         return transferInternal(req, false);
     }

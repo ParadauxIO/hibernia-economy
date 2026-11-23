@@ -20,8 +20,6 @@ import io.paradaux.treasury.services.exceptions.InsufficientFineFundsException;
 import io.paradaux.treasury.services.exceptions.PrimitiveAccountException;
 import io.paradaux.treasury.utils.Idempotency;
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +33,6 @@ public class GovServiceImpl implements GovService {
     private final GovernmentFineMapper fineMapper;
     private final GovernmentConfiguration govConfig;
     private final PlayerDirectoryService playerDirectory;
-    private final Clock clock;
 
     @Inject
     public GovServiceImpl(
@@ -44,23 +41,11 @@ public class GovServiceImpl implements GovService {
             GovernmentFineMapper fineMapper,
             GovernmentConfiguration govConfig,
             PlayerDirectoryService playerDirectory) {
-        this(accountService, ledgerService, fineMapper, govConfig, playerDirectory, Clock.systemUTC());
-    }
-
-    /** Test seam: lets a test pin the clock so the per-second fine dedup key is deterministic. */
-    GovServiceImpl(
-            AccountService accountService,
-            LedgerService ledgerService,
-            GovernmentFineMapper fineMapper,
-            GovernmentConfiguration govConfig,
-            PlayerDirectoryService playerDirectory,
-            Clock clock) {
         this.accountService = accountService;
         this.ledgerService = ledgerService;
         this.fineMapper = fineMapper;
         this.govConfig = govConfig;
         this.playerDirectory = playerDirectory;
-        this.clock = clock;
     }
 
     // ---- Account management ----
@@ -166,21 +151,17 @@ public class GovServiceImpl implements GovService {
         }
 
         BigDecimal normalized = Money.normalize(amount);
-        // Include the amount and reason in the dedup key, not just issuer+debtor+second:
-        // otherwise two legitimate but distinct fines on the same debtor within the same
-        // second collapse to one via the ledger dedup UNIQUE (ADT-33). Two fines that
-        // also share amount and reason in the same second are treated as a double-submit.
-        byte[] dedupKey = Idempotency.sha256("fine:" + issuedBy + ":" + debtorAccountId + ":"
-                + normalized.toPlainString() + ":" + reason + ":"
-                + clock.instant().truncatedTo(ChronoUnit.SECONDS));
-
-        LedgerService.TransferResult debit;
+        // No dedup key: each fine is a separate decision by its issuer, and an
+        // identical fine issued twice (even within one second) is two fines. A
+        // time-bucketed key used to collapse them while still reporting both as
+        // issued (PAR-570).
+        long txnId;
         try {
             // A fine is an administrative debit by authority of permission, so it
             // must bypass the debtor's requires_authorization gate (you can't dodge
             // a fine by demanding an authorizer) — adminTransfer skips ONLY that gate
             // and still fails on insufficient funds (ADT fine-debtor-auth-not-wrapped).
-            debit = ledgerService.adminTransferChecked(new TransferRequest(
+            txnId = ledgerService.adminTransfer(new TransferRequest(
                     debtorAccountId,
                     govAccount.getAccountId(),
                     normalized,
@@ -188,7 +169,7 @@ public class GovServiceImpl implements GovService {
                     issuedBy,
                     null,
                     TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey));
+                    null));
         } catch (IllegalStateException e) {
             // LedgerService.transfer throws IllegalStateException for insufficient
             // funds (and a few other failure modes). The fine path only ever debits
@@ -196,24 +177,6 @@ public class GovServiceImpl implements GovService {
             throw playerUuid != null
                     ? new InsufficientFineFundsException(playerUuid, e)
                     : new InsufficientFineFundsException(debtorAccountId, e);
-        }
-        long txnId = debit.txnId();
-
-        if (!debit.created()) {
-            // Double-submit: the ledger collapsed this debit onto an existing txn, so
-            // no new money moved. Return the fine already recorded for that txn rather
-            // than inserting a second row for the same debit — each row is separately
-            // revocable (the revoke dedup key is per fine id), so a duplicate would let
-            // the debtor be refunded twice for one debit. uq_fines_txn backstops this.
-            GovernmentFine existing = fineMapper.findFineByTxnIdForUpdate(txnId);
-            if (existing != null) {
-                log.info(
-                        "Fine double-submit collapsed onto existing fine: id={} txn={} issuedBy={}",
-                        existing.getFineId(),
-                        txnId,
-                        issuedBy);
-                return existing;
-            }
         }
 
         GovernmentFine fine = GovernmentFine.builder()

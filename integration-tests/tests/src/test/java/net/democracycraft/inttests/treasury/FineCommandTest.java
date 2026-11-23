@@ -137,14 +137,12 @@ class FineCommandTest {
     }
 
     @Test
-    void doubleSubmittedFineNeverRecordsMoreFinesThanDebits() {
-        // Two identical /fine issue commands inside one second share a ledger
-        // dedup key, so the ledger moves the money once. The fine table must
-        // agree: one fine row per debit (V29 uq_fines_txn + GovServiceImpl
-        // returning the existing fine). Two rows for one debit would be
-        // separately revocable — a double refund. If the two submissions happen
-        // to straddle a second boundary they are two legitimate fines and two
-        // debits; either way rows × amount must equal the money actually taken.
+    void identicalFinesInOneSecondAreTwoFinesAndTwoDebits() {
+        // PAR-570: two identical /fine issue commands inside one second used to
+        // share a ledger dedup key, so only the first debited while both reported
+        // "Issued fine". Commands carry no dedup key now: each is its own fine,
+        // its own debit and its own fine row (V29 uq_fines_txn keeps rows and
+        // debits one-to-one, so neither can be refunded twice).
         String admin = Usernames.fresh("FdA");
         String target = Usernames.fresh("FdT");
         BigDecimal amount = new BigDecimal("30.00");
@@ -161,17 +159,14 @@ class FineCommandTest {
                 if (intoSecond > 300) sleep(1000 - intoSecond + 20);
                 a.chatCommand(cmd);
                 a.chatCommand(cmd);
-                // Both submissions are acknowledged, whichever way they resolved.
                 a.awaitMessageContaining("Issued fine", TIMEOUT);
                 a.awaitMessageContaining("Issued fine", TIMEOUT);
             });
 
             Barrier.settle();
-            int fines = Ledger.totalFinesForPlayer(t.getUuid());
-            assertThat(fines).isBetween(1, 2);
-            Ledger.waitForPersonalBalance(t.getUuid(),
-                    startBal.subtract(amount.multiply(BigDecimal.valueOf(fines))), TIMEOUT);
-            assertThat(Ledger.activeFinesForPlayer(t.getUuid())).isEqualTo(fines);
+            Ledger.waitForPersonalBalance(t.getUuid(), startBal.subtract(amount.multiply(BigDecimal.valueOf(2))), TIMEOUT);
+            assertThat(Ledger.totalFinesForPlayer(t.getUuid())).isEqualTo(2);
+            assertThat(Ledger.activeFinesForPlayer(t.getUuid())).isEqualTo(2);
         }
     }
 

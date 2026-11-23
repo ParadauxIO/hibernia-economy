@@ -8,7 +8,6 @@ import io.paradaux.hibernia.framework.commander.HelpGenerator;
 import io.paradaux.hibernia.framework.commander.annotations.*;
 import io.paradaux.hibernia.framework.commander.spi.CommandHandler;
 import io.paradaux.hibernia.framework.i18n.Message;
-import io.paradaux.treasury.internal.utils.GovDedupKeys;
 import io.paradaux.treasury.internal.utils.TreasuryConstants;
 import io.paradaux.treasury.model.Page;
 import io.paradaux.treasury.model.economy.*;
@@ -20,7 +19,6 @@ import io.paradaux.treasury.services.PlayerDirectoryService;
 import io.paradaux.treasury.services.exceptions.GovAccountNotFoundException;
 import io.paradaux.treasury.services.exceptions.PrimitiveAccountException;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Bukkit;
@@ -747,9 +745,6 @@ public class GovCommand implements CommandHandler {
                 ? "Gov transfer: " + reason
                 : "Gov transfer from " + from.getDisplayName() + " to " + to.getDisplayName();
 
-        byte[] dedupKey = GovDedupKeys.transfer(
-                actorOf(sender), from.getAccountId(), to.getAccountId(), normalized, Instant.now());
-
         executeGovernmentTransfer(
                 sender,
                 from,
@@ -757,8 +752,7 @@ public class GovCommand implements CommandHandler {
                 to.getDisplayName(),
                 normalized,
                 memo,
-                "treasury.gov.account.transfer.success",
-                dedupKey);
+                "treasury.gov.account.transfer.success");
     }
 
     private void doExternalPayout(
@@ -855,19 +849,9 @@ public class GovCommand implements CommandHandler {
                 ? "Gov payout: " + reason
                 : "Gov payout from " + from.getDisplayName() + " to " + toDisplayName;
 
-        byte[] dedupKey =
-                GovDedupKeys.payout(actorOf(sender), from.getAccountId(), toAccountId, normalized, Instant.now());
-
         try {
             if (!executeGovernmentTransfer(
-                    sender,
-                    from,
-                    toAccountId,
-                    toDisplayName,
-                    normalized,
-                    memo,
-                    "treasury.gov.payout.success",
-                    dedupKey)) return;
+                    sender, from, toAccountId, toDisplayName, normalized, memo, "treasury.gov.payout.success")) return;
         } catch (SecurityException e) {
             message.send(sender, "treasury.gov.no-access");
             return;
@@ -900,7 +884,13 @@ public class GovCommand implements CommandHandler {
         return true;
     }
 
-    /** Returns true only after settlement, so callers can safely notify the recipient. */
+    /**
+     * Returns true only after settlement, so callers can safely notify the recipient.
+     *
+     * <p>Sends no dedup key: a command invocation has no retry path, so two identical
+     * commands — e.g. a vote crate running the same reward payout several times in one
+     * tick — are separate payments and must each move money (PAR-570).
+     */
     private boolean executeGovernmentTransfer(
             CommandSender sender,
             Account from,
@@ -908,8 +898,7 @@ public class GovCommand implements CommandHandler {
             String toDisplayName,
             BigDecimal normalized,
             String memo,
-            String successKey,
-            byte[] dedupKey) {
+            String successKey) {
         try {
             TransferRequest request = new TransferRequest(
                     from.getAccountId(),
@@ -919,7 +908,7 @@ public class GovCommand implements CommandHandler {
                     actorOf(sender),
                     null,
                     TreasuryConstants.TREASURY_PLUGIN_NAME,
-                    dedupKey);
+                    null);
             // Console/RCON bypasses requires_authorization; players retain the normal ledger gate.
             if (sender instanceof Player) {
                 ledgerService.transfer(request);

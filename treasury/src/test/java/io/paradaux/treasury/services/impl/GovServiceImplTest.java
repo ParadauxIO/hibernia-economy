@@ -23,6 +23,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -106,45 +107,17 @@ class GovServiceImplTest {
     }
 
     @Test
-    void issueFine_freshDebit_recordsAFineWithoutProbingForAnExistingOne() {
+    void issueFine_recordsAFineAgainstItsDebit_andSendsNoDedupKey() {
+        // No dedup key: an identical fine issued twice is two fines, not a collapsed
+        // double-submit that reports success without debiting (PAR-570).
         stubFineAccounts();
-        when(ledgerService.adminTransferChecked(any(TransferRequest.class)))
-                .thenReturn(new LedgerService.TransferResult(900L, true));
+        when(ledgerService.adminTransfer(any(TransferRequest.class))).thenReturn(900L);
 
         GovernmentFine fine = svc.issueFine(DEBTOR, GOV, new BigDecimal("25.00"), "littering", actor);
 
-        assertThat(fine.getTxnId()).isEqualTo(900L);
-        verify(fineMapper).insertFine(fine);
-        // The locking lookup is reserved for the deduplicated path (see mapper javadoc).
-        verify(fineMapper, never()).findFineByTxnIdForUpdate(900L);
-    }
-
-    @Test
-    void issueFine_deduplicatedDebit_returnsTheExistingFineInsteadOfInsertingASecond() {
-        // The ledger collapsed a double-submit onto txn 900 (created=false). A second
-        // fine row for that one debit would be separately revocable — a double refund.
-        stubFineAccounts();
-        when(ledgerService.adminTransferChecked(any(TransferRequest.class)))
-                .thenReturn(new LedgerService.TransferResult(900L, false));
-        GovernmentFine existing = GovernmentFine.builder().fineId(7).txnId(900L).build();
-        when(fineMapper.findFineByTxnIdForUpdate(900L)).thenReturn(existing);
-
-        GovernmentFine fine = svc.issueFine(DEBTOR, GOV, new BigDecimal("25.00"), "littering", actor);
-
-        assertThat(fine).isSameAs(existing);
-        verify(fineMapper, never()).insertFine(any());
-    }
-
-    @Test
-    void issueFine_deduplicatedDebitWithNoFineOnRecord_stillRecordsOne() {
-        // Defensive: a debit with no fine row must not stay unrecorded.
-        stubFineAccounts();
-        when(ledgerService.adminTransferChecked(any(TransferRequest.class)))
-                .thenReturn(new LedgerService.TransferResult(900L, false));
-        when(fineMapper.findFineByTxnIdForUpdate(900L)).thenReturn(null);
-
-        GovernmentFine fine = svc.issueFine(DEBTOR, GOV, new BigDecimal("25.00"), "littering", actor);
-
+        ArgumentCaptor<TransferRequest> request = ArgumentCaptor.forClass(TransferRequest.class);
+        verify(ledgerService).adminTransfer(request.capture());
+        assertThat(request.getValue().dedupKey()).isNull();
         assertThat(fine.getTxnId()).isEqualTo(900L);
         verify(fineMapper).insertFine(fine);
     }

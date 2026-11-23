@@ -180,6 +180,38 @@ class GovCommandTest {
         }
     }
 
+    @Test
+    void identicalConsolePayoutsInOneSecondEachPay() {
+        // PAR-570: opening several vote crates at once runs the same reward
+        // command from console within one tick. Every run is a real payment; a
+        // same-second dedup key used to pay only the first while each reported
+        // success.
+        String recipient = Usernames.fresh("GcR");
+
+        try (MockPlayer r = MockPlayer.connectLocal(recipient)) {
+            BigDecimal start = Ledger.waitForPersonalBalance(r.getUuid(), TIMEOUT);
+            String cmd = "gov payout DCGovernment " + recipient + " 7 crate reward";
+
+            // Start early in a wall-clock second so all three land inside it.
+            long intoSecond = System.currentTimeMillis() % 1000;
+            if (intoSecond > 300) sleepMillis(1000 - intoSecond + 20);
+            for (int i = 0; i < 3; i++) {
+                net.democracycraft.inttests.support.RconClient.send(cmd);
+            }
+
+            Ledger.waitForPersonalBalance(r.getUuid(), start.add(new BigDecimal("21.00")), TIMEOUT);
+        }
+    }
+
+    private static void sleepMillis(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
     // --- member management --------------------------------------------------
 
     @Test
