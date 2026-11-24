@@ -183,7 +183,7 @@ public class ItemServiceImpl implements ItemService {
 
         List<String> itemText = new ArrayList<>();
         for (Map.Entry<ItemStack, Integer> entry : itemCounts.entrySet()) {
-            itemText.add(entry.getValue() + " " + getName(entry.getKey()));
+            itemText.add(entry.getValue() + " " + getDisplayName(entry.getKey()));
         }
 
         return String.join(", ", itemText);
@@ -241,6 +241,24 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public String getSignName(ItemStack itemStack) {
         return getName(itemStack, MAXIMUM_SIGN_WIDTH);
+    }
+
+    /**
+     * Uses the shorthand exactly when the sign would, so a configured alias or custom item
+     * keeps the precedence it has on signs (PAR-569).
+     */
+    @Override
+    public String getDisplayName(ItemStack itemStack) {
+        String name = getName(itemStack);
+        String shorthand = shorthands.encode(itemStack);
+        if (shorthand == null) {
+            return name;
+        }
+        try {
+            return shorthand.equals(getSignName(itemStack)) ? shorthand : name;
+        } catch (IllegalArgumentException e) {
+            return name; // no sign-width name; the full name is what a player could type
+        }
     }
 
     // ---- configurable item aliases (was ItemAliasModule; PAR-316) ----------------

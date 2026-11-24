@@ -1,7 +1,7 @@
 package io.paradaux.chestshop.commands;
 
-import io.paradaux.chestshop.services.GiveService;
 import com.google.inject.Inject;
+import io.paradaux.chestshop.services.GiveService;
 import io.paradaux.chestshop.services.InventoryService;
 import io.paradaux.chestshop.services.ItemService;
 import io.paradaux.hibernia.framework.commander.annotations.Arg;
@@ -54,10 +54,11 @@ public class GiveCommand implements CommandHandler {
 
     @Route("give <code> [quantity] [player]")
     @Description("Give a player an item by its ChestShop item code")
-    public void give(@Sender CommandSender sender,
-                     @Arg(value = "code", sanitize = false) String code,
-                     @OptionalArg(value = "quantity", defaultValue = "1") int quantity,
-                     @OptionalArg(value = "player", defaultValue = OptionalArg.SENDER) OfflinePlayer player) {
+    public void give(
+            @Sender CommandSender sender,
+            @Arg(value = "code", sanitize = false) String code,
+            @OptionalArg(value = "quantity", defaultValue = "1") int quantity,
+            @OptionalArg(value = "player", defaultValue = OptionalArg.SENDER) OfflinePlayer player) {
         Player receiver = player == null ? null : player.getPlayer();
 
         if (receiver == null) {
@@ -78,6 +79,14 @@ public class GiveCommand implements CommandHandler {
         }
 
         inventoryService.add(item, receiver.getInventory());
-        message.send(sender, "chestshop.ITEM_GIVEN", "prefix", "", "item", items.getName(item), "player", receiver.getName());
+        message.send(
+                sender,
+                "chestshop.ITEM_GIVEN",
+                "prefix",
+                "",
+                "item",
+                items.getDisplayName(item),
+                "player",
+                receiver.getName());
     }
 }

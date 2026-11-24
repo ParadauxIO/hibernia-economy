@@ -147,6 +147,14 @@ public final class FindCommand implements CommandHandler {
                 return name.trim();
             }
         }
+        try {
+            String readable = items.getDisplayName(item);
+            if (readable != null && !readable.isBlank()) {
+                return readable;
+            }
+        } catch (RuntimeException ignored) {
+            // No round-tripping name; fall back to the search key.
+        }
         return canonicalKey(item);
     }
 }
