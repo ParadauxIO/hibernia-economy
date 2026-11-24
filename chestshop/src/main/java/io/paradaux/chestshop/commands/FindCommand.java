@@ -81,7 +81,7 @@ public final class FindCommand implements CommandHandler {
             message.send(player, "find.unknown-item", "code", code);
             return;
         }
-        openFind(player, item, canonicalKey(item), displayName(item));
+        openFind(player, item, canonicalKey(item), code);
     }
 
     @Route("toggle visibility <visible>")
