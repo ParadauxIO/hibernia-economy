@@ -17,18 +17,23 @@ import io.paradaux.hibernia.framework.usher.annotations.Input;
 import io.paradaux.hibernia.framework.usher.annotations.Model;
 import io.paradaux.hibernia.framework.usher.annotations.Screen;
 import io.paradaux.hibernia.framework.usher.input.DialogInputSpec;
+import io.paradaux.hibernia.framework.usher.spi.BedrockSupport;
 import io.paradaux.hibernia.framework.usher.spi.DialogHandler;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * The {@code /find} shop-search dialog flow — the first Usher consumer in
  * ChestShop. A faithful port of the legacy chestshop-database find dialog: a main
  * screen with quick-actions + a fuzzy toggle, Filters and Sort sub-screens that
  * mutate the shared {@link FindState}, then Curator chest results for all players. The query
- * runs off-thread via {@link DialogFlow#await} with a wait-screen.
+ * runs off-thread via {@link DialogFlow#await} with a wait-screen for Java players. Bedrock
+ * players (via Geyser) get a chat message instead, because the button-less wait notice can
+ * leave them stuck in a form that never gives way to the results (PAR-571).
  */
 @Dialog("find")
 public final class FindDialog implements DialogHandler {
@@ -36,13 +41,21 @@ public final class FindDialog implements DialogHandler {
     private final ShopFinderService finder;
     private final Message message;
     private final io.paradaux.hibernia.framework.curator.MenuManager menus;
+    private final BedrockSupport bedrock;
+    private final JavaPlugin plugin;
 
     @Inject
     public FindDialog(
-            ShopFinderService finder, Message message, io.paradaux.hibernia.framework.curator.MenuManager menus) {
+            ShopFinderService finder,
+            Message message,
+            io.paradaux.hibernia.framework.curator.MenuManager menus,
+            BedrockSupport bedrock,
+            JavaPlugin plugin) {
         this.finder = finder;
         this.message = message;
         this.menus = menus;
+        this.bedrock = bedrock;
+        this.plugin = plugin;
     }
 
     // ── main screen ─────────────────────────────────────────────────────────────
@@ -109,17 +122,46 @@ public final class FindDialog implements DialogHandler {
             flow.close();
             return;
         }
+        // Checked on each search rather than trusting a flag captured earlier.
+        if (bedrock.isBedrock(flow.player())) {
+            searchInChat(state, flow);
+            return;
+        }
         flow.await(finder.find(state), Text.key("find.querying"), (results, f) -> {
-            state.setResults(results);
-            if (results.isEmpty()) {
-                message.send(f.player(), "find.empty");
-                f.close();
-                return;
-            }
             Player player = f.player();
             f.close();
-            menus.open(player, FindResultsMenu.class, new FindResultsMenu.State(state));
+            showResults(player, state, results);
         });
+    }
+
+    /** Close the dialog first and report progress in chat, so no form is left waiting. */
+    private void searchInChat(FindState state, DialogFlow flow) {
+        Player player = flow.player();
+        flow.close();
+        message.send(player, "find.querying-chat");
+        var unused = finder.find(state)
+                .whenComplete((results, error) -> plugin.getServer()
+                        .getScheduler()
+                        .runTask(plugin, () -> {
+                            if (error != null) {
+                                plugin.getLogger()
+                                        .log(Level.WARNING, "Shop search failed for " + player.getName(), error);
+                                message.send(player, "find.no-search");
+                                return;
+                            }
+                            if (player.isOnline()) {
+                                showResults(player, state, results);
+                            }
+                        }));
+    }
+
+    private void showResults(Player player, FindState state, List<io.paradaux.chestshop.model.FoundShop> results) {
+        state.setResults(results);
+        if (results.isEmpty()) {
+            message.send(player, "find.empty");
+            return;
+        }
+        menus.open(player, FindResultsMenu.class, new FindResultsMenu.State(state));
     }
 
     // ── filters screen ──────────────────────────────────────────────────────────
